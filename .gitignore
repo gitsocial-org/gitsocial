@@ -1,0 +1,13 @@
+.legacy
+.local
+
+CLAUDE.md
+
+.DS_Store
+
+# Build outputs
+build/
+
+# Dependencies
+node_modules/
+

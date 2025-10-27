@@ -1,0 +1,145 @@
+{
+  "root": true,
+  "plugins": [
+    "@typescript-eslint",
+    "json"
+  ],
+  "env": {
+    "node": true,
+    "es2022": true,
+    "browser": true
+  },
+  "ignorePatterns": [
+    "**/*.js",
+    "**/*.d.ts",
+    "node_modules",
+    "dist",
+    "out",
+    "../../build"
+  ],
+  "overrides": [
+    {
+      "files": ["*.ts", "**/*.ts"],
+      "parser": "@typescript-eslint/parser",
+      "parserOptions": {
+        "ecmaVersion": 2022,
+        "sourceType": "module",
+        "project": "./tsconfig.json"
+      },
+      "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended",
+        "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      ],
+      "rules": {
+        "indent": ["error", 2],
+        "quotes": ["error", "single"],
+        "semi": ["error", "always"],
+        "comma-dangle": ["error", "never"],
+        "no-trailing-spaces": "error",
+        "eol-last": ["error", "always"],
+        "max-len": ["error", { "code": 120, "ignoreUrls": true, "ignoreStrings": true }],
+        "no-multiple-empty-lines": ["error", { "max": 1, "maxEOF": 0, "maxBOF": 0 }],
+        "@typescript-eslint/explicit-function-return-type": ["error", {
+          "allowExpressions": true,
+          "allowTypedFunctionExpressions": true
+        }],
+        "@typescript-eslint/no-explicit-any": "error",
+        "@typescript-eslint/no-unused-vars": ["error", {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_"
+        }],
+        "@typescript-eslint/consistent-type-imports": ["error", {
+          "prefer": "type-imports"
+        }],
+        "@typescript-eslint/naming-convention": [
+          "error",
+          {
+            "selector": "interface",
+            "format": ["PascalCase"]
+          },
+          {
+            "selector": "typeAlias",
+            "format": ["PascalCase"]
+          },
+          {
+            "selector": "function",
+            "format": ["camelCase"]
+          },
+          {
+            "selector": "variable",
+            "format": ["camelCase", "UPPER_CASE"],
+            "leadingUnderscore": "allow"
+          }
+        ],
+        "no-class": "off",
+        "no-this": "off",
+        "prefer-const": "error",
+        "no-var": "error",
+        "no-let": "off",
+        "no-throw-literal": "error",
+        "no-return-await": "error",
+        "eqeqeq": ["error", "always"],
+        "curly": ["error", "all"],
+        "no-console": ["warn", { "allow": ["warn", "error"] }],
+        "no-debugger": "error",
+        "no-alert": "error",
+        "no-duplicate-imports": "error",
+        "sort-imports": ["error", {
+          "ignoreCase": true,
+          "ignoreDeclarationSort": true
+        }]
+      }
+    },
+    {
+      "files": ["*.svelte", "**/*.svelte"],
+      "parser": "svelte-eslint-parser",
+      "parserOptions": {
+        "parser": "@typescript-eslint/parser",
+        "extraFileExtensions": [".svelte"],
+        "ecmaVersion": 2022,
+        "sourceType": "module"
+      },
+      "plugins": ["svelte"],
+      "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended",
+        "plugin:svelte/recommended"
+      ],
+      "rules": {
+        "indent": "off",
+        "svelte/indent": ["error", { "indent": 2 }],
+        "quotes": ["error", "single"],
+        "semi": ["error", "always"],
+        "comma-dangle": ["error", "never"],
+        "no-trailing-spaces": "error",
+        "eol-last": ["error", "always"],
+        "max-len": ["error", { "code": 120, "ignoreUrls": true, "ignoreStrings": true }],
+        "no-multiple-empty-lines": ["error", { "max": 1, "maxEOF": 0, "maxBOF": 0 }],
+        "@typescript-eslint/no-explicit-any": "error",
+        "@typescript-eslint/no-unused-vars": ["error", {
+          "argsIgnorePattern": "^_",
+          "varsIgnorePattern": "^_"
+        }],
+        "prefer-const": "error",
+        "no-var": "error",
+        "eqeqeq": ["error", "always"],
+        "curly": ["error", "all"],
+        "no-console": ["warn", { "allow": ["warn", "error"] }],
+        "no-debugger": "error",
+        "svelte/no-at-debug-tags": "error",
+        "svelte/no-at-html-tags": "warn"
+      }
+    },
+    {
+      "files": ["*.json", "**/*.json"],
+      "extends": ["plugin:json/recommended-with-comments"],
+      "rules": {
+        "json/*": ["error", {
+          "allowComments": true
+        }],
+        "no-trailing-spaces": "error"
+      }
+    }
+  ]
+}

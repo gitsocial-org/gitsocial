@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "outDir": "../../build/vscode",
+    "lib": ["ES2022"],
+    "sourceMap": true,
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "types": ["node", "vscode"],
+    "paths": {
+      "@gitsocial/core": ["../../build/core"],
+      "@gitsocial/core/client": ["../../build/core/client"],
+      "@gitsocial/core/utils": ["../../build/core/utils"]
+    }
+  },
+  "include": ["src/**/*", "src/**/*.svelte"],
+  "exclude": ["node_modules", ".vscode-test", "../../build"]
+}

@@ -1,0 +1,64 @@
+{
+  "folders": [
+    {
+      "name": "GitSocial",
+      "path": ".."
+    },
+    {
+      "name": "VSCode Extension",
+      "path": "../packages/vscode"
+    },
+    {
+      "name": "Core Library",
+      "path": "../packages/core"
+    }
+  ],
+  "settings": {
+    "typescript.tsdk": "../packages/vscode/node_modules/typescript/lib",
+    "eslint.workingDirectories": [
+      "../packages/vscode"
+    ],
+    "git.terminalAuthentication": false,
+    "chat.agent.enabled": false,
+    "chat.commandCenter.enabled": false,
+    "telemetry.feedback.enabled": false
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Extension",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": [
+          "--extensionDevelopmentPath=${workspaceFolder:GitSocial}/build/vscode"
+        ],
+        "outFiles": [
+          "${workspaceFolder:GitSocial}/build/vscode/**/*.js"
+        ],
+        "preLaunchTask": "pnpm: watch - packages/vscode"
+      }
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "type": "shell",
+        "command": "pnpm",
+        "args": ["run", "watch"],
+        "options": {
+          "cwd": "${workspaceFolder:VSCode Extension}"
+        },
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": "$esbuild-watch",
+        "isBackground": true,
+        "label": "pnpm: watch - packages/vscode",
+        "detail": "node build.js --watch"
+      }
+    ]
+  }
+}

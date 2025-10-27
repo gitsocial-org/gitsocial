@@ -1,0 +1,170 @@
+{
+  "name": "gitsocial",
+  "displayName": "GitSocial",
+  "description": "Social features for Git repositories",
+  "version": "0.1.0-beta.1",
+  "publisher": "gitsocial",
+  "icon": "media/gitsocial.png",
+  "engines": {
+    "vscode": "^1.74.0",
+    "node": ">=20.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "social",
+    "collaboration"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
+  "main": "extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitsocial.openTimeline",
+        "title": "GitSocial: Open Timeline"
+      },
+      {
+        "command": "gitsocial.openRepository",
+        "title": "GitSocial: Open Repository"
+      },
+      {
+        "command": "gitsocial.openSearch",
+        "title": "GitSocial: Search",
+        "icon": "$(search)"
+      },
+      {
+        "command": "gitsocial.openSettings",
+        "title": "Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "gitsocial.createPost",
+        "title": "GitSocial: Create Post"
+      },
+      {
+        "command": "gitsocial.initialize",
+        "title": "GitSocial: Initialize Repository"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitsocial",
+          "title": "GitSocial",
+          "icon": "media/gitsocial.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitsocial": [
+        {
+          "type": "webview",
+          "id": "gitsocial.sidebar",
+          "name": "GitSocial",
+          "contextualTitle": "GitSocial"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "gitsocial.openSettings",
+          "when": "view == gitsocial.sidebar",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "GitSocial",
+      "properties": {
+        "gitsocial.debug": {
+          "type": "string",
+          "enum": [
+            "off",
+            "error",
+            "warn",
+            "info",
+            "debug",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Set the debug logging level for GitSocial",
+          "enumDescriptions": [
+            "Disable all logging",
+            "Show only error messages",
+            "Show error and warning messages",
+            "Show error, warning, and info messages",
+            "Show all messages including debug logs",
+            "Show all messages including verbose debug logs"
+          ]
+        },
+        "gitsocial.cacheMaxSize": {
+          "type": "number",
+          "default": 100000,
+          "minimum": 1000,
+          "maximum": 1000000,
+          "description": "Maximum number of posts to keep in memory cache. Larger values use more memory but improve performance. Estimated memory usage: ~3KB per post."
+        },
+        "gitsocial.enableGravatar": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Gravatar as fallback for user avatars. When disabled (default), only local avatars and GitHub avatars are used for privacy."
+        },
+        "gitsocial.enableExplore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Explore tab in the sidebar for discovering curated lists."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "compile": "tsc -p ./",
+    "lint": "node build.js --lint",
+    "lint:fix": "node build.js --lint-fix",
+    "lint:vscode": "eslint . --ext .ts,.svelte,.json && npm run lint:whitespace",
+    "lint:fix:vscode": "eslint . --ext .ts,.svelte,.json --fix && npm run lint:whitespace:fix",
+    "lint:whitespace": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -exec grep -l '[[:space:]]$' {} \\; | grep . && echo 'Trailing whitespace found!' && exit 1 || echo 'No trailing whitespace found.'",
+    "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
+    "type-check": "tsc --noEmit",
+    "test": "vscode-test",
+    "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)"
+  },
+  "dependencies": {
+    "@gitsocial/core": "file:../core",
+    "@vscode/codicons": "^0.0.36",
+    "lru-cache": "^11.0.2",
+    "marked": "^16.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "@vscode/test-cli": "^0.0.9",
+    "@vscode/test-electron": "^2.3.9",
+    "esbuild": "^0.20.0",
+    "esbuild-svelte": "^0.8.0",
+    "eslint": "^8.34.0",
+    "eslint-plugin-json": "^3.1.0",
+    "eslint-plugin-svelte": "^2.35.0",
+    "svelte": "^4.2.0",
+    "svelte-eslint-parser": "^0.33.0",
+    "svelte-preprocess": "^5.1.3",
+    "typescript": "^5.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gitsocial-org/gitsocial"
+  },
+  "license": "MIT"
+}

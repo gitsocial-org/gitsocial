@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: |
+          cd packages/core
+          pnpm install
+          cd ../vscode
+          pnpm install
+
+      - name: Build and package extension
+        run: |
+          cd packages/vscode
+          pnpm package
+
+      - name: Get version from tag
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify package version matches tag
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./packages/vscode/package.json').version")
+          TAG_VERSION="${{ steps.tag.outputs.version }}"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: package.json version ($PACKAGE_VERSION) does not match git tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "Version verified: $PACKAGE_VERSION"
+
+      - name: Verify VSIX package exists
+        run: |
+          VSIX_COUNT=$(ls packages/vscode/*.vsix 2>/dev/null | wc -l)
+          if [ "$VSIX_COUNT" -eq 0 ]; then
+            echo "Error: No .vsix file found in packages/vscode/"
+            exit 1
+          fi
+          VSIX_FILE=$(ls packages/vscode/*.vsix)
+          echo "Package verified: $VSIX_FILE"
+
+      - name: Check if pre-release
+        id: prerelease
+        run: |
+          if [[ "${{ steps.tag.outputs.version }}" == *"-"* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/vscode/*.vsix
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          name: GitSocial ${{ steps.tag.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

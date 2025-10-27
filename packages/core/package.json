@@ -1,0 +1,60 @@
+{
+  "name": "@gitsocial/core",
+  "version": "0.1.0",
+  "description": "Core GitMsg protocol implementation",
+  "main": "../../build/core/index.js",
+  "types": "../../build/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "../../build/core/index.d.ts",
+      "default": "../../build/core/index.js"
+    },
+    "./client": {
+      "types": "../../build/core/client/index.d.ts",
+      "default": "../../build/core/client/index.js"
+    },
+    "./utils": {
+      "types": "../../build/core/utils/index.d.ts",
+      "default": "../../build/core/utils/index.js"
+    }
+  },
+  "files": [
+    "../../build/core"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts,.json && npm run lint:whitespace",
+    "lint:fix": "eslint . --ext .ts,.json --fix && npm run lint:whitespace:fix",
+    "lint:whitespace": "find . \\( -name '*.ts' -o -name '*.json' \\) -not -path './node_modules/*' -exec grep -l '[[:space:]]$' {} \\; | grep . && echo 'Trailing whitespace found!' && exit 1 || echo 'No trailing whitespace found.'",
+    "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.json' \\) -not -path './node_modules/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf **/*.js **/*.d.ts **/*.js.map"
+  },
+  "keywords": [
+    "git",
+    "gitmsg",
+    "protocol",
+    "decentralized"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.15",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^8.56.0",
+    "eslint-plugin-json": "^3.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "lru-cache": "^11.0.2"
+  }
+}
