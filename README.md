@@ -10,6 +10,10 @@ Open source social network protocol for Git repositories.
 - Git-native - Uses only standard Git infrastructure (commits, branches, refs)
 - Works anywhere - GitHub.com, GitLab.com, self-hosted, or local
 
+---
+
+![GitSocial Timeline](docs/images/screenshot.png)
+
 ## How It Works
 
 ### Posts are commits
