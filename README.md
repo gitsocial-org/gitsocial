@@ -6,7 +6,7 @@ Open source social network protocol for Git repositories.
 
 - Universal - Turn any Git repository into a social network
 - Decentralized - No servers, no databases, no APIs
-- Own your data - Keep it in your repos, work offline, export by cloning
+- Own your data and your social graph - Keep everything in your repos, portable, works offline
 - Git-native - Uses only standard Git infrastructure (commits, branches, refs)
 - Works anywhere - GitHub.com, GitLab.com, self-hosted, or local
 
