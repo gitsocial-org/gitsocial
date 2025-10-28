@@ -1,8 +1,8 @@
 # GitSocial Quick Start - LLM Guide
 
 ## CRITICAL RULES (MUST FOLLOW)
-✅ **ALWAYS** use namespace objects: `gitMsgRef`, `gitMsgUrl`, `social`, `gitRepository`
-✅ **ALWAYS** use `getPosts()` for ANY post retrieval - NEVER access git/cache directly
+✅ **ALWAYS** use namespace objects: `gitMsgRef`, `gitMsgUrl`, `social`
+✅ **ALWAYS** use `social.post.getPosts()` for ANY post retrieval - NEVER access git/cache directly
 ✅ **ALWAYS** use `Result<T>` for all error handling
 ✅ **ALWAYS** check existing interfaces in `types.ts` files before creating new ones
 ✅ **ALWAYS** use `function` declarations, not `const` arrow functions
@@ -17,12 +17,10 @@
 // Core namespaces - ALWAYS use these
 import { gitMsgRef, gitMsgUrl, gitMsgHash } from '../gitmsg/protocol';
 import { gitHost } from '../githost';
-import { gitRepository, gitList } from '../repository';
 import { social } from '../social';
 import { log } from '../logger';
 // Types - reuse these
-import type { Post, List, Result } from '../social/types';
-import type { Repository } from '../repository/types';
+import type { Post, List, Result, Repository } from '../social/types';
 ```
 
 ## Architecture (3 Layers - No Circular Dependencies)
@@ -35,18 +33,18 @@ Git Layer → GitMsg Layer → Social Layer
 ### Get Posts (MANDATORY API - Use for ALL post retrieval)
 ```typescript
 // Timeline (all sources)
-const result = await social.getPosts(workdir, 'timeline');
+const result = await social.post.getPosts(workdir, 'timeline');
 // My repository
-const result = await social.getPosts(workdir, 'repository:my');
+const result = await social.post.getPosts(workdir, 'repository:my');
 // Specific list
-const result = await social.getPosts(workdir, 'list:reading');
+const result = await social.post.getPosts(workdir, 'list:reading');
 // Single post
-const result = await social.getPosts(workdir, 'post:https://github.com/user/repo#commit:abc123456789');
+const result = await social.post.getPosts(workdir, 'post:https://github.com/user/repo#commit:abc123456789');
 ```
 
 ### Create Post
 ```typescript
-const result = await social.createPost(workdir, 'Hello world!');
+const result = await social.post.createPost(workdir, 'Hello world!');
 if (!result.success) {
   return { success: false, error: result.error };
 }
@@ -54,15 +52,17 @@ if (!result.success) {
 
 ### Create Comment
 ```typescript
-const result = await social.createComment(workdir, postId, 'Great idea!');
+const result = await social.interaction.createComment(workdir, postId, 'Great idea!');
 ```
 
-### Repository Management
+### List Management
 ```typescript
 // Add repository to list
-const result = await gitRepository.addToList(workdir, 'reading', 'https://github.com/user/repo');
-// Get all repositories
-const repos = await gitRepository.getAll(workdir);
+const result = await social.list.addRepositoryToList(workdir, 'reading', 'https://github.com/user/repo');
+// Get all lists
+const lists = await social.list.getLists(workdir);
+// Get repositories
+const repos = await social.repository.getRepositories(workdir);
 ```
 
 ## Error Handling Pattern
@@ -82,17 +82,18 @@ if (!result.success) {
 
 ## Type Locations (ALWAYS REUSE)
 - `Post` → `social/types.ts`
-- `Repository` → `repository/types.ts`
+- `Repository` → `social/types.ts`
 - `List` → `social/types.ts`
 - `Result<T>` → `social/types.ts`
 - `GitMsgMessage` → `gitmsg/types.ts`
 
 ## Namespace Exports
-- `gitMsgRef`: parse(), create(), format()
-- `gitMsgUrl`: normalize(), isValid()
-- `social`: getPosts(), createPost(), createComment(), searchPosts()
-- `gitRepository`: getAll(), addToList(), removeFromList()
-- `gitList`: getAll(), create(), update(), delete()
+- `gitMsgRef`: parse(), create(), validate(), normalize()
+- `gitMsgUrl`: normalize(), validate(), toGit(), fromRef()
+- `social.post`: getPosts(), createPost()
+- `social.interaction`: createComment(), createRepost(), createQuote()
+- `social.list`: getLists(), createList(), updateList(), deleteList(), addRepositoryToList(), removeRepositoryFromList()
+- `social.repository`: getRepositories(), fetchUpdates(), cleanupStorage()
 - `log`: log(level, message, ...args)
 
 ## Documentation

@@ -133,46 +133,47 @@ validate(hash: string): boolean
 
 ### social (`social/index.ts`)
 ```typescript
-initialize(config: { storageBase: string }): void
-getPosts(workdir: string, scope: string, filter?: PostFilter): Promise<Result<Post[]>>
-createPost(workdir: string, content: string, options?: CreateOptions): Promise<Result<Post>>
-createInteraction(type: 'comment' | 'repost' | 'quote', workdir: string, targetPost: Post, content?: string): Promise<Result<Post>>
-getInteractions(workdir: string, postId: string, type?: string): Promise<Result<Post[]>>
-searchPosts(workdir: string, params: SearchParams): Promise<Result<SearchResult>>
+// Post operations (social.post)
+post.getPosts(workdir: string, scope: string, filter?: PostFilter): Promise<Result<Post[]>>
+post.createPost(workdir: string, content: string, options?: CreateOptions): Promise<Result<Post>>
 
-// List operations
-getLists(repository: string, workspaceRoot?: string): Promise<Result<List[]>>
-getList(repository: string, name: string): Promise<Result<List | null>>
-createList(repository: string, name: string, data?: Partial<List>): Promise<Result<List>>
-updateList(repository: string, name: string, data: Partial<List>): Promise<Result<List>>
-deleteList(repository: string, name: string): Promise<Result<void>>
-addRepositoryToList(repository: string, listName: string, repoUrl: string): Promise<Result<void>>
-removeRepositoryFromList(repository: string, listName: string, repoUrl: string): Promise<Result<void>>
-getListRepositories(repository: string, listName: string): Promise<Result<string[]>>
-syncList(repository: string, name: string): Promise<Result<void>>
+// Interaction operations (social.interaction)
+interaction.createComment(workdir: string, postId: string, content: string): Promise<Result<Post>>
+interaction.createRepost(workdir: string, postId: string): Promise<Result<Post>>
+interaction.createQuote(workdir: string, postId: string, content: string): Promise<Result<Post>>
+
+// Search operations (social.search)
+search.searchPosts(workdir: string, params: SearchParams): Promise<Result<SearchResult>>
+
+// Thread operations (social.thread)
+thread.getThread(workdir: string, postId: string, options?: ThreadOptions): Promise<Result<ThreadContext>>
+
+// Timeline operations (social.timeline)
+timeline.getTimeline(workdir: string, options?: TimelineOptions): Promise<Result<TimelineEntry[]>>
 ```
 
-### gitRepository (`social/repositories.ts`)
+### social.repository (`social/repository.ts`)
 ```typescript
-initialize(config: { storageBase: string }): void
-getRepositories(workdir: string, scope: string = 'workspace:my', filter?: RepositoryFilter): Promise<Result<Repository[]>>
-fetchUpdates(workdir: string, scope: string = 'following'): Promise<Result<{ fetched: number; failed: number }>>
-cleanupStorage(): Promise<void>
-getStorageStats(): Promise<{ totalRepositories: number; persistentRepositories: number; temporaryRepositories: number; totalSize: number; repositories: any[] }>
+repository.initialize(config: { storageBase: string }): void
+repository.getRepositories(workdir: string, scope: string, filter?: RepositoryFilter): Promise<Result<Repository[]>>
+repository.fetchUpdates(workdir: string, scope: string, options?: FetchOptions): Promise<Result<{ fetched: number; failed: number }>>
+repository.cleanupStorage(): Promise<void>
 ```
 
-### list (alias for lists from `social/index.ts`)
+### social.list (`social/list.ts`)
 ```typescript
-// Same as social list operations above - exported as separate namespace for convenience
-getLists(repository: string, workspaceRoot?: string): Promise<Result<List[]>>
-getList(repository: string, name: string): Promise<Result<List | null>>
-createList(repository: string, name: string, data?: Partial<List>): Promise<Result<List>>
-updateList(repository: string, name: string, data: Partial<List>): Promise<Result<List>>
-deleteList(repository: string, name: string): Promise<Result<void>>
-addRepositoryToList(repository: string, listName: string, repoUrl: string): Promise<Result<void>>
-removeRepositoryFromList(repository: string, listName: string, repoUrl: string): Promise<Result<void>>
-getListRepositories(repository: string, listName: string): Promise<Result<string[]>>
-syncList(repository: string, name: string): Promise<Result<void>>
+list.getLists(repository: string, workspaceRoot?: string): Promise<Result<List[]>>
+list.getList(repository: string, id: string): Promise<Result<List | null>>
+list.createList(repository: string, listId: string, name?: string): Promise<Result<void>>
+list.updateList(repository: string, listId: string, updates: Partial<List>): Promise<Result<void>>
+list.deleteList(repository: string, name: string): Promise<Result<void>>
+list.addRepositoryToList(repository: string, listId: string, repositoryUrl: string, explicitStorageBase?: string): Promise<Result<void>>
+list.removeRepositoryFromList(repository: string, listId: string, repositoryUrl: string): Promise<Result<void>>
+list.getListRepositories(repository: string, listId: string): Promise<Result<string[]>>
+list.syncList(repository: string, listId: string, remote?: string): Promise<Result<void>>
+list.followList(repository: string, sourceRepo: string, sourceListId: string, targetListId?: string, explicitStorageBase?: string): Promise<Result<{ listId: string }>>
+list.syncFollowedList(repository: string, listId: string, explicitStorageBase?: string): Promise<Result<{ added: number; removed: number }>>
+list.unfollowList(repository: string, listId: string): Promise<Result<void>>
 ```
 
 ## Interface Reuse Rules

@@ -1,32 +1,32 @@
 # Code Patterns Library
 
-## Post Retrieval (Always use social.getPosts)
+## Post Retrieval (Always use social.post.getPosts)
 
 ### Available Scopes
 
 ```typescript
 // Core scopes
-const result = await social.getPosts(workdir, "all"); // All posts in cache
-const result = await social.getPosts(workdir, "repository:my"); // Current repository
-const result = await social.getPosts(workdir, "timeline"); // All followed repositories
+const result = await social.post.getPosts(workdir, "all"); // All posts in cache
+const result = await social.post.getPosts(workdir, "repository:my"); // Current repository
+const result = await social.post.getPosts(workdir, "timeline"); // All followed repositories
 
 // Repository scopes
-const result = await social.getPosts(workdir, "repository:https://github.com/user/repo");
+const result = await social.post.getPosts(workdir, "repository:https://github.com/user/repo");
 
 // List scopes (posts from 'reading' list)
-const result = await social.getPosts(workdir, "list:reading");
+const result = await social.post.getPosts(workdir, "list:reading");
 
 // Combined repository/list scope
-const result = await social.getPosts(workdir, "repository:https://github.com/user/repo/list:favorites");
+const result = await social.post.getPosts(workdir, "repository:https://github.com/user/repo/list:favorites");
 
 // Single post scope
-const result = await social.getPosts(workdir, "post:https://github.com/user/repo#commit:abc123");
+const result = await social.post.getPosts(workdir, "post:https://github.com/user/repo#commit:abc123");
 
 // Multiple posts by ID
-const result = await social.getPosts(workdir, "byId:id1,id2,id3");
+const result = await social.post.getPosts(workdir, "byId:id1,id2,id3");
 
 // Thread scope (handled separately by thread module)
-const result = await social.getPosts(workdir, "thread:https://github.com/user/repo#commit:abc123");
+const result = await social.post.getPosts(workdir, "thread:https://github.com/user/repo#commit:abc123");
 ```
 
 ### Basic Usage Examples
@@ -35,7 +35,7 @@ const result = await social.getPosts(workdir, "thread:https://github.com/user/re
 import { social } from "../social";
 
 // Get timeline posts
-const result = await social.getPosts(workdir, "timeline");
+const result = await social.post.getPosts(workdir, "timeline");
 if (!result.success) {
   return { success: false, error: result.error };
 }
@@ -46,10 +46,10 @@ const posts = result.data; // Post[]
 
 ```typescript
 // Get multiple posts by ID (comma-separated)
-const result = await social.getPosts(workdir, "byId:id1,id2,id3");
+const result = await social.post.getPosts(workdir, "byId:id1,id2,id3");
 
 // Example with full post IDs
-const result = await social.getPosts(
+const result = await social.post.getPosts(
   workdir,
   "byId:https://github.com/user/repo#commit:abc123,https://github.com/other/repo#commit:def456"
 );
@@ -59,20 +59,20 @@ const result = await social.getPosts(
 
 ```typescript
 // Get a single post by its ID
-const result = await social.getPosts(workdir, "post:https://github.com/user/repo#commit:abc123456789");
+const result = await social.post.getPosts(workdir, "post:https://github.com/user/repo#commit:abc123456789");
 ```
 
 ### Get Thread (Post with Comments)
 
 ```typescript
 // Get post and its comment thread
-const result = await social.getPosts(workdir, "thread:https://github.com/user/repo#commit:abc123456789");
+const result = await social.post.getPosts(workdir, "thread:https://github.com/user/repo#commit:abc123456789");
 ```
 
 ### Filter Posts
 
 ```typescript
-const result = await social.getPosts(workdir, "timeline", {
+const result = await social.post.getPosts(workdir, "timeline", {
   types: ["post", "quote"], // Filter by type
   limit: 50, // Pagination
   since: new Date("2025-01-01"),
@@ -87,7 +87,7 @@ const result = await social.getPosts(workdir, "timeline", {
 ```typescript
 import { social } from "../social";
 
-const result = await social.createPost(workdir, "Hello GitSocial!");
+const result = await social.post.createPost(workdir, "Hello GitSocial!");
 if (!result.success) {
   log("error", "Failed to create post:", result.error);
   return result;
@@ -99,67 +99,51 @@ const newPost = result.data; // Post object
 
 ```typescript
 const postId = "https://github.com/user/repo#commit:abc123456789";
-const result = await social.createComment(workdir, postId, "Great idea!");
+const result = await social.interaction.createComment(workdir, postId, "Great idea!");
 ```
 
 ### Create Repost
 
 ```typescript
-const result = await social.createRepost(workdir, postId);
+const result = await social.interaction.createRepost(workdir, postId);
 ```
 
 ### Create Quote
 
 ```typescript
-const result = await social.createQuote(workdir, postId, "Adding my thoughts...");
+const result = await social.interaction.createQuote(workdir, postId, "Adding my thoughts...");
 ```
 
-## Repository Management
+## List Management
 
 ### Add Repository to List
 
 ```typescript
-import { gitRepository } from "../repository";
+import { social } from "../social";
 
-const result = await gitRepository.addToList(workdir, "reading", "https://github.com/torvalds/linux");
-```
-
-### Get All Repositories
-
-```typescript
-const result = await gitRepository.getAll(workdir);
-if (result.success && result.data) {
-  const repos = result.data; // Repository[]
-}
+const result = await social.list.addRepositoryToList(workdir, "reading", "https://github.com/torvalds/linux");
 ```
 
 ### Remove Repository from List
 
 ```typescript
-const result = await gitRepository.removeFromList(
+const result = await social.list.removeRepositoryFromList(
   workdir,
   "reading",
-  "https://github.com/torvalds/linux#branch:master"
+  "https://github.com/torvalds/linux"
 );
 ```
-
-## List Management
 
 ### Create List
 
 ```typescript
-import { gitList } from "../repository";
-
-const result = await gitList.create(workdir, "favorites", {
-  name: "My Favorites",
-  repositories: [],
-});
+const result = await social.list.createList(workdir, "favorites", "My Favorites");
 ```
 
 ### Get All Lists
 
 ```typescript
-const result = await gitList.getAll(workdir);
+const result = await social.list.getLists(workdir);
 if (result.success && result.data) {
   for (const list of result.data) {
     console.log(list.id, list.name, list.repositories.length);
@@ -170,10 +154,21 @@ if (result.success && result.data) {
 ### Update List
 
 ```typescript
-const result = await gitList.update(workdir, "favorites", {
+const result = await social.list.updateList(workdir, "favorites", {
   name: "Updated Name",
   repositories: ["https://github.com/user/repo#branch:main"],
 });
+```
+
+## Repository Management
+
+### Get Repositories
+
+```typescript
+const result = await social.repository.getRepositories(workdir);
+if (result.success && result.data) {
+  const repos = result.data; // Repository[]
+}
 ```
 
 ## Error Handling
@@ -192,17 +187,17 @@ return { success: true, data: processData(result.data) };
 ### Chaining Operations
 
 ```typescript
-const postResult = await social.createPost(workdir, content);
+const postResult = await social.post.createPost(workdir, content);
 if (!postResult.success) {
   return postResult; // Propagate error
 }
 
-const syncResult = await gitRepository.sync(workdir);
-if (!syncResult.success) {
-  log("warn", "Post created but sync failed:", syncResult.error);
+const fetchResult = await social.repository.fetchUpdates(workdir, 'following');
+if (!fetchResult.success) {
+  log("warn", "Post created but fetch failed:", fetchResult.error);
 }
 
-return postResult; // Return success even if sync failed
+return postResult; // Return success even if fetch failed
 ```
 
 ## Search Patterns
@@ -210,7 +205,7 @@ return postResult; // Return success even if sync failed
 ### Search Posts
 
 ```typescript
-const result = await social.searchPosts(workdir, {
+const result = await social.search.searchPosts(workdir, {
   query: "GitSocial",
   filters: {
     types: ["post", "quote"],
@@ -225,7 +220,7 @@ const result = await social.searchPosts(workdir, {
 ### Search with Regex
 
 ```typescript
-const result = await social.searchPosts(workdir, {
+const result = await social.search.searchPosts(workdir, {
   query: "/git.*social/i", // Regex pattern
   filters: { types: ["post"] },
 });
