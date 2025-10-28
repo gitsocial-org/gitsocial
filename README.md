@@ -1,9 +1,10 @@
 # GitSocial [Beta]
 
-Turn any Git repository into a decentralized social network using Git's native infrastructure.
+Open source social network protocol for Git repositories.
 
 ## Features
 
+- Universal - Turn any Git repository into a social network
 - Decentralized - No servers, no databases, no APIs
 - Own your data - Keep it in your repos, work offline, export by cloning
 - Git-native - Uses only standard Git infrastructure (commits, branches, refs)
