@@ -250,6 +250,29 @@ function copyPackageJson() {
   fs.writeFileSync(targetPath, JSON.stringify(packageJson, null, 2));
 }
 
+function generateReadme() {
+  const rootReadmePath = path.resolve(__dirname, '../../README.md');
+  const vscodeRequirementsPath = path.join(__dirname, 'README.vscode.md');
+  const targetPath = path.join(buildDir, 'README.md');
+
+  let rootReadme = fs.readFileSync(rootReadmePath, 'utf8');
+  const vscodeRequirements = fs.readFileSync(vscodeRequirementsPath, 'utf8');
+
+  // Transform title to include "for VS Code"
+  rootReadme = rootReadme.replace(/^# GitSocial/, '# GitSocial for VS Code');
+
+  // Transform image paths to absolute GitHub URLs for marketplace compatibility
+  rootReadme = rootReadme.replace(/docs\/images\//g, 'https://github.com/gitsocial-org/gitsocial/raw/HEAD/docs/images/');
+
+  // Remove Installation section (between "## Installation" and next "##")
+  rootReadme = rootReadme.replace(/## Installation\n\n[\s\S]*?(?=\n## )/m, '');
+
+  // Insert Requirements after Quick Start section (before "## Documentation")
+  rootReadme = rootReadme.replace(/(?=\n## Documentation)/, '\n' + vscodeRequirements + '\n');
+
+  fs.writeFileSync(targetPath, rootReadme);
+}
+
 async function build() {
   try {
     fs.mkdirSync(buildDir, { recursive: true });
@@ -332,6 +355,7 @@ async function build() {
 
       copyStaticFiles();
       copyPackageJson();
+      generateReadme();
       ensureSymlink();
       console.log('👀 Watching for changes in extension...');
 
@@ -351,6 +375,7 @@ async function build() {
 
       copyStaticFiles();
       copyPackageJson();
+      generateReadme();
       if (!production) {
         ensureSymlink();
       }
