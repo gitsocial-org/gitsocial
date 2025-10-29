@@ -1,0 +1,108 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background: #fff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+.container {
+  max-width: 700px;
+  text-align: center;
+}
+.logo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 1.5rem;
+}
+h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #000;
+}
+.tagline {
+  font-size: 1.5rem;
+  color: #666;
+  margin-bottom: 2rem;
+}
+.pitch {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: #555;
+  margin-bottom: 2.5rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cta-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-block;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.btn-primary {
+  background: #000;
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #333;
+}
+.btn-secondary {
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+}
+.btn-secondary:hover {
+  background: #f5f5f5;
+}
+footer {
+  padding: 2rem;
+  text-align: center;
+  color: #999;
+  font-size: 0.875rem;
+  border-top: 1px solid #eee;
+}
+@media (max-width: 640px) {
+  .logo {
+    width: 80px;
+    height: 80px;
+  }
+  h1 {
+    font-size: 2rem;
+  }
+  .tagline {
+    font-size: 1.25rem;
+  }
+  .pitch {
+    font-size: 1rem;
+  }
+  .cta-buttons {
+    flex-direction: column;
+  }
+  .btn {
+    width: 100%;
+  }
+}
