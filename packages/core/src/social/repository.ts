@@ -302,23 +302,14 @@ export async function initializeRepository(
       return result;
     }
 
-    // Switch to the branch if requested and branchName is explicitly provided
-    if (branchOptions?.createBranch && branchOptions?.branchName) {
-      const checkoutResult = await execGit(repository, ['checkout', branchOptions.branchName]);
+    // Note: initializeGitSocial already creates the orphan branch and switches back
+    // to the original branch. We don't switch to gitsocial here to keep the user
+    // on their working branch (usually main).
 
-      if (!checkoutResult.success) {
-        // Try to create and switch if checkout failed
-        const createAndCheckoutResult = await execGit(repository, ['checkout', '-b', branchOptions.branchName]);
-
-        if (!createAndCheckoutResult.success) {
-          console.warn(`Could not switch to ${branchOptions.branchName} branch:`, createAndCheckoutResult.error);
-        } else {
-          log('info', `Created and switched to branch: ${branchOptions.branchName}`);
-        }
-      } else {
-        log('info', `Switched to branch: ${branchOptions.branchName}`);
-      }
-    }
+    // Clear cache to remove any posts from the old branch
+    // This ensures the timeline only shows posts from the orphan gitsocial branch
+    await cache.refresh({ all: true }, repository, storageBase);
+    log('info', '[initializeRepository] Cache cleared after orphan branch initialization');
 
     return { success: true };
   } catch (error) {

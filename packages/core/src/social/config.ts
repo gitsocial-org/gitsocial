@@ -291,35 +291,68 @@ export async function initializeGitSocial(
         return { success: true };
       }
 
-      if (!headResult.data) {
-        return {
-          success: false,
-          error: {
-            code: 'HEAD_ERROR',
-            message: 'Failed to get current HEAD'
-          }
-        };
-      }
-
-      // Create the branch from current HEAD
-      const createBranchResult = await execGit(workdir, [
-        'branch',
-        branchName,
-        headResult.data.stdout.trim()
+      // Get current branch to switch back later
+      const currentBranchResult = await execGit(workdir, [
+        'rev-parse',
+        '--abbrev-ref',
+        'HEAD'
       ]);
 
-      if (!createBranchResult.success) {
+      const currentBranch = currentBranchResult.success && currentBranchResult.data
+        ? currentBranchResult.data.stdout.trim()
+        : 'main';
+
+      log('info', `[initializeGitSocial] Current branch: ${currentBranch}`);
+
+      // Create orphan branch (no shared history)
+      const checkoutOrphanResult = await execGit(workdir, [
+        'checkout',
+        '--orphan',
+        branchName
+      ]);
+
+      if (!checkoutOrphanResult.success) {
         return {
           success: false,
           error: {
             code: 'BRANCH_CREATE_ERROR',
-            message: `Failed to create branch ${branchName}`,
-            details: createBranchResult.error
+            message: `Failed to create orphan branch ${branchName}`,
+            details: checkoutOrphanResult.error
           }
         };
       }
 
-      log('info', `[initializeGitSocial] Created branch: ${branchName}`);
+      // Remove all files from staging (clean slate for orphan branch)
+      await execGit(workdir, ['rm', '-rf', '--cached', '.']);
+
+      // Create initial empty commit
+      const commitResult = await execGit(workdir, [
+        'commit',
+        '--allow-empty',
+        '-m',
+        `Initialize ${branchName} branch`
+      ]);
+
+      if (!commitResult.success) {
+        // Try to switch back even if commit fails (force to handle untracked files)
+        await execGit(workdir, ['checkout', '-f', currentBranch]);
+        return {
+          success: false,
+          error: {
+            code: 'COMMIT_ERROR',
+            message: `Failed to create initial commit on ${branchName}`,
+            details: commitResult.error
+          }
+        };
+      }
+
+      // Switch back to original branch (force to handle untracked files)
+      const switchBackResult = await execGit(workdir, ['checkout', '-f', currentBranch]);
+      if (!switchBackResult.success) {
+        log('warn', `[initializeGitSocial] Failed to switch back to ${currentBranch}`);
+      }
+
+      log('info', `[initializeGitSocial] Created orphan branch: ${branchName} (no shared history)`);
     }
 
     log('info', `[initializeGitSocial] Initialized with explicit branch: ${branchName}`);
