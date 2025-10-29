@@ -12,7 +12,7 @@ Open source social network protocol for Git repositories.
 
 ---
 
-![GitSocial Timeline](docs/images/screenshot.png)
+![GitSocial Timeline](documentation/images/screenshot.png)
 
 ## How It Works
 
@@ -44,9 +44,9 @@ Open source social network protocol for Git repositories.
 
 ## Documentation
 
-- [GITSOCIAL.md](docs/GITSOCIAL.md) - GitSocial specification
-- [GITMSG.md](docs/GITMSG.md) - GitMsg protocol specification
-- [Developer docs](docs/) - Architecture, patterns, and more
+- [GITSOCIAL.md](documentation/GITSOCIAL.md) - GitSocial specification
+- [GITMSG.md](documentation/GITMSG.md) - GitMsg protocol specification
+- [Developer documentation](documentation/) - Architecture, patterns, and more
 
 ## License
 

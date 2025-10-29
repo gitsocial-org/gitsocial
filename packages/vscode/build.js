@@ -262,7 +262,7 @@ function generateReadme() {
   rootReadme = rootReadme.replace(/^# GitSocial/, '# GitSocial for VS Code');
 
   // Transform image paths to absolute GitHub URLs for marketplace compatibility
-  rootReadme = rootReadme.replace(/docs\/images\//g, 'https://github.com/gitsocial-org/gitsocial/raw/HEAD/docs/images/');
+  rootReadme = rootReadme.replace(/documentation\/images\//g, 'https://github.com/gitsocial-org/gitsocial/raw/HEAD/documentation/images/');
 
   // Remove Installation section (between "## Installation" and next "##")
   rootReadme = rootReadme.replace(/## Installation\n\n[\s\S]*?(?=\n## )/m, '');
