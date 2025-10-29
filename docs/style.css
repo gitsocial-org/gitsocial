@@ -1,59 +1,154 @@
+:root {
+  --bg-color: #fff;
+  --text-color: #333;
+  --heading-color: #000;
+  --pitch-color: #555;
+  --footer-color: #999;
+  --border-color: #eee;
+  --btn-primary-bg: #000;
+  --btn-primary-hover: #333;
+  --btn-secondary-bg: #fff;
+  --btn-secondary-color: #000;
+  --btn-secondary-hover: #f5f5f5;
+  --logo-filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #0d1117;
+    --text-color: #c9d1d9;
+    --heading-color: #f0f6fc;
+    --pitch-color: #c9d1d9;
+    --footer-color: #8b949e;
+    --border-color: #30363d;
+    --btn-primary-bg: #f0f6fc;
+    --btn-primary-hover: #c9d1d9;
+    --btn-secondary-bg: transparent;
+    --btn-secondary-color: #f0f6fc;
+    --btn-secondary-hover: #161b22;
+    --logo-filter: invert(1);
+  }
+}
+
+body.dark-mode {
+  --bg-color: #0d1117;
+  --text-color: #c9d1d9;
+  --heading-color: #f0f6fc;
+  --pitch-color: #c9d1d9;
+  --footer-color: #8b949e;
+  --border-color: #30363d;
+  --btn-primary-bg: #f0f6fc;
+  --btn-primary-hover: #c9d1d9;
+  --btn-secondary-bg: transparent;
+  --btn-secondary-color: #f0f6fc;
+  --btn-secondary-hover: #161b22;
+  --logo-filter: invert(1);
+}
+
+body.light-mode {
+  --bg-color: #fff;
+  --text-color: #333;
+  --heading-color: #000;
+  --pitch-color: #555;
+  --footer-color: #999;
+  --border-color: #eee;
+  --btn-primary-bg: #000;
+  --btn-primary-hover: #333;
+  --btn-secondary-bg: #fff;
+  --btn-secondary-color: #000;
+  --btn-secondary-hover: #f5f5f5;
+  --logo-filter: none;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   line-height: 1.6;
-  color: #333;
-  background: #fff;
+  color: var(--text-color);
+  background: var(--bg-color);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: background-color 0.3s, color 0.3s;
 }
+
 main {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  position: relative;
 }
+
 .container {
   max-width: 700px;
   text-align: center;
 }
+
+.theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: var(--heading-color);
+}
+
+.theme-toggle:hover {
+  border-color: var(--heading-color);
+  transform: scale(1.1);
+}
+
+.theme-toggle svg {
+  transition: transform 0.2s;
+}
+
 .logo {
   width: 120px;
   height: 120px;
   margin-bottom: 1.5rem;
+  filter: var(--logo-filter);
+  transition: filter 0.3s;
 }
+
 h1 {
   font-size: 3rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #000;
+  color: var(--heading-color);
 }
-.tagline {
-  font-size: 1.5rem;
-  color: #666;
-  margin-bottom: 2rem;
-}
+
 .pitch {
   font-size: 1.125rem;
   line-height: 1.8;
-  color: #555;
+  color: var(--pitch-color);
   margin-bottom: 2.5rem;
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
 }
+
 .cta-buttons {
   display: flex;
   gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
 }
+
 .btn {
   display: inline-block;
   padding: 0.875rem 2rem;
@@ -63,45 +158,64 @@ h1 {
   border-radius: 6px;
   transition: all 0.2s;
 }
+
 .btn-primary {
-  background: #000;
-  color: #fff;
+  background: var(--btn-primary-bg);
+  color: var(--bg-color);
 }
+
 .btn-primary:hover {
-  background: #333;
+  background: var(--btn-primary-hover);
 }
+
 .btn-secondary {
-  background: #fff;
-  color: #000;
-  border: 2px solid #000;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+  border: 2px solid var(--btn-secondary-color);
 }
+
 .btn-secondary:hover {
-  background: #f5f5f5;
+  background: var(--btn-secondary-hover);
 }
+
 footer {
   padding: 2rem;
   text-align: center;
-  color: #999;
+  color: var(--footer-color);
   font-size: 0.875rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 }
+
 @media (max-width: 640px) {
+  .theme-toggle {
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 40px;
+    height: 40px;
+  }
+
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+  }
+
   .logo {
     width: 80px;
     height: 80px;
   }
+
   h1 {
     font-size: 2rem;
   }
-  .tagline {
-    font-size: 1.25rem;
-  }
+
   .pitch {
     font-size: 1rem;
   }
+
   .cta-buttons {
     flex-direction: column;
   }
+
   .btn {
     width: 100%;
   }
