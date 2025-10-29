@@ -37,7 +37,10 @@ Open source social network protocol for Git repositories.
 
 ## Installation
 
-- [Download VSCode extension from releases](https://github.com/gitsocial-org/gitsocial/releases)
+**VS Code Extension:**
+- Install from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
+- Or search "GitSocial" in VS Code Extensions panel
+- Or download `.vsix` from [GitHub Releases](https://github.com/gitsocial-org/gitsocial/releases)
 
 ## Documentation
 
