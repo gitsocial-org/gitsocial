@@ -137,7 +137,9 @@
     "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
     "type-check": "tsc --noEmit",
     "test": "vscode-test",
-    "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)"
+    "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)",
+    "publish": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies --pre-release)",
+    "publish:stable": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies)"
   },
   "dependencies": {
     "@gitsocial/core": "file:../core",
