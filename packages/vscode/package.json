@@ -138,8 +138,8 @@
     "type-check": "tsc --noEmit",
     "test": "vscode-test",
     "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)",
-    "publish": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies --pre-release)",
-    "publish:stable": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies)"
+    "vsce:publish": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies --pre-release)",
+    "vsce:publish:stable": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies)"
   },
   "dependencies": {
     "@gitsocial/core": "file:../core",
