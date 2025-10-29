@@ -2,7 +2,7 @@
   "name": "gitsocial",
   "displayName": "GitSocial",
   "description": "Social features for Git repositories",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0",
   "publisher": "gitsocial",
   "icon": "media/gitsocial.png",
   "engines": {
