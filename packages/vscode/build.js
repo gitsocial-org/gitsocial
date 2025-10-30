@@ -46,6 +46,12 @@ const webviewConfig = {
   sourcemap: !production,
   minify: production,
   logLevel: 'info',
+  loader: {
+    '.woff': 'dataurl',
+    '.woff2': 'dataurl',
+    '.ttf': 'dataurl',
+    '.eot': 'dataurl'
+  },
   plugins: [
     sveltePlugin({
       preprocess: sveltePreprocess({
@@ -76,7 +82,13 @@ const cssConfig = {
   bundle: true,
   outfile: path.join(buildDir, 'webview.css'),
   minify: production,
-  logLevel: 'info'
+  logLevel: 'info',
+  loader: {
+    '.woff': 'file',
+    '.woff2': 'file',
+    '.ttf': 'file',
+    '.eot': 'file'
+  }
 };
 
 /**

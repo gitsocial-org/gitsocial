@@ -1,3 +1,8 @@
+/* ===== IMPORTS ===== */
+@import 'katex/dist/katex.min.css';
+@import 'prism-themes/themes/prism-one-light.css' (prefers-color-scheme: light);
+@import 'prism-themes/themes/prism-one-dark.css' (prefers-color-scheme: dark);
+
 /* ===== RESET & BASE ===== */
 * {
   box-sizing: border-box;
@@ -267,6 +272,8 @@ hr {
 .h-6 { height: 1.5rem; }
 .h-8 { height: 2rem; }
 .h-10 { height: 2.5rem; }
+.min-h-md { min-height: 28rem; }
+
 
 /* Min/Max Width */
 .min-w-0 { min-width: 0; }
@@ -352,7 +359,7 @@ hr {
 
 /* ===== BORDERS & VISUAL ===== */
 /* Borders */
-.border { border: 1px solid var(--vscode-widget-border); }
+.border { border: 1px solid var(--vscode-input-border); }
 .border-0 { border: none; }
 .border-2 { border-width: 2px; }
 .border-t { border-top: 1px solid var(--vscode-widget-border); }

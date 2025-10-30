@@ -144,8 +144,19 @@
   "dependencies": {
     "@gitsocial/core": "file:../core",
     "@vscode/codicons": "^0.0.36",
+    "dompurify": "^3.3.0",
+    "katex": "^0.16.25",
     "lru-cache": "^11.0.2",
-    "marked": "^16.2.1"
+    "prism-themes": "^1.9.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-prism-plus": "^2.0.0",
+    "rehype-stringify": "^10.0.1",
+    "remark-emoji": "^5.0.2",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.1",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/node": "16.x",

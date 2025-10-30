@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../api';
   import { webLog } from '../utils/weblog';
+  import MilkdownEditor from '../components/MilkdownEditor.svelte';
 
   let content = '';
   let creating = false;
@@ -10,16 +11,15 @@
   let currentRequestId: string | null = null;
 
   onMount(() => {
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.classList.add('full-width-view');
+    }
+
     // Get initial content from params if provided
     const params = (window as { viewParams?: { content?: string } }).viewParams;
     if (params?.content) {
       content = params.content;
-    }
-
-    // Focus on the textarea
-    const textarea = document.querySelector('textarea');
-    if (textarea) {
-      (textarea as HTMLTextAreaElement).focus();
     }
 
     // Listen for response from extension
@@ -73,6 +73,13 @@
   function handleCancel() {
     api.closePanel();
   }
+
+  onDestroy(() => {
+    const appEl = document.getElementById('app');
+    if (appEl) {
+      appEl.classList.remove('full-width-view');
+    }
+  });
 </script>
 
 <div class="view-container">
@@ -96,35 +103,19 @@
   {/if}
 
   <form on:submit|preventDefault={handleSubmit}>
-    <div class="mb-1">
-      <textarea
-        id="post-content"
-        bind:value={content}
-        placeholder="What's on your mind?"
-        rows="20"
-        required
-        disabled={creating}
-        class="w-full"
-      ></textarea>
-    </div>
-
-    <div class="flex gap-2 justify-end">
-      <button
-        type="button"
-        class="btn"
-        on:click={handleCancel}
-        disabled={creating}
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        class="btn primary wide"
-        disabled={!content.trim() || creating}
-      >
-        <span class="codicon codicon-save"></span>
-        {creating ? 'Saving...' : 'Save Post'}
-      </button>
-    </div>
+    <MilkdownEditor
+      bind:value={content}
+      placeholder="What's on your mind?"
+      disabled={creating}
+      creating={creating}
+      onSubmit={handleSubmit}
+      onCancel={handleCancel}
+    />
   </form>
 </div>
+
+<style>
+  :global(#app.full-width-view) {
+    max-width: none;
+  }
+</style>

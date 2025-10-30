@@ -7,7 +7,7 @@
   import Dialog from './Dialog.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
-  import { parseMarkdown, extractImages, configureMarked } from '../utils/markdown';
+  import { parseMarkdown, extractImages } from '../utils/markdown';
 
   export let post: Post;  // Post object
   export let posts: Map<string, Post> | Post[] = [];  // Optional posts collection for optimization
@@ -102,8 +102,6 @@
   $: formattedTime = timeUpdateTrigger >= 0 && post ? formatRelativeTime(post.timestamp) : '';
 
   onMount(() => {
-    // Initialize marked configuration once
-    configureMarked();
     cleanup = setupMessageListeners();
 
     // Set up event-driven time updates
