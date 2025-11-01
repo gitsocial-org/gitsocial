@@ -40,7 +40,8 @@ export type SpecialWebviewMessages =
   | { type: 'openView'; id?: string; viewType: string; title: string; params?: Record<string, unknown> }
   | { type: 'updatePanelIcon'; postAuthor: { email: string; repository: string }; id?: string }
   | { type: 'updatePanelTitle'; title: string; id?: string }
-  | { type: 'closePanel'; id?: string };
+  | { type: 'closePanel'; id?: string }
+  | { type: 'toggleZenMode'; id?: string };
 
 /**
  * Special extension messages

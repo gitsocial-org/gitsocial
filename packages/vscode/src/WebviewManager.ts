@@ -245,6 +245,9 @@ export class WebviewManager {
       panel.title = updateMessage.title;
       return;
     }
+    case 'toggleZenMode':
+      await vscode.commands.executeCommand('workbench.action.toggleZenMode');
+      return;
     case 'closePanel':
       panel.dispose();
       return;

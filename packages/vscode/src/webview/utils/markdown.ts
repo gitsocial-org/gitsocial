@@ -108,7 +108,7 @@ export function transformCodeAndMath(content: string): string {
   }
   try {
     const parts: Array<{ type: 'text' | 'code' | 'math', content: string, language?: string, isDisplay?: boolean }> = [];
-    const codeBlockRegex = /```([a-zA-Z0-9_+-#]*)\n([\s\S]*?)```/g;
+    const codeBlockRegex = /```([a-zA-Z0-9_+#-]*)\n([\s\S]*?)```/g;
     const mathDisplayRegex = /\$\$((?:[^\$]|\$(?!\$))+?)\$\$/g;
     const mathInlineRegex = /\$(?=\S)((?:[^\$\n]|\\\$)+?)(?<=\S)\$(?!\d)/g;
     const allMatches: Array<{ index: number, length: number, type: 'code' | 'math', content: string, language?: string, isDisplay?: boolean }> = [];

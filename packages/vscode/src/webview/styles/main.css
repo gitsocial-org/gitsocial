@@ -199,6 +199,7 @@ hr {
 .-mr-2 { margin-right: -0.5rem; }
 .-mr-3 { margin-right: -0.75rem; }
 .-mr-4 { margin-right: -1rem; }
+.-mr-8 { margin-right: -2rem; }
 .-mb-1 { margin-bottom: -0.25rem; }
 .-mb-2 { margin-bottom: -0.5rem; }
 
@@ -566,6 +567,10 @@ select:hover {
 .btn:focus {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
+}
+
+.btn.absolute {
+  position: absolute;
 }
 
 /* Button Variants */

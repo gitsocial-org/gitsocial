@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { Post } from '@gitsocial/core/client';
   import { gitHost } from '@gitsocial/core/client';
-  import { onMount, onDestroy } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { api } from '../api';
   import Avatar from './Avatar.svelte';
   import Dialog from './Dialog.svelte';
+  import FullscreenPostViewer from './FullscreenPostViewer.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
   import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
@@ -18,11 +19,15 @@
   export let isEmbedded = false;
   export let anchorPostId: string | undefined = undefined;  // Optional: the ID of the main post being viewed
   export let isAnchorPost = false;  // True only for main post in Post view
+  export let hideFullscreenButton = false;  // Hide fullscreen button (when already in fullscreen)
 
-  // Note: post is now always a Post object, no string ID handling needed
+  const dispatch = createEventDispatcher<{ fullscreen: Post }>();
 
   // Raw view toggle state
   let showRawView = false;
+
+  // Fullscreen state
+  let showFullscreen = false;
 
   // Context-aware display logic
   $: showFullContent = post && (displayMode === 'main' || displayMode === 'reply' || displayMode === 'full');
@@ -243,6 +248,16 @@
     return resolvedPosts.get(postId) || null;
   }
 
+  function handleFullscreenClick() {
+    showFullscreen = true;
+    api.toggleZenMode();
+  }
+
+  function handleCloseFullscreen() {
+    showFullscreen = false;
+    api.toggleZenMode();
+  }
+
   // Reactive: auto-resolve missing original posts (only for quote/repost types)
   $: if (post && post.originalPostId && (post.type === 'quote' || post.type === 'repost')) {
     const resolved = getResolvedPost(post.originalPostId);
@@ -330,16 +345,26 @@
                 </span>
               </div>
             </div>
-            <!-- Raw View Toggle Button (top right) -->
-            {#if isAnchorPost && (parsedHtml || images.length > 0)}
-              <button
-                class="btn ghost sm {showRawView ? 'active' : ''}"
-                on:click={() => showRawView = !showRawView}
-                title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
-                <span class="codicon codicon-code"></span>
-                <span>Raw</span>
-              </button>
-            {/if}
+            <!-- Action Buttons (top right) -->
+            <div class="flex gap-2">
+              {#if isAnchorPost && (parsedHtml || images.length > 0)}
+                <button
+                  class="btn ghost sm {showRawView ? 'active' : ''}"
+                  on:click={() => showRawView = !showRawView}
+                  title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
+                  <span class="codicon codicon-code"></span>
+                  <span>Raw</span>
+                </button>
+              {/if}
+              {#if !hideFullscreenButton}
+                <button
+                  class="btn ghost sm"
+                  on:click={handleFullscreenClick}
+                  title="View fullscreen (F)">
+                  <span class="codicon codicon-screen-full"></span>
+                </button>
+              {/if}
+            </div>
           </div>
           <!-- Full Width Content -->
 
@@ -568,16 +593,26 @@
                   {formattedTime}
                 </span>
               </div>
-              <!-- Raw View Toggle Button (top right) -->
-              {#if isAnchorPost && (parsedHtml || images.length > 0)}
-                <button
-                  class="btn ghost sm {showRawView ? 'active' : ''}"
-                  on:click={(e) => { e.stopPropagation(); showRawView = !showRawView; }}
-                  title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
-                  <span class="codicon codicon-{showRawView ? 'markdown' : 'code'}"></span>
-                  <span>Raw</span>
-                </button>
-              {/if}
+              <!-- Action Buttons (top right) -->
+              <div class="flex gap-2">
+                {#if isAnchorPost && (parsedHtml || images.length > 0)}
+                  <button
+                    class="btn ghost sm {showRawView ? 'active' : ''}"
+                    on:click={(e) => { e.stopPropagation(); showRawView = !showRawView; }}
+                    title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
+                    <span class="codicon codicon-{showRawView ? 'markdown' : 'code'}"></span>
+                    <span>Raw</span>
+                  </button>
+                {/if}
+                {#if !hideFullscreenButton}
+                  <button
+                    class="btn ghost sm"
+                    on:click={(e) => { e.stopPropagation(); handleFullscreenClick(); }}
+                    title="View fullscreen (F)">
+                    <span class="codicon codicon-screen-full"></span>
+                  </button>
+                {/if}
+              </div>
             </div>
 
             <!-- Content -->
@@ -907,5 +942,12 @@
         </div>
       {/if}
     </div>
+  {/if}
+
+  {#if showFullscreen}
+    <FullscreenPostViewer
+      posts={[post]}
+      currentIndex={0}
+      on:close={handleCloseFullscreen} />
   {/if}
 {/if}

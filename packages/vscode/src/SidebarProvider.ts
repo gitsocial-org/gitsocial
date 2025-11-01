@@ -101,6 +101,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       await this._updateUnpushedCount();
       break;
 
+    case 'toggleZenMode':
+      await vscode.commands.executeCommand('workbench.action.toggleZenMode');
+      break;
+
     default: {
       const handler = getHandler(message.type);
       if (handler && this._view) {

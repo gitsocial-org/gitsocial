@@ -165,6 +165,10 @@ class WebviewAPI {
     this.postMessage({ type: 'closePanel' });
   }
 
+  toggleZenMode(): void {
+    this.postMessage({ type: 'toggleZenMode' });
+  }
+
   getUnpushedCounts(): void {
     this.postMessage({ type: 'getUnpushedCounts' });
   }

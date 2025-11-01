@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { Post, ThreadItem as ThreadItemType, ThreadSort } from '@gitsocial/core/client';
   import PostCard from '../components/PostCard.svelte';
+  import FullscreenPostViewer from '../components/FullscreenPostViewer.svelte';
   import { api } from '../api';
   import { sortPosts } from '../utils/sorting';
   import { getLastMonday, getTimeRangeLabel } from '../utils/time';
@@ -16,6 +17,8 @@
   let threadItems: ThreadItemType[] = [];
   let error: string | null = null;
   let currentRequestId: string | null = null;
+  let fullscreenPost: Post | null = null;
+  let fullscreenPostIndex = 0;
 
   // Reactive: rebuild thread items when posts or sort changes
   $: threadItems = rawPosts.length > 0 ? buildThreadItems(rawPosts) : [];
@@ -168,6 +171,22 @@
     return items;
   }
 
+  function handleFullscreen(event: CustomEvent<Post>) {
+    const post = event.detail;
+    const allPosts = threadItems.filter(item => item.data).map(item => item.data as Post);
+    fullscreenPostIndex = allPosts.findIndex(p => p.id === post.id);
+    if (fullscreenPostIndex === -1) {
+      fullscreenPostIndex = 0;
+    }
+    fullscreenPost = post;
+    api.toggleZenMode();
+  }
+
+  function handleCloseFullscreen() {
+    fullscreenPost = null;
+    api.toggleZenMode();
+  }
+
 </script>
 
 <div class="flex flex-col h-full">
@@ -207,7 +226,8 @@
                 post={item.data}
                 displayMode={getDisplayMode(item)}
                 anchorPostId={anchorPostId}
-                isAnchorPost={item.type === 'anchor'} />
+                isAnchorPost={item.type === 'anchor'}
+                on:fullscreen={handleFullscreen} />
             </div>
           {/if}
         {:else if item.type === 'readMore'}
@@ -245,3 +265,10 @@
     </div>
   {/if}
 </div>
+
+{#if fullscreenPost}
+  <FullscreenPostViewer
+    posts={threadItems.filter(item => item.data).map(item => item.data)}
+    currentIndex={fullscreenPostIndex}
+    on:close={handleCloseFullscreen} />
+{/if}
