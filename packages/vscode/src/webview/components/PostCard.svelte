@@ -7,7 +7,7 @@
   import Dialog from './Dialog.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
-  import { parseMarkdown, extractImages } from '../utils/markdown';
+  import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
 
   export let post: Post;  // Post object
   export let posts: Map<string, Post> | Post[] = [];  // Optional posts collection for optimization
@@ -34,9 +34,13 @@
   // Markdown and image processing (on-demand)
   $: images = extractImages(post?.content || '');
   let parsedHtml = '';
+  let transformedHtml = '';
   $: if (isAnchorPost && post?.content) {
     const result = parseMarkdown(post.content);
     parsedHtml = result.html;
+  }
+  $: if (!isAnchorPost && post?.content) {
+    transformedHtml = transformCodeAndMath(post.content);
   }
 
   // Image lightbox state
@@ -350,6 +354,12 @@
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html parsedHtml}
               </div>
+            {:else if transformedHtml}
+              <!-- Code and math transformed -->
+              <div class="markdown-content {isMainPost ? 'text-lg' : ''}">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                {@html transformedHtml}
+              </div>
             {:else if showFullContent || post.type !== 'comment'}
               <!-- Plain text for other posts -->
               {#if post.content.split('\n').length > 0}
@@ -580,6 +590,12 @@
                 <div class="markdown-content">
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                   {@html parsedHtml}
+                </div>
+              {:else if transformedHtml}
+                <!-- Code and math transformed -->
+                <div class="markdown-content">
+                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                  {@html transformedHtml}
                 </div>
               {:else if showFullContent || post.type !== 'comment'}
                 <!-- Plain text for other posts -->
