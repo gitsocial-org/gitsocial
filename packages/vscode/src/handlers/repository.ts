@@ -565,7 +565,6 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
         }
 
         let syncMessage = 'Already up-to-date';
-        let didMerge = false;
 
         // Only attempt merge if HEAD is not detached
         if (!isDetached) {
@@ -576,6 +575,14 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
           ]);
 
           if (originBranchResult.success) {
+            // Ensure upstream tracking is configured for the branch
+            const upstreamResult = await git.getUpstreamBranch(workdir, gitSocialBranch);
+            if (!upstreamResult.success || upstreamResult.data !== originBranchRef) {
+              const setUpstreamResult = await git.setUpstreamBranch(workdir, originBranchRef, gitSocialBranch);
+              if (setUpstreamResult.success) {
+                log('info', `[fetchUpdates] Set upstream tracking: ${gitSocialBranch} -> ${originBranchRef}`);
+              }
+            }
             // Check divergence
             const divergenceResult = await git.execGit(workdir, [
               'rev-list', '--left-right', '--count', `${originBranchRef}...${gitSocialBranch}`
@@ -609,7 +616,6 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
 
                 log('info', `[fetchUpdates] Merged ${behind} commits from ${originBranchRef}`);
                 syncMessage = `Synced ${behind} new post${behind !== 1 ? 's' : ''}`;
-                didMerge = true;
               }
             }
           }

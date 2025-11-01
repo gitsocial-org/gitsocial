@@ -26,6 +26,8 @@ export const git = {
   getConfiguredBranch: operations.getConfiguredBranch,
   validatePushPreconditions: operations.validatePushPreconditions,
   mergeBranch: operations.mergeBranch,
+  setUpstreamBranch: operations.setUpstreamBranch,
+  getUpstreamBranch: operations.getUpstreamBranch,
 
   // From remotes
   addRemote: remotes.addRemote,

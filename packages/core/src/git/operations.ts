@@ -632,3 +632,44 @@ export async function mergeBranch(
 
   return { success: true };
 }
+/**
+ * Set upstream tracking branch for the current or specified branch
+ */
+export async function setUpstreamBranch(
+  workdir: string,
+  upstreamBranch: string,
+  localBranch?: string
+): Promise<Result<void>> {
+  const args = ['branch', '--set-upstream-to', upstreamBranch];
+  if (localBranch) {
+    args.push(localBranch);
+  }
+  const result = await execGit(workdir, args);
+  if (!result.success) {
+    return {
+      success: false,
+      error: {
+        code: ERROR_CODES.GIT_ERROR,
+        message: 'Failed to set upstream branch',
+        details: result.error
+      }
+    };
+  }
+  return { success: true };
+}
+
+/**
+ * Get the upstream branch for the current or specified branch
+ */
+export async function getUpstreamBranch(
+  workdir: string,
+  localBranch?: string
+): Promise<Result<string>> {
+  const args = ['rev-parse', '--abbrev-ref'];
+  if (localBranch) {
+    args.push(`${localBranch}@{upstream}`);
+  } else {
+    args.push('@{upstream}');
+  }
+  return executeGit(workdir, args);
+}
