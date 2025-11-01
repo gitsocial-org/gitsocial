@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { api } from '../api';
   import { webLog } from '../utils/weblog';
-  import MilkdownEditor from '../components/MilkdownEditor.svelte';
+  import MarkdownEditor from '../components/MarkdownEditor.svelte';
 
   let content = '';
   let creating = false;
@@ -103,7 +103,7 @@
   {/if}
 
   <form on:submit|preventDefault={handleSubmit}>
-    <MilkdownEditor
+    <MarkdownEditor
       bind:value={content}
       placeholder="What's on your mind?"
       disabled={creating}

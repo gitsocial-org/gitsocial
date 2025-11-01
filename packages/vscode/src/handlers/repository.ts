@@ -948,8 +948,19 @@ registerHandler('checkRepositoryStatus', async function handleGetRepositoryRelat
       if (result.success && result.data) {
         const repository = result.data;
 
-        // For workspace repos, check for origin remote
+        // For workspace repos, load config and check for origin remote
         if (repository.type === 'workspace') {
+          // Get GitSocial branch configuration
+          const gitSocialBranch = await git.getConfiguredBranch(workspaceFolder.uri.fsPath);
+          repository.branch = gitSocialBranch;
+          repository.config = {
+            branch: gitSocialBranch,
+            social: {
+              enabled: true,
+              branch: gitSocialBranch
+            }
+          };
+
           const remotesResult = await git.listRemotes(workspaceFolder.uri.fsPath);
           if (remotesResult.success && remotesResult.data) {
             const originRemote = remotesResult.data.find(r => r.name === 'origin');

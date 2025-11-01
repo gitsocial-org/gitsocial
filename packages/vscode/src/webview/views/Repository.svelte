@@ -64,7 +64,7 @@
     }
   })();
   $: repositoryUrl = repositoryParsed?.repository || repository;
-  $: repositoryBranch = repositoryParsed?.branch || null;
+  $: repositoryBranch = repositoryParsed?.branch || (isWorkspace ? repositoryStatus?.branch : null) || null;
   let activeTab: 'posts' | 'comments' | 'lists' | 'followers' | 'log' = 'posts';
   let postsRequestId: string | null = null;
   let repliesRequestId: string | null = null;
@@ -111,11 +111,6 @@
   let followersTabData: Follower[] = [];
   let followersRequestId: string | null = null;
   let followersLoaded = false;
-
-  // Inline post form state
-  let showPostForm = false;
-  let postContent = '';
-  let isCreatingPost = false;
 
   // Total unpushed counts (accurate from all posts, not just current week)
   let totalUnpushedCounts = { posts: 0, comments: 0, total: 0 };
@@ -308,16 +303,6 @@
         loadRangeData(true);
         // Also refresh total unpushed counts
         api.getUnpushedCounts();
-        break;
-
-      case 'postCreated':
-      case 'commitCreated':
-        // Post was successfully created
-        isCreatingPost = false;
-        showPostForm = false;
-        postContent = '';
-        // Refresh posts to show the new one
-        loadRangeData(true); // Skip cache to get fresh data
         break;
 
       case 'refresh': {
@@ -532,32 +517,7 @@
   }
 
   function handleCreatePost() {
-    // Toggle inline form instead of opening new view
-    showPostForm = true;
-    postContent = '';
-  }
-
-  function handleCancelPost() {
-    showPostForm = false;
-    postContent = '';
-    isCreatingPost = false;
-  }
-
-  async function handleSubmitPost() {
-    if (!postContent.trim() || isCreatingPost) {return;}
-
-    isCreatingPost = true;
-    error = null;
-
-    // Send create post message
-    api.createPost(postContent.trim());
-
-    // Reset form
-    showPostForm = false;
-    postContent = '';
-    isCreatingPost = false;
-
-  // Posts will refresh via the 'refresh' message handler
+    api.openView('createPost', 'New Post');
   }
 
   function handlePush() {
@@ -844,15 +804,16 @@
     <div class="flex justify-end items-center {isWorkspace ? 'mt-1' : '-mb-1'} ">
       <div class="text-sm text-muted italic whitespace-nowrap">
         {#if (isWorkspace && originUrl) || (!isWorkspace && repository)}
-          {@const baseUrl = gitHost.getWebUrl(isWorkspace ? originUrl : repositoryUrl) || '#'}
+          {@const displayUrl = isWorkspace ? gitMsgUrl.normalize(originUrl) : repositoryUrl}
+          {@const baseUrl = gitHost.getWebUrl(displayUrl) || '#'}
           {@const fullUrl = repositoryBranch ? `${baseUrl}#branch:${repositoryBranch}` : baseUrl}
           {#if fullUrl !== '#'}
             <a href={fullUrl} class="hover-underline text-muted">
-              {isWorkspace ? originUrl : repositoryUrl}{repositoryBranch ? `#branch:${repositoryBranch}` : ''}
+              {displayUrl}{repositoryBranch ? `#branch:${repositoryBranch}` : ''}
             </a>
           {:else}
             <span class="text-muted">
-              {isWorkspace ? originUrl : repositoryUrl}{repositoryBranch ? `#branch:${repositoryBranch}` : ''}
+              {displayUrl}{repositoryBranch ? `#branch:${repositoryBranch}` : ''}
             </span>
           {/if}
           {#if isFollowedRepo || fetchTimeDisplay}
@@ -882,52 +843,6 @@
   {:else}
     {#if activeTab === 'posts'}
       <div class="section">
-        {#if isWorkspace}
-          <!-- Inline post creation area -->
-          <div class="">
-            {#if showPostForm}
-              <div class="card">
-                <div class="flex justify-between items-center">
-                  <h3 class="font-medium">New Post</h3>
-                  <button
-                    class="btn ghost sm"
-                    on:click={handleCancelPost}
-                    disabled={isCreatingPost}
-                  >
-                    <span class="codicon codicon-close"></span>
-                  </button>
-                </div>
-                <form on:submit|preventDefault={handleSubmitPost}>
-                  <textarea
-                    bind:value={postContent}
-                    class="w-full border"
-                    rows="20"
-                    placeholder="What's on your mind?"
-                    disabled={isCreatingPost}
-                  ></textarea>
-                  <div class="flex justify-between items-center mt-2">
-                    <span class="text-sm text-muted">
-                      {postContent.length} characters
-                    </span>
-                    <button
-                      type="submit"
-                      class="btn primary wide"
-                      disabled={!postContent.trim() || isCreatingPost}
-                    >
-                      {#if isCreatingPost}
-                        <span class="codicon codicon-loading spin"></span>
-                        Saving Post...
-                      {:else}
-                        <span class="codicon codicon-save"></span>
-                        Save Post
-                      {/if}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            {/if}
-          </div>
-        {/if}
         <div class="flex flex-col gap-2 -ml-4">
           {#each postsTabData as post (post.id)}
             <PostCard {post} posts={allPostsForContext} />
