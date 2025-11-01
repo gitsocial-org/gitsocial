@@ -65,7 +65,9 @@
       {/if}
     </div>
     {#if posts.length > 1}
-      <div class="fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center items-center gap-4 border rounded-full z-50 bg-sidebar p-2">
+      <div
+        class="fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center items-center gap-4
+          border rounded-full z-50 bg-sidebar p-2">
         <button
           class="bg-transparent border-0 cursor-pointer p-2 rounded-sm flex items-center justify-center transition"
           on:click={navigatePrevious}

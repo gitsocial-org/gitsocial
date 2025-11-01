@@ -109,12 +109,13 @@ export function transformCodeAndMath(content: string): string {
   try {
     const parts: Array<{ type: 'text' | 'code' | 'math', content: string, language?: string, isDisplay?: boolean }> = [];
     const codeBlockRegex = /```([a-zA-Z0-9_+#-]*)\n([\s\S]*?)```/g;
-    const mathDisplayRegex = /\$\$((?:[^\$]|\$(?!\$))+?)\$\$/g;
-    const mathInlineRegex = /\$(?=\S)((?:[^\$\n]|\\\$)+?)(?<=\S)\$(?!\d)/g;
+    const mathDisplayRegex = /\$\$((?:[^$]|\$(?!\$))+?)\$\$/g;
+    // eslint-disable-next-line no-useless-escape
+    const mathInlineRegex = /\$(?=\S)((?:[^$\n]|\\\$)+?)(?<=\S)\$(?!\d)/g;
     const allMatches: Array<{ index: number, length: number, type: 'code' | 'math', content: string, language?: string, isDisplay?: boolean }> = [];
     for (const match of content.matchAll(codeBlockRegex)) {
       allMatches.push({
-        index: match.index!,
+        index: match.index,
         length: match[0].length,
         type: 'code',
         content: match[2],
@@ -123,7 +124,7 @@ export function transformCodeAndMath(content: string): string {
     }
     for (const match of content.matchAll(mathDisplayRegex)) {
       allMatches.push({
-        index: match.index!,
+        index: match.index,
         length: match[0].length,
         type: 'math',
         content: match[1],
@@ -132,7 +133,7 @@ export function transformCodeAndMath(content: string): string {
     }
     for (const match of content.matchAll(mathInlineRegex)) {
       allMatches.push({
-        index: match.index!,
+        index: match.index,
         length: match[0].length,
         type: 'math',
         content: match[1],
@@ -173,7 +174,7 @@ export function transformCodeAndMath(content: string): string {
       if (part.type === 'text') {
         html += `<span class="whitespace-pre-wrap">${escapeHtml(part.content)}</span>`;
       } else if (part.type === 'code') {
-        const codeMarkdown = `\`\`\`${part.language}\n${part.content}\n\`\`\``;
+        const codeMarkdown = `\`\`\`${part.language || ''}\n${part.content}\n\`\`\``;
         const processedHtml = markdownToHtml(codeMarkdown);
         html += processedHtml;
       } else if (part.type === 'math') {

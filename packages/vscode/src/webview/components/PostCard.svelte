@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Post } from '@gitsocial/core/client';
   import { gitHost } from '@gitsocial/core/client';
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../api';
   import Avatar from './Avatar.svelte';
   import Dialog from './Dialog.svelte';
@@ -20,8 +20,6 @@
   export let anchorPostId: string | undefined = undefined;  // Optional: the ID of the main post being viewed
   export let isAnchorPost = false;  // True only for main post in Post view
   export let hideFullscreenButton = false;  // Hide fullscreen button (when already in fullscreen)
-
-  const dispatch = createEventDispatcher<{ fullscreen: Post }>();
 
   // Raw view toggle state
   let showRawView = false;
