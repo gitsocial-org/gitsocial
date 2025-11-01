@@ -550,10 +550,71 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
         // Workspace fetch: fetch from origin directly
         const gitSocialBranch = await git.getConfiguredBranch(workdir);
 
+        // Check if HEAD is detached
+        const headResult = await git.execGit(workdir, ['symbolic-ref', '-q', 'HEAD']);
+        const isDetached = !headResult.success;
+
+        if (isDetached) {
+          log('info', '[fetchUpdates] HEAD is detached, will fetch only (no merge)');
+        }
+
         const fetchResult = await git.fetchRemote(workdir, 'origin', { branch: gitSocialBranch });
 
         if (!fetchResult.success) {
           throw new Error(fetchResult.error?.message || 'Failed to fetch from origin');
+        }
+
+        let syncMessage = 'Already up-to-date';
+        let didMerge = false;
+
+        // Only attempt merge if HEAD is not detached
+        if (!isDetached) {
+          // Check if origin/branch exists
+          const originBranchRef = `origin/${gitSocialBranch}`;
+          const originBranchResult = await git.execGit(workdir, [
+            'rev-parse', '--verify', '--quiet', originBranchRef
+          ]);
+
+          if (originBranchResult.success) {
+            // Check divergence
+            const divergenceResult = await git.execGit(workdir, [
+              'rev-list', '--left-right', '--count', `${originBranchRef}...${gitSocialBranch}`
+            ]);
+
+            if (divergenceResult.success && divergenceResult.data) {
+              const output = divergenceResult.data.stdout.trim();
+              const [behind, ahead] = output.split('\t').map(Number);
+
+              if (behind > 0) {
+                // We are behind - merge is needed
+                if (ahead > 0) {
+                  // Diverged - both have commits
+                  postMessage(panel, 'fetchProgress', {
+                    status: 'syncing',
+                    message: `Merging ${behind} new posts with ${ahead} unpushed posts...`
+                  }, requestId);
+                } else {
+                  // Can fast-forward
+                  postMessage(panel, 'fetchProgress', {
+                    status: 'syncing',
+                    message: `Syncing ${behind} new posts...`
+                  }, requestId);
+                }
+
+                // Merge origin/branch
+                const mergeResult = await git.mergeBranch(workdir, originBranchRef);
+                if (!mergeResult.success) {
+                  throw new Error('Failed to merge remote changes');
+                }
+
+                log('info', `[fetchUpdates] Merged ${behind} commits from ${originBranchRef}`);
+                syncMessage = `Synced ${behind} new post${behind !== 1 ? 's' : ''}`;
+                didMerge = true;
+              }
+            }
+          }
+        } else {
+          syncMessage = 'Fetched updates (HEAD detached - checkout branch to sync)';
         }
 
         // Refresh cache for workspace repository
@@ -567,11 +628,11 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
         // Send completion response
         postMessage(panel, 'fetchProgress', {
           status: 'completed',
-          message: 'Workspace updated successfully'
+          message: syncMessage
         }, requestId);
 
         // Show completion message
-        void vscode.window.showInformationMessage('Successfully fetched workspace updates');
+        void vscode.window.showInformationMessage(syncMessage);
 
         // Refresh all open views to show updated content
         if (broadcastToAll) {
