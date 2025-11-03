@@ -8,6 +8,14 @@ import { getCommit, listRefs, readGitRef, writeGitRef } from '../git/operations'
 import { execGit } from '../git/exec';
 import { log } from '../logger';
 
+export interface ListCommit {
+  hash: string;
+  author: string;
+  email: string;
+  timestamp: Date;
+  content: unknown;
+}
+
 /**
  * GitMsg List operations - Generic protocol-level list storage
  */
@@ -78,8 +86,22 @@ export const gitMsgList = {
       // Use the empty tree for commits (we store data in the commit message)
       const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
+      // Read current ref to get parent commit (for maintaining history)
+      const refPath = `refs/gitmsg/${extension}/lists/${name}`;
+      const currentRefResult = await readGitRef(workdir, refPath);
+
       // Create a commit with JSON in the message
       const commitArgs = ['commit-tree', EMPTY_TREE, '-m', content];
+
+      // Add parent if ref exists (maintains commit history chain)
+      if (currentRefResult.success && currentRefResult.data) {
+        const parentHash = currentRefResult.data.trim();
+        commitArgs.push('-p', parentHash);
+        log('debug', `[gitMsgList.write] Using parent commit: ${parentHash}`);
+      } else {
+        log('debug', '[gitMsgList.write] No existing ref, creating initial commit');
+      }
+
       log('debug', `[gitMsgList.write] Creating commit with git command: git ${commitArgs.join(' ')}`);
 
       const commitResult = await execGit(workdir, commitArgs);
@@ -104,7 +126,6 @@ export const gitMsgList = {
       log('info', `[gitMsgList.write] Created commit: ${commitHash}`);
 
       // Update the ref to point to the new commit
-      const refPath = `refs/gitmsg/${extension}/lists/${name}`;
       log('info', `[gitMsgList.write] Updating ref '${refPath}' to commit ${commitHash}`);
 
       const refResult = await writeGitRef(workdir, refPath, commitHash);
@@ -210,5 +231,76 @@ export const gitMsgList = {
         }
       };
     }
-  }
+  },
+
+  /**
+   * Get commit history for a list
+   * @param workdir - Working directory
+   * @param extension - Extension name (e.g., 'social')
+   * @param name - List name
+   * @param options - Options for filtering history
+   * @returns Array of commits
+   */
+  async getHistory(
+    workdir: string,
+    extension: string,
+    name: string,
+    options?: {
+      since?: Date;
+      until?: Date;
+    }
+  ): Promise<Result<ListCommit[]>> {
+    try {
+      const refPath = `refs/gitmsg/${extension}/lists/${name}`;
+      const args = ['log', '--format=%H%n%an%n%ae%n%at%n%B%n---GITMSG-END---', refPath];
+
+      if (options?.since) {
+        args.push(`--since=${options.since.toISOString()}`);
+      }
+
+      if (options?.until) {
+        args.push(`--until=${options.until.toISOString()}`);
+      }
+
+      const result = await execGit(workdir, args);
+      if (!result.success || !result.data?.stdout) {
+        return { success: false, error: { code: 'GIT_ERROR', message: 'Failed to get list history' } };
+      }
+
+      const commits: ListCommit[] = [];
+      const entries = result.data.stdout.trim().split('---GITMSG-END---').filter(e => e.trim());
+
+      for (const entry of entries) {
+        const lines = entry.trim().split('\n');
+        if (lines.length < 5) {continue;}
+
+        const content = lines.slice(4).join('\n').trim();
+        let parsedContent: unknown;
+        try {
+          parsedContent = JSON.parse(content);
+        } catch {
+          parsedContent = content;
+        }
+
+        commits.push({
+          hash: lines[0] || '',
+          author: lines[1] || '',
+          email: lines[2] || '',
+          timestamp: new Date(parseInt(lines[3] || '0') * 1000),
+          content: parsedContent
+        });
+      }
+
+      return { success: true, data: commits };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          code: 'HISTORY_ERROR',
+          message: `Failed to get list history: ${String(error)}`
+        }
+      };
+    }
+  },
+
 };
