@@ -5,6 +5,7 @@ import {
   type List,
   social
 } from '@gitsocial/core';
+import { getStorageUri } from '../extension';
 
 // Message types for list operations
 export type ListsMessages =
@@ -266,11 +267,8 @@ registerHandler('list.follow', async function handleFollowList(panel, message) {
       throw new Error('No workspace folder found');
     }
 
-    // Get storage path for isolated repositories
-    const storageUri = panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(workspaceFolder.uri, '.vscode', 'gitsocial')
-    );
-    const storageBase = storageUri.fsPath;
+    const storageUri = getStorageUri();
+    const storageBase = storageUri?.fsPath;
 
     // Follow the list using core library
     const result = await social.list.followList(
@@ -322,11 +320,8 @@ registerHandler('list.sync', async function handleSyncFollowedList(panel, messag
       throw new Error('No workspace folder found');
     }
 
-    // Get storage path for isolated repositories
-    const storageUri = panel.webview.asWebviewUri(
-      vscode.Uri.joinPath(workspaceFolder.uri, '.vscode', 'gitsocial')
-    );
-    const storageBase = storageUri.fsPath;
+    const storageUri = getStorageUri();
+    const storageBase = storageUri?.fsPath;
 
     // Sync the followed list using core library
     const result = await social.list.syncFollowedList(

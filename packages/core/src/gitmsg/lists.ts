@@ -235,23 +235,31 @@ export const gitMsgList = {
 
   /**
    * Get commit history for a list
-   * @param workdir - Working directory
+   * @param repository - Repository path to read from
    * @param extension - Extension name (e.g., 'social')
    * @param name - List name
+   * @param workspaceRoot - Path to the workspace root repository
    * @param options - Options for filtering history
    * @returns Array of commits
    */
   async getHistory(
-    workdir: string,
+    repository: string,
     extension: string,
     name: string,
+    workspaceRoot: string,
     options?: {
       since?: Date;
       until?: Date;
     }
   ): Promise<Result<ListCommit[]>> {
     try {
-      const refPath = `refs/gitmsg/${extension}/lists/${name}`;
+      // Simple check: is this the workspace repository?
+      const isWorkspaceRepo = repository === workspaceRoot;
+
+      // Use local refs for workspace, remote refs for isolated clones
+      const refPath = isWorkspaceRepo
+        ? `refs/gitmsg/${extension}/lists/${name}`
+        : `refs/remotes/upstream/gitmsg/${extension}/lists/${name}`;
       const args = ['log', '--format=%H%n%an%n%ae%n%at%n%B%n---GITMSG-END---', refPath];
 
       if (options?.since) {
@@ -262,7 +270,7 @@ export const gitMsgList = {
         args.push(`--until=${options.until.toISOString()}`);
       }
 
-      const result = await execGit(workdir, args);
+      const result = await execGit(repository, args);
       if (!result.success || !result.data?.stdout) {
         return { success: false, error: { code: 'GIT_ERROR', message: 'Failed to get list history' } };
       }
@@ -301,6 +309,6 @@ export const gitMsgList = {
         }
       };
     }
-  },
+  }
 
 };

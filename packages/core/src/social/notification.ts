@@ -1,8 +1,12 @@
 import type { NotificationType, Post, Result } from './types';
 import { git } from '../git';
 import { gitMsgRef, gitMsgUrl } from '../gitmsg/protocol';
+import { gitMsgList } from '../gitmsg/lists';
 import { log } from '../logger';
 import { post } from './post';
+import { follower } from './follower';
+import { list } from './list';
+import { cache } from './post/cache';
 
 /**
  * Notificatio namespace
@@ -12,22 +16,18 @@ export const notification = {
 };
 
 export interface Notification {
-  id: string;
   type: NotificationType;
-  timestamp: Date;
-
-  post: Post;
-  targetPostId?: string;
-
-  actor: {
-    repository: string;
-    name: string;
+  commitId: string;
+  commit?: {
+    author: string;
     email: string;
+    timestamp: Date;
   };
 }
 
 export interface NotificationOptions {
   since?: Date;
+  until?: Date;
   limit?: number;
 }
 
@@ -43,8 +43,80 @@ function isMyRepository(
   return normalizedPostRepo === myRepoUrl || normalizedPostRepo === normalizedWorkdir;
 }
 
+async function getFollowNotifications(
+  workdir: string,
+  myRepoUrl: string,
+  since: Date,
+  until?: Date
+): Promise<Notification[]> {
+  const followNotifications: Notification[] = [];
+  try {
+    const followersResult = await follower.get(workdir);
+    if (!followersResult.success || !followersResult.data) {
+      return [];
+    }
+    for (const followerRepo of followersResult.data) {
+      if (!followerRepo.path) {
+        continue;
+      }
+      const listsResult = await list.getLists(followerRepo.path);
+      if (!listsResult.success || !listsResult.data) {
+        continue;
+      }
+      const relevantList = listsResult.data.find(l => l.name === followerRepo.followsVia);
+      if (!relevantList) {
+        continue;
+      }
+      const historyResult = await gitMsgList.getHistory(
+        followerRepo.path,
+        'social',
+        relevantList.id,
+        workdir,
+        {
+          since,
+          until
+        }
+      );
+      if (!historyResult.success || !historyResult.data) {
+        continue;
+      }
+      let previousRepositories = new Set<string>();
+      for (const commit of historyResult.data) {
+        const repositories = (commit.content as Record<string, unknown>)?.['repositories'];
+        const currentRepositories = new Set<string>();
+        if (Array.isArray(repositories)) {
+          for (const repoStr of repositories) {
+            if (typeof repoStr === 'string') {
+              const repoUrl = repoStr.split('#')[0];
+              const normalized = gitMsgUrl.normalize(repoUrl || '');
+              currentRepositories.add(normalized);
+            }
+          }
+        }
+        if (currentRepositories.has(myRepoUrl) && !previousRepositories.has(myRepoUrl)) {
+          followNotifications.push({
+            type: 'follow',
+            commitId: `${followerRepo.url}#commit:${commit.hash}`,
+            commit: {
+              author: commit.author,
+              email: commit.email,
+              timestamp: commit.timestamp
+            }
+          });
+          break;
+        }
+        previousRepositories = currentRepositories;
+      }
+    }
+  } catch (error) {
+    log('error', 'Error getting follow notifications:', error);
+  }
+  return followNotifications;
+}
+
 async function getNotifications(
   workdir: string,
+  storageBase?: string,
   options?: NotificationOptions
 ): Promise<Result<Notification[]>> {
   try {
@@ -61,7 +133,15 @@ async function getNotifications(
     const myRepoUrl = gitMsgUrl.normalize(myRepoUrlResult.data);
     log('debug', `Normalized my repository URL: ${myRepoUrl}`);
 
-    const allPostsResult = post.getPosts(workdir, 'timeline');
+    const since = options?.since || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const until = options?.until;
+
+    // Ensure cache has data for the requested date range
+    if (storageBase && !cache.isCacheRangeCovered(since)) {
+      await cache.loadAdditionalPosts(workdir, storageBase, since);
+    }
+
+    const allPostsResult = post.getPosts(workdir, 'timeline', { since, until });
     if (!allPostsResult.success || !allPostsResult.data) {
       return {
         success: false,
@@ -72,17 +152,11 @@ async function getNotifications(
       };
     }
 
-    const notifications = allPostsResult.data
+    const postNotifications = allPostsResult.data
       .filter((post: Post) => {
-        // Skip posts from my own repository
         if (isMyRepository(post.repository, myRepoUrl, workdir)) { return false; }
 
-        // Skip old posts if since is specified
-        if (options?.since && post.timestamp < options.since) { return false; }
-
-        // Check if this is a comment on my post
         if (post.type === 'comment') {
-          // Check originalPostId
           if (post.originalPostId) {
             const originalRef = gitMsgRef.parse(post.originalPostId);
             if (originalRef.repository) {
@@ -90,7 +164,6 @@ async function getNotifications(
               if (normalizedOrigRepo === myRepoUrl) { return true; }
             }
           }
-          // Check parentCommentId
           if (post.parentCommentId) {
             const parentRef = gitMsgRef.parse(post.parentCommentId);
             if (parentRef.repository) {
@@ -100,7 +173,6 @@ async function getNotifications(
           }
         }
 
-        // Check if this is a repost or quote of my post
         if ((post.type === 'repost' || post.type === 'quote') && post.originalPostId) {
           const originalRef = gitMsgRef.parse(post.originalPostId);
           if (originalRef.repository) {
@@ -111,26 +183,18 @@ async function getNotifications(
 
         return false;
       })
-      .sort((a: Post, b: Post) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, options?.limit || 100)
       .map((post: Post) => ({
-        id: post.id,
         type: post.type as NotificationType,
-        timestamp: post.timestamp,
-        post,
-        targetPostId: post.originalPostId || post.parentCommentId,
-        actor: {
-          repository: post.repository,
-          name: post.author.name,
-          email: post.author.email
-        }
+        commitId: post.id
       }));
 
-    log('debug', `Found ${notifications.length} notifications`);
+    const followNotifications = await getFollowNotifications(workdir, myRepoUrl, since, until);
 
+    const allNotifications = [...postNotifications, ...followNotifications]
+      .slice(0, options?.limit || 100);
     return {
       success: true,
-      data: notifications
+      data: allNotifications
     };
   } catch (error) {
     log('error', 'Failed to get notifications:', error);

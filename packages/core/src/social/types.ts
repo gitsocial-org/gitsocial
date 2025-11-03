@@ -92,7 +92,7 @@ export interface ThreadItem {
  */
 export type ThreadSort = 'top' | 'oldest' | 'latest';
 
-export type NotificationType = 'comment' | 'repost' | 'quote';
+export type NotificationType = 'comment' | 'repost' | 'quote' | 'follow';
 
 /**
  * List represents a collection of repositories using state-based JSON storage

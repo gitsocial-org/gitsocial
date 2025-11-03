@@ -2,11 +2,13 @@ import * as vscode from 'vscode';
 import { registerHandler } from './registry';
 import type { BaseWebviewMessage } from './types';
 import { log, social } from '@gitsocial/core';
+import { getStorageUri } from '../extension';
 
 export interface GetNotificationsMessage extends BaseWebviewMessage {
   type: 'getNotifications';
   options?: {
     since?: string;
+    until?: string;
     limit?: number;
   };
   id?: string;
@@ -34,13 +36,18 @@ registerHandler<GetNotificationsMessage>('getNotifications', async (panel, messa
   }
 
   try {
+    const storageUri = getStorageUri();
+    const storageBase = storageUri?.fsPath;
+
     const options = message.options ? {
       ...message.options,
-      since: message.options.since ? new Date(message.options.since) : undefined
+      since: message.options.since ? new Date(message.options.since) : undefined,
+      until: message.options.until ? new Date(message.options.until) : undefined
     } : undefined;
 
     const result = await social.notification.getNotifications(
       workspaceFolder.uri.fsPath,
+      storageBase,
       options
     );
 
