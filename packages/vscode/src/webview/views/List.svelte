@@ -5,6 +5,7 @@
   import PostCard from '../components/PostCard.svelte';
   import Tabs from '../components/Tabs.svelte';
   import Avatar from '../components/Avatar.svelte';
+  import DateNavigation from '../components/DateNavigation.svelte';
   import { skipCacheOnNextRefresh } from '../stores';
   import { gitMsgRef, gitMsgUrl, gitHost } from '@gitsocial/core/client';
   import { formatRelativeTime, useEventDrivenTimeUpdates, getWeekStart, getWeekEnd, getWeekLabel } from '../utils/time';
@@ -585,37 +586,15 @@
         <!-- Column 3: Navigation + Actions -->
         <div class="flex items-center gap-2">
           <!-- Time Navigation (grouped) -->
-          <div class="flex items-center gap-1">
-            <button
-              class="btn sm"
-              on:click={goToPreviousWeek}
-              title="Previous week"
-              disabled={isLoadingWeek}
-            >
-              <span class="codicon codicon-chevron-left"></span>
-            </button>
-            <div class="text-center px-1">
-              {#if isLoadingWeek}
-                <span class="codicon codicon-loading spin"></span>
-              {:else}
-                {weekLabel}
-              {/if}
-            </div>
-            <button
-              class="btn sm"
-              on:click={weekOffset === 0 && list.repositories.length > 0 ? handleFetchUpdates : goToNextWeek}
-              title={weekOffset === 0 && list.repositories.length > 0 ? 'Fetch updates from remote repositories' : 'Next week'}
-              disabled={weekOffset === 0
-                ? (list.repositories.length > 0 ? fetchingUpdates : false)
-                : (weekOffset >= 0 || isLoadingWeek)}
-            >
-              {#if weekOffset === 0 && list.repositories.length > 0}
-                <span class="codicon codicon-{fetchingUpdates ? 'loading spin' : 'sync'}"></span>
-              {:else}
-                <span class="codicon codicon-chevron-right"></span>
-              {/if}
-            </button>
-          </div>
+          <DateNavigation
+            offset={weekOffset}
+            label={weekLabel}
+            loading={isLoadingWeek}
+            onPrevious={goToPreviousWeek}
+            onNext={goToNextWeek}
+            onRefresh={weekOffset === 0 && list?.repositories.length > 0 ? handleFetchUpdates : undefined}
+            refreshLoading={fetchingUpdates}
+          />
 
           <!-- Action Buttons -->
           {#if list.source && !repository}

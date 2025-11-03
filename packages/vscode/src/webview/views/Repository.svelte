@@ -6,6 +6,7 @@
   import ListManager from '../components/ListManager.svelte';
   import Avatar from '../components/Avatar.svelte';
   import Dialog from '../components/Dialog.svelte';
+  import DateNavigation from '../components/DateNavigation.svelte';
   import { skipCacheOnNextRefresh } from '../stores';
   import type { Post, List, Follower } from '@gitsocial/core';
   import { gitHost, gitMsgUrl, gitMsgRef } from '@gitsocial/core/client';
@@ -51,7 +52,7 @@
   $: originUrl = repositoryStatus?.originUrl || null;
   $: canPush = isWorkspace && hasOriginRemote;
   $: isFollowedRepo = !isWorkspace && repositoryStatus?.lists && repositoryStatus.lists.length > 0;
-  $: showFetchButton = rangeOffset === 0 && (isFollowedRepo || (isWorkspace && hasOriginRemote));
+  $: showFetchButton = rangeOffset === 0 && (!isWorkspace || hasOriginRemote);
 
   // Parse repository to extract URL and branch (strict - no fallbacks)
   $: repositoryParsed = (() => {
@@ -721,35 +722,15 @@
       <!-- Column 3: Navigation + Actions -->
       <div class="flex items-center gap-2">
         <!-- Time Navigation (grouped) -->
-        <div class="flex items-center gap-1">
-          <button
-            class="btn sm"
-            on:click={goToPreviousRange}
-            title={isWorkspace ? 'Previous 30 days' : 'Previous week'}
-            disabled={isLoadingRange}
-          >
-            <span class="codicon codicon-chevron-left"></span>
-          </button>
-          <div class="text-center px-1">
-            {#if isLoadingRange}
-              <span class="codicon codicon-loading spin"></span>
-            {:else}
-              {rangeLabel}
-            {/if}
-          </div>
-          <button
-            class="btn sm"
-            on:click={showFetchButton ? handleFetch : goToNextRange}
-            title={showFetchButton ? 'Fetch updates from remote repository' : (isWorkspace ? 'Next 30 days' : 'Next week')}
-            disabled={rangeOffset === 0 ? (isFollowedRepo && fetchingRepository) : (rangeOffset >= 0 || isLoadingRange)}
-          >
-            {#if showFetchButton}
-              <span class="codicon codicon-{fetchingRepository ? 'loading spin' : 'sync'}"></span>
-            {:else}
-              <span class="codicon codicon-chevron-right"></span>
-            {/if}
-          </button>
-        </div>
+        <DateNavigation
+          offset={rangeOffset}
+          label={rangeLabel}
+          loading={isLoadingRange}
+          onPrevious={goToPreviousRange}
+          onNext={goToNextRange}
+          onRefresh={showFetchButton ? handleFetch : undefined}
+          refreshLoading={fetchingRepository}
+        />
 
         <!-- Action Buttons -->
         {#if !isWorkspace && !isFollowedRepo}
