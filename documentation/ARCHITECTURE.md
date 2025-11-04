@@ -51,11 +51,11 @@ Namespace objects and functions only - no classes.
 
 ### 3. State-Based Storage
 
-Lists/config use JSON snapshots at Git refs - O(1) read, no event reconstruction.
+Lists/config use JSON snapshots at Git refs - O(1) read, no event reconstruction. Lists maintain commit history chains while storing complete state in each commit.
 
 ### 4. Isolated Repository Storage
 
-External repos in app storage with blobless clones (90% size reduction).
+External repos in app storage with bare, blobless clones (90% size reduction).
 
 ## Layer Usage
 
@@ -77,7 +77,7 @@ External repos in app storage with blobless clones (90% size reduction).
 
 `Client → getLists() → JSON at refs/gitmsg/social/lists/<name> → List Objects`
 
-Posts use event stream (commits), Lists/Config use JSON snapshots (O(1) read).
+Posts use event stream (commits), Lists/Config use JSON snapshots with commit history (O(1) read, queryable history).
 
 ## Performance & Constants
 
@@ -88,7 +88,7 @@ Posts use event stream (commits), Lists/Config use JSON snapshots (O(1) read).
 ## Repository Architecture
 
 **Workspace**: Direct access, contains lists/config
-**External**: App storage, blobless clones, auto-deduplication
+**External**: App storage, bare blobless clones, auto-deduplication
 **Identification**: GitMsg refs (`url#commit:hash` posts, `url#branch:name` repos)
 
 ## Core Principles
