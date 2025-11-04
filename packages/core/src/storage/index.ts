@@ -15,6 +15,7 @@ import { gitMsgUrl } from '../gitmsg/protocol';
  * Track in-progress repository operations to prevent race conditions
  */
 const repositoryOperations = new Map<string, Promise<Result<string>>>();
+const fetchOperations = new Map<string, Promise<Result<{ skipped?: boolean } | void>>>();
 
 /**
  * Storage namespace - Repository storage and cache management
@@ -122,7 +123,41 @@ function mergeDateRanges(ranges: DateRange[]): DateRange[] {
   return merged;
 }
 
-// Removed unused function isDateRangeCovered
+/**
+ * Check if a date range is fully covered by existing ranges (no gaps)
+ */
+function isDateRangeCovered(
+  requestedStart: string,
+  requestedEnd: string,
+  existingRanges: DateRange[]
+): boolean {
+  if (existingRanges.length === 0) {return false;}
+
+  // Sort ranges by start date
+  const sorted = [...existingRanges].sort((a, b) => a.start.localeCompare(b.start));
+
+  let currentPos = requestedStart;
+
+  for (const range of sorted) {
+    // If this range starts after our current position, we have a gap
+    if (range.start > currentPos) {
+      return false;
+    }
+
+    // This range covers current position, advance to its end
+    if (range.end >= currentPos) {
+      currentPos = range.end;
+    }
+
+    // If we've covered up to the requested end, we're done
+    if (currentPos >= requestedEnd) {
+      return true;
+    }
+  }
+
+  // Didn't reach requested end
+  return false;
+}
 
 /**
  * Add a new date range and merge with existing ranges
@@ -213,6 +248,7 @@ async function readRepositoryConfig(repositoryPath: string): Promise<{
   fetchedRanges?: DateRange[];
   isPersistent?: boolean;
   createdAt?: string;
+  branch?: string;
 } | null> {
   try {
     const config: {
@@ -221,6 +257,7 @@ async function readRepositoryConfig(repositoryPath: string): Promise<{
       fetchedRanges?: DateRange[];
       isPersistent?: boolean;
       createdAt?: string;
+      branch?: string;
     } = {};
 
     // Read all gitsocial.* config values
@@ -248,6 +285,8 @@ async function readRepositoryConfig(repositoryPath: string): Promise<{
           config.createdAt = value;
         } else if (keyName === 'version') {
           config.version = value;
+        } else if (keyName === 'branch') {
+          config.branch = value;
         }
       }
       return Object.keys(config).length > 0 ? config : null;
@@ -267,6 +306,7 @@ async function writeRepositoryConfig(repositoryPath: string, config: {
   fetchedRanges?: DateRange[];
   isPersistent?: boolean;
   createdAt?: string;
+  branch?: string;
 }): Promise<void> {
   try {
     log('debug', '[writeRepositoryConfig] Writing config:', { repositoryPath, config });
@@ -287,6 +327,9 @@ async function writeRepositoryConfig(repositoryPath: string, config: {
     }
     if (config.createdAt) {
       await execGit(repositoryPath, ['config', 'gitsocial.createdat', config.createdAt]);
+    }
+    if (config.branch) {
+      await execGit(repositoryPath, ['config', 'gitsocial.branch', config.branch]);
     }
   } catch (error) {
     log('warn', '[isolated-repositories] Failed to write config:', { repositoryPath, error });
@@ -426,8 +469,8 @@ async function doEnsureRepository(
     // Create directory
     mkdirSync(storageDir, { recursive: true });
 
-    // Initialize empty repository
-    const initResult = await execGit(storageDir, ['init']);
+    // Initialize bare repository (no working directory - we only read commits)
+    const initResult = await execGit(storageDir, ['init', '--bare']);
     if (!initResult.success) {
       cleanupRepository(storageDir);
       return {
@@ -492,25 +535,42 @@ async function doEnsureRepository(
     let usedDepthFetch = false;
     if (!fetchResult.success) {
       const errorMessage = fetchResult.error?.message || '';
-      if (errorMessage.includes('error processing shallow info') || errorMessage.includes('shallow')) {
-        log('warn', '[isolated-repositories] Shallow fetch failed, retrying with depth-based fetch:', {
+
+      // Check for lock file issues during clone
+      if (errorMessage.includes('Unable to create') && errorMessage.includes('.lock')) {
+        log('warn', '[isolated-repositories] Detected lock file issue during clone, cleaning up:', {
           url: normalizedUrl,
-          branch,
-          sinceDate
+          storageDir
         });
-        fetchResult = await execGit(storageDir, [
-          'fetch',
-          'upstream',
-          `+refs/heads/${branch}:refs/remotes/upstream/${branch}`,
-          '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
-          '--depth', '100',
-          '--no-tags'
-        ]);
-        usedDepthFetch = true;
+        cleanupRepository(storageDir);
+        return {
+          success: false,
+          error: {
+            code: 'LOCK_FILE_ERROR',
+            message: 'Repository lock file error during clone',
+            details: fetchResult.error
+          }
+        };
       }
 
+      log('debug', '[isolated-repositories] Shallow fetch not supported by server, using depth-based fetch:', {
+        url: normalizedUrl,
+        branch,
+        sinceDate
+      });
+      fetchResult = await execGit(storageDir, [
+        'fetch',
+        'upstream',
+        `+refs/heads/${branch}:refs/remotes/upstream/${branch}`,
+        '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
+        '--depth', '100',
+        '--update-shallow',  // Required: first fetch created shallow repo
+        '--no-tags'
+      ]);
+      usedDepthFetch = true;
+
       if (!fetchResult.success) {
-        log('error', '[isolated-repositories] Failed to fetch branch:', {
+        log('error', '[isolated-repositories] Failed to fetch branch after retry:', {
           url: normalizedUrl,
           branch,
           error: fetchResult.error
@@ -553,7 +613,8 @@ async function doEnsureRepository(
       lastFetch: now.toISOString(),
       fetchedRanges: [{ start: actualStartDate, end: todayDate }],
       isPersistent,
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      branch
     });
 
     log('info', '[isolated-repositories] Successfully cloned repository:', {
@@ -598,170 +659,237 @@ async function fetchRepository(
       };
     }
 
-    if (!branch) {
-      return {
-        success: false,
-        error: {
-          code: 'MISSING_BRANCH',
-          message: `Branch is required for repository: ${url}`
-        }
-      };
-    }
-    const targetBranch = branch;
-
-    log('debug', '[isolated-repositories] Fetching repository:', {
-      url: normalizedUrl,
-      branch: targetBranch,
-      storageDir
-    });
-
-    // Read existing config to check current state
-    const existingConfig = await readRepositoryConfig(storageDir);
-    const existingRanges = existingConfig?.fetchedRanges || [];
-
-    // Determine the date to fetch from
-    let sinceDate: string;
-    const now = new Date();
-    const todayDate = now.toISOString().substring(0, 10);
-
-    if (options?.since) {
-      // Use the requested date, normalized to YYYY-MM-DD
-      sinceDate = options.since.includes('T') ?
-        options.since.substring(0, 10) : options.since;
-      log('info', `[fetchRepository] Fetching from requested date: ${sinceDate}`);
-
-      // Check if the requested date range is already covered
-      const isAlreadyCovered = existingRanges.some(range =>
-        range.start <= sinceDate && range.end >= todayDate
-      );
-
-      if (isAlreadyCovered) {
-        log('info', '[fetchRepository] Date range already covered by existing fetchedRanges, skipping fetch:', {
-          requestedDate: sinceDate,
-          todayDate,
-          existingRanges
-        });
-        // Don't update lastFetch since we didn't actually fetch
-        return { success: true, data: { skipped: true } };
-      }
-      // If not covered, keep using the requested sinceDate to fetch earlier data
-      log('info', `[fetchRepository] Fetching earlier data from requested date: ${sinceDate}`);
-    } else if (!options?.since && existingRanges.length > 0) {
-      // Only use existing ranges when NO specific date was requested
-      const firstRange = existingRanges[0]!;
-      const oldestDate = existingRanges.reduce((oldest, range) =>
-        range.start < oldest ? range.start : oldest, firstRange.start);
-      sinceDate = oldestDate;
-      log('info', `[fetchRepository] No specific date requested, using oldest fetched date from ranges: ${sinceDate}`);
-    } else {
-      // Default to this week's Monday
-      const dayOfWeek = now.getDay();
-      const daysFromMonday = (dayOfWeek === 0) ? 6 : dayOfWeek - 1;
-      const thisWeekMonday = new Date(now);
-      thisWeekMonday.setDate(now.getDate() - daysFromMonday);
-      thisWeekMonday.setHours(0, 0, 0, 0);
-      sinceDate = thisWeekMonday.toISOString().substring(0, 10);
-      log('info', `[fetchRepository] Using default (this week's Monday): ${sinceDate}`);
-    }
-
-    // Build fetch command with --shallow-since and --update-shallow
-    const fetchArgs = [
-      'fetch',
-      'upstream',
-      `+refs/heads/${targetBranch}:refs/remotes/upstream/${targetBranch}`,
-      '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
-      '--shallow-since', sinceDate,
-      '--update-shallow',  // Required to update shallow boundaries
-      '--no-tags'
-    ];
-
-    log('info', '[fetchRepository] Executing git fetch with args:', fetchArgs);
-    let fetchResult = await execGit(storageDir, fetchArgs);
-
-    let usedDepthFetch = false;
-    if (!fetchResult.success) {
-      const errorMessage = fetchResult.error?.message || '';
-      if (errorMessage.includes('error processing shallow info') || errorMessage.includes('shallow')) {
-        log('warn', '[fetchRepository] Shallow fetch failed, retrying with depth-based fetch:', {
-          url: normalizedUrl,
-          branch: targetBranch,
-          sinceDate
-        });
-        fetchResult = await execGit(storageDir, [
-          'fetch',
-          'upstream',
-          `+refs/heads/${targetBranch}:refs/remotes/upstream/${targetBranch}`,
-          '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
-          '--depth', '100',
-          '--update-shallow',
-          '--no-tags'
-        ]);
-        usedDepthFetch = true;
-      }
-
-      if (!fetchResult.success) {
-        log('error', '[fetchRepository] Git fetch failed:', {
-          command: `git ${fetchArgs.join(' ')}`,
-          error: fetchResult.error
-        });
+    // Try to get branch from config if not provided
+    let targetBranch = branch;
+    if (!targetBranch) {
+      const existingConfig = await readRepositoryConfig(storageDir);
+      if (existingConfig?.branch) {
+        targetBranch = existingConfig.branch;
+        log('debug', '[fetchRepository] Using branch from stored config:', targetBranch);
+      } else {
         return {
           success: false,
           error: {
-            code: 'FETCH_ERROR',
-            message: 'Failed to fetch repository',
-            details: fetchResult.error
+            code: 'MISSING_BRANCH',
+            message: `Branch is required for repository: ${url}`
           }
         };
       }
     }
 
-    log('info', '[fetchRepository] Git fetch succeeded');
-
-    // Determine actual fetched range
-    let actualStartDate = sinceDate;
-    if (usedDepthFetch) {
-      const oldestCommitResult = await execGit(storageDir, [
-        'log',
-        `upstream/${targetBranch}`,
-        '--reverse',
-        '--max-count=1',
-        '--format=%cd',
-        '--date=short'
-      ]);
-      if (oldestCommitResult.success && oldestCommitResult.data?.stdout.trim()) {
-        actualStartDate = oldestCommitResult.data.stdout.trim();
-        log('info', '[fetchRepository] Using actual oldest commit date for fetched range:', {
-          actualStartDate,
-          originalSinceDate: sinceDate
-        });
-      }
+    // Check for in-progress fetch operations on this repository
+    const fetchKey = `${normalizedUrl}:${targetBranch}:${options?.since || 'latest'}`;
+    const existingFetch = fetchOperations.get(fetchKey);
+    if (existingFetch) {
+      log('debug', '[fetchRepository] Waiting for existing fetch operation:', fetchKey);
+      return existingFetch;
     }
 
-    // Update fetched ranges with the new range
-    const newRange: DateRange = { start: actualStartDate, end: todayDate };
-    const updatedRanges = addDateRange(existingRanges, newRange);
+    // Create the fetch operation promise
+    const fetchOperation = (async () => {
+      try {
+        log('debug', '[isolated-repositories] Fetching repository:', {
+          url: normalizedUrl,
+          branch: targetBranch,
+          storageDir
+        });
 
-    log('info', '[fetchRepository] Updating fetched ranges:', {
-      existingRanges,
-      newRange,
-      updatedRanges
-    });
+        // Read existing config to check current state
+        const existingConfig = await readRepositoryConfig(storageDir);
+        const existingRanges = existingConfig?.fetchedRanges || [];
 
-    // Update config with new ranges and last fetch time
-    const configUpdate: {
-      lastFetch: string;
-      fetchedRanges: DateRange[];
-    } = {
-      lastFetch: new Date().toISOString(),
-      fetchedRanges: updatedRanges
-    };
+        // Determine the date to fetch from
+        let sinceDate: string;
+        const now = new Date();
+        const todayDate = now.toISOString().substring(0, 10);
 
-    log('debug', '[fetchRepository] Writing config update:', configUpdate);
-    await writeRepositoryConfig(storageDir, configUpdate);
+        if (options?.since) {
+        // Use the requested date, normalized to YYYY-MM-DD
+          sinceDate = options.since.includes('T') ?
+            options.since.substring(0, 10) : options.since;
+          log('info', `[fetchRepository] Fetching from requested date: ${sinceDate}`);
 
-    return { success: true };
+          // Check if the requested date range is already covered (gap-aware check)
+          const isAlreadyCovered = isDateRangeCovered(sinceDate, todayDate, existingRanges);
+
+          if (isAlreadyCovered) {
+            log('info', '[fetchRepository] Date range already covered by existing fetchedRanges, skipping fetch:', {
+              requestedDate: sinceDate,
+              todayDate,
+              existingRanges
+            });
+            // Don't update lastFetch since we didn't actually fetch
+            return { success: true, data: { skipped: true } };
+          }
+          // If not covered, keep using the requested sinceDate to fetch earlier data
+          log('info', `[fetchRepository] Fetching earlier data from requested date: ${sinceDate}`);
+        } else if (!options?.since && existingRanges.length > 0) {
+        // Only use existing ranges when NO specific date was requested
+          const firstRange = existingRanges[0]!;
+          const oldestDate = existingRanges.reduce((oldest, range) =>
+            range.start < oldest ? range.start : oldest, firstRange.start);
+          sinceDate = oldestDate;
+          log('info', `[fetchRepository] No specific date requested, using oldest fetched date from ranges: ${sinceDate}`);
+        } else {
+        // Default to this week's Monday
+          const dayOfWeek = now.getDay();
+          const daysFromMonday = (dayOfWeek === 0) ? 6 : dayOfWeek - 1;
+          const thisWeekMonday = new Date(now);
+          thisWeekMonday.setDate(now.getDate() - daysFromMonday);
+          thisWeekMonday.setHours(0, 0, 0, 0);
+          sinceDate = thisWeekMonday.toISOString().substring(0, 10);
+          log('info', `[fetchRepository] Using default (this week's Monday): ${sinceDate}`);
+        }
+
+        // Build fetch command with --shallow-since and --update-shallow
+        const fetchArgs = [
+          'fetch',
+          'upstream',
+          `+refs/heads/${targetBranch}:refs/remotes/upstream/${targetBranch}`,
+          '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
+          '--shallow-since', sinceDate,
+          '--update-shallow',  // Required to update shallow boundaries
+          '--no-tags'
+        ];
+
+        log('info', '[fetchRepository] Executing git fetch with args:', fetchArgs);
+        let fetchResult = await execGit(storageDir, fetchArgs);
+
+        let usedDepthFetch = false;
+        if (!fetchResult.success) {
+          const errorMessage = fetchResult.error?.message || '';
+
+          // Check for lock file issues - clean up and let it re-clone next time
+          if (errorMessage.includes('Unable to create') && errorMessage.includes('.lock')) {
+            log('warn', '[fetchRepository] Detected lock file issue, cleaning up repository:', {
+              url: normalizedUrl,
+              storageDir
+            });
+            cleanupRepository(storageDir);
+            return {
+              success: false,
+              error: {
+                code: 'LOCK_FILE_ERROR',
+                message: 'Repository has stale lock file - cleaned up, will re-clone on next fetch',
+                details: fetchResult.error
+              }
+            };
+          }
+
+          log('debug', '[fetchRepository] Shallow fetch not supported by server, using depth-based fetch:', {
+            url: normalizedUrl,
+            branch: targetBranch,
+            sinceDate
+          });
+          fetchResult = await execGit(storageDir, [
+            'fetch',
+            'upstream',
+            `+refs/heads/${targetBranch}:refs/remotes/upstream/${targetBranch}`,
+            '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
+            '--depth', '100',
+            '--update-shallow',
+            '--no-tags'
+          ]);
+          usedDepthFetch = true;
+
+          if (!fetchResult.success) {
+          // Try --unshallow as last resort before giving up
+            log('debug', '[fetchRepository] Depth-based fetch not supported, using --unshallow:', {
+              url: normalizedUrl,
+              branch: targetBranch
+            });
+            fetchResult = await execGit(storageDir, [
+              'fetch',
+              'upstream',
+              `+refs/heads/${targetBranch}:refs/remotes/upstream/${targetBranch}`,
+              '+refs/gitmsg/social/*:refs/remotes/upstream/gitmsg/social/*',
+              '--unshallow',
+              '--no-tags'
+            ]);
+
+            if (!fetchResult.success) {
+              log('error', '[fetchRepository] Git fetch failed after all retries:', {
+                command: `git ${fetchArgs.join(' ')}`,
+                error: fetchResult.error
+              });
+              return {
+                success: false,
+                error: {
+                  code: 'FETCH_ERROR',
+                  message: 'Failed to fetch repository after all fallback attempts',
+                  details: fetchResult.error
+                }
+              };
+            }
+          }
+        }
+
+        log('info', '[fetchRepository] Git fetch succeeded');
+
+        // Determine actual fetched range
+        let actualStartDate = sinceDate;
+        if (usedDepthFetch) {
+          const oldestCommitResult = await execGit(storageDir, [
+            'log',
+            `upstream/${targetBranch}`,
+            '--reverse',
+            '--max-count=1',
+            '--format=%cd',
+            '--date=short'
+          ]);
+          if (oldestCommitResult.success && oldestCommitResult.data?.stdout.trim()) {
+            actualStartDate = oldestCommitResult.data.stdout.trim();
+            log('info', '[fetchRepository] Using actual oldest commit date for fetched range:', {
+              actualStartDate,
+              originalSinceDate: sinceDate
+            });
+          }
+        }
+
+        // Update fetched ranges with the new range
+        const newRange: DateRange = { start: actualStartDate, end: todayDate };
+        const updatedRanges = addDateRange(existingRanges, newRange);
+
+        log('info', '[fetchRepository] Updating fetched ranges:', {
+          existingRanges,
+          newRange,
+          updatedRanges
+        });
+
+        // Update config with new ranges and last fetch time
+        const configUpdate: {
+        lastFetch: string;
+        fetchedRanges: DateRange[];
+      } = {
+        lastFetch: new Date().toISOString(),
+        fetchedRanges: updatedRanges
+      };
+
+        log('debug', '[fetchRepository] Writing config update:', configUpdate);
+        await writeRepositoryConfig(storageDir, configUpdate);
+
+        return { success: true };
+      } catch (error) {
+        log('error', '[isolated-repositories] Unexpected error in fetchRepository:', error);
+        return {
+          success: false,
+          error: {
+            code: 'FETCH_ERROR',
+            message: 'Failed to fetch repository',
+            details: error
+          }
+        };
+      }
+    })()
+      .finally(() => {
+        fetchOperations.delete(fetchKey);
+      });
+
+    // Store operation for other concurrent calls
+    fetchOperations.set(fetchKey, fetchOperation);
+    return fetchOperation;
   } catch (error) {
-    log('error', '[isolated-repositories] Unexpected error in fetchRepository:', error);
+    log('error', '[isolated-repositories] Unexpected error in fetchRepository outer:', error);
     return {
       success: false,
       error: {

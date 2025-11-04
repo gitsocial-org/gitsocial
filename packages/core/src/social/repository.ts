@@ -666,7 +666,13 @@ export async function loadExternalRepository(
 ): Promise<Repository | null> {
   try {
     const normalizedUrl = gitMsgUrl.normalize(url);
-    const branch = options?.branch || 'main';
+
+    // Branch is required - no fallback to prevent accidental 'main' usage
+    if (!options?.branch) {
+      log('error', '[loadExternalRepository] Branch is required but not provided for:', url);
+      return null;
+    }
+    const branch = options.branch;
 
     // Check if we should ensure it's cloned
     if (storageBase && options?.ensureCloned) {

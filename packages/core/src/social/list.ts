@@ -3,7 +3,7 @@
  */
 
 import type { List, Post, Result } from './types';
-import { getConfiguredBranch, listRefs } from '../git/operations';
+import { listRefs } from '../git/operations';
 import { execGit } from '../git/exec';
 import { getRemoteDefaultBranch, listRemotes } from '../git/remotes';
 import { log } from '../logger';
@@ -531,11 +531,16 @@ async function getLists(repository: string, workspaceRoot?: string): Promise<Res
 
         // Fetch latest lists from upstream (won't affect post cache)
         if (storageBase) {
-          const branch = await getConfiguredBranch(repository);
-
-          const fetchResult = await storage.repository.fetch(storageBase, upstreamUrl, branch);
+          // Don't pass branch - let fetchRepository use the branch stored in git config
+          // from when the repository was initially cloned
+          const fetchResult = await storage.repository.fetch(storageBase, upstreamUrl);
           if (!fetchResult.success) {
             log('warn', '[getLists] Failed to fetch latest refs:', fetchResult.error);
+            // If repository was cleaned up due to lock file, skip it (will re-clone next time)
+            if (fetchResult.error?.code === 'LOCK_FILE_ERROR') {
+              log('debug', '[getLists] Skipping repository after lock file cleanup');
+              return { success: true, data: [] };
+            }
           } else {
             log('debug', '[getLists] Successfully fetched latest refs from upstream');
           }

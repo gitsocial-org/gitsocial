@@ -207,7 +207,7 @@ class WebviewAPI {
     this.postMessage({ type: 'clearCache' });
   }
 
-  getNotifications(options?: { since?: string; limit?: number }, requestId?: string): string {
+  getNotifications(options?: { since?: string; until?: string; limit?: number }, requestId?: string): string {
     const id = requestId || `getNotifications-${Date.now()}-${Math.random()}`;
     this.postMessage({ type: 'getNotifications', options, id });
     return id;
