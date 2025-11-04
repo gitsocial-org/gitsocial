@@ -369,16 +369,16 @@
           <div class="post-content {isMainPost ? 'mb-5' : 'mb-3'}">
             {#if showRawView}
               <!-- Raw text view -->
-              <pre class="whitespace-pre-wrap font-mono py-3 m-0">{post.content}</pre>
+              <pre class="whitespace-pre-wrap break-words font-mono py-3 m-0">{post.content}</pre>
             {:else if isAnchorPost && parsedHtml}
               <!-- Full markdown for anchor post -->
-              <div class="markdown-content {isMainPost ? 'text-lg' : ''}">
+              <div class="markdown-content break-words {isMainPost ? 'text-lg' : ''}">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html parsedHtml}
               </div>
             {:else if transformedHtml}
               <!-- Code and math transformed -->
-              <div class="markdown-content {isMainPost ? 'text-lg' : ''}">
+              <div class="markdown-content break-words {isMainPost ? 'text-lg' : ''}">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html transformedHtml}
               </div>
@@ -611,16 +611,16 @@
             <div class="post-content mb-3">
               {#if showRawView}
                 <!-- Raw text view -->
-                <pre class="font-mono text-sm p-3 rounded">{post.content}</pre>
+                <pre class="break-words font-mono text-sm p-3 rounded">{post.content}</pre>
               {:else if isAnchorPost && parsedHtml}
                 <!-- Full markdown for anchor post -->
-                <div class="markdown-content">
+                <div class="markdown-content break-words">
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                   {@html parsedHtml}
                 </div>
               {:else if transformedHtml}
                 <!-- Code and math transformed -->
-                <div class="markdown-content">
+                <div class="markdown-content break-words">
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                   {@html transformedHtml}
                 </div>
