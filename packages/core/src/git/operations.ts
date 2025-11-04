@@ -91,7 +91,8 @@ export async function getCommits(
   // Format uses abbreviated hash (%h) with consistent 12-character length
   // Using ASCII separators to avoid conflicts with message content
   // Use committer date (%cd) instead of author date (%ad) to match --since/--until filtering
-  const format = `${RECORD_SEP}%h${UNIT_SEP}%cd${UNIT_SEP}%an${UNIT_SEP}%ae${UNIT_SEP}%s${UNIT_SEP}%b${UNIT_SEP}%S`;
+  // Use %B (raw body) to preserve exact message formatting including newlines
+  const format = `${RECORD_SEP}%h${UNIT_SEP}%cd${UNIT_SEP}%an${UNIT_SEP}%ae${UNIT_SEP}%B${UNIT_SEP}%S`;
   const args = ['log'];
 
   // Use --all flag if requested, otherwise use specific branch or HEAD
@@ -150,15 +151,13 @@ export async function getCommits(
     .filter(entry => entry.trim())
     .map(entry => {
       const parts = entry.split(UNIT_SEP);
-      if (parts.length < 7) {return null;}
+      if (parts.length < 6) {return null;}
 
-      const [hash, date, author, email, subject, body, refname] = parts;
-      // Combine subject and body to form full message
-      const message = subject + (body ? '\n\n' + body.trim() : '');
+      const [hash, date, author, email, message, refname] = parts;
 
       return {
         hash: (hash || '').trim(),
-        message: message.trim(),
+        message: message || '',
         author: (author || '').trim(),
         email: (email || '').trim(),
         timestamp: new Date(date || ''),
