@@ -55,9 +55,34 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
+export function hasMarkdownSyntax(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+  const firstLine = content.split('\n')[0];
+  if (/```/.test(content) || /\$\$/.test(content) || /\$(?=\S)((?:[^$\n]|\\\$)+?)(?<=\S)\$(?!\d)/.test(content)) {
+    return true;
+  }
+  if (/^#{1,6}\s/.test(firstLine) ||
+      /^[-*+]\s/.test(firstLine) ||
+      /^\d+\.\s/.test(firstLine) ||
+      /^>\s/.test(firstLine)) {
+    return true;
+  }
+  let count = 0;
+  if (/\*\*.+?\*\*/.test(content)) count++;
+  if (/\[.+?\]\(.+?\)/.test(content)) count++;
+  if (/!\[.+?\]\(.+?\)/.test(content)) count++;
+  if (/`[^`\n]+`/.test(content)) count++;
+  return count >= 2;
+}
+
 export function parseMarkdown(content: string): string {
   if (!content) {
     return '';
+  }
+  if (!hasMarkdownSyntax(content)) {
+    return `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`;
   }
   try {
     return markdownToHtml(content);

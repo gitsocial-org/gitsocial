@@ -8,7 +8,7 @@
   import FullscreenPostViewer from './FullscreenPostViewer.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
-  import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
+  import { parseMarkdown, extractImages, transformCodeAndMath, hasMarkdownSyntax } from '../utils/markdown';
 
   export let post: Post;  // Post object
   export let posts: Map<string, Post> | Post[] = [];  // Optional posts collection for optimization
@@ -611,7 +611,7 @@
             <div class="post-content mb-3">
               {#if showRawView}
                 <!-- Raw text view -->
-                <pre class="whitespace-pre-wrap font-mono text-sm p-3 bg-opacity-50 rounded m-0">{post.content}</pre>
+                <pre class="font-mono text-sm p-3 rounded">{post.content}</pre>
               {:else if isAnchorPost && parsedHtml}
                 <!-- Full markdown for anchor post -->
                 <div class="markdown-content">
@@ -626,7 +626,7 @@
                 </div>
               {:else if showFullContent || post.type !== 'comment'}
                 <!-- Plain text for other posts -->
-                <div class="whitespace-pre-wrap break-words">{post.content}</div>
+                <div class="break-words">{post.content}</div>
               {:else}
                 <div class="break-words">{post.content.split('\n')[0]}</div>
                 {#if post.content.split('\n').length > 1}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { markdownToHtml } from '../utils/markdown';
+  import { parseMarkdown } from '../utils/markdown';
 
   export let value = '';
   export let placeholder = '';
@@ -11,7 +11,7 @@
   let showPreview = false;
   let previewHtml = '';
 
-  $: previewHtml = markdownToHtml(value);
+  $: previewHtml = parseMarkdown(value);
 </script>
 
 <div class="w-full">
@@ -69,7 +69,7 @@
     </div>
 
     {#if showPreview}
-      <div class="border min-h-md px-4 py-2">
+      <div class="markdown-content border min-h-md px-4 py-2">
         <!-- eslint-disable-next-line svelte/no-at-html-tags -->
         {@html previewHtml}
       </div>
