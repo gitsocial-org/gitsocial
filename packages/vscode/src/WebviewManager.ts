@@ -321,7 +321,7 @@ export class WebviewManager {
         <title>GitSocial</title>
       </head>
       <body>
-        <div id="app" data-view-type="${viewType}"></div>
+        <div id="app" class="border-r min-h-screen" data-view-type="${viewType}"></div>
         <script nonce="${nonce}">
           const vscode = acquireVsCodeApi();
           window.vscode = vscode;

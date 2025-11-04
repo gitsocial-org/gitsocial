@@ -268,6 +268,7 @@ hr {
 .h-auto { height: auto; }
 .h-full { height: 100%; }
 .h-screen { height: 100vh; }
+.min-h-screen { min-height: 100vh; }
 .h-2 { height: 0.5rem; }
 .h-3 { height: 0.75rem; }
 .h-6 { height: 1.5rem; }
