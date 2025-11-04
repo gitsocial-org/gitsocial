@@ -324,7 +324,7 @@
         <div class="w-full">
           <!-- Header with Avatar -->
           <div class="flex items-center justify-between gap-3 mb-3">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
               <Avatar
                 type="user"
                 identifier={post.author.email}
@@ -332,18 +332,18 @@
                 repository={post.repository}
                 size={40}
               />
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-lg">{post.author.name}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-bold text-lg truncate">{post.author.name}</span>
                 <span>·</span>
-                <span class="text-sm text-muted">{post.author.email}</span>
+                <span class="text-sm text-muted truncate">{post.author.email}</span>
                 <span>·</span>
-                <span class="text-sm text-muted italic cursor-help" title={new Date(post.timestamp).toLocaleString()}>
+                <span class="text-sm text-muted italic cursor-help whitespace-nowrap" title={new Date(post.timestamp).toLocaleString()}>
                   {formattedTime}
                 </span>
               </div>
             </div>
             <!-- Action Buttons (top right) -->
-            <div class="flex gap-2">
+            <div class="flex gap-2 flex-shrink-0">
               {#if post.content}
                 <button
                   class="btn ghost sm {showRawView ? 'active' : ''}"
@@ -534,7 +534,7 @@
               {#if post.display.commitUrl}
                 <a
                   href={post.display.commitUrl}
-                  class="btn ghost sm"
+                  class="btn ghost sm min-w-0"
                   title="View commit on {post.display.repositoryName}"
                 >
                   {#if post.display.isOrigin}
@@ -547,12 +547,12 @@
                       size={16}
                     />
                   {/if}
-                  <span class="text-sm text-muted subtle hover-underline">{post.display.commitUrl}</span>
+                  <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
                 </a>
               {:else}
-                <span class="btn ghost sm disabled" title="Local commit">
+                <span class="btn ghost sm disabled min-w-0" title="Local commit">
                   <span class="codicon codicon-home sm"></span>
-                  <span class="text-sm -ml-2">{post.display.commitHash}</span>
+                  <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
                 </span>
               {/if}
             </div>
@@ -576,17 +576,17 @@
           <div class="flex-1 min-w-0">
             <!-- Header -->
             <div class="flex items-center justify-between gap-2 mb-1">
-              <div class="flex items-center gap-2">
-                <span class="font-bold">{post.author.name}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-bold truncate">{post.author.name}</span>
                 <span>·</span>
-                <span class="text-sm text-muted">{post.author.email}</span>
+                <span class="text-sm text-muted truncate">{post.author.email}</span>
                 <span>·</span>
-                <span class="text-sm text-muted italic cursor-help" title={new Date(post.timestamp).toLocaleString()}>
+                <span class="text-sm text-muted italic cursor-help whitespace-nowrap" title={new Date(post.timestamp).toLocaleString()}>
                   {formattedTime}
                 </span>
               </div>
               <!-- Action Buttons (top right) -->
-              <div class="flex gap-2">
+              <div class="flex gap-2 flex-shrink-0">
                 {#if post.content}
                   <button
                     class="btn ghost sm {showRawView ? 'active' : ''}"
@@ -772,7 +772,7 @@
                 {#if post.display.commitUrl}
                   <a
                     href={post.display.commitUrl}
-                    class="btn ghost sm"
+                    class="btn ghost sm min-w-0"
                     title="View commit on {post.display.repositoryName}"
                   >
                     {#if post.display.isOrigin}
@@ -785,12 +785,12 @@
                         size={16}
                       />
                     {/if}
-                    <span class="text-sm text-muted subtle hover-underline">{post.display.commitUrl}</span>
+                    <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
                   </a>
                 {:else}
-                  <span class="btn ghost sm disabled" title="Local commit">
+                  <span class="btn ghost sm disabled min-w-0" title="Local commit">
                     <span class="codicon codicon-home sm"></span>
-                    <span class="text-sm -ml-2">{post.display.commitHash}</span>
+                    <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
                   </span>
                 {/if}
               </div>

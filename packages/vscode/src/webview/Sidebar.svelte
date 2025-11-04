@@ -176,7 +176,7 @@
             <circle fill="currentColor" cx="3" cy="12" r="1" />
             <rect fill="currentColor" x="6" y="11.5" width="8" height="1" />
           </svg>
-          <span class="flex-1">{list.name}</span>
+          <span class="flex-1 truncate">{list.name}</span>
         </button>
       </li>
     {/each}
