@@ -39,8 +39,7 @@
   let parsedHtml = '';
   let transformedHtml = '';
   $: if (isAnchorPost && post?.content) {
-    const result = parseMarkdown(post.content);
-    parsedHtml = result.html;
+    parsedHtml = parseMarkdown(post.content);
   }
   $: if (!isAnchorPost && post?.content) {
     transformedHtml = transformCodeAndMath(post.content);
@@ -385,14 +384,9 @@
               </div>
             {:else if showFullContent || post.type !== 'comment'}
               <!-- Plain text for other posts -->
-              {#if post.content.split('\n').length > 0}
-                <div class="font-bold break-words {isMainPost ? 'text-xl' : ''}">{post.content.split('\n')[0]}</div>
-                {#if post.content.split('\n').slice(1).join('\n').trim()}
-                  <div class="whitespace-pre-wrap break-words {isMainPost ? 'text-lg mt-2' : 'mt-1'}">{post.content.split('\n').slice(1).join('\n').trim()}</div>
-                {/if}
-              {/if}
+              <div class="whitespace-pre-wrap break-words {isMainPost ? 'text-lg' : ''}">{post.content}</div>
             {:else}
-              <div class="font-bold break-words {isMainPost ? 'text-xl' : ''}">{post.content.split('\n')[0]}</div>
+              <div class="break-words {isMainPost ? 'text-lg' : ''}">{post.content.split('\n')[0]}</div>
               {#if post.content.split('\n').length > 1}
                 <span class="text-muted">...</span>
               {/if}
@@ -632,14 +626,9 @@
                 </div>
               {:else if showFullContent || post.type !== 'comment'}
                 <!-- Plain text for other posts -->
-                {#if post.content.split('\n').length > 0}
-                  <div class="font-bold break-words">{post.content.split('\n')[0]}</div>
-                  {#if post.content.split('\n').slice(1).join('\n').trim()}
-                    <div class="whitespace-pre-wrap break-words mt-1">{post.content.split('\n').slice(1).join('\n').trim()}</div>
-                  {/if}
-                {/if}
+                <div class="whitespace-pre-wrap break-words">{post.content}</div>
               {:else}
-                <div class="font-bold break-words">{post.content.split('\n')[0]}</div>
+                <div class="break-words">{post.content.split('\n')[0]}</div>
                 {#if post.content.split('\n').length > 1}
                   <span class="text-muted">...</span>
                 {/if}

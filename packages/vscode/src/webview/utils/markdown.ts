@@ -55,50 +55,15 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-export function parseMarkdown(content: string): {
-	html: string
-	text: string
-	firstLine: string
-	remainingContent: string
-} {
+export function parseMarkdown(content: string): string {
   if (!content) {
-    return { html: '', text: '', firstLine: '', remainingContent: '' };
+    return '';
   }
   try {
-    const lines = content.split('\n');
-    const firstLine = lines[0].trim();
-    const remainingContent = lines.slice(1).join('\n');
-    const isHeading = /^#{1,6}\s/.test(firstLine);
-    const isUnorderedList = /^[-*+]\s/.test(firstLine);
-    const isOrderedList = /^\d+\.\s/.test(firstLine);
-    const isCodeBlock = /^```/.test(firstLine);
-    const isBlockquote = /^>\s/.test(firstLine);
-    const isHorizontalRule = /^(---+|\*\*\*+|___+)$/.test(firstLine);
-    const isBlockElement = isHeading || isUnorderedList || isOrderedList
-      || isCodeBlock || isBlockquote || isHorizontalRule;
-    if (isBlockElement) {
-      const html = markdownToHtml(content);
-      return { html, text: content, firstLine: lines[0], remainingContent };
-    } else {
-      let html = '';
-      if (firstLine) {
-        const firstLineHtml = markdownToHtml(firstLine);
-        html += `<div class="font-bold">${firstLineHtml}</div>`;
-      }
-      if (remainingContent.trim()) {
-        const remainingHtml = markdownToHtml(remainingContent);
-        html += remainingHtml;
-      }
-      return { html, text: content, firstLine: lines[0], remainingContent };
-    }
+    return markdownToHtml(content);
   } catch (error) {
     console.warn('Markdown parsing error:', error);
-    return {
-      html: `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`,
-      text: content,
-      firstLine: content.split('\n')[0],
-      remainingContent: content.split('\n').slice(1).join('\n')
-    };
+    return `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`;
   }
 }
 
