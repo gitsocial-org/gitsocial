@@ -463,11 +463,11 @@ async function initializeGlobalCache(workdir: string, storageBase?: string, sinc
 
     // Process all posts with unified function
     for (const post of workspaceCommits) {
-      processPost(post, posts, workdir, originUrl);
+      processPost(post, posts, workdir, originUrl, postIndex);
     }
 
     for (const post of externalCommits) {
-      processPost(post, posts, workdir, originUrl);
+      processPost(post, posts, workdir, originUrl, postIndex);
     }
 
     log('debug', '[initializeGlobalCache] Processed all posts and references');
@@ -752,7 +752,7 @@ export async function loadRepositoryPosts(
 
   // Process all posts with unified function
   for (const post of posts) {
-    processPost(post, postsMap, repositoryUrl, originUrl);
+    processPost(post, postsMap, repositoryUrl, originUrl, postIndex);
   }
 
   // Update interaction counts incrementally
@@ -931,10 +931,10 @@ async function loadAdditionalPosts(
 
     // Process all posts
     for (const post of workspaceCommits) {
-      processPost(post, posts, workdir, originUrl);
+      processPost(post, posts, workdir, originUrl, postIndex);
     }
     for (const post of externalCommits) {
-      processPost(post, posts, workdir, originUrl);
+      processPost(post, posts, workdir, originUrl, postIndex);
     }
 
     log('debug', '[loadAdditionalPosts] Processed', posts.size, 'additional posts');
