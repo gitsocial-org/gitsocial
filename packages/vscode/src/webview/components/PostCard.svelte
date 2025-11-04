@@ -344,7 +344,7 @@
             </div>
             <!-- Action Buttons (top right) -->
             <div class="flex gap-2">
-              {#if isAnchorPost && (parsedHtml || images.length > 0)}
+              {#if post.content}
                 <button
                   class="btn ghost sm {showRawView ? 'active' : ''}"
                   on:click={() => showRawView = !showRawView}
@@ -587,7 +587,7 @@
               </div>
               <!-- Action Buttons (top right) -->
               <div class="flex gap-2">
-                {#if isAnchorPost && (parsedHtml || images.length > 0)}
+                {#if post.content}
                   <button
                     class="btn ghost sm {showRawView ? 'active' : ''}"
                     on:click={(e) => { e.stopPropagation(); showRawView = !showRawView; }}
