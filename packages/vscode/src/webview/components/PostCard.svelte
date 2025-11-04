@@ -369,7 +369,7 @@
           <div class="post-content {isMainPost ? 'mb-5' : 'mb-3'}">
             {#if showRawView}
               <!-- Raw text view -->
-              <div class="whitespace-pre-wrap py-3">{post.content}</div>
+              <pre class="whitespace-pre-wrap font-mono py-3 m-0">{post.content}</pre>
             {:else if isAnchorPost && parsedHtml}
               <!-- Full markdown for anchor post -->
               <div class="markdown-content {isMainPost ? 'text-lg' : ''}">
@@ -611,7 +611,7 @@
             <div class="post-content mb-3">
               {#if showRawView}
                 <!-- Raw text view -->
-                <div class="whitespace-pre-wrap font-mono text-sm p-3 bg-opacity-50 rounded">{post.content}</div>
+                <pre class="whitespace-pre-wrap font-mono text-sm p-3 bg-opacity-50 rounded m-0">{post.content}</pre>
               {:else if isAnchorPost && parsedHtml}
                 <!-- Full markdown for anchor post -->
                 <div class="markdown-content">

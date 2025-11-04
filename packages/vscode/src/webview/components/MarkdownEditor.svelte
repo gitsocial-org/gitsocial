@@ -41,7 +41,7 @@
           bind:value
           {placeholder}
           {disabled}
-          class="min-h-md p-4"
+          class="min-h-md p-4 font-mono"
         ></textarea>
       </div>
 

@@ -305,6 +305,9 @@ hr {
 .font-semibold { font-weight: 600; }
 .font-bold { font-weight: 700; }
 
+/* Font Family */
+.font-mono { font-family: var(--vscode-editor-font-family); }
+
 /* Font Style */
 .italic { font-style: italic; }
 
