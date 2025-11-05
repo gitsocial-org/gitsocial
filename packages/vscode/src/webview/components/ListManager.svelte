@@ -143,7 +143,7 @@
       {/if}
     </div>
   {:else}
-    <div>
+    <div class="flex flex-col gap-2">
       {#each lists as list (list.id)}
         <ListCard
           {list}

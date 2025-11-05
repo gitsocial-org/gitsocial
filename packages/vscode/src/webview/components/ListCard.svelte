@@ -83,7 +83,7 @@
   }
 </script>
 
-<div class="card pad hover cursor-pointer {list.isUnpushed ? 'border-warning' : ''} {list.source ? 'border-accent' : ''}" on:click={handleViewList} on:keydown={(e) => e.key === 'Enter' && handleViewList()} role="button" tabindex="0">
+<div class="card pad hover cursor-pointer border-l {list.isUnpushed ? 'border-l-warning' : ''} {list.source ? 'border-l-accent' : ''}" on:click={handleViewList} on:keydown={(e) => e.key === 'Enter' && handleViewList()} role="button" tabindex="0">
   <div class="flex justify-between items-center">
     <div class="flex-1 min-w-0">
       {#if editingName}
@@ -117,78 +117,75 @@
           </button>
         </form>
       {:else}
-        <div class="flex items-center text-lg font-semibold truncate mb-1">
+        <div class="flex items-center text-lg font-semibold truncate mb-2 -mt-2">
           {#if list.source}
             <span class="codicon codicon-sync mr-2" title="Following"></span>
           {/if}
           {list.name}
         </div>
       {/if}
-      <div class="flex items-center text-sm text-muted">
+      {#if list.source}
+        <div class="text-xs text-muted mb-2 -mt-2 truncate">{list.source}</div>
+      {/if}
+      <div class="flex items-center gap-2 text-sm text-muted">
         {#if list.repositories.length > 0}
-          <div class="flex mr-2 gap-2 relative z-10">
-            {#each list.repositories.slice(0, 10) as repoString}
-              {@const repo = gitMsgRef.parseRepositoryId(repoString)}
-              {#if repo}
-                <span
-                  class="cursor-pointer inline-block rounded-full hover-border-link"
-                  on:click={handleViewRepository(repoString)}
-                  on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleViewRepository(repoString)(e)}
-                  title="View {gitHost.getDisplayName(repo.repository)}"
-                  role="button"
-                  tabindex="0"
-                >
-                  <Avatar
-                    type="repository"
-                    identifier={repo.repository}
-                    name={gitHost.getDisplayName(repo.repository)}
-                    size={16}
-                  />
-                </span>
-              {/if}
-            {/each}
-          </div>
-          {#if list.repositories.length > 0}
-            <span class="mx-2">·</span><span>{list.repositories.length}</span><span class="mx-2">·</span>
-          {/if}
+          <span class="badge">{list.repositories.length}</span>
+          {#each list.repositories.slice(0, 10) as repoString}
+            {@const repo = gitMsgRef.parseRepositoryId(repoString)}
+            {#if repo}
+              <span
+                class="flex cursor-pointer rounded-full hover-border-link"
+                on:click={handleViewRepository(repoString)}
+                on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleViewRepository(repoString)(e)}
+                title="View {gitHost.getDisplayName(repo.repository)}"
+                role="button"
+                tabindex="0"
+              >
+                <Avatar
+                  type="repository"
+                  identifier={repo.repository}
+                  name={gitHost.getDisplayName(repo.repository)}
+                  size={16}
+                />
+              </span>
+            {/if}
+          {/each}
         {:else}
-          <span>Empty list, click to add repositories</span>
-          <span class="mx-2">·</span>
-        {/if}
-        {#if list.source}
-          <span class="text-xs">Following: {list.source}</span>
+          <span>Empty list</span>
         {/if}
       </div>
     </div>
 
-    {#if showFollowButton}
-      <button
-        class="btn btn-primary"
-        title="Follow list"
-        on:click|stopPropagation={handleFollow}
-      >
-        <span class="codicon codicon-add mr-1"></span>
-        Follow
-      </button>
-    {:else if !readOnly}
-      {#if !list.source && !editingName}
+    <div class="flex gap-2">
+      {#if showFollowButton}
+        <button
+          class="btn btn-primary"
+          title="Follow list"
+          on:click|stopPropagation={handleFollow}
+        >
+          <span class="codicon codicon-add mr-1"></span>
+          Follow
+        </button>
+      {:else if !readOnly}
+        {#if !list.source && !editingName}
+          <button
+            class="btn"
+            title="Rename list"
+            on:click|stopPropagation={startRename}
+            disabled={isDeleting || isRenaming}
+          >
+            <span class="codicon codicon-edit"></span>
+          </button>
+        {/if}
         <button
           class="btn"
-          title="Rename list"
-          on:click|stopPropagation={startRename}
-          disabled={isDeleting || isRenaming}
+          title="Delete list"
+          on:click|stopPropagation={handleDelete}
+          disabled={isDeleting || editingName}
         >
-          <span class="codicon codicon-edit"></span>
+          <span class="codicon codicon-trash"></span>
         </button>
       {/if}
-      <button
-        class="btn"
-        title="Delete list"
-        on:click|stopPropagation={handleDelete}
-        disabled={isDeleting || editingName}
-      >
-        <span class="codicon codicon-trash"></span>
-      </button>
-    {/if}
+    </div>
   </div>
 </div>

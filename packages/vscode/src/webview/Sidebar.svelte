@@ -168,14 +168,18 @@
           class:active={list.active}
           on:click={() => handleListClick(list)}
         >
-          <svg class="flex-shrink-0" width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-            <circle fill="currentColor" cx="3" cy="4" r="1" />
-            <rect fill="currentColor" x="6" y="3.5" width="8" height="1" />
-            <circle fill="currentColor" cx="3" cy="8" r="1" />
-            <rect fill="currentColor" x="6" y="7.5" width="8" height="1" />
-            <circle fill="currentColor" cx="3" cy="12" r="1" />
-            <rect fill="currentColor" x="6" y="11.5" width="8" height="1" />
-          </svg>
+          {#if list.source}
+            <span class="codicon codicon-sync flex-shrink-0"></span>
+          {:else}
+            <svg class="flex-shrink-0" width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+              <circle fill="currentColor" cx="3" cy="4" r="1" />
+              <rect fill="currentColor" x="6" y="3.5" width="8" height="1" />
+              <circle fill="currentColor" cx="3" cy="8" r="1" />
+              <rect fill="currentColor" x="6" y="7.5" width="8" height="1" />
+              <circle fill="currentColor" cx="3" cy="12" r="1" />
+              <rect fill="currentColor" x="6" y="11.5" width="8" height="1" />
+            </svg>
+          {/if}
           <span class="flex-1 truncate">{list.name}</span>
         </button>
       </li>

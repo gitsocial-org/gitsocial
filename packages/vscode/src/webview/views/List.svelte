@@ -468,7 +468,9 @@
 
   function handleSyncList() {
     if (!listId) {return;}
+    fetchingUpdates = true;
     api.syncList(listId);
+    api.fetchListRepositories(listId, repository);
   }
 
   function handleUnfollowList() {
@@ -592,7 +594,7 @@
             loading={isLoadingWeek}
             onPrevious={goToPreviousWeek}
             onNext={goToNextWeek}
-            onRefresh={weekOffset === 0 && list?.repositories.length > 0 ? handleFetchUpdates : undefined}
+            onRefresh={weekOffset === 0 && list?.repositories.length > 0 ? (list?.source ? handleSyncList : handleFetchUpdates) : undefined}
             refreshLoading={fetchingUpdates}
           />
 
@@ -600,19 +602,10 @@
           {#if list.source && !repository}
             <button
               class="btn"
-              on:click={handleSyncList}
-              title="Sync with source list"
-            >
-              <span class="codicon codicon-sync"></span>
-              Sync
-            </button>
-            <button
-              class="btn"
               on:click={handleUnfollowList}
               title="Stop following this list"
             >
               <span class="codicon codicon-close"></span>
-              Unfollow
             </button>
             <button
               class="btn"
@@ -620,24 +613,14 @@
               title="Delete list"
             >
               <span class="codicon codicon-trash"></span>
-              Delete
             </button>
           {:else if repository && isRemoteListFollowed}
-            <button
-              class="btn"
-              on:click={handleSyncList}
-              title="Sync with source list"
-            >
-              <span class="codicon codicon-sync"></span>
-              Sync
-            </button>
             <button
               class="btn"
               on:click={handleUnfollowList}
               title="Stop following this list"
             >
               <span class="codicon codicon-close"></span>
-              Unfollow
             </button>
           {:else if repository && !isRemoteListFollowed}
             <button
@@ -655,14 +638,13 @@
               title="Delete list"
             >
               <span class="codicon codicon-trash"></span>
-              Delete
             </button>
           {/if}
         </div>
       </div>
 
       <!-- Bottom Row: URL + Meta (concatenated, right-aligned) -->
-      <div class="flex justify-end items-center mt-1">
+      <div class="flex justify-left items-center mt-1">
         <div class="text-sm text-muted italic whitespace-nowrap">
           {#if listReference}
             {@const webUrl = gitHost.getWebUrl(baseRepository)}
@@ -680,11 +662,11 @@
             {:else}
               <span>{list.source}</span>
             {/if}
-            <span> • </span>
           {/if}
-          <span>{postsTabData.length + repliesTabData.length} post{postsTabData.length + repliesTabData.length === 1 ? '' : 's'}</span>
           {#if fetchTimeDisplay}
-            <span> • </span>
+            {#if list?.source}
+              <span> • </span>
+            {/if}
             <span class="cursor-help" title={`Fetched ${lastFetchTime ? new Date(lastFetchTime).toLocaleString() : ''}`}>
               Fetched {fetchTimeDisplay}
             </span>

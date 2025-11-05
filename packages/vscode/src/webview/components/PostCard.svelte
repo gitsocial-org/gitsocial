@@ -275,7 +275,7 @@
 
 {#if post}
   {#if post.type === 'repost'}
-    <div class="card hover {post.display.isUnpushed ? 'border-warning' : ''}">
+    <div class="card hover {post.display.isUnpushed ? 'border-l-warning' : ''}">
       <div class="ml-12 mt-2 -mb-2 text-sm text-muted font-bold relative z-10 cursor-pointer subtle hover-underline"
         role="button" tabindex="0"
         on:click={handleViewPost} on:keydown={isMainPost ? undefined : handleKeydown}>
@@ -313,7 +313,7 @@
     </div>
   {:else}
     <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-    <div class="card {isMainPost || isNested ? '' : 'hover'} {isNested ? 'p-2' : 'pad'} {post.type} {displayMode} {post.display.isUnpushed ? 'border-warning' : ''}"
+    <div class="card {isMainPost || isNested ? '' : 'hover'} {isNested ? 'p-2' : 'pad'} {post.type} {displayMode} {post.display.isUnpushed ? 'border-l-warning' : ''}"
       tabindex={isMainPost || isNested ? -1 : 0}
       role={isMainPost || isNested ? 'article' : 'button'}
       on:click={isMainPost || isNested ? undefined : handleViewPost}

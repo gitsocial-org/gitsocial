@@ -442,12 +442,16 @@ hr {
 .border-link:hover { 
   border-color: var(--vscode-textLink-foreground); 
 }
-.border-warning {
+.border-l-warning {
   border-left: 1px solid var(--vscode-editorWarning-foreground);
   box-sizing: border-box;
 }
 .border-primary {
   border-color: var(--vscode-textLink-foreground);
+}
+.border-l-accent {
+  border-left: 1px solid var(--vscode-focusBorder);
+  box-sizing: border-box;
 }
 
 /* Animation */

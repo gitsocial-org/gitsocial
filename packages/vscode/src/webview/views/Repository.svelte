@@ -782,7 +782,7 @@
     </div>
 
     <!-- Bottom Row: URL + Meta (concatenated, right-aligned) -->
-    <div class="flex justify-end items-center {isWorkspace ? 'mt-1' : '-mb-1'} ">
+    <div class="flex justify-left items-center {isWorkspace ? 'mt-1' : '-mb-1'} ">
       <div class="text-sm text-muted italic whitespace-nowrap">
         {#if (isWorkspace && originUrl) || (!isWorkspace && repository)}
           {@const displayUrl = isWorkspace ? gitMsgUrl.normalize(originUrl) : repositoryUrl}
@@ -1123,7 +1123,7 @@
     {/if}
   </div>
 
-  <div slot="footer" class="flex justify-end gap-2">
+  <div slot="footer" class="flex justify-left gap-2">
     <button class="btn" on:click={() => {
       showFollowDialog = false;
       selectedListId = '';
