@@ -826,7 +826,7 @@
       <div class="section">
         <div class="flex flex-col gap-2 -ml-4">
           {#each postsTabData as post (post.id)}
-            <PostCard {post} posts={allPostsForContext} />
+            <PostCard post={post} posts={allPostsForContext} />
           {/each}
         </div>
       </div>
@@ -858,7 +858,7 @@
                     {#if threadReplies.length > 0}
                       <div class="thread-connector"></div>
                     {/if}
-                    <PostCard post={originalPost} posts={allPostsForContext} displayMode="context" />
+                    <PostCard post={originalPost} posts={allPostsForContext} />
                   </div>
                 {/if}
                 {#each threadReplies as reply, index}
@@ -866,7 +866,7 @@
                     {#if index < threadReplies.length - 1}
                       <div class="thread-connector"></div>
                     {/if}
-                    <PostCard post={reply} posts={allPostsForContext} displayMode="reply" showParentContext={false} />
+                    <PostCard post={reply} posts={allPostsForContext} showParentContext={false} />
                   </div>
                 {/each}
               </div>

@@ -51,7 +51,7 @@
     {:else}
       <div class="posts-list">
         {#each $posts as post (post.id)}
-          <PostCard {post} displayMode="preview" />
+          <PostCard post={post} />
         {/each}
       </div>
     {/if}

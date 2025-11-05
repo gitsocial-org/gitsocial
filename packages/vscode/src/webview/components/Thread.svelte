@@ -27,16 +27,6 @@
     threadItems = buildThreadItems(rawPosts);
   }
 
-  function getDisplayMode(item: ThreadItemType): 'main' | 'context' | 'reply' {
-    if (item.type === 'anchor') {
-      return 'main';
-    }
-    if (item.type === 'post' && item.depth < 0) {
-      return 'context';
-    }
-    return 'reply';
-  }
-
   function fetchThread() {
     loading = true;
     error = null;
@@ -224,9 +214,9 @@
               {/if}
               <PostCard
                 post={item.data}
-                displayMode={getDisplayMode(item)}
+                clickable={item.type !== 'anchor'}
+                expandContent={item.type === 'anchor'}
                 anchorPostId={anchorPostId}
-                isAnchorPost={item.type === 'anchor'}
                 on:fullscreen={handleFullscreen} />
             </div>
           {/if}

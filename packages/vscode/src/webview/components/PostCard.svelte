@@ -10,16 +10,21 @@
   import { createInteractionHandler } from '../utils/interactions';
   import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
 
-  export let post: Post;  // Post object
-  export let posts: Map<string, Post> | Post[] = [];  // Optional posts collection for optimization
-  export let displayMode: 'main' | 'context' | 'reply' | 'nested' | 'preview' | 'full' = 'preview';
-  export let depth = 0;
-  export let isNested = false;
+  export let post: Post;
+  export let posts: Map<string, Post> | Post[] = [];
+
+  // Visual layout
+  export let layout: 'compact' | 'normal' = 'normal';
+
+  // Behavioral flags
+  export let clickable = true;
+  export let interactive = true;
+  export let expandContent = false;
+
+  // Context
   export let showParentContext = false;
-  export let isEmbedded = false;
-  export let anchorPostId: string | undefined = undefined;  // Optional: the ID of the main post being viewed
-  export let isAnchorPost = false;  // True only for main post in Post view
-  export let hideFullscreenButton = false;  // Hide fullscreen button (when already in fullscreen)
+  export let anchorPostId: string | undefined = undefined;
+  export let hideFullscreenButton = false;
 
   // Raw view toggle state
   let showRawView = false;
@@ -27,21 +32,20 @@
   // Fullscreen state
   let showFullscreen = false;
 
-  // Context-aware display logic
-  $: showFullContent = post && (displayMode === 'main' || displayMode === 'reply' || displayMode === 'full');
-  $: _compactLayout = displayMode === 'nested';
-  $: showInteractions = !_compactLayout;
-  $: isMainPost = displayMode === 'main';
+  // Computed display logic
+  $: showFullContent = expandContent;
+  $: isCompact = layout === 'compact';
+  $: showInteractions = interactive;
   $: showParentContextComputed = post && (post.originalPostId || post.parentCommentId) && showParentContext;
 
   // Markdown and image processing (on-demand)
   $: images = extractImages(post?.content || '');
   let parsedHtml = '';
   let transformedHtml = '';
-  $: if (isAnchorPost && post?.content) {
+  $: if (expandContent && post?.content) {
     parsedHtml = parseMarkdown(post.content);
   }
-  $: if (!isAnchorPost && post?.content) {
+  $: if (!expandContent && post?.content) {
     transformedHtml = transformCodeAndMath(post.content);
   }
 
@@ -181,7 +185,7 @@
   });
 
   function handleViewPost(): void {
-    if (!isMainPost && !isNested && !isEmbedded) {
+    if (clickable) {
       // Simply use post.id directly - it's already correct (relative for workspace, absolute for external)
       api.openView('viewPost', post.content.split('\n')[0].substring(0, 30) + '...', {
         postId: post.id,
@@ -276,9 +280,12 @@
 {#if post}
   {#if post.type === 'repost'}
     <div class="card hover {post.display.isUnpushed ? 'border-l-warning' : ''}">
-      <div class="ml-12 mt-2 -mb-2 text-sm text-muted font-bold relative z-10 cursor-pointer subtle hover-underline"
-        role="button" tabindex="0"
-        on:click={handleViewPost} on:keydown={isMainPost ? undefined : handleKeydown}>
+      <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+      <div class="ml-12 mt-2 -mb-2 text-sm text-muted font-bold relative z-10 {clickable ? 'cursor-pointer subtle hover-underline' : ''}"
+        role={clickable ? 'button' : undefined}
+        tabindex={clickable ? 0 : -1}
+        on:click={clickable ? handleViewPost : undefined}
+        on:keydown={clickable ? handleKeydown : undefined}>
         <span class="codicon codicon-2xs codicon-arrow-swap mr-1"></span>
         <span>{post.author.name} reposted</span>
         <span>·</span>
@@ -291,10 +298,7 @@
         {#if originalPost}
           <svelte:self
             post={originalPost}
-            {posts}
-            displayMode="preview"
-            depth={depth + 1}
-            isNested={false} />
+            {posts} />
         {:else if loadingPosts.has(post.originalPostId)}
           <div class="p-3 text-center text-muted">
             <span class="codicon codicon-loading spin"></span>
@@ -313,13 +317,13 @@
     </div>
   {:else}
     <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-    <div class="card {isMainPost || isNested ? '' : 'hover'} {isNested ? 'p-2' : 'pad'} {post.type} {displayMode} {post.display.isUnpushed ? 'border-l-warning' : ''}"
-      tabindex={isMainPost || isNested ? -1 : 0}
-      role={isMainPost || isNested ? 'article' : 'button'}
-      on:click={isMainPost || isNested ? undefined : handleViewPost}
-      on:keydown={isMainPost || isNested ? undefined : handleKeydown}>
+    <div class="card {clickable ? 'hover' : ''} {isCompact ? 'p-2' : 'pad'} {post.type} {post.display.isUnpushed ? 'border-l-warning' : ''}"
+      tabindex={clickable ? 0 : -1}
+      role={clickable ? 'button' : 'article'}
+      on:click={clickable ? handleViewPost : undefined}
+      on:keydown={clickable ? handleKeydown : undefined}>
 
-      {#if isMainPost}
+      {#if expandContent}
         <!-- Main Post Layout - Full Width Content -->
         <div class="w-full">
           <!-- Header with Avatar -->
@@ -346,50 +350,52 @@
               </div>
             </div>
             <!-- Action Buttons (top right) -->
-            <div class="flex gap-2 flex-shrink-0">
-              {#if post.content}
-                <button
-                  class="btn ghost sm {showRawView ? 'active' : ''}"
-                  on:click={() => showRawView = !showRawView}
-                  title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
-                  <span class="codicon codicon-code"></span>
-                  <span>Raw</span>
-                </button>
-              {/if}
-              {#if !hideFullscreenButton}
-                <button
-                  class="btn ghost sm"
-                  on:click={handleFullscreenClick}
-                  title="View fullscreen (F)">
-                  <span class="codicon codicon-screen-full"></span>
-                </button>
-              {/if}
-            </div>
+            {#if showInteractions}
+              <div class="flex gap-2 flex-shrink-0">
+                {#if post.content}
+                  <button
+                    class="btn ghost sm {showRawView ? 'active' : ''}"
+                    on:click={() => showRawView = !showRawView}
+                    title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
+                    <span class="codicon codicon-code"></span>
+                    <span>Raw</span>
+                  </button>
+                {/if}
+                {#if !hideFullscreenButton}
+                  <button
+                    class="btn ghost sm"
+                    on:click={handleFullscreenClick}
+                    title="View fullscreen (F)">
+                    <span class="codicon codicon-screen-full"></span>
+                  </button>
+                {/if}
+              </div>
+            {/if}
           </div>
           <!-- Full Width Content -->
 
           <!-- Content -->
-          <div class="post-content {isMainPost ? 'mb-5' : 'mb-3'}">
+          <div class="post-content {expandContent ? 'mb-5' : 'mb-3'}">
             {#if showRawView}
               <!-- Raw text view -->
               <pre class="whitespace-pre-wrap break-words font-mono py-3 m-0">{post.content}</pre>
-            {:else if isAnchorPost && parsedHtml}
+            {:else if expandContent && parsedHtml}
               <!-- Full markdown for anchor post -->
-              <div class="markdown-content break-words {isMainPost ? 'text-lg' : ''}">
+              <div class="markdown-content break-words {expandContent ? 'text-lg' : ''}">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html parsedHtml}
               </div>
             {:else if transformedHtml}
               <!-- Code and math transformed -->
-              <div class="markdown-content break-words {isMainPost ? 'text-lg' : ''}">
+              <div class="markdown-content break-words {expandContent ? 'text-lg' : ''}">
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html transformedHtml}
               </div>
             {:else if showFullContent || post.type !== 'comment'}
               <!-- Plain text for other posts -->
-              <div class="whitespace-pre-wrap break-words {isMainPost ? 'text-lg' : ''}">{post.content}</div>
+              <div class="whitespace-pre-wrap break-words {expandContent ? 'text-lg' : ''}">{post.content}</div>
             {:else}
-              <div class="break-words {isMainPost ? 'text-lg' : ''}">{post.content.split('\n')[0]}</div>
+              <div class="break-words {expandContent ? 'text-lg' : ''}">{post.content.split('\n')[0]}</div>
               {#if post.content.split('\n').length > 1}
                 <span class="text-muted">...</span>
               {/if}
@@ -444,9 +450,8 @@
                     <svelte:self
                       post={originalPost}
                       {posts}
-                      displayMode="preview"
-                      isNested={true}
-                      isEmbedded={true}
+                      layout="compact"
+                      clickable={false}
                       {anchorPostId} />
                   {:else if loadingPosts.has(post.originalPostId)}
                     <div class="text-center text-muted p-2">
@@ -492,9 +497,8 @@
                   <svelte:self
                     post={parentPost}
                     {posts}
-                    displayMode="preview"
-                    isNested={true}
-                    isEmbedded={true} />
+                    layout="compact"
+                    clickable={false} />
                 {:else if parentId && loadingPosts.has(parentId)}
                   <div class="text-center text-muted p-2">
                     <span class="codicon codicon-loading spin"></span>
@@ -508,8 +512,8 @@
           {/if}
 
           <!-- Actions -->
-          {#if showInteractions}
-            <div class="flex gap-4">
+          <div class="flex gap-4">
+            {#if showInteractions}
               <button
                 class="btn ghost subtle sm "
                 class:disabled={buttonsDisabled}
@@ -534,32 +538,33 @@
                   <span class="text-sm text-muted">{post.display.totalReposts}</span>
                 {/if}
               </button>
-              {#if post.display.commitUrl}
-                <a
-                  href={post.display.commitUrl}
-                  class="btn ghost sm min-w-0"
-                  title="View commit on {post.display.repositoryName}"
-                >
-                  {#if post.display.isOrigin}
-                    <span class="codicon codicon-home sm"></span>
-                  {:else}
-                    <Avatar
-                      type="repository"
-                      identifier={gitHost.getWebUrl(post.repository) || post.repository}
-                      name={post.display.repositoryName}
-                      size={16}
-                    />
-                  {/if}
-                  <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
-                </a>
-              {:else}
-                <span class="btn ghost sm disabled min-w-0" title="Local commit">
+            {/if}
+            {#if post.display.commitUrl}
+              <a
+                href={post.display.commitUrl}
+                class="btn ghost sm min-w-0"
+                class:-ml-2={!showInteractions}
+                title="View commit on {post.display.repositoryName}"
+              >
+                {#if post.display.isOrigin}
                   <span class="codicon codicon-home sm"></span>
-                  <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
-                </span>
-              {/if}
-            </div>
-          {/if}
+                {:else}
+                  <Avatar
+                    type="repository"
+                    identifier={gitHost.getWebUrl(post.repository) || post.repository}
+                    name={post.display.repositoryName}
+                    size={16}
+                  />
+                {/if}
+                <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
+              </a>
+            {:else}
+              <span class="btn ghost sm disabled min-w-0" class:-ml-2={!showInteractions} title="Local commit">
+                <span class="codicon codicon-home sm"></span>
+                <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
+              </span>
+            {/if}
+          </div>
         </div>
       {:else}
         <!-- Regular Post Layout -->
@@ -592,25 +597,27 @@
                 </span>
               </div>
               <!-- Action Buttons (top right) -->
-              <div class="flex gap-2 flex-shrink-0">
-                {#if post.content}
-                  <button
-                    class="btn ghost sm {showRawView ? 'active' : ''}"
-                    on:click={(e) => { e.stopPropagation(); showRawView = !showRawView; }}
-                    title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
-                    <span class="codicon codicon-{showRawView ? 'markdown' : 'code'}"></span>
-                    <span>Raw</span>
-                  </button>
-                {/if}
-                {#if !hideFullscreenButton}
-                  <button
-                    class="btn ghost sm"
-                    on:click={(e) => { e.stopPropagation(); handleFullscreenClick(); }}
-                    title="View fullscreen (F)">
-                    <span class="codicon codicon-screen-full"></span>
-                  </button>
-                {/if}
-              </div>
+              {#if showInteractions}
+                <div class="flex gap-2 flex-shrink-0">
+                  {#if post.content}
+                    <button
+                      class="btn ghost sm {showRawView ? 'active' : ''}"
+                      on:click={(e) => { e.stopPropagation(); showRawView = !showRawView; }}
+                      title="{showRawView ? 'Show rendered view' : 'Show raw view'}">
+                      <span class="codicon codicon-{showRawView ? 'markdown' : 'code'}"></span>
+                      <span>Raw</span>
+                    </button>
+                  {/if}
+                  {#if !hideFullscreenButton}
+                    <button
+                      class="btn ghost sm"
+                      on:click={(e) => { e.stopPropagation(); handleFullscreenClick(); }}
+                      title="View fullscreen (F)">
+                      <span class="codicon codicon-screen-full"></span>
+                    </button>
+                  {/if}
+                </div>
+              {/if}
             </div>
 
             <!-- Content -->
@@ -618,7 +625,7 @@
               {#if showRawView}
                 <!-- Raw text view -->
                 <pre class="break-words font-mono text-sm p-3 rounded">{post.content}</pre>
-              {:else if isAnchorPost && parsedHtml}
+              {:else if expandContent && parsedHtml}
                 <!-- Full markdown for anchor post -->
                 <div class="markdown-content break-words">
                   <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -749,8 +756,8 @@
             {/if}
 
             <!-- Actions -->
-            {#if showInteractions}
-              <div class="flex gap-4">
+            <div class="flex gap-4">
+              {#if showInteractions}
                 <button
                   class="btn ghost subtle sm "
                   class:disabled={buttonsDisabled}
@@ -775,32 +782,33 @@
                     <span class="text-sm text-muted">{post.display.totalReposts}</span>
                   {/if}
                 </button>
-                {#if post.display.commitUrl}
-                  <a
-                    href={post.display.commitUrl}
-                    class="btn ghost sm min-w-0"
-                    title="View commit on {post.display.repositoryName}"
-                  >
-                    {#if post.display.isOrigin}
-                      <span class="codicon codicon-home sm"></span>
-                    {:else}
-                      <Avatar
-                        type="repository"
-                        identifier={gitHost.getWebUrl(post.repository) || post.repository}
-                        name={post.display.repositoryName}
-                        size={16}
-                      />
-                    {/if}
-                    <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
-                  </a>
-                {:else}
-                  <span class="btn ghost sm disabled min-w-0" title="Local commit">
+              {/if}
+              {#if post.display.commitUrl}
+                <a
+                  href={post.display.commitUrl}
+                  class="btn ghost sm min-w-0"
+                  class:-ml-2={!showInteractions}
+                  title="View commit on {post.display.repositoryName}"
+                >
+                  {#if post.display.isOrigin}
                     <span class="codicon codicon-home sm"></span>
-                    <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
-                  </span>
-                {/if}
-              </div>
-            {/if}
+                  {:else}
+                    <Avatar
+                      type="repository"
+                      identifier={gitHost.getWebUrl(post.repository) || post.repository}
+                      name={post.display.repositoryName}
+                      size={16}
+                    />
+                  {/if}
+                  <span class="text-sm text-muted subtle hover-underline truncate">{post.display.commitUrl}</span>
+                </a>
+              {:else}
+                <span class="btn ghost sm disabled min-w-0" class:-ml-2={!showInteractions} title="Local commit">
+                  <span class="codicon codicon-home sm"></span>
+                  <span class="text-sm -ml-2 truncate">{post.display.commitHash}</span>
+                </span>
+              {/if}
+            </div>
           </div>
         </div>
       {/if}
@@ -817,7 +825,7 @@
   >
     {#if $interactionState.selectedPost}
       <div class="card border bg-muted mt-1 mb-4 overflow-x-auto">
-        <svelte:self post={$interactionState.selectedPost} displayMode="preview" />
+        <svelte:self post={$interactionState.selectedPost} />
       </div>
 
       {#if $interactionState.interactionType === 'comment' || $interactionState.interactionType === 'quote'}

@@ -239,7 +239,7 @@
   {:else}
     <div class="flex flex-col gap-2 -ml-4">
       {#each posts as post (post.id)}
-        <PostCard {post} />
+        <PostCard post={post} />
       {/each}
     </div>
   {/if}

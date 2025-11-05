@@ -272,7 +272,10 @@
                   interactive={true} />
               {/if}
             {:else}
-              <PostCard post={post} />
+              <PostCard
+                post={post}
+                clickable={notification.type !== 'follow'}
+                interactive={notification.type !== 'follow'} />
             {/if}
           {/if}
         </div>

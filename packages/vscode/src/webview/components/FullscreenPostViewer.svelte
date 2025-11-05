@@ -59,8 +59,8 @@
       {#if currentPost}
         <PostCard
           post={currentPost}
-          displayMode="main"
-          isAnchorPost={true}
+          clickable={false}
+          expandContent={true}
           hideFullscreenButton={true} />
       {/if}
     </div>
