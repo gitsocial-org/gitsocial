@@ -3,7 +3,7 @@
  */
 
 import { join } from 'path';
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs';
 import type { Repository, Result } from '../social/types';
 import type { Commit } from '../git/types';
 import { execGit } from '../git/exec';
@@ -25,7 +25,7 @@ export const storage = {
   cache: {
     get: getCachedRepositories,
     set: setCachedRepositories,
-    clear: clearRepositoryCache
+    clear: clearRepositoryMetadataCache
   },
 
   // Repository operations (all are used)
@@ -34,7 +34,9 @@ export const storage = {
     fetch: fetchRepository,
     getCommits: getRepositoryCommits,
     cleanup: cleanupExpiredRepositories,
-    readConfig: readRepositoryConfig
+    readConfig: readRepositoryConfig,
+    getStats: getRepositoryStorageStats,
+    clearCache: clearRepositoryCache
   },
 
   // Path utilities (only what's actually used)
@@ -230,7 +232,7 @@ function setCachedRepositories(
 /**
  * Clear cached repositories for a specific scope
  */
-function clearRepositoryCache(
+function clearRepositoryMetadataCache(
   workdir: string,
   scope: string
 ): void {
@@ -979,6 +981,73 @@ async function getRepositoryCommits(
 }
 
 /**
+ * Get storage statistics for cached repositories
+ */
+async function getRepositoryStorageStats(storageBase: string): Promise<{
+  totalRepositories: number;
+  diskUsage: number;
+  persistent: number;
+  temporary: number;
+}> {
+  const stats = {
+    totalRepositories: 0,
+    diskUsage: 0,
+    persistent: 0,
+    temporary: 0
+  };
+  try {
+    const repositoriesDir = join(storageBase, 'repositories');
+    if (!existsSync(repositoriesDir)) {
+      return stats;
+    }
+    const entries = readdirSync(repositoriesDir);
+    for (const entry of entries) {
+      const fullPath = join(repositoriesDir, entry);
+      try {
+        const config = await readRepositoryConfig(fullPath);
+        if (config) {
+          stats.totalRepositories++;
+          if (config.isPersistent) {
+            stats.persistent++;
+          } else {
+            stats.temporary++;
+          }
+          const diskSize = getDirectorySize(fullPath);
+          stats.diskUsage += diskSize;
+        }
+      } catch (error) {
+        log('debug', '[getRepositoryStorageStats] Error reading repository:', { path: fullPath, error });
+      }
+    }
+  } catch (error) {
+    log('warn', '[getRepositoryStorageStats] Failed to get storage stats:', error);
+  }
+  return stats;
+}
+
+/**
+ * Calculate directory size recursively
+ */
+function getDirectorySize(dirPath: string): number {
+  let totalSize = 0;
+  try {
+    const entries = readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        totalSize += getDirectorySize(fullPath);
+      } else if (entry.isFile()) {
+        const stats = statSync(fullPath);
+        totalSize += stats.size;
+      }
+    }
+  } catch (error) {
+    log('debug', '[getDirectorySize] Error calculating size:', { dirPath, error });
+  }
+  return totalSize;
+}
+
+/**
  * Clean up expired repositories
  */
 async function cleanupExpiredRepositories(storageBase: string): Promise<void> {
@@ -1022,6 +1091,56 @@ async function cleanupExpiredRepositories(storageBase: string): Promise<void> {
   } catch (error) {
     log('warn', '[isolated-repositories] Failed to cleanup expired repositories:', error);
   }
+}
+
+/**
+ * Clear all cached repositories regardless of TTL
+ */
+function clearRepositoryCache(storageBase: string): {
+  deletedCount: number;
+  diskSpaceFreed: number;
+  errors: string[];
+} {
+  const result = {
+    deletedCount: 0,
+    diskSpaceFreed: 0,
+    errors: [] as string[]
+  };
+  log('info', '[isolated-repositories] Clearing all repository cache');
+  try {
+    const repositoriesDir = join(storageBase, 'repositories');
+    if (!existsSync(repositoriesDir)) {
+      return result;
+    }
+    const entries = readdirSync(repositoriesDir);
+    for (const entry of entries) {
+      const fullPath = join(repositoriesDir, entry);
+      try {
+        const diskSize = getDirectorySize(fullPath);
+        cleanupRepository(fullPath);
+        result.deletedCount++;
+        result.diskSpaceFreed += diskSize;
+        log('debug', '[isolated-repositories] Deleted cached repository:', {
+          path: fullPath,
+          size: (diskSize / 1024 / 1024).toFixed(1) + ' MB'
+        });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        result.errors.push(`Failed to delete ${entry}: ${errorMsg}`);
+        log('warn', '[isolated-repositories] Error deleting repository:', { path: fullPath, error });
+      }
+    }
+    log('info', '[isolated-repositories] Cleared repository cache:', {
+      deleted: result.deletedCount,
+      freed: (result.diskSpaceFreed / 1024 / 1024).toFixed(1) + ' MB',
+      errors: result.errors.length
+    });
+  } catch (error) {
+    log('error', '[isolated-repositories] Failed to clear repository cache:', error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    result.errors.push(`Failed to read repositories directory: ${errorMsg}`);
+  }
+  return result;
 }
 
 /**

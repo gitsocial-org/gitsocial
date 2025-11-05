@@ -175,6 +175,46 @@ export const repository = {
     }
   },
 
+  /**
+   * Get storage statistics for cached repositories
+   */
+  async getStorageStats(): Promise<{
+    totalRepositories: number;
+    diskUsage: number;
+    persistent: number;
+    temporary: number;
+  }> {
+    const storageDir = getConfiguredStorageBase();
+    if (!storageDir) {
+      return {
+        totalRepositories: 0,
+        diskUsage: 0,
+        persistent: 0,
+        temporary: 0
+      };
+    }
+    return storage.repository.getStats(storageDir);
+  },
+
+  /**
+   * Clear all cached repositories regardless of TTL
+   */
+  clearCache(): {
+    deletedCount: number;
+    diskSpaceFreed: number;
+    errors: string[];
+    } {
+    const storageDir = getConfiguredStorageBase();
+    if (!storageDir) {
+      return {
+        deletedCount: 0,
+        diskSpaceFreed: 0,
+        errors: []
+      };
+    }
+    return storage.repository.clearCache(storageDir);
+  },
+
   // Add all the missing exported functions
   createRepositoryFromUrl,
   checkGitSocialInit,

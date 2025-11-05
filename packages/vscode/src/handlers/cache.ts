@@ -10,7 +10,9 @@ export type CacheMessages =
   | { type: 'clearCache'; id?: string }
   | { type: 'getAvatarCacheStats'; id?: string }
   | { type: 'clearAvatarCache'; id?: string; options?: { clearMemoryCache?: boolean } }
-  | { type: 'setCacheMaxSize'; value: number; id?: string };
+  | { type: 'setCacheMaxSize'; value: number; id?: string }
+  | { type: 'getRepositoryStorageStats'; id?: string }
+  | { type: 'clearRepositoryCache'; id?: string };
 
 // Response types for cache operations
 export type CacheResponses =
@@ -18,7 +20,9 @@ export type CacheResponses =
   | { type: 'cacheCleared'; data?: unknown; requestId?: string }
   | { type: 'avatarCacheStats'; data: unknown; requestId?: string }
   | { type: 'avatarCacheCleared'; data: unknown; requestId?: string }
-  | { type: 'cacheMaxSizeUpdated'; data?: unknown; requestId?: string };
+  | { type: 'cacheMaxSizeUpdated'; data?: unknown; requestId?: string }
+  | { type: 'repositoryStorageStats'; data: unknown; requestId?: string }
+  | { type: 'repositoryCacheCleared'; data: unknown; requestId?: string };
 
 // Register cache statistics handler
 registerHandler('getCacheStats', function handleGetCacheStats(panel, message) {
@@ -136,6 +140,47 @@ registerHandler('setCacheMaxSize', async function handleSetCacheMaxSize(panel, m
     postMessage(panel, 'error', {
       message: error instanceof Error ? error.message : 'Failed to update cache size',
       context: 'cache'
+    }, requestId);
+  }
+});
+
+// Register repository storage statistics handler
+registerHandler('getRepositoryStorageStats', async function handleGetRepositoryStorageStats(panel, message) {
+  const requestId = message.id || undefined;
+
+  try {
+    const stats = await social.repository.getStorageStats();
+    postMessage(panel, 'repositoryStorageStats', stats, requestId);
+  } catch (error) {
+    postMessage(panel, 'error', {
+      message: error instanceof Error ? error.message : 'Failed to get repository storage stats',
+      context: 'repositoryStorage'
+    }, requestId);
+  }
+});
+
+// Register clear repository cache handler
+registerHandler('clearRepositoryCache', function handleClearRepositoryCache(panel, message) {
+  const requestId = message.id || undefined;
+
+  try {
+    const result = social.repository.clearCache();
+    postMessage(panel, 'repositoryCacheCleared', result, requestId);
+
+    const deletedMsg = result.deletedCount === 1
+      ? '1 repository'
+      : `${result.deletedCount} repositories`;
+    const freedMsg = (result.diskSpaceFreed / 1024 / 1024).toFixed(1) + ' MB';
+
+    const successMessage = result.deletedCount > 0
+      ? `Repository cache cleared: ${deletedMsg} (${freedMsg})`
+      : 'Repository cache cleared (no cached repositories found)';
+
+    void vscode.window.showInformationMessage(successMessage);
+  } catch (error) {
+    postMessage(panel, 'error', {
+      message: error instanceof Error ? error.message : 'Failed to clear repository cache',
+      context: 'repositoryStorage'
     }, requestId);
   }
 });

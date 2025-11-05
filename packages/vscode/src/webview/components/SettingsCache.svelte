@@ -15,12 +15,22 @@
     };
   }
 
+  interface RepositoryStorageStats {
+    totalRepositories: number;
+    diskUsage: number;
+    persistent: number;
+    temporary: number;
+  }
+
   let cacheStats: CacheStats | null = null;
   let avatarCacheStats: AvatarCacheStats | null = null;
+  let repositoryStorageStats: RepositoryStorageStats | null = null;
   let loading = false;
   let avatarLoading = false;
+  let repositoryStorageLoading = false;
   let operationInProgress = false;
   let avatarOperationInProgress = false;
+  let repositoryStorageOperationInProgress = false;
   let error: string | null = null;
   let successMessage: string | null = null;
   let cacheMaxSize = 100000; // Default value
@@ -30,8 +40,10 @@
   export function loadCacheStats(): void {
     loading = true;
     avatarLoading = true;
+    repositoryStorageLoading = true;
     window.vscode.postMessage({ type: 'getCacheStats' });
     window.vscode.postMessage({ type: 'getAvatarCacheStats' });
+    window.vscode.postMessage({ type: 'getRepositoryStorageStats' });
   }
 
   const clearCache = (): void => {
@@ -51,6 +63,11 @@
   const clearAvatarCache = (options = { clearMemoryCache: true }): void => {
     avatarOperationInProgress = true;
     window.vscode.postMessage({ type: 'clearAvatarCache', options });
+  };
+
+  const clearRepositoryCache = (): void => {
+    repositoryStorageOperationInProgress = true;
+    window.vscode.postMessage({ type: 'clearRepositoryCache' });
   };
 
   const formatNumber = (num: number): string => {
@@ -91,6 +108,11 @@
         avatarLoading = false;
         break;
 
+      case 'repositoryStorageStats':
+        repositoryStorageStats = message.data;
+        repositoryStorageLoading = false;
+        break;
+
       case 'cacheCleared':
         successMessage = 'Cache cleared successfully';
         setTimeout(() => (successMessage = null), 3000);
@@ -118,6 +140,24 @@
         break;
       }
 
+      case 'repositoryCacheCleared': {
+        const result = message.data;
+        if (result.deletedCount > 0) {
+          const deletedMsg = result.deletedCount === 1
+            ? '1 repository'
+            : `${result.deletedCount} repositories`;
+          const freedMsg = (result.diskSpaceFreed / 1024 / 1024).toFixed(1) + ' MB';
+          successMessage = `Repository cache cleared: ${deletedMsg} (${freedMsg})`;
+        } else {
+          successMessage = 'Repository cache cleared (no cached repositories found)';
+        }
+        setTimeout(() => (successMessage = null), 3000);
+        repositoryStorageOperationInProgress = false;
+        // Reload stats
+        loadCacheStats();
+        break;
+      }
+
       case 'cacheMaxSizeUpdated':
         successMessage = 'Cache size updated successfully';
         setTimeout(() => (successMessage = null), 3000);
@@ -129,13 +169,16 @@
 
       case 'error':
         if ((message.context === 'cache' && (loading || operationInProgress)) ||
-          (message.context === 'avatarCache' && (avatarLoading || avatarOperationInProgress))) {
+          (message.context === 'avatarCache' && (avatarLoading || avatarOperationInProgress)) ||
+          (message.context === 'repositoryStorage' && (repositoryStorageLoading || repositoryStorageOperationInProgress))) {
           error = message.message || 'An error occurred';
           setTimeout(() => (error = null), 5000);
           loading = false;
           operationInProgress = false;
           avatarLoading = false;
           avatarOperationInProgress = false;
+          repositoryStorageLoading = false;
+          repositoryStorageOperationInProgress = false;
         }
         break;
     }
@@ -159,7 +202,7 @@
     <div class="text-xs text-muted mb-2">✓ {successMessage}</div>
   {/if}
 
-  {#if loading || avatarLoading}
+  {#if loading || avatarLoading || repositoryStorageLoading}
     <div class="flex items-center gap-2 text-sm text-muted">
       <span class="codicon codicon-loading spin"></span>
       Loading statistics...
@@ -248,11 +291,35 @@
         </div>
       {/if}
 
+      {#if repositoryStorageStats}
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="text-sm">Repository Storage</div>
+            <div class="text-xs text-muted">
+              {formatNumber(repositoryStorageStats.totalRepositories)} repositories
+              ({repositoryStorageStats.persistent} persistent, {repositoryStorageStats.temporary} temporary)
+              · {(repositoryStorageStats.diskUsage / 1024 / 1024).toFixed(1)} MB
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              class="btn subtle sm"
+              on:click={clearRepositoryCache}
+              disabled={operationInProgress || avatarOperationInProgress || repositoryStorageOperationInProgress}
+              title="Clear all cached repositories"
+            >
+              <span class="codicon codicon-trash text-xs"></span>
+            </button>
+          </div>
+        </div>
+      {/if}
+
       <div class="flex gap-2 pt-3 border-t">
         <button
           class="btn subtle sm"
           on:click={refreshStats}
-          disabled={loading || avatarLoading || operationInProgress || avatarOperationInProgress}
+          disabled={loading || avatarLoading || repositoryStorageLoading ||
+            operationInProgress || avatarOperationInProgress || repositoryStorageOperationInProgress}
           title="Refresh statistics"
         >
           <span class="codicon codicon-refresh"></span>
@@ -261,7 +328,8 @@
         <button
           class="btn subtle sm"
           on:click={clearCache}
-          disabled={operationInProgress || avatarOperationInProgress || !cacheStats.enabled}
+          disabled={operationInProgress || avatarOperationInProgress ||
+            repositoryStorageOperationInProgress || !cacheStats.enabled}
           title="Clear all caches"
         >
           <span class="codicon codicon-trash"></span>
