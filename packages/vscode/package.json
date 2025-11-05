@@ -117,6 +117,11 @@
           "default": false,
           "description": "Enable Gravatar as fallback for user avatars. When disabled (default), only local avatars and GitHub avatars are used for privacy."
         },
+        "gitsocial.autoLoadImages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically load images in post content. When disabled, images show as click-to-load placeholders for privacy and bandwidth control. Note: User and repository avatars are always loaded."
+        },
         "gitsocial.enableExplore": {
           "type": "boolean",
           "default": true,

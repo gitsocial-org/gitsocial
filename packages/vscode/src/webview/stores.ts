@@ -21,6 +21,9 @@ export const repositoryInfo = writable<{
   branch: string;
 } | null>(null);
 
+// Settings store
+export const settings = writable<Record<string, unknown>>({});
+
 // Handle messages from extension
 export function handleExtensionMessage(message: ExtensionMessage): void {
   switch (message.type) {
@@ -63,6 +66,15 @@ export function handleExtensionMessage(message: ExtensionMessage): void {
     // Trigger refresh with cache skip after repository fetch
     skipCacheOnNextRefresh.set(true);
     refreshTrigger.update(n => n + 1);
+    break;
+
+  case 'settings':
+    if (message.data?.key) {
+      settings.update(current => ({
+        ...current,
+        [message.data.key]: message.data.value
+      }));
+    }
     break;
   }
 }

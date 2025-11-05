@@ -3,6 +3,7 @@
   import { gitHost } from '@gitsocial/core/client';
   import { onMount, onDestroy } from 'svelte';
   import { api } from '../api';
+  import { settings } from '../stores';
   import Avatar from './Avatar.svelte';
   import Dialog from './Dialog.svelte';
   import FullscreenPostViewer from './FullscreenPostViewer.svelte';
@@ -51,6 +52,15 @@
 
   // Image lightbox state
   let selectedImageIndex: number | null = null;
+
+  // Image loading state
+  let imagesManuallyLoaded = false;
+  $: autoLoadImages = $settings.autoLoadImages ?? true;
+  $: shouldShowImages = autoLoadImages || imagesManuallyLoaded;
+
+  function loadImages() {
+    imagesManuallyLoaded = true;
+  }
 
   // Handle keyboard navigation for lightbox
   function handleLightboxKeys(event: KeyboardEvent) {
@@ -112,6 +122,9 @@
   $: formattedTime = timeUpdateTrigger >= 0 && post ? formatRelativeTime(post.timestamp) : '';
 
   onMount(() => {
+    // Request autoLoadImages setting
+    api.getSettings('autoLoadImages');
+
     cleanup = setupMessageListeners();
 
     // Set up event-driven time updates
@@ -403,21 +416,30 @@
 
             <!-- Images for ALL posts (lazy loaded) -->
             {#if !showRawView && images.length > 0}
-              <div class="image-gallery mt-3">
-                {#each images as url, index}
-                  <button
-                    class="image-button"
-                    on:click={(e) => { e.stopPropagation(); selectedImageIndex = index; }}
-                    aria-label="View larger image">
-                    <img
-                      src={url}
-                      alt=""
-                      loading="lazy"
-                      class="gallery-image"
-                      on:error={(e) => e.currentTarget.style.display = 'none'} />
+              {#if shouldShowImages}
+                <div class="image-gallery mt-3">
+                  {#each images as url, index}
+                    <button
+                      class="image-button"
+                      on:click={(e) => { e.stopPropagation(); selectedImageIndex = index; }}
+                      aria-label="View larger image">
+                      <img
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        class="gallery-image"
+                        on:error={(e) => e.currentTarget.style.display = 'none'} />
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <div class="flex items-center gap-2 mt-3 p-3 border rounded">
+                  <button class="btn sm" on:click={(e) => { e.stopPropagation(); loadImages(); }}>
+                    <span class="codicon codicon-file-media mr-2"></span>
+                    Load {images.length} {images.length === 1 ? 'image' : 'images'}
                   </button>
-                {/each}
-              </div>
+                </div>
+              {/if}
             {/if}
           </div>
 
@@ -649,21 +671,30 @@
 
               <!-- Images for ALL posts (lazy loaded) -->
               {#if !showRawView && images.length > 0}
-                <div class="image-gallery mt-3">
-                  {#each images as url, index}
-                    <button
-                      class="image-button"
-                      on:click={(e) => { e.stopPropagation(); selectedImageIndex = index; }}
-                      aria-label="View larger image">
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        class="gallery-image"
-                        on:error={(e) => e.currentTarget.style.display = 'none'} />
+                {#if shouldShowImages}
+                  <div class="image-gallery mt-3">
+                    {#each images as url, index}
+                      <button
+                        class="image-button"
+                        on:click={(e) => { e.stopPropagation(); selectedImageIndex = index; }}
+                        aria-label="View larger image">
+                        <img
+                          src={url}
+                          alt=""
+                          loading="lazy"
+                          class="gallery-image"
+                          on:error={(e) => e.currentTarget.style.display = 'none'} />
+                      </button>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="flex items-center gap-2 mt-3 p-3 border rounded">
+                    <button class="btn sm" on:click={(e) => { e.stopPropagation(); loadImages(); }}>
+                      <span class="codicon codicon-file-media mr-2"></span>
+                      Load {images.length} {images.length === 1 ? 'image' : 'images'}
                     </button>
-                  {/each}
-                </div>
+                  </div>
+                {/if}
               {/if}
             </div>
 

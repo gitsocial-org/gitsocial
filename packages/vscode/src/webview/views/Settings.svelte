@@ -13,6 +13,7 @@
   let requestId: string | null = null;
   let currentLogLevel: LogLevel = 'error';
   let enableGravatar = false;
+  let autoLoadImages = true;
   let enableExplore = true;
   let exploreListsSource = '';
   const defaultExploreListsSource = 'https://github.com/gitsocial-org/gitsocial-official-lists';
@@ -34,6 +35,7 @@
 
     // Load settings
     api.getSettings('enableGravatar');
+    api.getSettings('autoLoadImages');
     api.getSettings('enableExplore');
     api.getSettings('exploreListsSource');
 
@@ -47,6 +49,8 @@
       if (message.type === 'settings') {
         if (message.data?.key === 'enableGravatar') {
           enableGravatar = message.data.value ?? false;
+        } else if (message.data?.key === 'autoLoadImages') {
+          autoLoadImages = message.data.value ?? true;
         } else if (message.data?.key === 'enableExplore') {
           enableExplore = message.data.value ?? true;
         } else if (message.data?.key === 'exploreListsSource') {
@@ -90,6 +94,10 @@
 
   function handleGravatarToggle() {
     api.updateSettings('enableGravatar', enableGravatar);
+  }
+
+  function handleAutoLoadImagesToggle() {
+    api.updateSettings('autoLoadImages', autoLoadImages);
   }
 
   function handleExploreToggle() {
@@ -236,7 +244,7 @@
   <section class="mb-6">
     <h2>Privacy</h2>
 
-    <div class="p-4 rounded border">
+    <div class="p-4 rounded border space-y-4">
       <label class="flex items-center gap-3 cursor-pointer">
         <input
           type="checkbox"
@@ -248,6 +256,21 @@
           <p class="text-xs text-muted mt-1">
             Use Gravatar as fallback for user avatars. When disabled, only avatars from the git
             repository host and generated avatars are used.
+          </p>
+        </div>
+      </label>
+
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          bind:checked={autoLoadImages}
+          on:change={handleAutoLoadImagesToggle}
+        />
+        <div class="flex-1">
+          <div class="text-sm font-medium">Auto-load images</div>
+          <p class="text-xs text-muted mt-1">
+            Automatically load images in post content. When disabled, images show as
+            click-to-load placeholders for privacy and bandwidth control.
           </p>
         </div>
       </label>

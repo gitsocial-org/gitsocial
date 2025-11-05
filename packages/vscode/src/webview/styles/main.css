@@ -791,7 +791,7 @@ img {
 
 .image-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min-content, 1fr));
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
@@ -817,10 +817,11 @@ img {
 }
 
 .gallery-image {
-  width: 100%;
+  max-width: 100%;
+  width: auto;
   height: auto;
   max-height: 300px;
-  object-fit: contain;
+  object-fit: scale-down;
   display: block;
 }
 
