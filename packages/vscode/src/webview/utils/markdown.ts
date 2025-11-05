@@ -70,10 +70,10 @@ export function hasMarkdownSyntax(content: string): boolean {
     return true;
   }
   let count = 0;
-  if (/\*\*.+?\*\*/.test(content)) count++;
-  if (/\[.+?\]\(.+?\)/.test(content)) count++;
-  if (/!\[.+?\]\(.+?\)/.test(content)) count++;
-  if (/`[^`\n]+`/.test(content)) count++;
+  if (/\*\*.+?\*\*/.test(content)) {count++;}
+  if (/\[.+?\]\(.+?\)/.test(content)) {count++;}
+  if (/!\[.+?\]\(.+?\)/.test(content)) {count++;}
+  if (/`[^`\n]+`/.test(content)) {count++;}
   return count >= 2;
 }
 

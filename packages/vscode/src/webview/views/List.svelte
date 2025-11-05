@@ -594,7 +594,9 @@
             loading={isLoadingWeek}
             onPrevious={goToPreviousWeek}
             onNext={goToNextWeek}
-            onRefresh={weekOffset === 0 && list?.repositories.length > 0 ? (list?.source ? handleSyncList : handleFetchUpdates) : undefined}
+            onRefresh={weekOffset === 0 && list?.repositories.length > 0
+              ? (list?.source ? handleSyncList : handleFetchUpdates)
+              : undefined}
             refreshLoading={fetchingUpdates}
           />
 

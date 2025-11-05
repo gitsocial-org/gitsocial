@@ -8,7 +8,7 @@
   import FullscreenPostViewer from './FullscreenPostViewer.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
-  import { parseMarkdown, extractImages, transformCodeAndMath, hasMarkdownSyntax } from '../utils/markdown';
+  import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
 
   export let post: Post;  // Post object
   export let posts: Map<string, Post> | Post[] = [];  // Optional posts collection for optimization
@@ -337,7 +337,10 @@
                 <span>·</span>
                 <span class="text-sm text-muted truncate">{post.author.email}</span>
                 <span>·</span>
-                <span class="text-sm text-muted italic cursor-help whitespace-nowrap" title={new Date(post.timestamp).toLocaleString()}>
+                <span
+                  class="text-sm text-muted italic cursor-help whitespace-nowrap"
+                  title={new Date(post.timestamp).toLocaleString()}
+                >
                   {formattedTime}
                 </span>
               </div>
@@ -581,7 +584,10 @@
                 <span>·</span>
                 <span class="text-sm text-muted truncate">{post.author.email}</span>
                 <span>·</span>
-                <span class="text-sm text-muted italic cursor-help whitespace-nowrap" title={new Date(post.timestamp).toLocaleString()}>
+                <span
+                  class="text-sm text-muted italic cursor-help whitespace-nowrap"
+                  title={new Date(post.timestamp).toLocaleString()}
+                >
                   {formattedTime}
                 </span>
               </div>
