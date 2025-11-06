@@ -53,6 +53,9 @@
   function handleFollow() {
     dispatch('follow', { list });
   }
+  function handleUnfollow() {
+    dispatch('unfollow', { list });
+  }
 
   function startRename(event: MouseEvent) {
     event.stopPropagation();
@@ -84,16 +87,16 @@
 </script>
 
 <div class="card pad hover cursor-pointer border-l {list.isUnpushed ? 'border-l-warning' : ''} {list.source ? 'border-l-accent' : ''}" on:click={handleViewList} on:keydown={(e) => e.key === 'Enter' && handleViewList()} role="button" tabindex="0">
-  <div class="flex justify-between items-center">
+  <div class="flex justify-between items-start">
     <div class="flex-1 min-w-0">
       {#if editingName}
-        <form on:submit={handleRename} class="flex items-center gap-2">
+        <form on:submit={handleRename} class="flex items-center gap-2 mb-3 mr-3">
           <input
             type="text"
             bind:value={newName}
             on:keydown={handleKeydown}
             on:click|stopPropagation
-            class="flex-1 text-lg font-semibold"
+            class="flex-1 font-semibold"
             placeholder="List name"
             disabled={isRenaming}
           />
@@ -158,14 +161,25 @@
 
     <div class="flex gap-2">
       {#if showFollowButton}
-        <button
-          class="btn btn-primary"
-          title="Follow list"
-          on:click|stopPropagation={handleFollow}
-        >
-          <span class="codicon codicon-add mr-1"></span>
-          Follow
-        </button>
+        {#if list.isFollowedLocally}
+          <button
+            class="btn"
+            title="Unfollow list"
+            on:click|stopPropagation={handleUnfollow}
+          >
+            <span class="codicon codicon-close mr-1"></span>
+            Unfollow
+          </button>
+        {:else}
+          <button
+            class="btn btn-primary"
+            title="Follow list"
+            on:click|stopPropagation={handleFollow}
+          >
+            <span class="codicon codicon-add mr-1"></span>
+            Follow
+          </button>
+        {/if}
       {:else if !readOnly}
         {#if !list.source && !editingName}
           <button

@@ -2,58 +2,16 @@
   import type { List } from '@gitsocial/core';
   import { createEventDispatcher } from 'svelte';
   import ListCard from './ListCard.svelte';
+  import ListCreateForm from './ListCreateForm.svelte';
 
   export let lists: List[] = [];
   export let readOnly = false;
-  export let repository: string | undefined = undefined; // Repository URL if viewing external lists
+  export let repository: string | undefined = undefined;
 
   const dispatch = createEventDispatcher();
 
-  let newListName = '';
-  let newListId = '';
-  let isCreating = false;
-  let showCustomId = false;
-
-  function generateListId(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .substring(0, 40);
-  }
-
-  function handleCreateList() {
-    const listId = showCustomId ? newListId.trim() : generateListId(newListName.trim());
-    const name = newListName.trim();
-
-    if (!name) {
-      alert('Name is required');
-      return;
-    }
-
-    if (!listId) {
-      alert('Generated ID is empty. Please use custom ID or a different name.');
-      return;
-    }
-
-    // Validate list name pattern
-    const validPattern = /^[a-zA-Z0-9_-]{1,40}$/;
-    if (!validPattern.test(listId)) {
-      alert('List ID must be 1-40 characters and contain only letters, numbers, hyphens, and underscores');
-      return;
-    }
-
-    isCreating = true;
-    dispatch('createList', {
-      id: listId,
-      name: name
-    });
-
-    // Reset form
-    newListName = '';
-    newListId = '';
-    showCustomId = false;
-    isCreating = false;
+  function handleCreateList(event: CustomEvent<{ id: string; name: string }>) {
+    dispatch('createList', event.detail);
   }
 
   function handleDeleteList(event: CustomEvent<{ list: List }>) {
@@ -67,69 +25,17 @@
   function handleFollowList(event: CustomEvent<{ list: List }>) {
     dispatch('followList', { ...event.detail, repository });
   }
+  function handleUnfollowList(event: CustomEvent<{ list: List }>) {
+    dispatch('unfollowList', event.detail);
+  }
 </script>
 
 <div class="list-manager">
   {#if !readOnly}
     <div class="mb-4">
-      <div class="flex flex-wrap gap-2 items-end">
-        <div class="flex-1">
-          <label for="list-display-name" class="block text-sm font-medium mb-1">Name</label>
-          <input
-            id="list-display-name"
-            type="text"
-            bind:value={newListName}
-            placeholder="My Favorite Repositories"
-            disabled={isCreating}
-            class="w-full"
-          />
-        </div>
-
-        {#if showCustomId}
-          <div class="flex-1">
-            <label for="list-custom-id" class="block text-sm font-medium mb-1">Custom ID</label>
-            <input
-              id="list-custom-id"
-              type="text"
-              bind:value={newListId}
-              placeholder="my-favorite-repos"
-              disabled={isCreating}
-              class="w-full"
-            />
-          </div>
-        {/if}
-
-        <div class="flex items-end gap-2">
-          <button
-            class="btn"
-            on:click={() => showCustomId = !showCustomId}
-            disabled={isCreating}
-            title={showCustomId ? 'Use auto-generated ID' : 'Use custom ID'}
-            class:active={showCustomId}
-          >
-            <span class="codicon codicon-gear"></span>
-          </button>
-        </div>
-
-        <button
-          class="btn primary"
-          on:click={handleCreateList}
-          disabled={!newListName.trim() || isCreating}
-        >
-          <span class="codicon codicon-add"></span>
-          {isCreating ? 'Creating...' : 'Create List'}
-        </button>
-      </div>
-
-      {#if showCustomId}
-        <div class="text-xs text-muted mt-1">
-          Letters, numbers, hyphens, and underscores only
-        </div>
-      {:else if newListName.trim()}
-        <div class="text-xs text-muted mt-1">
-          ID: {generateListId(newListName.trim()) || 'invalid'}
-        </div>
-      {/if}
+      <ListCreateForm
+        on:createList={handleCreateList}
+      />
     </div>
   {/if}
 
@@ -152,6 +58,7 @@
           on:delete={handleDeleteList}
           on:viewList={handleViewList}
           on:follow={handleFollowList}
+          on:unfollow={handleUnfollowList}
         />
       {/each}
     </div>

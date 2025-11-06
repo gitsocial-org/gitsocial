@@ -4,6 +4,7 @@
   import PostCard from '../components/PostCard.svelte';
   import Tabs from '../components/Tabs.svelte';
   import ListManager from '../components/ListManager.svelte';
+  import ListCreateForm from '../components/ListCreateForm.svelte';
   import Avatar from '../components/Avatar.svelte';
   import Dialog from '../components/Dialog.svelte';
   import DateNavigation from '../components/DateNavigation.svelte';
@@ -90,11 +91,10 @@
   let showFollowDialog = false;
   let isFollowDialogSubmitting = false;
   let availableLists: List[] = [];
-  let selectedListId = '';
+  let selectedListIds: string[] = [];
   let showCreateNew = false;
-  let newListId = '';
-  let newListName = '';
-  let firstRadioElement: HTMLInputElement;
+  let firstListName = 'Default';
+  let submitCreateListForm: (() => void) | null = null;
 
   // Reactive fetch time display that updates with currentTime
   $: fetchTimeDisplay = lastFetchTime && currentTime ? formatRelativeTime(lastFetchTime) : '';
@@ -228,8 +228,8 @@
         break;
 
       case 'lists':
-        // Check if this is for the workspace lists (follow dialog)
-        if (message.requestId === 'workspace-lists-for-follow') {
+        // Check if this is for the workspace lists (follow dialog or follow status display)
+        if (message.requestId === 'workspace-lists-for-follow' || message.requestId === 'workspace-lists-for-display') {
           availableLists = message.data || [];
         } else {
           lists = message.data || [];
@@ -248,9 +248,14 @@
         break;
 
       case 'listDeleted':
+      case 'listUnfollowed':
       case 'repositoryRemoved':
         // Refresh lists after any list operation
         api.getLists(repository);
+        // Refresh repository status to update follow status in UI
+        if (message.type === 'repositoryRemoved') {
+          api.checkRepositoryStatus(repository);
+        }
         break;
 
       case 'repositoryAdded':
@@ -258,7 +263,8 @@
         if (message.requestId === 'follow-repository') {
           isFollowDialogSubmitting = false;
           showFollowDialog = false;
-        // Backend has already refreshed the cache, no need to do it again
+          // Refresh repository status to update follow status in UI
+          api.checkRepositoryStatus(repository);
         }
         break;
 
@@ -387,6 +393,8 @@
       api.checkRepositoryStatus(repository);
       // Load lists for other repository to show count in tab
       api.getLists(repository);
+      // Load workspace lists to enable "Following in" display with unfollow buttons
+      api.getListsWithId('', 'workspace-lists-for-display');
     } else {
       // Workspace repository - clear repository identifier
       repository = ''; // Workspace repos don't have a repository identifier
@@ -547,22 +555,24 @@
     // Show the follow dialog
     showFollowDialog = true;
 
-    // Load workspace lists
-    api.getListsWithId('', 'workspace-lists-for-follow');
+    // Load workspace lists if not already loaded
+    if (availableLists.length === 0) {
+      api.getListsWithId('', 'workspace-lists-for-follow');
+    }
   }
 
-  function handleFollowSubmit(event: CustomEvent<{ listId: string }>) {
+  function handleFollowSubmit(event: CustomEvent<{ listIds: string[] }>) {
     isFollowDialogSubmitting = true;
-    api.addRepositoryWithId(event.detail.listId, repository, 'follow-repository', undefined);
+    for (const listId of event.detail.listIds) {
+      api.addRepositoryWithId(listId, repository, 'follow-repository', undefined);
+    }
   }
 
-  function handleCreateAndFollow(event: CustomEvent<{ listId: string; listName: string }>) {
+  function handleCreateAndFollow(event: CustomEvent<{ id: string; name: string }>) {
     isFollowDialogSubmitting = true;
-    // First create the list
-    api.createListWithId(event.detail.listId, event.detail.listName, 'create-list-for-follow');
-    // Store the repository to add after list creation
+    api.createListWithId(event.detail.id, event.detail.name, 'create-list-for-follow');
     if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.setItem('pendingFollowList', event.detail.listId);
+      window.sessionStorage.setItem('pendingFollowList', event.detail.id);
       window.sessionStorage.setItem('pendingFollowRepo', repository);
     }
   }
@@ -656,9 +666,25 @@
     // Send follow request with optional target list ID (use same as source by default)
     api.followList(sourceRepo, sourceListId);
   }
+  function handleUnfollowListCard(event: CustomEvent<{ list: List }>) {
+    api.unfollowList(event.detail.list.id);
+  }
 
   function handleSettings() {
     api.openView('settings', 'Settings');
+  }
+
+  function handleUnfollowFromList(listId: string) {
+    if (!repository) {return;}
+    api.removeRepository(listId, repository);
+  }
+
+  function handleOpenList(list: List) {
+    const params: { listId: string; list: List; repository?: string } = {
+      listId: list.id,
+      list: list
+    };
+    api.openView('viewList', list.name, params);
   }
 
   // Log table helpers
@@ -783,7 +809,7 @@
 
     <!-- Bottom Row: URL + Meta (concatenated, right-aligned) -->
     <div class="flex justify-left items-center {isWorkspace ? 'mt-1' : '-mb-1'} ">
-      <div class="text-sm text-muted italic whitespace-nowrap">
+      <div class="flex items-center gap-4 text-sm text-muted italic whitespace-nowrap">
         {#if (isWorkspace && originUrl) || (!isWorkspace && repository)}
           {@const displayUrl = isWorkspace ? gitMsgUrl.normalize(originUrl) : repositoryUrl}
           {@const baseUrl = gitHost.getWebUrl(displayUrl) || '#'}
@@ -797,18 +823,40 @@
               {displayUrl}{repositoryBranch ? `#branch:${repositoryBranch}` : ''}
             </span>
           {/if}
-          {#if isFollowedRepo || fetchTimeDisplay}
-            <span> • </span>
-          {/if}
         {/if}
-        {#if isFollowedRepo}
-          <span>Following</span>
-          {#if fetchTimeDisplay}
-            <span> • </span>
-          {/if}
+        {#if isFollowedRepo && repositoryStatus?.lists}
+          {#each repositoryStatus.lists as listName}
+            {@const listObj = availableLists.find(l => l.name === listName)}
+            {#if listObj}
+              <div class="inline-flex items-center gap-1">
+                <span class="codicon codicon-list-unordered" title="Following in list"></span>
+                <span
+                  class="flex items-center gap-1 hover-underline text-muted cursor-pointer"
+                  on:click={() => handleOpenList(listObj)}
+                  on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleOpenList(listObj)}
+                  role="button"
+                  tabindex="0"
+                  title="Open {listName} list"
+                >
+                  {listName}
+                </span>
+                <button
+                  class="btn xxs ghost"
+                  on:click={() => handleUnfollowFromList(listObj.id)}
+                  title="Unfollow from {listName}"
+                >
+                  <span class="codicon codicon-close text-xs"></span>
+                </button>
+              </div>
+            {:else}
+              <span>{listName}</span>
+            {/if}
+          {/each}
         {/if}
         {#if fetchTimeDisplay}
-          <span>Fetched {fetchTimeDisplay}</span>
+          <span class="flex items-center gap-1">
+            <span class="codicon codicon-sync" title="Fetched"></span>
+            {fetchTimeDisplay}</span>
         {/if}
       </div>
     </div>
@@ -885,6 +933,7 @@
             on:deleteList={handleDeleteList}
             on:viewList={handleViewList}
             on:followList={handleFollowListCard}
+            on:unfollowList={handleUnfollowListCard}
           />
         </div>
       </div>
@@ -1010,14 +1059,12 @@
   title="Follow Repository"
   on:close={() => {
     showFollowDialog = false;
-    selectedListId = '';
+    selectedListIds = [];
     showCreateNew = false;
-    newListId = '';
-    newListName = '';
+    firstListName = 'Default';
   }}
 >
   <div class="mb-4">
-    <div class="text-sm text-muted mb-2">Add to list:</div>
     <div class="card bg-muted pad">
       <div class="font-semibold">{gitHost.getDisplayName(repository)}</div>
       <div class="text-sm text-muted">{repository}</div>
@@ -1026,36 +1073,46 @@
 
   <div class="mb-4">
     {#if availableLists.length === 0 && !showCreateNew}
-      <div class="text-center py-4">
-        <p class="text-muted mb-2">No lists available</p>
-        <button
-          class="btn primary"
-          on:click={() => showCreateNew = true}>
-          <span class="codicon codicon-add"></span>
-          Create New List
-        </button>
+      <div class="space-y-2">
+        <div class="font-medium mb-2">Create your first list:</div>
+        <form on:submit|preventDefault={() => {
+          const trimmedName = firstListName.trim();
+          if (!trimmedName) {return;}
+          const listId = trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').substring(0, 40);
+          handleCreateAndFollow({ detail: { id: listId, name: trimmedName } });
+        }}>
+          <div class="flex gap-2">
+            <input
+              type="text"
+              bind:value={firstListName}
+              placeholder="List name"
+              disabled={isFollowDialogSubmitting}
+              class="flex-1"
+            />
+            <button
+              type="submit"
+              class="btn primary"
+              disabled={isFollowDialogSubmitting || !firstListName.trim()}>
+              {#if isFollowDialogSubmitting}
+                <span class="codicon codicon-loading spin"></span>
+              {:else}
+                Create & Follow
+              {/if}
+            </button>
+          </div>
+        </form>
       </div>
     {:else if !showCreateNew}
       <div class="space-y-2">
-        <div class="font-medium mb-2">Select a list:</div>
-        {#each availableLists as list, index}
+        <div class="font-medium mb-2">Add to lists:</div>
+        {#each availableLists as list}
           <label class="flex items-center gap-2 cursor-pointer hover:bg-muted rounded px-2 py-1">
-            {#if index === 0}
-              <input
-                type="radio"
-                bind:this={firstRadioElement}
-                bind:group={selectedListId}
-                value={list.id}
-                disabled={isFollowDialogSubmitting}
-              />
-            {:else}
-              <input
-                type="radio"
-                bind:group={selectedListId}
-                value={list.id}
-                disabled={isFollowDialogSubmitting}
-              />
-            {/if}
+            <input
+              type="checkbox"
+              bind:group={selectedListIds}
+              value={list.id}
+              disabled={isFollowDialogSubmitting}
+            />
             <div class="flex-1">
               <div>{list.name}</div>
               {#if list.repositories && list.repositories.length > 0}
@@ -1069,8 +1126,8 @@
 
         <div class="border-t pt-2 mt-2">
           <button
-            class="text-sm text-muted hover:underline"
-            on:click={() => { showCreateNew = true; selectedListId = ''; }}>
+            class="btn sm"
+            on:click={() => { showCreateNew = true; selectedListIds = []; }}>
             <span class="codicon codicon-add"></span>
             Create new list
           </button>
@@ -1079,45 +1136,19 @@
     {:else}
       <div>
         <button
-          class="text-sm text-muted hover:underline"
-          on:click={() => { showCreateNew = false; newListId = ''; newListName = ''; }}>
+          class="btn sm"
+          on:click={() => { showCreateNew = false; }}>
           <span class="codicon codicon-arrow-left"></span>
           Back to list selection
         </button>
 
-        <div class="space-y-3">
-          <div>
-            <label for="new-list-id" class="block text-sm font-medium mb-1">
-              List ID <span class="text-muted">(lowercase, no spaces)</span>
-            </label>
-            <input
-              id="new-list-id"
-              type="text"
-              bind:value={newListId}
-              on:input={(e) => newListId = e.currentTarget.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')}
-              placeholder="e.g., reading-list"
-              maxlength="40"
-              disabled={isFollowDialogSubmitting}
-            />
-            {#if newListId && !/^[a-zA-Z0-9_-]{1,40}$/.test(newListId)}
-              <div class="text-xs text-error mt-1">
-                Only letters, numbers, hyphens, and underscores allowed
-              </div>
-            {/if}
-          </div>
-
-          <div>
-            <label for="new-list-name" class="block text-sm font-medium mb-1">
-              List Name
-            </label>
-            <input
-              id="new-list-name"
-              type="text"
-              bind:value={newListName}
-              placeholder="e.g., Reading List"
-              disabled={isFollowDialogSubmitting}
-            />
-          </div>
+        <div class="mt-3">
+          <ListCreateForm
+            bind:submitHandler={submitCreateListForm}
+            isCreating={isFollowDialogSubmitting}
+            compact={true}
+            on:createList={handleCreateAndFollow}
+          />
         </div>
       </div>
     {/if}
@@ -1126,38 +1157,40 @@
   <div slot="footer" class="flex justify-left gap-2">
     <button class="btn" on:click={() => {
       showFollowDialog = false;
-      selectedListId = '';
+      selectedListIds = [];
       showCreateNew = false;
-      newListId = '';
-      newListName = '';
+      firstListName = 'Default';
     }} disabled={isFollowDialogSubmitting}>
       Cancel
     </button>
-    <button
-      class="btn primary"
-      on:click={() => {
-        if (showCreateNew) {
-          if (newListId.trim() && newListName.trim()) {
-            handleCreateAndFollow({ detail: { listId: newListId.trim(), listName: newListName.trim() } });
+    {#if showCreateNew}
+      <button
+        class="btn primary"
+        on:click={() => { if (submitCreateListForm) {submitCreateListForm();} }}
+        disabled={isFollowDialogSubmitting}>
+        {#if isFollowDialogSubmitting}
+          <span class="codicon codicon-loading spin"></span>
+          Adding...
+        {:else}
+          Create List & Follow
+        {/if}
+      </button>
+    {:else}
+      <button
+        class="btn primary"
+        on:click={() => {
+          if (selectedListIds.length > 0) {
+            handleFollowSubmit({ detail: { listIds: selectedListIds } });
           }
-        } else {
-          if (selectedListId) {
-            handleFollowSubmit({ detail: { listId: selectedListId } });
-          }
-        }
-      }}
-      disabled={isFollowDialogSubmitting ||
-        (showCreateNew
-          ? (!newListId.trim() || !newListName.trim() || !/^[a-zA-Z0-9_-]{1,40}$/.test(newListId))
-          : !selectedListId)}>
-      {#if isFollowDialogSubmitting}
-        <span class="codicon codicon-loading spin"></span>
-        Adding...
-      {:else if showCreateNew}
-        Create List & Follow
-      {:else}
-        Follow Repository
-      {/if}
-    </button>
+        }}
+        disabled={isFollowDialogSubmitting || selectedListIds.length === 0}>
+        {#if isFollowDialogSubmitting}
+          <span class="codicon codicon-loading spin"></span>
+          Adding...
+        {:else}
+          Follow Repository{#if selectedListIds.length > 1} ({selectedListIds.length} lists){/if}
+        {/if}
+      </button>
+    {/if}
   </div>
 </Dialog>
