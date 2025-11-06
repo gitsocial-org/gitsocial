@@ -263,6 +263,7 @@ hr {
 .w-10 { width: 2.5rem; }
 .w-20 { width: 5rem; }
 .w-32 { width: 8rem; }
+.w-90vw { width: 90vw; }
 
 /* Height */
 .h-auto { height: auto; }
@@ -274,6 +275,7 @@ hr {
 .h-6 { height: 1.5rem; }
 .h-8 { height: 2rem; }
 .h-10 { height: 2.5rem; }
+.h-90vh { height: 90vh; }
 .min-h-md { min-height: 28rem; }
 
 
@@ -287,6 +289,7 @@ hr {
 .max-w-lg { max-width: 32rem; }
 .max-w-xl { max-width: 36rem; }
 .max-w-2xl { max-width: 42rem; }
+.max-w-4xl { max-width: 56rem; }
 .max-w-full { max-width: 100%; }
 
 /* ===== TYPOGRAPHY ===== */
@@ -721,11 +724,12 @@ select:hover {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--vscode-editor-background) 90%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .dialog {
@@ -733,8 +737,6 @@ select:hover {
   border: 1px solid var(--vscode-widget-border);
   border-radius: 4px;
   padding: 1rem;
-  width: 90%;
-  max-width: 500px;
 }
 
 /* Code Blocks */

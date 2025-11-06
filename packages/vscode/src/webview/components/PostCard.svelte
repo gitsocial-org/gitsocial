@@ -7,6 +7,8 @@
   import Avatar from './Avatar.svelte';
   import Dialog from './Dialog.svelte';
   import FullscreenPostViewer from './FullscreenPostViewer.svelte';
+  import FullscreenTextareaEditor from './FullscreenTextareaEditor.svelte';
+  import MarkdownEditor from './MarkdownEditor.svelte';
   import { formatRelativeTime, useEventDrivenTimeUpdates } from '../utils/time';
   import { createInteractionHandler } from '../utils/interactions';
   import { parseMarkdown, extractImages, transformCodeAndMath } from '../utils/markdown';
@@ -21,6 +23,7 @@
   export let clickable = true;
   export let interactive = true;
   export let expandContent = false;
+  export let trimmed = false;
 
   // Context
   export let showParentContext = false;
@@ -32,6 +35,7 @@
 
   // Fullscreen state
   let showFullscreen = false;
+  let showFullscreenEditor = false;
 
   // Computed display logic
   $: showFullContent = expandContent;
@@ -48,6 +52,13 @@
   }
   $: if (!expandContent && post?.content) {
     transformedHtml = transformCodeAndMath(post.content);
+  }
+  function truncateContent(content: string, maxLines = 3): string {
+    const lines = content.split('\n');
+    if (lines.length <= maxLines) {
+      return content;
+    }
+    return lines.slice(0, maxLines).join('\n') + '...';
   }
 
   // Image lightbox state
@@ -103,7 +114,6 @@
   } = createInteractionHandler();
 
   let interactionText = '';
-  let textareaElement: HTMLTextAreaElement;
 
   let cleanup: (() => void) | null = null;
 
@@ -207,12 +217,6 @@
     }
   }
 
-  function _handleViewRepository(): void {
-    api.openView('repository', post.display.repositoryName, {
-      repository: post.repository
-    });
-  }
-
   // Disable buttons when dialog is open or submitting
   $: buttonsDisabled = $interactionState.selectedPost !== null || $interactionState.isSubmitting;
 
@@ -270,6 +274,27 @@
   function handleCloseFullscreen() {
     showFullscreen = false;
     api.toggleZenMode();
+  }
+  function handleFullscreenEditor() {
+    showFullscreenEditor = true;
+    api.toggleZenMode();
+  }
+  function handleFullscreenEditorCancel() {
+    showFullscreenEditor = false;
+    api.toggleZenMode();
+  }
+  function handleFullscreenEditorSubmit(event: CustomEvent<{ text: string; isQuoteRepost: boolean }>) {
+    showFullscreenEditor = false;
+    api.toggleZenMode();
+    handleInteractionSubmit(event);
+  }
+  function handleDialogSubmit() {
+    const isQuoteRepost = $interactionState.interactionType === 'repost' && interactionText.trim().length > 0;
+    handleInteractionSubmit({ detail: { text: interactionText, isQuoteRepost } });
+  }
+  function handleDialogCancel() {
+    handleInteractionCancel();
+    interactionText = '';
   }
 
   // Reactive: auto-resolve missing original posts (only for quote/repost types)
@@ -644,7 +669,12 @@
 
             <!-- Content -->
             <div class="post-content mb-3">
-              {#if showRawView}
+              {#if trimmed}
+                <!-- Trimmed view for dialog preview -->
+                <div class="break-words text-sm text-muted">
+                  {truncateContent(post.content)}
+                </div>
+              {:else if showRawView}
                 <!-- Raw text view -->
                 <pre class="break-words font-mono text-sm p-3 rounded">{post.content}</pre>
               {:else if expandContent && parsedHtml}
@@ -670,7 +700,7 @@
               {/if}
 
               <!-- Images for ALL posts (lazy loaded) -->
-              {#if !showRawView && images.length > 0}
+              {#if !showRawView && !trimmed && images.length > 0}
                 {#if shouldShowImages}
                   <div class="image-gallery mt-3">
                     {#each images as url, index}
@@ -699,7 +729,7 @@
             </div>
 
             <!-- Quoted Content -->
-            {#if post.type === 'quote' && post.originalPostId !== anchorPostId}
+            {#if !trimmed && post.type === 'quote' && post.originalPostId !== anchorPostId}
               <div class="mb-3">
                 <div class="card ghost border border-link rounded p-2 cursor-pointer"
                   role="button"
@@ -727,9 +757,6 @@
                       <svelte:self
                         post={originalPost}
                         {posts}
-                        displayMode="preview"
-                        isNested={true}
-                        isEmbedded={true}
                         {anchorPostId} />
                     {:else if loadingPosts.has(post.originalPostId)}
                       <div class="text-center text-muted p-2">
@@ -747,7 +774,7 @@
             {/if}
 
             <!-- Parent Context for Comments -->
-            {#if showParentContextComputed && (post.originalPostId || post.parentCommentId)}
+            {#if !trimmed && showParentContextComputed && (post.originalPostId || post.parentCommentId)}
               {@const parentId = post.originalPostId || post.parentCommentId}
               {@const parentPost = parentId ? getResolvedPost(parentId) : null}
               <div class="parent-context mb-3">
@@ -770,10 +797,7 @@
                   {#if parentPost}
                     <svelte:self
                       post={parentPost}
-                      {posts}
-                      displayMode="preview"
-                      isNested={true}
-                      isEmbedded={true} />
+                      {posts} />
                   {:else if parentId && loadingPosts.has(parentId)}
                     <div class="text-center text-muted p-2">
                       <span class="codicon codicon-loading spin"></span>
@@ -848,59 +872,56 @@
 
   <Dialog
     isOpen={!!$interactionState.selectedPost && !!$interactionState.interactionType}
-    title={$interactionState.interactionType ? $interactionState.interactionType.charAt(0).toUpperCase() + $interactionState.interactionType.slice(1) : ''}
     on:close={() => {
       handleInteractionCancel();
       interactionText = '';
     }}
   >
+    <div slot="header" class="flex justify-between items-center mb-4">
+      <h3 id="dialog-title" class="m-0">
+        {$interactionState.interactionType ? $interactionState.interactionType.charAt(0).toUpperCase() + $interactionState.interactionType.slice(1) : ''}
+      </h3>
+      <div class="flex gap-2">
+        <button
+          class="btn ghost sm"
+          on:click={handleFullscreenEditor}
+          title="Fullscreen editor (F)">
+          <span class="codicon codicon-screen-full"></span>
+        </button>
+        <button
+          class="btn ghost sm"
+          on:click={() => {
+            handleInteractionCancel();
+            interactionText = '';
+          }}>
+          <span class="codicon codicon-close"></span>
+        </button>
+      </div>
+    </div>
     {#if $interactionState.selectedPost}
       <div class="card border bg-muted mt-1 mb-4 overflow-x-auto">
-        <svelte:self post={$interactionState.selectedPost} />
+        <svelte:self post={$interactionState.selectedPost} layout="compact" interactive={false} trimmed={true} />
       </div>
 
       {#if $interactionState.interactionType === 'comment' || $interactionState.interactionType === 'quote'}
-        <div>
-          <label for="interaction-text" class="block text-sm font-medium mb-1">
-            {$interactionState.interactionType === 'comment' ? 'Comment' : 'Your thoughts'}
-          </label>
-          <textarea
-            id="interaction-text"
-            bind:this={textareaElement}
-            bind:value={interactionText}
-            on:keydown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                handleInteractionSubmit({ detail: { text: interactionText, isQuoteRepost: false } });
-              }
-            }}
-            on:click|stopPropagation
-            placeholder={$interactionState.interactionType === 'comment' ? 'Write your comment...' : 'Add your thoughts...'}
-            disabled={$interactionState.isSubmitting}
-            class="w-full"
-            rows="10"
-          />
-        </div>
+        <MarkdownEditor
+          bind:value={interactionText}
+          placeholder={$interactionState.interactionType === 'comment' ? 'Write your comment...' : 'Add your thoughts...'}
+          disabled={$interactionState.isSubmitting}
+          creating={$interactionState.isSubmitting}
+          onSubmit={handleDialogSubmit}
+          onCancel={handleDialogCancel}
+        />
       {:else if $interactionState.interactionType === 'repost'}
-        <div>
-          <label for="repost-text" class="block text-sm font-medium mb-1">Comment (optional)</label>
-          <textarea
-            id="repost-text"
-            bind:this={textareaElement}
-            bind:value={interactionText}
-            on:keydown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                handleInteractionSubmit({
-                  detail: { text: interactionText, isQuoteRepost: interactionText.trim().length > 0 }
-                });
-              }
-            }}
-            on:click|stopPropagation
-            placeholder="Add a comment (optional)"
-            disabled={$interactionState.isSubmitting}
-            class="w-full"
-            rows="10"
-          />
-        </div>
+        <MarkdownEditor
+          bind:value={interactionText}
+          placeholder="Add a comment (optional)"
+          disabled={$interactionState.isSubmitting}
+          creating={$interactionState.isSubmitting}
+          allowEmpty={true}
+          onSubmit={handleDialogSubmit}
+          onCancel={handleDialogCancel}
+        />
       {/if}
 
       {#if $interactionState.submissionMessage}
@@ -909,27 +930,6 @@
         </div>
       {/if}
     {/if}
-
-    <div slot="footer" class="flex gap-2 mt-1 justify-end">
-      <button
-        class="btn"
-        on:click={() => {
-          handleInteractionCancel();
-          interactionText = '';
-        }}
-        disabled={$interactionState.isSubmitting}
-      >
-        Cancel
-      </button>
-      <button
-        class="btn primary wide"
-        on:click={() => handleInteractionSubmit({ detail: { text: interactionText, isQuoteRepost: $interactionState.interactionType === 'repost' && interactionText.trim().length > 0 } })}
-        disabled={$interactionState.isSubmitting || ($interactionState.interactionType === 'comment' && !interactionText.trim()) || ($interactionState.interactionType === 'quote' && !interactionText.trim())}
-      >
-        <span class="codicon codicon-{$interactionState.interactionType === 'comment' ? 'comment' : 'arrow-swap'}"></span>
-        {$interactionState.interactionType === 'comment' ? 'Comment' : $interactionState.interactionType === 'quote' ? 'Quote' : 'Repost'}
-      </button>
-    </div>
   </Dialog>
 
   <!-- Image Lightbox -->
@@ -981,5 +981,14 @@
       posts={[post]}
       currentIndex={0}
       on:close={handleCloseFullscreen} />
+  {/if}
+  {#if showFullscreenEditor && $interactionState.selectedPost && $interactionState.interactionType}
+    <FullscreenTextareaEditor
+      post={$interactionState.selectedPost}
+      interactionType={$interactionState.interactionType}
+      bind:text={interactionText}
+      isSubmitting={$interactionState.isSubmitting}
+      on:submit={handleFullscreenEditorSubmit}
+      on:cancel={handleFullscreenEditorCancel} />
   {/if}
 {/if}

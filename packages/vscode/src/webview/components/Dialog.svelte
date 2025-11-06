@@ -3,7 +3,7 @@
 
   export let isOpen = false;
   export let title = '';
-  export let width = 'max-w-500px';
+  export let size = 'w-90vw h-90vh';
   export let closeOnOverlay = true;
   export let closeOnEscape = true;
   export let focusOnMount = true;
@@ -38,7 +38,7 @@
     tabindex="0"
     on:click={handleOverlayClick}
     on:keydown={handleKeydown}>
-    <div class="dialog {width}"
+    <div class="dialog overflow-y-auto {size}"
       bind:this={dialogElement}
       role="dialog"
       aria-modal="true"
@@ -63,22 +63,3 @@
     </div>
   </div>
 {/if}
-
-<style>
-  .dialog {
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  .max-w-500px {
-    max-width: 500px;
-  }
-
-  .max-w-600px {
-    max-width: 600px;
-  }
-
-  .max-w-700px {
-    max-width: 700px;
-  }
-</style>
