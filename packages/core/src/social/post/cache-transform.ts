@@ -56,7 +56,7 @@ export function constructPost(
     author = { name: realCommit.author, email: realCommit.email };
     timestamp = realCommit.timestamp;
     gitMsg = parseGitMsgMessage(realCommit.message);
-    content = gitMsg?.content || realCommit.message;
+    content = gitMsg?.content || realCommit.message.trimEnd();
     hash = realCommit.hash;
   } else if (isVirtual && virtualCommit) {
     // Use parseGitMsgRef for embedded messages
@@ -279,7 +279,8 @@ export function processPost(
   postIndex?: {
     absolute: Map<string, string>;
     merged: Set<string>;
-  }
+  },
+  skipEmbeddedReferences?: boolean
 ): void {
   // Normalize post references using existing protocol functions
   // Only re-normalize if we have an originUrl (for workspace posts with remote)
@@ -342,6 +343,10 @@ export function processPost(
   // Otherwise keep existing (don't replace real with virtual)
 
   // Process embedded references to create virtual posts
+  if (skipEmbeddedReferences) {
+    return; // Skip embedded reference processing in Phase 1
+  }
+
   if (post.raw?.gitMsg?.references) {
     for (const ref of post.raw.gitMsg.references) {
       if (ref.ext === 'social' && ref.metadata) {

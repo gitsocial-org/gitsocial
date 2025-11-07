@@ -35,7 +35,7 @@ import { log } from '../../logger';
 import { gitMsgHash, gitMsgRef, gitMsgUrl } from '../../gitmsg/protocol';
 import { storage } from '../../storage';
 import { list } from '../list';
-import { processCommits, processPost } from './cache-transform';
+import { createVirtualPostFromReference, mergeVirtualPostIntoWorkspace, processCommits, processPost } from './cache-transform';
 import { updateInteractionCounts } from './cache-interactions';
 
 // ========================================
@@ -356,6 +356,85 @@ function getCachedPosts(
   return filtered;
 }
 
+function removeFromIndexes(postId: string): void {
+  const hash12Entries = Array.from(postIndex.byHash.entries());
+  for (const [hash, ids] of hash12Entries) {
+    if (ids.has(postId)) {
+      ids.delete(postId);
+      if (ids.size === 0) {
+        postIndex.byHash.delete(hash);
+      }
+    }
+  }
+  const repoEntries = Array.from(postIndex.byRepository.entries());
+  for (const [repo, ids] of repoEntries) {
+    if (ids.has(postId)) {
+      ids.delete(postId);
+      if (ids.size === 0) {
+        postIndex.byRepository.delete(repo);
+      }
+    }
+  }
+  const listEntries = Array.from(postIndex.byList.entries());
+  for (const [list, ids] of listEntries) {
+    if (ids.has(postId)) {
+      ids.delete(postId);
+      if (ids.size === 0) {
+        postIndex.byList.delete(list);
+      }
+    }
+  }
+  for (const [key, value] of postIndex.absolute.entries()) {
+    if (key === postId || value === postId) {
+      postIndex.absolute.delete(key);
+    }
+  }
+  postIndex.merged.delete(postId);
+}
+
+function processEmbeddedReferences(
+  posts: Map<string, Post>,
+  workdir: string,
+  originUrl?: string,
+  postIndex?: {
+    absolute: Map<string, string>;
+    merged: Set<string>;
+  }
+): void {
+  for (const post of posts.values()) {
+    if (post.raw?.gitMsg?.references) {
+      for (const ref of post.raw.gitMsg.references) {
+        if (ref.ext === 'social' && ref.metadata) {
+          const virtualPost = createVirtualPostFromReference(ref, post, workdir, originUrl);
+          if (virtualPost) {
+            if (originUrl && virtualPost.id.startsWith(originUrl)) {
+              const parsed = gitMsgRef.parse(virtualPost.id);
+              const relativeId = gitMsgRef.create(parsed.type as 'commit' | 'branch', parsed.value);
+              const workspacePost = posts.get(relativeId);
+              if (workspacePost) {
+                mergeVirtualPostIntoWorkspace(workspacePost, ref);
+                if (postIndex) {
+                  postIndex.absolute.set(virtualPost.id, relativeId);
+                  postIndex.merged.add(virtualPost.id);
+                }
+                log('debug', '[processEmbeddedReferences] Merged virtual ref into workspace post:', {
+                  virtualRef: virtualPost.id,
+                  workspaceId: relativeId
+                });
+                continue;
+              }
+            }
+            if (!posts.has(virtualPost.id) && !postIndex?.absolute.has(virtualPost.id)) {
+              posts.set(virtualPost.id, virtualPost);
+              log('debug', '[processEmbeddedReferences] Added virtual post:', virtualPost.id);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 async function refresh(scope: {
   repositories?: string[];
   hashes?: string[];
@@ -384,8 +463,8 @@ async function refresh(scope: {
         if (postsToRemove) {
           for (const postId of postsToRemove) {
             postsCache.delete(postId);
+            removeFromIndexes(postId);
           }
-          postIndex.byHash.delete(hash12);
         }
       }
     }
@@ -457,20 +536,23 @@ async function initializeGlobalCache(workdir: string, storageBase?: string, sinc
   const posts = new Map<string, Post>();
 
   try {
-    // Load all posts in single phase with unified processing
     const workspaceCommits = await loadPosts(workdir, 'workspace', undefined, sinceOverride);
     const externalCommits = await loadPosts(workdir, 'external', storageBase, sinceOverride);
 
-    // Process all posts with unified function
-    for (const post of workspaceCommits) {
-      processPost(post, posts, workdir, originUrl, postIndex);
+    // Phase 1: Add all posts to map first (without processing embedded references)
+    // This ensures all posts are available when processing references in Phase 2
+    const allPosts = [...workspaceCommits, ...externalCommits];
+
+    for (const post of allPosts) {
+      // Add basic post and deduplication mappings, but skip embedded reference processing
+      processPost(post, posts, workdir, originUrl, postIndex, true);
     }
 
-    for (const post of externalCommits) {
-      processPost(post, posts, workdir, originUrl, postIndex);
-    }
+    log('debug', '[initializeGlobalCache] Phase 1 complete: Added', posts.size, 'posts');
 
-    log('debug', '[initializeGlobalCache] Processed all posts and references');
+    // Phase 2: Process embedded references with full context
+    processEmbeddedReferences(posts, workdir, originUrl, postIndex);
+    log('debug', '[initializeGlobalCache] Phase 2 complete: Processed all references, final count:', posts.size);
   } catch (error) {
     log('error', '[initializeGlobalCache] Error processing posts:', error);
     // Continue with initialization even if some posts fail
@@ -489,10 +571,8 @@ async function initializeGlobalCache(workdir: string, storageBase?: string, sinc
   log('debug', '[initializeGlobalCache] Updated interaction counts');
 
   for (const post of posts.values()) {
-    const frozenPost: Readonly<Post> = Object.freeze(post);
-
-    postsCache.set(post.id, frozenPost);
-    updateIndexes(post.id, frozenPost, workdir);
+    postsCache.set(post.id, post as Readonly<Post>);
+    updateIndexes(post.id, post, workdir);
   }
 
   // Track that we've loaded from this date
@@ -750,19 +830,21 @@ export async function loadRepositoryPosts(
     log('debug', '[loadRepositoryPosts] No origin URL available:', error);
   }
 
-  // Process all posts with unified function
+  // Phase 1: Add all posts without processing embedded references
   for (const post of posts) {
-    processPost(post, postsMap, repositoryUrl, originUrl, postIndex);
+    processPost(post, postsMap, repositoryUrl, originUrl, postIndex, true);
   }
+
+  // Phase 2: Process embedded references with full context
+  processEmbeddedReferences(postsMap, repositoryUrl, originUrl, postIndex);
 
   // Update interaction counts incrementally
   await updateInteractionCounts(postsMap, workdir);
 
   // Add all posts to global cache (real and virtual)
   for (const post of postsMap.values()) {
-    const frozenPost: Readonly<Post> = Object.freeze(post);
-    postsCache.set(post.id, frozenPost);
-    updateIndexes(post.id, frozenPost, workdir);
+    postsCache.set(post.id, post as Readonly<Post>);
+    updateIndexes(post.id, post, workdir);
   }
 
   log('debug', `[loadRepositoryPosts] Loaded ${postsMap.size} posts for ${repositoryUrl}`);
@@ -929,14 +1011,14 @@ async function loadAdditionalPosts(
     const workspaceCommits = await loadPosts(workdir, 'workspace', undefined, since);
     const externalCommits = await loadPosts(workdir, 'external', storageBase, since);
 
-    // Process all posts
-    for (const post of workspaceCommits) {
-      processPost(post, posts, workdir, originUrl, postIndex);
-    }
-    for (const post of externalCommits) {
-      processPost(post, posts, workdir, originUrl, postIndex);
+    // Phase 1: Add all posts without processing embedded references
+    const allPosts = [...workspaceCommits, ...externalCommits];
+    for (const post of allPosts) {
+      processPost(post, posts, workdir, originUrl, postIndex, true);
     }
 
+    // Phase 2: Process embedded references with full context
+    processEmbeddedReferences(posts, workdir, originUrl, postIndex);
     log('debug', '[loadAdditionalPosts] Processed', posts.size, 'additional posts');
   } catch (error) {
     log('error', '[loadAdditionalPosts] Error processing posts:', error);
@@ -949,9 +1031,8 @@ async function loadAdditionalPosts(
   let addedCount = 0;
   for (const post of posts.values()) {
     if (!postsCache.has(post.id)) {
-      const frozenPost: Readonly<Post> = Object.freeze(post);
-      postsCache.set(post.id, frozenPost);
-      updateIndexes(post.id, frozenPost, workdir);
+      postsCache.set(post.id, post as Readonly<Post>);
+      updateIndexes(post.id, post, workdir);
       addedCount++;
     }
   }

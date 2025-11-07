@@ -32,11 +32,9 @@ async function calculateInteractionCounts(posts: Map<string, Post>, workdir?: st
   const countedInteractions = new Set<string>();
 
   for (const post of posts.values()) {
-    // For comments, use parentCommentId if present, otherwise originalPostId
-    // For reposts/quotes, always use originalPostId
-    const targetId = (post.type === 'comment' && post.parentCommentId)
-      ? post.parentCommentId
-      : post.originalPostId;
+    // Count all interactions toward the original post
+    // This ensures nested comments (replies to comments) are counted
+    const targetId = post.originalPostId;
 
     if (targetId && post.type !== 'post') {
       // Normalize both sides of the interaction for dedup checking

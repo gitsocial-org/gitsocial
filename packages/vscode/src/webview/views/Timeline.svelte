@@ -118,15 +118,15 @@
       }
 
       case 'refreshAfterFetch': {
-        // No longer needed - backend handles fetching before returning posts
-        // Kept for compatibility with other views
+        // Cache already refreshed by handler, re-query to show new repository posts
+        loadWeekData(false);
         break;
       }
 
       case 'postCreated':
       case 'commitCreated':
-        // Refresh timeline when a new post is created
-        loadWeekData();
+        // Refresh timeline when a new post is created (skip cache to see new post)
+        loadWeekData(true);
         break;
 
     }
@@ -170,7 +170,7 @@
     }
   }
 
-  function loadWeekData() {
+  function loadWeekData(skipCache = false) {
     isLoadingWeek = true;
     error = null;
     // Calculate dates directly to avoid timing issues with reactive values
@@ -184,7 +184,8 @@
       since,
       until,
       scope: 'timeline',
-      types: ['post', 'quote', 'repost']
+      types: ['post', 'quote', 'repost'],
+      skipCache
     });
   }
 
