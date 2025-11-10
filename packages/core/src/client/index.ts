@@ -4,7 +4,7 @@
  */
 
 // Export client-safe types only (from social/types and gitmsg/types)
-export type { Post, List, Result, NotificationType } from '../social/types';
+export type { Post, List, Result, NotificationType, ThreadItem, ThreadSort } from '../social/types';
 export type { Repository } from '../social/types';
 export type { Notification } from '../social/notification';
 export type { GitMsgHeader, GitMsgRef as GitMsgRefType, GitMsgMessage } from '../gitmsg/types';
@@ -16,6 +16,9 @@ export { createGitMsgHeader, createGitMsgRef, formatGitMsgMessage } from '../git
 // Export namespace objects for webview use (pure functions only)
 export { gitMsgRef, gitMsgUrl, gitMsgHash } from '../gitmsg/protocol';
 export { gitHost } from '../githost';
+
+// Export thread helper functions (pure, client-safe)
+export { matchesPostId, calculateDepth, buildParentChildMap, sortThreadTree, sortPosts } from '../social/thread/helpers';
 
 // Export client-safe date utilities
 export * from '../utils/date';

@@ -197,7 +197,7 @@
 
 <div>
   <!-- Header -->
-  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar mb-6">
+  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar mb-6 border-b-r">
     <div class="flex justify-between items-center">
       <h1><span class="codicon codicon-lg codicon-bell mr-2"></span>Notifications</h1>
       <DateNavigation

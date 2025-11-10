@@ -100,7 +100,7 @@
 
 <div>
   <!-- Header -->
-  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar mb-6">
+  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar mb-6 border-b-r">
     <h1><span class="codicon codicon-lg codicon-search mr-2"></span>Search Posts</h1>
   </div>
 

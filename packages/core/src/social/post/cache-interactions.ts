@@ -33,7 +33,6 @@ async function calculateInteractionCounts(posts: Map<string, Post>, workdir?: st
 
   for (const post of posts.values()) {
     // Count all interactions toward the original post
-    // This ensures nested comments (replies to comments) are counted
     const targetId = post.originalPostId;
 
     if (targetId && post.type !== 'post') {
@@ -45,7 +44,7 @@ async function calculateInteractionCounts(posts: Map<string, Post>, workdir?: st
       const interactionKey = `${sourceId}->${canonicalTargetId}`;
       if (countedInteractions.has(interactionKey)) {
         log('debug', '[calculateInteractionCounts] Skipping duplicate interaction:', interactionKey);
-        continue; // Already counted this interaction
+        continue;
       }
       countedInteractions.add(interactionKey);
 
@@ -103,6 +102,37 @@ async function calculateInteractionCounts(posts: Map<string, Post>, workdir?: st
           hasTargetInMap: posts.has(targetId),
           availableKeys: Array.from(posts.keys()).filter(k => k.includes(targetId?.split('#commit:')?.[1]?.substring(0, 8) || 'none')).slice(0, 3)
         });
+      }
+    }
+
+    // Also count nested comments towards their parent comment
+    if (post.parentCommentId && post.type === 'comment') {
+      const parentId = post.parentCommentId;
+      const sourceId = resolveToCanonicalId(post.id, myOriginUrl);
+      const canonicalParentId = resolveToCanonicalId(parentId, myOriginUrl);
+
+      const parentInteractionKey = `${sourceId}->parent->${canonicalParentId}`;
+      if (!countedInteractions.has(parentInteractionKey)) {
+        countedInteractions.add(parentInteractionKey);
+
+        let parentPost = posts.get(parentId);
+        if (!parentPost) {
+          const mappedId = postIndex.absolute.get(parentId);
+          if (mappedId) {
+            parentPost = posts.get(mappedId);
+          }
+        }
+        if (!parentPost && myOriginUrl && parentId.includes(myOriginUrl)) {
+          const parsed = gitMsgRef.parse(parentId);
+          if (parsed.type === 'commit' && parsed.value) {
+            const localId = `#commit:${parsed.value}`;
+            parentPost = posts.get(localId);
+          }
+        }
+
+        if (parentPost?.interactions) {
+          parentPost.interactions.comments++;
+        }
       }
     }
   }

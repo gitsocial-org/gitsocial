@@ -86,7 +86,7 @@
   }
 </script>
 
-<div class="card pad hover cursor-pointer border-l {list.isUnpushed ? 'border-l-warning' : ''} {list.source ? 'border-l-accent' : ''}" on:click={handleViewList} on:keydown={(e) => e.key === 'Enter' && handleViewList()} role="button" tabindex="0">
+<div class="card p-3 hover cursor-pointer border-l {list.isUnpushed ? 'border-l-warning' : ''} {list.source ? 'border-l-accent' : ''}" on:click={handleViewList} on:keydown={(e) => e.key === 'Enter' && handleViewList()} role="button" tabindex="0">
   <div class="flex justify-between items-start">
     <div class="flex-1 min-w-0">
       {#if editingName}

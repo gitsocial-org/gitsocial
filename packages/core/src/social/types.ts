@@ -80,11 +80,11 @@ export interface ThreadContext {
  * Thread item for rendering
  */
 export interface ThreadItem {
-  type: 'post' | 'anchor' | 'readMore' | 'skeleton' | 'blocked' | 'notFound';
+  type: 'post' | 'anchor' | 'skeleton' | 'blocked' | 'notFound';
   key: string;
   depth: number;              // <0 for parents, 0 for anchor, >0 for children
   data?: Post;
-  onLoadMore?: () => void;
+  hasChildren?: boolean;       // True if this post has replies
 }
 
 /**

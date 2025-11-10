@@ -19,7 +19,7 @@ body {
 }
 
 #app {
-  max-width: 42rem;
+  max-width: 48rem;
   padding: 0 1rem;
 }
 
@@ -171,6 +171,7 @@ hr {
 .ml-2 { margin-left: 0.5rem; }
 .ml-3 { margin-left: 0.75rem; }
 .ml-4 { margin-left: 1rem; }
+.ml-5 { margin-left: 1.25rem; }
 .ml-10 { margin-left: 2.5rem; }
 .ml-12 { margin-left: 3rem; }
 .ml-auto { margin-left: auto; }
@@ -259,6 +260,7 @@ hr {
 .w-6 { width: 1.5rem; }
 .w-2\/3 { width: 66.666667%; }
 .w-3\/4 { width: 75%; }
+.w-7 { width: 1.75rem; }
 .w-8 { width: 2rem; }
 .w-10 { width: 2.5rem; }
 .w-20 { width: 5rem; }
@@ -370,11 +372,21 @@ hr {
 .border { border: 1px solid var(--vscode-input-border); }
 .border-0 { border: none; }
 .border-2 { border-width: 2px; }
-.border-t { border-top: 1px solid var(--vscode-widget-border); }
-.border-b { border-bottom: 1px solid var(--vscode-widget-border); }
-.border-l { border-left: 1px solid var(--vscode-widget-border); }
-.border-r { border-right: 1px solid var(--vscode-widget-border); }
-.border-l-4 { border-left-width: 4px; }
+.border-t { box-shadow: inset 0 1px 0 0 var(--vscode-widget-border); }
+.border-b { box-shadow: inset 0 -1px 0 0 var(--vscode-widget-border); }
+.border-l { box-shadow: inset 1px 0 0 0 var(--vscode-widget-border); }
+.border-r { box-shadow: inset -1px 0 0 0 var(--vscode-widget-border); }
+.border-l-4 { box-shadow: inset 4px 0 0 0 var(--vscode-widget-border); }
+.border-y {
+  box-shadow:
+    inset 0 1px 0 0 var(--vscode-widget-border),
+    inset 0 -1px 0 0 var(--vscode-widget-border);
+}
+.border-b-r {
+  box-shadow:
+    inset 0 -1px 0 0 var(--vscode-widget-border),
+    inset -1px 0 0 0 var(--vscode-widget-border);
+}
 .border-transparent { border-color: transparent; }
 .border-error { border-color: var(--vscode-errorForeground); }
 
@@ -446,15 +458,13 @@ hr {
   border-color: var(--vscode-textLink-foreground); 
 }
 .border-l-warning {
-  border-left: 1px solid var(--vscode-editorWarning-foreground);
-  box-sizing: border-box;
+  box-shadow: inset 1px 0 0 0 var(--vscode-editorWarning-foreground);
 }
 .border-primary {
   border-color: var(--vscode-textLink-foreground);
 }
 .border-l-accent {
-  border-left: 1px solid var(--vscode-focusBorder);
-  box-sizing: border-box;
+  box-shadow: inset 1px 0 0 0 var(--vscode-focusBorder);
 }
 
 /* Animation */
@@ -701,24 +711,20 @@ select:hover {
   background-color: var(--vscode-list-hoverBackground);
 }
 
-.card.pad {
-  padding: 0.75rem;
-}
-
 .card.active {
   background-color: var(--vscode-list-activeSelectionBackground);
 }
 
-.thread-connector {
-  position: absolute;
-  left: calc(0.75rem + 20px);
-  top: 40px;
-  width: 1px;
-  height: 100%;
-  background-color: var(--vscode-textLink-foreground);
-  opacity: 0.3;
-  z-index: 1;
-}
+/* Reddit-style thread depth indentation */
+.thread-item-depth-0 { padding-left: 0; }
+.thread-item-depth-1 { padding-left: 0; }
+.thread-item-depth-2 { padding-left: 3rem; }
+.thread-item-depth-3 { padding-left: 6rem; }
+.thread-item-depth-4 { padding-left: 9rem; }
+.thread-item-depth-5 { padding-left: 12rem; }
+.thread-item-depth-6 { padding-left: 15rem; }
+.thread-item-depth-7 { padding-left: 18rem; }
+.thread-item-depth-8 { padding-left: 21rem; }
 
 /* Dialog */
 .dialog-overlay {

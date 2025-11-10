@@ -5,7 +5,7 @@
 import type { Post, Result, ThreadContext, ThreadItem, ThreadSort } from './types';
 import { cache } from './post/cache';
 import { log } from '../logger';
-import { gitMsgRef } from '../gitmsg/protocol';
+import { buildParentChildMap, calculateDepth, matchesPostId, sortThreadTree } from './thread/helpers';
 
 /**
  * Thread namespace
@@ -13,25 +13,9 @@ import { gitMsgRef } from '../gitmsg/protocol';
 export const thread = {
   getThread: getThreadImpl,
   buildThreadItems: buildThreadItemsImpl,
-  sortPosts: sortPostsImpl,
   flattenContext: flattenContextImpl,
   buildContext: buildContextImpl
 };
-
-function matchesPostId(postId: string | undefined, targetId: string): boolean {
-  if (!postId) { return false; }
-  if (postId === targetId) { return true; }
-
-  const parsedPost = gitMsgRef.parse(postId);
-  const parsedTarget = gitMsgRef.parse(targetId);
-
-  if (parsedPost.type === 'commit' && parsedTarget.type === 'commit' &&
-      parsedPost.value === parsedTarget.value) {
-    return true;
-  }
-
-  return false;
-}
 
 function getThreadImpl(
   workdir: string,
@@ -84,10 +68,12 @@ function getThreadImpl(
 
 function buildThreadItemsImpl(
   context: ThreadContext,
+  allPosts: Post[],
   options?: {
     deferParents?: boolean;
     maxParents?: number;
     maxChildren?: number;
+    maxDepth?: number;
   }
 ): ThreadItem[] {
   const items: ThreadItem[] = [];
@@ -95,32 +81,28 @@ function buildThreadItemsImpl(
     deferParents: false,
     maxParents: 5,
     maxChildren: 50,
+    maxDepth: 8,
     ...options
   };
+
+  // Build parent-child map once for O(1) lookups
+  const parentChildMap = buildParentChildMap(allPosts);
 
   // Add parent posts if not deferred
   if (!opts.deferParents && context.parentPosts.length > 0) {
     const parentsToShow = context.parentPosts.slice(-opts.maxParents);
-    parentsToShow.forEach((post, index) => {
+    parentsToShow.forEach((post) => {
+      const rawDepth = calculateDepth(post, context.anchorPost, allPosts);
+      const depth = Math.max(-opts.maxDepth, rawDepth);
+      const hasChildren = parentChildMap.has(post.id);
       items.push({
         type: 'post',
         key: post.id,
-        depth: index - parentsToShow.length,
-        data: post
+        depth,
+        data: post,
+        hasChildren
       });
     });
-
-    // Add "load more" if there are more parents
-    if (context.parentPosts.length > opts.maxParents) {
-      items.unshift({
-        type: 'readMore',
-        key: 'readMore-parents',
-        depth: -opts.maxParents - 1,
-        onLoadMore: () => {
-          // Will be implemented with pagination
-        }
-      });
-    }
   }
 
   // Add anchor post
@@ -133,59 +115,20 @@ function buildThreadItemsImpl(
 
   // Add child posts
   const childrenToShow = context.childPosts.slice(0, opts.maxChildren);
-  childrenToShow.forEach((post, index) => {
+  childrenToShow.forEach((post) => {
+    const rawDepth = calculateDepth(post, context.anchorPost, allPosts);
+    const depth = Math.min(opts.maxDepth, rawDepth);
+    const hasChildren = parentChildMap.has(post.id);
     items.push({
       type: 'post',
       key: post.id,
-      depth: index + 1,
-      data: post
+      depth,
+      data: post,
+      hasChildren
     });
   });
 
-  // Add "load more" if there are more children
-  if (context.childPosts.length > opts.maxChildren) {
-    items.push({
-      type: 'readMore',
-      key: 'readMore-children',
-      depth: opts.maxChildren + 1,
-      onLoadMore: () => {
-        // Will be implemented with pagination
-      }
-    });
-  }
-
   return items;
-}
-
-function sortPostsImpl(posts: Post[], sort: ThreadSort): Post[] {
-  switch (sort) {
-  case 'top':
-    // Sort by interaction count (comments + reposts)
-    return [...posts].sort((a, b) => {
-      const scoreA = (a.interactions?.comments || 0) +
-                      (a.interactions?.reposts || 0) +
-                      (a.interactions?.quotes || 0);
-      const scoreB = (b.interactions?.comments || 0) +
-                      (b.interactions?.reposts || 0) +
-                      (b.interactions?.quotes || 0);
-      return scoreB - scoreA;
-    });
-
-  case 'oldest':
-    // Sort by creation time ascending
-    return [...posts].sort((a, b) =>
-      a.timestamp.getTime() - b.timestamp.getTime()
-    );
-
-  case 'latest':
-    // Sort by creation time descending
-    return [...posts].sort((a, b) =>
-      b.timestamp.getTime() - a.timestamp.getTime()
-    );
-
-  default:
-    return posts;
-  }
 }
 
 function flattenContextImpl(context: ThreadContext): Post[] {
@@ -304,22 +247,15 @@ function buildContextImpl(
   }
   parentPosts.push(...parentComments);
 
-  // Find child posts (direct replies to anchor)
-  // Exclude reposts when viewing the original post directly
-  const childPosts = allPosts.filter(p =>
-    (matchesPostId(p.originalPostId, anchorPostId) && p.type !== 'repost') ||
-    matchesPostId(p.parentCommentId, anchorPostId)
-  );
+  // Find child posts with tree-aware sorting (maintains parent-child visual order)
+  const sortedChildren = sortThreadTree(anchorPostId, allPosts, sort, 1);
 
   log('debug', '[buildContext] Finding children for anchor:', {
     anchorPostId,
     anchorPostType: anchorPost.type,
     totalPosts: allPosts.length,
-    childrenFound: childPosts.length
+    childrenFound: sortedChildren.length
   });
-
-  // Sort children
-  const sortedChildren = sortPostsImpl(childPosts, sort);
 
   return {
     success: true,

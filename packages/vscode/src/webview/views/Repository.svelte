@@ -717,7 +717,7 @@
 
 <div class="view-container">
   <!-- Header -->
-  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar">
+  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar border-r">
     <!-- Main Row -->
     <div class="grid gap-2 items-center" style="grid-template-columns: auto 1fr auto;">
       <!-- Column 1: Avatar/Icon -->
@@ -1065,7 +1065,7 @@
   }}
 >
   <div class="mb-4">
-    <div class="card bg-muted pad">
+    <div class="card bg-muted p-3">
       <div class="font-semibold">{gitHost.getDisplayName(repository)}</div>
       <div class="text-sm text-muted">{repository}</div>
     </div>

@@ -114,7 +114,7 @@
 </script>
 
 <!-- Header -->
-<div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar flex justify-between items-center border-b">
+<div class="sticky z-20 top-0 -ml-4 -mr-4 p-2 bg-sidebar flex justify-between items-center border-b-r">
   <div class="flex items-center">
     <button class="btn ghost" on:click={goBack}><span class="codicon codicon-arrow-left"></span>Post</button>
     <select
@@ -149,7 +149,7 @@
   </div>
 </div>
 
-<div class="-ml-4">
+<div class="-ml-4 -mr-4">
   {#if loading}
     <div class="flex flex-col items-center justify-center p-3">
       <p class="mt-2">Loading post...</p>

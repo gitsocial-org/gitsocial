@@ -24,9 +24,8 @@ export function sortPosts(posts: Post[], sortBy: SortType): Post[] {
       const aCount = a.interactions?.comments || 0;
       const bCount = b.interactions?.comments || 0;
       if (aCount !== bCount) {
-        return bCount - aCount; // Higher comment count first
+        return bCount - aCount;
       }
-      // Fallback to latest for ties
       return parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp);
     }
 

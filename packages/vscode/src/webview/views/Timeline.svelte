@@ -200,7 +200,7 @@
 
 <div>
   <!-- Header -->
-  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar">
+  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar border-b-r">
     <div class="flex justify-between items-center">
       <h1><svg width="20" height="20" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="vertical-align: text-bottom; margin-right: 0.5rem;"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg>Timeline</h1>
       <DateNavigation
@@ -238,7 +238,7 @@
       </button>
     </div>
   {:else}
-    <div class="flex flex-col gap-2 -ml-4">
+    <div class="flex flex-col gap-2 -ml-4 -mr-4">
       {#each posts as post (post.id)}
         <PostCard post={post} />
       {/each}

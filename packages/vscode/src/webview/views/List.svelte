@@ -525,7 +525,7 @@
     </div>
   {:else if list}
     <!-- Header -->
-    <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar">
+    <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar border-r">
       <!-- Main Row -->
       <div class="grid gap-2 items-center" style="grid-template-columns: auto 1fr auto;">
         <!-- Column 1: Icon -->
@@ -792,7 +792,7 @@
             {#each list.repositories as repoString}
               {@const repo = gitMsgRef.parseRepositoryId(repoString)}
               {#if repo}
-                <div class="card pad hover cursor-pointer" on:click={() => handleViewRepository(repoString)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && handleViewRepository(repoString)}>
+                <div class="card p-3 hover cursor-pointer" on:click={() => handleViewRepository(repoString)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && handleViewRepository(repoString)}>
                   <div class="flex items-center gap-3">
                     <Avatar
                       type="repository"

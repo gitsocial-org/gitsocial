@@ -116,7 +116,7 @@
 
 <div>
   <!-- Header -->
-  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar">
+  <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar border-b-r">
     <h1><span class="codicon codicon-lg codicon-settings-gear mr-2"></span>Settings</h1>
   </div>
 
