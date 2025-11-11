@@ -23,7 +23,7 @@
   "extensionDependencies": [
     "vscode.git"
   ],
-  "main": "extension.js",
+  "main": "../../build/vscode/extension.js",
   "contributes": {
     "commands": [
       {
@@ -138,10 +138,13 @@
     "lint:fix": "node build.js --lint-fix",
     "lint:vscode": "eslint . --ext .ts,.svelte,.json && npm run lint:whitespace",
     "lint:fix:vscode": "eslint . --ext .ts,.svelte,.json --fix && npm run lint:whitespace:fix",
-    "lint:whitespace": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -exec grep -l '[[:space:]]$' {} \\; | grep . && echo 'Trailing whitespace found!' && exit 1 || echo 'No trailing whitespace found.'",
-    "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
+    "lint:whitespace": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -not -path './.vscode-test/*' -exec grep -l '[[:space:]]$' {} \\; | grep . && echo 'Trailing whitespace found!' && exit 1 || echo 'No trailing whitespace found.'",
+    "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -not -path './.vscode-test/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
     "type-check": "tsc --noEmit",
-    "test": "vscode-test",
+    "test": "NODE_PATH=./node_modules node ../../build/vscode/test/runTest.js",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:coverage": "vitest run --coverage",
     "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)",
     "vsce:publish": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies --pre-release)",
     "vsce:publish:stable": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies)"
@@ -152,6 +155,7 @@
     "dompurify": "^3.3.0",
     "katex": "^0.16.25",
     "lru-cache": "^11.0.2",
+    "mocha": "^10.2.0",
     "prism-themes": "^1.9.0",
     "rehype-katex": "^7.0.1",
     "rehype-prism-plus": "^2.0.0",
@@ -164,10 +168,12 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.6",
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
+    "@vitest/coverage-v8": "^2.1.8",
     "@vscode/test-cli": "^0.0.9",
     "@vscode/test-electron": "^2.3.9",
     "esbuild": "^0.20.0",
@@ -175,10 +181,12 @@
     "eslint": "^8.34.0",
     "eslint-plugin-json": "^3.1.0",
     "eslint-plugin-svelte": "^2.35.0",
+    "glob": "^10.3.10",
     "svelte": "^4.2.0",
     "svelte-eslint-parser": "^0.33.0",
     "svelte-preprocess": "^5.1.3",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.8"
   },
   "repository": {
     "type": "git",

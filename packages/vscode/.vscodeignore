@@ -9,6 +9,9 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+**/*.test.js
+**/*.test.d.ts
+test/**
 node_modules/**
 !node_modules/@gitsocial/core/**
 build.js

@@ -1,0 +1,11 @@
+{
+  "posts": [
+    {
+      "id": "gitmsg:https://github.com/test-user/test-repo#commit:abc123",
+      "content": "Test post content",
+      "author": "test-user",
+      "timestamp": "2025-11-11T12:00:00Z",
+      "repository": "https://github.com/test-user/test-repo"
+    }
+  ]
+}

@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
-    "types": ["node", "vscode"],
+    "types": ["node", "vscode", "mocha"],
     "paths": {
       "@gitsocial/core": ["../../build/core"],
       "@gitsocial/core/client": ["../../build/core/client"],
@@ -20,5 +20,5 @@
     }
   },
   "include": ["src/**/*", "src/**/*.svelte"],
-  "exclude": ["node_modules", ".vscode-test", "../../build"]
+  "exclude": ["node_modules", ".vscode-test", "../../build", "src/webview/**/*.test.ts"]
 }
