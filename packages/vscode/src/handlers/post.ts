@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { registerHandler } from './registry';
 import { postMessage } from '.';
 import {
+  git,
   gitMsgRef,
   log,
   type Post,
@@ -382,6 +383,16 @@ registerHandler('social.createPost', async function handleCreatePost(panel, mess
       throw new Error('No workspace folder found');
     }
 
+    // Check if it's a git repository, initialize if not
+    const isGitRepo = await git.isGitRepository(workspaceFolder.uri.fsPath);
+    if (!isGitRepo) {
+      log('info', '[createPost] Directory is not a git repository, initializing git with gitsocial branch');
+      const gitInitResult = await git.initGitRepository(workspaceFolder.uri.fsPath, 'gitsocial');
+      if (!gitInitResult.success) {
+        throw new Error('Failed to initialize git repository: ' + (gitInitResult.error?.message || 'Unknown error'));
+      }
+      log('info', '[createPost] Git repository initialized successfully');
+    }
     // Check if GitSocial is initialized, if not, initialize automatically
     const initResult = await social.repository.checkGitSocialInit(workspaceFolder.uri.fsPath);
     if (initResult.success && initResult.data && !initResult.data.isInitialized) {
