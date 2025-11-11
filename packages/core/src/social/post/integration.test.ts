@@ -166,7 +166,7 @@ describe('Post Integration Tests', () => {
       const createResult = await post.createPost(testRepo.path, 'Test post');
       expect(createResult.success).toBe(true);
 
-      const getResult = post.getPosts(testRepo.path, 'repository:my');
+      const getResult = await post.getPosts(testRepo.path, 'repository:my');
 
       expect(getResult.success).toBe(true);
       expect(getResult.data).toHaveLength(1);
@@ -178,7 +178,7 @@ describe('Post Integration Tests', () => {
       await post.createPost(testRepo.path, 'Second');
       await post.createPost(testRepo.path, 'Third');
 
-      const result = post.getPosts(testRepo.path, 'repository:my');
+      const result = await post.getPosts(testRepo.path, 'repository:my');
 
       expect(result.success).toBe(true);
       expect(result.data?.length).toBeGreaterThanOrEqual(3);
@@ -194,15 +194,15 @@ describe('Post Integration Tests', () => {
       const postId = createResult.data?.id;
       expect(postId).toBeDefined();
 
-      const getResult = post.getPosts(testRepo.path, `post:${postId}`);
+      const getResult = await post.getPosts(testRepo.path, `post:${postId}`);
 
       expect(getResult.success).toBe(true);
       expect(getResult.data).toHaveLength(1);
       expect(getResult.data?.[0]?.id).toBe(postId);
     });
 
-    it('should return empty array when no posts exist', () => {
-      const result = post.getPosts(testRepo.path, 'repository:my');
+    it('should return empty array when no posts exist', async () => {
+      const result = await post.getPosts(testRepo.path, 'repository:my');
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual([]);
@@ -213,7 +213,7 @@ describe('Post Integration Tests', () => {
       await post.createPost(testRepo.path, 'Post 2');
       await post.createPost(testRepo.path, 'Post 3');
 
-      const result = post.getPosts(testRepo.path, 'repository:my', {
+      const result = await post.getPosts(testRepo.path, 'repository:my', {
         types: ['post']
       });
 
@@ -232,7 +232,7 @@ describe('Post Integration Tests', () => {
 
       await post.createPost(testRepo.path, 'Post 2');
 
-      const result = post.getPosts(testRepo.path, 'repository:my', {
+      const result = await post.getPosts(testRepo.path, 'repository:my', {
         since: cutoffTime
       });
 
@@ -248,7 +248,7 @@ describe('Post Integration Tests', () => {
       await post.createPost(testRepo.path, 'Post 4');
       await post.createPost(testRepo.path, 'Post 5');
 
-      const result = post.getPosts(testRepo.path, 'repository:my', {
+      const result = await post.getPosts(testRepo.path, 'repository:my', {
         limit: 3
       });
 
@@ -269,7 +269,7 @@ describe('Post Integration Tests', () => {
       expect(gitSocialLogResult.success).toBe(true);
       expect(gitSocialLogResult.data?.stdout).toContain('Hello, World!');
 
-      const getResult = post.getPosts(testRepo.path, `post:${postId}`);
+      const getResult = await post.getPosts(testRepo.path, `post:${postId}`);
       expect(getResult.success).toBe(true);
       expect(getResult.data).toHaveLength(1);
 
@@ -296,7 +296,7 @@ describe('Post Integration Tests', () => {
       expect(branchResult.success).toBe(true);
       expect(branchResult.data).toBe('feature');
 
-      const result = post.getPosts(testRepo.path, 'repository:my');
+      const result = await post.getPosts(testRepo.path, 'repository:my');
       expect(result.success).toBe(true);
       expect(result.data?.length).toBeGreaterThanOrEqual(2);
     });
@@ -306,13 +306,13 @@ describe('Post Integration Tests', () => {
       const post2 = await post.createPost(testRepo.path, 'Unique-Second-' + Date.now());
       const post3 = await post.createPost(testRepo.path, 'Unique-Third-' + Date.now());
 
-      const result1 = post.getPosts(testRepo.path, 'repository:my');
+      const result1 = await post.getPosts(testRepo.path, 'repository:my');
       const contents1 = new Set(result1.data?.map(p => p.content));
 
       // Refresh cache
       await cache.refresh({}, testRepo.path);
 
-      const result2 = post.getPosts(testRepo.path, 'repository:my');
+      const result2 = await post.getPosts(testRepo.path, 'repository:my');
       const contents2 = new Set(result2.data?.map(p => p.content));
 
       // All three unique posts should be in both results
@@ -333,8 +333,8 @@ describe('Post Integration Tests', () => {
       expect(result.error).toBeDefined();
     });
 
-    it('should handle getPosts with invalid scope gracefully', () => {
-      const result = post.getPosts(testRepo.path, 'invalid:scope');
+    it('should handle getPosts with invalid scope gracefully', async () => {
+      const result = await post.getPosts(testRepo.path, 'invalid:scope');
 
       // Should not crash, might return empty or error
       expect(result).toBeDefined();
@@ -344,7 +344,7 @@ describe('Post Integration Tests', () => {
       cache.setCacheEnabled(false);
 
       await post.createPost(testRepo.path, 'Test post');
-      const result = post.getPosts(testRepo.path, 'repository:my');
+      const result = await post.getPosts(testRepo.path, 'repository:my');
 
       // Should still work with cache disabled
       expect(result).toBeDefined();

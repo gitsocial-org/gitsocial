@@ -119,12 +119,13 @@ async function getWeekPosts(
     }
 
     // Get the posts now that all data is loaded
-    const postsResult = post.getPosts(workdir, 'timeline', {
+    const postsResult = await post.getPosts(workdir, 'timeline', {
       types: options?.types === undefined ? undefined : options.types,
       since: weekStart,
       until: weekEnd,
       limit: options?.limit,
-      skipCache: options?.skipCache
+      skipCache: options?.skipCache,
+      storageBase
     });
 
     if (!postsResult.success || !postsResult.data) {

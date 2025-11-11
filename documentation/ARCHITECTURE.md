@@ -28,12 +28,17 @@ Namespace objects and functions only - no classes.
 
 **Requirements**: Atomic transformation for cross-repository references and interaction counting.
 
+**Async Operations**: All cache operations (`getCachedPosts()`, `getPosts()`) are async and return Promises. Auto-initialization ensures cache is ready before returning results. Callers must use `await`.
+
+**State Management**: Uses `CacheState` enum (UNINITIALIZED → INITIALIZING → READY/ERROR/REFRESHING) to track initialization status. Promise-based initialization prevents duplicate concurrent loads.
+
 **Initialization**: Load ALL posts from ALL sources on first query or Git state change:
 
 - Workspace repository posts
 - External repository posts from lists
 - Virtual posts from references (placeholders when real post missing)
 - Single instance per post ID (deduplication)
+- Auto-initializes via `ensureInitialized()` on first query
 
 **Transformation Pipeline** (must stay together in cache.ts):
 
@@ -67,11 +72,11 @@ External repos in app storage with bare, blobless clones (90% size reduction).
 
 ### Post Loading
 
-`Client → getPosts(scope) → getCachedPosts() → [Initialize if needed] → Direct Filter → Enriched Posts`
+`Client → await getPosts(scope) → await getCachedPosts() → [Auto-initialize if needed] → Direct Filter → Enriched Posts`
 
 **Scopes**: `timeline` (all), `repository:my` (workspace), `list:{name}`, `post:{id}`
 
-**Rules**: All posts via `getPosts()` API. No post creation/counting outside cache.ts.
+**Rules**: All posts via `getPosts()` API (with `await` since it's async). No post creation/counting outside cache.ts.
 
 ### State Storage
 

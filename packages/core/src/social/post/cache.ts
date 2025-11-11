@@ -27,7 +27,7 @@
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { LRUCache } from 'lru-cache';
-import type { List, Post } from '../types';
+import { type CacheState, CacheState as CacheStateEnum, type CacheStatus, type List, type Post } from '../types';
 import type { Commit } from '../../git/types';
 import { getCommits, getConfiguredBranch } from '../../git/operations';
 import { execGit } from '../../git/exec';
@@ -51,6 +51,8 @@ export const cache = {
   initializeGlobalCache,
   setCacheEnabled,
   getCacheStats,
+  getStatus: () => cacheState.getStatus(),
+  isInitialized,
   setCacheMaxSize,
   loadRepositoryPosts,
   loadAdditionalPosts,
@@ -82,19 +84,105 @@ export const postIndex = {
   merged: new Set<string>() // Tracks which virtual posts have been merged
 };
 
-// Track which start dates have been loaded into cache (data goes to HEAD)
-const cachedStartDates: Set<string> = new Set();
-let cacheEnabled = true;
-let globalCacheInitialized = false;
+const cacheState = {
+  state: CacheStateEnum.UNINITIALIZED,
+  lastInitialized: undefined as Date | undefined,
+  lastError: undefined as Error | undefined,
+  dateRanges: new Set<string>(),
+  initPromise: null as Promise<void> | null,
 
-// Track configured GitSocial branch per workdir for filtering
+  getStatus(): CacheStatus {
+    return {
+      state: this.state,
+      lastInitialized: this.lastInitialized,
+      lastError: this.lastError,
+      dateRanges: new Set(this.dateRanges),
+      postCount: postsCache.size
+    };
+  },
+
+  async waitForReady(): Promise<void> {
+    if (this.state === CacheStateEnum.READY) {
+      return;
+    }
+    if (this.state === CacheStateEnum.INITIALIZING && this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+    throw new Error(`Cache in invalid state: ${this.state}`);
+  },
+
+  isReady(): boolean {
+    return this.state === CacheStateEnum.READY;
+  },
+
+  isDateRangeCovered(since: Date): boolean {
+    if (this.state !== CacheStateEnum.READY) {
+      return false;
+    }
+    const dateStr = since.toISOString().split('T')[0]!;
+    return this.dateRanges.has(dateStr);
+  },
+
+  setState(newState: CacheState, error?: Error) {
+    this.state = newState;
+    if (error) {
+      this.lastError = error;
+    }
+    if (newState === CacheStateEnum.READY) {
+      this.lastInitialized = new Date();
+      this.lastError = undefined;
+    }
+  },
+
+  clearDateRanges() {
+    this.dateRanges.clear();
+  },
+
+  addDateRange(date: Date) {
+    const dateStr = date.toISOString().split('T')[0]!;
+    this.dateRanges.add(dateStr);
+  }
+};
+
+let cacheEnabled = true;
 const configuredBranches = new Map<string, string>();
 
 // ========================================
 // MAIN API IMPLEMENTATIONS
 // ========================================
 
-function getCachedPosts(
+async function ensureInitialized(workdir: string, storageBase?: string): Promise<void> {
+  const status = cacheState.getStatus();
+
+  if (status.state === CacheStateEnum.READY) {
+    return;
+  }
+
+  if (status.state === CacheStateEnum.INITIALIZING && cacheState.initPromise) {
+    await cacheState.waitForReady();
+    return;
+  }
+
+  if (status.state === CacheStateEnum.REFRESHING && cacheState.initPromise) {
+    log('debug', '[ensureInitialized] Cache is refreshing, waiting for completion');
+    await cacheState.waitForReady();
+    return;
+  }
+
+  if (status.state === CacheStateEnum.UNINITIALIZED || status.state === CacheStateEnum.ERROR) {
+    await initializeGlobalCache(workdir, storageBase);
+    return;
+  }
+
+  log('warn', '[ensureInitialized] Unexpected cache state:', status.state);
+}
+
+function isInitialized(): boolean {
+  return cacheState.isReady();
+}
+
+async function getCachedPosts(
   workdir: string,
   scope: string,
   filter?: {
@@ -105,19 +193,24 @@ function getCachedPosts(
     includeImplicit?: boolean;
     skipCache?: boolean;
     sortBy?: 'top' | 'latest' | 'oldest';
+    storageBase?: string;
   },
   context?: {
     list?: List;  // Optional list data for remote lists
   }
-): Post[] {
+): Promise<Post[]> {
   if (!cacheEnabled) {
     log('debug', '[getCachedPosts] Cache disabled, returning empty');
     return [];
   }
 
-  if (!globalCacheInitialized) {
-    log('debug', '[getCachedPosts] Global cache not initialized, returning empty results for scope:', scope);
-    return [];
+  // Auto-initialize if needed
+  await ensureInitialized(workdir, filter?.storageBase);
+
+  // Handle skipCache
+  if (filter?.skipCache) {
+    log('debug', '[getCachedPosts] skipCache requested, refreshing cache');
+    await refresh({ all: true }, workdir, filter.storageBase);
   }
 
   log('debug', '[getCachedPosts] Looking up posts for scope:', scope, 'filter:', filter);
@@ -459,10 +552,11 @@ async function refresh(scope: {
     postIndex.byList.clear();
     postIndex.absolute.clear();
     postIndex.merged.clear();
-    globalCacheInitialized = false;
+    cacheState.clearDateRanges();
+    cacheState.setState(CacheStateEnum.UNINITIALIZED);
   } else {
     if (scope.repositories?.length) {
-      globalCacheInitialized = false;
+      cacheState.setState(CacheStateEnum.REFRESHING);
     }
 
     if (scope.hashes?.length) {
@@ -479,7 +573,7 @@ async function refresh(scope: {
     }
 
     if (scope.lists?.length) {
-      globalCacheInitialized = false;
+      cacheState.setState(CacheStateEnum.REFRESHING);
     }
   }
 
@@ -487,13 +581,13 @@ async function refresh(scope: {
   if (workdir) {
     // If refreshing all, force reinitialization
     if (scope.all) {
-      globalCacheInitialized = false;
+      cacheState.setState(CacheStateEnum.UNINITIALIZED);
     }
     // If no specific scope was provided and cache is not initialized, set flag
     const isEmptyScope = !scope.all && !scope.repositories?.length && !scope.hashes?.length && !scope.lists?.length;
-    if (isEmptyScope && !globalCacheInitialized) {
+    if (isEmptyScope && !cacheState.isReady()) {
       log('debug', '[Cache] Empty scope with uninitialized cache - will initialize');
-      globalCacheInitialized = false;
+      cacheState.setState(CacheStateEnum.UNINITIALIZED);
     }
 
     // Determine the oldest date we need to load based on what we're refreshing
@@ -558,7 +652,7 @@ async function addPostToCache(workdir: string, commitHash: string): Promise<bool
    * Incrementally add a single post to cache without full refresh
    * Returns true if post was successfully added, false otherwise
    */
-  if (!cacheEnabled || !globalCacheInitialized) {
+  if (!cacheEnabled || !cacheState.isReady()) {
     log('debug', '[addPostToCache] Cache not ready, falling back to full refresh');
     await refresh({}, workdir);
     return true;
@@ -644,85 +738,108 @@ async function initializeGlobalCache(
   if (!cacheEnabled) {return;}
 
   // Skip if already initialized unless forced
-  if (globalCacheInitialized && !force) {
+  if (cacheState.isReady() && !force) {
     log('debug', '[initializeGlobalCache] Cache already initialized, skipping');
     return;
   }
 
+  // If already initializing, wait for completion
+  if (cacheState.state === CacheStateEnum.INITIALIZING) {
+    log('debug', '[initializeGlobalCache] Already initializing, waiting for completion');
+    if (cacheState.initPromise) {
+      await cacheState.initPromise;
+    }
+    return;
+  }
+
+  // Set state to initializing and create promise
+  cacheState.setState(CacheStateEnum.INITIALIZING);
   log('debug', '[initializeGlobalCache] Starting global cache initialization with sinceOverride:', sinceOverride?.toISOString());
 
-  // Get configured GitSocial branch for filtering repository:my posts
-  try {
-    const configuredBranch = await getConfiguredBranch(workdir);
-    configuredBranches.set(workdir, configuredBranch);
-    log('debug', '[initializeGlobalCache] Configured GitSocial branch:', configuredBranch);
-  } catch (error) {
-    log('debug', '[initializeGlobalCache] Failed to get configured branch:', error);
-  }
+  cacheState.initPromise = (async () => {
 
-  // Get origin URL if available for absolute->relative mappings
-  let originUrl: string | undefined;
-  try {
-    const originResult = await getOriginUrl(workdir);
-    if (originResult.success && originResult.data && originResult.data !== 'myrepository') {
-      originUrl = gitMsgUrl.normalize(originResult.data);
-      log('debug', '[initializeGlobalCache] Origin URL:', originUrl);
+    // Get configured GitSocial branch for filtering repository:my posts
+    try {
+      const configuredBranch = await getConfiguredBranch(workdir);
+      configuredBranches.set(workdir, configuredBranch);
+      log('debug', '[initializeGlobalCache] Configured GitSocial branch:', configuredBranch);
+    } catch (error) {
+      log('debug', '[initializeGlobalCache] Failed to get configured branch:', error);
     }
-  } catch (error) {
-    log('debug', '[initializeGlobalCache] No origin URL available:', error);
-  }
 
-  const posts = new Map<string, Post>();
+    // Get origin URL if available for absolute->relative mappings
+    let originUrl: string | undefined;
+    try {
+      const originResult = await getOriginUrl(workdir);
+      if (originResult.success && originResult.data && originResult.data !== 'myrepository') {
+        originUrl = gitMsgUrl.normalize(originResult.data);
+        log('debug', '[initializeGlobalCache] Origin URL:', originUrl);
+      }
+    } catch (error) {
+      log('debug', '[initializeGlobalCache] No origin URL available:', error);
+    }
 
-  try {
-    const workspaceCommits = await loadPosts(workdir, 'workspace', undefined, sinceOverride);
-    const externalCommits = await loadPosts(workdir, 'external', storageBase, sinceOverride);
+    const posts = new Map<string, Post>();
 
-    // Phase 1: Add all posts to map first (without processing embedded references)
-    // This ensures all posts are available when processing references in Phase 2
-    const allPosts = [...workspaceCommits, ...externalCommits];
+    try {
+      const workspaceCommits = await loadPosts(workdir, 'workspace', undefined, sinceOverride);
+      const externalCommits = await loadPosts(workdir, 'external', storageBase, sinceOverride);
 
-    for (const post of allPosts) {
+      // Phase 1: Add all posts to map first (without processing embedded references)
+      // This ensures all posts are available when processing references in Phase 2
+      const allPosts = [...workspaceCommits, ...externalCommits];
+
+      for (const post of allPosts) {
       // Add basic post and deduplication mappings, but skip embedded reference processing
-      processPost(post, posts, workdir, originUrl, postIndex, true);
+        processPost(post, posts, workdir, originUrl, postIndex, true);
+      }
+
+      log('debug', '[initializeGlobalCache] Phase 1 complete: Added', posts.size, 'posts');
+
+      // Phase 2: Process embedded references with full context
+      processEmbeddedReferences(posts, workdir, originUrl, postIndex);
+      log('debug', '[initializeGlobalCache] Phase 2 complete: Processed all references, final count:', posts.size);
+    } catch (error) {
+      log('error', '[initializeGlobalCache] Error processing posts:', error);
+    // Continue with initialization even if some posts fail
     }
 
-    log('debug', '[initializeGlobalCache] Phase 1 complete: Added', posts.size, 'posts');
+    try {
+      await list.initializeListStorage(workdir);
+      log('debug', '[initializeGlobalCache] Initialized list storage');
+    } catch (error) {
+      log('error', '[initializeGlobalCache] Failed to initialize list storage:', error);
+    }
 
-    // Phase 2: Process embedded references with full context
-    processEmbeddedReferences(posts, workdir, originUrl, postIndex);
-    log('debug', '[initializeGlobalCache] Phase 2 complete: Processed all references, final count:', posts.size);
-  } catch (error) {
-    log('error', '[initializeGlobalCache] Error processing posts:', error);
-    // Continue with initialization even if some posts fail
-  }
+    log('debug', '[initializeGlobalCache] Total posts after processing:', posts.size);
 
-  try {
-    await list.initializeListStorage(workdir);
-    log('debug', '[initializeGlobalCache] Initialized list storage');
-  } catch (error) {
-    log('error', '[initializeGlobalCache] Failed to initialize list storage:', error);
-  }
+    await updateInteractionCounts(posts, workdir);
+    log('debug', '[initializeGlobalCache] Updated interaction counts');
 
-  log('debug', '[initializeGlobalCache] Total posts after processing:', posts.size);
+    for (const post of posts.values()) {
+      postsCache.set(post.id, post as Readonly<Post>);
+      updateIndexes(post.id, post, workdir);
+    }
 
-  await updateInteractionCounts(posts, workdir);
-  log('debug', '[initializeGlobalCache] Updated interaction counts');
+    // Track that we've loaded from this date
+    // IMPORTANT: Must match what was actually loaded in loadPosts() above
+    const actualSince = sinceOverride || new Date(getFetchStartDate());
 
-  for (const post of posts.values()) {
-    postsCache.set(post.id, post as Readonly<Post>);
-    updateIndexes(post.id, post, workdir);
-  }
+    // Mark all dates from actualSince to today as covered
+    const today = new Date();
+    const currentDate = new Date(actualSince);
+    while (currentDate <= today) {
+      cacheState.addDateRange(currentDate);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
-  // Track that we've loaded from this date
-  // IMPORTANT: Must match what was actually loaded in loadPosts() above
-  const actualSince = sinceOverride || new Date(getFetchStartDate());
-  const dateStr = actualSince.toISOString().split('T')[0]!;
-  cachedStartDates.add(dateStr);
-  log('debug', '[initializeGlobalCache] Marked cache as having data from:', dateStr);
+    log('debug', '[initializeGlobalCache] Marked cache as having data from:', actualSince.toISOString().split('T')[0], 'to today');
 
-  globalCacheInitialized = true;
-  log('debug', '[initializeGlobalCache] Completed global cache initialization with', posts.size, 'posts');
+    cacheState.setState(CacheStateEnum.READY);
+    log('debug', '[initializeGlobalCache] Completed global cache initialization with', posts.size, 'posts');
+  })();
+
+  await cacheState.initPromise;
 }
 
 function setCacheEnabled(enabled: boolean): void {
@@ -732,8 +849,8 @@ function setCacheEnabled(enabled: boolean): void {
     postIndex.byHash.clear();
     postIndex.byRepository.clear();
     postIndex.byList.clear();
-    cachedStartDates.clear();
-    globalCacheInitialized = false;
+    cacheState.clearDateRanges();
+    cacheState.setState(CacheStateEnum.UNINITIALIZED);
   }
 }
 
@@ -1102,8 +1219,8 @@ function parseScopeParameter(scope: string): {
  */
 function isCacheRangeCovered(since: Date): boolean {
   const sinceStr: string = since.toISOString().split('T')[0]!;
-  const covered = cachedStartDates.has(sinceStr);
-  log('debug', '[isCacheRangeCovered] Checking if', sinceStr, 'is covered. Result:', covered, 'Cached dates:', Array.from(cachedStartDates));
+  const covered = cacheState.isDateRangeCovered(since);
+  log('debug', '[isCacheRangeCovered] Checking if', sinceStr, 'is covered. Result:', covered, 'Cached dates:', Array.from(cacheState.dateRanges));
   return covered;
 }
 
@@ -1111,7 +1228,7 @@ function isCacheRangeCovered(since: Date): boolean {
  * Get the start dates that have been loaded into cache
  */
 function getCachedRanges(): string[] {
-  return Array.from(cachedStartDates).sort();
+  return Array.from(cacheState.dateRanges).sort();
 }
 
 /**
@@ -1182,7 +1299,7 @@ async function loadAdditionalPosts(
 
   // Only mark this date as cached if we actually found and loaded posts
   if (addedCount > 0) {
-    cachedStartDates.add(since.toISOString().split('T')[0]!);
+    cacheState.addDateRange(since);
     log('debug', '[loadAdditionalPosts] Added', addedCount, 'new posts to cache, marked date as cached');
   } else {
     log('debug', '[loadAdditionalPosts] No new posts found for date, not marking as cached:', since.toISOString());

@@ -237,7 +237,7 @@ registerHandler('social.getPosts', async function handleGetPosts(panel, message)
       }
 
       // Get posts for the list
-      const postsResult = social.post.getPosts(
+      const postsResult = await social.post.getPosts(
         workspaceFolder.uri.fsPath,
         `list:${msg.options.listId}`,
         buildGetPostsOptions(msg)
@@ -302,7 +302,7 @@ registerHandler('social.getPosts', async function handleGetPosts(panel, message)
         }
 
         // Get posts for the list, passing the list data directly as context
-        const postsResult = social.post.getPosts(
+        const postsResult = await social.post.getPosts(
           workspaceFolder.uri.fsPath,
           `list:${listId}`,
           buildGetPostsOptions(msg),
@@ -331,7 +331,7 @@ registerHandler('social.getPosts', async function handleGetPosts(panel, message)
     );
 
     // Get posts
-    const result = social.post.getPosts(
+    const result = await social.post.getPosts(
       workspaceFolder.uri.fsPath,
       scope,
       buildGetPostsOptions(msg)
@@ -408,7 +408,7 @@ registerHandler('social.createPost', async function handleCreatePost(panel, mess
     let result;
     if (msg.parentId) {
       // For comments, we need to get the parent post first
-      const parentPostResult = social.post.getPosts(
+      const parentPostResult = await social.post.getPosts(
         workspaceFolder.uri.fsPath,
         `post:${msg.parentId}`,
         { limit: 1 }
@@ -458,7 +458,7 @@ registerHandler('social.createPost', async function handleCreatePost(panel, mess
 });
 
 // Register search posts handler
-registerHandler('social.searchPosts', function handleSearchPosts(panel, message) {
+registerHandler('social.searchPosts', async function handleSearchPosts(panel, message) {
   const requestId = message.id || undefined;
 
   try {
@@ -476,7 +476,7 @@ registerHandler('social.searchPosts', function handleSearchPosts(panel, message)
       throw new Error('No workspace folder found');
     }
 
-    const result = social.search.searchPosts(
+    const result = await social.search.searchPosts(
       workspaceFolder.uri.fsPath,
       {
         query: msg.query,

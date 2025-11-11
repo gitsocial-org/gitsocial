@@ -17,7 +17,7 @@ export const thread = {
   buildContext: buildContextImpl
 };
 
-function getThreadImpl(
+async function getThreadImpl(
   workdir: string,
   anchorPostId: string,
   options?: {
@@ -25,10 +25,10 @@ function getThreadImpl(
     maxParents?: number;
     maxChildren?: number;
   }
-): Result<ThreadContext> {
+): Promise<Result<ThreadContext>> {
   try {
     // Get all posts from cache (including virtual posts from external repos)
-    const allPosts = cache.getCachedPosts(workdir, 'all');
+    const allPosts = await cache.getCachedPosts(workdir, 'all');
     if (!allPosts || allPosts.length === 0) {
       return {
         success: false,

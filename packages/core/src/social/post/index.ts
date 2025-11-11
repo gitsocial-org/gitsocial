@@ -23,7 +23,7 @@ export const post = {
  * This is now a simple wrapper that delegates all work to cache.ts
  * as per the CRITICAL REQUIREMENT in ARCHITECTURE.md
  */
-function getPosts(
+async function getPosts(
   workdir: string,
   scope: string = 'repository:my',
   filter?: {
@@ -34,16 +34,17 @@ function getPosts(
     includeImplicit?: boolean;
     skipCache?: boolean;
     sortBy?: 'top' | 'latest' | 'oldest';
+    storageBase?: string;
   },
   context?: {
     list?: List;  // Optional list data for remote lists
   }
-): Result<Post[]> {
+): Promise<Result<Post[]>> {
   try {
     // Handle thread scope
     if (scope.startsWith('thread:')) {
       const postId = scope.substring(7);
-      const threadResult = thread.getThread(workdir, postId, {
+      const threadResult = await thread.getThread(workdir, postId, {
         sort: filter?.sortBy || 'top'
       });
 
@@ -60,7 +61,7 @@ function getPosts(
     }
 
     // All post operations happen in cache.ts
-    const posts = cache.getCachedPosts(workdir, scope, filter, context);
+    const posts = await cache.getCachedPosts(workdir, scope, filter, context);
     return { success: true, data: posts || [] };
   } catch (error) {
     log('error', '[getPosts] Error:', error);
@@ -140,7 +141,7 @@ async function createPost(
 
     const postId = gitMsgRef.create('commit', commitHash);
     log('debug', '[createPost] Looking for post with ID:', postId);
-    const postsResult = getPosts(workdir, `post:${postId}`);
+    const postsResult = await getPosts(workdir, `post:${postId}`);
 
     if (!postsResult.success || !postsResult.data || postsResult.data.length === 0) {
       // Retry once more with longer delay
@@ -153,7 +154,7 @@ async function createPost(
       await new Promise(resolve => setTimeout(resolve, 200));
       await cache.refresh({}, workdir);
 
-      const retryResult = getPosts(workdir, `post:${postId}`);
+      const retryResult = await getPosts(workdir, `post:${postId}`);
       log('warn', '[createPost] Retry result:', {
         postId,
         success: retryResult.success,

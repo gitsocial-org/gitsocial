@@ -141,7 +141,7 @@ async function getNotifications(
       await cache.loadAdditionalPosts(workdir, storageBase, since);
     }
 
-    const allPostsResult = post.getPosts(workdir, 'timeline', { since, until });
+    const allPostsResult = await post.getPosts(workdir, 'timeline', { since, until });
     if (!allPostsResult.success || !allPostsResult.data) {
       return {
         success: false,

@@ -1279,7 +1279,7 @@ registerHandler('pushToRemote', async function handlePushToRemote(panel, message
       ]);
 
       // Count what we're pushing before clearing cache
-      const postsResult = social.post.getPosts(workspaceFolder.uri.fsPath, 'repository:my', { limit: 1000 }) ;
+      const postsResult = await social.post.getPosts(workspaceFolder.uri.fsPath, 'repository:my', { limit: 1000 }) ;
       const unpushedPosts = postsResult.success && postsResult.data
         ? postsResult.data.filter((p: Post) => p.display.isUnpushed)
         : [];

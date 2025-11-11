@@ -79,7 +79,7 @@ async function createInteraction(
       if (actualOriginalPostId !== targetPost.id) {
         log('debug', '[createInteraction] Fetching original post:', actualOriginalPostId);
         try {
-          const originalResult = postNamespace.getPosts(workdir, `post:${actualOriginalPostId}`);
+          const originalResult = await postNamespace.getPosts(workdir, `post:${actualOriginalPostId}`);
 
           if (originalResult.success && originalResult.data && originalResult.data.length > 0) {
             actualOriginalPost = originalResult.data[0]!;

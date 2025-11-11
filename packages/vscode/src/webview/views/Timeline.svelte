@@ -81,6 +81,11 @@
         break;
 
       case 'refresh': {
+        // Prevent race condition - skip if already loading
+        if (isLoadingWeek) {
+          break;
+        }
+
         const scopes = message.scope || ['all'];
         const operation = message.operation;
         const skipCache = message.skipCache || $skipCacheOnNextRefresh;
@@ -119,7 +124,7 @@
 
       case 'refreshAfterFetch': {
         // Cache already refreshed by handler, re-query to show new repository posts
-        loadWeekData(false);
+        loadWeekData(true);
         break;
       }
 
@@ -171,6 +176,11 @@
   }
 
   function loadWeekData(skipCache = false) {
+    // Prevent race condition - skip if already loading
+    if (isLoadingWeek) {
+      return;
+    }
+
     isLoadingWeek = true;
     error = null;
     // Calculate dates directly to avoid timing issues with reactive values

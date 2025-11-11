@@ -229,6 +229,28 @@ export function error<T>(code: string, message: string, details?: unknown): Resu
 }
 
 /**
+ * Cache state enum for tracking initialization and readiness
+ */
+export enum CacheState {
+  UNINITIALIZED = 'uninitialized',
+  INITIALIZING = 'initializing',
+  READY = 'ready',
+  ERROR = 'error',
+  REFRESHING = 'refreshing'
+}
+
+/**
+ * Cache status interface for querying cache state
+ */
+export interface CacheStatus {
+  state: CacheState;
+  lastInitialized?: Date;
+  lastError?: Error;
+  dateRanges: Set<string>;
+  postCount: number;
+}
+
+/**
  * Log entry represents a git operation in the audit trail
  */
 export interface LogEntry {

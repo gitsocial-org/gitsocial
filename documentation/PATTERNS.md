@@ -80,6 +80,22 @@ const result = await social.post.getPosts(workdir, "timeline", {
 });
 ```
 
+### Async Behavior
+
+`getPosts()` is async and returns a Promise. All calls must use `await`:
+
+```typescript
+// Correct - properly awaits the Promise
+const result = await social.post.getPosts(workdir, "timeline");
+
+// Wrong - returns a Promise instead of Result<Post[]>
+const result = social.post.getPosts(workdir, "timeline");
+```
+
+**Auto-initialization**: The cache automatically initializes on first query. You don't need to manually call any initialization functions.
+
+**State management**: Cache tracks its state (UNINITIALIZED, INITIALIZING, READY, ERROR, REFRESHING) and ensures it's ready before returning results.
+
 ## Post Creation
 
 ### Create Post

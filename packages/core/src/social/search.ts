@@ -70,17 +70,17 @@ export interface SearchPost extends Post {
 /**
  * Search posts across all repositories
  */
-function searchPosts(
+async function searchPosts(
   workdir: string,
   params: SearchParams
-): Result<SearchResult> {
+): Promise<Result<SearchResult>> {
   const startTime = Date.now();
 
   try {
     log('debug', '[searchPosts] Starting search with params:', params);
 
     // Get all posts using getPosts with scope all
-    const postsResult = post.getPosts(workdir, 'all', {
+    const postsResult = await post.getPosts(workdir, 'all', {
       limit: 1000 // Get more posts for search
     });
 
