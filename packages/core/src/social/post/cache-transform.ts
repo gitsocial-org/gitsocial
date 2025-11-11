@@ -215,7 +215,7 @@ export function constructPost(
       isEmpty: gitMsg ? isEmptyRepost(gitMsg) : false,
       isUnpushed: realCommit?.hasOriginRemote ?
         (realCommit.unpushedCommits !== undefined
-          ? realCommit.unpushedCommits !== null && realCommit.unpushedCommits.has(hash)
+          ? realCommit.unpushedCommits !== null && realCommit.unpushedCommits.has(normalizedHash)
           : !realCommit.refname ||
             realCommit.refname.startsWith('refs/heads/') ||
             !realCommit.refname.startsWith('refs/remotes/origin/')

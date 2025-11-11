@@ -24,10 +24,10 @@ export type InteractionResponses = {
 };
 
 // Helper for broadcasting to all panels
-let broadcastToAll: ((message: { type: string }) => void) | undefined;
+let broadcastToAll: ((message: { type: string; [key: string]: unknown }) => void) | undefined;
 
 export function setInteractionCallbacks(
-  broadcast: (message: { type: string }) => void
+  broadcast: (message: { type: string; [key: string]: unknown }) => void
 ): void {
   broadcastToAll = broadcast;
 }
@@ -103,7 +103,10 @@ registerHandler('social.createInteraction', async function handleCreateInteracti
 
       // Notify all panels to refresh
       if (broadcastToAll) {
-        broadcastToAll({ type: 'refresh' });
+        broadcastToAll({
+          type: 'postCreated',
+          data: { post: enrichedPost }
+        });
       }
 
     } else {

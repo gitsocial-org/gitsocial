@@ -124,23 +124,53 @@ async function createPost(
 
     log('info', '[createPost] Commit created successfully:', commitResult.data);
 
-    await cache.refresh({ repositories: [workdir] }, workdir);
-    log('debug', '[createPost] Cache refreshed to include new post');
-
     const commitHash = commitResult.data.substring(0, 12);
-    const postId = gitMsgRef.create('commit', commitHash);
 
+    // Add small delay to ensure git commit is fully written
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Use addPostToCache for incremental update
+    const added = await cache.addPostToCache(workdir, commitHash);
+    if (!added) {
+      log('warn', '[createPost] Failed to add post to cache incrementally, falling back to full refresh');
+      await cache.refresh({ all: true }, workdir);
+    } else {
+      log('debug', '[createPost] Post added to cache incrementally');
+    }
+
+    const postId = gitMsgRef.create('commit', commitHash);
+    log('debug', '[createPost] Looking for post with ID:', postId);
     const postsResult = getPosts(workdir, `post:${postId}`);
 
     if (!postsResult.success || !postsResult.data || postsResult.data.length === 0) {
-      return {
-        success: false,
-        error: {
-          code: 'POST_LOAD_ERROR',
-          message: 'Failed to load created post',
-          details: postsResult.error
-        }
-      };
+      // Retry once more with longer delay
+      log('warn', '[createPost] Post not found on first attempt:', {
+        postId,
+        success: postsResult.success,
+        dataLength: postsResult.data?.length || 0,
+        error: postsResult.error
+      });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      await cache.refresh({}, workdir);
+
+      const retryResult = getPosts(workdir, `post:${postId}`);
+      log('warn', '[createPost] Retry result:', {
+        postId,
+        success: retryResult.success,
+        dataLength: retryResult.data?.length || 0,
+        error: retryResult.error
+      });
+      if (!retryResult.success || !retryResult.data || retryResult.data.length === 0) {
+        return {
+          success: false,
+          error: {
+            code: 'POST_LOAD_ERROR',
+            message: 'Failed to load created post after retry',
+            details: retryResult.error
+          }
+        };
+      }
+      return { success: true, data: retryResult.data[0] };
     }
 
     const post = postsResult.data[0];

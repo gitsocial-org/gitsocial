@@ -24,11 +24,13 @@
  * - No origin URL required for workspace operation
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 import { LRUCache } from 'lru-cache';
 import type { List, Post } from '../types';
 import type { Commit } from '../../git/types';
 import { getCommits, getConfiguredBranch } from '../../git/operations';
+import { execGit } from '../../git/exec';
 import { getOriginUrl } from '../../git/remotes';
 import { getFetchStartDate } from '../../git/utils';
 import { log } from '../../logger';
@@ -45,6 +47,7 @@ import { updateInteractionCounts } from './cache-interactions';
 export const cache = {
   getCachedPosts,
   refresh,
+  addPostToCache,
   initializeGlobalCache,
   setCacheEnabled,
   getCacheStats,
@@ -304,7 +307,13 @@ function getCachedPosts(
         }
 
         // Don't return true here - let it fall through to date filtering
-      } else if (scope !== 'timeline') {
+      } else if (scope === 'timeline') {
+        // Skip absolute IDs that map to relative workspace posts
+        const mappedId = postIndex.absolute.get(post.id);
+        if (mappedId && mappedId !== post.id) {
+          return false;
+        }
+      } else {
         return false;
       }
 
@@ -474,11 +483,48 @@ async function refresh(scope: {
     }
   }
 
-  // Always reinitialize if workdir provided
+  // Reinitialize if workdir provided
   if (workdir) {
+    // If refreshing all, force reinitialization
+    if (scope.all) {
+      globalCacheInitialized = false;
+    }
+    // If no specific scope was provided and cache is not initialized, set flag
+    const isEmptyScope = !scope.all && !scope.repositories?.length && !scope.hashes?.length && !scope.lists?.length;
+    if (isEmptyScope && !globalCacheInitialized) {
+      log('debug', '[Cache] Empty scope with uninitialized cache - will initialize');
+      globalCacheInitialized = false;
+    }
+
     // Determine the oldest date we need to load based on what we're refreshing
     let sinceOverride: Date | undefined;
-    if (scope.repositories && scope.repositories.length > 0 && storageBase) {
+    if (scope.all && storageBase) {
+      // When refreshing all, check oldest fetched date from all repositories
+      let oldestDate: string | null = null;
+      try {
+        const repositoriesDir = join(storageBase, 'repositories');
+        if (existsSync(repositoriesDir)) {
+          const entries = readdirSync(repositoriesDir);
+          for (const entry of entries) {
+            const fullPath = join(repositoriesDir, entry);
+            const config = await storage.repository.readConfig(fullPath);
+            if (config?.fetchedRanges && config.fetchedRanges.length > 0) {
+              for (const range of config.fetchedRanges) {
+                if (!oldestDate || range.start < oldestDate) {
+                  oldestDate = range.start;
+                }
+              }
+            }
+          }
+        }
+        if (oldestDate) {
+          sinceOverride = new Date(oldestDate);
+          log('debug', `[Cache] Using oldest fetched date from all repositories: ${oldestDate}`);
+        }
+      } catch (error) {
+        log('warn', '[Cache] Failed to determine oldest fetched date from all repositories:', error);
+      }
+    } else if (scope.repositories && scope.repositories.length > 0 && storageBase) {
       // Check the oldest fetched date from the repositories we're refreshing
       let oldestDate: string | null = null;
       for (const repoId of scope.repositories) {
@@ -507,8 +553,101 @@ async function refresh(scope: {
   }
 }
 
-async function initializeGlobalCache(workdir: string, storageBase?: string, sinceOverride?: Date): Promise<void> {
+async function addPostToCache(workdir: string, commitHash: string): Promise<boolean> {
+  /**
+   * Incrementally add a single post to cache without full refresh
+   * Returns true if post was successfully added, false otherwise
+   */
+  if (!cacheEnabled || !globalCacheInitialized) {
+    log('debug', '[addPostToCache] Cache not ready, falling back to full refresh');
+    await refresh({}, workdir);
+    return true;
+  }
+
+  try {
+    // Load just the single commit using git show (use %H for full hash, not %h)
+    const result = await execGit(workdir, ['show', '--format=%H%x1F%cd%x1F%an%x1F%ae%x1F%B%x1F%S', '--no-patch', commitHash]);
+    if (!result.success || !result.data) {
+      log('debug', '[addPostToCache] Commit not found:', commitHash);
+      return false;
+    }
+
+    // Parse the commit data
+    const parts = result.data.stdout.split('\x1F');
+    if (parts.length < 5) {
+      log('debug', '[addPostToCache] Invalid commit format:', commitHash);
+      return false;
+    }
+
+    const commit: Commit = {
+      hash: parts[0] || commitHash,
+      timestamp: new Date(parts[1] || ''),
+      author: parts[2] || '',
+      email: parts[3] || '',
+      message: parts[4] || '',
+      refname: parts[5]?.trim() || ''
+    };
+
+    // Process the commit into a post
+    const posts = await processCommits(workdir, [commit]);
+    if (posts.length === 0) {
+      log('debug', '[addPostToCache] No posts from commit:', commitHash);
+      return false;
+    }
+
+    const post = posts[0];
+    if (!post) {
+      log('debug', '[addPostToCache] Post undefined after processing:', commitHash);
+      return false;
+    }
+
+    // Get origin URL for normalization
+    let originUrl: string | undefined;
+    try {
+      const originResult = await getOriginUrl(workdir);
+      if (originResult.success && originResult.data && originResult.data !== 'myrepository') {
+        originUrl = gitMsgUrl.normalize(originResult.data);
+      }
+    } catch {
+      // Continue without origin URL
+    }
+
+    // Process the post (normalization, etc)
+    const processedPosts = new Map<string, Post>();
+    processPost(post, processedPosts, workdir, originUrl, postIndex, true);
+
+    // Update interaction counts with existing posts
+    await updateInteractionCounts(processedPosts, workdir);
+
+    // Add the new post to cache
+    for (const [id, updatedPost] of processedPosts.entries()) {
+      postsCache.set(id, updatedPost as Readonly<Post>);
+      updateIndexes(id, updatedPost, workdir);
+      log('debug', '[addPostToCache] Added post to cache with ID:', id, 'hash:', commitHash);
+    }
+
+    return true;
+  } catch (error) {
+    log('error', '[addPostToCache] Error adding post to cache:', error);
+    // Fall back to full refresh on error
+    await refresh({}, workdir);
+    return true;
+  }
+}
+
+async function initializeGlobalCache(
+  workdir: string,
+  storageBase?: string,
+  sinceOverride?: Date,
+  force: boolean = false
+): Promise<void> {
   if (!cacheEnabled) {return;}
+
+  // Skip if already initialized unless forced
+  if (globalCacheInitialized && !force) {
+    log('debug', '[initializeGlobalCache] Cache already initialized, skipping');
+    return;
+  }
 
   log('debug', '[initializeGlobalCache] Starting global cache initialization with sinceOverride:', sinceOverride?.toISOString());
 
@@ -879,20 +1018,24 @@ function updateIndexes(postId: string, post: Readonly<Post> | Post, workdir: str
   }
 
   // Index by lists that contain this post's repository
-  const allLists = list.getAllListsFromStorage(workdir);
-  for (const listObj of allLists) {
-    const postRepoUrl = gitMsgUrl.normalize(post.repository.split('#')[0] || post.repository);
-    const inList = listObj.repositories.some(listRepoUrl => {
-      const normalizedListRepo = gitMsgUrl.normalize(listRepoUrl.split('#')[0] || listRepoUrl);
-      return normalizedListRepo === postRepoUrl;
-    });
-    if (inList) {
-      const listKey = `${workdir}:${listObj.id}`;
-      if (!postIndex.byList.has(listKey)) {
-        postIndex.byList.set(listKey, new Set());
+  try {
+    const allLists = list.getAllListsFromStorage(workdir);
+    for (const listObj of allLists) {
+      const postRepoUrl = gitMsgUrl.normalize(post.repository.split('#')[0] || post.repository);
+      const inList = listObj.repositories.some(listRepoUrl => {
+        const normalizedListRepo = gitMsgUrl.normalize(listRepoUrl.split('#')[0] || listRepoUrl);
+        return normalizedListRepo === postRepoUrl;
+      });
+      if (inList) {
+        const listKey = `${workdir}:${listObj.id}`;
+        if (!postIndex.byList.has(listKey)) {
+          postIndex.byList.set(listKey, new Set());
+        }
+        postIndex.byList.get(listKey)!.add(postId);
       }
-      postIndex.byList.get(listKey)!.add(postId);
     }
+  } catch (error) {
+    log('debug', '[updateIndexes] Failed to index by lists, continuing without list indexing:', error);
   }
 }
 

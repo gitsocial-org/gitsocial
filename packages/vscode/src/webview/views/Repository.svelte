@@ -312,6 +312,14 @@
         api.getUnpushedCounts();
         break;
 
+      case 'postCreated':
+      case 'commitCreated':
+        loadRangeData(true);
+        if (isWorkspace) {
+          api.getUnpushedCounts();
+        }
+        break;
+
       case 'refresh': {
         const scopes = message.scope || ['all'];
         const operation = message.operation;

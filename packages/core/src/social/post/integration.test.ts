@@ -16,10 +16,14 @@ describe('Post Integration Tests', () => {
 
     cache.setCacheEnabled(true);
     cache.setCacheMaxSize(10000);
-    await cache.refresh({ all: true });
+    // Properly initialize cache with workdir to avoid uninitialized state
+    await cache.refresh({ all: true }, testRepo.path);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Clear cache completely before cleanup
+    cache.setCacheEnabled(false);
+    await cache.refresh({ all: true });
     testRepo.cleanup();
     cache.setCacheEnabled(true);
   });
