@@ -150,7 +150,7 @@ export function createInteractionHandler(): {
     };
   }
 
-  function handleCreationSuccess(type: string, createdPost: Post): void {
+  function handleCreationSuccess(type: string, _createdPost: Post): void {
     const successMessage = `${type} created successfully!`;
 
     state.update(s => ({
@@ -160,17 +160,8 @@ export function createInteractionHandler(): {
       isSubmitting: false
     }));
 
-    // Navigate to newly created post after showing success message
+    // Close dialog after showing success message
     setTimeout(() => {
-      if (createdPost) {
-        const title = createdPost.content.split('\n')[0].substring(0, 30) + '...';
-        api.openView('viewPost', title, {
-          postId: createdPost.id,
-          repository: createdPost.repository
-        });
-      }
-
-      // Close dialog
       handleInteractionCancel();
     }, 1500);
   }
