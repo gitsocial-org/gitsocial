@@ -951,15 +951,7 @@ registerHandler('removeRepository', async function handleRemoveRepository(panel,
     });
 
     if (result.success) {
-      log('info', '[removeRepository] Operation succeeded, clearing cache and broadcasting');
-
-      // Refresh cache to ensure fresh data after list change
-      try {
-        await social.cache.refresh({ lists: ['*'] }, workspaceFolder.uri.fsPath);
-        log('debug', '[removeRepository] Cache refreshed after list change');
-      } catch (error) {
-        log('error', '[removeRepository] Failed to refresh cache:', error);
-      }
+      log('info', '[removeRepository] Operation succeeded, broadcasting');
 
       // Send success response
       postMessage(panel, 'repositoryRemoved', {

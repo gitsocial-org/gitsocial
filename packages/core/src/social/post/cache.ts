@@ -541,6 +541,7 @@ async function refresh(scope: {
   repositories?: string[];
   hashes?: string[];
   lists?: string[];
+  removedRepositories?: string[];
   all?: boolean;
 }, workdir?: string, storageBase?: string): Promise<void> {
   log('debug', '[Cache] Refreshing cache with scope:', scope);
@@ -568,6 +569,28 @@ async function refresh(scope: {
             postsCache.delete(postId);
             removeFromIndexes(postId);
           }
+        }
+      }
+    }
+
+    if (scope.removedRepositories?.length) {
+      for (const repoUrl of scope.removedRepositories) {
+        const normalizedBaseUrl = gitMsgUrl.normalize(repoUrl);
+        let removedCount = 0;
+        for (const [repoId, postIds] of postIndex.byRepository.entries()) {
+          if (repoId === normalizedBaseUrl || repoId.startsWith(`${normalizedBaseUrl}#branch:`)) {
+            log('debug', `[Cache] Removing ${postIds.size} posts from repository: ${repoId}`);
+            for (const postId of Array.from(postIds)) {
+              postsCache.delete(postId);
+              removeFromIndexes(postId);
+              removedCount++;
+            }
+          }
+        }
+        if (removedCount === 0) {
+          log('debug', `[Cache] No posts found for repository: ${normalizedBaseUrl}`);
+        } else {
+          log('info', `[Cache] Removed ${removedCount} posts from repository: ${normalizedBaseUrl}`);
         }
       }
     }

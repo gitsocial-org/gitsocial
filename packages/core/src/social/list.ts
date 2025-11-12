@@ -126,6 +126,26 @@ function getBaseRepositoryUrl(repositoryUrl: string): string {
 }
 
 /**
+ * Check if a repository exists in any list
+ * @param workdir - Working directory
+ * @param repositoryUrl - Repository URL to check
+ * @returns True if repository is in at least one list
+ */
+function isRepositoryInAnyList(workdir: string, repositoryUrl: string): boolean {
+  const baseUrl = getBaseRepositoryUrl(repositoryUrl);
+  const lists = getAllListsFromStorage(workdir);
+  for (const list of lists) {
+    if (!list.repositories) {continue;}
+    const hasRepository = list.repositories.some(repo => {
+      const repoBaseUrl = getBaseRepositoryUrl(repo);
+      return repoBaseUrl === baseUrl;
+    });
+    if (hasRepository) {return true;}
+  }
+  return false;
+}
+
+/**
  * Create a new repository list
  */
 async function createList(
@@ -482,6 +502,16 @@ async function removeRepositoryFromList(
     if (!updateResult.success) {
       log('error', '[removeRepositoryFromList] updateList failed:', updateResult.error);
       return updateResult;
+    }
+
+    // Check if repository still exists in any other list
+    const stillInAnyList = isRepositoryInAnyList(repository, baseUrlToRemove);
+    if (!stillInAnyList) {
+      // Repository is no longer in any list, clean up its posts from cache
+      log('info', `[removeRepositoryFromList] Repository '${baseUrlToRemove}' not in any list, removing posts from cache`);
+      await cache.refresh({ removedRepositories: [baseUrlToRemove] }, repository);
+    } else {
+      log('info', `[removeRepositoryFromList] Repository '${baseUrlToRemove}' still exists in other lists, keeping posts`);
     }
 
     log('info', `[removeRepositoryFromList] Successfully removed repository with base URL '${baseUrlToRemove}' from list '${listId}'`);
