@@ -2,7 +2,7 @@ const esbuild = require('esbuild');
 const sveltePlugin = require('esbuild-svelte');
 const sveltePreprocess = require('svelte-preprocess');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 
 const production = process.argv.includes('--production');
@@ -391,6 +391,12 @@ async function build() {
       if (!production) {
         ensureSymlink();
       }
+      // Compile test files
+      console.log('📦 Compiling test files...');
+      execSync('npx tsc --project tsconfig.test.json', {
+        cwd: __dirname,
+        stdio: 'inherit'
+      });
       console.log('✅ Build complete');
     }
   } catch (err) {
