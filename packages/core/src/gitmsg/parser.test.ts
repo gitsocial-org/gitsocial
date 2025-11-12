@@ -211,6 +211,14 @@ Third line
     expect(parseGitMsgMessage(message)).toBeNull();
   });
 
+  it('should return null when header has invalid required fields', () => {
+    const message = `Content
+
+--- GitMsg: ext="social"; v="0.1.0" ---`;
+
+    expect(parseGitMsgMessage(message)).toBeNull();
+  });
+
   it('should handle references with metadata', () => {
     const message = 'Quote message\n' +
       '\n' +
@@ -363,6 +371,38 @@ describe('validateGitMsgMessage', () => {
       }]
     };
     expect(validateGitMsgMessage(invalid)).toBe(false);
+  });
+
+  it('should reject reference with invalid version format', () => {
+    const invalid: GitMsgMessage = {
+      ...validMessage,
+      references: [{
+        ext: 'social',
+        ref: '#commit:abc123def456',
+        v: '1.0',
+        extV: '0.1.0',
+        author: 'Dave',
+        email: 'dave@example.com',
+        time: '2025-10-21T08:00:00Z',
+        fields: {}
+      }]
+    };
+    expect(validateGitMsgMessage(invalid)).toBe(false);
+
+    const invalid2: GitMsgMessage = {
+      ...validMessage,
+      references: [{
+        ext: 'social',
+        ref: '#commit:abc123def456',
+        v: '0.1.0',
+        extV: 'invalid',
+        author: 'Eve',
+        email: 'eve@example.com',
+        time: '2025-10-21T07:00:00Z',
+        fields: {}
+      }]
+    };
+    expect(validateGitMsgMessage(invalid2)).toBe(false);
   });
 });
 

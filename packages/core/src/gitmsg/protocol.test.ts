@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gitMsgRef, gitMsgUrl } from './protocol';
+import { gitMsgHash, gitMsgRef, gitMsgUrl } from './protocol';
 
 describe('gitMsgRef', () => {
   describe('create()', () => {
@@ -236,6 +236,11 @@ describe('gitMsgRef', () => {
     it('should return unchanged if no remote prefix', () => {
       expect(gitMsgRef.extractBranchFromRemote('main')).toBe('main');
     });
+
+    it('should return unchanged if remotes/ format has less than 3 parts', () => {
+      expect(gitMsgRef.extractBranchFromRemote('remotes/origin')).toBe('remotes/origin');
+      expect(gitMsgRef.extractBranchFromRemote('remotes/')).toBe('remotes/');
+    });
   });
 
   describe('normalizeHashInRefWithContext()', () => {
@@ -319,6 +324,11 @@ describe('gitMsgUrl', () => {
       expect(gitMsgUrl.validate(null as unknown as string)).toBe(false);
       expect(gitMsgUrl.validate(undefined as unknown as string)).toBe(false);
     });
+
+    it('should handle malformed HTTPS URLs gracefully', () => {
+      expect(gitMsgUrl.validate('https://')).toBe(false);
+      expect(gitMsgUrl.validate('https:// invalid')).toBe(false);
+    });
   });
 
   describe('toGit()', () => {
@@ -336,6 +346,121 @@ describe('gitMsgUrl', () => {
 
     it('should trim whitespace', () => {
       expect(gitMsgUrl.toGit('  https://github.com/user/repo  ')).toBe('https://github.com/user/repo.git');
+    });
+  });
+
+  describe('fromRef()', () => {
+    it('should extract repository from absolute ref', () => {
+      const url = gitMsgUrl.fromRef('https://github.com/user/repo#commit:abc123def456');
+      expect(url).toBe('https://github.com/user/repo');
+    });
+
+    it('should return null for relative ref', () => {
+      const url = gitMsgUrl.fromRef('#commit:abc123def456');
+      expect(url).toBeNull();
+    });
+
+    it('should extract repository from branch ref', () => {
+      const url = gitMsgUrl.fromRef('https://github.com/user/repo#branch:main');
+      expect(url).toBe('https://github.com/user/repo');
+    });
+
+    it('should extract repository from list ref', () => {
+      const url = gitMsgUrl.fromRef('https://github.com/user/repo#list:reading');
+      expect(url).toBe('https://github.com/user/repo');
+    });
+  });
+
+  describe('parseFragment()', () => {
+    it('should parse URL without fragment', () => {
+      const result = gitMsgUrl.parseFragment('https://github.com/user/repo');
+      expect(result).toEqual({ base: 'https://github.com/user/repo' });
+    });
+
+    it('should parse URL with branch: prefix', () => {
+      const result = gitMsgUrl.parseFragment('https://github.com/user/repo#branch:main');
+      expect(result).toEqual({
+        base: 'https://github.com/user/repo',
+        fragment: 'branch:main',
+        branch: 'main'
+      });
+    });
+
+    it('should parse URL with plain fragment', () => {
+      const result = gitMsgUrl.parseFragment('https://github.com/user/repo#develop');
+      expect(result).toEqual({
+        base: 'https://github.com/user/repo',
+        fragment: 'develop',
+        branch: 'develop'
+      });
+    });
+
+    it('should handle commit fragments', () => {
+      const result = gitMsgUrl.parseFragment('https://github.com/user/repo#commit:abc123');
+      expect(result).toEqual({
+        base: 'https://github.com/user/repo',
+        fragment: 'commit:abc123',
+        branch: 'commit:abc123'
+      });
+    });
+  });
+});
+
+describe('gitMsgHash', () => {
+  describe('normalize()', () => {
+    it('should normalize valid hash to 12 characters', () => {
+      expect(gitMsgHash.normalize('abc123def456789012345678')).toBe('abc123def456');
+    });
+
+    it('should lowercase hash', () => {
+      expect(gitMsgHash.normalize('ABC123DEF456')).toBe('abc123def456');
+    });
+
+    it('should handle exactly 12 character hash', () => {
+      expect(gitMsgHash.normalize('abc123def456')).toBe('abc123def456');
+    });
+
+    it('should throw error for invalid hash format', () => {
+      expect(() => gitMsgHash.normalize('xyz123')).toThrow('Invalid commit hash format');
+      expect(() => gitMsgHash.normalize('abc123-def')).toThrow('Invalid commit hash format');
+      expect(() => gitMsgHash.normalize('')).toThrow('Invalid commit hash format');
+      expect(() => gitMsgHash.normalize('not-a-hash')).toThrow('Invalid commit hash format');
+    });
+  });
+
+  describe('truncate()', () => {
+    it('should truncate hash to specified length', () => {
+      expect(gitMsgHash.truncate('abc123def456789', 6)).toBe('abc123');
+      expect(gitMsgHash.truncate('abc123def456789', 8)).toBe('abc123de');
+    });
+
+    it('should respect max length of 12', () => {
+      expect(gitMsgHash.truncate('abc123def456789', 20)).toBe('abc123def456');
+    });
+
+    it('should handle length of 12', () => {
+      expect(gitMsgHash.truncate('abc123def456789', 12)).toBe('abc123def456');
+    });
+
+    it('should normalize before truncating', () => {
+      expect(gitMsgHash.truncate('ABC123DEF456789', 6)).toBe('abc123');
+    });
+  });
+
+  describe('validate()', () => {
+    it('should validate correct 12-char hex hash', () => {
+      expect(gitMsgHash.validate('abc123def456')).toBe(true);
+      expect(gitMsgHash.validate('ABC123DEF456')).toBe(true);
+      expect(gitMsgHash.validate('000000000000')).toBe(true);
+    });
+
+    it('should reject invalid hashes', () => {
+      expect(gitMsgHash.validate('abc123')).toBe(false);
+      expect(gitMsgHash.validate('abc123def456789')).toBe(false);
+      expect(gitMsgHash.validate('xyz123def456')).toBe(false);
+      expect(gitMsgHash.validate('abc123-def45')).toBe(false);
+      expect(gitMsgHash.validate('')).toBe(false);
+      expect(gitMsgHash.validate('not-a-hash')).toBe(false);
     });
   });
 });

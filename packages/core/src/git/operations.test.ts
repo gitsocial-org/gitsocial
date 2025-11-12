@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCommit,
   getCommit,
@@ -13,7 +13,7 @@ import {
 } from './operations';
 import { createCommit as createTestCommit, createTestRepo, type TestRepo } from '../test-utils';
 import { execGit } from './exec';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -26,6 +26,7 @@ describe('git/operations', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     testRepo.cleanup();
   });
 
@@ -68,6 +69,18 @@ describe('git/operations', () => {
       const result = await initGitRepository('/invalid/path/that/does/not/exist');
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
+    });
+
+    it('should return fallback error when execGit returns no error', async () => {
+      const spy = vi.spyOn(await import('./exec'), 'execGit');
+      spy.mockResolvedValueOnce({ success: false });
+      const tempPath = mkdtempSync(join(tmpdir(), 'test-git-fallback-'));
+      const result = await initGitRepository(tempPath);
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('GIT_INIT_ERROR');
+      expect(result.error?.message).toBe('Failed to initialize git repository');
+      spy.mockRestore();
+      rmSync(tempPath, { recursive: true, force: true });
     });
   });
 
@@ -202,6 +215,47 @@ describe('git/operations', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
+    });
+
+    it('should return fallback error when commit-tree succeeds but returns empty data', async () => {
+      const parentResult = await execGit(testRepo.path, ['rev-parse', 'HEAD']);
+      const parentHash = parentResult.data?.stdout.trim();
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'commit-tree') {
+          return { success: true, data: { stdout: '', stderr: '' } };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const result = await createCommit(testRepo.path, {
+        message: 'Test',
+        parent: parentHash
+      });
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('GIT_COMMIT_ERROR');
+      expect(result.error?.message).toBe('Failed to create commit');
+      spy.mockRestore();
+    });
+
+    it('should return error when git commit command fails', async () => {
+      writeFileSync(join(testRepo.path, 'test.txt'), 'content');
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'commit') {
+          return { success: false, error: { code: 'GIT_ERROR', message: 'Commit failed' } };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const result = await createCommit(testRepo.path, {
+        message: 'Test',
+        allowEmpty: false
+      });
+      expect(result.success).toBe(false);
+      spy.mockRestore();
     });
   });
 
@@ -353,6 +407,270 @@ describe('git/operations', () => {
       const unpushed = await getUnpushedCommits(testRepo.path, 'main');
 
       expect(unpushed.size).toBe(0);
+    });
+
+    it('should return empty set when rev-list fails for local branch', async () => {
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'rev-list' && !args.includes('..')) {
+          return { success: false };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const unpushed = await getUnpushedCommits(testRepo.path, 'main');
+      expect(unpushed.size).toBe(0);
+      spy.mockRestore();
+    });
+  });
+
+  describe('createCommitOnBranch()', () => {
+    it('should create commit on new branch', async () => {
+      const { createCommitOnBranch } = await import('./operations');
+      const result = await createCommitOnBranch(testRepo.path, 'new-branch', 'Test commit');
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(result.data?.length).toBe(12);
+    });
+
+    it('should create commit on existing branch with parent', async () => {
+      const { createCommitOnBranch } = await import('./operations');
+      await createTestCommit(testRepo.path, 'First', { allowEmpty: true });
+      await execGit(testRepo.path, ['branch', 'existing']);
+      const result = await createCommitOnBranch(testRepo.path, 'existing', 'Second commit');
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+    });
+
+    it('should return short hash', async () => {
+      const { createCommitOnBranch } = await import('./operations');
+      const result = await createCommitOnBranch(testRepo.path, 'test', 'Message');
+      expect(result.success).toBe(true);
+      expect(result.data?.length).toBe(12);
+    });
+
+    it('should return fallback error when commit-tree returns empty data on existing branch', async () => {
+      const { createCommitOnBranch } = await import('./operations');
+      await execGit(testRepo.path, ['branch', 'existing']);
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'commit-tree') {
+          return { success: true, data: { stdout: '', stderr: '' } };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const result = await createCommitOnBranch(testRepo.path, 'existing', 'Test');
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('GIT_COMMIT_ERROR');
+      expect(result.error?.message).toBe('Failed to create commit');
+      spy.mockRestore();
+    });
+
+    it('should return fallback error when commit-tree returns empty data on new branch', async () => {
+      const { createCommitOnBranch } = await import('./operations');
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'commit-tree') {
+          return { success: true, data: { stdout: '', stderr: '' } };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const result = await createCommitOnBranch(testRepo.path, 'new-branch', 'Test');
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('GIT_COMMIT_ERROR');
+      expect(result.error?.message).toBe('Failed to create initial commit');
+      spy.mockRestore();
+    });
+  });
+
+  describe('getConfiguredBranch()', () => {
+    it('should return branch from refs/gitmsg/social/config', async () => {
+      const { getConfiguredBranch } = await import('./operations');
+      const config = JSON.stringify({ branch: 'custom' });
+      await execGit(testRepo.path, ['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', config])
+        .then(async (result) => {
+          const hash = result.data?.stdout.trim();
+          await execGit(testRepo.path, ['update-ref', 'refs/gitmsg/social/config', hash!]);
+        });
+      const branch = await getConfiguredBranch(testRepo.path);
+      expect(branch).toBe('custom');
+    });
+
+    it('should return gitsocial if branch exists', async () => {
+      const { getConfiguredBranch } = await import('./operations');
+      await execGit(testRepo.path, ['branch', 'gitsocial']);
+      const branch = await getConfiguredBranch(testRepo.path);
+      expect(branch).toBe('gitsocial');
+    });
+
+    it('should return default branch from origin/HEAD', async () => {
+      const { getConfiguredBranch } = await import('./operations');
+      await execGit(testRepo.path, ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop']);
+      const branch = await getConfiguredBranch(testRepo.path);
+      expect(branch).toBe('develop');
+    });
+
+    it('should fallback to main', async () => {
+      const { getConfiguredBranch } = await import('./operations');
+      const branch = await getConfiguredBranch(testRepo.path);
+      expect(branch).toBe('main');
+    });
+
+    it('should ignore invalid JSON in config ref', async () => {
+      const { getConfiguredBranch } = await import('./operations');
+      const invalidJson = 'not valid json {';
+      await execGit(testRepo.path, ['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', invalidJson])
+        .then(async (result) => {
+          const hash = result.data?.stdout.trim();
+          await execGit(testRepo.path, ['update-ref', 'refs/gitmsg/social/config', hash!]);
+        });
+      const branch = await getConfiguredBranch(testRepo.path);
+      expect(branch).toBe('main');
+    });
+  });
+
+  describe('validatePushPreconditions()', () => {
+    it('should fail on detached HEAD', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      await execGit(testRepo.path, ['checkout', '--detach']);
+      const result = await validatePushPreconditions(testRepo.path);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('detached HEAD');
+    });
+
+    it('should fail when no remotes exist', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      const result = await validatePushPreconditions(testRepo.path);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('No \'origin\' remote');
+    });
+
+    it('should fail when git remote command fails', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      const execModule = await import('./exec');
+      const originalExecGit = execModule.execGit;
+      const spy = vi.spyOn(execModule, 'execGit');
+      spy.mockImplementation(async (workdir, args) => {
+        if (args[0] === 'remote' && args.length === 1) {
+          return { success: false };
+        }
+        return originalExecGit(workdir, args);
+      });
+      const result = await validatePushPreconditions(testRepo.path);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toBe('Failed to list remotes');
+      spy.mockRestore();
+    });
+
+    it('should fail when branch does not exist', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      const newRepo = await createTestRepo('validate-no-branch');
+      await addRemoteFn(newRepo.path, 'origin', 'https://github.com/user/repo.git');
+      const result = await validatePushPreconditions(newRepo.path);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('does not exist locally');
+      newRepo.cleanup();
+    });
+
+    it('should fail when branches have diverged', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      await addRemoteFn(testRepo.path, 'origin', 'https://github.com/user/repo.git');
+      await createTestCommit(testRepo.path, 'Base', { allowEmpty: true });
+      await execGit(testRepo.path, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+      await createTestCommit(testRepo.path, 'Local ahead', { allowEmpty: true });
+      await execGit(testRepo.path, ['commit-tree', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-m', 'Remote ahead', '-p', 'refs/remotes/origin/main'])
+        .then(async (result) => {
+          const hash = result.data?.stdout.trim();
+          await execGit(testRepo.path, ['update-ref', 'refs/remotes/origin/main', hash!]);
+        });
+      const result = await validatePushPreconditions(testRepo.path);
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('diverged');
+    });
+
+    it('should succeed with valid state', async () => {
+      const { validatePushPreconditions } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      await addRemoteFn(testRepo.path, 'origin', 'https://github.com/user/repo.git');
+      await execGit(testRepo.path, ['branch', 'main']);
+      const result = await validatePushPreconditions(testRepo.path);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('mergeBranch()', () => {
+    it('should merge branch successfully', async () => {
+      const { mergeBranch } = await import('./operations');
+      await execGit(testRepo.path, ['branch', 'feature']);
+      await execGit(testRepo.path, ['checkout', 'feature']);
+      await createTestCommit(testRepo.path, 'Feature commit', { allowEmpty: true });
+      await execGit(testRepo.path, ['checkout', 'main']);
+      const result = await mergeBranch(testRepo.path, 'feature');
+      expect(result.success).toBe(true);
+    });
+
+    it('should return error on merge failure', async () => {
+      const { mergeBranch } = await import('./operations');
+      const result = await mergeBranch(testRepo.path, 'nonexistent');
+      expect(result.success).toBe(false);
+      expect(result.error?.message).toContain('merge');
+    });
+  });
+
+  describe('setUpstreamBranch() and getUpstreamBranch()', () => {
+    it('should set and get upstream branch', async () => {
+      const { setUpstreamBranch, getUpstreamBranch } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      await addRemoteFn(testRepo.path, 'origin', 'https://github.com/user/repo.git');
+      await execGit(testRepo.path, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+      const setResult = await setUpstreamBranch(testRepo.path, 'origin/main');
+      expect(setResult.success).toBe(true);
+      const getResult = await getUpstreamBranch(testRepo.path);
+      expect(getResult.success).toBe(true);
+      expect(getResult.data).toContain('origin/main');
+    });
+
+    it('should set upstream for specific branch', async () => {
+      const { setUpstreamBranch } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      await addRemoteFn(testRepo.path, 'origin', 'https://github.com/user/repo.git');
+      await execGit(testRepo.path, ['branch', 'feature']);
+      await execGit(testRepo.path, ['update-ref', 'refs/remotes/origin/feature', 'HEAD']);
+      const result = await setUpstreamBranch(testRepo.path, 'origin/feature', 'feature');
+      expect(result.success).toBe(true);
+    });
+
+    it('should fail to get upstream when not set', async () => {
+      const { getUpstreamBranch } = await import('./operations');
+      const result = await getUpstreamBranch(testRepo.path);
+      expect(result.success).toBe(false);
+    });
+
+    it('should fail to set upstream with invalid ref', async () => {
+      const { setUpstreamBranch } = await import('./operations');
+      const result = await setUpstreamBranch(testRepo.path, 'origin/nonexistent');
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('GIT_ERROR');
+      expect(result.error?.message).toBe('Failed to set upstream branch');
+    });
+
+    it('should get upstream for specific branch', async () => {
+      const { setUpstreamBranch, getUpstreamBranch } = await import('./operations');
+      const { addRemote: addRemoteFn } = await import('./remotes');
+      await addRemoteFn(testRepo.path, 'origin', 'https://github.com/user/repo.git');
+      await execGit(testRepo.path, ['branch', 'feature']);
+      await execGit(testRepo.path, ['update-ref', 'refs/remotes/origin/feature', 'HEAD']);
+      await setUpstreamBranch(testRepo.path, 'origin/feature', 'feature');
+      const result = await getUpstreamBranch(testRepo.path, 'feature');
+      expect(result.success).toBe(true);
+      expect(result.data).toContain('origin/feature');
     });
   });
 });
