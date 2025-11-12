@@ -97,6 +97,7 @@ if (!result.success) {
 - `log`: log(level, message, ...args)
 
 ## Documentation
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Setup, testing, and submitting changes
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design & decisions
 - [PATTERNS.md](PATTERNS.md) - Code patterns | [INTERFACES.md](INTERFACES.md) - Type reference
 - [GITMSG.md](GITMSG.md) - Protocol | [GITSOCIAL.md](GITSOCIAL.md) - Social extension

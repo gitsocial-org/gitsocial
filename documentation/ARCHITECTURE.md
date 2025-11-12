@@ -129,4 +129,4 @@ packages/
 
 ## Related Documentation
 
-[START.md](START.md) | [PATTERNS.md](PATTERNS.md) | [INTERFACES.md](INTERFACES.md) | [GITMSG.md](GITMSG.md) | [GITSOCIAL.md](GITSOCIAL.md) | [AVATAR.md](AVATAR.md)
+[CONTRIBUTING.md](CONTRIBUTING.md) | [START.md](START.md) | [PATTERNS.md](PATTERNS.md) | [INTERFACES.md](INTERFACES.md) | [GITMSG.md](GITMSG.md) | [GITSOCIAL.md](GITSOCIAL.md) | [AVATAR.md](AVATAR.md)

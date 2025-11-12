@@ -54,6 +54,7 @@ Open source social network protocol for Git repositories.
 
 - [GITSOCIAL.md](documentation/GITSOCIAL.md) - GitSocial specification
 - [GITMSG.md](documentation/GITMSG.md) - GitMsg protocol specification
+- [CONTRIBUTING.md](documentation/CONTRIBUTING.md) - Developer guide (also: [AGENTS.md](AGENTS.md))
 - [Developer documentation](documentation/) - Architecture, patterns, and more
 
 ## License
