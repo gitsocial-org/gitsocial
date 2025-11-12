@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Post } from '@gitsocial/core/client';
-  import { gitHost } from '@gitsocial/core/client';
+  import { gitHost, matchesPostId } from '@gitsocial/core/client';
   import { onMount, onDestroy } from 'svelte';
   import { api } from '../api';
   import { settings } from '../stores';
@@ -256,15 +256,21 @@
   function getResolvedPost(postId: string): Post | null {
     // Try frontend posts collection first
     const frontendPost = Array.isArray(posts)
-      ? posts.find(p => p.id === postId)
+      ? posts.find(p => matchesPostId(p.id, postId))
       : posts.get ? posts.get(postId) : null;
 
     if (frontendPost) {
       return frontendPost;
     }
 
-    // Try resolved posts cache
-    return resolvedPosts.get(postId) || null;
+    // Try resolved posts cache (iterate since we need matchesPostId)
+    for (const [id, post] of resolvedPosts.entries()) {
+      if (matchesPostId(id, postId)) {
+        return post;
+      }
+    }
+
+    return null;
   }
 
   function handleFullscreenClick() {

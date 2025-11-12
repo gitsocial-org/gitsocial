@@ -10,7 +10,7 @@
   import DateNavigation from '../components/DateNavigation.svelte';
   import { skipCacheOnNextRefresh } from '../stores';
   import type { Post, List, Follower } from '@gitsocial/core';
-  import { gitHost, gitMsgUrl, gitMsgRef } from '@gitsocial/core/client';
+  import { gitHost, gitMsgUrl, gitMsgRef, matchesPostId } from '@gitsocial/core/client';
   import { formatRelativeTime, useEventDrivenTimeUpdates, getWeekStart, getWeekEnd, getWeekLabel, format30DayRange } from '../utils/time';
   import type { Repository } from '@gitsocial/core/client';
   import type { LogEntry } from '../../handlers/types';
@@ -135,32 +135,6 @@
   ];
 
   // Group replies by their original thread
-  function groupRepliesByThread(replies: Post[]): Map<string, Post[]> {
-    const threadMap = new Map<string, Post[]>();
-
-    for (const reply of replies) {
-      // Group by original post ID (the thread root)
-      const threadId = reply.originalPostId || reply.id;
-      if (!threadMap.has(threadId)) {
-        threadMap.set(threadId, []);
-      }
-      const threadReplies = threadMap.get(threadId);
-      if (threadReplies) {
-        threadReplies.push(reply);
-      }
-    }
-
-    // Sort each thread's replies by timestamp (oldest first within thread)
-    for (const [, threadReplies] of threadMap) {
-      threadReplies.sort((a, b) => {
-        const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-        const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
-        return aTime - bTime; // Oldest first within thread
-      });
-    }
-
-    return threadMap;
-  }
 
   // Message handler function
   function handleMessage(event: MessageEvent) {
@@ -446,9 +420,11 @@
       }
     }
 
-    // Filter out IDs we already have
-    const existingIds = new Set([...postsTabData, ...repliesTabData].map(p => p.id));
-    const missingIds = Array.from(neededIds).filter(id => !existingIds.has(id));
+    // Filter out IDs we already have (use matchesPostId for comparison)
+    const allExistingPosts = [...postsTabData, ...repliesTabData];
+    const missingIds = Array.from(neededIds).filter(neededId =>
+      !allExistingPosts.some(p => matchesPostId(p.id, neededId))
+    );
 
     if (missingIds.length > 0) {
       // Fetch missing posts using byId scope
@@ -894,38 +870,14 @@
             <p>No replies yet</p>
           </div>
         {:else}
-          {@const threadGroups = groupRepliesByThread(repliesTabData)}
-          {@const sortedThreads = Array.from(threadGroups.entries()).sort((a, b) => {
-            // Sort threads by the most recent reply in each thread
-            const aLatest = Math.max(...a[1].map(r =>
-              r.timestamp instanceof Date ? r.timestamp.getTime() : new Date(r.timestamp).getTime()
-            ));
-            const bLatest = Math.max(...b[1].map(r =>
-              r.timestamp instanceof Date ? r.timestamp.getTime() : new Date(r.timestamp).getTime()
-            ));
-            return bLatest - aLatest; // Newest threads first
+          {@const sortedReplies = [...repliesTabData].sort((a, b) => {
+            const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+            const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+            return bTime - aTime;
           })}
           <div class="flex flex-col gap-2 -ml-4">
-            {#each sortedThreads as [threadId, threadReplies]}
-              {@const originalPost = contextPosts.get(threadId) || allPostsForContext.find(p => p.id === threadId)}
-              <div class="thread-group mb-4">
-                {#if originalPost}
-                  <div class="relative mb-2">
-                    {#if threadReplies.length > 0}
-                      <div class="thread-connector"></div>
-                    {/if}
-                    <PostCard post={originalPost} posts={allPostsForContext} />
-                  </div>
-                {/if}
-                {#each threadReplies as reply, index}
-                  <div class="relative mb-2">
-                    {#if index < threadReplies.length - 1}
-                      <div class="thread-connector"></div>
-                    {/if}
-                    <PostCard post={reply} posts={allPostsForContext} showParentContext={false} />
-                  </div>
-                {/each}
-              </div>
+            {#each sortedReplies as reply}
+              <PostCard post={reply} posts={allPostsForContext} showParentContext={true} />
             {/each}
           </div>
         {/if}
