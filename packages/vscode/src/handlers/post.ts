@@ -19,6 +19,7 @@ interface GetPostsOptions {
   until?: Date;
   limit?: number;
   skipCache?: boolean;
+  storageBase?: string;
 }
 
 function buildGetPostsOptions(msg: Extract<PostsMessages, { type: 'social.getPosts' }>): GetPostsOptions {
@@ -27,7 +28,8 @@ function buildGetPostsOptions(msg: Extract<PostsMessages, { type: 'social.getPos
     since: msg.options?.since ? new Date(msg.options.since) : undefined,
     until: msg.options?.until ? new Date(msg.options.until) : undefined,
     limit: msg.options?.limit,
-    skipCache: msg.options?.skipCache
+    skipCache: msg.options?.skipCache,
+    storageBase: getStorageUri()?.fsPath
   };
 }
 

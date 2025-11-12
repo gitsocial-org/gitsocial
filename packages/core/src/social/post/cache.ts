@@ -37,6 +37,7 @@ import { log } from '../../logger';
 import { gitMsgHash, gitMsgRef, gitMsgUrl } from '../../gitmsg/protocol';
 import { storage } from '../../storage';
 import { list } from '../list';
+import { getConfiguredStorageBase } from '../repository';
 import { createVirtualPostFromReference, mergeVirtualPostIntoWorkspace, processCommits, processPost } from './cache-transform';
 import { updateInteractionCounts } from './cache-interactions';
 
@@ -546,6 +547,8 @@ async function refresh(scope: {
 }, workdir?: string, storageBase?: string): Promise<void> {
   log('debug', '[Cache] Refreshing cache with scope:', scope);
 
+  const effectiveStorageBase = storageBase || getConfiguredStorageBase();
+
   if (scope.all) {
     postsCache.clear();
     postIndex.byHash.clear();
@@ -615,11 +618,11 @@ async function refresh(scope: {
 
     // Determine the oldest date we need to load based on what we're refreshing
     let sinceOverride: Date | undefined;
-    if (scope.all && storageBase) {
+    if (scope.all && effectiveStorageBase) {
       // When refreshing all, check oldest fetched date from all repositories
       let oldestDate: string | null = null;
       try {
-        const repositoriesDir = join(storageBase, 'repositories');
+        const repositoriesDir = join(effectiveStorageBase, 'repositories');
         if (existsSync(repositoriesDir)) {
           const entries = readdirSync(repositoriesDir);
           for (const entry of entries) {
@@ -641,13 +644,44 @@ async function refresh(scope: {
       } catch (error) {
         log('warn', '[Cache] Failed to determine oldest fetched date from all repositories:', error);
       }
-    } else if (scope.repositories && scope.repositories.length > 0 && storageBase) {
+    } else if (scope.lists && scope.lists.length > 0 && workdir && effectiveStorageBase) {
+      // When updating lists, use oldest date from ALL repositories in those lists
+      let oldestDate: string | null = null;
+      try {
+        const allLists = list.getAllListsFromStorage(workdir);
+        const affectedLists = allLists.filter(l => scope.lists!.includes(l.id));
+        const allRepoUrls = new Set<string>();
+        for (const listObj of affectedLists) {
+          for (const repoUrl of listObj.repositories) {
+            const normalizedUrl = gitMsgUrl.normalize(repoUrl.split('#')[0] || repoUrl);
+            allRepoUrls.add(normalizedUrl);
+          }
+        }
+        for (const repoUrl of allRepoUrls) {
+          const storageDir = storage.path.getDirectory(effectiveStorageBase, repoUrl);
+          const config = await storage.repository.readConfig(storageDir);
+          if (config?.fetchedRanges && config.fetchedRanges.length > 0) {
+            for (const range of config.fetchedRanges) {
+              if (!oldestDate || range.start < oldestDate) {
+                oldestDate = range.start;
+              }
+            }
+          }
+        }
+        if (oldestDate) {
+          sinceOverride = new Date(oldestDate);
+          log('debug', `[Cache] Using oldest fetched date from all repositories in affected lists: ${oldestDate}`);
+        }
+      } catch (error) {
+        log('warn', '[Cache] Failed to determine oldest fetched date from list repositories:', error);
+      }
+    } else if (scope.repositories && scope.repositories.length > 0 && effectiveStorageBase) {
       // Check the oldest fetched date from the repositories we're refreshing
       let oldestDate: string | null = null;
       for (const repoId of scope.repositories) {
         const parsed = gitMsgRef.parseRepositoryId(repoId);
         if (parsed) {
-          const storageDir = storage.path.getDirectory(storageBase, parsed.repository);
+          const storageDir = storage.path.getDirectory(effectiveStorageBase, parsed.repository);
           const config = await storage.repository.readConfig(storageDir);
           if (config?.fetchedRanges && config.fetchedRanges.length > 0) {
             const ranges = config.fetchedRanges;
@@ -665,7 +699,7 @@ async function refresh(scope: {
       }
     }
 
-    await initializeGlobalCache(workdir, storageBase, sinceOverride);
+    await initializeGlobalCache(workdir, effectiveStorageBase, sinceOverride);
     log('debug', '[Cache] Cache refreshed and reinitialized');
   }
 }
