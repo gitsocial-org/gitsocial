@@ -29,7 +29,12 @@ const extensionConfig = {
   define: {
     'process.env.NODE_ENV': production ? '"production"' : '"development"'
   },
-  nodePaths: [path.resolve(__dirname, 'node_modules')]
+  nodePaths: [path.resolve(__dirname, 'node_modules')],
+  alias: {
+    '@gitsocial/core/client': path.resolve(__dirname, '../../build/core/client/index.js'),
+    '@gitsocial/core/utils': path.resolve(__dirname, '../../build/core/utils/index.js'),
+    '@gitsocial/core': path.resolve(__dirname, '../../build/core/index.js')
+  }
 };
 
 /**
@@ -379,6 +384,14 @@ async function build() {
       });
     } else {
       // Build mode
+      // Compile test files first (this also compiles dependencies)
+      console.log('📦 Compiling test files...');
+      execSync('npx tsc --project tsconfig.test.json', {
+        cwd: __dirname,
+        stdio: 'inherit'
+      });
+
+      // Then bundle extension and webview (overwrites tsc output with bundled versions)
       await Promise.all([
         esbuild.build(extensionConfig),
         esbuild.build(webviewConfig),
@@ -391,12 +404,6 @@ async function build() {
       if (!production) {
         ensureSymlink();
       }
-      // Compile test files
-      console.log('📦 Compiling test files...');
-      execSync('npx tsc --project tsconfig.test.json', {
-        cwd: __dirname,
-        stdio: 'inherit'
-      });
       console.log('✅ Build complete');
     }
   } catch (err) {
