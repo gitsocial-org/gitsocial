@@ -50,10 +50,14 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Run core tests
-        run: pnpm --filter=@gitsocial/core test
+        run: |
+          cd packages/core
+          pnpm test
 
       - name: Run core lint
-        run: pnpm --filter=@gitsocial/core lint
+        run: |
+          cd packages/core
+          pnpm lint
 
   test-vscode:
     name: Test VSCode Extension
@@ -101,20 +105,33 @@ jobs:
           cd ../vscode
           pnpm install --frozen-lockfile
 
+      - name: Build packages
+        run: |
+          cd packages/vscode
+          pnpm build
+
       - name: Install xvfb (Linux only)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Run VSCode unit tests
-        run: pnpm --filter=gitsocial test:unit
+        run: |
+          cd packages/vscode
+          pnpm test:unit
 
       - name: Run VSCode integration tests (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a pnpm --filter=gitsocial test
+        run: |
+          cd packages/vscode
+          xvfb-run -a pnpm test
 
       - name: Run VSCode integration tests (macOS/Windows)
         if: runner.os != 'Linux'
-        run: pnpm --filter=gitsocial test
+        run: |
+          cd packages/vscode
+          pnpm test
 
       - name: Run VSCode lint
-        run: pnpm --filter=gitsocial lint
+        run: |
+          cd packages/vscode
+          pnpm lint
