@@ -1,10 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { post } from './index';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ensureRemoteListRepositories, post } from './index';
 import { cache } from './cache';
 import { createCommit, createTestRepo, type TestRepo } from '../../test-utils';
 import { execGit } from '../../git/exec';
 import { getCurrentBranch } from '../../git/operations';
 import { initializeGitSocial } from '../config';
+import { git } from '../../git';
+import { repository } from '../repository';
+import { gitMsgRef } from '../../gitmsg/protocol';
+import type { Post } from '../types';
 
 describe('Post Integration Tests', () => {
   let testRepo: TestRepo;
@@ -26,6 +30,7 @@ describe('Post Integration Tests', () => {
     await cache.refresh({ all: true });
     testRepo.cleanup();
     cache.setCacheEnabled(true);
+    vi.restoreAllMocks();
   });
 
   describe('createPost()', () => {
@@ -325,6 +330,49 @@ describe('Post Integration Tests', () => {
     });
   });
 
+  describe('Thread scope', () => {
+    it('should retrieve thread for valid post ID', async () => {
+      const parentResult = await post.createPost(testRepo.path, 'Parent post');
+      expect(parentResult.success).toBe(true);
+      const parentId = parentResult.data?.id;
+
+      const threadResult = await post.getPosts(testRepo.path, `thread:${parentId}`);
+
+      expect(threadResult.success).toBe(true);
+      expect(threadResult.data).toBeDefined();
+      expect(threadResult.data?.length).toBeGreaterThanOrEqual(1);
+      expect(threadResult.data?.some(p => p.id === parentId)).toBe(true);
+    });
+
+    it('should handle thread scope with invalid post ID', async () => {
+      const result = await post.getPosts(testRepo.path, 'thread:#commit:invalidhash000');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should handle thread scope with sort options', async () => {
+      const parentResult = await post.createPost(testRepo.path, 'Parent for sorting');
+      expect(parentResult.success).toBe(true);
+      const parentId = parentResult.data?.id;
+
+      const latestResult = await post.getPosts(testRepo.path, `thread:${parentId}`, {
+        sortBy: 'latest'
+      });
+      expect(latestResult.success).toBe(true);
+
+      const oldestResult = await post.getPosts(testRepo.path, `thread:${parentId}`, {
+        sortBy: 'oldest'
+      });
+      expect(oldestResult.success).toBe(true);
+
+      const topResult = await post.getPosts(testRepo.path, `thread:${parentId}`, {
+        sortBy: 'top'
+      });
+      expect(topResult.success).toBe(true);
+    });
+  });
+
   describe('Error handling', () => {
     it('should return error for invalid repository path', async () => {
       const result = await post.createPost('/nonexistent/path', 'Test');
@@ -350,6 +398,208 @@ describe('Post Integration Tests', () => {
       expect(result).toBeDefined();
 
       cache.setCacheEnabled(true);
+    });
+
+    it('should fallback to full refresh when incremental cache add fails', async () => {
+      const addPostSpy = vi.spyOn(cache, 'addPostToCache').mockResolvedValue(false);
+      const refreshSpy = vi.spyOn(cache, 'refresh');
+
+      const result = await post.createPost(testRepo.path, 'Test cache fallback');
+
+      expect(result.success).toBe(true);
+      expect(addPostSpy).toHaveBeenCalled();
+      expect(refreshSpy).toHaveBeenCalledWith({ all: true }, testRepo.path);
+    });
+
+    it('should handle unexpected exception in createPost', async () => {
+      const errorMessage = 'Unexpected internal error';
+      vi.spyOn(git, 'getConfiguredBranch').mockRejectedValue(new Error(errorMessage));
+
+      const result = await post.createPost(testRepo.path, 'Test exception');
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('CREATE_POST_ERROR');
+      expect(result.error?.message).toBe('Failed to create post');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should return post on successful retry after first failure', async () => {
+      let getCachedPostsCallCount = 0;
+      const originalGetCachedPosts = cache.getCachedPosts.bind(cache);
+
+      vi.spyOn(cache, 'getCachedPosts').mockImplementation(async (workdir, scope, filter, context) => {
+        getCachedPostsCallCount++;
+        if (getCachedPostsCallCount === 1) {
+          return [];
+        }
+        return originalGetCachedPosts(workdir, scope, filter, context);
+      });
+
+      const result = await post.createPost(testRepo.path, 'Test retry success');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(getCachedPostsCallCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should handle undefined post in data array', async () => {
+      let callCount = 0;
+      vi.spyOn(cache, 'getCachedPosts').mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          return Promise.resolve([undefined as unknown as Post]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const result = await post.createPost(testRepo.path, 'Test undefined post');
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('POST_LOAD_ERROR');
+      expect(result.error?.message).toContain('post was undefined');
+    });
+
+    it('should handle null posts from cache (fallback to empty array)', async () => {
+      vi.spyOn(cache, 'getCachedPosts').mockResolvedValue(null as unknown as Post[]);
+
+      const result = await post.getPosts(testRepo.path, 'repository:my');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([]);
+    });
+  });
+
+  describe('ensureRemoteListRepositories()', () => {
+    it('should process valid repositories', async () => {
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange').mockResolvedValue({
+        success: true,
+        data: undefined
+      });
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        ['https://github.com/user/repo#branch:main'],
+        '/tmp/storage',
+        new Date()
+      );
+
+      expect(ensureDataSpy).toHaveBeenCalledWith(
+        testRepo.path,
+        '/tmp/storage',
+        'https://github.com/user/repo',
+        'main',
+        expect.any(Date),
+        { isPersistent: false }
+      );
+    });
+
+    it('should skip invalid repository format', async () => {
+      const parseRepoSpy = vi.spyOn(gitMsgRef, 'parseRepositoryId').mockReturnValue(null);
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange');
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        ['invalid-repo-format'],
+        '/tmp/storage'
+      );
+
+      expect(parseRepoSpy).toHaveBeenCalledWith('invalid-repo-format');
+      expect(ensureDataSpy).not.toHaveBeenCalled();
+    });
+
+    it('should continue on individual repository failure', async () => {
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange')
+        .mockResolvedValueOnce({
+          success: false,
+          error: { code: 'ERROR', message: 'Failed' }
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          data: undefined
+        });
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        [
+          'https://github.com/user/repo1#branch:main',
+          'https://github.com/user/repo2#branch:main'
+        ],
+        '/tmp/storage'
+      );
+
+      expect(ensureDataSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should use current date when since not provided', async () => {
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange').mockResolvedValue({
+        success: true,
+        data: undefined
+      });
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        ['https://github.com/user/repo#branch:main'],
+        '/tmp/storage'
+      );
+
+      expect(ensureDataSpy).toHaveBeenCalledWith(
+        testRepo.path,
+        '/tmp/storage',
+        'https://github.com/user/repo',
+        'main',
+        expect.any(Date),
+        { isPersistent: false }
+      );
+    });
+
+    it('should process multiple valid repositories', async () => {
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange').mockResolvedValue({
+        success: true,
+        data: undefined
+      });
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        [
+          'https://github.com/user/repo1#branch:main',
+          'https://github.com/user/repo2#branch:dev',
+          'https://github.com/user/repo3#branch:feature'
+        ],
+        '/tmp/storage',
+        new Date('2024-01-01')
+      );
+
+      expect(ensureDataSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('should handle mixed valid and invalid repositories', async () => {
+      vi.spyOn(gitMsgRef, 'parseRepositoryId').mockImplementation((repoString) => {
+        if (repoString === 'invalid') {
+          return null;
+        }
+        return {
+          repository: 'https://github.com/user/repo',
+          branch: 'main'
+        };
+      });
+
+      const ensureDataSpy = vi.spyOn(repository, 'ensureDataForDateRange').mockResolvedValue({
+        success: true,
+        data: undefined
+      });
+
+      await ensureRemoteListRepositories(
+        testRepo.path,
+        [
+          'https://github.com/user/repo1#branch:main',
+          'invalid',
+          'https://github.com/user/repo2#branch:main'
+        ],
+        '/tmp/storage'
+      );
+
+      expect(ensureDataSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -303,9 +303,9 @@ describe('git/remotes', () => {
     });
 
     it('should fetch with shallow-since', async () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const dateStr = yesterday.toISOString().split('T')[0];
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const dateStr = weekAgo.toISOString().split('T')[0];
       const result = await fetchRemote(testRepo.path, 'origin', { shallowSince: dateStr });
       expect(result.success).toBe(true);
     });
