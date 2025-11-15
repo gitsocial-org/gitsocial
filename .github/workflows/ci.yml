@@ -49,10 +49,17 @@ jobs:
           cd ../vscode
           pnpm install --frozen-lockfile
 
-      - name: Run core tests
+      - name: Run core tests with coverage
         run: |
           cd packages/core
-          pnpm test
+          pnpm test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./packages/core/coverage/lcov.info
+          flags: core
+          name: core-coverage
 
       - name: Run core lint
         run: |

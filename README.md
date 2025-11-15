@@ -9,6 +9,7 @@ Open source social network protocol for Git repositories.
 [![VS Code Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/gitsocial.gitsocial?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
 [![VS Code Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/gitsocial.gitsocial)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
 [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/gitsocial-org/gitsocial/branch/main/graph/badge.svg)](https://codecov.io/gh/gitsocial-org/gitsocial)
 
 ## Features
 
