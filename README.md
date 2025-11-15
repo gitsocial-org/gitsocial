@@ -1,6 +1,6 @@
 # GitSocial [Beta]
 
-Open source social network protocol for Git repositories.
+*Decentralized open source git-native social network*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](https://github.com/gitsocial-org/gitsocial/blob/main/documentation/GITMSG.md)
@@ -8,8 +8,8 @@ Open source social network protocol for Git repositories.
 [![Beta](https://img.shields.io/badge/Status-Beta-orange)](https://github.com/gitsocial-org/gitsocial)
 [![VS Code Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/gitsocial.gitsocial?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
 [![VS Code Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/gitsocial.gitsocial)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
-[![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/gitsocial-org/gitsocial/branch/main/graph/badge.svg)](https://codecov.io/gh/gitsocial-org/gitsocial)
+[![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
 ## Features
 
