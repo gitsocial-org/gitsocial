@@ -60,6 +60,7 @@ jobs:
           files: ./packages/core/coverage/lcov.info
           flags: core
           name: core-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run core lint
         run: |
