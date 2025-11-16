@@ -81,6 +81,7 @@ export function parseMarkdown(content: string): string {
   if (!content) {
     return '';
   }
+  content = decodeHtmlEntities(content);
   if (!hasMarkdownSyntax(content)) {
     return `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`;
   }
@@ -90,6 +91,12 @@ export function parseMarkdown(content: string): string {
     console.warn('Markdown parsing error:', error);
     return `<div class="whitespace-pre-wrap">${escapeHtml(content)}</div>`;
   }
+}
+
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
 }
 
 export function transformCodeAndMath(content: string): string {
@@ -168,8 +175,12 @@ export function transformCodeAndMath(content: string): string {
         const processedHtml = markdownToHtml(codeMarkdown);
         html += processedHtml;
       } else if (part.type === 'math') {
-        const mathMarkdown = part.isDisplay ? `$$${part.content}$$` : `$${part.content}$`;
-        const processedHtml = markdownToHtml(mathMarkdown);
+        const decodedContent = decodeHtmlEntities(part.content);
+        const mathMarkdown = part.isDisplay ? `$$${decodedContent}$$` : `$${decodedContent}$`;
+        let processedHtml = markdownToHtml(mathMarkdown);
+        if (!part.isDisplay) {
+          processedHtml = processedHtml.replace(/^<p>(.*)<\/p>$/s, '$1');
+        }
         html += processedHtml;
       }
     }
