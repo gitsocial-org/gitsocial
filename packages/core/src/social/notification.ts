@@ -96,7 +96,7 @@ async function getFollowNotifications(
         if (currentRepositories.has(myRepoUrl) && !previousRepositories.has(myRepoUrl)) {
           followNotifications.push({
             type: 'follow',
-            commitId: `${followerRepo.url}#commit:${commit.hash}`,
+            commitId: gitMsgRef.create('commit', commit.hash, followerRepo.url),
             commit: {
               author: commit.author,
               email: commit.email,
