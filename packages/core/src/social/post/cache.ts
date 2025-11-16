@@ -618,7 +618,25 @@ async function refresh(scope: {
 
     // Determine the oldest date we need to load based on what we're refreshing
     let sinceOverride: Date | undefined;
-    if (scope.all && effectiveStorageBase) {
+
+    // Preserve existing cache date ranges when refreshing workspace or workspace+lists
+    // This prevents losing historical posts when pushing workspace changes
+    const hasOnlyWorkspacePaths = scope.repositories?.length &&
+      !scope.repositories.some(repoId => gitMsgUrl.validate(repoId));
+    const isEmptyScopeRefresh = isEmptyScope && workdir;
+    const isWorkspaceRefresh = hasOnlyWorkspacePaths || isEmptyScopeRefresh ||
+      (scope.lists?.length && !scope.repositories?.some(repoId => gitMsgUrl.validate(repoId)));
+    if (isWorkspaceRefresh && cacheState.dateRanges.size > 0) {
+      const sortedDates = Array.from(cacheState.dateRanges).sort();
+      const oldestDateStr = sortedDates[0];
+      if (oldestDateStr) {
+        sinceOverride = new Date(oldestDateStr);
+        log('debug', `[Cache] Preserving existing cache date range from: ${oldestDateStr}`);
+      }
+    }
+
+    // Only compute sinceOverride from external sources if not already set by workspace preservation
+    if (!sinceOverride && scope.all && effectiveStorageBase) {
       // When refreshing all, check oldest fetched date from all repositories
       let oldestDate: string | null = null;
       try {
@@ -644,7 +662,7 @@ async function refresh(scope: {
       } catch (error) {
         log('warn', '[Cache] Failed to determine oldest fetched date from all repositories:', error);
       }
-    } else if (scope.lists && scope.lists.length > 0 && workdir && effectiveStorageBase) {
+    } else if (!sinceOverride && scope.lists && scope.lists.length > 0 && workdir && effectiveStorageBase) {
       // When updating lists, use oldest date from ALL repositories in those lists
       let oldestDate: string | null = null;
       try {
@@ -675,10 +693,15 @@ async function refresh(scope: {
       } catch (error) {
         log('warn', '[Cache] Failed to determine oldest fetched date from list repositories:', error);
       }
-    } else if (scope.repositories && scope.repositories.length > 0 && effectiveStorageBase) {
+    } else if (!sinceOverride && scope.repositories && scope.repositories.length > 0 && effectiveStorageBase) {
       // Check the oldest fetched date from the repositories we're refreshing
       let oldestDate: string | null = null;
       for (const repoId of scope.repositories) {
+        // Skip workspace paths (filesystem paths that aren't valid repository URLs)
+        if (!gitMsgUrl.validate(repoId)) {
+          log('debug', `[Cache] Skipping non-URL repository identifier (likely workspace): ${repoId}`);
+          continue;
+        }
         const parsed = gitMsgRef.parseRepositoryId(repoId);
         if (parsed) {
           const storageDir = storage.path.getDirectory(effectiveStorageBase, parsed.repository);

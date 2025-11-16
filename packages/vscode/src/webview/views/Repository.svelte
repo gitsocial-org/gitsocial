@@ -263,8 +263,8 @@
           fetchingRepository = false;
           // Update fetch time when remote fetch completes successfully
           lastFetchTime = new Date();
-          // Refresh posts after fetch completes - skip cache to get fresh data
-          loadRangeData(true);
+          // Cache already refreshed by fetch, just re-query without forcing another refresh
+          loadRangeData(false);
         } else if (message.data?.status === 'error') {
           fetchingRepository = false;
         }
@@ -280,8 +280,8 @@
 
       case 'pushCompleted':
         pushingToRemote = false;
-        // Refresh to update unpushed counts, skip cache to get fresh data after push
-        loadRangeData(true);
+        // Cache already refreshed by push, just re-query without forcing another refresh
+        loadRangeData(false);
         // Also refresh total unpushed counts
         api.getUnpushedCounts();
         break;
@@ -334,8 +334,8 @@
       }
 
       case 'refreshAfterFetch': {
-        // Handle refresh after fetch - always skip cache to show new posts
-        loadRangeData(true);
+        // Handle refresh after fetch - cache already refreshed by sync, just re-query without forcing another refresh
+        loadRangeData(false);
         break;
       }
 

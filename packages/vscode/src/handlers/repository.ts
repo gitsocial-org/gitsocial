@@ -625,7 +625,8 @@ registerHandler('fetchUpdates', async function handleFetchUpdates(panel, message
 
         // Refresh cache for workspace repository
         try {
-          await social.cache.refresh({ repositories: [workdir] }, workdir);
+          const storageUri = getStorageUri();
+          await social.cache.refresh({ repositories: [workdir] }, workdir, storageUri?.fsPath);
           log('debug', '[fetchUpdates] Workspace cache refreshed after fetch');
         } catch (error) {
           log('error', '[fetchUpdates] Failed to refresh workspace cache:', error);
@@ -1216,7 +1217,8 @@ registerHandler('pushToRemote', async function handlePushToRemote(panel, message
           log('info', '[pushToRemote] Auto-sync successful');
 
           // Refresh cache after merge
-          await social.cache.refresh({ repositories: [workdir] }, workdir);
+          const storageUri = getStorageUri();
+          await social.cache.refresh({ repositories: [workdir] }, workdir, storageUri?.fsPath);
 
           // Update progress message - now pushing
           postMessage(panel, 'pushProgress', {
@@ -1286,7 +1288,8 @@ registerHandler('pushToRemote', async function handlePushToRemote(panel, message
 
       // Refresh cache for my repository after push
       try {
-        await social.cache.refresh({ repositories: [workspaceFolder.uri.fsPath], lists: ['*'] }, workspaceFolder.uri.fsPath);
+        const storageUri = getStorageUri();
+        await social.cache.refresh({ repositories: [workspaceFolder.uri.fsPath], lists: ['*'] }, workspaceFolder.uri.fsPath, storageUri?.fsPath);
         log('debug', '[pushRepository] Cache refreshed after push');
       } catch (error) {
         log('error', '[pushRepository] Failed to refresh cache:', error);
