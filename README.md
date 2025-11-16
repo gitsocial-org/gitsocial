@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="documentation/images/gitsocial-icon.png" style="width: 120px; height:120px;">
+  <img src="documentation/images/gitsocial-icon.png" width="120" height="120">
   <h1>GitSocial</h1>
 
   *Decentralized, open-source, Git-native social network*
