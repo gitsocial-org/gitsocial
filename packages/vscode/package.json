@@ -181,7 +181,7 @@
     "@vitest/coverage-v8": "^2.1.8",
     "@vscode/test-cli": "^0.0.9",
     "@vscode/test-electron": "^2.3.9",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "esbuild": "^0.20.0",
     "esbuild-svelte": "^0.8.0",
     "eslint": "^8.34.0",
