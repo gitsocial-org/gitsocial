@@ -226,6 +226,25 @@ function ensureSymlink() {
   fs.symlinkSync(path.relative(path.dirname(symlinkPath), targetPath), symlinkPath);
 }
 
+function ensureNodeModulesSymlink() {
+  const symlinkPath = path.join(buildDir, 'node_modules');
+  const targetPath = path.join(__dirname, 'node_modules');
+
+  try {
+    const stats = fs.lstatSync(symlinkPath);
+    if (stats.isSymbolicLink()) {
+      return;
+    }
+    fs.rmSync(symlinkPath, { recursive: true, force: true });
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      throw err;
+    }
+  }
+
+  fs.symlinkSync(path.relative(buildDir, targetPath), symlinkPath);
+}
+
 const FILES_TO_COPY = [
   { from: 'node_modules/@vscode/codicons/dist/codicon.css', to: 'codicon.css' },
   { from: 'node_modules/@vscode/codicons/dist/codicon.ttf', to: 'codicon.ttf' },
@@ -293,6 +312,7 @@ function generateReadme() {
 async function build() {
   try {
     fs.mkdirSync(buildDir, { recursive: true });
+    ensureNodeModulesSymlink();
 
     if (lint) {
       // Lint both core and vscode
