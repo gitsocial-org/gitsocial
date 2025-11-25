@@ -153,7 +153,7 @@
   },
   "dependencies": {
     "@gitsocial/core": "file:../core",
-    "@vscode/codicons": "^0.0.36",
+    "@vscode/codicons": "^0.0.43",
     "dompurify": "^3.3.0",
     "katex": "^0.16.25",
     "lru-cache": "^11.0.2",
