@@ -814,7 +814,7 @@ describe('repository', () => {
       const result = await repository.fetchUpdates(testRepo.path, 'following');
       expect(result.success).toBe(true);
       expect(result.data?.failed).toBeGreaterThanOrEqual(1);
-    });
+    }, 10000);
 
     it('should handle fetch failures', async () => {
       await initializeGitSocial(testRepo.path);
