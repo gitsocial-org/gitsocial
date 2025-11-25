@@ -113,6 +113,22 @@ async function buildCore() {
 
     buildProcess.on('close', (code) => {
       if (code === 0) {
+        // Create dist symlink for package.json main field resolution
+        const distSymlink = path.join(corePath, 'dist');
+        const buildCorePath = path.resolve(__dirname, '../../build/core');
+        try {
+          const stats = fs.lstatSync(distSymlink);
+          if (!stats.isSymbolicLink()) {
+            fs.rmSync(distSymlink, { recursive: true, force: true });
+            fs.symlinkSync(path.relative(corePath, buildCorePath), distSymlink);
+          }
+        } catch (err) {
+          if (err.code === 'ENOENT') {
+            fs.symlinkSync(path.relative(corePath, buildCorePath), distSymlink);
+          } else {
+            throw err;
+          }
+        }
         console.log('✅ Core build complete');
         resolve();
       } else {
