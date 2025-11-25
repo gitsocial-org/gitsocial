@@ -1,10 +1,81 @@
+<script lang="ts" context="module">
+  import { gitHost, gitMsgRef } from '@gitsocial/core/client';
+  import type { Notification, Post } from '@gitsocial/core/client';
+
+  export function matchesPostId(postId: string | undefined, targetId: string): boolean {
+    if (!postId) {return false;}
+    if (postId === targetId) {return true;}
+    const parsedPost = gitMsgRef.parse(postId);
+    const parsedTarget = gitMsgRef.parse(targetId);
+    if (parsedPost.type === 'commit' && parsedTarget.type === 'commit' &&
+      parsedPost.value === parsedTarget.value) {
+      return true;
+    }
+    return false;
+  }
+
+  export function getNotificationIcon(type: string): string {
+    switch (type) {
+      case 'comment':
+        return 'codicon-comment';
+      case 'repost':
+        return 'codicon-sync';
+      case 'quote':
+        return 'codicon-quote';
+      case 'follow':
+        return 'codicon-person-add';
+      default:
+        return 'codicon-bell';
+    }
+  }
+
+  export function createSyntheticFollowPost(notification: Notification): Post {
+    const [repositoryUrl, commitPart] = notification.commitId.split('#');
+    const commitHash = commitPart ? commitPart.replace('commit:', '') : '';
+    const repositoryName = gitHost.getDisplayName(repositoryUrl);
+    const commitUrl = gitHost.getCommitUrl(repositoryUrl, commitHash);
+    const author = notification.commit?.author || repositoryName;
+    const email = notification.commit?.email || '';
+    const timestamp = notification.commit?.timestamp ? new Date(notification.commit.timestamp) : new Date();
+    return {
+      id: notification.commitId,
+      repository: repositoryUrl,
+      author: {
+        name: author,
+        email
+      },
+      timestamp,
+      content: 'Added you to a list',
+      type: 'post',
+      source: 'explicit',
+      raw: {
+        commit: {
+          hash: commitHash,
+          message: 'Added you to a list',
+          author,
+          email,
+          timestamp
+        }
+      },
+      display: {
+        repositoryName,
+        commitHash: commitHash.substring(0, 12),
+        commitUrl,
+        totalReposts: 0,
+        isEmpty: false,
+        isUnpushed: false,
+        isOrigin: false,
+        isWorkspacePost: false
+      }
+    };
+  }
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../api';
   import PostCard from '../components/PostCard.svelte';
   import DateNavigation from '../components/DateNavigation.svelte';
-  import type { Notification, Post } from '@gitsocial/core/client';
-  import { gitHost, gitMsgRef } from '@gitsocial/core/client';
   import { getWeekStart, getWeekEnd, getWeekLabel } from '../utils/time';
 
   let notifications: Notification[] = [];
@@ -17,18 +88,6 @@
   $: weekStart = getWeekStart(weekOffset);
   $: weekEnd = getWeekEnd(weekOffset);
   $: weekLabel = getWeekLabel(weekOffset);
-
-  function matchesPostId(postId: string | undefined, targetId: string): boolean {
-    if (!postId) {return false;}
-    if (postId === targetId) {return true;}
-    const parsedPost = gitMsgRef.parse(postId);
-    const parsedTarget = gitMsgRef.parse(targetId);
-    if (parsedPost.type === 'commit' && parsedTarget.type === 'commit' &&
-      parsedPost.value === parsedTarget.value) {
-      return true;
-    }
-    return false;
-  }
 
   onMount(() => {
     api.getNotifications({
@@ -106,61 +165,6 @@
     });
   }
 
-  function getNotificationIcon(type: string): string {
-    switch (type) {
-      case 'comment':
-        return 'codicon-comment';
-      case 'repost':
-        return 'codicon-sync';
-      case 'quote':
-        return 'codicon-quote';
-      case 'follow':
-        return 'codicon-person-add';
-      default:
-        return 'codicon-bell';
-    }
-  }
-
-  function createSyntheticFollowPost(notification: Notification): Post {
-    const [repositoryUrl, commitPart] = notification.commitId.split('#');
-    const commitHash = commitPart.replace('commit:', '');
-    const repositoryName = gitHost.getDisplayName(repositoryUrl);
-    const commitUrl = gitHost.getCommitUrl(repositoryUrl, commitHash);
-    const author = notification.commit?.author || repositoryName;
-    const email = notification.commit?.email || '';
-    const timestamp = notification.commit?.timestamp ? new Date(notification.commit.timestamp) : new Date();
-    return {
-      id: notification.commitId,
-      repository: repositoryUrl,
-      author: {
-        name: author,
-        email
-      },
-      timestamp,
-      content: 'Added you to a list',
-      type: 'post',
-      source: 'explicit',
-      raw: {
-        commit: {
-          hash: commitHash,
-          message: 'Added you to a list',
-          author,
-          email,
-          timestamp
-        }
-      },
-      display: {
-        repositoryName,
-        commitHash: commitHash.substring(0, 12),
-        commitUrl,
-        totalReposts: 0,
-        isEmpty: false,
-        isUnpushed: false,
-        isOrigin: false,
-        isWorkspacePost: false
-      }
-    };
-  }
   function fetchNotificationPosts(notifs: Notification[]) {
     const followNotifs = notifs.filter(n => n.type === 'follow');
     for (const notif of followNotifs) {

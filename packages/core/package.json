@@ -2,24 +2,24 @@
   "name": "@gitsocial/core",
   "version": "0.1.0",
   "description": "Core GitMsg protocol implementation",
-  "main": "../../build/core/index.js",
-  "types": "../../build/core/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "../../build/core/index.d.ts",
-      "default": "../../build/core/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./client": {
-      "types": "../../build/core/client/index.d.ts",
-      "default": "../../build/core/client/index.js"
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
     },
     "./utils": {
-      "types": "../../build/core/utils/index.d.ts",
-      "default": "../../build/core/utils/index.js"
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
     }
   },
   "files": [
-    "../../build/core"
+    "dist/**/*"
   ],
   "scripts": {
     "build": "tsc",

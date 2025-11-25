@@ -1,23 +1,25 @@
-<script lang="ts">
-  import { onMount } from 'svelte';
+<script lang="ts" context="module">
   import { api } from '../api';
 
-  const DEFAULT_REPO = 'https://github.com/gitsocial-org/gitsocial-official-lists#branch:main';
-  let exploreListsSource = DEFAULT_REPO;
+  export const DEFAULT_REPO = 'https://github.com/gitsocial-org/gitsocial-official-lists#branch:main';
+
+  export function handleSettingsMessage(message: { type?: string; data?: { key?: string; value?: string } }): void {
+    if (message.type === 'settings' && message.data?.key === 'exploreListsSource') {
+      const repository = message.data.value ?? DEFAULT_REPO;
+      api.openView('repository', 'Explore', {
+        repository,
+        activeTab: 'lists'
+      });
+    }
+  }
+</script>
+
+<script lang="ts">
+  import { onMount } from 'svelte';
 
   onMount(() => {
     api.getSettings('exploreListsSource');
-
-    window.addEventListener('message', (event) => {
-      const message = event.data;
-      if (message.type === 'settings' && message.data?.key === 'exploreListsSource') {
-        exploreListsSource = message.data.value ?? DEFAULT_REPO;
-        api.openView('repository', 'Explore', {
-          repository: exploreListsSource,
-          activeTab: 'lists'
-        });
-      }
-    });
+    window.addEventListener('message', (event) => handleSettingsMessage(event.data));
   });
 </script>
 

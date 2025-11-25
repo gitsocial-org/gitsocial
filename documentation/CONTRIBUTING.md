@@ -10,7 +10,7 @@ Thank you for your interest in contributing! GitSocial is a decentralized social
 
 ## Coding Standards
 
-Follow patterns in [PATTERNS.md](PATTERNS.md). See [ARCHITECTURE.md](ARCHITECTURE.md) for system design and [START.md](START.md) for LLM development guide.
+Follow patterns in [PATTERNS.md](PATTERNS.md). See [ARCHITECTURE.md](ARCHITECTURE.md) for system design, [TESTING.md](TESTING.md) for testing guide, and [START.md](START.md) for LLM development guide.
 
 ## Getting Started
 
@@ -38,7 +38,7 @@ pnpm test
 pnpm test:unit
 ```
 
-If all tests pass, you're ready to contribute!
+If all tests pass, you're ready to contribute! See [TESTING.md](TESTING.md) for comprehensive testing guide.
 
 ## Development Workflow
 
@@ -75,6 +75,7 @@ If CI fails, check the logs and fix issues locally before pushing updates.
 
 - Check [ARCHITECTURE.md](ARCHITECTURE.md) for system design questions
 - Review [PATTERNS.md](PATTERNS.md) for code style questions
+- See [TESTING.md](TESTING.md) for testing questions
 - Open an issue for bugs or feature discussions
 - Ask questions in pull requests
 
@@ -125,5 +126,6 @@ pnpm package            # Create .vsix package for local testing/installation
 - [README.md](../README.md) - Project overview
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System design and decisions
 - [PATTERNS.md](PATTERNS.md) - Code patterns and conventions
+- [TESTING.md](TESTING.md) - Testing guide
 - [INTERFACES.md](INTERFACES.md) - Type reference
 - [START.md](START.md) - LLM development guide

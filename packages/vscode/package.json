@@ -141,10 +141,12 @@
     "lint:whitespace": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -not -path './.vscode-test/*' -exec grep -l '[[:space:]]$' {} \\; | grep . && echo 'Trailing whitespace found!' && exit 1 || echo 'No trailing whitespace found.'",
     "lint:whitespace:fix": "find . \\( -name '*.ts' -o -name '*.svelte' -o -name '*.json' \\) -not -path './node_modules/*' -not -path './../../build/*' -not -path './.vscode-test/*' -exec sed -i '' 's/[[:space:]]*$//' {} \\;",
     "type-check": "tsc --noEmit",
-    "test": "cross-env NODE_PATH=./node_modules node ../../build/vscode/test/runTest.js",
+    "test": "pnpm build && cross-env NODE_PATH=./node_modules node ../../build/vscode/tests/integration/runTest.js",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",
+    "test:e2e": "pnpm build && cross-env NODE_PATH=./node_modules node ../../build/vscode/tests/integration/runE2ETest.js",
+    "test:all": "pnpm test:unit && pnpm test && pnpm test:e2e",
     "package": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce package --no-dependencies && mv *.vsix ../../packages/vscode/)",
     "vsce:publish": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies --pre-release)",
     "vsce:publish:stable": "pnpm build --production && (cd ../../build/vscode && npx @vscode/vsce publish --no-dependencies)"
@@ -168,6 +170,9 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.2.9",
     "@types/mocha": "^10.0.6",
     "@types/node": "16.x",
     "@types/vscode": "^1.74.0",
@@ -183,6 +188,8 @@
     "eslint-plugin-json": "^3.1.0",
     "eslint-plugin-svelte": "^2.35.0",
     "glob": "^10.3.10",
+    "happy-dom": "^20.0.10",
+    "jsdom": "^27.2.0",
     "svelte": "^4.2.0",
     "svelte-eslint-parser": "^0.33.0",
     "svelte-preprocess": "^5.1.3",

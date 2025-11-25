@@ -1,3 +1,37 @@
+<script lang="ts" context="module">
+  import type { Post } from '@gitsocial/core';
+
+  export function extractBaseRepository(repository: string | null | undefined): string | null {
+    if (!repository) {return null;}
+    return repository.split('#')[0];
+  }
+
+  export function constructListReference(baseRepository: string | null, listId: string | undefined): string | null {
+    if (!baseRepository || !listId) {return null;}
+    return `${baseRepository}#list:${listId}`;
+  }
+
+  export function constructListScope(
+    repository: string | null | undefined,
+    listId: string | undefined
+  ): { scope?: string; listId?: string } {
+    if (!listId) {return {};}
+    const baseRepo = extractBaseRepository(repository);
+    if (repository && baseRepo) {
+      return { scope: `repository:${baseRepo}/list:${listId}` };
+    }
+    return { listId };
+  }
+
+  export function filterPostsByType(posts: Post[], type: 'posts' | 'replies'): Post[] {
+    if (!posts || !Array.isArray(posts)) {return [];}
+    if (type === 'posts') {
+      return posts.filter(p => p.type === 'post' || p.type === 'quote' || p.type === 'repost');
+    }
+    return posts.filter(p => p.type === 'comment');
+  }
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Post, List } from '@gitsocial/core';
@@ -53,8 +87,8 @@
   list = passedList || null;
 
   // Compute clean base repository URL and list reference
-  const baseRepository = repository ? repository.split('#')[0] : null;
-  const listReference = baseRepository && listId ? `${baseRepository}#list:${listId}` : null;
+  const baseRepository = extractBaseRepository(repository);
+  const listReference = constructListReference(baseRepository, listId);
 
   // Check if this remote list is already followed locally
   let isRemoteListFollowed = false;
@@ -150,15 +184,11 @@
       case 'posts':
         // Route to appropriate array based on request ID
         if (message.requestId === 'posts-tab') {
-          // Filter to ensure we only show posts, quotes, and reposts in the Posts tab
-          postsTabData = (message.data || []).filter(p =>
-            p.type === 'post' || p.type === 'quote' || p.type === 'repost'
-          );
+          postsTabData = filterPostsByType(message.data || [], 'posts');
           postsTabData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           isLoadingWeek = false;
         } else if (message.requestId === 'replies-tab') {
-          // Filter to ensure we only show comments in the Replies tab
-          repliesTabData = (message.data || []).filter(p => p.type === 'comment');
+          repliesTabData = filterPostsByType(message.data || [], 'replies');
           repliesTabData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           isLoadingWeek = false;
         }
@@ -385,25 +415,11 @@
     const since = weekStart.toISOString();
     const until = weekEnd.toISOString();
 
-    // Construct proper scope based on whether this is a remote repository list
-    // Note: repository and baseRepository are const, so recompute here to ensure we have current values
-    const currentBaseRepository = repository ? repository.split('#')[0] : null;
+    const scopeParams = constructListScope(repository, listId);
+    webLog('debug', '[ViewList] loadPostsData called with scope:', scopeParams);
 
-    webLog('debug', '[ViewList] loadPostsData called:', { repository, baseRepository: currentBaseRepository, listId });
-
-    if (repository && currentBaseRepository) {
-      // Remote repository list: use combined repository/list scope format
-      // This format is parsed by the backend to filter posts from the repository's list
-      const scope = `repository:${currentBaseRepository}/list:${listId}`;
-      webLog('debug', '[ViewList] Using remote repository list scope:', scope);
-      api.getPosts({ since, until, scope, types: ['post', 'quote', 'repost'], skipCache }, 'posts-tab');
-      api.getPosts({ since, until, scope, types: ['comment'], skipCache }, 'replies-tab');
-    } else {
-      // Local workspace list: use list ID directly
-      webLog('debug', '[ViewList] Using workspace list scope with listId:', listId);
-      api.getPosts({ since, until, listId, types: ['post', 'quote', 'repost'], skipCache }, 'posts-tab');
-      api.getPosts({ since, until, listId, types: ['comment'], skipCache }, 'replies-tab');
-    }
+    api.getPosts({ since, until, ...scopeParams, types: ['post', 'quote', 'repost'], skipCache }, 'posts-tab');
+    api.getPosts({ since, until, ...scopeParams, types: ['comment'], skipCache }, 'replies-tab');
   }
 
   function loadData(skipCache = false) {

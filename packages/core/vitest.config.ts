@@ -4,17 +4,22 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['tests/**/*.test.ts'],
+    pool: 'forks',
+    fileParallelism: true,
+    isolate: true,
+    maxConcurrency: 4,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reportsDirectory: '../../.test-artifacts/coverage/core',
+      reporter: ['text', 'json', 'html', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/types.ts'],
+      exclude: ['src/**/types.ts'],
       thresholds: {
-        lines: 24,
-        functions: 40,
-        branches: 65,
-        statements: 24
+        lines: 88,
+        functions: 97,
+        branches: 86,
+        statements: 88
       }
     }
   }

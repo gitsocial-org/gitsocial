@@ -15,6 +15,20 @@
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
+  "search.exclude": {
+    "**/build": true,
+    "**/node_modules": true,
+    "**/.vscode-test": true,
+    "**/tests": true,
+    "**/test": true
+  },
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/node_modules/**": true,
+    "**/.vscode-test/**": true,
+    "**/tests/**": true,
+    "**/test/**": true
+  },
   "eslint.workingDirectories": [
     "packages/core",
     "packages/vscode"

@@ -363,6 +363,8 @@
   {:else}
     <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
     <div class="card {clickable ? 'hover' : ''} {isCompact ? 'p-2' : 'p-3'} {post.type} {post.display.isUnpushed ? 'border-l-warning' : ''}"
+      data-testid="post-card"
+      data-layout={isCompact ? 'compact' : 'normal'}
       tabindex={clickable ? 0 : -1}
       role={clickable ? 'button' : 'article'}
       on:click={clickable ? handleViewPost : undefined}

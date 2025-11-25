@@ -20,5 +20,5 @@
     }
   },
   "include": ["src/**/*", "src/**/*.svelte"],
-  "exclude": ["node_modules", ".vscode-test", "../../build", "src/webview/**/*.test.ts"]
+  "exclude": ["node_modules", ".vscode-test", "../../build", "tests"]
 }

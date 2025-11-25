@@ -732,8 +732,13 @@ async function addPostToCache(workdir: string, commitHash: string): Promise<bool
    * Incrementally add a single post to cache without full refresh
    * Returns true if post was successfully added, false otherwise
    */
-  if (!cacheEnabled || !cacheState.isReady()) {
-    log('debug', '[addPostToCache] Cache not ready, falling back to full refresh');
+  if (!cacheEnabled) {
+    return false;
+  }
+  if (cacheState.state === CacheStateEnum.INITIALIZING) {
+    await cacheState.waitForReady();
+  }
+  if (!cacheState.isReady()) {
     await refresh({}, workdir);
     return true;
   }
@@ -742,14 +747,12 @@ async function addPostToCache(workdir: string, commitHash: string): Promise<bool
     // Load just the single commit using git show (use %H for full hash, not %h)
     const result = await execGit(workdir, ['show', '--format=%H%x1F%cd%x1F%an%x1F%ae%x1F%B%x1F%S', '--no-patch', commitHash]);
     if (!result.success || !result.data) {
-      log('debug', '[addPostToCache] Commit not found:', commitHash);
       return false;
     }
 
     // Parse the commit data
     const parts = result.data.stdout.split('\x1F');
     if (parts.length < 5) {
-      log('debug', '[addPostToCache] Invalid commit format:', commitHash);
       return false;
     }
 
@@ -762,16 +765,14 @@ async function addPostToCache(workdir: string, commitHash: string): Promise<bool
       refname: parts[5]?.trim() || ''
     };
 
-    // Process the commit into a post
-    const posts = await processCommits(workdir, [commit]);
+    // Process the commit into a post (workspace commit from known branch)
+    const posts = await processCommits(workdir, [commit], 'known-branch');
     if (posts.length === 0) {
-      log('debug', '[addPostToCache] No posts from commit:', commitHash);
       return false;
     }
 
     const post = posts[0];
     if (!post) {
-      log('debug', '[addPostToCache] Post undefined after processing:', commitHash);
       return false;
     }
 
@@ -797,7 +798,6 @@ async function addPostToCache(workdir: string, commitHash: string): Promise<bool
     for (const [id, updatedPost] of processedPosts.entries()) {
       postsCache.set(id, updatedPost as Readonly<Post>);
       updateIndexes(id, updatedPost, workdir);
-      log('debug', '[addPostToCache] Added post to cache with ID:', id, 'hash:', commitHash);
     }
 
     return true;
@@ -929,8 +929,14 @@ function setCacheEnabled(enabled: boolean): void {
     postIndex.byHash.clear();
     postIndex.byRepository.clear();
     postIndex.byList.clear();
+    postIndex.absolute.clear();
+    postIndex.merged.clear();
     cacheState.clearDateRanges();
+    cacheState.initPromise = null;
+    cacheState.lastInitialized = undefined;
+    cacheState.lastError = undefined;
     cacheState.setState(CacheStateEnum.UNINITIALIZED);
+    configuredBranches.clear();
   }
 }
 
@@ -1008,13 +1014,14 @@ async function loadPosts(
   const since = sinceOverride || new Date(getFetchStartDate());
 
   if (scope === 'workspace') {
+    // Don't use --since for workspace scope - the local gitsocial branch has few commits
+    // and the --since filter causes flaky behavior with newly created commits
     const myCommits = await getCommits(workdir, {
       all: false,
       branch: gitSocialBranch,
-      since,
       limit: 10000
     });
-    return myCommits.length > 0 ? processCommits(workdir, myCommits) : [];
+    return myCommits.length > 0 ? processCommits(workdir, myCommits, 'known-branch') : [];
   }
 
   // 'external' scope only loads external repository commits

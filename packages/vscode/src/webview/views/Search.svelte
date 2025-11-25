@@ -1,6 +1,48 @@
+<script lang="ts" context="module">
+  import type { Post } from '@gitsocial/core';
+
+  export function generateRequestId(): string {
+    return Date.now().toString(36) + Math.random().toString(36);
+  }
+
+  export function validateQuery(query: string): boolean {
+    if (!query) {return false;}
+    return query.trim().length > 0;
+  }
+
+  export function processSearchResultsMessage(
+    message: { type: string; requestId?: string; data?: { posts?: Post[] } },
+    currentRequestId: string | null
+  ): { shouldUpdate: boolean; posts: Post[]; hasError: boolean } {
+    if (!message || message.type !== 'searchResults' || message.requestId !== currentRequestId) {
+      return { shouldUpdate: false, posts: [], hasError: false };
+    }
+
+    if (message.data?.posts) {
+      return { shouldUpdate: true, posts: message.data.posts, hasError: false };
+    }
+
+    return { shouldUpdate: true, posts: [], hasError: false };
+  }
+
+  export function processErrorMessage(
+    message: { type: string; requestId?: string; data?: { message?: string } },
+    currentRequestId: string | null
+  ): { shouldUpdate: boolean; errorMessage: string } {
+    if (!message || message.type !== 'error' || message.requestId !== currentRequestId) {
+      return { shouldUpdate: false, errorMessage: '' };
+    }
+
+    const errorMessage = message.data?.message;
+    return {
+      shouldUpdate: true,
+      errorMessage: errorMessage || 'Search failed'
+    };
+  }
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { Post } from '@gitsocial/core';
   import { api } from '../api';
   import PostCard from '../components/PostCard.svelte';
 
@@ -11,29 +53,25 @@
   let debounceTimer: number | undefined;
   let currentRequestId: string | null = null;
 
-  // Message handler
   function handleMessage(event: MessageEvent) {
     const message = event.data;
 
-    // Handle search results
-    if (message.type === 'searchResults' && message.requestId === currentRequestId) {
+    const searchResult = processSearchResultsMessage(message, currentRequestId);
+    if (searchResult.shouldUpdate) {
       loading = false;
       currentRequestId = null;
-
-      if (message.data?.posts) {
-        searchResults = message.data.posts;
-        error = null;
-      } else {
-        searchResults = [];
-      }
+      searchResults = searchResult.posts;
+      error = null;
+      return;
     }
 
-    // Handle errors
-    if (message.type === 'error' && message.requestId === currentRequestId) {
+    const errorResult = processErrorMessage(message, currentRequestId);
+    if (errorResult.shouldUpdate) {
       loading = false;
       currentRequestId = null;
-      error = message.data?.message || 'Search failed';
+      error = errorResult.errorMessage;
       searchResults = [];
+      return;
     }
   }
 
@@ -69,7 +107,7 @@
   }
 
   function performSearch() {
-    if (!searchQuery.trim()) {
+    if (!validateQuery(searchQuery)) {
       searchResults = [];
       error = null;
       return;
@@ -78,10 +116,8 @@
     loading = true;
     error = null;
 
-    // Generate request ID
-    currentRequestId = Date.now().toString(36) + Math.random().toString(36);
+    currentRequestId = generateRequestId();
 
-    // Send search request with request ID
     api.postMessage({
       type: 'social.searchPosts',
       query: searchQuery.trim(),

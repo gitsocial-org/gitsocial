@@ -10,9 +10,10 @@
   [![GitSocial Extension](https://img.shields.io/badge/GitSocial%20Protocol-v0.1.0-blue)](https://github.com/gitsocial-org/gitsocial/blob/main/documentation/GITSOCIAL.md) <br />
   [![Beta](https://img.shields.io/badge/Status-Beta-orange)](https://github.com/gitsocial-org/gitsocial)
   [![VS Code Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/gitsocial.gitsocial?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
-  [![VS Code Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/gitsocial.gitsocial)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial)
-  [![codecov](https://codecov.io/gh/gitsocial-org/gitsocial/branch/main/graph/badge.svg)](https://codecov.io/gh/gitsocial-org/gitsocial)
+  [![VS Code Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/gitsocial.gitsocial)](https://marketplace.visualstudio.com/items?itemName=gitsocial.gitsocial) <br />
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
+  [![CodeQL](https://github.com/gitsocial-org/gitsocial/actions/workflows/codeql.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/codeql.yml)
+  [![codecov](https://codecov.io/gh/gitsocial-org/gitsocial/branch/main/graph/badge.svg)](https://codecov.io/gh/gitsocial-org/gitsocial)
 
 </div>
 
@@ -67,6 +68,7 @@ Choose one of these methods:
 - [ARCHITECTURE.md](documentation/ARCHITECTURE.md) - System design and decisions
 - [PATTERNS.md](documentation/PATTERNS.md) - Code patterns and conventions
 - [INTERFACES.md](documentation/INTERFACES.md) - Type reference
+- [TESTING.md](documentation/TESTING.md) - Testing guide
 - [START.md](documentation/START.md) - LLM guide
 
 ## License

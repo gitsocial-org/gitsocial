@@ -57,7 +57,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./packages/core/coverage/lcov.info
+          files: ./.test-artifacts/coverage/core/lcov.info
           flags: core
           name: core-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -127,6 +127,21 @@ jobs:
           cd packages/vscode
           pnpm test:unit
 
+      - name: Run VSCode unit tests with coverage (Ubuntu only)
+        if: runner.os == 'Linux'
+        run: |
+          cd packages/vscode
+          pnpm test:unit:coverage
+
+      - name: Upload VSCode component coverage to Codecov (Ubuntu only)
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./.test-artifacts/coverage/vscode/lcov.info
+          flags: vscode-components
+          name: vscode-component-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Run VSCode integration tests (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -143,3 +158,75 @@ jobs:
         run: |
           cd packages/vscode
           pnpm lint
+
+      - name: Run security audit
+        run: |
+          cd packages/core
+          pnpm audit --audit-level=high
+          cd ../vscode
+          pnpm audit --audit-level=high
+
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure git
+        run: |
+          git config --global init.defaultBranch main
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: |
+          cd packages/core
+          pnpm install --frozen-lockfile
+          cd ../vscode
+          pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: |
+          cd packages/vscode
+          pnpm build
+
+      - name: Install xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run E2E tests
+        run: |
+          cd packages/vscode
+          xvfb-run -a pnpm test:e2e
+
+      - name: Upload E2E test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: packages/vscode/test-results/
+          retention-days: 7

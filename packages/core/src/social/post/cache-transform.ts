@@ -508,7 +508,11 @@ export function mergeVirtualPostIntoWorkspace(
   // Note: Reference normalization is handled in processPostWithReferences
 }
 
-export async function processCommits(workdir: string, commits: Commit[]): Promise<Post[]> {
+export async function processCommits(
+  workdir: string,
+  commits: Commit[],
+  sourceContext?: 'known-branch' | 'mixed'
+): Promise<Post[]> {
   const posts: Post[] = [];
   const gitSocialBranch = await getConfiguredBranch(workdir);
   const currentBranchResult = await getCurrentBranch(workdir);
@@ -536,7 +540,6 @@ export async function processCommits(workdir: string, commits: Commit[]): Promis
   for (const commit of commits) {
     // Skip if we've already processed this commit
     if (processedHashes.has(commit.hash)) {
-      log('debug', '[processCommits] Skipping duplicate commit:', gitMsgHash.truncate(commit.hash, 8), 'from', commit.refname);
       continue;
     }
 
@@ -598,9 +601,21 @@ export async function processCommits(workdir: string, commits: Commit[]): Promis
       } else if (commit.refname === gitSocialBranch) {
         isGitSocialBranch = true;
         branch = commit.refname;
+      } else if (sourceContext === 'known-branch') {
+        // refname is something unexpected (e.g., commit hash from git show %S)
+        // but we know we're loading from the gitsocial branch
+        isGitSocialBranch = true;
       }
     } else {
-      isGitSocialBranch = currentBranch === gitSocialBranch;
+      // Empty refname - use sourceContext to determine behavior
+      if (sourceContext === 'known-branch') {
+        // Commits from specific branch query (e.g., 'git log gitsocial')
+        // Parent commits have empty refname but are from the queried branch
+        isGitSocialBranch = true;
+      } else {
+        // Mixed source or unknown - check current branch
+        isGitSocialBranch = currentBranch === gitSocialBranch;
+      }
     }
 
     // Add hash to processed set to prevent duplicates
@@ -625,7 +640,9 @@ export async function processCommits(workdir: string, commits: Commit[]): Promis
       undefined
     );
 
-    if (post) {posts.push(post);}
+    if (post) {
+      posts.push(post);
+    }
   }
 
   return posts;

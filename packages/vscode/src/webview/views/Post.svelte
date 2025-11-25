@@ -1,7 +1,110 @@
+<script lang="ts" context="module">
+  import type { Post } from '@gitsocial/core/client';
+  import { gitMsgUrl } from '@gitsocial/core/client';
+
+  export function validatePostId(postId: string | undefined): { isValid: boolean; error?: string } {
+    if (!postId) {
+      return { isValid: false, error: 'No post ID provided' };
+    }
+    return { isValid: true };
+  }
+
+  export function processPostMessage(
+    message: { type: string; data?: Post | Post[]; requestId?: string; message?: string },
+    currentRequestId: string | null,
+    hasReceivedInitialPost: boolean
+  ): {
+    shouldUpdate: boolean;
+    post: Post | null;
+    error: string;
+    hasReceivedInitialPost: boolean;
+  } {
+    if (!message) {
+      return { shouldUpdate: false, post: null, error: '', hasReceivedInitialPost };
+    }
+
+    switch (message.type) {
+      case 'initialPost':
+        if (message.data && !Array.isArray(message.data)) {
+          return {
+            shouldUpdate: true,
+            post: message.data,
+            error: '',
+            hasReceivedInitialPost: true
+          };
+        }
+        return { shouldUpdate: false, post: null, error: '', hasReceivedInitialPost };
+
+      case 'posts':
+        if (
+          message.requestId &&
+          message.requestId.startsWith('getMainPost-') &&
+          !hasReceivedInitialPost
+        ) {
+          const posts = Array.isArray(message.data) ? message.data : [];
+          if (posts.length > 0) {
+            return {
+              shouldUpdate: true,
+              post: posts[0],
+              error: '',
+              hasReceivedInitialPost
+            };
+          }
+          return {
+            shouldUpdate: true,
+            post: null,
+            error: 'Post not found',
+            hasReceivedInitialPost
+          };
+        }
+        return { shouldUpdate: false, post: null, error: '', hasReceivedInitialPost };
+
+      case 'error':
+        return {
+          shouldUpdate: true,
+          post: null,
+          error: message.message || 'Failed to load post',
+          hasReceivedInitialPost
+        };
+
+      case 'refresh':
+      case 'postCreated':
+      case 'commitCreated':
+        return { shouldUpdate: false, post: null, error: '', hasReceivedInitialPost };
+
+      default:
+        return { shouldUpdate: false, post: null, error: '', hasReceivedInitialPost };
+    }
+  }
+
+  export function determineRepositoryView(post: Post | null): {
+    viewType: 'repository';
+    title: string;
+    params?: { repository: string };
+  } {
+    if (!post) {
+      return { viewType: 'repository', title: 'My Repository' };
+    }
+
+    if (post.display.isOrigin) {
+      return { viewType: 'repository', title: 'My Repository' };
+    }
+
+    if (gitMsgUrl.validate(post.repository)) {
+      return {
+        viewType: 'repository',
+        title: post.display.repositoryName,
+        params: { repository: post.repository }
+      };
+    }
+
+    return { viewType: 'repository', title: 'My Repository' };
+  }
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Post } from '@gitsocial/core/client';
-  import { gitHost, gitMsgUrl } from '@gitsocial/core/client';
+  import { gitHost } from '@gitsocial/core/client';
   import { api } from '../api';
   import Avatar from '../components/Avatar.svelte';
   import Thread from '../components/Thread.svelte';
@@ -12,60 +115,31 @@
   let sortBy: 'top' | 'latest' | 'oldest' = 'top';
   let timeRangeLabel = '';
 
-  // Get post ID from view params
-  const postId = (window as { viewParams?: { postId?: string } }).viewParams
-    ?.postId;
+  const postId = (window as { viewParams?: { postId?: string } }).viewParams?.postId;
 
   onMount(() => {
-    if (!postId) {
-      error = 'No post ID provided';
+    const validation = validatePostId(postId);
+    if (!validation.isValid) {
+      error = validation.error || 'Invalid post ID';
       loading = false;
       return;
     }
 
     let hasReceivedInitialPost = false;
 
-    // Listen for messages from extension
     window.addEventListener('message', (event) => {
       const message = event.data;
+      const result = processPostMessage(message, null, hasReceivedInitialPost);
 
-      switch (message.type) {
-        case 'initialPost':
-          // Received the post data directly
-          post = message.data;
-          hasReceivedInitialPost = true;
-          loading = false;
-          break;
-
-        case 'posts':
-          // Handle main post response only
-          if (message.requestId && message.requestId.startsWith('getMainPost-') && !hasReceivedInitialPost) {
-            // This is the main post response
-            const posts = message.data || [];
-            if (posts.length > 0) {
-              post = posts[0];
-              loading = false;
-            } else {
-              error = 'Post not found';
-              loading = false;
-            }
-          }
-          break;
-
-        case 'error':
-          error = message.message || 'Failed to load post';
-          loading = false;
-          break;
-
-        case 'refresh':
-          // Thread component will handle its own refresh
-          break;
-
-        case 'postCreated':
-        case 'commitCreated':
-          // Refresh when a new post/comment/repost/quote is created
-          // Thread component will handle its own refresh
-          break;
+      if (result.shouldUpdate) {
+        if (result.post) {
+          post = result.post;
+        }
+        if (result.error) {
+          error = result.error;
+        }
+        hasReceivedInitialPost = result.hasReceivedInitialPost;
+        loading = false;
       }
     });
 
@@ -96,18 +170,11 @@
   }
 
   function handleViewRepository() {
-    if (post) {
-      if (post.display.isOrigin) {
-        api.openView('repository', 'My Repository');
-      } else if (gitMsgUrl.validate(post.repository)) {
-        api.openView(
-          'repository',
-          post.display.repositoryName,
-          { repository: post.repository }
-        );
-      } else {
-        api.openView('repository', 'My Repository');
-      }
+    const view = determineRepositoryView(post);
+    if (view.params) {
+      api.openView(view.viewType, view.title, view.params);
+    } else {
+      api.openView(view.viewType, view.title);
     }
   }
 
