@@ -809,12 +809,20 @@ describe('repository', () => {
     it('should handle ensure failures', async () => {
       await initializeGitSocial(testRepo.path);
       await list.createList(testRepo.path, 'reading');
-      await list.addRepositoryToList(testRepo.path, 'reading', 'https://invalid-url.com/repo#branch:main');
+      await list.addRepositoryToList(testRepo.path, 'reading', 'https://example.com/repo#branch:main');
+
+      const spy = vi.spyOn(storageModule.storage.repository, 'ensure');
+      spy.mockResolvedValue({
+        success: false,
+        error: { code: 'CLONE_ERROR', message: 'Failed to clone repository' }
+      });
 
       const result = await repository.fetchUpdates(testRepo.path, 'following');
       expect(result.success).toBe(true);
       expect(result.data?.failed).toBeGreaterThanOrEqual(1);
-    }, 10000);
+
+      spy.mockRestore();
+    });
 
     it('should handle fetch failures', async () => {
       await initializeGitSocial(testRepo.path);
