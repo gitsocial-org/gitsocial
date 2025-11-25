@@ -1,5 +1,6 @@
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
+import { mkdirSync } from 'fs';
 
 async function main(): Promise<void> {
   try {
@@ -9,6 +10,7 @@ async function main(): Promise<void> {
       NODE_PATH: path.resolve(__dirname, '../../node_modules')
     };
     const vscodeTestCachePath = path.resolve(__dirname, '../../../../.test-artifacts/vscode-test');
+    mkdirSync(vscodeTestCachePath, { recursive: true });
 
     await runTests({
       extensionDevelopmentPath,
