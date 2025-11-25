@@ -430,11 +430,6 @@ Don't test:
 
 ### Automated Scanning
 
-**Dependabot** (`.github/dependabot.yml`):
-- Weekly dependency updates
-- Grouped minor/patch updates
-- Separate for core and vscode packages
-
 **CodeQL** (`.github/workflows/codeql.yml`):
 - Runs on push to main and PRs
 - JavaScript/TypeScript SAST
