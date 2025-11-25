@@ -56,5 +56,10 @@
   },
   "dependencies": {
     "lru-cache": "^11.0.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "glob": ">=10.5.0"
+    }
   }
 }
