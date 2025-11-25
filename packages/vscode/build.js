@@ -266,17 +266,17 @@ function ensureNodeModulesSymlink() {
     JSON.stringify(corePackageJson, null, 2)
   );
 
-  createSymlinkIfNeeded(coreDistSymlink, path.relative(corePath, buildCorePath));
+  createSymlinkIfNeeded(coreDistSymlink, path.relative(corePath, buildCorePath), buildCorePath);
 
   // Symlink lru-cache in build/core/node_modules (required by @gitsocial/core at runtime)
   const buildCoreNodeModules = path.join(buildCorePath, 'node_modules');
   fs.mkdirSync(buildCoreNodeModules, { recursive: true });
   const lruCacheSymlink = path.join(buildCoreNodeModules, 'lru-cache');
   const lruCacheTarget = path.resolve(__dirname, '../core/node_modules/lru-cache');
-  createSymlinkIfNeeded(lruCacheSymlink, path.relative(buildCoreNodeModules, lruCacheTarget));
+  createSymlinkIfNeeded(lruCacheSymlink, path.relative(buildCoreNodeModules, lruCacheTarget), lruCacheTarget);
 }
 
-function createSymlinkIfNeeded(symlinkPath, target) {
+function createSymlinkIfNeeded(symlinkPath, target, absoluteTarget) {
   try {
     const stats = fs.lstatSync(symlinkPath);
     if (stats.isSymbolicLink()) {
@@ -288,7 +288,13 @@ function createSymlinkIfNeeded(symlinkPath, target) {
       throw err;
     }
   }
-  fs.symlinkSync(target, symlinkPath);
+  // Use junction on Windows (doesn't require admin privileges)
+  // Junctions require absolute paths
+  if (process.platform === 'win32') {
+    fs.symlinkSync(absoluteTarget, symlinkPath, 'junction');
+  } else {
+    fs.symlinkSync(target, symlinkPath);
+  }
 }
 
 const FILES_TO_COPY = [
