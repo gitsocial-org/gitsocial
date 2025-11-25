@@ -297,6 +297,14 @@ function createSymlinkIfNeeded(symlinkPath, target, absoluteTarget) {
   }
 }
 
+function ensureCoreDistSymlink() {
+  const corePath = path.resolve(__dirname, '../core');
+  const distSymlink = path.join(corePath, 'dist');
+  const buildCorePath = path.resolve(__dirname, '../../build/core');
+  fs.mkdirSync(buildCorePath, { recursive: true });
+  createSymlinkIfNeeded(distSymlink, path.relative(corePath, buildCorePath), buildCorePath);
+}
+
 const FILES_TO_COPY = [
   { from: 'node_modules/@vscode/codicons/dist/codicon.css', to: 'codicon.css' },
   { from: 'node_modules/@vscode/codicons/dist/codicon.ttf', to: 'codicon.ttf' },
@@ -367,6 +375,8 @@ async function build() {
     ensureNodeModulesSymlink();
 
     if (lint) {
+      // Ensure dist symlink exists (uses junction on Windows)
+      ensureCoreDistSymlink();
       // Lint both core and vscode
       await lintCore();
       
