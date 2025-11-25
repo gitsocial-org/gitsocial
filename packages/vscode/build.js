@@ -243,9 +243,40 @@ function ensureSymlink() {
 }
 
 function ensureNodeModulesSymlink() {
-  const symlinkPath = path.join(buildDir, 'node_modules');
-  const targetPath = path.join(__dirname, 'node_modules');
+  const nodeModulesPath = path.join(buildDir, 'node_modules');
+  const gitsocialPath = path.join(nodeModulesPath, '@gitsocial');
+  const corePath = path.join(gitsocialPath, 'core');
+  const coreDistSymlink = path.join(corePath, 'dist');
+  const buildCorePath = path.resolve(__dirname, '../../build/core');
 
+  fs.mkdirSync(corePath, { recursive: true });
+
+  const corePackageJson = {
+    name: '@gitsocial/core',
+    version: '0.1.0',
+    main: './dist/index.js',
+    exports: {
+      '.': { default: './dist/index.js' },
+      './client': { default: './dist/client/index.js' },
+      './utils': { default: './dist/utils/index.js' }
+    }
+  };
+  fs.writeFileSync(
+    path.join(corePath, 'package.json'),
+    JSON.stringify(corePackageJson, null, 2)
+  );
+
+  createSymlinkIfNeeded(coreDistSymlink, path.relative(corePath, buildCorePath));
+
+  // Symlink lru-cache in build/core/node_modules (required by @gitsocial/core at runtime)
+  const buildCoreNodeModules = path.join(buildCorePath, 'node_modules');
+  fs.mkdirSync(buildCoreNodeModules, { recursive: true });
+  const lruCacheSymlink = path.join(buildCoreNodeModules, 'lru-cache');
+  const lruCacheTarget = path.resolve(__dirname, '../core/node_modules/lru-cache');
+  createSymlinkIfNeeded(lruCacheSymlink, path.relative(buildCoreNodeModules, lruCacheTarget));
+}
+
+function createSymlinkIfNeeded(symlinkPath, target) {
   try {
     const stats = fs.lstatSync(symlinkPath);
     if (stats.isSymbolicLink()) {
@@ -257,8 +288,7 @@ function ensureNodeModulesSymlink() {
       throw err;
     }
   }
-
-  fs.symlinkSync(path.relative(buildDir, targetPath), symlinkPath);
+  fs.symlinkSync(target, symlinkPath);
 }
 
 const FILES_TO_COPY = [
