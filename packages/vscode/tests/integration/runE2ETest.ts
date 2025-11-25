@@ -13,6 +13,7 @@ async function main(): Promise<void> {
       NODE_PATH: path.resolve(__dirname, '../../node_modules')
     };
     const vscodeTestCachePath = path.resolve(__dirname, '../../../../.test-artifacts/vscode-test');
+    mkdirSync(vscodeTestCachePath, { recursive: true });
 
     testWorkspace = path.join(tmpdir(), `gitsocial-e2e-${Date.now()}`);
     mkdirSync(testWorkspace, { recursive: true });

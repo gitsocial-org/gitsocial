@@ -12,6 +12,13 @@ vi.mock('../../../src/avatar', () => ({
   getAvatar: mockGetAvatar
 }));
 
+vi.mock('@gitsocial/core', () => ({
+  social: {
+    cache: { getCacheStats: vi.fn(), refresh: vi.fn(), setCacheMaxSize: vi.fn() },
+    repository: { getStorageStats: vi.fn(), clearCache: vi.fn() }
+  }
+}));
+
 import * as vscode from 'vscode';
 import { getHandler } from '../../../src/handlers/registry';
 import { setMiscCallbacks } from '../../../src/handlers/misc';
