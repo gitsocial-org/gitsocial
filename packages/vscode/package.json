@@ -157,7 +157,7 @@
     "dompurify": "^3.3.0",
     "katex": "^0.16.25",
     "lru-cache": "^11.0.2",
-    "mocha": "^10.2.0",
+    "mocha": "^11.7.5",
     "prism-themes": "^1.9.0",
     "rehype-katex": "^7.0.1",
     "rehype-prism-plus": "^2.0.0",
