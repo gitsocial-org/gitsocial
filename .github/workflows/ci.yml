@@ -55,7 +55,7 @@ jobs:
           pnpm test:coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./.test-artifacts/coverage/core/lcov.info
           flags: core
@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload VSCode component coverage to Codecov (Ubuntu only)
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./.test-artifacts/coverage/vscode/lcov.info
           flags: vscode-components
