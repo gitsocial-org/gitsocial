@@ -2,7 +2,7 @@
 
 ## System Overview
 
-GitSocial is a decentralized open source social network built entirely on Git and the GitMsg protocol.
+GitSocial is a decentralized open-source Git-native social network built on the GitMsg protocol.
 
 ### Layer Architecture
 

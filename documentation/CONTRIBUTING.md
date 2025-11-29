@@ -1,6 +1,6 @@
 # Contributing to GitSocial
 
-Thank you for your interest in contributing! GitSocial is a decentralized social network protocol built entirely on Git. This guide will help you get started.
+Thank you for your interest in contributing! GitSocial is a decentralized open-source Git-native social network. This guide will help you get started.
 
 ## Prerequisites
 

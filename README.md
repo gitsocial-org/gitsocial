@@ -3,7 +3,7 @@
   <img src="documentation/images/gitsocial-icon.png" width="120" height="120">
   <h1>GitSocial</h1>
 
-  *Decentralized, open-source, Git-native social network*
+  *Decentralized open-source Git-native social network*
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](https://github.com/gitsocial-org/gitsocial/blob/main/documentation/GITMSG.md)
@@ -19,9 +19,7 @@
 
 ## About
 
-GitSocial is a decentralized social network built entirely on Git. Your posts, interactions, and social graph are stored as commits in standard Git repositories. You have complete ownership of your data, everything works offline-first, and syncing happens through normal Git operations.
-
-GitSocial uses only standard Git features: commits store your posts, branches organize content, and references track your lists. This means it works anywhere Git works (GitHub, GitLab, self-hosted, or local repositories) and integrates naturally with existing Git workflows.
+GitSocial is a decentralized social network built entirely on Git: posts are commits, follows are lists of repositories stored as references, and syncing uses `git fetch`/`push`. You own your data and your social graph, with offline-first support on GitHub, GitLab, self-hosted, or local repositories.
 
 ![GitSocial Timeline](documentation/images/screenshot.png)
 
@@ -29,15 +27,15 @@ GitSocial uses only standard Git features: commits store your posts, branches or
 
 ### Posts are commits
 
-When you create a post, GitSocial writes a commit to your `gitsocial` branch. Comments, reposts, and quotes also become commits. GitMsg headers link these interactions to their parent posts, creating conversation threads.
+Every post is a commit on your `gitsocial` branch, as are comments, reposts, and quotes, which link to their parent posts via GitMsg headers to form conversation threads.
 
-### Following is list-based
+### Follows are lists
 
-Instead of following individual accounts, you organize repositories into custom lists like "OSS" or "AI". Your timeline shows posts from all repositories across your lists. Since lists are stored as Git references in your repository, your social graph stays portable and version-controlled.
+Follows are lists of repositories like "OSS" or "AI", stored as Git references, with posts from your lists appearing in your timeline.
 
-### Syncing is through Git
+### Syncing via Git
 
-Updates from repositories you follow come through standard `git fetch` commands. Sharing your posts uses `git push` and `git pull`. No special servers or APIs needed: if you can use Git, you can use GitSocial.
+Updates use `git fetch`, publishing uses `git push`, with no special servers or APIs needed.
 
 ## Installation
 
@@ -49,11 +47,8 @@ Choose one of these methods:
 
 ## Quick Start
 
-1. Install the GitSocial VS Code extension
-2. Open the GitSocial panel in VS Code's sidebar and write your first post
-3. Create a list and add repository URLs to start following them
-4. View your timeline to see posts from repositories you follow
-5. Interact with posts through comments, reposts, or quotes
+1. Open GitSocial in VS Code's sidebar, create a list, and add repositories to see them on your timeline
+2. Write posts, comment on others, and publish using push
 
 ## Documentation
 

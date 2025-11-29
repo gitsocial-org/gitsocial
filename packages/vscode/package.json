@@ -1,7 +1,7 @@
 {
   "name": "gitsocial",
   "displayName": "GitSocial",
-  "description": "Decentralized open source social network built entirely on Git",
+  "description": "Decentralized open-source Git-native social network",
   "version": "0.4.3",
   "publisher": "gitsocial",
   "icon": "media/gitsocial.png",
