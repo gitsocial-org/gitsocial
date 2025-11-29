@@ -22,7 +22,14 @@
     temporary: number;
   }
 
+  interface StoragePath {
+    base: string | null;
+    avatars: string | null;
+    repositories: string | null;
+  }
+
   let cacheStats: CacheStats | null = null;
+  let storagePath: StoragePath | null = null;
   let avatarCacheStats: AvatarCacheStats | null = null;
   let repositoryStorageStats: RepositoryStorageStats | null = null;
   let loading = false;
@@ -44,6 +51,7 @@
     window.vscode.postMessage({ type: 'getCacheStats' });
     window.vscode.postMessage({ type: 'getAvatarCacheStats' });
     window.vscode.postMessage({ type: 'getRepositoryStorageStats' });
+    window.vscode.postMessage({ type: 'getStoragePath' });
   }
 
   const clearCache = (): void => {
@@ -111,6 +119,10 @@
       case 'repositoryStorageStats':
         repositoryStorageStats = message.data;
         repositoryStorageLoading = false;
+        break;
+
+      case 'storagePath':
+        storagePath = message.data;
         break;
 
       case 'cacheCleared':
@@ -209,6 +221,13 @@
     </div>
   {:else if cacheStats}
     <div class="space-y-4">
+      {#if storagePath?.base}
+        <div class="pb-3 border-b">
+          <div class="text-sm mb-1">Storage Location</div>
+          <div class="text-xs text-muted break-all font-mono">{storagePath.base}</div>
+        </div>
+      {/if}
+
       <div class="flex justify-between items-center pb-3 border-b">
         <div class="text-sm">Status</div>
         <div class="text-sm font-medium {cacheStats.enabled ? 'text-muted' : 'text-error'}">

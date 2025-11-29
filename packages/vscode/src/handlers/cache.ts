@@ -3,6 +3,7 @@ import { registerHandler } from './registry';
 import { postMessage } from './';
 import { social } from '@gitsocial/core';
 import { clearAvatarCache, getAvatarCacheStats } from '../avatar';
+import { getStorageUri } from '../extension';
 
 // Message types for cache operations
 export type CacheMessages =
@@ -12,7 +13,8 @@ export type CacheMessages =
   | { type: 'clearAvatarCache'; id?: string; options?: { clearMemoryCache?: boolean } }
   | { type: 'setCacheMaxSize'; value: number; id?: string }
   | { type: 'getRepositoryStorageStats'; id?: string }
-  | { type: 'clearRepositoryCache'; id?: string };
+  | { type: 'clearRepositoryCache'; id?: string }
+  | { type: 'getStoragePath'; id?: string };
 
 // Response types for cache operations
 export type CacheResponses =
@@ -22,7 +24,8 @@ export type CacheResponses =
   | { type: 'avatarCacheCleared'; data: unknown; requestId?: string }
   | { type: 'cacheMaxSizeUpdated'; data?: unknown; requestId?: string }
   | { type: 'repositoryStorageStats'; data: unknown; requestId?: string }
-  | { type: 'repositoryCacheCleared'; data: unknown; requestId?: string };
+  | { type: 'repositoryCacheCleared'; data: unknown; requestId?: string }
+  | { type: 'storagePath'; data: unknown; requestId?: string };
 
 // Register cache statistics handler
 registerHandler('getCacheStats', function handleGetCacheStats(panel, message) {
@@ -183,4 +186,16 @@ registerHandler('clearRepositoryCache', function handleClearRepositoryCache(pane
       context: 'repositoryStorage'
     }, requestId);
   }
+});
+
+// Register storage path handler
+registerHandler('getStoragePath', function handleGetStoragePath(panel, message) {
+  const requestId = message.id || undefined;
+  const storageUri = getStorageUri();
+  const basePath = storageUri?.fsPath || null;
+  postMessage(panel, 'storagePath', {
+    base: basePath,
+    avatars: basePath ? `${basePath}/avatars` : null,
+    repositories: basePath ? `${basePath}/repositories` : null
+  }, requestId);
 });
