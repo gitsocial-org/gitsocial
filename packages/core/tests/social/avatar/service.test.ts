@@ -914,7 +914,10 @@ describe('social/avatar/service', () => {
 
     it('should handle Gitea user avatar API response', async () => {
       const email = 'gitea-user@example.com';
-      const commits = [{ author: { avatar_url: 'https://gitea.example.com/avatars/123' } }];
+      const commits = [{
+        author: { avatar_url: 'https://gitea.example.com/avatars/123' },
+        commit: { author: { email: 'gitea-user@example.com' } }
+      }];
       const imageData = 'fake-image';
 
       mockFetch
