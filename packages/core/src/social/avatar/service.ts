@@ -126,9 +126,19 @@ async function resolveGiteaUserAvatar(email: string, remoteUrl: string): Promise
 
     log('debug', `[Avatar] Gitea API response status: ${response.status}`);
     if (response.ok) {
-      const commits = await response.json() as Array<{ author?: { avatar_url?: string } }>;
+      const commits = await response.json() as Array<{
+        author?: { avatar_url?: string };
+        commit?: { author?: { email?: string } };
+      }>;
       log('debug', `[Avatar] Gitea API commits count: ${commits.length}, first commit:`, commits[0]);
-      return commits[0]?.author?.avatar_url || null;
+      const commit = commits[0];
+      if (commit) {
+        const commitEmail = commit.commit?.author?.email?.toLowerCase();
+        if (commitEmail === email.toLowerCase()) {
+          return commit.author?.avatar_url || null;
+        }
+        log('debug', `[Avatar] Gitea commit email mismatch: expected ${email}, got ${commitEmail}`);
+      }
     }
   } catch (error) {
     log('debug', `[Avatar] Failed to fetch user avatar from Gitea API for ${email}:`, error);
