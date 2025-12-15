@@ -7,7 +7,7 @@ import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 // Types
-import type { Repository, RepositoryFilter, Result } from './types';
+import type { RelatedRepository, Repository, RepositoryFilter, Result } from './types';
 
 // Cross-layer imports
 import { execGit } from '../git/exec';
@@ -221,6 +221,7 @@ export const repository = {
   checkGitSocialInit,
   initializeRepository,
   getRepositoryRelationship,
+  getRelatedRepositories,
   loadWorkspaceRepository,
   loadFollowingRepositories,
   loadAllRepositories,
@@ -902,6 +903,158 @@ export async function ensureDataForDateRange(
 
   log('debug', '[ensureDataForDateRange] Successfully ensured data for:', repositoryUrl);
   return { success: true };
+}
+
+/**
+ * Get repositories related to the specified repository
+ * Finds relationships through shared lists and shared authors
+ */
+export async function getRelatedRepositories(
+  workdir: string,
+  targetRepository: string
+): Promise<Result<RelatedRepository[]>> {
+  try {
+    const isWorkspace = !targetRepository || targetRepository === workdir;
+    const targetParsed = targetRepository ? gitMsgRef.parseRepositoryId(targetRepository) : null;
+    const targetBaseUrl = targetParsed ? gitMsgUrl.normalize(targetParsed.repository) : null;
+
+    // Get workspace origin URL for matching
+    let workspaceOriginUrl: string | null = null;
+    if (isWorkspace) {
+      const originResult = await git.getOriginUrl(workdir);
+      if (originResult.success && originResult.data && originResult.data !== 'myrepository') {
+        workspaceOriginUrl = gitMsgUrl.normalize(originResult.data);
+      }
+    }
+
+    // Get all lists to find shared lists
+    const listsResult = await list.getLists(workdir);
+    if (!listsResult.success || !listsResult.data) {
+      return { success: true, data: [] };
+    }
+
+    // Find lists containing the target repository and build repo-to-lists map
+    const targetLists: string[] = [];
+    const listRepoMap = new Map<string, Set<string>>();
+
+    for (const l of listsResult.data) {
+      for (const repoStr of l.repositories) {
+        const parsed = gitMsgRef.parseRepositoryId(repoStr);
+        const repoUrl = gitMsgUrl.normalize(parsed.repository);
+
+        if (!listRepoMap.has(repoUrl)) {
+          listRepoMap.set(repoUrl, new Set());
+        }
+        listRepoMap.get(repoUrl)!.add(l.name);
+
+        // Check if this repo matches the target
+        const matchesTarget = isWorkspace
+          ? (workspaceOriginUrl && repoUrl === workspaceOriginUrl)
+          : (targetBaseUrl && repoUrl === targetBaseUrl);
+
+        if (matchesTarget && !targetLists.includes(l.name)) {
+          targetLists.push(l.name);
+        }
+      }
+    }
+
+    // Get cached posts to find shared authors
+    const postsResult = await cache.getCachedPosts(workdir, 'timeline');
+    const targetAuthors = new Set<string>();
+    const authorRepoMap = new Map<string, Set<string>>();
+
+    for (const post of postsResult) {
+      const postRepoUrl = gitMsgUrl.normalize(post.repository.split('#')[0] || post.repository);
+      const authorEmail = post.author.email;
+
+      if (!authorRepoMap.has(authorEmail)) {
+        authorRepoMap.set(authorEmail, new Set());
+      }
+      authorRepoMap.get(authorEmail)!.add(postRepoUrl);
+
+      // Check if this is a post from the target repository
+      const isWorkspacePost = post.isWorkspacePost || post.id.startsWith('#');
+      const matchesTarget = isWorkspace
+        ? isWorkspacePost
+        : (targetBaseUrl && postRepoUrl === targetBaseUrl);
+
+      if (matchesTarget) {
+        targetAuthors.add(authorEmail);
+      }
+    }
+
+    // Build related repositories map
+    const relatedMap = new Map<string, RelatedRepository>();
+
+    // Add repositories from shared lists
+    for (const listName of targetLists) {
+      for (const [repoUrl, repoLists] of listRepoMap) {
+        // Skip the target repository itself
+        if (isWorkspace && workspaceOriginUrl === repoUrl) {continue;}
+        if (targetBaseUrl && repoUrl === targetBaseUrl) {continue;}
+        if (!repoLists.has(listName)) {continue;}
+
+        if (!relatedMap.has(repoUrl)) {
+          relatedMap.set(repoUrl, {
+            id: repoUrl,
+            url: repoUrl,
+            name: gitHost.getDisplayName(repoUrl),
+            branch: 'main',
+            relationships: { sharedLists: [], sharedAuthors: [] }
+          });
+        }
+        const rel = relatedMap.get(repoUrl)!;
+        if (!rel.relationships.sharedLists.includes(listName)) {
+          rel.relationships.sharedLists.push(listName);
+        }
+      }
+    }
+
+    // Add repositories with shared authors
+    for (const authorEmail of targetAuthors) {
+      const authorRepos = authorRepoMap.get(authorEmail);
+      if (!authorRepos) {continue;}
+
+      for (const repoUrl of authorRepos) {
+        // Skip the target repository itself
+        if (isWorkspace && workspaceOriginUrl === repoUrl) {continue;}
+        if (targetBaseUrl && repoUrl === targetBaseUrl) {continue;}
+        if (repoUrl === 'myrepository') {continue;}
+
+        if (!relatedMap.has(repoUrl)) {
+          relatedMap.set(repoUrl, {
+            id: repoUrl,
+            url: repoUrl,
+            name: gitHost.getDisplayName(repoUrl),
+            branch: 'main',
+            relationships: { sharedLists: [], sharedAuthors: [] }
+          });
+        }
+        const rel = relatedMap.get(repoUrl)!;
+        if (!rel.relationships.sharedAuthors.includes(authorEmail)) {
+          rel.relationships.sharedAuthors.push(authorEmail);
+        }
+      }
+    }
+
+    // Sort by relationship strength (lists weighted 2x)
+    const related = Array.from(relatedMap.values()).sort((a, b) => {
+      const aScore = a.relationships.sharedLists.length * 2 + a.relationships.sharedAuthors.length;
+      const bScore = b.relationships.sharedLists.length * 2 + b.relationships.sharedAuthors.length;
+      return bScore - aScore;
+    });
+
+    return { success: true, data: related };
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        code: 'GET_RELATED_ERROR',
+        message: 'Failed to get related repositories',
+        details: error
+      }
+    };
+  }
 }
 
 /**

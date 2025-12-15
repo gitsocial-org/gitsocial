@@ -9,7 +9,7 @@
   import Dialog from '../components/Dialog.svelte';
   import DateNavigation from '../components/DateNavigation.svelte';
   import { skipCacheOnNextRefresh } from '../stores';
-  import type { Post, List, Follower } from '@gitsocial/core';
+  import type { Post, List, Follower, RelatedRepository } from '@gitsocial/core';
   import { gitHost, gitMsgUrl, gitMsgRef, matchesPostId } from '@gitsocial/core/client';
   import { formatRelativeTime, useEventDrivenTimeUpdates, getWeekStart, getWeekEnd, getWeekLabel, format30DayRange } from '../utils/time';
   import type { Repository } from '@gitsocial/core/client';
@@ -67,7 +67,7 @@
   })();
   $: repositoryUrl = repositoryParsed?.repository || repository;
   $: repositoryBranch = repositoryParsed?.branch || (isWorkspace ? repositoryStatus?.branch : null) || null;
-  let activeTab: 'posts' | 'comments' | 'lists' | 'followers' | 'log' = 'posts';
+  let activeTab: 'posts' | 'comments' | 'lists' | 'followers' | 'related' | 'log' = 'posts';
   let postsRequestId: string | null = null;
   let repliesRequestId: string | null = null;
   let lastFetchTime: Date | null = null;
@@ -113,6 +113,11 @@
   let followersRequestId: string | null = null;
   let followersLoaded = false;
 
+  // Related tab state
+  let relatedTabData: RelatedRepository[] = [];
+  let relatedRequestId: string | null = null;
+  let relatedLoaded = false;
+
   // Total unpushed counts (accurate from all posts, not just current week)
   let totalUnpushedCounts = { posts: 0, comments: 0, total: 0 };
 
@@ -126,11 +131,13 @@
     { id: 'comments', label: 'Replies', count: repliesTabData.length, unpushedCount: unpushedRepliesCount },
     { id: 'lists', label: 'Lists', count: lists.length, unpushedCount: unpushedListsCountFromArray },
     { id: 'followers', label: 'Followers', count: followersLoaded ? followersTabData.length : undefined },
+    { id: 'related', label: 'Related', count: relatedLoaded ? relatedTabData.length : undefined },
     { id: 'log', label: 'Log' }
   ] : [
     { id: 'posts', label: 'Posts', count: postsTabData.length, unpushedCount: unpushedPostsCount },
     { id: 'comments', label: 'Replies', count: repliesTabData.length, unpushedCount: unpushedRepliesCount },
     { id: 'lists', label: 'Lists', count: lists.length, unpushedCount: unpushedListsCountFromArray },
+    { id: 'related', label: 'Related', count: relatedLoaded ? relatedTabData.length : undefined },
     { id: 'log', label: 'Log' }
   ];
 
@@ -185,6 +192,13 @@
         if (message.requestId === followersRequestId) {
           followersTabData = message.data || [];
           followersLoaded = true;
+        }
+        break;
+
+      case 'relatedRepositories':
+        if (message.requestId === relatedRequestId) {
+          relatedTabData = message.data || [];
+          relatedLoaded = true;
         }
         break;
 
@@ -588,6 +602,9 @@
     } else if (activeTab === 'followers' && !followersLoaded && isWorkspace) {
       // Lazy load followers when tab is clicked for the first time (only for workspace)
       loadFollowersData();
+    } else if (activeTab === 'related' && !relatedLoaded) {
+      // Lazy load related repositories when tab is clicked for the first time
+      loadRelatedData();
     } else if (activeTab === 'log' && !logsLoaded) {
       // Lazy load logs when log tab is clicked for the first time
       loadLogsData();
@@ -598,6 +615,11 @@
   function loadFollowersData() {
     followersRequestId = `followers-${Date.now()}`;
     api.getFollowers(followersRequestId);
+  }
+
+  function loadRelatedData() {
+    relatedRequestId = `related-${Date.now()}`;
+    api.getRelatedRepositories(repository || '', relatedRequestId);
   }
 
   function loadLogsData() {
@@ -702,6 +724,11 @@
     ? logTabData
     : logTabData.filter(entry => entry.type === typeFilter);
 
+  function handleViewRelatedRepository(related: RelatedRepository) {
+    api.openView('repository', related.name, {
+      repository: related.id
+    });
+  }
 </script>
 
 <div class="view-container">
@@ -927,6 +954,61 @@
                   <span class="px-2 py-1 bg-muted rounded text-xs">
                     via "{follower.followsVia}" list
                   </span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {:else if activeTab === 'related'}
+      <div class="section">
+        {#if !relatedLoaded}
+          <div class="empty">
+            <span class="codicon codicon-loading spin"></span>
+            <p>Loading related repositories...</p>
+          </div>
+        {:else if relatedTabData.length === 0}
+          <div class="empty">
+            <span class="codicon codicon-link"></span>
+            <p>No related repositories found</p>
+            <p class="text-muted text-sm">Related repositories share lists or authors with this repository</p>
+          </div>
+        {:else}
+          <div class="flex flex-col gap-2">
+            {#each relatedTabData as related}
+              <div
+                class="card p-3 hover cursor-pointer"
+                on:click={() => handleViewRelatedRepository(related)}
+                on:keydown={(e) => e.key === 'Enter' && handleViewRelatedRepository(related)}
+                role="button"
+                tabindex="0"
+              >
+                <div class="flex items-center gap-3">
+                  <Avatar
+                    type="repository"
+                    identifier={gitHost.getWebUrl(related.url) || related.url}
+                    name={related.name}
+                    size={40}
+                  />
+                  <div class="flex-1 min-w-0">
+                    <div class="font-bold truncate">
+                      {related.name}
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-sm text-muted mt-1">
+                      {#if related.relationships.sharedLists.length > 0}
+                        <span class="flex items-center gap-1">
+                          <span class="codicon codicon-list-unordered"></span>
+                          {related.relationships.sharedLists.length} shared list{related.relationships.sharedLists.length !== 1 ? 's' : ''}
+                        </span>
+                      {/if}
+                      {#if related.relationships.sharedAuthors.length > 0}
+                        <span class="flex items-center gap-1">
+                          <span class="codicon codicon-person"></span>
+                          {related.relationships.sharedAuthors.length} shared author{related.relationships.sharedAuthors.length !== 1 ? 's' : ''}
+                        </span>
+                      {/if}
+                    </div>
+                  </div>
                 </div>
               </div>
             {/each}

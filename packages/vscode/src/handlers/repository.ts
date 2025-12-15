@@ -7,6 +7,7 @@ import {
   type List,
   log,
   type Post,
+  type RelatedRepository,
   type Repository,
   social,
   storage
@@ -29,7 +30,8 @@ export type RepositoryMessages =
   | { type: 'checkRepositoryStatus'; id?: string; repository?: string }
   | { type: 'getUnpushedCounts'; id?: string }
   | { type: 'getUnpushedListsCount'; id?: string }
-  | { type: 'pushToRemote'; id?: string; remoteName?: string };
+  | { type: 'pushToRemote'; id?: string; remoteName?: string }
+  | { type: 'getRelatedRepositories'; id?: string; repository: string };
 
 // Response types for repository operations
 export type RepositoryResponses =
@@ -44,7 +46,8 @@ export type RepositoryResponses =
   | { type: 'unpushedCounts'; data: { posts: number; comments: number; total: number }; requestId?: string }
   | { type: 'unpushedListsCount'; data: number; requestId?: string }
   | { type: 'pushProgress'; data: { status: string; message?: string }; requestId?: string }
-  | { type: 'pushCompleted'; data: { message: string; pushed: number }; requestId?: string };
+  | { type: 'pushCompleted'; data: { message: string; pushed: number }; requestId?: string }
+  | { type: 'relatedRepositories'; data: RelatedRepository[]; requestId?: string };
 
 // Helper for broadcasting to all panels
 let broadcastToAll: ((message: { type: string }) => void) | undefined;
@@ -1366,6 +1369,34 @@ registerHandler('getRepositories', async function handleGetRepositories(panel, m
   } catch (error) {
     postMessage(panel, 'error', {
       message: error instanceof Error ? error.message : 'Failed to get repositories'
+    }, requestId);
+  }
+});
+
+// Register get related repositories handler
+registerHandler('getRelatedRepositories', async function handleGetRelatedRepositories(panel, message) {
+  const requestId = message.id || undefined;
+  const msg = message as Extract<RepositoryMessages, { type: 'getRelatedRepositories' }>;
+
+  try {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      throw new Error('No workspace folder found');
+    }
+
+    const result = await social.repository.getRelatedRepositories(
+      workspaceFolder.uri.fsPath,
+      msg.repository || ''
+    );
+
+    if (result.success && result.data) {
+      postMessage(panel, 'relatedRepositories', result.data, requestId);
+    } else {
+      throw new Error(result.error?.message || 'Failed to get related repositories');
+    }
+  } catch (error) {
+    postMessage(panel, 'error', {
+      message: error instanceof Error ? error.message : 'Failed to get related repositories'
     }, requestId);
   }
 });

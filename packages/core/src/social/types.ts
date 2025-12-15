@@ -178,6 +178,20 @@ export interface RepositoryFilter {
 }
 
 /**
+ * Related repository with relationship context
+ */
+export interface RelatedRepository {
+  id: string;
+  url: string;
+  name: string;
+  branch: string;
+  relationships: {
+    sharedLists: string[];
+    sharedAuthors: string[];
+  };
+}
+
+/**
  * Timeline entry combines posts and interactions
  */
 export interface TimelineEntry {

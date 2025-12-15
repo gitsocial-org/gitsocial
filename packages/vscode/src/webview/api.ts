@@ -141,6 +141,12 @@ class WebviewAPI {
     this.postMessage({ type: 'getRepositories', scope });
   }
 
+  getRelatedRepositories(repository: string, requestId?: string): string {
+    const id = requestId || `getRelatedRepositories-${Date.now()}-${Math.random()}`;
+    this.postMessage({ type: 'getRelatedRepositories', repository, id });
+    return id;
+  }
+
   fetchSpecificRepositories(repositoryIds: string[], since?: string): void {
     this.postMessage({ type: 'fetchSpecificRepositories', repositoryIds, since });
   }
