@@ -711,7 +711,7 @@
             type="repository"
             identifier={gitHost.getWebUrl(repositoryUrl) || repositoryUrl}
             name={gitHost.getDisplayName(repositoryUrl)}
-            size={48}
+            size={32}
           />
         {:else}
           <span class="codicon codicon-xl codicon-home"></span>
@@ -791,8 +791,8 @@
       </div>
     </div>
 
-    <!-- Bottom Row: URL + Meta (concatenated, right-aligned) -->
-    <div class="flex justify-left items-center {isWorkspace ? 'mt-1' : '-mb-1'} ">
+    <!-- Bottom Row: URL + Meta (left) and Fetch time (right) -->
+    <div class="flex justify-between items-center mt-1 {isWorkspace ? '' : '-mb-1'}">
       <div class="flex items-center gap-4 text-sm text-muted italic whitespace-nowrap">
         {#if (isWorkspace && originUrl) || (!isWorkspace && repository)}
           {@const displayUrl = isWorkspace ? gitMsgUrl.normalize(originUrl) : repositoryUrl}
@@ -837,12 +837,12 @@
             {/if}
           {/each}
         {/if}
-        {#if fetchTimeDisplay}
-          <span class="flex items-center gap-1">
-            <span class="codicon codicon-sync" title="Fetched"></span>
-            {fetchTimeDisplay}</span>
-        {/if}
       </div>
+      {#if fetchTimeDisplay}
+        <div class="text-sm text-muted italic">
+          Fetched {fetchTimeDisplay}
+        </div>
+      {/if}
     </div>
 
     <Tabs {tabs} {activeTab} on:change={handleTabChange} />

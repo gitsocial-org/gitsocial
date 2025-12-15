@@ -546,7 +546,7 @@
       <div class="grid gap-2 items-center" style="grid-template-columns: auto 1fr auto;">
         <!-- Column 1: Icon -->
         <div>
-          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8">
             <circle fill="currentColor" cx="3" cy="4" r="1"/>
             <rect fill="currentColor" x="6" y="3.5" width="8" height="1"/>
             <circle fill="currentColor" cx="3" cy="8" r="1"/>
@@ -661,8 +661,8 @@
         </div>
       </div>
 
-      <!-- Bottom Row: URL + Meta (concatenated, right-aligned) -->
-      <div class="flex justify-left items-center mt-1">
+      <!-- Bottom Row: URL + Meta (left) and Fetch time (right) -->
+      <div class="flex justify-between items-center mt-1">
         <div class="text-sm text-muted italic whitespace-nowrap">
           {#if listReference}
             {@const webUrl = gitHost.getWebUrl(baseRepository)}
@@ -672,7 +672,6 @@
             {:else}
               <span>{listReference}</span>
             {/if}
-            <span>, </span>
           {:else if list.source}
             {@const sourceWebUrl = gitHost.getWebUrl(list.source)}
             {#if sourceWebUrl}
@@ -681,15 +680,12 @@
               <span>{list.source}</span>
             {/if}
           {/if}
-          {#if fetchTimeDisplay}
-            {#if list?.source}
-              <span> • </span>
-            {/if}
-            <span class="cursor-help" title={`Fetched ${lastFetchTime ? new Date(lastFetchTime).toLocaleString() : ''}`}>
-              Fetched {fetchTimeDisplay}
-            </span>
-          {/if}
         </div>
+        {#if fetchTimeDisplay}
+          <div class="text-sm text-muted italic">
+            Fetched {fetchTimeDisplay}
+          </div>
+        {/if}
       </div>
 
       <Tabs {tabs} {activeTab} on:change={handleTabChange} />

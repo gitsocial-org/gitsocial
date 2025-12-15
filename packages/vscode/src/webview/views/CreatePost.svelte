@@ -85,7 +85,7 @@
 <div class="view-container">
   <!-- Header -->
   <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar border-b-r">
-    <h1><span class="codicon codicon-lg codicon-edit mr-2"></span>New Post</h1>
+    <h1><span class="codicon codicon-xl codicon-edit mr-2"></span>New Post</h1>
   </div>
 
   {#if error}

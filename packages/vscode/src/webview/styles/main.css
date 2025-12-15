@@ -788,13 +788,13 @@ pre code {
 }
 
 /* Codicons */
-.codicon-2xs[class*='codicon-'] { font-size: 0.625rem; }
-.codicon-xs[class*='codicon-'] { font-size: 0.75rem; }
-.codicon-sm[class*='codicon-'] { font-size: 0.875rem; }
-.codicon-lg[class*='codicon-'] { font-size: 1.5rem; }
-.codicon-xl[class*='codicon-'] { font-size: 2rem; }
-.codicon-2xl[class*='codicon-'] { font-size: 2.5rem; }
-.codicon-3xl[class*='codicon-'] { font-size: 3rem; }
+.codicon-2xs[class*='codicon-'] { font-size: 8px; }
+.codicon-xs[class*='codicon-'] { font-size: 10px; }
+.codicon-sm[class*='codicon-'] { font-size: 12px; }
+.codicon-lg[class*='codicon-'] { font-size: 24px; }
+.codicon-xl[class*='codicon-'] { font-size: 32px; }
+.codicon-2xl[class*='codicon-'] { font-size: 40px; }
+.codicon-3xl[class*='codicon-'] { font-size: 48px; }
 
 /* Image Rendering */
 img {

@@ -113,7 +113,7 @@
 <div class="p-6 max-w-2xl mx-auto">
   <!-- Header -->
   <div class="sticky z-20 top-0 -ml-4 -mr-4 p-4 pb-2 bg-sidebar mb-8 text-center">
-    <h1 class="justify-center"><span class="codicon codicon-lg codicon-heart mr-2"></span>Welcome to GitSocial</h1>
+    <h1 class="justify-center"><span class="codicon codicon-xl codicon-heart mr-2"></span>Welcome to GitSocial</h1>
     <p class="text-muted">Choose branch for GitSocial content</p>
   </div>
 
