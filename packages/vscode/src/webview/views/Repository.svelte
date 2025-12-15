@@ -253,7 +253,12 @@
         if (repositoryStatus.lastFetchTime) {
           lastFetchTime = new Date(repositoryStatus.lastFetchTime);
         }
-        // Status received - user initiated load should have already happened
+        // If backend says this is workspace but we navigated via URL, redirect to workspace panel
+        if (repositoryStatus.type === 'workspace' && repository) {
+          api.openView('repository', 'My Repository');
+          api.closePanel();
+          return;
+        }
         break;
 
       case 'fetchProgress':

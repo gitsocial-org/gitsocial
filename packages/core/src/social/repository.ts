@@ -12,6 +12,7 @@ import type { Repository, RepositoryFilter, Result } from './types';
 // Cross-layer imports
 import { execGit } from '../git/exec';
 import { getConfiguredBranch } from '../git/operations';
+import { git } from '../git';
 import { log } from '../logger';
 import { gitMsgRef, gitMsgUrl } from '../gitmsg/protocol';
 import { gitHost } from '../githost';
@@ -376,7 +377,7 @@ export async function getRepositoryRelationship(
   try {
     log('debug', `[getRepositoryRelationship] Checking relationship for target: ${targetRepository}`);
 
-    // Check if it's the workspace repository
+    // Check if it's the workspace repository (by path)
     if (!targetRepository || targetRepository === workspaceRepository) {
       const workspaceRepo = createRepositoryFromUrl(workspaceRepository, {
         type: 'workspace',
@@ -386,6 +387,24 @@ export async function getRepositoryRelationship(
         success: true,
         data: workspaceRepo
       };
+    }
+
+    // Check if target URL matches workspace's origin remote
+    if (targetRepository.startsWith('http://') || targetRepository.startsWith('https://')) {
+      const originResult = await git.getOriginUrl(workspaceRepository);
+      if (originResult.success && originResult.data && originResult.data !== 'myrepository') {
+        const normalizedTarget = gitMsgUrl.normalize(targetRepository.split('#')[0] || targetRepository);
+        const normalizedOrigin = gitMsgUrl.normalize(originResult.data);
+        if (normalizedTarget === normalizedOrigin) {
+          const workspaceRepo = createRepositoryFromUrl(workspaceRepository, {
+            type: 'workspace',
+            socialEnabled: true
+          });
+          workspaceRepo.originUrl = originResult.data;
+          workspaceRepo.hasOriginRemote = true;
+          return { success: true, data: workspaceRepo };
+        }
+      }
     }
 
     // Get all lists to check if repository is in any
