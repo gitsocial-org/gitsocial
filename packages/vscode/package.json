@@ -2,7 +2,7 @@
   "name": "gitsocial",
   "displayName": "GitSocial",
   "description": "Decentralized open-source Git-native social network",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "gitsocial",
   "icon": "media/gitsocial.png",
   "engines": {
