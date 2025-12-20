@@ -37,7 +37,16 @@ References use `<type>:<value>` format. Implementations MUST support both remote
 - Remote: `<repository-url>#<type>:<value>` (HTTPS: `https://github.com/user/repo#commit:abc123456789`, SSH: `git@github.com:user/repo.git#commit:abc123456789`)
 - Local: `#<type>:<value>` (e.g., `#commit:abc123456789`)
 
-Implementations MUST support `commit` and `branch` references. Extensions MAY define additional reference types. Commit hashes MUST be exactly 12 characters (e.g., `abc123456789`).
+Implementations MUST support the following core reference types:
+- `commit:<hash>` - Git commit (hash MUST be exactly 12 characters)
+- `branch:<name>` - Git branch
+- `tag:<name>` - Git tag
+- `file:<path>` - File at HEAD
+- `file:<path>@<ref>` - File at specific commit/tag/branch
+- `file:<path>:L<n>` - File at specific line
+- `file:<path>:L<n>-<m>` - File at line range
+
+Extensions MAY define additional reference types (e.g., `issue`, `pr`, `advisory`).
 
 GitMsg-Ref sections MUST include the following fields:
 - `ext`: Extension name
