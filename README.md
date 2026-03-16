@@ -7,9 +7,7 @@
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
-  [![Go 1.25+](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://go.dev) <br />
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
-  [![codecov](https://codecov.io/gh/gitsocial-org/gitsocial/branch/main/graph/badge.svg)](https://codecov.io/gh/gitsocial-org/gitsocial)
 
 [How It Works](#how-it-works) • [Extensions](#extensions) • [Interfaces](#interfaces) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
@@ -43,6 +41,11 @@
 **Homebrew** (macOS / Linux):
 ```bash
 brew install gitsocial-org/tap/gitsocial
+```
+
+If macOS blocks the binary ("cannot verify developer"), run:
+```bash
+xattr -d com.apple.quarantine $(which gitsocial)
 ```
 
 **Scoop** (Windows):
