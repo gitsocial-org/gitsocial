@@ -1,0 +1,40 @@
+╭─ ※  GitSocial ───────────────╮╭─ ?  Help ────────────────────────────────────────────────────────────────────────────╮
+│                              ││                                                                                      │
+│  ⌕  Search  ············  /  ││   GitSocial                                                                          │
+│  ⚑  Notifications  ·····  @  ││                                                                                      │
+│  ◧  Analytics  ·········  %  ││  Git-native collaboration — posts, issues, PRs, releases, all in your repo.          │
+│ ──────────────────────────── ││                                                                                      │
+│  ⌘  Social  ············  T  ││  ## How It Works                                                                     │
+│     ⏱  Timeline              ││                                                                                      │
+│     ♥  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
+│     ☷  My Lists             ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
+│  ▢  PM  ················  B  ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
+│  ⑂  Review  ············  P  ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│  ⏏  Release  ···········  R  ││                                                                                      │
+│                              ││  ## Workflow                                                                         │
+│                              ││                                                                                      │
+│                              ││  • Fetch — Pull updates from repositories you follow                                 │
+│                              ││  • Push — Publish your local changes to your remote                                  │
+│                              ││  • Lists — Group repositories into curated feeds                                     │
+│                              ││                                                                                      │
+│                              ││  Follow someone by adding their repo to a list. Their posts appear in your           │
+│                              ││  timeline after fetch.                                                               │
+│                              ││                                                                                      │
+│                              ││  ## Extensions                                                                       │
+│                              ││                                                                                      │
+│                              ││  • Social — Posts, comments, reposts, quotes, timeline, lists, followers             │
+│                              ││  • PM — Issues, milestones, sprints, boards                                          │
+│                              ││  • Review — Pull requests, inline feedback, fork PRs, merges                         │
+│                              ││  • Release — Releases, artifacts, checksums, signatures                              │
+│                              ││                                                                                      │
+│                              ││  Each extension stores data on its own  gitmsg/*  branch and can be enabled          │
+│                              ││  or disabled in Settings.                                                            │
+│                              ││                                                                                      │
+│ ──────────────────────────── ││  ## TUI Layout                                                                       │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⛁  Cache  ········ XXXKB    ││  • Left panel: navigation sidebar (toggle with  ` )                                  │
+│  ⌨  Settings                 ││  • Right panel: content area for the active view                                     │
+│  ⚠  Error Log  ·········  !  ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│.../tui-test-FIXTURE          ││   `:focus  f:fetch  q:quit                                                           │
+╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

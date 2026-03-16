@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: library
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: library/go.mod
+          cache-dependency-path: library/go.sum
+
+      - name: Build
+        run: go build -o /dev/null ./cli
+
+      - name: Test
+        run: go test -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          files: library/coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.9.0
+          working-directory: library

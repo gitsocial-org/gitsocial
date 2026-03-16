@@ -1,0 +1,100 @@
+// provider_trailers.go - Notification provider for git trailer references
+package notifications
+
+import (
+	"database/sql"
+	"strings"
+	"time"
+
+	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/git"
+)
+
+type trailerProvider struct{}
+
+func init() {
+	RegisterProvider("core", &trailerProvider{})
+}
+
+// GetNotifications returns notifications for commits that reference items authored by the current user.
+func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Notification, error) {
+	userEmail := strings.ToLower(git.GetUserEmail(workdir))
+	if userEmail == "" {
+		return nil, nil
+	}
+	return cache.QueryLocked(func(db *sql.DB) ([]Notification, error) {
+		query := `
+			SELECT t.repo_url, t.hash, t.branch, t.trailer_key,
+			       c.author_name, c.author_email, c.timestamp,
+			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
+			FROM core_trailer_refs t
+			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
+			JOIN core_commits ref ON t.ref_repo_url = ref.repo_url AND t.ref_hash = ref.hash AND t.ref_branch = ref.branch
+			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
+			WHERE ref.author_email = ?
+			  AND c.author_email != ?
+		`
+		args := []interface{}{userEmail, userEmail}
+		if filter.UnreadOnly {
+			query += " AND r.repo_url IS NULL"
+		}
+		query += " ORDER BY c.timestamp DESC"
+		if filter.Limit > 0 {
+			query += " LIMIT ?"
+			args = append(args, filter.Limit)
+		}
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var results []Notification
+		for rows.Next() {
+			var repoURL, hash, branch, trailerKey, authorName, authorEmail string
+			var ts sql.NullString
+			var isRead int
+			if err := rows.Scan(&repoURL, &hash, &branch, &trailerKey, &authorName, &authorEmail, &ts, &isRead); err != nil {
+				continue
+			}
+			var timestamp time.Time
+			if ts.Valid {
+				if t, err := time.Parse(time.RFC3339, ts.String); err == nil {
+					timestamp = t
+				}
+			}
+			results = append(results, Notification{
+				RepoURL:   repoURL,
+				Hash:      hash,
+				Branch:    branch,
+				Type:      "reference",
+				Source:    "core",
+				Actor:     Actor{Name: authorName, Email: authorEmail},
+				ActorRepo: repoURL,
+				Timestamp: timestamp,
+				IsRead:    isRead == 1,
+			})
+		}
+		return results, rows.Err()
+	})
+}
+
+// GetUnreadCount returns the number of unread trailer reference notifications.
+func (p *trailerProvider) GetUnreadCount(workdir string) (int, error) {
+	userEmail := strings.ToLower(git.GetUserEmail(workdir))
+	if userEmail == "" {
+		return 0, nil
+	}
+	return cache.QueryLocked(func(db *sql.DB) (int, error) {
+		var count int
+		err := db.QueryRow(`
+			SELECT COUNT(*) FROM core_trailer_refs t
+			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
+			JOIN core_commits ref ON t.ref_repo_url = ref.repo_url AND t.ref_hash = ref.hash AND t.ref_branch = ref.branch
+			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
+			WHERE ref.author_email = ?
+			  AND c.author_email != ?
+			  AND r.repo_url IS NULL
+		`, userEmail, userEmail).Scan(&count)
+		return count, err
+	})
+}

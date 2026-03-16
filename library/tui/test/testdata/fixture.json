@@ -1,0 +1,18 @@
+{
+  "post_id": "https://github.com/user/repo#commit:6d60e68f5b9f@gitmsg/social",
+  "post_content": "Hello world!",
+  "comment_content": "Great idea!",
+  "quote_content": "Adding my thoughts on this...",
+  "edited_content": "Hello world! (updated)",
+  "issue_id": "https://github.com/user/repo#commit:4619e94cacee@gitmsg/pm",
+  "issue_subject": "Add dark mode support",
+  "milestone_id": "https://github.com/user/repo#commit:5dc0dc769fdc@gitmsg/pm",
+  "milestone_title": "Release v2.0",
+  "sprint_id": "https://github.com/user/repo#commit:0d11ac80cbec@gitmsg/pm",
+  "sprint_title": "Sprint 23: UX Polish",
+  "release_id": "https://github.com/user/repo#commit:ca9c627d9e5c@gitmsg/release",
+  "release_subject": "Release v1.0.0",
+  "release_tag": "v1.0.0",
+  "pr_id": "https://github.com/user/repo#commit:c76d3493eb17@gitmsg/review",
+  "pr_subject": "Add dark mode support"
+}

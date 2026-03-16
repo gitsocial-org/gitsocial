@@ -1,0 +1,189 @@
+:root {
+  --bg-color: #fff;
+  --text-color: #333;
+  --heading-color: #000;
+  --pitch-color: #555;
+  --footer-color: #999;
+  --border-color: #eee;
+  --btn-primary-bg: #000;
+  --btn-primary-hover: #333;
+  --btn-secondary-bg: #fff;
+  --btn-secondary-color: #000;
+  --btn-secondary-hover: #f5f5f5;
+  --logo-filter: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #0d1117;
+    --text-color: #c9d1d9;
+    --heading-color: #f0f6fc;
+    --pitch-color: #c9d1d9;
+    --footer-color: #8b949e;
+    --border-color: #30363d;
+    --btn-primary-bg: #f0f6fc;
+    --btn-primary-hover: #c9d1d9;
+    --btn-secondary-bg: transparent;
+    --btn-secondary-color: #f0f6fc;
+    --btn-secondary-hover: #161b22;
+    --logo-filter: invert(1);
+  }
+}
+
+body.dark-mode {
+  --bg-color: #0d1117;
+  --text-color: #c9d1d9;
+  --heading-color: #f0f6fc;
+  --pitch-color: #c9d1d9;
+  --footer-color: #8b949e;
+  --border-color: #30363d;
+  --btn-primary-bg: #f0f6fc;
+  --btn-primary-hover: #c9d1d9;
+  --btn-secondary-bg: transparent;
+  --btn-secondary-color: #f0f6fc;
+  --btn-secondary-hover: #161b22;
+  --logo-filter: invert(1);
+}
+
+body.light-mode {
+  --bg-color: #fff;
+  --text-color: #333;
+  --heading-color: #000;
+  --pitch-color: #555;
+  --footer-color: #999;
+  --border-color: #eee;
+  --btn-primary-bg: #000;
+  --btn-primary-hover: #333;
+  --btn-secondary-bg: #fff;
+  --btn-secondary-color: #000;
+  --btn-secondary-hover: #f5f5f5;
+  --logo-filter: none;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+  line-height: 1.6;
+  color: var(--text-color);
+  background: var(--bg-color);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+}
+
+.container {
+  max-width: 400px;
+  text-align: center;
+  margin: 0 -1rem;
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: transparent;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: var(--heading-color);
+}
+
+.theme-toggle:hover {
+  border-color: var(--heading-color);
+  transform: scale(1.1);
+}
+
+.theme-toggle svg {
+  transition: transform 0.2s;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 0.75rem;
+  filter: var(--logo-filter);
+  transition: filter 0.3s;
+}
+
+h1 {
+  font-size: 2.25rem;
+  color: var(--heading-color);
+}
+
+.pitch {
+  font-size: .875rem;
+  line-height: 1.5;
+  color: var(--pitch-color);
+  max-width: 600px;
+  margin: 2rem auto 3rem;
+}
+
+.pitch p + p {
+  margin-top: 2rem;
+}
+
+.cta-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--bg-color);
+}
+
+.btn-primary:hover {
+  background: var(--btn-primary-hover);
+}
+
+.btn-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+  border: 2px solid var(--btn-secondary-color);
+}
+
+.btn-secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+footer {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--footer-color);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}

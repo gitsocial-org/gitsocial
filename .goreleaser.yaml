@@ -1,0 +1,53 @@
+version: 2
+
+project_name: gitsocial
+
+builds:
+  - dir: library
+    main: ./cli
+    binary: gitsocial
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  prerelease: auto
+
+homebrew_casks:
+  - name: gitsocial
+    binaries:
+      - gitsocial
+    repository:
+      owner: gitsocial-org
+      name: homebrew-tap
+      token: "{{ .Env.GORELEASER_HOMEBREW_CASK_GITHUB_TOKEN }}"
+    homepage: https://github.com/gitsocial-org/gitsocial
+    description: "Git-native collaboration — posts, issues, PRs, releases, all in your repo"
+    license: MIT
+
+scoops:
+  - repository:
+      owner: gitsocial-org
+      name: scoop-bucket
+      token: "{{ .Env.GORELEASER_SCOOP_GITHUB_TOKEN }}"
+    homepage: https://github.com/gitsocial-org/gitsocial
+    description: "Git-native collaboration — posts, issues, PRs, releases, all in your repo"
+    license: MIT

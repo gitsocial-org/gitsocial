@@ -1,0 +1,7 @@
+bin/
+vendor/
+*.exe
+*.test
+*.out
+.air.toml
+tmp/

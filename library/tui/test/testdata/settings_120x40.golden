@@ -1,0 +1,40 @@
+╭─ ※  GitSocial ───────────────╮╭─ ⌨  Settings ────────────────────────────────────────────────────────────────────────╮
+│                              ││                                                                                      │
+│  ⌕  Search  ············  /  ││  Fetch                                                                               │
+│  ⚑  Notifications  ·····  @  ││  ▸ fetch.parallel        4                                                           │
+│  ◧  Analytics  ·········  %  ││    fetch.timeout         30                                                          │
+│ ──────────────────────────── ││                                                                                      │
+│  ⌘  Social  ············  T  ││  Workspace                                                                           │
+│     ⏱  Timeline              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│     ♥  My Repository         ││                                                                                      │
+│     ☷  My Lists             ││  Output                                                                              │
+│  ▢  PM  ················  B  ││    output.color          auto  (auto · always · never)                               │
+│  ⑂  Review  ············  P  ││                                                                                      │
+│  ⏏  Release  ···········  R  ││  Log                                                                                 │
+│                              ││    log.level             info  (debug · info · warn · error)                         │
+│                              ││                                                                                      │
+│                              ││  Display                                                                             │
+│                              ││    display.show_email    false  (false · true)                                       │
+│                              ││                                                                                      │
+│                              ││  Extensions                                                                          │
+│                              ││    extensions.social     true  (true · false)                                        │
+│                              ││    extensions.pm         true  (true · false)                                        │
+│                              ││    extensions.review     true  (true · false)                                        │
+│                              ││    extensions.release    true  (true · false)                                        │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⛁  Cache  ········ XXXKB    ││                                                                                      │
+│  ⌨  Settings                 ││                                                                                      │
+│  ⚠  Error Log  ·········  !  ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│.../tui-test-FIXTURE          ││   e:edit  `:focus  f:fetch  q:quit  ?:help                                           │
+╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

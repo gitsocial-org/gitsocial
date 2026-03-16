@@ -1,0 +1,40 @@
+╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/17 ─────────────────────────────────────────────────────────────────╮
+│                              ││                                                                                      │
+│  ⌕  Search  ············  /  ││  ▏•  Alice · TIME     · #24514a3f8d58@dark-mode                                      │
+│  ⚑  Notifications  ·····  @  ││  ▏   Initial commit                                                                  │
+│  ◧  Analytics  ·········  %  ││                                                                                      │
+│ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ⌘  Social  ············  T  ││                                                                                      │
+│     ⏱  Timeline              ││   ◷  Alice · TIME     · #0d11ac80cbec@gitmsg/pm                                      │
+│     ♥  My Repository         ││      Sprint 23: UX Polish                                                            │
+│     ☷  My Lists             ││                                                                                      │
+│  ▢  PM  ················  B  ││      Two-week sprint for user experience improvements.                               │
+│  ⑂  Review  ············  P  ││                                                                                      │
+│  ⏏  Release  ···········  R  ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ◇  Alice · TIME     · #5dc0dc769fdc@gitmsg/pm                                      │
+│                              ││      Release v2.0                                                                    │
+│                              ││                                                                                      │
+│                              ││      Dark mode and dashboard analytics.                                              │
+│                              ││                                                                                      │
+│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ●  Alice · TIME     · #7fc50f9aa963@gitmsg/pm                                      │
+│                              ││      Implement real-time notifications                                               │
+│                              ││                                                                                      │
+│                              ││      No longer needed                                                                │
+│                              ││                                                                                      │
+│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ●  Alice ✎ · TIME     · #73431ca460ac@gitmsg/pm                                    │
+│                              ││      Add keyboard shortcuts                                                          │
+│                              ││                                                                                      │
+│                              ││      Dashboard needs keyboard navigation                                             │
+│ ──────────────────────────── ││                                                                                      │
+│  ⚙  Configuration            ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ⛁  Cache  ········ XXXKB    ││                                                                                      │
+│  ⌨  Settings                 ││   ○  Alice · TIME     · #4619e94cacee@gitmsg/pm                                      │
+│  ⚠  Error Log  ·········  !  ││                                                                                      │
+│ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  `:focus  f:fetch  q:quit        │
+│.../tui-test-FIXTURE          ││   ?:help                                                                             │
+╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯
