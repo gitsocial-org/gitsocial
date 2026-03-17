@@ -36,5 +36,5 @@
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   N:new  r:refresh  p:push  `:focus  f:fetch  q:quit  ?:help                         │
+│.../tui-test-FIXTURE          ││   N:new  r:refresh  p:push  L:push lfs  `:focus  f:fetch  q:quit  ?:help             │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

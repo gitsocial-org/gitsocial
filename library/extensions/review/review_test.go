@@ -432,10 +432,7 @@ func TestCommitFailedPaths(t *testing.T) {
 }
 
 func TestMergeOperations(t *testing.T) {
-	t.Parallel()
-
 	t.Run("MergePR", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		git.ExecGit(dir, []string{"checkout", "-b", "feature"})
 		git.CreateCommit(dir, git.CommitOptions{Message: "Feature commit", AllowEmpty: true})
@@ -458,7 +455,6 @@ func TestMergeOperations(t *testing.T) {
 	})
 
 	t.Run("MergePR_invalidState", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		created := CreatePR(dir, "PR", "", CreatePROptions{Base: "main"})
 		if !created.Success {
@@ -475,7 +471,6 @@ func TestMergeOperations(t *testing.T) {
 	})
 
 	t.Run("MergePR_notFound", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		res := MergePR(dir, "#commit:nonexistent00@gitmsg/review", MergeStrategyFF)
 		if res.Success {
@@ -487,7 +482,6 @@ func TestMergeOperations(t *testing.T) {
 	})
 
 	t.Run("MergePR_withPMCloses", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		git.ExecGit(dir, []string{"checkout", "-b", "feature2"})
 		git.CreateCommit(dir, git.CommitOptions{Message: "Feature 2", AllowEmpty: true})
@@ -508,7 +502,6 @@ func TestMergeOperations(t *testing.T) {
 	})
 
 	t.Run("MergePR_remoteHead", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		res := CreatePR(dir, "Remote head PR", "", CreatePROptions{
 			Base: "#branch:main",
