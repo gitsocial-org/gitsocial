@@ -71,11 +71,12 @@ type HandlerContext struct {
 	SelectedItem DisplayItem
 
 	// Callbacks requiring app.go state
-	ToggleFocus func()
-	Navigate    func(Context) tea.Cmd
-	OpenEditor  func(mode, targetID string) tea.Cmd
-	StartFetch  func() tea.Cmd
-	StartPush   func() tea.Cmd
+	ToggleFocus  func()
+	Navigate     func(Context) tea.Cmd
+	OpenEditor   func(mode, targetID string) tea.Cmd
+	StartFetch   func() tea.Cmd
+	StartPush    func() tea.Cmd
+	StartLFSPush func() tea.Cmd
 
 	// Panel for direct action calls
 	Panel PanelActions

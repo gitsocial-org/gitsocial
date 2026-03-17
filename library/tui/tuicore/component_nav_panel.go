@@ -21,18 +21,19 @@ const (
 
 // NavPanel is the left navigation sidebar
 type NavPanel struct {
-	width         int
-	height        int
-	focused       bool
-	registry      *NavRegistry
-	router        *Router
-	cursorID      string // Visual cursor position (may differ from router selection when browsing)
-	workdir       string
-	cacheSize     string
-	unreadCount   int
-	unpushedCount int
-	errorLogCount int
-	zonePrefix    string
+	width            int
+	height           int
+	focused          bool
+	registry         *NavRegistry
+	router           *Router
+	cursorID         string // Visual cursor position (may differ from router selection when browsing)
+	workdir          string
+	cacheSize        string
+	unreadCount      int
+	unpushedCount    int
+	unpushedLFSCount int
+	errorLogCount    int
+	zonePrefix       string
 	// Cached flat items
 	cachedItems      []NavItem
 	cachedDomain     string
@@ -335,6 +336,12 @@ func (p *NavPanel) SetUnpushedCount(count int) {
 	p.viewDirty = true
 }
 
+// SetUnpushedLFSCount sets the unpushed LFS objects count for releases.
+func (p *NavPanel) SetUnpushedLFSCount(count int) {
+	p.unpushedLFSCount = count
+	p.viewDirty = true
+}
+
 // SetErrorLogCount sets the error log entry count.
 func (p *NavPanel) SetErrorLogCount(count int) {
 	p.errorLogCount = count
@@ -480,6 +487,9 @@ func (p *NavPanel) View() string {
 			label += icon + "  "
 		}
 		label += item.Label
+		if item.ID == "release" && p.unpushedLFSCount > 0 {
+			label = fmt.Sprintf("%s (%d)", label, p.unpushedLFSCount)
+		}
 		key := getDomainKey(item.ID)
 
 		if isSelected {

@@ -131,6 +131,9 @@ func (m *Model) LoadUnreadCount() tea.Cmd { return m.loadInitialUnreadCount() }
 // LoadUnpushedCount returns a command to reload unpushed count.
 func (m *Model) LoadUnpushedCount() tea.Cmd { return m.loadInitialUnpushedCount() }
 
+// LoadUnpushedLFSCount returns a command to reload unpushed LFS count.
+func (m *Model) LoadUnpushedLFSCount() tea.Cmd { return m.loadInitialUnpushedLFSCount() }
+
 // RefreshTimeline returns a command to refresh the timeline.
 func (m *Model) RefreshTimeline() tea.Cmd { return m.refreshTimeline() }
 
@@ -261,6 +264,7 @@ func (m Model) Init() tea.Cmd {
 		m.loadInitialCacheSize(),
 		m.loadInitialUnreadCount(),
 		m.loadInitialUnpushedCount(),
+		m.loadInitialUnpushedLFSCount(),
 		m.loadInitialLists(),
 	)
 }
@@ -297,6 +301,15 @@ func (m Model) loadInitialUnpushedCount() tea.Cmd {
 			}
 		}
 		return tuicore.UnpushedCountMsg{Count: total}
+	}
+}
+
+// loadInitialUnpushedLFSCount loads the unpushed LFS objects count at startup.
+func (m Model) loadInitialUnpushedLFSCount() tea.Cmd {
+	workdir := m.workdir
+	return func() tea.Msg {
+		count := git.GetUnpushedLFSCount(workdir)
+		return tuicore.UnpushedLFSCountMsg{Count: count}
 	}
 }
 
@@ -395,6 +408,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuicore.UnpushedCountMsg:
 		m.nav.SetUnpushedCount(msg.Count)
 		return m, nil
+
+	case tuicore.UnpushedLFSCountMsg:
+		m.nav.SetUnpushedLFSCount(msg.Count)
+		return m, nil
+
+	case tuicore.LFSPushCompletedMsg:
+		m.isPushing = false
+		m.host.SetPushing(false)
+		if msg.Err != nil {
+			m.host.SetMessage(fmt.Sprintf("LFS push failed: %s", msg.Err), tuicore.MessageTypeError)
+			return m, nil
+		}
+		var msgCmd tea.Cmd
+		if msg.Count == 0 {
+			msgCmd = m.host.SetMessageWithTimeout("No LFS objects to push", tuicore.MessageTypeSuccess, 5*time.Second)
+		} else {
+			msgCmd = m.host.SetMessageWithTimeout(fmt.Sprintf("Pushed %d LFS objects", msg.Count), tuicore.MessageTypeSuccess, 5*time.Second)
+		}
+		return m, tea.Batch(msgCmd, m.loadInitialUnpushedLFSCount())
 
 	case tuicore.CacheSizeMsg:
 		m.nav.SetCacheSize(msg.Size)
@@ -685,6 +717,15 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
 			return m.startPush()
 		},
+		StartLFSPush: func() tea.Cmd {
+			if m.isPushing || m.isFetching {
+				return nil
+			}
+			m.isPushing = true
+			m.host.SetPushing(true)
+			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
+			return m.startLFSPush()
+		},
 
 		// Direct panel access
 		Panel: m.host,
@@ -817,6 +858,15 @@ func (m Model) startPush() tea.Cmd {
 			return tuisocial.PushCompletedMsg{Err: err}
 		}
 		return tuisocial.PushCompletedMsg{Commits: result.Commits, Refs: result.Refs}
+	}
+}
+
+// startLFSPush begins pushing LFS objects to the remote repository.
+func (m Model) startLFSPush() tea.Cmd {
+	workdir := m.workdir
+	return func() tea.Msg {
+		count, err := git.PushLFS(workdir)
+		return tuicore.LFSPushCompletedMsg{Count: count, Err: err}
 	}
 }
 

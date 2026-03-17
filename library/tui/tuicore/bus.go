@@ -28,6 +28,7 @@ type AppContext interface {
 	LoadLists() tea.Cmd
 	LoadUnreadCount() tea.Cmd
 	LoadUnpushedCount() tea.Cmd
+	LoadUnpushedLFSCount() tea.Cmd
 	RefreshTimeline() tea.Cmd
 	RefreshCacheSize() tea.Cmd
 	FetchRepo(repoURL string) tea.Cmd
@@ -56,6 +57,7 @@ type HostContext interface {
 // NavContext provides nav panel operations for message handlers.
 type NavContext interface {
 	SetUnreadCount(count int)
+	SetUnpushedLFSCount(count int)
 	SetCacheSize(size string)
 	SetErrorLogCount(count int)
 	Registry() *NavRegistry

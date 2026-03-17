@@ -217,6 +217,17 @@ type UnpushedCountMsg struct {
 	Count int
 }
 
+// UnpushedLFSCountMsg is sent with unpushed LFS objects count
+type UnpushedLFSCountMsg struct {
+	Count int
+}
+
+// LFSPushCompletedMsg is sent when LFS push completes
+type LFSPushCompletedMsg struct {
+	Count int
+	Err   error
+}
+
 // CacheSizeMsg is sent with cache size
 type CacheSizeMsg struct {
 	Size string

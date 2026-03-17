@@ -473,6 +473,12 @@ func (v *ReleaseDetailView) Bindings() []tuicore.Binding {
 		}
 		return true, ctx.StartPush()
 	}
+	lfsPush := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
+		if ctx.StartLFSPush == nil {
+			return false, nil
+		}
+		return true, ctx.StartLFSPush()
+	}
 	return []tuicore.Binding{
 		{Key: "s", Label: "sbom", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
@@ -483,6 +489,7 @@ func (v *ReleaseDetailView) Bindings() []tuicore.Binding {
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: push},
+		{Key: "P", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: lfsPush},
 	}
 }
 

@@ -68,6 +68,48 @@ func IsLFSPointer(data []byte) bool {
 	return bytes.HasPrefix(data, []byte(lfsPointerPrefix))
 }
 
+// GetUnpushedLFSCount returns the number of LFS objects not yet pushed to origin.
+func GetUnpushedLFSCount(workdir string) int {
+	if !IsLFSAvailable() {
+		return 0
+	}
+	result, err := ExecGit(workdir, []string{"lfs", "push", "--dry-run", "origin", "--all"})
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		if strings.HasPrefix(line, "push ") {
+			count++
+		}
+	}
+	return count
+}
+
+// PushLFS pushes all LFS objects to origin, including those on gitmsg refs.
+func PushLFS(workdir string) (int, error) {
+	if !IsLFSAvailable() {
+		return 0, fmt.Errorf("git-lfs not installed")
+	}
+	count := GetUnpushedLFSCount(workdir)
+	if count == 0 {
+		return 0, nil
+	}
+	if _, err := ExecGit(workdir, []string{"lfs", "push", "origin", "--all"}); err != nil {
+		return 0, fmt.Errorf("lfs push --all: %w", err)
+	}
+	refsResult, err := ExecGit(workdir, []string{"for-each-ref", "--format=%(refname)", "refs/gitmsg/"})
+	if err == nil {
+		for _, ref := range strings.Split(refsResult.Stdout, "\n") {
+			ref = strings.TrimSpace(ref)
+			if ref != "" {
+				_, _ = ExecGit(workdir, []string{"lfs", "push", "origin", ref})
+			}
+		}
+	}
+	return count, nil
+}
+
 // ParseLFSPointer extracts the oid and size from LFS pointer content.
 func ParseLFSPointer(data []byte) (oid string, size int64, ok bool) {
 	if !IsLFSPointer(data) {
