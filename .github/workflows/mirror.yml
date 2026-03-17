@@ -2,8 +2,9 @@ name: Mirror
 
 on:
   push:
-    branches: [main]
+    branches: [main, "gitmsg/**"]
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   gitlab:
