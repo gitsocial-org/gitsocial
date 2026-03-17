@@ -17,7 +17,7 @@ jobs:
 
       - run: |
           git remote add gitlab https://oauth2:${{ secrets.GITLAB_PAT }}@gitlab.com/gitsocial-org/gitsocial.git
-          git fetch origin '+refs/gitmsg/*:refs/gitmsg/*'
+          git fetch origin '+refs/heads/gitmsg/*:refs/heads/gitmsg/*' '+refs/gitmsg/*:refs/gitmsg/*'
           git lfs fetch origin --all
           git push gitlab --all --force
           git push gitlab --tags --force
@@ -37,7 +37,7 @@ jobs:
 
       - run: |
           git remote add codeberg https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/gitsocial.git
-          git fetch origin '+refs/gitmsg/*:refs/gitmsg/*'
+          git fetch origin '+refs/heads/gitmsg/*:refs/heads/gitmsg/*' '+refs/gitmsg/*:refs/gitmsg/*'
           git lfs fetch origin --all
           git push codeberg --all --force
           git push codeberg --tags --force
