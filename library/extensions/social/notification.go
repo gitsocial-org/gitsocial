@@ -26,7 +26,7 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 			SELECT v.repo_url, v.hash, v.branch, v.type,
 			       v.original_repo_url, v.original_hash, v.original_branch,
 			       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
-			       v.resolved_message, v.author_name, v.author_email, v.timestamp,
+			       v.resolved_message, v.original_message, v.author_name, v.author_email, v.timestamp,
 			       v.is_virtual,
 			       v.comments, v.reposts, v.quotes,
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
@@ -70,19 +70,29 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 		var results []notificationRow
 		for rows.Next() {
 			var row notificationRow
-			var ts sql.NullString
+			var message, originalMessage, ts sql.NullString
 			var isVirtual int
 			var isRead int
 			err := rows.Scan(
 				&row.item.RepoURL, &row.item.Hash, &row.item.Branch, &row.item.Type,
 				&row.item.OriginalRepoURL, &row.item.OriginalHash, &row.item.OriginalBranch,
 				&row.item.ReplyToRepoURL, &row.item.ReplyToHash, &row.item.ReplyToBranch,
-				&row.item.Content, &row.item.AuthorName, &row.item.AuthorEmail, &ts,
+				&message, &originalMessage, &row.item.AuthorName, &row.item.AuthorEmail, &ts,
 				&isVirtual,
 				&row.item.Comments, &row.item.Reposts, &row.item.Quotes, &isRead,
 			)
 			if err != nil {
 				return nil, err
+			}
+			if message.Valid {
+				row.item.Content = protocol.ExtractCleanContent(message.String)
+				row.item.OriginalExtension, row.item.OriginalType = extractOriginalExtType(message.String)
+				row.item.HeaderExt, row.item.HeaderType, row.item.HeaderState = extractHeaderFields(message.String)
+			}
+			if originalMessage.Valid {
+				if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
+					row.item.Origin = protocol.ExtractOrigin(&msg.Header)
+				}
 			}
 			if ts.Valid {
 				row.item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
