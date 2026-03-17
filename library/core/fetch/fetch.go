@@ -2,6 +2,7 @@
 package fetch
 
 import (
+	"database/sql"
 	"fmt"
 	"sync"
 	"time"
@@ -300,12 +301,23 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 	return count, nil
 }
 
+// deleteHEADBranchCommits removes commits stored with branch="HEAD" (a symbolic ref, not a real branch).
+func deleteHEADBranchCommits(repoURL string) {
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`DELETE FROM core_commits WHERE repo_url = ? AND branch = 'HEAD'`, repoURL)
+		return err
+	}); err != nil {
+		log.Debug("delete HEAD branch commits", "error", err)
+	}
+}
+
 // fetchFullHistoryAllBranches retrieves and processes all commits with per-commit branch tracking.
 func fetchFullHistoryAllBranches(storageDir, repoURL, fallbackBranch string, processors []CommitProcessor) (int, error) {
 	gitCommits, err := git.GetCommits(storageDir, &git.GetCommitsOptions{All: true})
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
+	deleteHEADBranchCommits(repoURL)
 	count, err := processAllBranchCommits(gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err
@@ -342,6 +354,7 @@ func fetchIncrementalAllBranches(storageDir, repoURL, fallbackBranch string, sin
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
+	deleteHEADBranchCommits(repoURL)
 	count, err := processAllBranchCommits(gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err

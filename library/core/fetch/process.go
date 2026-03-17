@@ -64,7 +64,7 @@ func ProcessCommits(gitCommits []git.Commit, repoURL, branch string, processors 
 
 // CleanRefname strips ref prefixes to produce a short branch name.
 func CleanRefname(ref string) string {
-	if ref == "" {
+	if ref == "" || ref == "HEAD" || strings.HasSuffix(ref, "/HEAD") {
 		return ""
 	}
 	if strings.HasPrefix(ref, "refs/heads/") {

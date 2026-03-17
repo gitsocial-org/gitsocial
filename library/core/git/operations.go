@@ -76,7 +76,7 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 	args := []string{"log"}
 
 	if opts.All {
-		args = append(args, "--exclude=refs/gitmsg/config", "--all")
+		args = append(args, "--exclude=refs/gitmsg/config", "--exclude=HEAD", "--exclude=refs/remotes/*/HEAD", "--all")
 	} else {
 		branch := opts.Branch
 		if branch == "" {
