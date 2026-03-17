@@ -133,6 +133,7 @@ h1 {
 
 .pitch {
   font-size: .875rem;
+  font-weight: bold;
   line-height: 1.5;
   color: var(--pitch-color);
   max-width: 600px;
@@ -152,7 +153,7 @@ h1 {
 
 .btn {
   display: inline-block;
-  padding: 0.875rem 2rem;
+  padding: 0.75rem 2rem;
   font-size: 1rem;
   font-weight: 600;
   text-decoration: none;
