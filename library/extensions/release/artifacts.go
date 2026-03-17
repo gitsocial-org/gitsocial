@@ -10,8 +10,11 @@ import (
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/result"
 )
+
+const lfsThreshold = 1 << 20 // 1MB
 
 // AddArtifacts commits files to refs/gitmsg/release/<version>/artifacts.
 func AddArtifacts(workdir, version string, filePaths []string) Result[ArtifactResult] {
@@ -26,7 +29,20 @@ func AddArtifacts(workdir, version string, filePaths []string) Result[ArtifactRe
 		name := filepath.Base(fp)
 		hash := sha256.Sum256(data)
 		hexHash := fmt.Sprintf("%x", hash)
-		files[name] = data
+		if len(data) > lfsThreshold {
+			if err := git.StoreLFSObject(workdir, hexHash, data); err != nil {
+				log.Warn("lfs store failed, using raw blob", "file", name, "error", err)
+				files[name] = data
+			} else {
+				files[name] = git.FormatLFSPointer(hexHash, int64(len(data)))
+				log.Info("storing artifact via LFS", "file", name, "size", len(data))
+				if !git.IsLFSAvailable() {
+					log.Warn("git-lfs not installed; LFS objects may not push correctly")
+				}
+			}
+		} else {
+			files[name] = data
+		}
 		infos = append(infos, ArtifactInfo{Filename: name, Size: int64(len(data)), SHA256: hexHash})
 		fmt.Fprintf(&checksumLines, "%s  %s  %d\n", hexHash, name, len(data))
 	}

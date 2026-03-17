@@ -313,6 +313,11 @@ func GetSBOMSummary(workdir, repoURL, version, sbomFilename, artifactURL string)
 	ref := "refs/gitmsg/release/" + version + "/artifacts"
 	if content, err := git.GetFileContent(workdir, ref, sbomFilename); err == nil {
 		data = []byte(content)
+		if oid, _, ok := git.ParseLFSPointer(data); ok {
+			if lfsData, lfsErr := git.ReadLFSObject(workdir, oid); lfsErr == nil {
+				data = lfsData
+			}
+		}
 	} else if artifactURL != "" {
 		fetched, fetchErr := fetchSBOMHTTP(artifactURL, sbomFilename)
 		if fetchErr != nil {
@@ -379,6 +384,11 @@ func GetSBOMRaw(workdir, version, sbomFilename string) Result[string] {
 	content, err := git.GetFileContent(workdir, ref, sbomFilename)
 	if err != nil {
 		return result.Err[string]("READ_FAILED", err.Error())
+	}
+	if oid, _, ok := git.ParseLFSPointer([]byte(content)); ok {
+		if lfsData, lfsErr := git.ReadLFSObject(workdir, oid); lfsErr == nil {
+			return result.Ok(string(lfsData))
+		}
 	}
 	return result.Ok(content)
 }
