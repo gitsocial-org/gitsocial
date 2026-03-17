@@ -470,6 +470,7 @@
 | `N` | New |
 | `r` | Refresh |
 | `p` | Push |
+| `L` | Push LFS |
 
 ### Release Detail
 
@@ -485,6 +486,7 @@
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
+| `L` | Push LFS |
 
 ### Release SBOM
 

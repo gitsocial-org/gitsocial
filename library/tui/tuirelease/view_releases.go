@@ -322,7 +322,7 @@ func (v *ReleasesView) Bindings() []tuicore.Binding {
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: push},
-		{Key: "P", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: lfsPush},
+		{Key: "L", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: lfsPush},
 	}
 }
 

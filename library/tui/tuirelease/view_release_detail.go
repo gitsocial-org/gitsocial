@@ -489,7 +489,7 @@ func (v *ReleaseDetailView) Bindings() []tuicore.Binding {
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: push},
-		{Key: "P", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: lfsPush},
+		{Key: "L", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: lfsPush},
 	}
 }
 
