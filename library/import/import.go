@@ -42,6 +42,7 @@ type Options struct {
 	Verbose    bool
 	FetchOpts  FetchOptions
 	Counts     *ItemCounts         // pre-fetched counts (skip counting if set)
+	Mapping    *MappingFile        // pre-loaded mapping (skip ReadMapping if set)
 	OnProgress func(ProgressEvent) // optional progress callback
 }
 
@@ -80,12 +81,17 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 		}
 		progress("", PhaseCount, Stats{}, 0, 0, detail)
 	}
-	mapping := ReadMapping(opts.CacheDir, opts.RepoURL, opts.MapFile)
+	var mapping *MappingFile
+	if opts.Mapping != nil {
+		mapping = opts.Mapping
+	} else {
+		mapping = ReadMapping(opts.CacheDir, opts.RepoURL, opts.MapFile)
+		if len(mapping.Items) == 0 {
+			RebuildMapping(opts.WorkDir, mapping)
+		}
+	}
 	mapping.Source = adapter.Platform()
 	mapping.RepoURL = opts.RepoURL
-	if len(mapping.Items) == 0 {
-		RebuildMapping(opts.WorkDir, mapping)
-	}
 	// Store platform-specific metadata (e.g. GitLab project ID for upload URL resolution)
 	if provider, ok := adapter.(PlatformMetaProvider); ok {
 		if meta := provider.PlatformMeta(); len(meta) > 0 {

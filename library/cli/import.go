@@ -197,6 +197,9 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	}
 	counts, _ := adapter.CountItems(fetchOpts)
 	mapping := importpkg.ReadMapping(cfg.CacheDir, repoURL, f.mapFile)
+	if len(mapping.Items) == 0 {
+		importpkg.RebuildMapping(cfg.WorkDir, mapping)
+	}
 	mapped := importpkg.CountMapped(mapping, counts)
 	if !cfg.JSONOutput {
 		summary := importpkg.FormatItemCounts(counts)
@@ -232,6 +235,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		Verbose:    f.verbose,
 		FetchOpts:  fetchOpts,
 		Counts:     &counts,
+		Mapping:    mapping,
 		OnProgress: func(ev importpkg.ProgressEvent) {
 			if cfg.JSONOutput {
 				return
