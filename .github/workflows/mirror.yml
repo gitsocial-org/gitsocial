@@ -20,6 +20,7 @@ jobs:
           git push gitlab --all --force
           git push gitlab --tags --force
           git lfs push gitlab --all || true
+          git for-each-ref --format='%(refname)' refs/gitmsg/ | xargs -I{} git lfs push gitlab {} 2>/dev/null || true
           git push gitlab 'refs/gitmsg/*:refs/gitmsg/*' --force
 
   codeberg:
