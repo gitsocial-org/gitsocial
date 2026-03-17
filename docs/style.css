@@ -67,7 +67,7 @@ body.light-mode {
 }
 
 body {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.6;
   color: var(--text-color);
   background: var(--bg-color);
@@ -128,12 +128,13 @@ main {
 
 h1 {
   font-size: 2.25rem;
+  line-height: 1.15;
   color: var(--heading-color);
 }
 
 .pitch {
-  font-size: .875rem;
-  font-weight: bold;
+  font-size: 1rem;
+  font-weight: normal;
   line-height: 1.5;
   color: var(--pitch-color);
   max-width: 600px;

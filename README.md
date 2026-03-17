@@ -28,7 +28,7 @@
 | **Social** | Stable | Posts, comments, reposts, lists, timeline |
 | **PM** | Stable | Issues, milestones, sprints, boards |
 | **Review** | Stable | Cross-forge PRs, version-aware reviews ([see more](documentation/GITREVIEW-FLOWS.md)) |
-| **Release** | Stable | Releases, artifacts, checksums, signatures |
+| **Release** | Stable | Releases, artifacts, checksums, signatures, SBOM |
 
 ## Interfaces
 
@@ -122,7 +122,7 @@ gitsocial push
 | [GITSOCIAL.md](specs/GITSOCIAL.md) | Posts, comments, reposts, quotes, and lists |
 | [GITPM.md](specs/GITPM.md) | Issues, milestones, sprints, and hierarchy |
 | [GITREVIEW.md](specs/GITREVIEW.md) | Pull requests, inline feedback, and review states |
-| [GITRELEASE.md](specs/GITRELEASE.md) | Releases with artifacts, checksums, and signatures |
+| [GITRELEASE.md](specs/GITRELEASE.md) | Releases with artifacts, checksums, signatures, and SBOM |
 
 ## License
 
