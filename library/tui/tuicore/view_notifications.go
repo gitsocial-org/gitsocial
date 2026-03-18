@@ -2,6 +2,8 @@
 package tuicore
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/core/log"
@@ -48,7 +50,8 @@ type NotificationsView struct {
 	markAllReadFn   MarkAllReadFunc
 	markAllUnreadFn MarkAllUnreadFunc
 	resolveFunc     ResolveItemFunc
-	restoreIndex    int // cursor position to restore after refresh (-1 = none)
+	restoreIndex    int       // cursor position to restore after refresh (-1 = none)
+	loadedFetchTime time.Time // LastFetchTime when data was loaded; reload when it changes
 }
 
 // NotificationsViewOption configures the notifications view.
@@ -136,11 +139,19 @@ func (v *NotificationsView) SetSize(width, height int) {
 
 // Activate loads notifications.
 func (v *NotificationsView) Activate(state *State) tea.Cmd {
-	// Restore cursor position when returning from detail view
 	if state.DetailSource != nil && state.DetailSource.Path == "/notifications" {
 		v.restoreIndex = state.DetailSource.Index
 	} else {
 		v.restoreIndex = -1
+	}
+	// Use cached data if we have it and no fetch has occurred since last load.
+	// Data only changes on fetch (new items) or mark read/unread (applied locally).
+	if len(v.meta) > 0 && v.loadedFetchTime.Equal(state.LastFetchTime) {
+		if v.restoreIndex >= 0 {
+			v.cardlist.SetSelected(v.restoreIndex)
+			v.restoreIndex = -1
+		}
+		return nil
 	}
 	v.loading = true
 	return v.loadNotifications()
@@ -183,7 +194,7 @@ func (v *NotificationsView) Update(msg tea.Msg, state *State) tea.Cmd {
 	default:
 		switch msg := msg.(type) {
 		case NotificationsLoadedMsg:
-			v.handleLoaded(msg)
+			v.handleLoaded(msg, state)
 		case NotificationMarkedReadMsg:
 			v.handleMarkedRead(msg, state)
 		case NotificationMarkedUnreadMsg:
@@ -246,13 +257,14 @@ func (v *NotificationsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded processes the loaded notifications.
-func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg) {
+func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg, state *State) {
 	v.loading = false
 	if msg.Err != nil {
 		return
 	}
 	v.meta = msg.Result.Meta
 	v.cardlist.SetItems(msg.Result.Items)
+	v.loadedFetchTime = state.LastFetchTime
 	if v.restoreIndex >= 0 {
 		v.cardlist.SetSelected(v.restoreIndex)
 		v.restoreIndex = -1

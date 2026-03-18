@@ -13,6 +13,32 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 )
 
+// userThreadsCTE pre-computes threads the user participates in, scoped to repos
+// the workspace follows. Queries base tables directly for performance.
+// Parameters: userEmail, workspaceURL, workdir
+const userThreadsCTE = `
+	user_threads AS (
+		SELECT DISTINCT s.original_repo_url, s.original_hash, s.original_branch
+		FROM social_items s
+		JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+		WHERE s.type IN ('comment', 'repost', 'quote')
+		  AND COALESCE(c.origin_author_email, c.author_email) = ?
+		  AND s.original_repo_url IS NOT NULL
+		  AND (s.original_repo_url = ?
+		       OR s.original_repo_url IN (
+		           SELECT lr.repo_url FROM core_list_repositories lr
+		           JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?))
+	)
+`
+
+// followedReposCondition filters thread-participation notifications to repos the workspace follows.
+// Parameter: workdir
+const followedReposCondition = `
+	v.original_repo_url IN (
+		SELECT lr.repo_url FROM core_list_repositories lr
+		JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
+`
+
 // GetNotifications retrieves notifications for interactions on workspace posts and threads the user participates in.
 func GetNotifications(workdir string, filter NotificationFilter) ([]Notification, error) {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
@@ -23,6 +49,7 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 
 	items, err := cache.QueryLocked(func(db *sql.DB) ([]notificationRow, error) {
 		query := `
+			WITH ` + userThreadsCTE + `
 			SELECT v.repo_url, v.hash, v.branch, v.type,
 			       v.original_repo_url, v.original_hash, v.original_branch,
 			       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
@@ -34,21 +61,19 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
 			WHERE v.type IN ('comment', 'repost', 'quote')
 			  AND v.repo_url != ?
+			  AND v.author_email != ?
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted
 			  AND (
 			    v.original_repo_url = ?
-			    OR EXISTS (
-			      SELECT 1 FROM social_items_resolved p
-			      WHERE p.type IN ('comment', 'repost', 'quote')
-			        AND p.author_email = ?
-			        AND p.original_repo_url = v.original_repo_url
-			        AND p.original_hash = v.original_hash
-			        AND p.original_branch = v.original_branch
-			        AND NOT p.is_edit_commit AND NOT p.is_retracted
-			    )
+			    OR (EXISTS (
+			      SELECT 1 FROM user_threads ut
+			      WHERE ut.original_repo_url = v.original_repo_url
+			        AND ut.original_hash = v.original_hash
+			        AND ut.original_branch = v.original_branch
+			    ) AND ` + followedReposCondition + `)
 			  )
 		`
-		args := []interface{}{workspaceURL, workspaceURL, userEmail}
+		args := []interface{}{userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir}
 
 		if filter.UnreadOnly {
 			query += " AND r.repo_url IS NULL"
@@ -216,25 +241,24 @@ func GetUnreadCount(workdir string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var itemCount, followCount int
 		if err := db.QueryRow(`
+			WITH `+userThreadsCTE+`
 			SELECT COUNT(*) FROM social_items_resolved v
 			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
 			WHERE v.type IN ('comment', 'repost', 'quote')
 			  AND v.repo_url != ?
+			  AND v.author_email != ?
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted
 			  AND (
 			    v.original_repo_url = ?
-			    OR EXISTS (
-			      SELECT 1 FROM social_items_resolved p
-			      WHERE p.type IN ('comment', 'repost', 'quote')
-			        AND p.author_email = ?
-			        AND p.original_repo_url = v.original_repo_url
-			        AND p.original_hash = v.original_hash
-			        AND p.original_branch = v.original_branch
-			        AND NOT p.is_edit_commit AND NOT p.is_retracted
-			    )
+			    OR (EXISTS (
+			      SELECT 1 FROM user_threads ut
+			      WHERE ut.original_repo_url = v.original_repo_url
+			        AND ut.original_hash = v.original_hash
+			        AND ut.original_branch = v.original_branch
+			    ) AND `+followedReposCondition+`)
 			  )
 			  AND r.repo_url IS NULL
-		`, workspaceURL, workspaceURL, userEmail).Scan(&itemCount); err != nil {
+		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir).Scan(&itemCount); err != nil {
 			return 0, fmt.Errorf("count unread items: %w", err)
 		}
 		if err := db.QueryRow(`
@@ -259,27 +283,26 @@ func MarkAllAsRead(workdir string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
 		if _, err := db.Exec(`
+			WITH `+userThreadsCTE+`
 			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
 			SELECT v.repo_url, v.hash, v.branch, ? FROM social_items_resolved v
 			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
 			WHERE v.type IN ('comment', 'repost', 'quote')
 			  AND v.repo_url != ?
+			  AND v.author_email != ?
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted
 			  AND (
 			    v.original_repo_url = ?
-			    OR EXISTS (
-			      SELECT 1 FROM social_items_resolved p
-			      WHERE p.type IN ('comment', 'repost', 'quote')
-			        AND p.author_email = ?
-			        AND p.original_repo_url = v.original_repo_url
-			        AND p.original_hash = v.original_hash
-			        AND p.original_branch = v.original_branch
-			        AND NOT p.is_edit_commit AND NOT p.is_retracted
-			    )
+			    OR (EXISTS (
+			      SELECT 1 FROM user_threads ut
+			      WHERE ut.original_repo_url = v.original_repo_url
+			        AND ut.original_hash = v.original_hash
+			        AND ut.original_branch = v.original_branch
+			    ) AND `+followedReposCondition+`)
 			  )
 			  AND r.repo_url IS NULL
 			ON CONFLICT(repo_url, hash, branch) DO NOTHING
-		`, now, workspaceURL, workspaceURL, userEmail); err != nil {
+		`, userEmail, workspaceURL, workdir, now, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
 			return fmt.Errorf("mark items as read: %w", err)
 		}
 		if _, err := db.Exec(`
@@ -304,26 +327,25 @@ func MarkAllAsUnread(workdir string) error {
 	userEmail := git.GetUserEmail(workdir)
 	return cache.ExecLocked(func(db *sql.DB) error {
 		if _, err := db.Exec(`
+			WITH `+userThreadsCTE+`
 			DELETE FROM core_notification_reads
 			WHERE (repo_url, hash, branch) IN (
 				SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v
 				WHERE v.type IN ('comment', 'repost', 'quote')
 				  AND v.repo_url != ?
+				  AND v.author_email != ?
 				  AND NOT v.is_edit_commit AND NOT v.is_retracted
 				  AND (
 				    v.original_repo_url = ?
-				    OR EXISTS (
-				      SELECT 1 FROM social_items_resolved p
-				      WHERE p.type IN ('comment', 'repost', 'quote')
-				        AND p.author_email = ?
-				        AND p.original_repo_url = v.original_repo_url
-				        AND p.original_hash = v.original_hash
-				        AND p.original_branch = v.original_branch
-				        AND NOT p.is_edit_commit AND NOT p.is_retracted
-				    )
+				    OR (EXISTS (
+				      SELECT 1 FROM user_threads ut
+				      WHERE ut.original_repo_url = v.original_repo_url
+				        AND ut.original_hash = v.original_hash
+				        AND ut.original_branch = v.original_branch
+				    ) AND `+followedReposCondition+`)
 				  )
 			)
-		`, workspaceURL, workspaceURL, userEmail); err != nil {
+		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
 			return fmt.Errorf("unmark items as read: %w", err)
 		}
 		if _, err := db.Exec(`
