@@ -10,13 +10,12 @@ import (
 	"strconv"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/settings"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/extensions/social"
 )
@@ -107,10 +106,9 @@ func initializeHandler(s *Server, version string) HandlerFunc {
 		if err := cache.Open(cacheDir); err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("open cache: %s", err))
 		}
-		syncExtension("social", p.Workdir, social.SyncWorkspaceToCache)
-		syncExtension("pm", p.Workdir, pm.SyncWorkspaceToCache)
-		syncExtension("review", p.Workdir, review.SyncWorkspaceToCache)
-		syncExtension("release", p.Workdir, release.SyncWorkspaceToCache)
+		if err := fetch.SyncWorkspace(p.Workdir); err != nil {
+			log.Printf("sync workspace: %s", err)
+		}
 		repoURL := gitmsg.ResolveRepoURL(p.Workdir)
 		extensions := buildExtensionStatus(p.Workdir)
 		s.session.Workdir = p.Workdir
@@ -399,10 +397,9 @@ func coreFetch(s *Server) HandlerFunc {
 				},
 			}
 			result := social.Fetch(workdir, cacheDir, opts)
-			syncExtension("social", workdir, social.SyncWorkspaceToCache)
-			syncExtension("pm", workdir, pm.SyncWorkspaceToCache)
-			syncExtension("review", workdir, review.SyncWorkspaceToCache)
-			syncExtension("release", workdir, release.SyncWorkspaceToCache)
+			if err := fetch.SyncWorkspace(workdir); err != nil {
+				log.Printf("sync workspace: %s", err)
+			}
 			review.FetchForks(workdir, cacheDir)
 			if result.Success {
 				errCount := len(result.Data.Errors)
@@ -496,11 +493,4 @@ func resolveRPCWorkspaceMode(workdir string) bool {
 	}
 	mode := settings.GetWorkspaceMode(s, originURL)
 	return mode == "*"
-}
-
-// syncExtension runs a sync function and logs errors without failing.
-func syncExtension(name, workdir string, fn func(string) error) {
-	if err := fn(workdir); err != nil {
-		log.Printf("sync %s: %s", name, err)
-	}
 }

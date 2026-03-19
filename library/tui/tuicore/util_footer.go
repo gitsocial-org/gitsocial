@@ -37,6 +37,11 @@ func RenderSyncingFooter(width int) string {
 	return footerStyle.Width(width).Render(keyStyle.Render("Syncing workspace..."))
 }
 
+// RenderLoadingFooter renders a subtle loading indicator in the footer
+func RenderLoadingFooter(width int) string {
+	return footerStyle.Width(width).Render(Dim.Render("Loading..."))
+}
+
 // RenderFetchingFooter renders the fetching progress footer with dynamic info
 func RenderFetchingFooter(repos, lists, width int) string {
 	content := keyStyle.Render("Fetching...") + "  " +

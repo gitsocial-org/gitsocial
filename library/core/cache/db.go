@@ -212,6 +212,12 @@ CREATE TABLE IF NOT EXISTS core_repository_meta (
     value TEXT NOT NULL,
     PRIMARY KEY (repo_url, key)
 );
+
+-- Core: Sync tips for workspace sync short-circuiting across restarts
+CREATE TABLE IF NOT EXISTS core_sync_tips (
+    key TEXT PRIMARY KEY,
+    tip TEXT NOT NULL
+);
 `
 
 // Open initializes the SQLite database connection and creates schema tables.

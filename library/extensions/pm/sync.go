@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/log"
@@ -12,6 +13,12 @@ import (
 )
 
 var lastSyncedTip sync.Map
+
+func init() {
+	fetch.RegisterProcessor("pm", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
+		ProcessWorkspaceBatch(commits, repoURL, extBranch)
+	})
+}
 
 // SyncWorkspaceToCache synchronizes PM commits from the workspace to the cache.
 func SyncWorkspaceToCache(workdir string) error {
@@ -24,6 +31,10 @@ func SyncWorkspaceToCache(workdir string) error {
 	}
 	key := workdir + "\x00" + branch
 	if prev, ok := lastSyncedTip.Load(key); ok && prev.(string) == tip {
+		return nil
+	}
+	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == tip {
+		lastSyncedTip.Store(key, tip)
 		return nil
 	}
 
@@ -83,7 +94,39 @@ func SyncWorkspaceToCache(workdir string) error {
 		}
 	}
 	lastSyncedTip.Store(key, tip)
+	_ = cache.SetSyncTip(key, tip)
 	return nil
+}
+
+// ProcessWorkspaceBatch processes pre-fetched commits for PM extension items.
+// Used by the unified workspace sync to avoid redundant git log calls.
+func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
+	var pmItems []PMItem
+	var links []pmLinkEntry
+	for _, gc := range commits {
+		if fetch.CleanRefname(gc.Refname) != branch {
+			continue
+		}
+		msg := protocol.ParseMessage(gc.Message)
+		if msg == nil || msg.Header.Ext != "pm" {
+			continue
+		}
+		item, lnk := buildPMItem(gc, msg, repoURL, branch)
+		if item != nil {
+			pmItems = append(pmItems, *item)
+		}
+		if lnk != nil {
+			links = append(links, *lnk)
+		}
+	}
+	if err := InsertPMItems(pmItems); err != nil {
+		log.Debug("batch insert pm items failed", "error", err)
+	}
+	for _, lnk := range links {
+		if err := InsertLinks(repoURL, lnk.hash, branch, lnk.blocks, lnk.blockedBy, lnk.related); err != nil {
+			log.Debug("insert pm links failed", "hash", lnk.hash, "error", err)
+		}
+	}
 }
 
 // pmLinkEntry holds link data for batch processing.

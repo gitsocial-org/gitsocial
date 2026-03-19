@@ -46,6 +46,7 @@ type State struct {
 	// Core paths
 	Workdir  string
 	CacheDir string
+	GitRoot  string // pre-computed git root to avoid subprocess on hot paths
 
 	// User info
 	UserEmail string

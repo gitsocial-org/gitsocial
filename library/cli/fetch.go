@@ -7,17 +7,16 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/settings"
 	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/extensions/social"
 )
@@ -107,22 +106,9 @@ For extension-specific options, use the extension's fetch command directly:
 				fmt.Printf("Fetched %d review items from %d forks\n", forkStats.Items, forkStats.Forks)
 			}
 			// Re-sync all workspace extension branches to cache
-			var wg sync.WaitGroup
-			for _, fn := range []func(string) error{
-				social.SyncWorkspaceToCache,
-				pm.SyncWorkspaceToCache,
-				review.SyncWorkspaceToCache,
-				release.SyncWorkspaceToCache,
-			} {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					if err := fn(cfg.WorkDir); err != nil {
-						slog.Debug("sync workspace", "error", err)
-					}
-				}()
+			if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
-			wg.Wait()
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
 				os.Exit(ExitCode(result.Error.Code))

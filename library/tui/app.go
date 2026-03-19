@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -16,6 +15,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/log"
@@ -159,10 +159,17 @@ func NewModel(workdir, cacheDir string) Model {
 	// Initialize keybinding registry
 	registry := tuicore.NewRegistry()
 
+	// Pre-compute git root once to avoid repeated subprocess calls
+	gitRoot, _ := git.GetRootDir(workdir)
+	if gitRoot == "" {
+		gitRoot = workdir
+	}
+
 	// Initialize shared state
 	state := &tuicore.State{
 		Workdir:     workdir,
 		CacheDir:    cacheDir,
+		GitRoot:     gitRoot,
 		UserEmail:   git.GetUserEmail(workdir),
 		Registry:    registry,
 		NavRegistry: navRegistry,
@@ -260,11 +267,8 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.host.ActivateView(),
 		func() tea.Msg { return startSyncMsg{} },
-		m.loadInitialStatus(),
 		m.loadInitialCacheSize(),
 		m.loadInitialUnreadCount(),
-		m.loadInitialUnpushedCount(),
-		m.loadInitialUnpushedLFSCount(),
 		m.loadInitialLists(),
 	)
 }
@@ -338,27 +342,9 @@ func (m Model) loadInitialCacheSize() tea.Cmd {
 // initWorkspace syncs the workspace to cache at startup.
 func (m Model) initWorkspace() tea.Cmd {
 	return func() tea.Msg {
-		var wg sync.WaitGroup
-		wg.Add(3)
-		go func() {
-			defer wg.Done()
-			if err := social.SyncWorkspaceToCache(m.workdir); err != nil {
-				log.Debug("background social sync failed", "error", err)
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := pm.SyncWorkspaceToCache(m.workdir); err != nil {
-				log.Debug("background pm sync failed", "error", err)
-			}
-		}()
-		go func() {
-			defer wg.Done()
-			if err := review.SyncWorkspaceToCache(m.workdir); err != nil {
-				log.Debug("background review sync failed", "error", err)
-			}
-		}()
-		wg.Wait()
+		if err := fetch.SyncWorkspace(m.workdir); err != nil {
+			log.Debug("workspace sync failed", "error", err)
+		}
 		return tuicore.WorkspaceInitializedMsg{}
 	}
 }
@@ -460,7 +446,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tuicore.WorkspaceInitializedMsg:
 		m.host.SetSyncing(false)
-		return m, m.host.ActivateView()
+		return m, tea.Batch(
+			m.host.ActivateView(),
+			m.loadInitialStatus(),
+			m.loadInitialUnpushedCount(),
+			m.loadInitialUnpushedLFSCount(),
+		)
 
 	case tuicore.TriggerFetchMsg:
 		if !m.isFetching {
@@ -831,17 +822,8 @@ func (m Model) startFetchWithMode(allBranches bool) tea.Cmd {
 		// Fetch fork PRs (review-only)
 		review.FetchForks(m.workdir, m.cacheDir)
 		// Re-sync all workspace extension branches to cache
-		if err := social.SyncWorkspaceToCache(m.workdir); err != nil {
-			log.Debug("post-fetch social sync failed", "error", err)
-		}
-		if err := pm.SyncWorkspaceToCache(m.workdir); err != nil {
-			log.Debug("post-fetch pm sync failed", "error", err)
-		}
-		if err := review.SyncWorkspaceToCache(m.workdir); err != nil {
-			log.Debug("post-fetch review sync failed", "error", err)
-		}
-		if err := release.SyncWorkspaceToCache(m.workdir); err != nil {
-			log.Debug("post-fetch release sync failed", "error", err)
+		if err := fetch.SyncWorkspace(m.workdir); err != nil {
+			log.Debug("post-fetch workspace sync failed", "error", err)
 		}
 		if !result.Success {
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
@@ -927,13 +909,14 @@ func (m Model) saveWorkspaceModeAndFetch(mode string) tea.Cmd {
 // refreshTimeline reloads timeline posts from the database.
 func (m Model) refreshTimeline() tea.Cmd {
 	workdir := m.workdir
+	gitRoot := m.host.State().GitRoot
 	return func() tea.Msg {
-		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: tuicore.PageSize + 1})
+		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: tuicore.PageSize + 1, GitRoot: gitRoot})
 		if !result.Success {
 			return tuisocial.TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
-		total := social.CountTimeline(workdir)
+		total := social.CountTimeline(workdir, gitRoot)
 		return tuisocial.TimelineLoadedMsg{Posts: posts, HasMore: hasMore, Total: total}
 	}
 }

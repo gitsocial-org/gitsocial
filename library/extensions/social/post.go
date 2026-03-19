@@ -18,6 +18,13 @@ import (
 
 var lastSyncedTip sync.Map
 
+func init() {
+	fetch.RegisterProcessor("social", func(commits []git.Commit, workdir, repoURL, _, defaultBranch string) {
+		ProcessWorkspaceBatch(commits, repoURL, defaultBranch)
+		SyncListsToCache(workdir)
+	})
+}
+
 // SyncWorkspaceToCache synchronizes workspace commits and lists to the cache.
 func SyncWorkspaceToCache(workdir string) error {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
@@ -26,12 +33,16 @@ func SyncWorkspaceToCache(workdir string) error {
 	if defaultBranch == "" {
 		defaultBranch = "main"
 	}
-	// Quick tip check to skip redundant syncs within the same session
+	// Quick tip check to skip redundant syncs
 	socialTip, _ := git.ReadRef(workdir, socialBranch)
 	defaultTip, _ := git.ReadRef(workdir, defaultBranch)
 	combinedTip := socialTip + "\x00" + defaultTip
 	key := workdir + "\x00" + repoURL
 	if prev, ok := lastSyncedTip.Load(key); ok && prev.(string) == combinedTip {
+		return nil
+	}
+	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == combinedTip {
+		lastSyncedTip.Store(key, combinedTip)
 		return nil
 	}
 	if err := cache.InsertRepository(cache.Repository{
@@ -78,45 +89,7 @@ func SyncWorkspaceToCache(workdir string) error {
 		}
 		msg := protocol.ParseMessage(gc.Message)
 		if msg != nil && msg.Header.Ext == "social" {
-			itemType := string(extractPostType(msg))
-			originalRepoURL, originalHash, originalBranch := "", "", ""
-			if orig := msg.Header.Fields["original"]; orig != "" {
-				normalizedRef := protocol.NormalizeRefWithContext(orig, repoURL, branch)
-				parsed := protocol.ParseRef(normalizedRef)
-				if parsed.Value != "" {
-					originalRepoURL = parsed.Repository
-					originalHash = parsed.Value
-					originalBranch = parsed.Branch
-					if originalBranch == "" {
-						originalBranch = branch
-					}
-				}
-			}
-			replyToRepoURL, replyToHash, replyToBranch := "", "", ""
-			if replyTo := msg.Header.Fields["reply-to"]; replyTo != "" {
-				normalizedRef := protocol.NormalizeRefWithContext(replyTo, repoURL, branch)
-				parsed := protocol.ParseRef(normalizedRef)
-				if parsed.Value != "" {
-					replyToRepoURL = parsed.Repository
-					replyToHash = parsed.Value
-					replyToBranch = parsed.Branch
-					if replyToBranch == "" {
-						replyToBranch = branch
-					}
-				}
-			}
-			socialItems = append(socialItems, SocialItem{
-				RepoURL:         repoURL,
-				Hash:            gc.Hash,
-				Branch:          branch,
-				Type:            itemType,
-				OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
-				OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
-				OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
-				ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
-				ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
-				ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
-			})
+			socialItems = append(socialItems, buildSocialItem(gc, msg, repoURL, branch))
 			for _, ref := range msg.References {
 				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
 					virtualItems = append(virtualItems, *vi)
@@ -140,13 +113,46 @@ func SyncWorkspaceToCache(workdir string) error {
 		liveHashes[c.Hash] = true
 	}
 	_, _ = cache.MarkCommitsStaleByRepo(repoURL, liveHashes)
-	syncListsToCache(workdir)
+	SyncListsToCache(workdir)
 	lastSyncedTip.Store(key, combinedTip)
+	_ = cache.SetSyncTip(key, combinedTip)
 	return nil
 }
 
-// syncListsToCache persists all workspace lists to the cache database.
-func syncListsToCache(workdir string) {
+// ProcessWorkspaceBatch processes pre-fetched commits for social extension items.
+// Used by the unified workspace sync to avoid redundant git log calls.
+func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) {
+	var socialItems []SocialItem
+	var virtualItems []SocialItem
+	for _, gc := range commits {
+		branch := fetch.CleanRefname(gc.Refname)
+		if branch == "" {
+			branch = defaultBranch
+		}
+		msg := protocol.ParseMessage(gc.Message)
+		if msg != nil && msg.Header.Ext == "social" {
+			socialItems = append(socialItems, buildSocialItem(gc, msg, repoURL, branch))
+			for _, ref := range msg.References {
+				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
+					virtualItems = append(virtualItems, *vi)
+				}
+			}
+		} else {
+			upgradeVirtualItem(gc, repoURL)
+		}
+	}
+	if err := InsertSocialItems(socialItems); err != nil {
+		log.Warn("batch insert social items failed", "error", err)
+	}
+	for _, vi := range virtualItems {
+		if err := InsertSocialItem(vi); err != nil {
+			log.Debug("insert virtual social item failed", "hash", vi.Hash, "error", err)
+		}
+	}
+}
+
+// SyncListsToCache persists all workspace lists to the cache database.
+func SyncListsToCache(workdir string) {
 	result := GetLists(workdir)
 	if !result.Success {
 		return
@@ -160,52 +166,11 @@ func syncListsToCache(workdir string) {
 func processWorkspaceCommits(commits []git.Commit, repoURL, branch string) {
 	for _, gc := range commits {
 		msg := protocol.ParseMessage(gc.Message)
-
 		if msg != nil && msg.Header.Ext == "social" {
-			itemType := string(extractPostType(msg))
-			// Parse original and reply-to refs to extract repo_url, hash, and branch
-			originalRepoURL, originalHash, originalBranch := "", "", ""
-			if orig := msg.Header.Fields["original"]; orig != "" {
-				normalizedRef := protocol.NormalizeRefWithContext(orig, repoURL, branch)
-				parsed := protocol.ParseRef(normalizedRef)
-				if parsed.Value != "" {
-					originalRepoURL = parsed.Repository
-					originalHash = parsed.Value
-					originalBranch = parsed.Branch
-					if originalBranch == "" {
-						originalBranch = branch // default to current branch
-					}
-				}
-			}
-			replyToRepoURL, replyToHash, replyToBranch := "", "", ""
-			if replyTo := msg.Header.Fields["reply-to"]; replyTo != "" {
-				normalizedRef := protocol.NormalizeRefWithContext(replyTo, repoURL, branch)
-				parsed := protocol.ParseRef(normalizedRef)
-				if parsed.Value != "" {
-					replyToRepoURL = parsed.Repository
-					replyToHash = parsed.Value
-					replyToBranch = parsed.Branch
-					if replyToBranch == "" {
-						replyToBranch = branch // default to current branch
-					}
-				}
-			}
-
-			if err := InsertSocialItem(SocialItem{
-				RepoURL:         repoURL,
-				Hash:            gc.Hash,
-				Branch:          branch,
-				Type:            itemType,
-				OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
-				OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
-				OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
-				ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
-				ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
-				ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
-			}); err != nil {
+			item := buildSocialItem(gc, msg, repoURL, branch)
+			if err := InsertSocialItem(item); err != nil {
 				log.Warn("insert social item failed", "hash", gc.Hash, "error", err)
 			}
-
 			for _, ref := range msg.References {
 				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
 					if err := InsertSocialItem(*vi); err != nil {
@@ -217,6 +182,42 @@ func processWorkspaceCommits(commits []git.Commit, repoURL, branch string) {
 			upgradeVirtualItem(gc, repoURL)
 		}
 	}
+}
+
+// buildSocialItem constructs a SocialItem from a parsed commit and message.
+func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) SocialItem {
+	itemType := string(extractPostType(msg))
+	originalRepoURL, originalHash, originalBranch := parseRefField(msg, "original", repoURL, branch)
+	replyToRepoURL, replyToHash, replyToBranch := parseRefField(msg, "reply-to", repoURL, branch)
+	return SocialItem{
+		RepoURL:         repoURL,
+		Hash:            gc.Hash,
+		Branch:          branch,
+		Type:            itemType,
+		OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
+		OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
+		OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
+		ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
+		ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
+		ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
+	}
+}
+
+// parseRefField extracts repo_url, hash, and branch from a header ref field.
+func parseRefField(msg *protocol.Message, field, repoURL, branch string) (string, string, string) {
+	raw := msg.Header.Fields[field]
+	if raw == "" {
+		return "", "", ""
+	}
+	parsed := protocol.ParseRef(protocol.NormalizeRefWithContext(raw, repoURL, branch))
+	if parsed.Value == "" {
+		return "", "", ""
+	}
+	b := parsed.Branch
+	if b == "" {
+		b = branch
+	}
+	return parsed.Repository, parsed.Value, b
 }
 
 // upgradeVirtualItem converts a virtual item to a real one when fetched.
@@ -285,6 +286,8 @@ type GetPostsOptions struct {
 	IncludeImplicit bool
 	SkipCache       bool
 	SortBy          string
+	GitRoot         string // pre-computed git root to avoid subprocess on hot path
+	SkipUnpushed    bool   // skip unpushed decoration for fast initial load
 }
 
 // CreatePostOptions configures post creation.
@@ -375,14 +378,21 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 
 // getTimeline retrieves posts from all subscribed lists and workspace.
 func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	gitRoot, err := git.GetRootDir(workdir)
-	if err != nil || gitRoot == "" {
-		gitRoot = workdir
+	gitRoot := opts.GitRoot
+	if gitRoot == "" {
+		var err error
+		gitRoot, err = git.GetRootDir(workdir)
+		if err != nil || gitRoot == "" {
+			gitRoot = workdir
+		}
 	}
 
-	// Get unpushed commits for workspace posts
-	branch := gitmsg.GetExtBranch(workdir, "social")
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
+	// Get unpushed commits for workspace posts (skip on fast initial load)
+	var unpushed map[string]struct{}
+	if !opts.SkipUnpushed {
+		branch := gitmsg.GetExtBranch(workdir, "social")
+		unpushed, _ = git.GetUnpushedCommits(workdir, branch)
+	}
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
 	items, err := GetTimeline(listIDs, workspaceURL, opts.Limit, opts.Cursor)
@@ -404,10 +414,13 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 }
 
 // CountTimeline returns the total number of timeline posts for the workspace.
-func CountTimeline(workdir string) int {
-	gitRoot, err := git.GetRootDir(workdir)
-	if err != nil || gitRoot == "" {
-		gitRoot = workdir
+func CountTimeline(workdir, gitRoot string) int {
+	if gitRoot == "" {
+		var err error
+		gitRoot, err = git.GetRootDir(workdir)
+		if err != nil || gitRoot == "" {
+			gitRoot = workdir
+		}
 	}
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	listIDs, _ := cache.GetListIDs(gitRoot)

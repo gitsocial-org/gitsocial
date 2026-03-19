@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/log"
@@ -12,6 +13,12 @@ import (
 )
 
 var lastSyncedTip sync.Map // "workdir\x00branch" → tip hash
+
+func init() {
+	fetch.RegisterProcessor("review", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
+		ProcessWorkspaceBatch(commits, repoURL, extBranch)
+	})
+}
 
 // SyncWorkspaceToCache synchronizes review commits from the workspace to the cache.
 func SyncWorkspaceToCache(workdir string) error {
@@ -24,6 +31,10 @@ func SyncWorkspaceToCache(workdir string) error {
 	}
 	key := workdir + "\x00" + branch
 	if prev, ok := lastSyncedTip.Load(key); ok && prev.(string) == tip {
+		return nil
+	}
+	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == tip {
+		lastSyncedTip.Store(key, tip)
 		return nil
 	}
 
@@ -69,7 +80,26 @@ func SyncWorkspaceToCache(workdir string) error {
 	}
 
 	lastSyncedTip.Store(key, tip)
+	_ = cache.SetSyncTip(key, tip)
 	return nil
+}
+
+// ProcessWorkspaceBatch processes pre-fetched commits for review extension items.
+// Used by the unified workspace sync to avoid redundant git log calls.
+func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
+	var reviewItems []ReviewItem
+	for _, gc := range commits {
+		if fetch.CleanRefname(gc.Refname) != branch {
+			continue
+		}
+		msg := protocol.ParseMessage(gc.Message)
+		if item := buildReviewItem(gc, msg, repoURL, branch); item != nil {
+			reviewItems = append(reviewItems, *item)
+		}
+	}
+	if err := InsertReviewItems(reviewItems); err != nil {
+		log.Debug("batch insert review items failed", "error", err)
+	}
 }
 
 // buildReviewItem builds a ReviewItem from a commit and message without inserting.

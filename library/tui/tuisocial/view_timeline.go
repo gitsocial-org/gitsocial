@@ -15,6 +15,7 @@ import (
 type TimelineView struct {
 	cardlist     *tuicore.CardList
 	workdir      string
+	gitRoot      string
 	userEmail    string
 	showEmail    bool
 	restoreIndex int // cursor position to restore after refresh (-1 = none)
@@ -106,6 +107,18 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 	} else {
 		v.restoreIndex = -1
 	}
+	if v.gitRoot == "" {
+		v.gitRoot = state.GitRoot
+	}
+	// Instant display: synchronous preload from cache when empty
+	if len(v.cardlist.Items()) == 0 {
+		result := social.GetPosts(v.workdir, "timeline", &social.GetPostsOptions{
+			Limit: 10, GitRoot: v.gitRoot, SkipUnpushed: true,
+		})
+		if result.Success && len(result.Data) > 0 {
+			v.cardlist.SetItems(PostsToItems(result.Data, v.userEmail, v.showEmail))
+		}
+	}
 	return v.loadPosts()
 }
 
@@ -113,14 +126,18 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 func (v *TimelineView) loadPosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
+	gitRoot := v.gitRoot
 	limit := v.pag.Limit()
 	return func() tea.Msg {
-		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: limit + 1})
+		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{
+			Limit:   limit + 1,
+			GitRoot: gitRoot,
+		})
 		if !result.Success {
 			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		total := social.CountTimeline(workdir)
+		total := social.CountTimeline(workdir, gitRoot)
 		return TimelineLoadedMsg{Posts: posts, HasMore: hasMore, Total: total}
 	}
 }
@@ -228,14 +245,12 @@ func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
 // Render renders the timeline view to a string.
 func (v *TimelineView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
-	var content string
-	if v.pag.Loading && len(v.cardlist.Items()) == 0 {
-		content = tuicore.Dim.Render("Loading...")
-	} else {
-		content = v.cardlist.View()
-	}
+	content := v.cardlist.View()
 
 	footer := tuicore.RenderFooter(state.Registry, tuicore.Timeline, wrapper.ContentWidth(), nil)
+	if v.pag.Loading && len(v.cardlist.Items()) > 0 {
+		footer = tuicore.RenderLoadingFooter(wrapper.ContentWidth())
+	}
 
 	return wrapper.Render(content, footer)
 }
@@ -290,7 +305,7 @@ func (v *TimelineView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 // HeaderInfo returns position and total for the header display.
 func (v *TimelineView) HeaderInfo() (position, total int) {
 	items := v.cardlist.Items()
-	if len(items) == 0 {
+	if len(items) == 0 || v.pag.Loading {
 		return 0, 0
 	}
 	return v.cardlist.Selected() + 1, v.pag.Total(len(items))
