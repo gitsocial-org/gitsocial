@@ -11,7 +11,6 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/tui/tuicore"
@@ -364,10 +363,6 @@ func (v *PRsView) loadPRs() tea.Cmd {
 	workdir := v.workdir
 	limit := v.pag.Limit()
 	return func() tea.Msg {
-		if err := review.SyncWorkspaceToCache(workdir); err != nil {
-			log.Debug("review sync before PR list load failed", "error", err)
-		}
-
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		v.workspaceURL = repoURL
 		branch := gitmsg.GetExtBranch(workdir, "review")

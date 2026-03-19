@@ -10,7 +10,6 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/tui/tuicore"
 )
@@ -339,10 +338,6 @@ func (v *ReleasesView) loadReleases() tea.Cmd {
 	workdir := v.workdir
 	limit := v.pag.Limit()
 	return func() tea.Msg {
-		if err := release.SyncWorkspaceToCache(workdir); err != nil {
-			log.Debug("release sync before list load failed", "error", err)
-		}
-
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		v.workspaceURL = repoURL
 		branch := gitmsg.GetExtBranch(workdir, "release")
