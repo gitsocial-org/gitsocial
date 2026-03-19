@@ -47,6 +47,7 @@ type HostContext interface {
 	// View operations
 	Update(msg tea.Msg) tea.Cmd
 	ActivateView() tea.Cmd
+	RefreshView() tea.Cmd
 	// Source navigation
 	GetSourceItem(offset int) (postID string, newIndex int, ok bool)
 	UpdateSourceIndex(index, total int)

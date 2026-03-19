@@ -291,7 +291,7 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 	} else {
 		msgCmd = ctx.Host().SetMessageWithTimeout("Already up to date", tuicore.MessageTypeSuccess, 5*time.Second)
 	}
-	return true, tea.Batch(ctx.Host().ActivateView(), ctx.LoadUnreadCount(), msgCmd)
+	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd)
 }
 
 func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
@@ -309,7 +309,7 @@ func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, te
 	} else {
 		msgCmd = ctx.Host().SetMessageWithTimeout(fmt.Sprintf("Pushed %d commits, %d refs", msg.Commits, msg.Refs), tuicore.MessageTypeSuccess, 5*time.Second)
 	}
-	return true, tea.Batch(ctx.Host().ActivateView(), ctx.LoadUnpushedCount(), msgCmd)
+	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnpushedCount(), msgCmd)
 }
 
 func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
@@ -397,7 +397,7 @@ func handlePostEdited(msg PostEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd)
 		updatedItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
 		sh.UpdateDisplayItem(updatedItem)
 	}
-	return true, ctx.Host().ActivateView()
+	return true, ctx.Host().RefreshView()
 }
 
 func handleRetractStarted(_ RetractStartedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {

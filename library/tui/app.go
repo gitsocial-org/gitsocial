@@ -447,7 +447,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tuicore.WorkspaceInitializedMsg:
 		m.host.SetSyncing(false)
 		return m, tea.Batch(
-			m.host.ActivateView(),
+			m.host.RefreshView(),
 			m.loadInitialStatus(),
 			m.loadInitialUnpushedCount(),
 			m.loadInitialUnpushedLFSCount(),
@@ -771,7 +771,7 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 			Total:       msg.SourceTotal,
 			SearchQuery: msg.SearchQuery,
 		}
-	} else {
+	} else if msg.Action != tuicore.NavBack {
 		m.host.State().DetailSource = nil
 	}
 	// Always focus content after navigation

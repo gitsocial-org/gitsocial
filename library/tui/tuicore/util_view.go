@@ -27,6 +27,13 @@ type ViewActivator interface {
 	Activate(state *State) tea.Cmd
 }
 
+// ViewRefresher is an optional interface for views that can reload data
+// without resetting view state (cursor position, scroll, etc.).
+type ViewRefresher interface {
+	// Refresh reloads data in place, preserving cursor and scroll state.
+	Refresh(state *State) tea.Cmd
+}
+
 // InputHandler is an optional interface for views with text input.
 type InputHandler interface {
 	// IsInputActive returns true if the view is handling text input.

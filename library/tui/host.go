@@ -236,6 +236,21 @@ func (h *Host) ActivateView() tea.Cmd {
 	return nil
 }
 
+// RefreshView reloads data in the current view without resetting view state.
+// Falls back to ActivateView if the view doesn't implement ViewRefresher.
+func (h *Host) RefreshView() tea.Cmd {
+	view := h.resolveView()
+	if view != nil {
+		if refresher, ok := view.(tuicore.ViewRefresher); ok {
+			return refresher.Refresh(h.state)
+		}
+		if activator, ok := view.(tuicore.ViewActivator); ok {
+			return activator.Activate(h.state)
+		}
+	}
+	return nil
+}
+
 // CurrentContext returns the context for the current view.
 func (h *Host) CurrentContext() tuicore.Context {
 	loc := h.state.Router.Location()

@@ -110,6 +110,12 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 	if v.gitRoot == "" {
 		v.gitRoot = state.GitRoot
 	}
+	// Navigating back with data already loaded: restore cursor, skip reload
+	if v.restoreIndex >= 0 && len(v.cardlist.Items()) > 0 {
+		v.cardlist.SetSelected(v.restoreIndex)
+		v.restoreIndex = -1
+		return nil
+	}
 	// Instant display: synchronous preload from cache when empty
 	if len(v.cardlist.Items()) == 0 {
 		result := social.GetPosts(v.workdir, "timeline", &social.GetPostsOptions{
@@ -119,6 +125,12 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 			v.cardlist.SetItems(PostsToItems(result.Data, v.userEmail, v.showEmail))
 		}
 	}
+	return v.loadPosts()
+}
+
+// Refresh reloads timeline data while preserving cursor position.
+func (v *TimelineView) Refresh(state *tuicore.State) tea.Cmd {
+	v.restoreIndex = v.cardlist.Selected()
 	return v.loadPosts()
 }
 
