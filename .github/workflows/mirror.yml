@@ -18,17 +18,7 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - run: |
-          git remote add gitlab https://oauth2:${{ secrets.GITLAB_PAT }}@gitlab.com/gitsocial-org/gitsocial.git
-          git fetch origin '+refs/heads/gitmsg/*:refs/heads/gitmsg/*' '+refs/gitmsg/*:refs/gitmsg/*'
-          git lfs fetch origin --all
-          git push gitlab --all --force
-          git push gitlab --tags --force
-          git lfs push gitlab --all || true
-          for ref in $(git for-each-ref --format='%(refname)' refs/gitmsg/); do
-            git lfs push gitlab "$ref" 2>/dev/null || true
-          done
-          git push gitlab 'refs/gitmsg/*:refs/gitmsg/*' --force
+      - run: scripts/mirror.sh gitlab "https://oauth2:${{ secrets.GITLAB_PAT }}@gitlab.com/gitsocial-org/gitsocial.git"
 
   codeberg:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
@@ -39,14 +29,4 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - run: |
-          git remote add codeberg https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/gitsocial.git
-          git fetch origin '+refs/heads/gitmsg/*:refs/heads/gitmsg/*' '+refs/gitmsg/*:refs/gitmsg/*'
-          git lfs fetch origin --all
-          git push codeberg --all --force
-          git push codeberg --tags --force
-          git lfs push codeberg --all || true
-          for ref in $(git for-each-ref --format='%(refname)' refs/gitmsg/); do
-            git lfs push codeberg "$ref" 2>/dev/null || true
-          done
-          git push codeberg 'refs/gitmsg/*:refs/gitmsg/*' --force
+      - run: scripts/mirror.sh codeberg "https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/gitsocial.git"

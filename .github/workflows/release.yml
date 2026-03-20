@@ -21,6 +21,8 @@ jobs:
           go-version-file: library/go.mod
           cache-dependency-path: library/go.sum
 
+      - uses: anchore/sbom-action/download-syft@v0
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -30,47 +32,5 @@ jobs:
           GORELEASER_HOMEBREW_CASK_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GORELEASER_SCOOP_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
-      - name: Publish gitsocial release with LFS artifacts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          BINARY="dist/gitsocial_linux_amd64_v1/gitsocial"
-          chmod +x "$BINARY"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Fetch existing gitmsg refs so we append to them
-          git fetch origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*' 'refs/gitmsg/*:refs/gitmsg/*' || true
-
-          # Generate changelog from commits since last tag
-          PREV_TAG=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || echo "")
-          NOTES=$(mktemp)
-          echo "$GITHUB_REF_NAME" > "$NOTES"
-          echo >> "$NOTES"
-          if [ -n "$PREV_TAG" ]; then
-            git log "$PREV_TAG..$GITHUB_REF_NAME" --oneline --no-decorate >> "$NOTES"
-          else
-            git log --oneline --no-decorate >> "$NOTES"
-          fi
-
-          # Add artifacts first, then create release with metadata
-          "$BINARY" release init || true
-          SBOM_NAME=$(cd dist && ls *.sbom.json 2>/dev/null | head -1)
-          "$BINARY" release artifacts add "$VERSION" dist/*.tar.gz dist/*.zip dist/checksums.txt dist/*.sbom.json
-          ARTIFACTS=$(cd dist && ls *.tar.gz *.zip 2>/dev/null | paste -sd, -)
-          "$BINARY" release create - \
-            --tag "$GITHUB_REF_NAME" \
-            --version "$VERSION" \
-            --artifacts "$ARTIFACTS" \
-            --checksums checksums.txt \
-            --sbom "$SBOM_NAME" \
-            < "$NOTES"
-          rm -f "$NOTES"
-
-          # Push LFS objects first, then refs
-          # (cannot use 'gitsocial push' — CI is in detached HEAD after tag checkout)
-          git lfs push origin --all
-          git push origin gitmsg/release
-          git push origin 'refs/gitmsg/*:refs/gitmsg/*'
+      - name: Publish gitsocial release
+        run: scripts/release.sh "$GITHUB_REF_NAME"
