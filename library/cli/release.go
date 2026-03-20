@@ -298,6 +298,10 @@ func newReleaseEditCmd() *cobra.Command {
 	var tag string
 	var version string
 	var sbom string
+	var artifactsStr string
+	var artifactURL string
+	var checksums string
+	var signedBy string
 
 	cmd := &cobra.Command{
 		Use:   "edit <release-ref>",
@@ -326,6 +330,19 @@ func newReleaseEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("sbom") {
 				opts.SBOM = &sbom
 			}
+			if cmd.Flags().Changed("artifacts") {
+				a := splitCSV(artifactsStr)
+				opts.Artifacts = &a
+			}
+			if cmd.Flags().Changed("artifact-url") {
+				opts.ArtifactURL = &artifactURL
+			}
+			if cmd.Flags().Changed("checksums") {
+				opts.Checksums = &checksums
+			}
+			if cmd.Flags().Changed("signed-by") {
+				opts.SignedBy = &signedBy
+			}
 
 			result := release.EditRelease(cfg.WorkDir, args[0], opts)
 			if !result.Success {
@@ -347,6 +364,10 @@ func newReleaseEditCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Updated git tag")
 	cmd.Flags().StringVarP(&version, "version", "v", "", "Updated version")
 	cmd.Flags().StringVar(&sbom, "sbom", "", "Updated SBOM filename")
+	cmd.Flags().StringVar(&artifactsStr, "artifacts", "", "Artifact filenames (comma-separated)")
+	cmd.Flags().StringVar(&artifactURL, "artifact-url", "", "Base URL for externally hosted artifacts")
+	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename (e.g., SHA256SUMS)")
+	cmd.Flags().StringVar(&signedBy, "signed-by", "", "Key fingerprint for release signature")
 
 	return cmd
 }
