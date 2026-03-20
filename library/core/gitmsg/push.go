@@ -13,6 +13,17 @@ type PushResult struct {
 	Refs    int `json:"refs"`
 }
 
+// HasDivergedBranches checks if any gitmsg branch has diverged from remote.
+func HasDivergedBranches(workdir string) bool {
+	for _, branch := range GetExtBranches(workdir) {
+		err := git.ValidatePushPreconditions(workdir, "origin", branch)
+		if err != nil && errors.Is(err, git.ErrDiverged) {
+			return true
+		}
+	}
+	return false
+}
+
 // Push pushes all extension branches and gitmsg refs to remote.
 func Push(workdir string, dryRun bool) (*PushResult, error) {
 	branches := GetExtBranches(workdir)

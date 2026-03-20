@@ -67,6 +67,9 @@ type Model struct {
 	// Workspace fetch mode choice dialog
 	fetchChoice tuicore.ChoiceDialog
 
+	// Push rebase confirmation dialog
+	pushConfirm tuicore.ConfirmDialog
+
 	// Nav panel hidden (fullscreen diff mode)
 	navHidden bool
 
@@ -483,6 +486,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.host.State().ChoicePrompt = m.fetchChoice.Render()
 		return m, nil
 
+	case pushDivergedMsg:
+		m.pushConfirm.Show("Branches have diverged. Rebase local commits?", false, func() tea.Cmd {
+			m.host.State().ChoicePrompt = ""
+			return m.rebaseAndPush()
+		})
+		m.host.State().ChoicePrompt = m.pushConfirm.Render()
+		// Reset push state if user declines (handled when dialog closes without confirm)
+		return m, nil
+
 	case startFetchMsg:
 		if !m.isFetching {
 			m.SetFetching(true)
@@ -591,6 +603,22 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if handled, cmd := m.fetchChoice.HandleKey(key); handled {
 			if !m.fetchChoice.IsActive() {
 				m.host.State().ChoicePrompt = ""
+			}
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	// Handle push rebase confirmation dialog
+	if m.pushConfirm.IsActive() {
+		if handled, cmd := m.pushConfirm.HandleKey(key); handled {
+			if !m.pushConfirm.IsActive() {
+				m.host.State().ChoicePrompt = ""
+				if cmd == nil {
+					// User declined — reset push state
+					m.isPushing = false
+					m.host.SetPushing(false)
+				}
 			}
 			return m, cmd
 		}
@@ -856,9 +884,29 @@ func (m Model) startFetchWithMode(allBranches bool) tea.Cmd {
 	}
 }
 
-// startPush begins pushing local changes to the remote repository.
+// pushDivergedMsg signals that gitmsg branches have diverged and need rebase confirmation.
+type pushDivergedMsg struct{}
+
+// startPush checks for divergence first, then pushes.
 func (m Model) startPush() tea.Cmd {
 	return func() tea.Msg {
+		if gitmsg.HasDivergedBranches(m.workdir) {
+			return pushDivergedMsg{}
+		}
+		result, err := gitmsg.Push(m.workdir, false)
+		if err != nil {
+			return tuisocial.PushCompletedMsg{Err: err}
+		}
+		return tuisocial.PushCompletedMsg{Commits: result.Commits, Refs: result.Refs}
+	}
+}
+
+// rebaseAndPush rebases diverged branches then pushes.
+func (m Model) rebaseAndPush() tea.Cmd {
+	return func() tea.Msg {
+		if err := gitmsg.RebaseDivergedBranches(m.workdir, gitmsg.GetExtBranches(m.workdir)); err != nil {
+			return tuisocial.PushCompletedMsg{Err: fmt.Errorf("rebase: %w", err)}
+		}
 		result, err := gitmsg.Push(m.workdir, false)
 		if err != nil {
 			return tuisocial.PushCompletedMsg{Err: err}

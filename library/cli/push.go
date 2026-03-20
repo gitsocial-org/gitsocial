@@ -2,8 +2,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -35,6 +37,22 @@ Examples:
 
 			if dryRun && !cfg.JSONOutput {
 				fmt.Println("Dry run - no changes will be pushed")
+			}
+
+			// Check for diverged branches and prompt for rebase
+			if !dryRun && gitmsg.HasDivergedBranches(cfg.WorkDir) {
+				fmt.Print("Some branches have diverged from remote. Rebase local commits? [y/n] ")
+				reader := bufio.NewReader(os.Stdin)
+				answer, _ := reader.ReadString('\n')
+				if strings.TrimSpace(strings.ToLower(answer)) != "y" {
+					fmt.Println("Push canceled.")
+					return
+				}
+				if err := gitmsg.RebaseDivergedBranches(cfg.WorkDir, gitmsg.GetExtBranches(cfg.WorkDir)); err != nil {
+					PrintError(cmd, fmt.Sprintf("Rebase failed: %s", err))
+					os.Exit(ExitError)
+				}
+				fmt.Println("Rebased successfully.")
 			}
 
 			result, err := gitmsg.Push(cfg.WorkDir, dryRun)
