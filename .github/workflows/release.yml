@@ -55,11 +55,17 @@ jobs:
             git log --oneline --no-decorate >> "$NOTES"
           fi
 
-          # Create gitsocial release and add artifacts
+          # Add artifacts first, then create release with metadata
           "$BINARY" release init || true
-          "$BINARY" release create - --tag "$GITHUB_REF_NAME" --version "$VERSION" < "$NOTES"
-          rm -f "$NOTES"
           "$BINARY" release artifacts add "$VERSION" dist/*.tar.gz dist/*.zip dist/checksums.txt
+          ARTIFACTS=$(cd dist && ls *.tar.gz *.zip 2>/dev/null | paste -sd, -)
+          "$BINARY" release create - \
+            --tag "$GITHUB_REF_NAME" \
+            --version "$VERSION" \
+            --artifacts "$ARTIFACTS" \
+            --checksums checksums.txt \
+            < "$NOTES"
+          rm -f "$NOTES"
 
           # Push LFS objects first, then refs
           # (cannot use 'gitsocial push' — CI is in detached HEAD after tag checkout)
