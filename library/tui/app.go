@@ -22,6 +22,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/settings"
+	"github.com/gitsocial-org/gitsocial/core/storage"
 	"github.com/gitsocial-org/gitsocial/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
@@ -512,6 +513,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
 		return m, nil
 
+	case tuicore.ExportArtifactMsg:
+		return m, m.exportArtifact(msg)
+
+	case exportArtifactDoneMsg:
+		if msg.err != nil {
+			return m, m.host.SetMessageWithTimeout(msg.err.Error(), tuicore.MessageTypeError, 5*time.Second)
+		}
+		openBrowser(filepath.Dir(msg.path))
+		return m, m.host.SetMessageWithTimeout("Saved to "+msg.path, tuicore.MessageTypeSuccess, 5*time.Second)
+
 	case tuicore.OpenEditorMsg:
 		mode := tuicore.EditorModePost
 		switch msg.Mode {
@@ -737,6 +748,14 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 		openBrowser(msg.Location.Path)
 		return m, nil
 	}
+	// Artifact export: download to ~/Downloads and open
+	if msg.Location.Path == "/export-artifact" {
+		return m, m.exportArtifact(tuicore.ExportArtifactMsg{
+			RepoURL:  msg.Location.Param("repoURL"),
+			Version:  msg.Location.Param("version"),
+			Filename: msg.Location.Param("filename"),
+		})
+	}
 	// Relative file paths: resolve against workdir and open externally
 	if !strings.HasPrefix(msg.Location.Path, "/") && strings.Contains(msg.Location.Path, ".") {
 		clean := filepath.Clean(msg.Location.Path)
@@ -876,6 +895,36 @@ func (m Model) checkWorkspaceMode() tea.Cmd {
 // triggerFetchDirectly is a helper that returns a startFetchMsg to begin fetching.
 func (m Model) triggerFetchDirectly(allBranches bool) tea.Msg {
 	return startFetchMsg{allBranches: allBranches}
+}
+
+// exportArtifactDoneMsg is sent when artifact export completes.
+type exportArtifactDoneMsg struct {
+	path string
+	err  error
+}
+
+// exportArtifact exports a release artifact to the downloads directory.
+func (m Model) exportArtifact(msg tuicore.ExportArtifactMsg) tea.Cmd {
+	workdir := m.workdir
+	cacheDir := m.cacheDir
+	return func() tea.Msg {
+		repoDir := workdir
+		repoURL := msg.RepoURL
+		if repoURL == "" {
+			repoURL = gitmsg.ResolveRepoURL(workdir)
+		}
+		wsURL := gitmsg.ResolveRepoURL(workdir)
+		if repoURL != wsURL {
+			repoDir = storage.GetStorageDir(cacheDir, repoURL)
+		}
+		destDir := git.DownloadsDir()
+		destPath := filepath.Join(destDir, msg.Filename)
+		res := release.ExportArtifact(repoDir, repoURL, msg.Version, msg.Filename, destPath)
+		if !res.Success {
+			return exportArtifactDoneMsg{err: fmt.Errorf("%s", res.Error.Message)}
+		}
+		return exportArtifactDoneMsg{path: res.Data}
+	}
 }
 
 // fetchStatusMsg delivers the async-loaded fetch status.

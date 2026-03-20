@@ -245,6 +245,13 @@ type LogErrorMsg struct {
 	Context  string
 }
 
+// ExportArtifactMsg requests exporting a release artifact to the downloads directory.
+type ExportArtifactMsg struct {
+	RepoURL  string
+	Version  string
+	Filename string
+}
+
 // HeaderPart is a segment of a card subtitle, optionally linked to a navigation target.
 type HeaderPart struct {
 	Text string

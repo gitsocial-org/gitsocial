@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 )
 
@@ -412,6 +415,7 @@ func newReleaseArtifactsCmd() *cobra.Command {
 	cmd.AddCommand(
 		newReleaseArtifactsAddCmd(),
 		newReleaseArtifactsListCmd(),
+		newReleaseArtifactsExportCmd(),
 	)
 	return cmd
 }
@@ -474,6 +478,47 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 					}
 					fmt.Printf("%s  %s  %d bytes\n", sha, f.Filename, f.Size)
 				}
+			}
+		},
+	}
+}
+
+func newReleaseArtifactsExportCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "export <version> [filename...]",
+		Short: "Export artifacts to downloads directory",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			version := args[0]
+			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
+			destDir := git.DownloadsDir()
+			filenames := args[1:]
+			if len(filenames) == 0 {
+				res := release.ListArtifacts(cfg.WorkDir, version)
+				if !res.Success {
+					PrintError(cmd, res.Error.Message)
+					os.Exit(ExitError)
+				}
+				for _, info := range res.Data {
+					filenames = append(filenames, info.Filename)
+				}
+				if len(filenames) == 0 {
+					fmt.Println("No artifacts found")
+					return
+				}
+			}
+			for _, filename := range filenames {
+				destPath := filepath.Join(destDir, filename)
+				res := release.ExportArtifact(cfg.WorkDir, repoURL, version, filename, destPath)
+				if !res.Success {
+					PrintError(cmd, fmt.Sprintf("%s: %s", filename, res.Error.Message))
+					continue
+				}
+				fmt.Printf("Saved %s → %s\n", filename, res.Data)
 			}
 		},
 	}

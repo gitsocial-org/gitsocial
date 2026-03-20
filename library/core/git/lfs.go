@@ -3,11 +3,16 @@ package git
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const lfsPointerPrefix = "version https://git-lfs.github.com/spec/v1\n"
@@ -123,4 +128,139 @@ func ParseLFSPointer(data []byte) (oid string, size int64, ok bool) {
 		}
 	}
 	return oid, size, oid != "" && size > 0
+}
+
+// FetchLFSObject downloads an LFS object from the remote using the Batch API.
+func FetchLFSObject(repoURL, oid string, size int64) ([]byte, error) {
+	lfsURL := buildLFSBatchURL(repoURL)
+	reqBody, _ := json.Marshal(map[string]interface{}{
+		"operation": "download",
+		"transfers": []string{"basic"},
+		"objects":   []map[string]interface{}{{"oid": oid, "size": size}},
+	})
+	req, err := http.NewRequest("POST", lfsURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("create lfs request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/vnd.git-lfs+json")
+	req.Header.Set("Accept", "application/vnd.git-lfs+json")
+	if user, pass, ok := getGitCredentials(repoURL); ok {
+		req.SetBasicAuth(user, pass)
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("lfs batch request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("lfs batch returned %d", resp.StatusCode)
+	}
+	var batchResp lfsBatchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&batchResp); err != nil {
+		return nil, fmt.Errorf("decode lfs batch response: %w", err)
+	}
+	if len(batchResp.Objects) == 0 {
+		return nil, fmt.Errorf("lfs batch returned no objects")
+	}
+	obj := batchResp.Objects[0]
+	if obj.Error != nil {
+		return nil, fmt.Errorf("lfs object error: %s", obj.Error.Message)
+	}
+	dl, ok := obj.Actions["download"]
+	if !ok {
+		return nil, fmt.Errorf("lfs object has no download action")
+	}
+	return downloadLFSObject(dl, client)
+}
+
+type lfsBatchResponse struct {
+	Objects []lfsObject `json:"objects"`
+}
+
+type lfsObject struct {
+	OID     string               `json:"oid"`
+	Size    int64                `json:"size"`
+	Actions map[string]lfsAction `json:"actions"`
+	Error   *lfsObjectError      `json:"error"`
+}
+
+type lfsAction struct {
+	Href   string            `json:"href"`
+	Header map[string]string `json:"header"`
+}
+
+type lfsObjectError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// downloadLFSObject fetches the actual object data from the download URL.
+func downloadLFSObject(action lfsAction, client *http.Client) ([]byte, error) {
+	req, err := http.NewRequest("GET", action.Href, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create download request: %w", err)
+	}
+	for k, v := range action.Header {
+		req.Header.Set(k, v)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download lfs object: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("lfs download returned %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read lfs object: %w", err)
+	}
+	return data, nil
+}
+
+// buildLFSBatchURL constructs the LFS Batch API URL from a repo URL.
+func buildLFSBatchURL(repoURL string) string {
+	base := strings.TrimSuffix(repoURL, "/")
+	if !strings.HasSuffix(base, ".git") {
+		base += ".git"
+	}
+	return base + "/info/lfs/objects/batch"
+}
+
+// getGitCredentials retrieves credentials for a URL via git credential fill.
+func getGitCredentials(repoURL string) (user, pass string, ok bool) {
+	parsed, err := url.Parse(repoURL)
+	if err != nil {
+		return "", "", false
+	}
+	input := fmt.Sprintf("protocol=%s\nhost=%s\n", parsed.Scheme, parsed.Host)
+	if parsed.Path != "" {
+		input += fmt.Sprintf("path=%s\n", strings.TrimPrefix(parsed.Path, "/"))
+	}
+	output, err := execGitWithStdin(".", []string{"credential", "fill"}, input)
+	if err != nil {
+		return "", "", false
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "username=") {
+			user = strings.TrimPrefix(line, "username=")
+		} else if strings.HasPrefix(line, "password=") {
+			pass = strings.TrimPrefix(line, "password=")
+		}
+	}
+	return user, pass, user != "" && pass != ""
+}
+
+// DownloadsDir returns the user's downloads directory.
+func DownloadsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "."
+	}
+	dir := filepath.Join(home, "Downloads")
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		return dir
+	}
+	return home
 }

@@ -93,6 +93,65 @@ type checksumEntry struct {
 	size   int64
 }
 
+// ExportArtifact reads an artifact from the release ref and writes it to destPath.
+// It resolves LFS pointers locally first, then falls back to remote fetch via the Batch API.
+func ExportArtifact(repoDir, repoURL, version, filename, destPath string) Result[string] {
+	ref := "refs/gitmsg/release/" + version + "/artifacts"
+	content, err := git.GetFileContent(repoDir, ref, filename)
+	if err != nil {
+		return result.Err[string]("NOT_FOUND", fmt.Sprintf("artifact %s not found in %s: %s", filename, version, err))
+	}
+	data := []byte(content)
+	if oid, size, ok := git.ParseLFSPointer(data); ok {
+		if lfsData, lfsErr := git.ReadLFSObject(repoDir, oid); lfsErr == nil {
+			data = lfsData
+		} else if repoURL != "" {
+			lfsData, fetchErr := git.FetchLFSObject(repoURL, oid, size)
+			if fetchErr != nil {
+				return result.Err[string]("LFS_UNAVAILABLE", fmt.Sprintf("artifact %s is stored in LFS but could not be downloaded: %s", filename, fetchErr))
+			}
+			data = lfsData
+			_ = git.StoreLFSObject(repoDir, oid, data)
+		} else {
+			return result.Err[string]("LFS_UNAVAILABLE", fmt.Sprintf("artifact %s is stored in LFS but not available locally", filename))
+		}
+	}
+	destPath = uniquePath(destPath)
+	if err := os.WriteFile(destPath, data, 0o644); err != nil {
+		return result.Err[string]("WRITE_FAILED", fmt.Sprintf("write artifact: %s", err))
+	}
+	return result.Ok(destPath)
+}
+
+// uniquePath appends (1), (2), etc. if the path already exists.
+func uniquePath(path string) string {
+	if _, err := os.Stat(path); err != nil {
+		return path
+	}
+	ext := filepath.Ext(path)
+	base := strings.TrimSuffix(path, ext)
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s (%d)%s", base, i, ext)
+		if _, err := os.Stat(candidate); err != nil {
+			return candidate
+		}
+	}
+}
+
+// FormatSize formats a byte count as a human-readable string.
+func FormatSize(bytes int64) string {
+	switch {
+	case bytes >= 1<<30:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(1<<30))
+	case bytes >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(1<<20))
+	case bytes >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(1<<10))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
 // readChecksums reads and parses the SHA256SUMS blob from the artifact ref.
 func readChecksums(workdir, ref string) map[string]checksumEntry {
 	out, err := git.ExecGit(workdir, []string{"show", ref + ":SHA256SUMS"})

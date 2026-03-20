@@ -1000,3 +1000,8 @@ func Hyperlink(linkURL, text string) string {
 	h = "\x1b[38;5;" + AccentHyperlink + ";4m" + h + "\x1b[39;24m"
 	return h
 }
+
+// LinkStyle applies link color and underline without an OSC 8 hyperlink.
+func LinkStyle(text string) string {
+	return "\x1b[38;5;" + AccentHyperlink + ";4m" + text + "\x1b[39;24m"
+}

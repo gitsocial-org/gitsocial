@@ -19,23 +19,24 @@ import (
 
 // ReleaseDetailView displays a single release with comments.
 type ReleaseDetailView struct {
-	workdir      string
-	width        int
-	height       int
-	loaded       bool
-	rel          *release.Release
-	comments     []social.Post
-	sbomSummary  *release.SBOMSummary
-	sbomLoading  bool
-	userEmail    string
-	showEmail    bool
-	workspaceURL string
-	focusID      string
-	showRaw      bool
-	confirm      tuicore.ConfirmDialog
-	sectionList  *tuicore.SectionList
-	sourceIndex  int
-	sourceTotal  int
+	workdir       string
+	width         int
+	height        int
+	loaded        bool
+	rel           *release.Release
+	comments      []social.Post
+	sbomSummary   *release.SBOMSummary
+	sbomLoading   bool
+	artifactInfos map[string]release.ArtifactInfo
+	userEmail     string
+	showEmail     bool
+	workspaceURL  string
+	focusID       string
+	showRaw       bool
+	confirm       tuicore.ConfirmDialog
+	sectionList   *tuicore.SectionList
+	sourceIndex   int
+	sourceTotal   int
 }
 
 // NewReleaseDetailView creates a new release detail view.
@@ -64,6 +65,7 @@ func (v *ReleaseDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.comments = nil
 	v.sbomSummary = nil
 	v.sbomLoading = false
+	v.artifactInfos = nil
 	v.sectionList.SetSections(nil)
 	if state.DetailSource != nil {
 		v.sourceIndex = state.DetailSource.Index
@@ -128,21 +130,42 @@ func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 			v.focusID = ""
 		}
+		var cmds []tea.Cmd
 		if v.rel != nil && v.rel.SBOM != "" && v.rel.Version != "" {
 			v.sbomLoading = true
 			rel := v.rel
 			workdir := v.workdir
-			return func() tea.Msg {
+			cmds = append(cmds, func() tea.Msg {
 				repoURL := gitmsg.ResolveRepoURL(workdir)
 				s, _ := release.GetSBOMSummary(workdir, repoURL, rel.Version, rel.SBOM, rel.ArtifactURL)
 				return releaseDetailSBOMMsg{summary: s}
-			}
+			})
 		}
-		return nil
+		if v.rel != nil && len(v.rel.Artifacts) > 0 && v.rel.ArtifactURL == "" && v.rel.Version != "" {
+			rel := v.rel
+			workdir := v.workdir
+			cmds = append(cmds, func() tea.Msg {
+				res := release.ListArtifacts(workdir, rel.Version)
+				if !res.Success {
+					return releaseDetailArtifactInfoMsg{}
+				}
+				return releaseDetailArtifactInfoMsg{infos: res.Data}
+			})
+		}
+		return tea.Batch(cmds...)
 	case releaseDetailSBOMMsg:
 		v.sbomLoading = false
 		v.sbomSummary = msg.summary
 		v.buildSections()
+		return nil
+	case releaseDetailArtifactInfoMsg:
+		if len(msg.infos) > 0 {
+			v.artifactInfos = make(map[string]release.ArtifactInfo, len(msg.infos))
+			for _, info := range msg.infos {
+				v.artifactInfos[info.Filename] = info
+			}
+			v.buildSections()
+		}
 		return nil
 	case tea.KeyPressMsg, tea.MouseMsg:
 		if key, ok := msg.(tea.KeyPressMsg); ok {
@@ -249,6 +272,25 @@ func (v *ReleaseDetailView) buildSections() {
 					}
 					if rel.SBOM != "" {
 						links = append(links, tuicore.CardLink{Label: rel.SBOM, Location: tuicore.Location{Path: base + "/" + rel.SBOM}})
+					}
+				} else {
+					for _, a := range rel.Artifacts {
+						links = append(links, tuicore.CardLink{Label: a, Location: tuicore.Location{
+							Path:   "/export-artifact",
+							Params: map[string]string{"repoURL": rel.Repository, "version": rel.Version, "filename": a},
+						}})
+					}
+					if rel.Checksums != "" && rel.Version != "" {
+						links = append(links, tuicore.CardLink{Label: rel.Checksums, Location: tuicore.Location{
+							Path:   "/export-artifact",
+							Params: map[string]string{"repoURL": rel.Repository, "version": rel.Version, "filename": rel.Checksums},
+						}})
+					}
+					if rel.SBOM != "" && rel.Version != "" {
+						links = append(links, tuicore.CardLink{Label: rel.SBOM, Location: tuicore.Location{
+							Path:   "/export-artifact",
+							Params: map[string]string{"repoURL": rel.Repository, "version": rel.Version, "filename": rel.SBOM},
+						}})
 					}
 				}
 				links = append(links, tuicore.ExtractContentLinks(rel.Body, rel.Repository, "")...)
@@ -363,10 +405,19 @@ func (v *ReleaseDetailView) renderReleaseCard(rel *release.Release, width int, s
 			if i > 0 {
 				label = ""
 			}
-			val := styles.Value.Render(a)
+			var val string
 			if rel.ArtifactURL != "" {
 				url := strings.TrimRight(rel.ArtifactURL, "/") + "/" + a
 				val = anchors.MarkLink(a, url, tuicore.Location{Path: url})
+			} else {
+				loc := tuicore.Location{Path: "/export-artifact", Params: map[string]string{
+					"repoURL": rel.Repository, "version": rel.Version, "filename": a,
+				}}
+				styled := tuicore.LinkStyle(a)
+				val = anchors.Mark(styled, loc)
+			}
+			if info, ok := v.artifactInfos[a]; ok && info.Size > 0 {
+				val += tuicore.Dim.Render(fmt.Sprintf(" (%s)", release.FormatSize(info.Size)))
 			}
 			lines = append(lines, selectionBar+styles.Label.Render(label)+val)
 		}
@@ -376,18 +427,32 @@ func (v *ReleaseDetailView) renderReleaseCard(rel *release.Release, width int, s
 		lines = append(lines, selectionBar+styles.Label.Render("Artifact URL")+link)
 	}
 	if rel.Checksums != "" {
-		val := styles.Value.Render(rel.Checksums)
+		var val string
 		if rel.ArtifactURL != "" {
 			url := strings.TrimRight(rel.ArtifactURL, "/") + "/" + rel.Checksums
 			val = anchors.MarkLink(rel.Checksums, url, tuicore.Location{Path: url})
+		} else if rel.Version != "" {
+			loc := tuicore.Location{Path: "/export-artifact", Params: map[string]string{
+				"repoURL": rel.Repository, "version": rel.Version, "filename": rel.Checksums,
+			}}
+			val = anchors.Mark(tuicore.LinkStyle(rel.Checksums), loc)
+		} else {
+			val = styles.Value.Render(rel.Checksums)
 		}
 		lines = append(lines, selectionBar+styles.Label.Render("Checksums")+val)
 	}
 	if rel.SBOM != "" {
-		sbomLink := rel.SBOM
+		var sbomLink string
 		if rel.ArtifactURL != "" {
 			url := strings.TrimRight(rel.ArtifactURL, "/") + "/" + rel.SBOM
 			sbomLink = anchors.MarkLink(rel.SBOM, url, tuicore.Location{Path: url})
+		} else if rel.Version != "" {
+			loc := tuicore.Location{Path: "/export-artifact", Params: map[string]string{
+				"repoURL": rel.Repository, "version": rel.Version, "filename": rel.SBOM,
+			}}
+			sbomLink = anchors.Mark(tuicore.LinkStyle(rel.SBOM), loc)
+		} else {
+			sbomLink = styles.Value.Render(rel.SBOM)
 		}
 		if v.sbomSummary != nil {
 			s := v.sbomSummary
@@ -500,4 +565,8 @@ type releaseDetailLoadedMsg struct {
 
 type releaseDetailSBOMMsg struct {
 	summary *release.SBOMSummary
+}
+
+type releaseDetailArtifactInfoMsg struct {
+	infos []release.ArtifactInfo
 }
