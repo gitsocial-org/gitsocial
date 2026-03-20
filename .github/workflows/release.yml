@@ -57,13 +57,15 @@ jobs:
 
           # Add artifacts first, then create release with metadata
           "$BINARY" release init || true
-          "$BINARY" release artifacts add "$VERSION" dist/*.tar.gz dist/*.zip dist/checksums.txt
+          SBOM_NAME=$(cd dist && ls *.sbom.json 2>/dev/null | head -1)
+          "$BINARY" release artifacts add "$VERSION" dist/*.tar.gz dist/*.zip dist/checksums.txt dist/*.sbom.json
           ARTIFACTS=$(cd dist && ls *.tar.gz *.zip 2>/dev/null | paste -sd, -)
           "$BINARY" release create - \
             --tag "$GITHUB_REF_NAME" \
             --version "$VERSION" \
             --artifacts "$ARTIFACTS" \
             --checksums checksums.txt \
+            --sbom "$SBOM_NAME" \
             < "$NOTES"
           rm -f "$NOTES"
 
