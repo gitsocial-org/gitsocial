@@ -1,0 +1,11 @@
+cd0c0394fa9ec85b00da912ebee8ddc95d97e187f45762176104177d9be0a9a6  gitsocial_0.6.1_darwin_amd64.tar.gz  9817860
+06341986dcd0e92bef5b84bd3b8381bcd38a078532057c0f438daabc231e0c0c  gitsocial_0.6.1_darwin_arm64.tar.gz  9203028
+f1ec371ea28ef2e702833fc306d9fe60ce8c5f0da74dad343b8cfc7a271653b1  gitsocial_0.6.1_linux_amd64.tar.gz  9703396
+ee4837cf58e8fb0670db30bc6ba6bf783e6139a8967413ce3f5d0b2cbb4c0e68  gitsocial_0.6.1_linux_arm64.tar.gz  8870563
+b060db98b30a3b88cc2e95cda23f1caa5fc2d139bb34d79a66237c84533a777a  gitsocial_0.6.1_windows_amd64.zip  9890440
+3a0fd0b36293f085b8075088807034fed6b4758e27f31ce4373a974656307fbe  checksums.txt  1062
+59ff216e22d1750815dc91d6b8f568b377a93a5042aeec599dd1cbb82f5f141f  gitsocial_0.6.1_darwin_amd64.tar.gz.sbom.json  77630
+d71fa37ec3d629d58df679b4ec77d2e4158eda13c41b6d75d1889e840fbddea3  gitsocial_0.6.1_darwin_arm64.tar.gz.sbom.json  77630
+3726a013907ac518da9210e8484c778955d7cc530364f0498dbc85595a28151c  gitsocial_0.6.1_linux_amd64.tar.gz.sbom.json  75938
+983bc50a3babf4be69b80fbd73b696ceb5ac618c01a75aedb14d91bbb413bbd5  gitsocial_0.6.1_linux_arm64.tar.gz.sbom.json  75938
+f69e2e9a2a019894d663d18da8f1a01cd7441315edc48eddfc08c3faaada87fb  gitsocial_0.6.1_windows_amd64.zip.sbom.json  77420
