@@ -522,10 +522,8 @@ func TestMergeOperations(t *testing.T) {
 
 func TestForkMerge(t *testing.T) {
 	setupTestDB(t)
-	t.Parallel()
 
 	t.Run("forkPR", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		repoURL := "https://github.com/test/repo"
 		forkURL := "https://github.com/fork/repo"
@@ -554,7 +552,6 @@ func TestForkMerge(t *testing.T) {
 	})
 
 	t.Run("forkPR_withCloses", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		repoURL := "https://github.com/test/repo"
 		forkURL := "https://github.com/fork/closes"
@@ -581,7 +578,6 @@ func TestForkMerge(t *testing.T) {
 	})
 
 	t.Run("remoteHeadViaLocalBare", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		git.ExecGit(dir, []string{"checkout", "-b", "feature-remote"})
 		git.CreateCommit(dir, git.CommitOptions{Message: "Remote feature", AllowEmpty: true})
@@ -608,7 +604,6 @@ func TestForkMerge(t *testing.T) {
 	})
 
 	t.Run("forkPR_commitFailed", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		repoURL := "https://github.com/test/repo"
 		forkURL := "https://github.com/fork/cfail"
