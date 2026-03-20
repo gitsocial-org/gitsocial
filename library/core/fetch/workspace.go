@@ -56,10 +56,13 @@ func SyncWorkspace(workdir string) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	tipParts := make([]string, 0, len(branches))
+	tipParts := make([]string, 0, len(branches)*2)
 	for _, name := range names {
-		tip, _ := git.ReadRef(workdir, branches[name])
+		branch := branches[name]
+		tip, _ := git.ReadRef(workdir, branch)
 		tipParts = append(tipParts, tip)
+		remoteTip, _ := git.ReadRef(workdir, "origin/"+branch)
+		tipParts = append(tipParts, remoteTip)
 	}
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
