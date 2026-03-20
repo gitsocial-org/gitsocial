@@ -23,7 +23,6 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history", Context: tuicore.ReviewPRHistory, Title: "PR History", Icon: "⑂", NavItemID: "review.prs", Component: "VersionPicker"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/diff", Context: tuicore.ReviewDiff, Title: "Files Changed", Icon: "⑂", NavItemID: "review.prs"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/interdiff", Context: tuicore.ReviewInterdiff, Title: "Interdiff", Icon: "⑂", NavItemID: "review.prs"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/forks", Context: tuicore.ReviewForks, Title: "Forks", Icon: "⑂", NavItemID: "review.prs"})
 	tuicore.RegisterMessageHandler(handleReviewMessages)
 	tuicore.RegisterNavTarget(
 		tuicore.ItemType{Extension: "review", Type: "pull-request"},
@@ -405,7 +404,6 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/review/pr/history", NewPRHistoryView(state.Workdir))
 	host.AddView("/review/diff", NewDiffView(state.Workdir))
 	host.AddView("/review/pr/interdiff", NewInterdiffView(state.Workdir))
-	host.AddView("/review/forks", NewForksView(state.Workdir))
 }
 
 // PRCreatedMsg is sent when a pull request is created.
@@ -445,10 +443,6 @@ func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleFeedbackCreated(msg, ctx)
 	case SuggestionAppliedMsg:
 		return handleSuggestionApplied(msg, ctx)
-	case ForkAddedMsg:
-		return handleForkAdded(msg, ctx)
-	case ForkRemovedMsg:
-		return handleForkRemoved(msg, ctx)
 	}
 	return false, nil
 }
@@ -567,34 +561,6 @@ func branchRefLocation(ref, workspaceURL string) *tuicore.Location {
 	}
 	loc := tuicore.LocRepository(repoURL, parsed.Value)
 	return &loc
-}
-
-func handleForkAdded(msg ForkAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if msg.Err != nil {
-		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, ctx.Host().Update(msg)
-	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(
-		fmt.Sprintf("Fork added: %s", protocol.GetDisplayName(msg.ForkURL)),
-		tuicore.MessageTypeSuccess,
-		5*time.Second,
-	)
-	viewCmd := ctx.Host().Update(msg)
-	return true, tea.Batch(msgCmd, viewCmd)
-}
-
-func handleForkRemoved(msg ForkRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if msg.Err != nil {
-		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, ctx.Host().Update(msg)
-	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(
-		fmt.Sprintf("Fork removed: %s", protocol.GetDisplayName(msg.ForkURL)),
-		tuicore.MessageTypeSuccess,
-		5*time.Second,
-	)
-	viewCmd := ctx.Host().Update(msg)
-	return true, tea.Batch(msgCmd, viewCmd)
 }
 
 // refreshCacheSize returns a command that recalculates cache size.

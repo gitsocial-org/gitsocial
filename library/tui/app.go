@@ -213,6 +213,9 @@ func NewModel(workdir, cacheDir string) Model {
 	configView := tuicore.NewConfigView()
 	host.AddView("/config", configView)
 
+	forksView := tuicore.NewForksView(workdir)
+	host.AddView("/config/forks", forksView)
+
 	cacheView := tuicore.NewCacheView()
 	host.AddView("/cache", cacheView)
 

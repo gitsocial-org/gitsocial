@@ -207,7 +207,7 @@ func (v *PRsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	case "F":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
-				Location: tuicore.LocReviewForks,
+				Location: tuicore.LocForks,
 				Action:   tuicore.NavPush,
 			}
 		}

@@ -35,6 +35,6 @@
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││   n:quick create  N:new  F:filter  m:my issues  r:refresh  p:push  `:focus           │
-│.../tui-test-FIXTURE          ││   f:fetch  q:quit  ?:help                                                            │
+│ ──────────────────────────── ││   n:quick create  N:new  F:forks  m:my issues  r:refresh  p:push  `:focus            │
+│.../tui-test-FIXTURE          ││   f:filter  q:quit  ?:help                                                           │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

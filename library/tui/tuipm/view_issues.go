@@ -329,10 +329,17 @@ func (v *IssuesView) GetItemCount() int {
 
 func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
-	case "F":
+	case "f":
 		v.showAll = !v.showAll
 		v.pag.Reset()
 		return v.loadIssues()
+	case "F":
+		return func() tea.Msg {
+			return tuicore.NavigateMsg{
+				Location: tuicore.LocForks,
+				Action:   tuicore.NavPush,
+			}
+		}
 	case "m":
 		if v.assigneeFilter == "" {
 			v.assigneeFilter = "me"
@@ -507,7 +514,8 @@ func (v *IssuesView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
-		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "f", Label: "filter", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "F", Label: "forks", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "m", Label: "my issues", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},

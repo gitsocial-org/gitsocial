@@ -159,7 +159,7 @@ var (
 	ReviewPRHistory = RegisterContext("review.pr_history")
 	ReviewDiff      = RegisterContext("review.diff")
 	ReviewInterdiff = RegisterContext("review.interdiff")
-	ReviewForks     = RegisterContext("review.forks")
+	CoreForks       = RegisterContext("core.forks")
 )
 
 // Domain IDs for top-level navigation domains

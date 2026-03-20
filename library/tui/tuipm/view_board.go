@@ -251,6 +251,13 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 			go func() { _ = pm.SaveUserPrefs(repoURL, prefs) }()
 		}
 		return nil
+	case "F":
+		return func() tea.Msg {
+			return tuicore.NavigateMsg{
+				Location: tuicore.LocForks,
+				Action:   tuicore.NavPush,
+			}
+		}
 	case "s":
 		// Cycle swimlane grouping
 		v.prefs.CycleSwimlaneField()
@@ -710,6 +717,7 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "N", Label: "full create", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "F", Label: "forks", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "x", Label: "collapse col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "s", Label: "swimlanes", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},

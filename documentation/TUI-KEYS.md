@@ -250,6 +250,7 @@
 |-----|--------|
 | `n` | Quick create |
 | `N` | Full create |
+| `F` | Forks |
 | `x` | Collapse col |
 | `s` | Swimlanes |
 | `r` | Refresh |
@@ -270,7 +271,8 @@
 | CardList navigation | (see Shared Navigation) |
 | `n` | Quick create |
 | `N` | New |
-| `F` | Filter |
+| `f` | Filter |
+| `F` | Forks |
 | `m` | My issues |
 | `r` | Refresh |
 | `p` | Push |
@@ -449,15 +451,6 @@
 | `esc` | Exit fullscreen / back |
 | `p` | Push |
 
-### Forks
-
-| Key | Action |
-|-----|--------|
-| `a` | Add fork |
-| `x` | Remove fork |
-| `enter` | Open repo |
-| `/` | Search |
-
 ---
 
 ## Release Extension
@@ -554,6 +547,21 @@
 | `end` | Last |
 | `p` | Push |
 | `/` | Search |
+
+### Forks
+
+| Key | Action |
+|-----|--------|
+| `a` | Add fork |
+| `x` | Remove fork |
+| `v` | Sort (name / fetched / commits) |
+| `/` | Search (live filter) |
+| `enter` | Open repo |
+| `j/k` | Up / down |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `home` | First |
+| `end` | Last |
 
 ### Cache
 

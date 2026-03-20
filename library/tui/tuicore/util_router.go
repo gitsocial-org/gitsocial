@@ -264,8 +264,8 @@ func LocReleaseSBOM(releaseID string) Location {
 // LocReviewPRs creates a location for the review PR list view.
 var LocReviewPRs = Location{Path: "/review/prs"}
 
-// LocReviewForks creates a location for the forks management view.
-var LocReviewForks = Location{Path: "/review/forks"}
+// LocForks creates a location for the forks management view.
+var LocForks = Location{Path: "/config/forks"}
 
 // LocReviewPRDetail creates a location for a review PR detail view.
 func LocReviewPRDetail(prID string) Location {
@@ -519,8 +519,9 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	// Config domain with sub-items
 	r.Register(NavItem{ID: "config", Label: "Configuration", Icon: "⚙", Order: 10, Enabled: true})
 	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: true})
-	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 1, Enabled: true})
-	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 2, Enabled: true})
+	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
+	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: true})
+	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
 
 	// Cache and Settings
 	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 11, Enabled: true})
