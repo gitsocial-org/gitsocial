@@ -403,11 +403,18 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 	if err != nil {
 		return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 	}
+	// Post-filter and deduplicate by hash: workspace items take priority
+	// (duplicates can happen when forks are created via git clone --mirror)
+	seen := make(map[string]bool, len(items))
 	prs := make([]PullRequest, 0, len(items))
 	for _, item := range items {
+		if seen[item.Hash] {
+			continue
+		}
 		if item.RepoURL != workspaceURL && !forkPRTargetsWorkspace(item, workspaceURL) {
 			continue
 		}
+		seen[item.Hash] = true
 		prs = append(prs, ReviewItemToPullRequest(item))
 	}
 	return result.Ok(prs)

@@ -178,12 +178,12 @@ Add dark mode support
 
 ## 3. Fork PR Discovery
 
-A maintainer registers forks so PRs from contributors are automatically discovered during fetch, appear in `pr list`, and trigger notifications.
+A maintainer registers forks so PRs (and issues) from contributors are automatically discovered during fetch, appear in `pr list`, and trigger notifications.
 
 ```
     Maintainer (upstream)               Contributor (fork)
       │                                      │
-      ●  review fork add                     │
+      ●  gitsocial fork add                  │
       │  <fork-url>                          │
       │                                      │
       │                                      ●  push feature branch
@@ -192,8 +192,8 @@ A maintainer registers forks so PRs from contributors are automatically discover
       │                                      │  head=#branch:feature
       │                                      │
       ●  gitsocial fetch                     │
-      │  → fetches fork's gitmsg/review      │
-      │  → review-only processors            │
+      │  → fetches fork's gitmsg/* branches  │
+      │  → all extension processors          │
       │                                      │
       ●  pr list shows fork PR               │
       ●  notification: "fork-pr"             │
@@ -203,19 +203,18 @@ A maintainer registers forks so PRs from contributors are automatically discover
 
 ### How It Works
 
-1. **Register fork**: `gitsocial review fork add https://github.com/contributor/repo`
-2. **Fetch**: During `gitsocial fetch`, each registered fork's `gitmsg/review` branch is fetched using review-only processors (no social/PM data is imported)
+1. **Register fork**: `gitsocial fork add https://github.com/contributor/repo`
+2. **Fetch**: During `gitsocial fetch`, all `gitmsg/*` branches from each registered fork are fetched and processed through all extension processors (review, PM, social, release)
 3. **Discovery**: Fork PRs with a `base` that is a local ref (`#branch:main`) or explicitly targets the workspace URL are included in `pr list`
 4. **Notifications**: New fork PRs appear as `fork-pr` notifications; feedback on workspace PRs appears as `feedback`/`approved`/`changes-requested` notifications
 
 ### Fork Config
 
-Forks are stored in the review extension config (`refs/gitmsg/review/config`):
+Forks are stored in the core config (`refs/gitmsg/core/config`):
 
 ```json
 {
   "version": "0.1.0",
-  "branch": "gitmsg/review",
   "forks": [
     "https://github.com/contributor/repo"
   ]

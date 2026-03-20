@@ -8,6 +8,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 )
 
@@ -465,7 +466,7 @@ func TestGetNotifications_errorPaths(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)
 
-	SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0", Forks: []string{"https://github.com/fork/errpath"}})
+	gitmsg.AddFork(dir, "https://github.com/fork/errpath")
 
 	cache.ExecLocked(func(db *sql.DB) error {
 		db.Exec("DROP VIEW IF EXISTS review_items_resolved")
@@ -486,7 +487,7 @@ func TestGetUnreadCount_errorPaths(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)
 
-	SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0", Forks: []string{"https://github.com/fork/err"}})
+	gitmsg.AddFork(dir, "https://github.com/fork/err")
 
 	cache.ExecLocked(func(db *sql.DB) error {
 		db.Exec("DROP VIEW IF EXISTS review_items_resolved")

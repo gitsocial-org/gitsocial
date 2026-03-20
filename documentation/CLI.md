@@ -341,12 +341,13 @@ gitsocial review config get|set|list               # Manage config
 
 ### Forks
 
-Register fork repositories so their PRs appear in your workspace.
+Register fork repositories so their PRs and issues are discovered during fetch.
+Forks are managed at the core level via `gitsocial fork` (also available as `gitsocial review fork`).
 
 ```
-gitsocial review fork add <url>                    # Register a fork
-gitsocial review fork remove <url>                 # Remove a fork
-gitsocial review fork list                         # List registered forks
+gitsocial fork add <url>                           # Register a fork
+gitsocial fork remove <url>                        # Remove a fork
+gitsocial fork list                                # List registered forks
 ```
 
 ### Pull Requests

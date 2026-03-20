@@ -100,10 +100,12 @@ For extension-specific options, use the extension's fetch command directly:
 			}
 
 			result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
-			// Fetch fork PRs (review-only, no social/pm pollution)
-			forkStats := review.FetchForks(cfg.WorkDir, cfg.CacheDir)
+			// Fetch all gitmsg data from registered forks
+			forkProcessors := append(review.Processors(), pm.Processors()...)
+			forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
+			forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
 			if !cfg.JSONOutput && forkStats.Items > 0 {
-				fmt.Printf("Fetched %d review items from %d forks\n", forkStats.Items, forkStats.Forks)
+				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Forks)
 			}
 			// Re-sync all workspace extension branches to cache
 			if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {

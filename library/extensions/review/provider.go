@@ -156,14 +156,19 @@ func getForkPRNotifications(workspaceURL, userEmail string, forkURLs []string, u
 		}
 		defer rows.Close()
 		var result []notifications.Notification
+		seen := map[string]bool{}
 		for rows.Next() {
 			item, isRead, err := scanResolvedRowWithRead(rows)
 			if err != nil {
 				return nil, err
 			}
+			if seen[item.Hash] {
+				continue
+			}
 			if !forkPRTargetsWorkspace(*item, workspaceURL) {
 				continue
 			}
+			seen[item.Hash] = true
 			subject, _ := protocol.SplitSubjectBody(item.Content)
 			rn := ReviewNotification{
 				ID:         protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch),

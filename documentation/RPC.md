@@ -908,11 +908,15 @@ Returns file content at a specific ref.
 
 #### review.getForks
 
+Returns registered fork URLs (stored in core config, shared across all extensions).
+
 **Params:** none
 
 **Result:** `string[]` (fork URLs)
 
 #### review.addFork
+
+Registers a fork URL in the core config (shared across all extensions).
 
 **Params:**
 | Field | Type | Required | Description |
@@ -922,6 +926,8 @@ Returns file content at a specific ref.
 **Result:** `true`
 
 #### review.removeFork
+
+Removes a fork URL from the core config.
 
 **Params:**
 | Field | Type | Required | Description |

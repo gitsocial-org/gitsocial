@@ -431,6 +431,88 @@ func GetIssues(repoURL, branch string, states []string, cursor string, limit int
 	return result.Ok(issues)
 }
 
+// GetIssuesWithForks retrieves issues from the workspace and registered forks.
+// Unlike PRs, fork issues don't need base-ref filtering — all issues from registered forks are included.
+func GetIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string, cursor string, limit int) Result[[]Issue] {
+	if len(forkURLs) == 0 {
+		return GetIssues(workspaceURL, workspaceBranch, states, cursor, limit)
+	}
+	repoURLs := append([]string{workspaceURL}, forkURLs...)
+	items, err := cache.QueryLocked(func(db *sql.DB) ([]PMItem, error) {
+		ph := strings.Repeat("?,", len(repoURLs))
+		ph = ph[:len(ph)-1]
+		var args []interface{}
+		var where []string
+		where = append(where, "v.type = ?")
+		args = append(args, string(ItemTypeIssue))
+		where = append(where, "v.repo_url IN ("+ph+")")
+		for _, u := range repoURLs {
+			args = append(args, u)
+		}
+		if len(states) > 0 {
+			sph := strings.Repeat("?,", len(states))
+			sph = sph[:len(sph)-1]
+			where = append(where, "v.state IN ("+sph+")")
+			for _, s := range states {
+				args = append(args, s)
+			}
+		}
+		if cursor != "" {
+			where = append(where, "v.timestamp < ?")
+			args = append(args, cursor)
+		}
+		where = append(where, "NOT v.is_edit_commit")
+		where = append(where, "NOT v.is_retracted")
+		sqlQuery := baseSelectFromView + " WHERE " + strings.Join(where, " AND ") + " ORDER BY v.timestamp DESC"
+		if limit > 0 {
+			sqlQuery += " LIMIT ?"
+			args = append(args, limit)
+		}
+		rows, err := db.Query(sqlQuery, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var result []PMItem
+		for rows.Next() {
+			item, err := scanResolvedRows(rows)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, *item)
+		}
+		return result, rows.Err()
+	})
+	if err != nil {
+		return result.Err[[]Issue]("QUERY_FAILED", err.Error())
+	}
+	// Deduplicate by hash: workspace items take priority over fork duplicates
+	// (can happen when forks are created via git clone --mirror)
+	seen := make(map[string]bool, len(items))
+	issues := make([]Issue, 0, len(items))
+	for _, item := range items {
+		if seen[item.Hash] {
+			continue
+		}
+		seen[item.Hash] = true
+		issues = append(issues, PMItemToIssue(item))
+	}
+	return result.Ok(issues)
+}
+
+// CountIssuesWithForks counts issues from workspace and forks.
+func CountIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string) int {
+	if len(forkURLs) == 0 {
+		count, _ := CountIssues(states)
+		return count
+	}
+	res := GetIssuesWithForks(workspaceURL, workspaceBranch, forkURLs, states, "", 0)
+	if !res.Success {
+		return 0
+	}
+	return len(res.Data)
+}
+
 // GetMilestones retrieves milestones with optional filtering.
 func GetMilestones(repoURL, branch string, states []string, cursor string, limit int) Result[[]Milestone] {
 	q := PMQuery{

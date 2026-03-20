@@ -661,7 +661,6 @@ func TestReviewConfig(t *testing.T) {
 			Version:       "0.1.0",
 			Branch:        "gitmsg/review",
 			RequireReview: true,
-			Forks:         []string{"https://github.com/fork/repo"},
 		})
 		if err != nil {
 			t.Fatalf("SaveReviewConfig() error = %v", err)
@@ -675,9 +674,6 @@ func TestReviewConfig(t *testing.T) {
 		}
 		if !config.RequireReview {
 			t.Error("RequireReview should be true")
-		}
-		if len(config.Forks) != 1 {
-			t.Errorf("len(Forks) = %d, want 1", len(config.Forks))
 		}
 	})
 
@@ -704,10 +700,8 @@ func TestReviewConfig(t *testing.T) {
 	t.Run("GetForks", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		SaveReviewConfig(dir, ReviewConfig{
-			Version: "0.1.0",
-			Forks:   []string{"https://github.com/fork1/repo", "https://github.com/fork2/repo"},
-		})
+		AddFork(dir, "https://github.com/fork1/repo")
+		AddFork(dir, "https://github.com/fork2/repo")
 		forks := GetForks(dir)
 		if len(forks) != 2 {
 			t.Errorf("len(Forks) = %d, want 2", len(forks))

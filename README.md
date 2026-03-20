@@ -9,7 +9,7 @@
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
-[How It Works](#how-it-works) • [Extensions](#extensions) • [Interfaces](#interfaces) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
+[How It Works](#how-it-works) • [Extensions](#extensions) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing)
 
 ![GitSocial Timeline](documentation/images/screenshot.png)
 
@@ -20,6 +20,7 @@
 - Everything is a commit: posts, issues, PRs, releases stored on `gitmsg/*` branches
 - Syncing is git: `git fetch` to update, `git push` to publish; works offline and peer-to-peer
 - Portable: `git clone --mirror`, no export tools needed
+- CLI, TUI, and JSON-RPC interfaces
 
 ## Extensions
 
@@ -29,12 +30,6 @@
 | **PM** | Stable | Issues, milestones, sprints, boards |
 | **Review** | Stable | Cross-forge PRs, version-aware reviews ([see more](documentation/GITREVIEW-FLOWS.md)) |
 | **Release** | Stable | Releases, artifacts, checksums, signatures, SBOM |
-
-## Interfaces
-
-- CLI: `gitsocial pm issue create "Dark mode"`
-- TUI: `gitsocial tui`
-- JSON: `gitsocial rpc`
 
 ## Installation
 
@@ -64,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/instal
 go install github.com/gitsocial-org/gitsocial/library/cli@latest
 ```
 
-Or download a binary manually from [Releases](../../releases/latest).
+Or download a binary manually from [Releases](https://github.com/gitsocial-org/gitsocial/releases/latest).
 
 ## Quick Start
 
@@ -123,6 +118,43 @@ gitsocial push
 | [GITPM.md](specs/GITPM.md) | Issues, milestones, sprints, and hierarchy |
 | [GITREVIEW.md](specs/GITREVIEW.md) | Pull requests, inline feedback, and review states |
 | [GITRELEASE.md](specs/GITRELEASE.md) | Releases with artifacts, checksums, signatures, and SBOM |
+
+## Contributing
+
+Platform issues and PRs are disabled on all mirrors — GitSocial uses its own tools for collaboration.
+
+### Getting Started
+
+1. Install GitSocial (see [Installation](#installation))
+2. Fork the repository on any host (GitHub, GitLab, Codeberg, or self-hosted)
+3. Clone your fork: `git clone https://your-host.com/you/gitsocial`
+
+### Submitting Pull Requests
+
+```bash
+git checkout -b feature/my-change         # make changes, commit
+
+gitsocial review pr create \
+  --base main \
+  --head feature/my-change \
+  "Short description of change"
+
+git push origin feature/my-change        # push your branch
+gitsocial push                           # push PR metadata
+```
+
+After your first push, request fork registration in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) so maintainers can discover your PRs and issues.
+
+See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for the full cross-forge PR workflow.
+
+### Reporting Bugs & Requesting Features
+
+```bash
+gitsocial pm issue create "Bug: description"
+gitsocial push
+```
+
+For quick questions or discussion, use the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org).
 
 ## License
 

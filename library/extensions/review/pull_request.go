@@ -496,10 +496,9 @@ func RetractPR(workdir, prRef string) Result[bool] {
 
 // ReviewConfig holds review extension configuration.
 type ReviewConfig struct {
-	Version       string   `json:"version"`
-	Branch        string   `json:"branch,omitempty"`
-	RequireReview bool     `json:"require-review,omitempty"`
-	Forks         []string `json:"forks,omitempty"`
+	Version       string `json:"version"`
+	Branch        string `json:"branch,omitempty"`
+	RequireReview bool   `json:"require-review,omitempty"`
 }
 
 // SaveReviewConfig saves the review extension configuration.
@@ -543,72 +542,30 @@ func GetReviewConfig(workdir string) ReviewConfig {
 	if v, ok := configMap["require-review"].(bool); ok {
 		config.RequireReview = v
 	}
-	if v, ok := configMap["forks"].([]interface{}); ok {
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				config.Forks = append(config.Forks, s)
-			}
-		}
-	}
 	if config.Branch == "" {
 		config.Branch = "gitmsg/review"
 	}
 	return config
 }
 
-// GetForks returns the list of registered fork URLs for the workspace.
+// GetForks returns the list of registered fork URLs (delegates to core).
 func GetForks(workdir string) []string {
-	return GetReviewConfig(workdir).Forks
+	return gitmsg.GetForks(workdir)
 }
 
-// AddFork registers a fork URL in the review config.
+// AddFork registers a fork URL (delegates to core).
 func AddFork(workdir, forkURL string) error {
-	forkURL = protocol.NormalizeURL(forkURL)
-	config := GetReviewConfig(workdir)
-	for _, f := range config.Forks {
-		if f == forkURL {
-			return nil
-		}
-	}
-	config.Forks = append(config.Forks, forkURL)
-	return SaveReviewConfig(workdir, config)
+	return gitmsg.AddFork(workdir, forkURL)
 }
 
-// AddForks registers multiple fork URLs in a single config save.
+// AddForks registers multiple fork URLs (delegates to core).
 func AddForks(workdir string, forkURLs []string) (int, error) {
-	config := GetReviewConfig(workdir)
-	existing := map[string]bool{}
-	for _, f := range config.Forks {
-		existing[f] = true
-	}
-	added := 0
-	for _, u := range forkURLs {
-		u = protocol.NormalizeURL(u)
-		if existing[u] {
-			continue
-		}
-		existing[u] = true
-		config.Forks = append(config.Forks, u)
-		added++
-	}
-	if added == 0 {
-		return 0, nil
-	}
-	return added, SaveReviewConfig(workdir, config)
+	return gitmsg.AddForks(workdir, forkURLs)
 }
 
-// RemoveFork removes a fork URL from the review config.
+// RemoveFork removes a fork URL (delegates to core).
 func RemoveFork(workdir, forkURL string) error {
-	forkURL = protocol.NormalizeURL(forkURL)
-	config := GetReviewConfig(workdir)
-	filtered := make([]string, 0, len(config.Forks))
-	for _, f := range config.Forks {
-		if f != forkURL {
-			filtered = append(filtered, f)
-		}
-	}
-	config.Forks = filtered
-	return SaveReviewConfig(workdir, config)
+	return gitmsg.RemoveFork(workdir, forkURL)
 }
 
 // resolveRefTip reads the branch tip hash, using ls-remote for cross-fork refs.

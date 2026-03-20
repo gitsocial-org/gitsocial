@@ -117,7 +117,7 @@ Configuration MUST include: `version`.
 
 Configuration SHOULD include: `branch`. Default: `gitmsg/review`.
 
-Configuration MAY include: `require-review` (boolean, default `false`), `forks` (array of fork repository URLs for cross-fork PR tracking).
+Configuration MAY include: `require-review` (boolean, default `false`).
 
 ## Appendix: Manifest
 

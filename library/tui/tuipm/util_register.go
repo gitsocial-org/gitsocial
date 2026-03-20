@@ -61,7 +61,7 @@ func init() {
 		tuicore.ItemType{Extension: "pm", Type: "sprint"},
 		sprintCardRenderer,
 	)
-	for _, t := range []string{"issue-assigned", "issue-closed", "issue-reopened"} {
+	for _, t := range []string{"issue-assigned", "issue-closed", "issue-reopened", "fork-issue"} {
 		tuicore.RegisterCardRenderer(
 			tuicore.ItemType{Extension: "pm", Type: t},
 			pmNotificationCardRenderer,
@@ -158,6 +158,8 @@ func pmNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.Card {
 	}
 	badge := "assigned you"
 	switch pn.Type {
+	case "fork-issue":
+		badge = "fork issue"
 	case "issue-closed":
 		badge = "closed"
 	case "issue-reopened":

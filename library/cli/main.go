@@ -33,6 +33,7 @@ func main() {
 		newDocsCmd(),
 		newRPCCmd(),
 		newImportCmd(),
+		newForkCmd(),
 	)
 
 	// Extension commands (auto-registered via init())

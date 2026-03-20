@@ -16,7 +16,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/settings"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/extensions/social"
 )
 
@@ -400,7 +399,7 @@ func coreFetch(s *Server) HandlerFunc {
 			if err := fetch.SyncWorkspace(workdir); err != nil {
 				log.Printf("sync workspace: %s", err)
 			}
-			review.FetchForks(workdir, cacheDir)
+			fetch.FetchForks(workdir, cacheDir, nil)
 			if result.Success {
 				errCount := len(result.Data.Errors)
 				s.Emit("fetch", "fetch.complete", map[string]any{

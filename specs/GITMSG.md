@@ -190,6 +190,8 @@ Extensions define message types and operations. Messages with GitMsg headers MUS
 
 Core protocol configuration MUST be stored at `refs/gitmsg/core/config` as JSON. Implementations MAY store arbitrary keys.
 
+Core configuration MAY include: `forks` (array of repository URLs for cross-fork collaboration).
+
 ### 3.2. Extension Requirements
 
 - MUST store data under `refs/gitmsg/<extension-name>/`

@@ -819,8 +819,10 @@ func (m Model) startFetchWithMode(allBranches bool) tea.Cmd {
 			ExtraProcessors:  extraProcessors,
 		}
 		result := social.Fetch(m.workdir, m.cacheDir, opts)
-		// Fetch fork PRs (review-only)
-		review.FetchForks(m.workdir, m.cacheDir)
+		// Fetch all gitmsg data from registered forks
+		forkProcessors := append(review.Processors(), pm.Processors()...)
+		forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
+		fetch.FetchForks(m.workdir, m.cacheDir, forkProcessors)
 		// Re-sync all workspace extension branches to cache
 		if err := fetch.SyncWorkspace(m.workdir); err != nil {
 			log.Debug("post-fetch workspace sync failed", "error", err)

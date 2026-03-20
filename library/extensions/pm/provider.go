@@ -22,7 +22,7 @@ func init() {
 // PMNotification holds PM-specific notification data.
 type PMNotification struct {
 	ID         string
-	Type       string // "issue-assigned"
+	Type       string // "issue-assigned", "fork-issue", etc.
 	RepoURL    string
 	Hash       string
 	Branch     string
@@ -44,7 +44,12 @@ func (p *pmNotificationProvider) GetNotifications(workdir string, filter notific
 	if userEmail == "" {
 		return nil, nil
 	}
+	forks := gitmsg.GetForks(workdir)
 	var result []notifications.Notification
+	forkIssues, err := getForkIssueNotifications(userEmail, forks, filter.UnreadOnly)
+	if err == nil {
+		result = append(result, forkIssues...)
+	}
 	assigned, err := getAssignedIssueNotifications(userEmail, filter.UnreadOnly, filter.Limit)
 	if err == nil {
 		result = append(result, assigned...)
@@ -69,6 +74,8 @@ func (p *pmNotificationProvider) GetUnreadCount(workdir string) (int, error) {
 	if userEmail == "" {
 		return 0, nil
 	}
+	forks := gitmsg.GetForks(workdir)
+	forkIssues, _ := getForkIssueNotifications(userEmail, forks, true)
 	assigned, err := getAssignedIssueNotifications(userEmail, true, 0)
 	if err != nil {
 		return 0, err
@@ -77,7 +84,96 @@ func (p *pmNotificationProvider) GetUnreadCount(workdir string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return len(assigned) + len(stateChanges), nil
+	return len(forkIssues) + len(assigned) + len(stateChanges), nil
+}
+
+// getForkIssueNotifications returns notifications for new issues filed from registered forks.
+func getForkIssueNotifications(userEmail string, forkURLs []string, unreadOnly bool) ([]notifications.Notification, error) {
+	if len(forkURLs) == 0 {
+		return nil, nil
+	}
+	return cache.QueryLocked(func(db *sql.DB) ([]notifications.Notification, error) {
+		ph := strings.Repeat("?,", len(forkURLs))
+		ph = ph[:len(ph)-1]
+		query := `
+			SELECT v.repo_url, v.hash, v.branch,
+			       v.author_name, v.author_email, v.resolved_message, v.timestamp, v.state,
+			       nr.repo_url
+			FROM pm_items_resolved v
+			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
+			WHERE v.type = 'issue'
+			  AND v.repo_url IN (` + ph + `)
+			  AND v.author_email != ?
+			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+		args := make([]interface{}, 0, len(forkURLs)+1)
+		for _, u := range forkURLs {
+			args = append(args, u)
+		}
+		args = append(args, userEmail)
+		if unreadOnly {
+			query += " AND nr.repo_url IS NULL"
+		}
+		query += " ORDER BY v.timestamp DESC"
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var result []notifications.Notification
+		seen := map[string]bool{}
+		for rows.Next() {
+			var repoURL, hash, branch, authorName, authorEmail string
+			var message, ts, state sql.NullString
+			var readRepoURL sql.NullString
+			if err := rows.Scan(
+				&repoURL, &hash, &branch,
+				&authorName, &authorEmail, &message, &ts, &state,
+				&readRepoURL,
+			); err != nil {
+				return nil, err
+			}
+			if seen[hash] {
+				continue
+			}
+			seen[hash] = true
+			var timestamp time.Time
+			if ts.Valid {
+				timestamp, _ = time.Parse(time.RFC3339, ts.String)
+			}
+			subject := ""
+			if message.Valid {
+				content := protocol.ExtractCleanContent(message.String)
+				subject, _ = protocol.SplitSubjectBody(content)
+			}
+			isRead := readRepoURL.Valid
+			pn := PMNotification{
+				ID:         protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
+				Type:       "fork-issue",
+				RepoURL:    repoURL,
+				Hash:       hash,
+				Branch:     branch,
+				Subject:    subject,
+				State:      state.String,
+				ActorName:  authorName,
+				ActorEmail: authorEmail,
+				Timestamp:  timestamp,
+				IsRead:     isRead,
+			}
+			result = append(result, notifications.Notification{
+				RepoURL:   repoURL,
+				Hash:      hash,
+				Branch:    branch,
+				Type:      "fork-issue",
+				Source:    "pm",
+				Item:      pn,
+				Actor:     notifications.Actor{Name: authorName, Email: authorEmail},
+				ActorRepo: repoURL,
+				Timestamp: timestamp,
+				IsRead:    isRead,
+			})
+		}
+		return result, rows.Err()
+	})
 }
 
 // getAssignedIssueNotifications returns notifications for issues assigned to the user.

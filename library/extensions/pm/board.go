@@ -138,15 +138,10 @@ func GetBoardViewByID(workdir string, boardID string) Result[BoardView] {
 	branch := gitmsg.GetExtBranch(workdir, "pm")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
-	q := PMQuery{
-		Types:   []string{string(ItemTypeIssue)},
-		RepoURL: repoURL,
-		Branch:  branch,
-		Limit:   1000,
-	}
-	items, err := GetPMItems(q)
-	if err != nil {
-		return result.Err[BoardView]("QUERY_FAILED", err.Error())
+	forks := gitmsg.GetForks(workdir)
+	issueResult := GetIssuesWithForks(repoURL, branch, forks, nil, "", 1000)
+	if !issueResult.Success {
+		return result.Err[BoardView]("QUERY_FAILED", issueResult.Error.Message)
 	}
 
 	// Build columns from board config
@@ -162,8 +157,7 @@ func GetBoardViewByID(workdir string, boardID string) Result[BoardView] {
 	}
 
 	// Group issues into columns
-	for _, item := range items {
-		issue := PMItemToIssue(item)
+	for _, issue := range issueResult.Data {
 		matchedCol := matchIssueToColumn(issue, filters)
 		if matchedCol >= 0 && matchedCol < len(columns) {
 			columns[matchedCol].Issues = append(columns[matchedCol].Issues, issue)

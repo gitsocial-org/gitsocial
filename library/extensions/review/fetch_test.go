@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 )
 
 func TestProcessors(t *testing.T) {
@@ -83,7 +85,7 @@ func TestFetchForks(t *testing.T) {
 	dir := initTestRepo(t)
 
 	t.Run("noForks", func(t *testing.T) {
-		stats := FetchForks(dir, t.TempDir())
+		stats := fetch.FetchForks(dir, t.TempDir(), Processors())
 		if stats.Forks != 0 {
 			t.Errorf("Forks = %d, want 0", stats.Forks)
 		}
@@ -99,10 +101,7 @@ func TestFetchForks(t *testing.T) {
 		git.ExecGit(bareDir, []string{"init", "--bare"})
 		git.ExecGit(srcDir, []string{"push", bareDir, "gitmsg/review"})
 
-		SaveReviewConfig(dir, ReviewConfig{
-			Version: "0.1.0",
-			Forks:   []string{bareDir},
-		})
+		gitmsg.AddFork(dir, bareDir)
 
 		cacheDir := t.TempDir()
 		cache.Reset()
@@ -114,7 +113,7 @@ func TestFetchForks(t *testing.T) {
 			cache.Open(testCacheDir)
 		})
 
-		stats := FetchForks(dir, cacheDir)
+		stats := fetch.FetchForks(dir, cacheDir, Processors())
 		if stats.Forks != 1 {
 			t.Errorf("Forks = %d, want 1", stats.Forks)
 		}
@@ -127,10 +126,8 @@ func TestFetchForks(t *testing.T) {
 	})
 
 	t.Run("withError", func(t *testing.T) {
-		SaveReviewConfig(dir, ReviewConfig{
-			Version: "0.1.0",
-			Forks:   []string{"file:///nonexistent/fork/repo"},
-		})
+		errDir := initTestRepo(t)
+		gitmsg.AddFork(errDir, "file:///nonexistent/fork/repo")
 
 		cacheDir := t.TempDir()
 		cache.Reset()
@@ -142,7 +139,7 @@ func TestFetchForks(t *testing.T) {
 			cache.Open(testCacheDir)
 		})
 
-		stats := FetchForks(dir, cacheDir)
+		stats := fetch.FetchForks(errDir, cacheDir, Processors())
 		if stats.Forks != 1 {
 			t.Errorf("Forks = %d, want 1", stats.Forks)
 		}

@@ -115,9 +115,9 @@ extensions/* → core/* → stdlib only
 | `core/git` | Git operations | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase` |
 | `core/protocol` | Message parsing | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `IsClosingTrailer` |
 | `core/cache` | SQLite operations | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
-| `core/gitmsg` | Protocol-level storage | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized` |
+| `core/gitmsg` | Protocol-level storage | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage` | Bare repo management | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/fetch` | Fetch orchestration | `FetchAll`, `FetchRepository`, `CommitProcessor`, `PostFetchHook` |
+| `core/fetch` | Fetch orchestration | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings` | User settings | `Get`, `Set`, `ListAll` |
 | `core/search` | Cross-extension search | `Search`, `Params`, `Result`, `Item`, `FormatResult` |
 | `core/result` | Result type | `Result[T]`, `Success`, `Failure` |
@@ -125,7 +125,7 @@ extensions/* → core/* → stdlib only
 | `extensions/social` | Social layer | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
 | `extensions/pm` | Project management | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
 | `extensions/release` | Release management | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
-| `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `FetchForks`, `GetPullRequestsWithForks`, `AddFork`, `RemoveFork`, `GetForks`, `Processors` |
+| `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `Processors` |
 | `import` | Platform import pipeline | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github` | GitHub adapter | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
 
@@ -332,6 +332,7 @@ gitsocial
 ├── explore             # Browse repositories
 ├── history             # View edit history
 ├── notifications       # View/manage notifications
+├── fork                # Add, remove, list registered forks
 ├── tui                 # Launch TUI
 │
 ├── import              # Import from external platforms
@@ -365,8 +366,7 @@ gitsocial
 └── review              # Code review extension
     ├── status/init/config
     ├── pr              # Create, list, show, merge, close, retract PRs
-    ├── feedback        # Approve, request-changes, inline comments
-    └── fork            # Add, remove, list registered forks
+    └── feedback        # Approve, request-changes, inline comments
 ```
 
 **Planned extensions**: cicd, ops, security, dm, portfolio
