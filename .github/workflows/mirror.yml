@@ -3,11 +3,14 @@ name: Mirror
 on:
   push:
     branches: [main, "gitmsg/**"]
-    tags: ["v*"]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 jobs:
   gitlab:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +31,7 @@ jobs:
           git push gitlab 'refs/gitmsg/*:refs/gitmsg/*' --force
 
   codeberg:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
