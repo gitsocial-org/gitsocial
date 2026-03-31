@@ -134,17 +134,20 @@ gitsocial log --limit 50                       # Limit results
 
 ### gitsocial search
 
-Search posts with filters.
+Search across all extensions (posts, issues, PRs, releases, and more).
 
 ```
 gitsocial search "query"
 gitsocial search "feature" --author alice@example.com --type post
 gitsocial search "bug fix" --scope list:favorites --sort date
+gitsocial search --type pr --state open --json
+gitsocial search --type issue --labels bug --assignee dev@example.com --json
+gitsocial search --draft --json
 ```
 
 **Flags:**
 - `--author, -a` - Filter by author email
-- `--type, -t` - Filter by post type (post|comment|repost|quote)
+- `--type, -t` - Filter by type (post|comment|repost|quote|pr|issue|milestone|sprint|release|feedback)
 - `--hash` - Filter by commit hash prefix
 - `--after` - Posts after date (YYYY-MM-DD)
 - `--before` - Posts before date (YYYY-MM-DD)
@@ -152,6 +155,19 @@ gitsocial search "bug fix" --scope list:favorites --sort date
 - `--scope, -s` - Search scope: `timeline` (default), `list:<name>`, `repository:<url>`
 - `--sort` - Sort by: `score` (default) or `date`
 - `--limit, -n` - Maximum results (default: 20)
+- `--state` - Filter by state (open, closed, merged, canceled)
+- `--labels` - Filter by labels (comma-separated, any match)
+- `--assignee` - Filter by assignee email (implies `--type issue`)
+- `--reviewer` - Filter by reviewer email (implies `--type pr`)
+- `--milestone` - Filter by milestone name (implies `--type issue`)
+- `--sprint` - Filter by sprint name (implies `--type issue`)
+- `--draft` - Filter draft PRs only (implies `--type pr`)
+- `--prerelease` - Filter pre-releases only (implies `--type release`)
+- `--tag` - Filter by release tag (implies `--type release`)
+- `--base` - Filter by PR base branch (implies `--type pr`)
+- `--group-by` - Group results by field (state, author, type, extension, repo, label, assignee, reviewer, milestone, base)
+- `--top` - Max items per group (default: unlimited)
+- `--count-only` - Show only group counts, no items
 
 ### gitsocial history
 

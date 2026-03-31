@@ -16,16 +16,55 @@ type Params struct {
 	Offset int
 	Scope  string // "timeline", "list:<id>", "repository:<url>", "repos:<csv>"
 	Sort   string // "score", "date"
+
+	// Extension-specific filters
+	State      string // "open", "closed", "merged", "canceled" (pm/review)
+	Labels     string // comma-separated labels to match (pm/review)
+	Assignee   string // filter by assignee email (pm)
+	Reviewer   string // filter by reviewer email (review)
+	Milestone  string // filter by milestone name (pm)
+	Sprint     string // filter by sprint name (pm)
+	Draft      bool   // filter draft PRs only (review)
+	Prerelease bool   // filter pre-releases only (release)
+	Tag        string // filter by release tag (release)
+	Base       string // filter by PR base branch (review)
+
+	// Grouping
+	GroupBy   string // field to group by: state, author, type, extension, repo, label, assignee, reviewer, milestone, base
+	Top       int    // max items per group (0 = unlimited)
+	CountOnly bool   // only return counts per group, no items
 }
 
 // Result holds search results with metadata.
 type Result struct {
 	Query           string       `json:"query"`
-	Results         []ScoredItem `json:"results"`
+	Results         []ScoredItem `json:"results,omitempty"`
 	Total           int          `json:"total"`
 	TotalSearched   int          `json:"total_searched"`
-	HasMore         bool         `json:"has_more"`
+	HasMore         bool         `json:"has_more,omitempty"`
 	ExecutionTimeMs int64        `json:"execution_time_ms"`
+
+	// Grouped output (populated when --group-by is used, Results will be nil)
+	GroupBy string  `json:"group_by,omitempty"`
+	Groups  []Group `json:"groups,omitempty"`
+}
+
+// Group is a single group within a grouped result.
+type Group struct {
+	Key   string        `json:"key"`
+	Count int           `json:"count"`
+	Items []GroupedItem `json:"items,omitempty"`
+}
+
+// GroupedItem is a compact item representation within a group.
+type GroupedItem struct {
+	Hash      string `json:"hash"`
+	Author    string `json:"author,omitempty"`
+	Subject   string `json:"subject"`
+	Timestamp string `json:"timestamp"`
+	State     string `json:"state,omitempty"`
+	Labels    string `json:"labels,omitempty"`
+	RepoURL   string `json:"repo_url,omitempty"`
 }
 
 // Item is an extension-agnostic search result from the database.
@@ -41,6 +80,14 @@ type Item struct {
 	Extension   string // "social", "pm", "review", "release"
 	IsVirtual   bool
 	IsStale     bool
+
+	// Internal fields for grouping (not serialized, populated by enrichForGrouping)
+	groupState     string
+	groupLabels    string
+	groupAssignees string
+	groupReviewers string
+	groupBase      string
+	groupMilestone string
 }
 
 // ScoredItem wraps an Item with a relevance score.

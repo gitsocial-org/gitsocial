@@ -9,6 +9,9 @@ import (
 
 // FormatResult formats search results for CLI text display.
 func FormatResult(result Result) string {
+	if len(result.Groups) > 0 {
+		return formatGroupedResult(result)
+	}
 	if len(result.Results) == 0 {
 		return fmt.Sprintf("No results for '%s'.", result.Query)
 	}
@@ -37,6 +40,57 @@ func formatItem(item ScoredItem) string {
 	lines = append(lines, content)
 
 	return strings.Join(lines, "\n")
+}
+
+// formatGroupedResult formats grouped search results for CLI text display.
+func formatGroupedResult(result Result) string {
+	var parts []string
+	for _, g := range result.Groups {
+		header := fmt.Sprintf("## %s (%d)", g.Key, g.Count)
+		parts = append(parts, header)
+		if len(g.Items) > 0 {
+			// Sub-group items by author for compact display
+			authorItems := make(map[string][]string)
+			var authorOrder []string
+			for _, item := range g.Items {
+				author := item.Author
+				if author == "" {
+					author = "(unknown)"
+				}
+				if _, exists := authorItems[author]; !exists {
+					authorOrder = append(authorOrder, author)
+				}
+				authorItems[author] = append(authorItems[author], item.Subject)
+			}
+			for _, author := range authorOrder {
+				subjects := authorItems[author]
+				summary := strings.Join(truncateStrings(subjects, 3), ", ")
+				if len(subjects) > 3 {
+					summary += fmt.Sprintf(", ... +%d more", len(subjects)-3)
+				}
+				parts = append(parts, fmt.Sprintf("  %s (%d): %s", author, len(subjects), summary))
+			}
+		}
+	}
+	parts = append(parts, fmt.Sprintf("\nTotal: %d (grouped by %s)", result.Total, result.GroupBy))
+	return strings.Join(parts, "\n")
+}
+
+// truncateStrings returns up to n strings, each truncated to 50 chars.
+func truncateStrings(ss []string, n int) []string {
+	limit := n
+	if limit > len(ss) {
+		limit = len(ss)
+	}
+	result := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		s := ss[i]
+		if len(s) > 50 {
+			s = s[:50] + "..."
+		}
+		result[i] = s
+	}
+	return result
 }
 
 // formatDate formats a timestamp as a human-readable relative time string.

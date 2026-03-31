@@ -19,6 +19,18 @@ type searchQuery struct {
 	ExtFilter    *ExtFilter // extension table filter
 	Since        *time.Time
 	Until        *time.Time
+
+	// Extension-specific SQL filters
+	State      string // pm_items.state or review_items.state
+	Labels     string // comma-separated labels to match (pm/review)
+	Assignee   string // assignee email (pm)
+	Reviewer   string // reviewer email (review)
+	Draft      bool   // review_items.draft = 1
+	Prerelease bool   // release_items.prerelease = 1
+	Tag        string // release_items.tag
+	Base       string // review_items.base
+	Milestone  string // pm milestone name (subquery through core_commits)
+	Sprint     string // pm sprint name (subquery through core_commits)
 }
 
 // extFilterFromType maps user-facing type names to extension table filters.
@@ -206,10 +218,92 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 		where = append(where, subq)
 	}
 
+	// Extension-specific filters use resolved views to get current state after edits.
+	// Raw tables only reflect creation-time values; resolved views COALESCE edit values.
+	if q.State != "" {
+		var stateClauses []string
+		// pm: open, closed, canceled
+		if q.State == "open" || q.State == "closed" || q.State == "canceled" {
+			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM pm_items_resolved pir WHERE pir.repo_url = r.repo_url AND pir.hash = r.hash AND pir.branch = r.branch AND pir.state = ?)")
+			args = append(args, q.State)
+		}
+		// review: open, merged, closed
+		if q.State == "open" || q.State == "merged" || q.State == "closed" {
+			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM review_items_resolved rir WHERE rir.repo_url = r.repo_url AND rir.hash = r.hash AND rir.branch = r.branch AND rir.state = ?)")
+			args = append(args, q.State)
+		}
+		if len(stateClauses) == 1 {
+			where = append(where, stateClauses[0])
+		} else if len(stateClauses) > 1 {
+			where = append(where, "("+strings.Join(stateClauses, " OR ")+")")
+		}
+	}
+	if q.Draft {
+		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir2 WHERE rir2.repo_url = r.repo_url AND rir2.hash = r.hash AND rir2.branch = r.branch AND rir2.draft = 1)")
+	}
+	if q.Prerelease {
+		where = append(where, "EXISTS (SELECT 1 FROM release_items rli2 WHERE rli2.repo_url = r.repo_url AND rli2.hash = r.hash AND rli2.branch = r.branch AND rli2.prerelease = 1)")
+	}
+	if q.Tag != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM release_items rli3 WHERE rli3.repo_url = r.repo_url AND rli3.hash = r.hash AND rli3.branch = r.branch AND rli3.tag = ?)")
+		args = append(args, q.Tag)
+	}
+	if q.Base != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir3 WHERE rir3.repo_url = r.repo_url AND rir3.hash = r.hash AND rir3.branch = r.branch AND rir3.base = ?)")
+		args = append(args, q.Base)
+	}
+	if q.Milestone != "" {
+		where = append(where, `EXISTS (SELECT 1 FROM pm_items_resolved pir2 WHERE pir2.repo_url = r.repo_url AND pir2.hash = r.hash AND pir2.branch = r.branch
+			AND pir2.milestone_hash IS NOT NULL
+			AND EXISTS (SELECT 1 FROM core_commits mc WHERE mc.repo_url = pir2.milestone_repo_url AND mc.hash = pir2.milestone_hash AND mc.branch = pir2.milestone_branch AND mc.message LIKE ? || '%'))`)
+		args = append(args, q.Milestone)
+	}
+	if q.Sprint != "" {
+		where = append(where, `EXISTS (SELECT 1 FROM pm_items_resolved pir3 WHERE pir3.repo_url = r.repo_url AND pir3.hash = r.hash AND pir3.branch = r.branch
+			AND pir3.sprint_hash IS NOT NULL
+			AND EXISTS (SELECT 1 FROM core_commits sc WHERE sc.repo_url = pir3.sprint_repo_url AND sc.hash = pir3.sprint_hash AND sc.branch = pir3.sprint_branch AND sc.message LIKE ? || '%'))`)
+		args = append(args, q.Sprint)
+	}
+	if q.Labels != "" {
+		// Match any of the provided labels (OR logic). Labels are comma-separated in DB.
+		labelList := splitCSV(q.Labels)
+		labelClauses := make([]string, 0, 2*len(labelList))
+		for _, label := range labelList {
+			labelClauses = append(labelClauses,
+				"EXISTS (SELECT 1 FROM pm_items_resolved pir4 WHERE pir4.repo_url = r.repo_url AND pir4.hash = r.hash AND pir4.branch = r.branch AND pir4.labels LIKE '%' || ? || '%')")
+			args = append(args, label)
+			labelClauses = append(labelClauses,
+				"EXISTS (SELECT 1 FROM review_items_resolved rir4 WHERE rir4.repo_url = r.repo_url AND rir4.hash = r.hash AND rir4.branch = r.branch AND rir4.labels LIKE '%' || ? || '%')")
+			args = append(args, label)
+		}
+		where = append(where, "("+strings.Join(labelClauses, " OR ")+")")
+	}
+	if q.Assignee != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM pm_items_resolved pir5 WHERE pir5.repo_url = r.repo_url AND pir5.hash = r.hash AND pir5.branch = r.branch AND (',' || REPLACE(pir5.assignees, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		args = append(args, q.Assignee)
+	}
+	if q.Reviewer != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir5 WHERE rir5.repo_url = r.repo_url AND rir5.hash = r.hash AND rir5.branch = r.branch AND (',' || REPLACE(rir5.reviewers, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		args = append(args, q.Reviewer)
+	}
+
 	// Standard exclusions
 	where = append(where, "NOT r.is_edit_commit")
 	where = append(where, "NOT r.is_retracted")
 	where = append(where, "(r.stale_since IS NULL OR r.is_virtual = 1)")
 
 	return " WHERE " + strings.Join(where, " AND "), args
+}
+
+// splitCSV splits a comma-separated string and trims whitespace from each element.
+func splitCSV(s string) []string {
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }

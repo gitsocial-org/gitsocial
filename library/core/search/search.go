@@ -95,6 +95,10 @@ func Search(workdir string, params Params) (Result, error) {
 		q.ListIDs = nil
 		q.WorkspaceURL = ""
 	}
+	// Type inference: extension-specific filters imply their type
+	if params.Type == "" {
+		params.Type = inferTypeFromFilters(params)
+	}
 	if params.Type != "" {
 		if ext := extFilterFromType(params.Type); ext != nil {
 			q.ExtFilter = ext
@@ -108,6 +112,18 @@ func Search(workdir string, params Params) (Result, error) {
 	if params.Before != nil {
 		q.Until = params.Before
 	}
+
+	// Pass extension-specific filters to query
+	q.State = params.State
+	q.Labels = params.Labels
+	q.Assignee = params.Assignee
+	q.Reviewer = params.Reviewer
+	q.Draft = params.Draft
+	q.Prerelease = params.Prerelease
+	q.Tag = params.Tag
+	q.Base = params.Base
+	q.Milestone = params.Milestone
+	q.Sprint = params.Sprint
 
 	items, err := queryItems(q)
 	if err != nil {
@@ -127,6 +143,20 @@ func Search(workdir string, params Params) (Result, error) {
 			}
 			return results[i].Timestamp.After(results[j].Timestamp)
 		})
+	}
+
+	// Grouped output path
+	if params.GroupBy != "" {
+		enrichForGrouping(results, params.GroupBy)
+		groups := groupBy(results, params.GroupBy, params.Top, params.CountOnly)
+		return Result{
+			Query:           params.Query,
+			GroupBy:         params.GroupBy,
+			Groups:          groups,
+			Total:           len(results),
+			TotalSearched:   len(items),
+			ExecutionTimeMs: time.Since(startTime).Milliseconds(),
+		}, nil
 	}
 
 	total := len(results)
@@ -150,6 +180,19 @@ func Search(workdir string, params Params) (Result, error) {
 		HasMore:         hasMore,
 		ExecutionTimeMs: time.Since(startTime).Milliseconds(),
 	}, nil
+}
+
+// inferTypeFromFilters returns an implied type when extension-specific filters are used without --type.
+func inferTypeFromFilters(params Params) string {
+	switch {
+	case params.Assignee != "" || params.Milestone != "" || params.Sprint != "":
+		return "issue"
+	case params.Reviewer != "" || params.Draft || params.Base != "":
+		return "pr"
+	case params.Prerelease || params.Tag != "":
+		return "release"
+	}
+	return ""
 }
 
 // resolveListID resolves a list filter value to an ID.

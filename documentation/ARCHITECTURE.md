@@ -119,7 +119,7 @@ extensions/* → core/* → stdlib only
 | `core/storage` | Bare repo management | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
 | `core/fetch` | Fetch orchestration | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings` | User settings | `Get`, `Set`, `ListAll` |
-| `core/search` | Cross-extension search | `Search`, `Params`, `Result`, `Item`, `FormatResult` |
+| `core/search` | Cross-extension search | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result` | Result type | `Result[T]`, `Success`, `Failure` |
 | `core/notifications` | Notification aggregation | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
 | `extensions/social` | Social layer | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
