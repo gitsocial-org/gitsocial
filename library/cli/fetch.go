@@ -79,18 +79,6 @@ For extension-specific options, use the extension's fetch command directly:
 			if err != nil {
 				slog.Debug("get unread count", "error", err)
 			}
-			fetchAllBranches := resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput)
-			extraProcessors := append(pm.Processors(), review.Processors()...)
-			extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
-			opts := &social.FetchOptions{
-				ListID:           listID,
-				Since:            since,
-				Before:           before,
-				Parallel:         parallel,
-				FetchAllBranches: fetchAllBranches,
-				ExtraProcessors:  extraProcessors,
-			}
-
 			if !cfg.JSONOutput {
 				if listID != "" {
 					fmt.Printf("Fetching repositories from list '%s'...\n", listID)
@@ -99,17 +87,14 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 			}
 
-			result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
-			// Fetch all gitmsg data from registered forks
-			forkProcessors := append(review.Processors(), pm.Processors()...)
-			forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
-			forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
+			result, forkStats := runFullFetch(cfg, &social.FetchOptions{
+				ListID:   listID,
+				Since:    since,
+				Before:   before,
+				Parallel: parallel,
+			})
 			if !cfg.JSONOutput && forkStats.Items > 0 {
 				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Forks)
-			}
-			// Re-sync all workspace extension branches to cache
-			if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "error", err)
 			}
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -194,6 +179,27 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 	}
 	fmt.Println()
 	return mode == "*"
+}
+
+// runFullFetch performs a full workspace fetch: subscribed repos, forks, and workspace sync.
+// If opts is nil, defaults are used. The caller can pre-populate opts with CLI-specific fields
+// (ListID, Since, Before, Parallel); this function fills in processors and branch mode.
+func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.FetchStats], fetch.FetchForkStats) {
+	if opts == nil {
+		opts = &social.FetchOptions{}
+	}
+	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput)
+	extraProcessors := append(pm.Processors(), review.Processors()...)
+	extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
+	opts.ExtraProcessors = extraProcessors
+	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
+	forkProcessors := append(review.Processors(), pm.Processors()...)
+	forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
+	forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
+	if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
+		slog.Debug("workspace sync", "error", err)
+	}
+	return result, forkStats
 }
 
 // printNotificationDelta prints new notification count if it increased after fetch.

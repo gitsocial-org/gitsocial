@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 )
 
@@ -109,7 +110,11 @@ func (m *MappingFile) GetUpdatedAt(key string) string {
 // RebuildMapping scans extension branches for commits with origin metadata
 // and rebuilds the mapping file from git history. Returns the count of recovered entries.
 func RebuildMapping(workdir string, mapping *MappingFile) int {
-	branches := []string{"gitmsg/social", "gitmsg/pm", "gitmsg/release", "gitmsg/review"}
+	exts := []string{"social", "pm", "release", "review"}
+	branches := make([]string, len(exts))
+	for i, ext := range exts {
+		branches[i] = gitmsg.GetExtBranch(workdir, ext)
+	}
 	recovered := 0
 	for _, branch := range branches {
 		commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{Branch: branch})

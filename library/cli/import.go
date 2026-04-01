@@ -191,6 +191,11 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	if hasSocial && f.categories != "" {
 		fetchOpts.Categories = strings.Split(f.categories, ",")
 	}
+	// Pre-import: full fetch to sync gitmsg branches and populate cache
+	if !cfg.JSONOutput {
+		fmt.Printf("Fetching latest updates...\n")
+	}
+	runFullFetch(cfg, nil)
 	// Count items and show confirmation prompt
 	if !cfg.JSONOutput {
 		fmt.Printf("Counting items...\n")
@@ -253,6 +258,13 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	}
 	if err != nil {
 		return err
+	}
+	// Post-import: full fetch to pick up activity pushed during import
+	if !f.dryRun {
+		if !cfg.JSONOutput {
+			fmt.Printf("\nFetching latest updates...\n")
+		}
+		runFullFetch(cfg, nil)
 	}
 	mapPath := importpkg.ResolveMappingPath(cfg.CacheDir, repoURL, f.mapFile)
 	if cfg.JSONOutput {

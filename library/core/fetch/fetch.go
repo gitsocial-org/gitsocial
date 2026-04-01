@@ -4,11 +4,13 @@ package fetch
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/result"
@@ -83,6 +85,8 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 		if err := git.FetchRefspec(workdir, "origin", "+refs/gitmsg/*:refs/gitmsg/*"); err != nil {
 			log.Debug("fetch gitmsg refs", "error", err)
 		}
+		// Fast-forward local gitmsg branches from remote
+		syncGitmsgBranches(workdir)
 		// Optionally fetch all upstream branches
 		if opts.FetchAllBranches {
 			if err := git.FetchRefspec(workdir, "origin", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
@@ -486,4 +490,61 @@ func runHooks(hooks []PostFetchHook, storageDir, repoURL, branch, workspaceURL s
 	for _, hook := range hooks {
 		hook(storageDir, repoURL, branch, workspaceURL)
 	}
+}
+
+// syncGitmsgBranches fast-forwards local gitmsg branches to match remote tracking refs.
+func syncGitmsgBranches(workdir string) {
+	branches := make(map[string]bool)
+	for _, b := range gitmsg.GetExtBranches(workdir) {
+		branches[b] = true
+	}
+	for _, b := range listRemoteGitmsgBranches(workdir) {
+		branches[b] = true
+	}
+	for branch := range branches {
+		syncBranchFromRemote(workdir, branch)
+	}
+}
+
+// syncBranchFromRemote creates or fast-forwards a local branch from its remote tracking ref.
+func syncBranchFromRemote(workdir, branch string) {
+	localRef := "refs/heads/" + branch
+	remoteRef := "refs/remotes/origin/" + branch
+	remoteResult, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", remoteRef})
+	if err != nil {
+		return
+	}
+	remoteHash := strings.TrimSpace(remoteResult.Stdout)
+	localResult, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", localRef})
+	if err != nil {
+		// Local doesn't exist — create from remote
+		_, _ = git.ExecGit(workdir, []string{"update-ref", localRef, remoteHash})
+		return
+	}
+	localHash := strings.TrimSpace(localResult.Stdout)
+	if localHash == remoteHash {
+		return
+	}
+	// Fast-forward only if local is ancestor of remote
+	if _, err := git.ExecGit(workdir, []string{"merge-base", "--is-ancestor", localHash, remoteHash}); err != nil {
+		return
+	}
+	_, _ = git.ExecGit(workdir, []string{"update-ref", localRef, remoteHash})
+}
+
+// listRemoteGitmsgBranches returns gitmsg/* branches from origin's remote tracking refs.
+func listRemoteGitmsgBranches(workdir string) []string {
+	result, err := git.ExecGit(workdir, []string{
+		"for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin/gitmsg/",
+	})
+	if err != nil || result.Stdout == "" {
+		return nil
+	}
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
+		if line != "" {
+			branches = append(branches, "gitmsg/"+line)
+		}
+	}
+	return branches
 }
