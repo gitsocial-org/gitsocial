@@ -25,6 +25,7 @@ func main() {
 		newSettingsCmd(),
 		newLogCmd(),
 		newSearchCmd(),
+		newShowCmd(),
 		newRelatedCmd(),
 		newExploreCmd(),
 		newHistoryCmd(),

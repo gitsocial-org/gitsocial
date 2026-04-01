@@ -169,6 +169,16 @@ gitsocial search --draft --json
 - `--top` - Max items per group (default: unlimited)
 - `--count-only` - Show only group counts, no items
 
+### gitsocial show
+
+Show full details for any item. Auto-detects extension (issue, PR, release, or post).
+
+```
+gitsocial show <ref>
+gitsocial show "#commit:abc123"
+gitsocial show "#commit:abc123" --json
+```
+
 ### gitsocial history
 
 View edit history of any GitMsg message.

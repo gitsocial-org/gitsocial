@@ -328,7 +328,8 @@ gitsocial
 ├── config              # Manage core protocol config
 ├── settings            # Manage user settings
 ├── log                 # Show activity log
-├── search              # Search posts
+├── search              # Search across all extensions
+├── show                # Show item details (auto-detects extension)
 ├── explore             # Browse repositories
 ├── history             # View edit history
 ├── notifications       # View/manage notifications
