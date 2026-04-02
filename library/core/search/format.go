@@ -49,26 +49,47 @@ func formatGroupedResult(result Result) string {
 		header := fmt.Sprintf("## %s (%d)", g.Key, g.Count)
 		parts = append(parts, header)
 		if len(g.Items) > 0 {
-			// Sub-group items by author for compact display
-			authorItems := make(map[string][]string)
-			var authorOrder []string
+			// Check if items have author info for sub-grouping
+			hasAuthors := false
 			for _, item := range g.Items {
-				author := item.Author
-				if author == "" {
-					author = "(unknown)"
+				if item.Author != "" {
+					hasAuthors = true
+					break
 				}
-				if _, exists := authorItems[author]; !exists {
-					authorOrder = append(authorOrder, author)
-				}
-				authorItems[author] = append(authorItems[author], item.Subject)
 			}
-			for _, author := range authorOrder {
-				subjects := authorItems[author]
-				summary := strings.Join(truncateStrings(subjects, 3), ", ")
-				if len(subjects) > 3 {
-					summary += fmt.Sprintf(", ... +%d more", len(subjects)-3)
+			if hasAuthors {
+				// Sub-group items by author for compact display
+				authorItems := make(map[string][]string)
+				var authorOrder []string
+				for _, item := range g.Items {
+					author := item.Author
+					if author == "" {
+						author = "(unknown)"
+					}
+					if _, exists := authorItems[author]; !exists {
+						authorOrder = append(authorOrder, author)
+					}
+					authorItems[author] = append(authorItems[author], item.Subject)
 				}
-				parts = append(parts, fmt.Sprintf("  %s (%d): %s", author, len(subjects), summary))
+				for _, author := range authorOrder {
+					subjects := authorItems[author]
+					summary := strings.Join(truncateStrings(subjects, 3), ", ")
+					if len(subjects) > 3 {
+						summary += fmt.Sprintf(", ... +%d more", len(subjects)-3)
+					}
+					parts = append(parts, fmt.Sprintf("  %s (%d): %s", author, len(subjects), summary))
+				}
+			} else {
+				// No author info (e.g., grouped by author) — list subjects directly
+				subjects := make([]string, 0, len(g.Items))
+				for _, item := range g.Items {
+					subjects = append(subjects, item.Subject)
+				}
+				summary := strings.Join(truncateStrings(subjects, 5), ", ")
+				if len(subjects) > 5 {
+					summary += fmt.Sprintf(", ... +%d more", len(subjects)-5)
+				}
+				parts = append(parts, "  "+summary)
 			}
 		}
 	}
