@@ -166,13 +166,15 @@ func TestPROperations(t *testing.T) {
 	})
 
 	t.Run("ClosePR_invalidState", func(t *testing.T) {
-		t.Parallel()
 		dir := initTestRepo(t)
 		created := CreatePR(dir, "PR to close twice", "", CreatePROptions{Base: "main"})
 		if !created.Success {
 			t.Fatalf("CreatePR() failed: %s", created.Error.Message)
 		}
-		ClosePR(dir, created.Data.ID)
+		first := ClosePR(dir, created.Data.ID)
+		if !first.Success {
+			t.Fatalf("first ClosePR() failed: %s", first.Error.Message)
+		}
 		res := ClosePR(dir, created.Data.ID)
 		if res.Success {
 			t.Error("should fail when closing an already closed PR")
