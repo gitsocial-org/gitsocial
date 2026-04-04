@@ -936,6 +936,9 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		} else {
 			baseText = styles.Value.Render(display)
 		}
+		if pr.BaseTip != "" {
+			baseText += tuicore.Dim.Render(" · #" + pr.BaseTip)
+		}
 		lines = append(lines, selectionBar+styles.Label.Render("Base")+baseText)
 	}
 	if pr.Head != "" {
@@ -954,12 +957,10 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		} else {
 			headText = styles.Value.Render(display)
 		}
-		lines = append(lines, selectionBar+styles.Label.Render("Head")+headText)
-		if parsed.Repository != "" && parsed.Repository != v.workspaceURL {
-			forkDisplay := strings.TrimPrefix(strings.TrimPrefix(parsed.Repository, "https://"), "http://")
-			forkLink := anchors.MarkLink(forkDisplay, parsed.Repository, tuicore.Location{Path: parsed.Repository})
-			lines = append(lines, selectionBar+styles.Label.Render("Fork")+forkLink)
+		if pr.HeadTip != "" {
+			headText += tuicore.Dim.Render(" · #" + pr.HeadTip)
 		}
+		lines = append(lines, selectionBar+styles.Label.Render("Head")+headText)
 	}
 	if v.behindCount > 0 && pr.Base != "" {
 		baseName := shortenBranchRef(pr.Base)
