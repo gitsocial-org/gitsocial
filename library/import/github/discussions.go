@@ -38,12 +38,6 @@ type ghPageInfo struct {
 	EndCursor   string `json:"endCursor"`
 }
 
-var defaultCategories = map[string]bool{
-	"announcements":    true,
-	"feature-requests": true,
-	"q-a":              true,
-}
-
 // buildDiscussionQuery builds a GraphQL query for fetching discussions with cursor pagination.
 func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
 	afterClause := ""
@@ -81,7 +75,7 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 	if limit <= 0 {
 		limit = 999999
 	}
-	allowed := defaultCategories
+	var allowed map[string]bool
 	if len(opts.Categories) > 0 {
 		allowed = map[string]bool{}
 		for _, c := range opts.Categories {
@@ -153,7 +147,7 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 		if opts.SkipExternalIDs[fmt.Sprintf("post:%d", d.Number)] {
 			continue
 		}
-		if !allowed[d.Category.Slug] {
+		if allowed != nil && !allowed[d.Category.Slug] {
 			filtered++
 			continue
 		}
