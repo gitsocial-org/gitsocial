@@ -109,6 +109,12 @@ gitsocial push
 | [TUI Diagrams](documentation/TUI-DIAGRAMS.md) | ASCII layouts for every list and detail view |
 | [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
 
+### Integrations
+
+| Integration | Description |
+|-------------|-------------|
+| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | GitSocial for AI agents |
+
 ### Protocol Specs
 
 | Spec | Description |
