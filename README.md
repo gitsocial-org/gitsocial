@@ -11,7 +11,7 @@
 
 [How It Works](#how-it-works) • [Extensions](#extensions) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing)
 
-![GitSocial Timeline](documentation/images/screenshot.png)
+![GitSocial TUI](documentation/demo/demo.gif)
 
 </div>
 
