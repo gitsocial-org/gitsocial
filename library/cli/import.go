@@ -55,7 +55,7 @@ func addImportFlags(cmd *cobra.Command, f *importFlags, hasSocial bool, defaultL
 	cmd.Flags().StringVar(&f.state, "state", "all", "Filter by state: open, closed, merged, all")
 	cmd.Flags().StringVar(&f.emailMap, "email-map", "", "Path to username=email mapping file for author email overrides")
 	if hasSocial {
-		cmd.Flags().StringVar(&f.categories, "categories", "announcements,feature-requests,q-a", "Discussion category slugs to import (comma-separated)")
+		cmd.Flags().StringVar(&f.categories, "categories", "", "Discussion category slugs to import (comma-separated, default: all)")
 	}
 }
 
