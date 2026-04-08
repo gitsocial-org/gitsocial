@@ -92,42 +92,52 @@ CREATE TABLE IF NOT EXISTS core_commits_version (
 CREATE INDEX IF NOT EXISTS idx_core_commits_version_canonical ON core_commits_version(canonical_repo_url, canonical_hash, canonical_branch);
 
 -- Core: Resolved commits view (handles versioning for all extensions)
+-- Uses correlated subqueries instead of ROW_NUMBER() so SQLite can flatten the view
+-- and push WHERE predicates from outer queries into core_commits.
 DROP VIEW IF EXISTS core_commits_resolved;
 CREATE VIEW core_commits_resolved AS
 SELECT
     c.repo_url,
     c.hash,
     c.branch,
-    COALESCE(le.message, c.message) as resolved_message,
+    COALESCE(
+        (SELECT e.message FROM core_commits_version v
+         JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+         WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+         ORDER BY e.timestamp DESC LIMIT 1),
+        c.message
+    ) as resolved_message,
     c.message as original_message,
     c.edits,
-    COALESCE(le.is_retracted, 0) as is_retracted,
-    (le.edit_repo_url IS NOT NULL) as has_edits,
-    (ec.edit_repo_url IS NOT NULL) as is_edit_commit,
+    COALESCE(
+        (SELECT v.is_retracted FROM core_commits_version v
+         JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+         WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+         ORDER BY e.timestamp DESC LIMIT 1),
+        0
+    ) as is_retracted,
+    EXISTS (
+        SELECT 1 FROM core_commits_version v
+        WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+    ) as has_edits,
+    EXISTS (
+        SELECT 1 FROM core_commits_version v
+        WHERE v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
+    ) as is_edit_commit,
     COALESCE(c.origin_author_name, c.author_name) as author_name,
     COALESCE(c.origin_author_email, c.author_email) as author_email,
     COALESCE(c.origin_time, c.timestamp) as timestamp,
-    COALESCE(le.labels, c.labels) as labels,
+    COALESCE(
+        (SELECT e.labels FROM core_commits_version v
+         JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+         WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+         ORDER BY e.timestamp DESC LIMIT 1),
+        c.labels
+    ) as labels,
     c.is_virtual,
     c.fetched_at,
     c.stale_since
-FROM core_commits c
-LEFT JOIN (
-    SELECT v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
-           e.message, v.is_retracted, v.edit_repo_url, e.labels,
-           ROW_NUMBER() OVER (
-               PARTITION BY v.canonical_repo_url, v.canonical_hash, v.canonical_branch
-               ORDER BY e.timestamp DESC
-           ) as rn
-    FROM core_commits_version v
-    JOIN core_commits e ON v.edit_repo_url = e.repo_url
-        AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-) le ON le.canonical_repo_url = c.repo_url
-    AND le.canonical_hash = c.hash
-    AND le.canonical_branch = c.branch
-    AND le.rn = 1
-LEFT JOIN core_commits_version ec ON ec.edit_repo_url = c.repo_url
-    AND ec.edit_hash = c.hash AND ec.edit_branch = c.branch;
+FROM core_commits c;
 
 -- Core: Repository tracking
 CREATE TABLE IF NOT EXISTS core_repositories (
