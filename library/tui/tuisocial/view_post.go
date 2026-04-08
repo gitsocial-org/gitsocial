@@ -204,8 +204,12 @@ func (v *PostView) Activate(state *tuicore.State) tea.Cmd {
 	}
 	// Only reset if navigating to a different post
 	if postID != v.requestedPostID {
+		v.post = social.Post{}
+		v.thread = nil
 		v.loadErr = nil
 		v.loading = true
+		v.selectedIndex = 0
+		v.scrollOffset = 0
 	}
 	v.requestedPostID = postID
 	return v.loadThread(postID)
