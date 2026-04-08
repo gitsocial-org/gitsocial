@@ -113,6 +113,19 @@ func Search(workdir string, params Params) (Result, error) {
 		q.Until = params.Before
 	}
 
+	// Push text search into SQL for performance
+	searchTerms := strings.ToLower(parsed.Terms)
+	for _, term := range strings.Fields(searchTerms) {
+		if !hashPattern.MatchString(term) {
+			if q.TextSearch != "" {
+				q.TextSearch += " "
+			}
+			q.TextSearch += term
+		}
+	}
+	q.AuthorFilter = params.Author
+	q.HashPrefix = strings.ToLower(params.Hash)
+
 	// Pass extension-specific filters to query
 	q.State = params.State
 	q.Labels = params.Labels

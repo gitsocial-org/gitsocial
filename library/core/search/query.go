@@ -20,6 +20,11 @@ type searchQuery struct {
 	Since        *time.Time
 	Until        *time.Time
 
+	// Text search filters (pushed to SQL for performance)
+	TextSearch   string // text to search in message and author fields
+	AuthorFilter string // author name/email substring
+	HashPrefix   string // hash prefix match
+
 	// Extension-specific SQL filters
 	State      string // pm_items.state or review_items.state
 	Labels     string // comma-separated labels to match (pm/review)
@@ -195,6 +200,20 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 	if q.Until != nil {
 		where = append(where, "r.timestamp <= ?")
 		args = append(args, q.Until.Format(time.RFC3339))
+	}
+
+	// Text search: filter by message content or author in SQL
+	if q.TextSearch != "" {
+		where = append(where, "(r.resolved_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+		args = append(args, q.TextSearch, q.TextSearch, q.TextSearch)
+	}
+	if q.AuthorFilter != "" {
+		where = append(where, "(r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+		args = append(args, q.AuthorFilter, q.AuthorFilter)
+	}
+	if q.HashPrefix != "" {
+		where = append(where, "r.hash LIKE ? || '%'")
+		args = append(args, q.HashPrefix)
 	}
 
 	// Social-level type filter (post, comment, repost, quote)
