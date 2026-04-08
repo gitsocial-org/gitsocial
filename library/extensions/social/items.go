@@ -64,6 +64,49 @@ const baseSelectFromView = `
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
+// baseDirectSelect bypasses social_items_resolved and core_commits_resolved views,
+// joining core_commits directly with inline version resolution. This avoids view
+// materialization issues with large tables (e.g. 1M+ commits).
+// Column order matches scanResolvedRows/scanResolvedRow.
+// Caller binds: workspace_url (for sf join), then WHERE params.
+const baseDirectSelect = `
+	SELECT c.repo_url, c.hash, c.branch,
+	       COALESCE(c.origin_author_name, c.author_name),
+	       COALESCE(c.origin_author_email, c.author_email),
+	       COALESCE(
+	           (SELECT e.message FROM core_commits_version v
+	            JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+	            WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+	            ORDER BY e.timestamp DESC LIMIT 1),
+	           c.message
+	       ),
+	       c.message,
+	       COALESCE(c.origin_time, c.timestamp),
+	       COALESCE(s.type, 'post'),
+	       s.original_repo_url, s.original_hash, s.original_branch,
+	       s.reply_to_repo_url, s.reply_to_hash, s.reply_to_branch,
+	       c.edits,
+	       COALESCE(i.comments, 0), COALESCE(i.reposts, 0), COALESCE(i.quotes, 0),
+	       c.is_virtual,
+	       COALESCE(
+	           (SELECT v.is_retracted FROM core_commits_version v
+	            JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+	            WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+	            ORDER BY e.timestamp DESC LIMIT 1),
+	           0
+	       ),
+	       EXISTS (
+	           SELECT 1 FROM core_commits_version v
+	           WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+	       ),
+	       c.stale_since,
+	       (sf.repo_url IS NOT NULL)
+	FROM core_commits c
+	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
+	LEFT JOIN social_interactions i ON c.repo_url = i.repo_url AND c.hash = i.hash AND c.branch = i.branch
+	LEFT JOIN social_followers sf ON c.repo_url = sf.repo_url AND sf.workspace_url = ?
+`
+
 // GetCachedCommit retrieves a commit from the cache and parses it as a social item.
 func GetCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
@@ -811,31 +854,26 @@ func GetAllItems(q SocialQuery) ([]SocialItem, error) {
 // GetThread retrieves all replies in a comment thread from a root post.
 func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		// CTE walks social_items for reply_to chain, then joins to view for data
-		// Seed CTE directly with params (not FROM social_items) so it works for posts without social_items records
+		// CTE walks social_items for reply_to chain, then joins core_commits directly
+		// (bypasses views to avoid materializing 1M+ rows).
 		query := `
 			WITH RECURSIVE descendants AS (
 				SELECT ? as repo_url, ? as hash, ? as branch
 				UNION
-				SELECT s.repo_url, s.hash, s.branch FROM social_items s
-				INNER JOIN descendants d ON s.reply_to_repo_url = d.repo_url AND s.reply_to_hash = d.hash AND s.reply_to_branch = d.branch
-			)
-			SELECT v.repo_url, v.hash, v.branch,
-			       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-			       v.type,
-			       v.original_repo_url, v.original_hash, v.original_branch,
-			       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
-			       v.edits, v.comments, v.reposts, v.quotes,
-			       v.is_virtual, v.is_retracted, v.has_edits,
-			       v.stale_since,
-			       (sf.repo_url IS NOT NULL) as follows_workspace
-			FROM social_items_resolved v
-			LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
-			WHERE ((v.repo_url, v.hash, v.branch) IN (SELECT repo_url, hash, branch FROM descendants)
-			   OR (v.original_repo_url = ? AND v.original_hash = ? AND v.original_branch = ?))
-			   AND NOT v.is_edit_commit
-			   AND NOT v.is_retracted
-			ORDER BY v.timestamp`
+				SELECT si.repo_url, si.hash, si.branch FROM social_items si
+				INNER JOIN descendants d ON si.reply_to_repo_url = d.repo_url AND si.reply_to_hash = d.hash AND si.reply_to_branch = d.branch
+			)` + baseDirectSelect + `
+			WHERE ((c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM descendants)
+			   OR (s.original_repo_url = ? AND s.original_hash = ? AND s.original_branch = ?))
+			   AND NOT EXISTS (SELECT 1 FROM core_commits_version v WHERE v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch)
+			   AND COALESCE(
+			       (SELECT v.is_retracted FROM core_commits_version v
+			        JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+			        WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
+			        ORDER BY e.timestamp DESC LIMIT 1),
+			       0
+			   ) = 0
+			ORDER BY COALESCE(c.origin_time, c.timestamp)`
 
 		rows, err := db.Query(query, rootRepoURL, rootHash, rootBranch, workspaceURL, rootRepoURL, rootHash, rootBranch)
 		if err != nil {
@@ -1098,35 +1136,22 @@ func SocialItemToPost(item SocialItem) Post {
 // GetParentChain retrieves ancestor posts in a reply chain.
 func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		// CTE walks reply_to chain, then joins to view for data
-		// - Seed CTE directly with params (not FROM social_items) so it works for posts without social_items records
-		// - Look for parents in core_commits (not social_items) so regular posts can be found as parents
+		// CTE walks reply_to chain upward, then joins core_commits directly
+		// (bypasses views to avoid materializing 1M+ rows).
 		query := `
 			WITH RECURSIVE ancestors AS (
 				SELECT ? as repo_url, ? as hash, ? as branch, 0 as depth
 				UNION ALL
-				SELECT s.repo_url, s.hash, s.branch, a.depth + 1 as depth
+				SELECT p.repo_url, p.hash, p.branch, a.depth + 1 as depth
 				FROM ancestors a
 				JOIN social_items ai ON ai.repo_url = a.repo_url AND ai.hash = a.hash AND ai.branch = a.branch
-				JOIN core_commits s ON
-					(ai.reply_to_repo_url IS NOT NULL AND s.repo_url = ai.reply_to_repo_url AND s.hash = ai.reply_to_hash AND s.branch = ai.reply_to_branch)
-					OR (ai.reply_to_repo_url IS NULL AND ai.original_repo_url IS NOT NULL AND s.repo_url = ai.original_repo_url AND s.hash = ai.original_hash AND s.branch = ai.original_branch)
+				JOIN core_commits p ON
+					(ai.reply_to_repo_url IS NOT NULL AND p.repo_url = ai.reply_to_repo_url AND p.hash = ai.reply_to_hash AND p.branch = ai.reply_to_branch)
+					OR (ai.reply_to_repo_url IS NULL AND ai.original_repo_url IS NOT NULL AND p.repo_url = ai.original_repo_url AND p.hash = ai.original_hash AND p.branch = ai.original_branch)
 				WHERE a.depth < 50
-			)
-			SELECT v.repo_url, v.hash, v.branch,
-			       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-			       v.type,
-			       v.original_repo_url, v.original_hash, v.original_branch,
-			       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
-			       v.edits, v.comments, v.reposts, v.quotes,
-			       v.is_virtual, v.is_retracted, v.has_edits,
-			       v.stale_since,
-			       (sf.repo_url IS NOT NULL) as follows_workspace
-			FROM ancestors a
-			JOIN social_items_resolved v ON a.repo_url = v.repo_url AND a.hash = v.hash AND a.branch = v.branch
-			LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
-			WHERE a.depth > 0
-			ORDER BY a.depth DESC`
+			)` + baseDirectSelect + `
+			WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM ancestors WHERE depth > 0)
+			ORDER BY (SELECT depth FROM ancestors a2 WHERE a2.repo_url = c.repo_url AND a2.hash = c.hash AND a2.branch = c.branch) DESC`
 
 		rows, err := db.Query(query, repoURL, hash, branch, workspaceURL)
 		if err != nil {
