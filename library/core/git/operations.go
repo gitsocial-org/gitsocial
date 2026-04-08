@@ -2,6 +2,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -67,11 +68,6 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 		opts = &GetCommitsOptions{}
 	}
 
-	limit := opts.Limit
-	if limit == 0 {
-		limit = 100000
-	}
-
 	format := fmt.Sprintf("%s%%h%s%%cd%s%%an%s%%ae%s%%B%s%%S", recordSep, unitSep, unitSep, unitSep, unitSep, unitSep)
 	args := []string{"log"}
 
@@ -94,8 +90,10 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 		}
 	}
 
+	if opts.Limit > 0 {
+		args = append(args, fmt.Sprintf("--max-count=%d", opts.Limit))
+	}
 	args = append(args,
-		fmt.Sprintf("--max-count=%d", limit),
 		fmt.Sprintf("--format=%s", format),
 		"--abbrev=12",
 		"--no-merges",
@@ -110,7 +108,13 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 		args = append(args, fmt.Sprintf("--until=%s", until.Format("2006-01-02")))
 	}
 
-	result, err := ExecGit(workdir, args)
+	timeout := gitTimeout
+	if opts.Limit == 0 {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result, err := ExecGitContext(ctx, workdir, args)
 	if err != nil {
 		slog.Debug("get commits", "error", err, "workdir", workdir)
 		return []Commit{}, nil
