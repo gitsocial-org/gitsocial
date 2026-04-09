@@ -80,34 +80,32 @@ Alice and Bob work on the same repo. Alice proposes a change, Bob reviews it.
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm"; head="#branch:dark-mode"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm"; head="#branch:dark-mode"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 **Bob posts inline review:**
 ```
 Consider caching this value to avoid recomputation on every render.
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.js"; line-start="42"; side="right"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.js"; line-start="42"; side="right"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 **Bob approves:**
 ```
 LGTM!
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; review-state="approved"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; review-state="approved"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 **Alice merges (edits original pull request commit):**
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; head="#branch:dark-mode"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; head="#branch:dark-mode"; v="0.1.0"
 ```
 
 ---
@@ -142,17 +140,16 @@ Alice works on GitLab, Bob maintains the upstream repo on GitHub. Alice forks, p
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0"
 ```
 
 **Bob reviews (on his GitHub repo's gitmsg/review branch):**
 ```
 Solid approach. One suggestion on the CSS transitions.
 
---- GitMsg: ext="review"; type="feedback"; pull-request="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; review-state="approved"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; review-state="approved"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 **Bob merges (on his GitHub repo):**
@@ -161,17 +158,16 @@ Step 1 — Copy fork PR to upstream (preserves original author via GitMsg-Ref):
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 Step 2 — Merge edit references the local copy:
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:ccc333444555@gitmsg/review"; state="merged"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:ccc333444555@gitmsg/review"; state="merged"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
 ---
@@ -250,10 +246,9 @@ Use a CSS custom property for the transition
 transition: background-color var(--theme-transition, 200ms) ease;
 ```
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.css"; line-start="18"; side="right"; suggestion="true"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Bob"; email="bob@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0" ---
-> Refactor theme transitions
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.css"; line-start="18"; side="right"; suggestion="true"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Bob"; email="bob@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
+ > Refactor theme transitions
 ~~~
 
 ---
@@ -299,13 +294,11 @@ Add dark mode support
 
 Implements theme switching with system preference detection.
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm,#commit:def456789012@gitmsg/pm"; head="#branch:dark-mode"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Add dark mode support
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-07T09:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0" ---
-> Support system theme preference
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm,#commit:def456789012@gitmsg/pm"; head="#branch:dark-mode"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Add dark mode support
+GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-07T09:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
+ > Support system theme preference
 ```
 
 When the pull request transitions to `state="merged"`, implementations auto-close the referenced issues.
@@ -339,20 +332,18 @@ General discussion (not anchored to code) uses GitSocial comments. Nested replie
 ```
 Should we also handle prefers-contrast?
 
---- GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 **Carol replies to Bob's comment:**
 ```
 Yes, good idea. I can follow up in a separate PR.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; reply-to="#commit:ccc333444555@gitmsg/social"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; type="comment"; author="Bob"; email="bob@example.com"; time="2025-01-20T11:00:00Z"; ref="#commit:ccc333444555@gitmsg/social"; v="0.1.0" ---
-> Should we also handle prefers-contrast?
+GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; reply-to="#commit:ccc333444555@gitmsg/social"; v="0.1.0"
+GitMsg-Ref: ext="social"; type="comment"; author="Bob"; email="bob@example.com"; time="2025-01-20T11:00:00Z"; ref="#commit:ccc333444555@gitmsg/social"; v="0.1.0"
+ > Should we also handle prefers-contrast?
 ```
 
 ---
@@ -424,14 +415,14 @@ When an author rebases or pushes new commits, `pr update` captures new branch ti
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="bbb222ccc333"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="bbb222ccc333"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 **Alice runs `pr update` after pushing fixes (version 1 = latest):**
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="ccc333ddd444"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="ccc333ddd444"; v="0.1.0"
 ```
 
 Updates are explicit — the author signals "new code is ready" by running `pr update`. Not every WIP push triggers a version.
@@ -466,7 +457,7 @@ Four merge strategies available per-PR via `--strategy` flag. Teams pick per-PR 
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="ddd444eee555"; head="#branch:dark-mode"; head-tip="eee555fff666"; merge-base="ddd444eee555"; merge-head="eee555fff666"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="ddd444eee555"; head="#branch:dark-mode"; head-tip="eee555fff666"; merge-base="ddd444eee555"; merge-head="eee555fff666"; v="0.1.0"
 ```
 
 `merge-base` and `merge-head` are captured before the merge (lost after fast-forward). They enable reconstructing the original diff of a merged PR.

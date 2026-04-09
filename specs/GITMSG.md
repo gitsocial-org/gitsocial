@@ -15,19 +15,21 @@ Messages are immutable Git commits.
 
 [<message-body>]
 
-[--- GitMsg: ext="<extension>"; [field-name="value"]; v="<version>" ---]
+GitMsg: ext="<extension>"; [field-name="value"]; v="<version>"
 
-[--- GitMsg-Ref: ext="<extension>"; author="<author>"; email="<email>"; time="<timestamp>"; [field-name="value"]; ref="<reference>"; v="<version>" ---]
-[> Referenced content on each line]
+GitMsg-Ref: ext="<extension>"; author="<author>"; email="<email>"; time="<timestamp>"; [field-name="value"]; ref="<reference>"; v="<version>"
+ > Referenced content on each line
 ```
+
+GitMsg uses standard git trailers (`git-interpret-trailers(1)`) as the message envelope. The `GitMsg:` trailer carries message metadata. `GitMsg-Ref:` trailers carry reference sections with quoted content as continuation lines (lines starting with a space).
 
 ### 1.2. Header Requirements
 
-Headers MUST start with `--- GitMsg: ` and end with ` ---`, using semicolon-separated `field="value"` pairs. All field values MUST be UTF-8 encoded.
+The `GitMsg:` trailer MUST use semicolon-separated `field="value"` pairs as its value. All field values MUST be UTF-8 encoded.
 
-Headers MUST contain `ext` (extension namespace) and `v` (protocol version) fields. Extensions with message types MUST include a `type` field. Third-party extensions MAY include `ext-v` (extension version) for compatibility tracking. Extension-specific fields are OPTIONAL.
+The `GitMsg:` trailer MUST contain `ext` (extension namespace) and `v` (protocol version) fields. Extensions with message types MUST include a `type` field. Third-party extensions MAY include `ext-v` (extension version) for compatibility tracking. Extension-specific fields are OPTIONAL.
 
-Field order in GitMsg headers MUST be:
+Field order in the `GitMsg:` trailer value MUST be:
 1. `ext` (REQUIRED, first); `ext-v` (if present, immediately after `ext`)
 2. `type` (if present)
 3. `edits` (if present)
@@ -36,11 +38,11 @@ Field order in GitMsg headers MUST be:
 6. Extension-specific fields and `labels` in the order defined by the extension (alphabetical by default). Extensions SHOULD order fields for human readability since headers appear in git commit messages — group related fields and lead with the most important (e.g., state first, categorization last).
 7. `v` (REQUIRED, last)
 
-Extensions SHOULD include semantic reference fields in GitMsg headers for performance and searchability. Header reference field values MUST match corresponding GitMsg-Ref section `ref` field values.
+Extensions SHOULD include semantic reference fields in the `GitMsg:` trailer for performance and searchability. Header reference field values MUST match corresponding `GitMsg-Ref:` trailer `ref` field values.
 
 ### 1.3. Reference Sections
 
-Reference sections MUST start with `--- GitMsg-Ref:` and end with ` ---`. Referenced content MUST be prefixed with "> " on each line.
+Reference sections use `GitMsg-Ref:` trailers. Referenced content MUST appear as continuation lines (prefixed with ` > ` — a space followed by `> ` on each line).
 
 References use `<type>:<value>@<branch>` format. The branch suffix is REQUIRED and represents the branch context at time of reference (historical, may become stale). Implementations MUST support both remote and local references:
 - Remote: `<repository-url>#<type>:<value>@<branch>` (e.g., `https://github.com/user/repo#commit:abc123456789@main`)
@@ -55,7 +57,7 @@ Implementations MUST support the following core reference types:
 - `file:<path>@<branch>:L<n>` - File at specific line
 - `file:<path>@<branch>:L<n>-<m>` - File at line range
 
-GitMsg-Ref sections MUST include the following fields:
+`GitMsg-Ref:` trailers MUST include the following fields:
 - `ext`: Extension name
 - `author`: Commit author name
 - `email`: Commit author email
@@ -63,7 +65,7 @@ GitMsg-Ref sections MUST include the following fields:
 - `ref`: Reference with proper commit hash
 - `v`: Protocol version
 
-Field order in GitMsg-Ref headers MUST be:
+Field order in `GitMsg-Ref:` trailer values MUST be:
 1. `ext` (REQUIRED, first)
 2. `type` (if present)
 3. `author` (REQUIRED)
@@ -75,17 +77,25 @@ Field order in GitMsg-Ref headers MUST be:
 
 Third-party extensions MAY include `ext-v` (extension version) for compatibility tracking.
 
-The Git primitives (`author`, `email`, `time`, `ref`) enable traceability, decentralization, and message reconstruction without requiring commit fetches. GitMsg-Ref sections MAY include a `type` field to describe the referenced message type.
+The Git primitives (`author`, `email`, `time`, `ref`) enable traceability, decentralization, and message reconstruction without requiring commit fetches. `GitMsg-Ref:` trailers MAY include a `type` field to describe the referenced message type.
 
-Extensions MAY add extension-specific metadata fields to GitMsg-Ref headers. These fields provide contextual information about the referenced message without requiring content parsing. Extension-specific fields:
+Extensions MAY add extension-specific metadata fields to `GitMsg-Ref:` trailers. These fields provide contextual information about the referenced message without requiring content parsing. Extension-specific fields:
 - SHOULD be small structured values (strings, numbers, booleans)
 - SHOULD represent immutable or stable metadata (file paths, line numbers, status at time of reference)
 - MUST be declared in the extension manifest's `fields` array
 - MAY become stale (represent state at time of reference, not current state)
 
-When multiple GitMsg-Ref sections reference a dependency chain, references SHOULD be ordered with the most immediate dependency first and the root/original last.
+When multiple `GitMsg-Ref:` trailers reference a dependency chain, references SHOULD be ordered with the most immediate dependency first and the root/original last.
 
-### 1.4. Versioning
+### 1.4. Trailer Block Structure
+
+All `GitMsg:` and `GitMsg-Ref:` trailers MUST appear in a single contiguous trailer block at the end of the commit message, separated from the body by a blank line. The `GitMsg:` trailer MUST appear first, followed by `GitMsg-Ref:` trailers.
+
+Continuation lines (quoted content) MUST start with a space followed by `> ` (e.g., ` > quoted text`). Blank lines within quoted content MUST use ` >` (space followed by `>`).
+
+GitMsg trailers MAY coexist with standard git trailers (`Signed-off-by:`, `Co-authored-by:`, etc.) in the same trailer block.
+
+### 1.5. Versioning
 
 Messages MAY be edited or retracted using the `edits` field.
 
@@ -97,16 +107,16 @@ Messages MAY be edited or retracted using the `edits` field.
 - Retracted messages MAY omit the `type` field
 
 ```
---- GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0" ---
+GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0"
 ```
 
 ```
---- GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0" ---
+GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0"
 ```
 
 Implementations MUST resolve references by locating the original commit, finding all edits, and returning the latest (or retracted state).
 
-### 1.5. Mentions
+### 1.6. Mentions
 
 Mentions reference a person within message content using the syntax `@<email>` where `<email>` is a valid address per RFC 5322 `addr-spec`. The leading `@` distinguishes mentions from plain email addresses in text.
 
@@ -115,7 +125,7 @@ Mentions MAY appear in subject lines and message bodies of any extension's messa
 - Implementations MUST recognize `@<email>` patterns in message bodies and subject lines
 - `@@<email>` is an escaped mention and MUST NOT be treated as a mention; implementations SHOULD render it as literal `@<email>`
 
-### 1.6. Labels
+### 1.7. Labels
 
 Messages MAY include a `labels` field containing comma-separated scoped values in `<scope>/<value>` format (e.g., `labels="kind/feature,priority/high"`). Labels provide categorization and filtering across extensions.
 
@@ -123,9 +133,9 @@ Messages MAY include a `labels` field containing comma-separated scoped values i
 - Labels are a core field: available to all extensions without manifest declaration
 - Extensions define the position of `labels` within their field order
 
-### 1.7. Commit Trailers
+### 1.8. Commit Trailers
 
-Regular commits (without GitMsg headers) MAY use git trailers (`git-interpret-trailers(1)`) to reference GitMsg items. Implementations MUST recognize these trailer keys:
+Regular commits (without `GitMsg:` trailers) MAY use git trailers to reference GitMsg items. Implementations MUST recognize these trailer keys:
 
 - `Fixes:`, `Closes:`, `Resolves:`, `Implements:` — closing references
 - `Refs:` — non-closing reference
@@ -134,7 +144,7 @@ Trailer values MUST be a GitMsg reference, a URL, or an opaque external identifi
 
 Closing trailers MUST NOT trigger state changes. Only structured GitMsg messages (e.g., pull requests with `closes` field) control item state. Implementations MAY ignore unresolvable external identifiers.
 
-### 1.8. Origin
+### 1.9. Origin
 
 Messages MAY include origin fields to indicate content imported from external platforms. Origin fields provide machine-readable provenance metadata and are OPTIONAL.
 
@@ -148,7 +158,7 @@ Available origin fields:
 All origin fields are OPTIONAL and independent. Implementations SHOULD include `origin-url` when available for traceability. Origin fields MUST NOT be modified during edits of imported content.
 
 ```
---- GitMsg: ext="pm"; type="issue"; origin-author-email="alice@example.com"; origin-author-name="Alice Smith"; origin-platform="github"; origin-time="2025-01-06T10:30:00Z"; origin-url="https://github.com/user/repo/issues/42"; state="open"; v="0.1.0" ---
+GitMsg: ext="pm"; type="issue"; origin-author-email="alice@example.com"; origin-author-name="Alice Smith"; origin-platform="github"; origin-time="2025-01-06T10:30:00Z"; origin-url="https://github.com/user/repo/issues/42"; state="open"; v="0.1.0"
 ```
 
 ## 2. Lists
@@ -184,7 +194,7 @@ Repository references in lists MAY use `#branch:*` to follow all branches. When 
 
 ## 3. Extensions
 
-Extensions define message types and operations. Messages with GitMsg headers MUST declare the extension:
+Extensions define message types and operations. Messages with `GitMsg:` trailers MUST declare the extension:
 
 ### 3.1. Core Configuration
 
@@ -226,13 +236,15 @@ Extension manifests enable cross-extension discovery and compatibility. When an 
 
 Extension manifests MUST include: `name` (matching `[a-z][a-z0-9_-]*`), `version` (semver), `description`.
 
-Extension manifests MAY include: `display` (human-readable name), `types` (array of valid values for the `type` field), `fields` (array of extension-specific field names for both GitMsg headers and GitMsg-Ref sections).
+Extension manifests MAY include: `display` (human-readable name), `types` (array of valid values for the `type` field), `fields` (array of extension-specific field names for both `GitMsg:` and `GitMsg-Ref:` trailers).
 
 Core fields (`type`, `author`, `email`, `time`, `ref`, `edits`, `retracted`, `labels`, `origin-author-email`, `origin-author-name`, `origin-platform`, `origin-time`, `origin-url`) are available to all extensions and do not need to be declared in the manifest.
 
 ## Appendix: Validation
 
-- Header: `^--- GitMsg: (.*) ---$`
+- Header trailer: `^GitMsg: (.*)$`
+- Reference trailer: `^GitMsg-Ref: (.*)$`
+- Continuation line: `^ > .*$` or `^ >$`
 - Required Fields: `ext="[a-z][a-z0-9_-]*"`, `v="\d+\.\d+\.\d+"`
 - Optional Fields: `ext-v="\d+\.\d+\.\d+"` (for third-party extensions)
 - Versioning Fields: `edits="<reference>"`, `retracted="true"` (boolean, requires `edits`)
@@ -266,10 +278,9 @@ Hello world!
 ```
 This is a response
 
---- GitMsg: ext="social"; type="comment"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-> Original message content
+GitMsg: ext="social"; type="comment"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+GitMsg-Ref: ext="social"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+ > Original message content
 ```
 
 ### Cross-Extension Example: PM + Review Integration
@@ -283,7 +294,7 @@ Add dark mode support
 
 Users can toggle between light and dark themes in settings.
 
---- GitMsg: ext="pm"; type="issue"; state="open"; labels="kind/feature,priority/high"; v="0.1.0" ---
+GitMsg: ext="pm"; type="issue"; state="open"; labels="kind/feature,priority/high"; v="0.1.0"
 ```
 
 Regular commit referencing the issue via trailer:
@@ -301,10 +312,9 @@ Add dark mode support
 
 Implements theme toggle with system preference detection.
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; reviewers="bob@example.com"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; reviewers="bob@example.com"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Add dark mode support
 ```
 
 Step 3 - Merge PR (auto-closes the linked issue):
@@ -314,7 +324,7 @@ Add dark mode support
 
 Implements theme toggle with system preference detection.
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789abc@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789abc@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 ### Imported Message with Origin
@@ -326,5 +336,5 @@ Add dark mode support
 
 Users can toggle between light and dark themes in settings.
 
---- GitMsg: ext="pm"; type="issue"; origin-author-email="alice@example.com"; origin-author-name="Alice Smith"; origin-platform="github"; origin-time="2025-01-06T10:30:00Z"; origin-url="https://github.com/user/repo/issues/42"; state="open"; labels="kind/feature,priority/high"; v="0.1.0" ---
+GitMsg: ext="pm"; type="issue"; origin-author-email="alice@example.com"; origin-author-name="Alice Smith"; origin-platform="github"; origin-time="2025-01-06T10:30:00Z"; origin-url="https://github.com/user/repo/issues/42"; state="open"; labels="kind/feature,priority/high"; v="0.1.0"
 ```

@@ -14,7 +14,7 @@ Message types:
 - `repost`: Share without commentary
 - `quote`: Share with commentary
 
-Commits without GitMsg headers on the configured branch (see Section 3) are implicit posts. Commits with GitMsg headers are explicit interactions.
+Commits without `GitMsg:` trailers on the configured branch (see Section 3) are implicit posts. Commits with `GitMsg:` trailers are explicit interactions.
 
 ### 1.2. Fields
 
@@ -22,7 +22,7 @@ Subject line requirements:
 - Reposts: `# <Author Name> @ <owner>/<repo>: <excerpt>` (remote) or `# <Author Name>: <excerpt>` (local)
 - Comments/quotes: Subject line MUST contain user content
 
-GitMsg header fields:
+`GitMsg:` trailer fields:
 - `original`: Reference to original content being commented on, reposted, or quoted
 - `reply-to`: Reference to parent comment in nested discussions
 
@@ -37,7 +37,7 @@ Reference structure requirements:
 
 ### 1.4. Editing and Deleting
 
-Messages MAY be edited or deleted using core versioning (GITMSG.md 1.4). Implementations SHOULD display an edit indicator on modified messages.
+Messages MAY be edited or deleted using core versioning (GITMSG.md 1.5). Implementations SHOULD display an edit indicator on modified messages.
 
 ## 2. Lists
 
@@ -60,7 +60,7 @@ Configuration MUST include: `version`.
 
 Configuration SHOULD include: `branch` (the branch containing all GitSocial content). Default: `gitmsg/social`.
 
-Branch resolution follows GITMSG.md Section 3.3. Only the resolved branch is scanned for social content. Commits without headers on this branch are implicit posts. Commits with GitMsg headers on this branch are interactions. All other branches are ignored.
+Branch resolution follows GITMSG.md Section 3.3. Only the resolved branch is scanned for social content. Commits without `GitMsg:` trailers on this branch are implicit posts. Commits with `GitMsg:` trailers on this branch are interactions. All other branches are ignored.
 
 ## 4. Manifest
 
@@ -88,10 +88,9 @@ Hello world!
 ```
 Great idea!
 
---- GitMsg: ext="social"; type="comment"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-> Original post content
+GitMsg: ext="social"; type="comment"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+ > Original post content
 ```
 
 ### Nested Comment
@@ -99,13 +98,11 @@ Great idea!
 ```
 I agree!
 
---- GitMsg: ext="social"; type="comment"; reply-to="#commit:def456789abc@main"; original="#commit:abc123456789@main"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; type="comment"; author="Bob"; email="bob@example.com"; time="2025-01-06T11:00:00Z"; ref="#commit:def456789abc@main"; v="0.1.0" ---
-> Parent comment
-
---- GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="#commit:abc123456789@main"; v="0.1.0" ---
-> Original post
+GitMsg: ext="social"; type="comment"; reply-to="#commit:def456789abc@main"; original="#commit:abc123456789@main"; v="0.1.0"
+GitMsg-Ref: ext="social"; type="comment"; author="Bob"; email="bob@example.com"; time="2025-01-06T11:00:00Z"; ref="#commit:def456789abc@main"; v="0.1.0"
+ > Parent comment
+GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="#commit:abc123456789@main"; v="0.1.0"
+ > Original post
 ```
 
 ### Repost
@@ -113,10 +110,9 @@ I agree!
 ```
 # Alice @ user/repo: Original content excerpt
 
---- GitMsg: ext="social"; type="repost"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0" ---
-> Original content
+GitMsg: ext="social"; type="repost"; original="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="https://github.com/user/repo#commit:abc123456789@main"; v="0.1.0"
+ > Original content
 ```
 
 ### Edit Post
@@ -124,13 +120,13 @@ I agree!
 ```
 Hello world! (updated)
 
---- GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0" ---
+GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0"
 ```
 
 ### Delete Post
 
 ```
---- GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0" ---
+GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0"
 ```
 
 ### Edit Comment
@@ -138,9 +134,7 @@ Hello world! (updated)
 ```
 Great idea! I especially like the part about...
 
---- GitMsg: ext="social"; type="comment"; edits="#commit:def456789abc@main"; original="#commit:abc123456789@main"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="#commit:abc123456789@main"; v="0.1.0" ---
-> Original post content
+GitMsg: ext="social"; type="comment"; edits="#commit:def456789abc@main"; original="#commit:abc123456789@main"; v="0.1.0"
+GitMsg-Ref: ext="social"; type="post"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:30:00Z"; ref="#commit:abc123456789@main"; v="0.1.0"
+ > Original post content
 ```
-

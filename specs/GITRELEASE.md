@@ -34,7 +34,7 @@ Field order: `artifact-url`, `artifacts`, `checksums`, `prerelease`, `sbom`, `si
 
 ### 1.4. Editing and Retracting
 
-Releases MAY be edited or retracted using core versioning (GITMSG.md Section 1.4). Implementations SHOULD display an edit indicator on modified releases.
+Releases MAY be edited or retracted using core versioning (GITMSG.md Section 1.5). Implementations SHOULD display an edit indicator on modified releases.
 
 Retracted releases SHOULD be hidden from release listings but MAY remain accessible for audit purposes. Retracting a release SHOULD NOT delete stored artifacts.
 
@@ -45,10 +45,9 @@ Implementations MUST use GitSocial for release comments. The `original` field re
 ```
 Looks great, shipping to production now.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/release"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="release"; type="release"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/release"; v="0.1.0" ---
-> Release v1.0.0
+GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/release"; v="0.1.0"
+GitMsg-Ref: ext="release"; type="release"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/release"; v="0.1.0"
+ > Release v1.0.0
 ```
 
 ## 2. Config
@@ -153,7 +152,7 @@ ghi789def012...  app-windows-x64.zip
 ```
 Release v1.0.0
 
---- GitMsg: ext="release"; type="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---
+GitMsg: ext="release"; type="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"
 ```
 
 ### Create Pre-release
@@ -161,7 +160,7 @@ Release v1.0.0
 ```
 Release v2.0.0-beta.1
 
---- GitMsg: ext="release"; type="release"; prerelease="true"; tag="v2.0.0-beta.1"; version="2.0.0-beta.1"; v="0.1.0" ---
+GitMsg: ext="release"; type="release"; prerelease="true"; tag="v2.0.0-beta.1"; version="2.0.0-beta.1"; v="0.1.0"
 ```
 
 ### Create Release with Artifacts
@@ -171,7 +170,7 @@ Release v1.0.0
 
 Pre-built binaries for Linux, macOS, and Windows.
 
---- GitMsg: ext="release"; type="release"; artifacts="app-linux-x64.tar.gz,app-darwin-arm64.tar.gz,app-windows-x64.zip"; checksums="SHA256SUMS"; sbom="sbom.spdx.json"; signed-by="SHA256:abc123..."; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---
+GitMsg: ext="release"; type="release"; artifacts="app-linux-x64.tar.gz,app-darwin-arm64.tar.gz,app-windows-x64.zip"; checksums="SHA256SUMS"; sbom="sbom.spdx.json"; signed-by="SHA256:abc123..."; tag="v1.0.0"; version="1.0.0"; v="0.1.0"
 ```
 
 ### Edit Release
@@ -181,13 +180,13 @@ Release v1.0.0
 
 Updated release description with additional context.
 
---- GitMsg: ext="release"; type="release"; edits="#commit:abc123456789@gitmsg/release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---
+GitMsg: ext="release"; type="release"; edits="#commit:abc123456789@gitmsg/release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"
 ```
 
 ### Retract Release
 
 ```
---- GitMsg: ext="release"; edits="#commit:abc123456789@gitmsg/release"; retracted="true"; v="0.1.0" ---
+GitMsg: ext="release"; edits="#commit:abc123456789@gitmsg/release"; retracted="true"; v="0.1.0"
 ```
 
 ### Release Referencing PM Issue
@@ -197,8 +196,7 @@ Release v1.0.0
 
 Implements #commit:abc123456789@gitmsg/pm.
 
---- GitMsg: ext="release"; type="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="release"; type="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Add dark mode support
 ```

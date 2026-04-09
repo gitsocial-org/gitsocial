@@ -33,7 +33,7 @@ func TestFetchRepository_defaultBranch(t *testing.T) {
 func TestFetchRepository_success(t *testing.T) {
 	setupTestDB(t)
 	srcDir := initTestRepo(t)
-	git.CreateCommitOnBranch(srcDir, "gitmsg/release", "Release v1.0.0\n\n"+`--- GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0" ---`)
+	git.CreateCommitOnBranch(srcDir, "gitmsg/release", "Release v1.0.0\n\n"+`GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0"`)
 
 	bareDir := t.TempDir()
 	git.ExecGit(bareDir, []string{"init", "--bare"})

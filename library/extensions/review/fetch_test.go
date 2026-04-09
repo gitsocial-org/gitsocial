@@ -66,7 +66,7 @@ func TestFetchRepository_success(t *testing.T) {
 	})
 
 	srcDir := initTestRepo(t)
-	git.CreateCommitOnBranch(srcDir, "gitmsg/review", "PR\n\n"+`--- GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0" ---`)
+	git.CreateCommitOnBranch(srcDir, "gitmsg/review", "PR\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0"`)
 
 	bareDir := t.TempDir()
 	git.ExecGit(bareDir, []string{"init", "--bare"})
@@ -96,7 +96,7 @@ func TestFetchForks(t *testing.T) {
 
 	t.Run("withSuccess", func(t *testing.T) {
 		srcDir := initTestRepo(t)
-		git.CreateCommitOnBranch(srcDir, "gitmsg/review", "PR\n\n"+`--- GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0" ---`)
+		git.CreateCommitOnBranch(srcDir, "gitmsg/review", "PR\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0"`)
 		bareDir := t.TempDir()
 		git.ExecGit(bareDir, []string{"init", "--bare"})
 		git.ExecGit(srcDir, []string{"push", bareDir, "gitmsg/review"})

@@ -276,7 +276,7 @@ func TestPROperations(t *testing.T) {
 	t.Run("CacheReviewFromCommit_reviewCommit", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		content := "Test PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0" ---`
+		content := "Test PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0"`
 		hash, err := git.CreateCommitOnBranch(dir, "gitmsg/review", content)
 		if err != nil {
 			t.Fatalf("CreateCommitOnBranch() error = %v", err)

@@ -461,7 +461,7 @@ func TestGetStateChangeInfo(t *testing.T) {
 	InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: canonHash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open")})
 
 	// Insert edit that changes state to merged (with merge-base/merge-head)
-	mergeContent := "Merged PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="merged"; merge-base="aaa111"; merge-head="bbb222"; edits="#commit:` + canonHash + `@gitmsg/review"; v="0.1.0" ---`
+	mergeContent := "Merged PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="merged"; merge-base="aaa111"; merge-head="bbb222"; edits="#commit:` + canonHash + `@gitmsg/review"; v="0.1.0"`
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: editHash, RepoURL: repoURL, Branch: reviewTestBranch,
 		AuthorName: "Merger", AuthorEmail: "merger@test.com", Message: mergeContent,

@@ -22,8 +22,8 @@ func TestCreateHeader(t *testing.T) {
 				},
 			},
 			check: func(t *testing.T, result string) {
-				if !strings.HasPrefix(result, "--- GitMsg: ") || !strings.HasSuffix(result, " ---") {
-					t.Errorf("missing markers: %q", result)
+				if !strings.HasPrefix(result, "GitMsg: ") {
+					t.Errorf("missing prefix: %q", result)
 				}
 				if !strings.Contains(result, `ext="social"`) {
 					t.Error("missing ext")
@@ -168,7 +168,7 @@ func TestCreateRefSection(t *testing.T) {
 				Fields: map[string]string{},
 			},
 			check: func(t *testing.T, result string) {
-				if !strings.HasPrefix(result, "--- GitMsg-Ref: ") {
+				if !strings.HasPrefix(result, "GitMsg-Ref: ") {
 					t.Error("missing prefix")
 				}
 				if !strings.Contains(result, `author="Alice"`) {
@@ -199,11 +199,11 @@ func TestCreateRefSection(t *testing.T) {
 				if len(lines) < 3 {
 					t.Fatalf("expected at least 3 lines, got %d", len(lines))
 				}
-				if lines[1] != "> Quoted content" {
-					t.Errorf("line 1 = %q", lines[1])
+				if lines[1] != " > Quoted content" {
+					t.Errorf("line 1 = %q, want %q", lines[1], " > Quoted content")
 				}
-				if lines[2] != "> Second line" {
-					t.Errorf("line 2 = %q", lines[2])
+				if lines[2] != " > Second line" {
+					t.Errorf("line 2 = %q, want %q", lines[2], " > Second line")
 				}
 			},
 		},
@@ -293,7 +293,7 @@ func TestFormatMessage(t *testing.T) {
 				if !strings.HasPrefix(result, "Hello world!") {
 					t.Error("should start with content")
 				}
-				if !strings.Contains(result, "--- GitMsg:") {
+				if !strings.Contains(result, "GitMsg:") {
 					t.Error("missing header")
 				}
 			},
@@ -314,7 +314,7 @@ func TestFormatMessage(t *testing.T) {
 				},
 			},
 			check: func(t *testing.T, result string) {
-				if !strings.Contains(result, "--- GitMsg-Ref:") {
+				if !strings.Contains(result, "GitMsg-Ref:") {
 					t.Error("missing ref section")
 				}
 			},
@@ -324,7 +324,7 @@ func TestFormatMessage(t *testing.T) {
 			content: "",
 			header:  Header{Ext: "social", V: "0.1.0", Fields: map[string]string{"type": "post"}},
 			check: func(t *testing.T, result string) {
-				if !strings.Contains(result, "--- GitMsg:") {
+				if !strings.Contains(result, "GitMsg:") {
 					t.Error("missing header")
 				}
 			},
@@ -336,6 +336,45 @@ func TestFormatMessage(t *testing.T) {
 			check: func(t *testing.T, result string) {
 				if !strings.HasPrefix(result, "spaces") {
 					t.Errorf("content not trimmed: %q", result)
+				}
+			},
+		},
+		{
+			name:    "no blank lines between trailers",
+			content: "A comment",
+			header:  Header{Ext: "social", V: "0.1.0", Fields: map[string]string{"type": "comment"}},
+			references: []Ref{
+				{
+					Ext: "social", Author: "Alice", Email: "a@b.com",
+					Time: "2025-01-01T00:00:00Z", Ref: "#commit:abc123456789",
+					V: "0.1.0", Fields: map[string]string{},
+				},
+				{
+					Ext: "social", Author: "Bob", Email: "b@b.com",
+					Time: "2025-01-02T00:00:00Z", Ref: "#commit:def456789abc",
+					V: "0.1.0", Fields: map[string]string{},
+				},
+			},
+			check: func(t *testing.T, result string) {
+				lines := strings.Split(result, "\n")
+				// Find the GitMsg: line
+				for i, line := range lines {
+					if strings.HasPrefix(line, "GitMsg: ") {
+						// Next line should be GitMsg-Ref, not blank
+						if i+1 < len(lines) && lines[i+1] == "" {
+							t.Error("blank line between GitMsg and GitMsg-Ref")
+						}
+					}
+					if strings.HasPrefix(line, "GitMsg-Ref: ") {
+						// Check next non-continuation line isn't blank
+						j := i + 1
+						for j < len(lines) && strings.HasPrefix(lines[j], " ") {
+							j++
+						}
+						if j < len(lines) && lines[j] == "" {
+							t.Error("blank line between GitMsg-Ref trailers")
+						}
+					}
 				}
 			},
 		},
@@ -404,13 +443,12 @@ func TestCreateRefSection_withMetadata(t *testing.T) {
 		Metadata: "> Some quoted content",
 	}
 	result := CreateRefSection(ref)
-	if !strings.HasPrefix(result, "--- GitMsg-Ref: ") {
+	if !strings.HasPrefix(result, "GitMsg-Ref: ") {
 		t.Error("missing prefix")
 	}
-	if !strings.Contains(result, "> Some quoted content") {
+	if !strings.Contains(result, " > Some quoted content") {
 		t.Error("metadata not included")
 	}
-	// Verify metadata is on a separate line
 	lines := strings.Split(result, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines, got %d", len(lines))
@@ -432,14 +470,12 @@ func TestCreateRefSection_socialFieldOrdering(t *testing.T) {
 		},
 	}
 	result := CreateRefSection(ref)
-	// reply-to and original should be present
 	if !strings.Contains(result, `reply-to=`) {
 		t.Error("missing reply-to")
 	}
 	if !strings.Contains(result, `original=`) {
 		t.Error("missing original")
 	}
-	// ref and v should be last
 	refIdx := strings.Index(result, `ref="#commit:abc123456789"`)
 	vIdx := strings.Index(result, `v="0.1.0"`)
 	replyIdx := strings.Index(result, `reply-to=`)

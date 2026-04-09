@@ -87,7 +87,7 @@ func TestProcessPMCommit_basicIssue(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "abc123456789"
 	branch := pmSyncTestBranch
-	content := "Fix the login bug\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0" ---`
+	content := "Fix the login bug\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -108,7 +108,7 @@ func TestProcessPMCommit_defaultState(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "def456789abc"
 	branch := pmSyncTestBranch
-	content := "No state specified\n\n" + `--- GitMsg: ext="pm"; type="issue"; v="0.1.0" ---`
+	content := "No state specified\n\n" + `GitMsg: ext="pm"; type="issue"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -126,7 +126,7 @@ func TestProcessPMCommit_withLabelsAssignees(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "lab123456789"
 	branch := pmSyncTestBranch
-	content := "Labeled issue\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; labels="priority/high,kind/bug"; assignees="alice@test.com,bob@test.com"; v="0.1.0" ---`
+	content := "Labeled issue\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; labels="priority/high,kind/bug"; assignees="alice@test.com,bob@test.com"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -147,7 +147,7 @@ func TestProcessPMCommit_withMilestoneRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "aaa111222333"
 	branch := pmSyncTestBranch
-	content := "Issue with milestone\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:bbb444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue with milestone\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:bbb444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -165,7 +165,7 @@ func TestProcessPMCommit_withSprintRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "ccc111222333"
 	branch := pmSyncTestBranch
-	content := "Issue in sprint\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; sprint="#commit:ddd444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue in sprint\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; sprint="#commit:ddd444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -183,7 +183,7 @@ func TestProcessPMCommit_withParentRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "eee111222333"
 	branch := pmSyncTestBranch
-	content := "Sub-issue\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; parent="#commit:fff444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Sub-issue\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; parent="#commit:fff444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -201,7 +201,7 @@ func TestProcessPMCommit_withRootRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "aab111222333"
 	branch := pmSyncTestBranch
-	content := "Deep sub-issue\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; root="#commit:aac444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Deep sub-issue\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; root="#commit:aac444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -221,14 +221,14 @@ func TestProcessPMCommit_withEditsRef(t *testing.T) {
 	canonicalHash := "ca0011223344"
 	editHash := "ed5566778899"
 	// Insert canonical commit first
-	canonContent := "Original issue\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0" ---`
+	canonContent := "Original issue\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`
 	insertTestCommit(t, canonicalHash, canonContent)
 	msg := protocol.ParseMessage(canonContent)
 	gc := git.Commit{Hash: canonicalHash, Timestamp: time.Now()}
 	processPMCommit(gc, msg, repoURL, branch)
 
 	// Insert edit commit
-	editContent := "Updated issue\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="closed"; edits="#commit:ca0011223344@gitmsg/pm"; v="0.1.0" ---`
+	editContent := "Updated issue\n\n" + `GitMsg: ext="pm"; type="issue"; state="closed"; edits="#commit:ca0011223344@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, editHash, editContent)
 	editMsg := protocol.ParseMessage(editContent)
 	editGc := git.Commit{Hash: editHash, Timestamp: time.Now()}
@@ -254,7 +254,7 @@ func TestProcessPMCommit_withFullURLMilestoneRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "ful111222333"
 	branch := pmSyncTestBranch
-	content := "Issue with full URL milestone\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; milestone="https://github.com/other/repo#commit:bbb444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue with full URL milestone\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; milestone="https://github.com/other/repo#commit:bbb444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -275,7 +275,7 @@ func TestProcessPMCommit_withFullURLSprintRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "f0a222333444"
 	branch := pmSyncTestBranch
-	content := "Issue with full URL sprint\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; sprint="https://github.com/other/repo#commit:aaa444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue with full URL sprint\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; sprint="https://github.com/other/repo#commit:aaa444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -296,7 +296,7 @@ func TestProcessPMCommit_withFullURLParentRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "f0b333444555"
 	branch := pmSyncTestBranch
-	content := "Issue with full URL parent\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; parent="https://github.com/other/repo#commit:ccc444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue with full URL parent\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; parent="https://github.com/other/repo#commit:ccc444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -317,7 +317,7 @@ func TestProcessPMCommit_withFullURLRootRef(t *testing.T) {
 	repoURL := pmSyncTestRepoURL
 	hash := "f0c444555666"
 	branch := pmSyncTestBranch
-	content := "Issue with full URL root\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; root="https://github.com/other/repo#commit:ddd444555666@gitmsg/pm"; v="0.1.0" ---`
+	content := "Issue with full URL root\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; root="https://github.com/other/repo#commit:ddd444555666@gitmsg/pm"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -343,7 +343,7 @@ func TestProcessPMCommit_withEditsFullURLRef(t *testing.T) {
 	otherBranch := "gitmsg/custom"
 
 	// Insert canonical commit at the coordinates the full URL ref points to
-	canonContent := "Original\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0" ---`
+	canonContent := "Original\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: canonHash, RepoURL: otherRepo, Branch: otherBranch,
 		AuthorName: "Test", AuthorEmail: "t@t.com", Message: canonContent,
@@ -355,7 +355,7 @@ func TestProcessPMCommit_withEditsFullURLRef(t *testing.T) {
 	processPMCommit(git.Commit{Hash: canonHash, Timestamp: time.Now()}, msg, otherRepo, otherBranch)
 
 	// Insert edit commit on the local repo, referencing canonical via full URL
-	editContent := "Updated\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="closed"; edits="https://github.com/other/repo#commit:ca1122334455@gitmsg/custom"; v="0.1.0" ---`
+	editContent := "Updated\n\n" + `GitMsg: ext="pm"; type="issue"; state="closed"; edits="https://github.com/other/repo#commit:ca1122334455@gitmsg/custom"; v="0.1.0"`
 	insertTestCommit(t, editHash, editContent)
 	editMsg := protocol.ParseMessage(editContent)
 	processPMCommit(git.Commit{Hash: editHash, Timestamp: time.Now()}, editMsg, repoURL, branch)
@@ -376,7 +376,7 @@ func TestProcessPMCommit_branchlessRefs(t *testing.T) {
 	setupTestDB(t)
 	hash := "brf111222333"
 	// Refs without @branch suffix trigger the branch fallback paths
-	content := "Issue with branchless refs\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:aab111222333"; sprint="#commit:aac111222333"; parent="#commit:aad111222333"; root="#commit:aae111222333"; v="0.1.0" ---`
+	content := "Issue with branchless refs\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:aab111222333"; sprint="#commit:aac111222333"; parent="#commit:aad111222333"; root="#commit:aae111222333"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -405,7 +405,7 @@ func TestProcessPMCommit_branchlessRefs(t *testing.T) {
 func TestProcessPMCommit_withDueAndDates(t *testing.T) {
 	setupTestDB(t)
 	hash := "due123456789"
-	content := "Issue with due\n\n" + `--- GitMsg: ext="pm"; type="issue"; state="open"; due="2025-12-31"; v="0.1.0" ---`
+	content := "Issue with due\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; due="2025-12-31"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -420,7 +420,7 @@ func TestProcessPMCommit_withDueAndDates(t *testing.T) {
 func TestProcessPMCommit_milestone(t *testing.T) {
 	setupTestDB(t)
 	hash := "mst123456789"
-	content := "A milestone\n\n" + `--- GitMsg: ext="pm"; type="milestone"; state="open"; due="2025-06-30"; v="0.1.0" ---`
+	content := "A milestone\n\n" + `GitMsg: ext="pm"; type="milestone"; state="open"; due="2025-06-30"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -435,7 +435,7 @@ func TestProcessPMCommit_milestone(t *testing.T) {
 func TestProcessPMCommit_sprint(t *testing.T) {
 	setupTestDB(t)
 	hash := "spt123456789"
-	content := "A sprint\n\n" + `--- GitMsg: ext="pm"; type="sprint"; state="planned"; start="2025-10-01"; end="2025-10-14"; v="0.1.0" ---`
+	content := "A sprint\n\n" + `GitMsg: ext="pm"; type="sprint"; state="planned"; start="2025-10-01"; end="2025-10-14"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)

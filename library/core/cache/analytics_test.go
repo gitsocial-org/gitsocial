@@ -585,7 +585,7 @@ func TestGetAnalytics_originAuthor(t *testing.T) {
 	now := time.Now().UTC()
 	repoURL := "https://github.com/user/repo"
 	// Insert a commit with origin-author fields in the GitMsg header
-	msg := "Imported post\n\n--- GitMsg: ext=\"social\" v=\"0.1.0\" type=\"post\" origin-author-name=\"Original Author\" origin-author-email=\"original@example.com\" ---"
+	msg := "Imported post\n\nGitMsg: ext=\"social\" v=\"0.1.0\" type=\"post\" origin-author-name=\"Original Author\" origin-author-email=\"original@example.com\""
 	InsertCommits([]Commit{{
 		Hash: "origin_hash", RepoURL: repoURL, Branch: "main",
 		AuthorName: "Importer Bot", AuthorEmail: "bot@importer.com",

@@ -94,7 +94,7 @@ func TestProcessSocialCommit_basicPost(t *testing.T) {
 	repoURL := socialSyncTestRepoURL
 	hash := "post12345678"
 	branch := socialSyncTestBranch
-	content := "Hello world!\n\n" + `--- GitMsg: ext="social"; type="post"; v="0.1.0" ---`
+	content := "Hello world!\n\n" + `GitMsg: ext="social"; type="post"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -112,7 +112,7 @@ func TestProcessSocialCommit_comment(t *testing.T) {
 	repoURL := socialSyncTestRepoURL
 	hash := "cmnt12345678"
 	branch := socialSyncTestBranch
-	content := "Nice post!\n\n" + `--- GitMsg: ext="social"; type="comment"; original="#commit:a01f12345678@main"; v="0.1.0" ---`
+	content := "Nice post!\n\n" + `GitMsg: ext="social"; type="comment"; original="#commit:a01f12345678@main"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -133,7 +133,7 @@ func TestProcessSocialCommit_repost(t *testing.T) {
 	repoURL := socialSyncTestRepoURL
 	hash := "rpst12345678"
 	branch := socialSyncTestBranch
-	content := "\n\n" + `--- GitMsg: ext="social"; type="repost"; original="#commit:a01f12345678@main"; v="0.1.0" ---`
+	content := "\n\n" + `GitMsg: ext="social"; type="repost"; original="#commit:a01f12345678@main"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -151,7 +151,7 @@ func TestProcessSocialCommit_quote(t *testing.T) {
 	repoURL := socialSyncTestRepoURL
 	hash := "quot12345678"
 	branch := socialSyncTestBranch
-	content := "My thoughts on this\n\n" + `--- GitMsg: ext="social"; type="quote"; original="#commit:a01f12345678@main"; v="0.1.0" ---`
+	content := "My thoughts on this\n\n" + `GitMsg: ext="social"; type="quote"; original="#commit:a01f12345678@main"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -169,7 +169,7 @@ func TestProcessSocialCommit_withReplyTo(t *testing.T) {
 	repoURL := socialSyncTestRepoURL
 	hash := "rply12345678"
 	branch := socialSyncTestBranch
-	content := "Replying to comment\n\n" + `--- GitMsg: ext="social"; type="comment"; original="#commit:a01f12345678@main"; reply-to="#commit:b02f12345678@main"; v="0.1.0" ---`
+	content := "Replying to comment\n\n" + `GitMsg: ext="social"; type="comment"; original="#commit:a01f12345678@main"; reply-to="#commit:b02f12345678@main"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)

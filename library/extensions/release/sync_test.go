@@ -133,7 +133,7 @@ func TestProcessReleaseCommit_basicRelease(t *testing.T) {
 	repoURL := relSyncTestRepoURL
 	hash := "rel123456789"
 	branch := relSyncTestBranch
-	content := "Release v1.0.0\n\nNew features and bug fixes\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---`
+	content := "Release v1.0.0\n\nNew features and bug fixes\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -154,7 +154,7 @@ func TestProcessReleaseCommit_prerelease(t *testing.T) {
 	repoURL := relSyncTestRepoURL
 	hash := "pre123456789"
 	branch := relSyncTestBranch
-	content := "Beta release\n\n" + `--- GitMsg: ext="release"; tag="v2.0.0-beta.1"; version="2.0.0-beta.1"; prerelease="true"; v="0.1.0" ---`
+	content := "Beta release\n\n" + `GitMsg: ext="release"; tag="v2.0.0-beta.1"; version="2.0.0-beta.1"; prerelease="true"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -172,7 +172,7 @@ func TestProcessReleaseCommit_withArtifacts(t *testing.T) {
 	repoURL := relSyncTestRepoURL
 	hash := "art123456789"
 	branch := relSyncTestBranch
-	content := "Release with artifacts\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; artifacts="app-linux,app-darwin,app-windows"; artifact-url="https://releases.example.com/v1.0.0"; checksums="sha256:abc123"; signed-by="release@example.com"; v="0.1.0" ---`
+	content := "Release with artifacts\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; artifacts="app-linux,app-darwin,app-windows"; artifact-url="https://releases.example.com/v1.0.0"; checksums="sha256:abc123"; signed-by="release@example.com"; v="0.1.0"`
 	insertTestCommit(t, hash, content)
 
 	msg := protocol.ParseMessage(content)
@@ -201,13 +201,13 @@ func TestProcessReleaseCommit_withEditsRef(t *testing.T) {
 	canonicalHash := "ca001e234567"
 	editHash := "edithash12345"
 
-	canonContent := "Original release\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---`
+	canonContent := "Original release\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`
 	insertTestCommit(t, canonicalHash, canonContent)
 	msg := protocol.ParseMessage(canonContent)
 	gc := git.Commit{Hash: canonicalHash, Timestamp: time.Now()}
 	processReleaseCommit(gc, msg, repoURL, branch)
 
-	editContent := "Updated release\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; edits="#commit:ca001e234567@gitmsg/release"; v="0.1.0" ---`
+	editContent := "Updated release\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; edits="#commit:ca001e234567@gitmsg/release"; v="0.1.0"`
 	insertTestCommit(t, editHash, editContent)
 	editMsg := protocol.ParseMessage(editContent)
 	editGc := git.Commit{Hash: editHash, Timestamp: time.Now()}
@@ -231,8 +231,8 @@ func TestSyncWorkspaceToCache(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)
 
-	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v1.0.0\n\n"+`--- GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0" ---`)
-	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v2.0.0\n\n"+`--- GitMsg: ext="release"; tag="v2.0.0"; version="2.0.0"; v="0.1.0" ---`)
+	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v1.0.0\n\n"+`GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`)
+	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v2.0.0\n\n"+`GitMsg: ext="release"; tag="v2.0.0"; version="2.0.0"; v="0.1.0"`)
 
 	if err := SyncWorkspaceToCache(dir); err != nil {
 		t.Fatalf("SyncWorkspaceToCache() error = %v", err)
@@ -254,7 +254,7 @@ func TestProcessReleaseCommit_dbError(t *testing.T) {
 		cache.Open(testCacheDir)
 	})
 
-	content := "Release v1.0\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0" ---`
+	content := "Release v1.0\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0"`
 	msg := protocol.ParseMessage(content)
 	gc := git.Commit{Hash: "abc123456789", Timestamp: time.Now()}
 	processReleaseCommit(gc, msg, "https://github.com/test/repo", "gitmsg/release")
@@ -262,7 +262,7 @@ func TestProcessReleaseCommit_dbError(t *testing.T) {
 
 func TestSyncWorkspaceToCache_cacheError(t *testing.T) {
 	dir := initTestRepo(t)
-	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release\n\n"+`--- GitMsg: ext="release"; v="0.1.0" ---`)
+	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release\n\n"+`GitMsg: ext="release"; v="0.1.0"`)
 
 	cache.Reset()
 	t.Cleanup(func() {
@@ -286,7 +286,7 @@ func TestProcessReleaseCommit_crossRepoEdit(t *testing.T) {
 	insertTestCommit(t, canonHash, "Original")
 	insertTestCommit(t, editHash, "Edited")
 
-	editContent := "Edited\n\n" + `--- GitMsg: ext="release"; tag="v1.0.1"; edits="https://github.com/other/repo#commit:` + canonHash + `@` + branch + `"; v="0.1.0" ---`
+	editContent := "Edited\n\n" + `GitMsg: ext="release"; tag="v1.0.1"; edits="https://github.com/other/repo#commit:` + canonHash + `@` + branch + `"; v="0.1.0"`
 	msg := protocol.ParseMessage(editContent)
 	gc := git.Commit{Hash: editHash, Timestamp: time.Now()}
 	processReleaseCommit(gc, msg, repoURL, branch)

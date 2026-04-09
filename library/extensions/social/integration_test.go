@@ -492,7 +492,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		_ = cache.InsertCommits([]cache.Commit{{
 			Hash: rootHash, RepoURL: workspaceURL, Branch: branch,
 			AuthorName: "Test", AuthorEmail: "test@test.com",
-			Message: "Orphan root\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---", Timestamp: time.Now(),
+			Message: "Orphan root\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"", Timestamp: time.Now(),
 		}})
 		// DON'T insert into social_items - the root won't appear in thread query results
 
@@ -2325,7 +2325,7 @@ func TestVersionAndResolve(t *testing.T) {
 		workdir := cloneFixture(t)
 		// Insert a commit directly into cache (not via workspace)
 		extRepo := "https://github.com/ext/cached"
-		msg := "Cached post\n\n" + `--- GitMsg: ext="social"; type="post"; v="0.1.0" ---`
+		msg := "Cached post\n\n" + `GitMsg: ext="social"; type="post"; v="0.1.0"`
 		_ = cache.InsertCommits([]cache.Commit{{
 			Hash: "ccfb12345678", RepoURL: extRepo, Branch: "main",
 			AuthorName: "Ext", AuthorEmail: "ext@t.com",

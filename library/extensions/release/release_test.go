@@ -441,7 +441,7 @@ func TestCacheReleaseFromCommit_crossRepoEdit(t *testing.T) {
 	repoURL := "https://github.com/test/repo"
 	branch := "gitmsg/release"
 
-	origContent := "Original\n\n" + `--- GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0" ---`
+	origContent := "Original\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; v="0.1.0"`
 	origHash, err := git.CreateCommitOnBranch(dir, branch, origContent)
 	if err != nil {
 		t.Fatalf("CreateCommitOnBranch() error = %v", err)
@@ -449,7 +449,7 @@ func TestCacheReleaseFromCommit_crossRepoEdit(t *testing.T) {
 	cacheReleaseFromCommit(dir, repoURL, origHash, branch)
 
 	crossRepoRef := "https://github.com/other/repo#commit:" + origHash + "@" + branch
-	editContent := "Edited\n\n" + `--- GitMsg: ext="release"; tag="v1.0.1"; edits="` + crossRepoRef + `"; v="0.1.0" ---`
+	editContent := "Edited\n\n" + `GitMsg: ext="release"; tag="v1.0.1"; edits="` + crossRepoRef + `"; v="0.1.0"`
 	editHash, err := git.CreateCommitOnBranch(dir, branch, editContent)
 	if err != nil {
 		t.Fatalf("CreateCommitOnBranch() error = %v", err)

@@ -84,30 +84,27 @@ Implementations MUST use GitSocial for PM item comments (issues, milestones, spr
 ```
 Love this idea, I'll start on it.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Add dark mode support
 ```
 
 Milestone comment example:
 ```
 Adding real-time collaboration to the scope, extending due date by one week.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:def456789012@gitmsg/pm"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="milestone"; author="Bob"; email="bob@example.com"; time="2025-01-01T00:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0" ---
-> Release v2.0
+GitMsg: ext="social"; type="comment"; original="#commit:def456789012@gitmsg/pm"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="milestone"; author="Bob"; email="bob@example.com"; time="2025-01-01T00:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
+ > Release v2.0
 ```
 
 Sprint comment example:
 ```
 Retrospective: Good velocity this sprint. Need to improve estimation.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="sprint"; author="Alice"; email="alice@example.com"; time="2025-02-01T00:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Sprint 23: UX Polish
+GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="sprint"; author="Alice"; email="alice@example.com"; time="2025-02-01T00:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Sprint 23: UX Polish
 ```
 
 ## 2. Config
@@ -197,19 +194,19 @@ Create issue:
 ```
 Add dark mode support
 
---- GitMsg: ext="pm"; type="issue"; state="open"; labels="kind/feature,priority/high"; v="0.1.0" ---
+GitMsg: ext="pm"; type="issue"; state="open"; labels="kind/feature,priority/high"; v="0.1.0"
 ```
 
 Close issue (full replacement via core versioning):
 ```
 Add dark mode support
 
---- GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; state="closed"; labels="kind/feature,priority/high,status/done"; v="0.1.0" ---
+GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; state="closed"; labels="kind/feature,priority/high,status/done"; v="0.1.0"
 ```
 
 Delete issue:
 ```
---- GitMsg: ext="pm"; edits="#commit:abc123456789@gitmsg/pm"; retracted="true"; v="0.1.0" ---
+GitMsg: ext="pm"; edits="#commit:abc123456789@gitmsg/pm"; retracted="true"; v="0.1.0"
 ```
 
 Create milestone:
@@ -218,7 +215,7 @@ Release v2.0
 
 Dark mode and dashboard analytics.
 
---- GitMsg: ext="pm"; type="milestone"; state="open"; due="2025-03-15"; v="0.1.0" ---
+GitMsg: ext="pm"; type="milestone"; state="open"; due="2025-03-15"; v="0.1.0"
 ```
 
 Create sprint:
@@ -227,53 +224,44 @@ Sprint 23: UX Polish
 
 Two-week sprint for user experience improvements.
 
---- GitMsg: ext="pm"; type="sprint"; state="planned"; start="2025-02-01"; end="2025-02-14"; v="0.1.0" ---
+GitMsg: ext="pm"; type="sprint"; state="planned"; start="2025-02-01"; end="2025-02-14"; v="0.1.0"
 ```
 
 Issue with milestone, sprint, and blocking link:
 ```
 Build real-time collaboration
 
---- GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:def456789012@gitmsg/pm"; sprint="#commit:abc123456789@gitmsg/pm"; blocks="#commit:aaa111222333@gitmsg/pm"; labels="kind/feature,status/backlog"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="milestone"; author="Bob"; email="bob@example.com"; time="2025-01-01T00:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0" ---
-> Release v2.0
-
---- GitMsg-Ref: ext="pm"; type="sprint"; author="Alice"; email="alice@example.com"; time="2025-02-01T00:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Sprint 23: UX Polish
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-10T09:00:00Z"; ref="#commit:aaa111222333@gitmsg/pm"; v="0.1.0" ---
-> Deploy to production
+GitMsg: ext="pm"; type="issue"; state="open"; milestone="#commit:def456789012@gitmsg/pm"; sprint="#commit:abc123456789@gitmsg/pm"; blocks="#commit:aaa111222333@gitmsg/pm"; labels="kind/feature,status/backlog"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="milestone"; author="Bob"; email="bob@example.com"; time="2025-01-01T00:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
+ > Release v2.0
+GitMsg-Ref: ext="pm"; type="sprint"; author="Alice"; email="alice@example.com"; time="2025-02-01T00:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Sprint 23: UX Polish
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-10T09:00:00Z"; ref="#commit:aaa111222333@gitmsg/pm"; v="0.1.0"
+ > Deploy to production
 ```
 
 Direct subtask with related link (child of epic):
 ```
 Dark mode theme engine
 
---- GitMsg: ext="pm"; type="issue"; state="open"; assignees="alice@example.com"; root="#commit:abc123456789@gitmsg/pm"; related="#commit:ddd444555666@gitmsg/pm"; labels="kind/story,status/backlog"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-05T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Design System Epic
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-08T14:00:00Z"; ref="#commit:ddd444555666@gitmsg/pm"; v="0.1.0" ---
-> Redesign settings page
+GitMsg: ext="pm"; type="issue"; state="open"; assignees="alice@example.com"; root="#commit:abc123456789@gitmsg/pm"; related="#commit:ddd444555666@gitmsg/pm"; labels="kind/story,status/backlog"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-05T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Design System Epic
+GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-08T14:00:00Z"; ref="#commit:ddd444555666@gitmsg/pm"; v="0.1.0"
+ > Redesign settings page
 ```
 
 Nested subtask blocked by multiple issues (grandchild of epic):
 ```
 Add theme toggle component
 
---- GitMsg: ext="pm"; type="issue"; state="open"; assignees="bob@example.com"; parent="#commit:def456789012@gitmsg/pm"; root="#commit:abc123456789@gitmsg/pm"; blocked-by="#commit:bbb222333444@gitmsg/pm,#commit:ccc333444555@gitmsg/pm"; labels="kind/task,status/backlog"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0" ---
-> Dark mode theme engine
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-05T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0" ---
-> Design System Epic
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-11T10:00:00Z"; ref="#commit:bbb222333444@gitmsg/pm"; v="0.1.0" ---
-> Fix authentication bug
-
---- GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-12T10:00:00Z"; ref="#commit:ccc333444555@gitmsg/pm"; v="0.1.0" ---
-> Update CI pipeline
+GitMsg: ext="pm"; type="issue"; state="open"; assignees="bob@example.com"; parent="#commit:def456789012@gitmsg/pm"; root="#commit:abc123456789@gitmsg/pm"; blocked-by="#commit:bbb222333444@gitmsg/pm,#commit:ccc333444555@gitmsg/pm"; labels="kind/task,status/backlog"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
+ > Dark mode theme engine
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-05T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
+ > Design System Epic
+GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-11T10:00:00Z"; ref="#commit:bbb222333444@gitmsg/pm"; v="0.1.0"
+ > Fix authentication bug
+GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-12T10:00:00Z"; ref="#commit:ccc333444555@gitmsg/pm"; v="0.1.0"
+ > Update CI pipeline
 ```

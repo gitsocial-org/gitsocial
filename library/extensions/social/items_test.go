@@ -290,7 +290,7 @@ func TestExtractHeaderFields_nilMsg(t *testing.T) {
 }
 
 func TestExtractHeaderFields_validMsg(t *testing.T) {
-	msg := "content\n\n--- GitMsg: ext=\"pm\"; type=\"issue\"; state=\"open\"; v=\"0.1.0\" ---"
+	msg := "content\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"open\"; v=\"0.1.0\""
 	ext, typ, state := extractHeaderFields(msg)
 	if ext != "pm" {
 		t.Errorf("ext = %q, want pm", ext)
@@ -455,7 +455,7 @@ func TestInsertSocialItem_interactionCounts(t *testing.T) {
 
 func TestGetCachedCommit(t *testing.T) {
 	setupTestDB(t)
-	msg := "Hello world\n\n" + `--- GitMsg: ext="social"; type="post"; v="0.1.0" ---`
+	msg := "Hello world\n\n" + `GitMsg: ext="social"; type="post"; v="0.1.0"`
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash:        "ccmt12345678",
 		RepoURL:     itemsTestRepoURL,
@@ -1304,7 +1304,7 @@ func TestInsertSocialItem_editCommitSkipsInteractions(t *testing.T) {
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: "edit_new_1234", RepoURL: itemsTestRepoURL, Branch: itemsTestBranch,
 		AuthorName: "Test", AuthorEmail: "test@test.com",
-		Message:   "edited content\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:edit_orig1234@main\"; v=\"0.1.0\" ---",
+		Message:   "edited content\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:edit_orig1234@main\"; v=\"0.1.0\"",
 		Timestamp: time.Now(),
 	}}); err != nil {
 		t.Fatal(err)

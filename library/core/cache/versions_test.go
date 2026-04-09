@@ -17,7 +17,7 @@ func insertCanonicalAndEdit(t *testing.T) {
 			Hash:      "canonical1234",
 			RepoURL:   "https://github.com/user/repo",
 			Branch:    "main",
-			Message:   "Original post\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---",
+			Message:   "Original post\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"",
 			Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
 		},
 	})
@@ -27,7 +27,7 @@ func insertCanonicalAndEdit(t *testing.T) {
 			Hash:      "edit12345678",
 			RepoURL:   "https://github.com/user/repo",
 			Branch:    "main",
-			Message:   "Edited post\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:canonical1234@main\"; v=\"0.1.0\" ---",
+			Message:   "Edited post\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:canonical1234@main\"; v=\"0.1.0\"",
 			Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC),
 		},
 	})
@@ -312,14 +312,14 @@ func TestReconcileVersions(t *testing.T) {
 	// Insert edit commit first (before canonical) so InsertCommits can't link them
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; v=\"0.1.0\"",
 			Timestamp: time.Now().UTC()},
 	})
 
 	// Now insert canonical commit
 	InsertCommits([]Commit{
 		{Hash: "aabb00112233", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message: "Original\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---", Timestamp: time.Now().UTC()},
+			Message: "Original\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"", Timestamp: time.Now().UTC()},
 	})
 
 	// ReconcileVersions should find the edit and create version record
@@ -526,14 +526,14 @@ func TestReconcileVersions_withRetracted(t *testing.T) {
 	// Insert retracted edit first (before canonical)
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Retracted\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; retracted=\"true\"; v=\"0.1.0\" ---",
+			Message:   "Retracted\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; retracted=\"true\"; v=\"0.1.0\"",
 			Timestamp: time.Now().UTC()},
 	})
 
 	// Now insert canonical
 	InsertCommits([]Commit{
 		{Hash: "aabb00112233", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message: "Original\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---", Timestamp: time.Now().UTC()},
+			Message: "Original\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"", Timestamp: time.Now().UTC()},
 	})
 
 	created, err := ReconcileVersions()
@@ -580,7 +580,7 @@ func TestReconcileVersions_unparsableRef(t *testing.T) {
 	// Insert commit with edits field that doesn't parse as a valid ref (no hex hash)
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"not-a-valid-ref\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"not-a-valid-ref\"; v=\"0.1.0\"",
 			Timestamp: time.Now().UTC()},
 	})
 
@@ -601,7 +601,7 @@ func TestReconcileVersions_canonicalNotYetFetched(t *testing.T) {
 	// Insert edit only — canonical does not exist
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"" + editsRef + "\"; v=\"0.1.0\"",
 			Timestamp: time.Now().UTC()},
 	})
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// CreateHeader formats a Header struct into a GitMsg header line.
+// CreateHeader formats a Header struct into a GitMsg trailer line.
 func CreateHeader(header Header) string {
 	fields := make([]string, 0, len(header.Fields)+4)
 	fields = append(fields, fmt.Sprintf(`ext="%s"`, header.Ext))
@@ -60,10 +60,10 @@ func CreateHeader(header Header) string {
 
 	fields = append(fields, fmt.Sprintf(`v="%s"`, header.V))
 
-	return fmt.Sprintf("--- GitMsg: %s ---", strings.Join(fields, "; "))
+	return fmt.Sprintf("GitMsg: %s", strings.Join(fields, "; "))
 }
 
-// CreateRefSection formats a Ref struct into a GitMsg-Ref section.
+// CreateRefSection formats a Ref struct into a GitMsg-Ref trailer with continuation lines.
 func CreateRefSection(ref Ref) string {
 	fields := make([]string, 0, len(ref.Fields)+6)
 	fields = append(fields, fmt.Sprintf(`ext="%s"`, ref.Ext))
@@ -99,10 +99,15 @@ func CreateRefSection(ref Ref) string {
 	fields = append(fields, fmt.Sprintf(`ref="%s"`, ref.Ref))
 	fields = append(fields, fmt.Sprintf(`v="%s"`, ref.V))
 
-	headerLine := fmt.Sprintf("--- GitMsg-Ref: %s ---", strings.Join(fields, "; "))
+	headerLine := fmt.Sprintf("GitMsg-Ref: %s", strings.Join(fields, "; "))
 
 	if ref.Metadata != "" {
-		return headerLine + "\n" + ref.Metadata
+		// Prefix each line with space for trailer continuation
+		metaLines := strings.Split(ref.Metadata, "\n")
+		for i, line := range metaLines {
+			metaLines[i] = " " + line
+		}
+		return headerLine + "\n" + strings.Join(metaLines, "\n")
 	}
 
 	return headerLine
@@ -123,13 +128,12 @@ func QuoteContent(content string) string {
 
 // FormatMessage assembles content, header, and refs into a commit message.
 func FormatMessage(content string, header Header, references []Ref) string {
-	parts := make([]string, 0, 3+2*len(references))
+	parts := make([]string, 0, 2+len(references)+1)
 	parts = append(parts, strings.TrimSpace(content))
-	parts = append(parts, "")
+	parts = append(parts, "") // blank line separating body from trailer block
 	parts = append(parts, CreateHeader(header))
 
 	for _, ref := range references {
-		parts = append(parts, "")
 		parts = append(parts, CreateRefSection(ref))
 	}
 

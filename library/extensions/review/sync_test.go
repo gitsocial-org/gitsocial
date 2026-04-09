@@ -187,7 +187,7 @@ func TestProcessReviewCommit_noType(t *testing.T) {
 func TestProcessReviewCommit_basicPR(t *testing.T) {
 	setupTestDB(t)
 	hash := "pr0123456789"
-	content := "Add feature\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; closes="#commit:iss1,#commit:iss2"; reviewers="bob@test.com"; v="0.1.0" ---`
+	content := "Add feature\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; closes="#commit:iss1,#commit:iss2"; reviewers="bob@test.com"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)
@@ -218,7 +218,7 @@ func TestProcessReviewCommit_basicPR(t *testing.T) {
 func TestProcessReviewCommit_feedback(t *testing.T) {
 	setupTestDB(t)
 	hash := "fb0123456789"
-	content := "Looks good\n\n" + `--- GitMsg: ext="review"; type="feedback"; pull-request="#commit:ab0c12345678@gitmsg/review"; review-state="approved"; v="0.1.0" ---`
+	content := "Looks good\n\n" + `GitMsg: ext="review"; type="feedback"; pull-request="#commit:ab0c12345678@gitmsg/review"; review-state="approved"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)
@@ -250,11 +250,11 @@ func TestProcessReviewCommit_withEditsRef(t *testing.T) {
 	insertReviewTestCommit(t, reviewTestRepoURL, canonicalHash)
 	insertReviewTestCommit(t, reviewTestRepoURL, editHash)
 
-	canonContent := "Original PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0" ---`
+	canonContent := "Original PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0"`
 	msg := protocol.ParseMessage(canonContent)
 	processReviewCommit(git.Commit{Hash: canonicalHash, Timestamp: time.Now()}, msg, reviewTestRepoURL, reviewTestBranch)
 
-	editContent := "Updated PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="merged"; edits="#commit:` + canonicalHash + `@gitmsg/review"; v="0.1.0" ---`
+	editContent := "Updated PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="merged"; edits="#commit:` + canonicalHash + `@gitmsg/review"; v="0.1.0"`
 	editMsg := protocol.ParseMessage(editContent)
 	processReviewCommit(git.Commit{Hash: editHash, Timestamp: time.Now()}, editMsg, reviewTestRepoURL, reviewTestBranch)
 
@@ -279,7 +279,7 @@ func TestProcessReviewCommit_crossRepoEdit(t *testing.T) {
 	insertReviewTestCommit(t, reviewTestRepoURL, canonHash)
 	insertReviewTestCommit(t, reviewTestRepoURL, editHash)
 
-	editContent := "Edited\n\n" + `--- GitMsg: ext="review"; type="pull-request"; edits="https://github.com/other/repo#commit:` + canonHash + `@gitmsg/review"; v="0.1.0" ---`
+	editContent := "Edited\n\n" + `GitMsg: ext="review"; type="pull-request"; edits="https://github.com/other/repo#commit:` + canonHash + `@gitmsg/review"; v="0.1.0"`
 	msg := protocol.ParseMessage(editContent)
 	processReviewCommit(git.Commit{Hash: editHash, Timestamp: time.Now()}, msg, reviewTestRepoURL, reviewTestBranch)
 }
@@ -287,7 +287,7 @@ func TestProcessReviewCommit_crossRepoEdit(t *testing.T) {
 func TestProcessReviewCommit_crossRepoHeadQualification(t *testing.T) {
 	setupTestDB(t)
 	hash := "xr0123456789"
-	content := "Cross-repo PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/upstream/repo#branch:main"; head="#branch:feature"; v="0.1.0" ---`
+	content := "Cross-repo PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/upstream/repo#branch:main"; head="#branch:feature"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)
@@ -302,7 +302,7 @@ func TestProcessReviewCommit_crossRepoHeadQualification(t *testing.T) {
 func TestProcessReviewCommit_lineFields(t *testing.T) {
 	setupTestDB(t)
 	hash := "ln0123456789"
-	content := "Inline comment\n\n" + `--- GitMsg: ext="review"; type="feedback"; commit="abc123"; file="main.go"; old-line="10"; new-line="15"; old-line-end="12"; new-line-end="17"; v="0.1.0" ---`
+	content := "Inline comment\n\n" + `GitMsg: ext="review"; type="feedback"; commit="abc123"; file="main.go"; old-line="10"; new-line="15"; old-line-end="12"; new-line-end="17"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)
@@ -332,7 +332,7 @@ func TestProcessReviewCommit_lineFields(t *testing.T) {
 func TestProcessReviewCommit_suggestion(t *testing.T) {
 	setupTestDB(t)
 	hash := "sg0123456789"
-	content := "Use this instead\n\n" + `--- GitMsg: ext="review"; type="feedback"; suggestion="true"; v="0.1.0" ---`
+	content := "Use this instead\n\n" + `GitMsg: ext="review"; type="feedback"; suggestion="true"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)
@@ -351,11 +351,11 @@ func TestProcessReviewCommit_retraction(t *testing.T) {
 	insertReviewTestCommit(t, reviewTestRepoURL, canonHash)
 	insertReviewTestCommit(t, reviewTestRepoURL, retractHash)
 
-	canonContent := "PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0" ---`
+	canonContent := "PR\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; v="0.1.0"`
 	msg := protocol.ParseMessage(canonContent)
 	processReviewCommit(git.Commit{Hash: canonHash, Timestamp: time.Now()}, msg, reviewTestRepoURL, reviewTestBranch)
 
-	retractContent := `--- GitMsg: ext="review"; type="pull-request"; edits="#commit:` + canonHash + `@gitmsg/review"; retracted="true"; v="0.1.0" ---`
+	retractContent := `GitMsg: ext="review"; type="pull-request"; edits="#commit:` + canonHash + `@gitmsg/review"; retracted="true"; v="0.1.0"`
 	retractMsg := protocol.ParseMessage(retractContent)
 	processReviewCommit(git.Commit{Hash: retractHash, Timestamp: time.Now()}, retractMsg, reviewTestRepoURL, reviewTestBranch)
 
@@ -380,7 +380,7 @@ func TestProcessReviewCommit_dbError(t *testing.T) {
 		cache.Open(testCacheDir)
 	})
 
-	content := "PR\n\n" + `--- GitMsg: ext="review"; type="pull-request"; v="0.1.0" ---`
+	content := "PR\n\n" + `GitMsg: ext="review"; type="pull-request"; v="0.1.0"`
 	msg := protocol.ParseMessage(content)
 	gc := git.Commit{Hash: "abc123456789", Timestamp: time.Now()}
 	processReviewCommit(gc, msg, reviewTestRepoURL, reviewTestBranch)
@@ -400,8 +400,8 @@ func TestSyncWorkspace(t *testing.T) {
 	t.Run("withCommits", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		git.CreateCommitOnBranch(dir, "gitmsg/review", "Add feature\n\n"+`--- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; v="0.1.0" ---`)
-		git.CreateCommitOnBranch(dir, "gitmsg/review", "Fix bug\n\n"+`--- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:bugfix"; v="0.1.0" ---`)
+		git.CreateCommitOnBranch(dir, "gitmsg/review", "Add feature\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; v="0.1.0"`)
+		git.CreateCommitOnBranch(dir, "gitmsg/review", "Fix bug\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:bugfix"; v="0.1.0"`)
 
 		if err := SyncWorkspaceToCache(dir); err != nil {
 			t.Fatalf("SyncWorkspaceToCache() error = %v", err)
@@ -419,7 +419,7 @@ func TestSyncWorkspace(t *testing.T) {
 
 func TestSyncWorkspaceToCache_cacheError(t *testing.T) {
 	dir := initTestRepo(t)
-	git.CreateCommitOnBranch(dir, "gitmsg/review", "PR\n\n"+`--- GitMsg: ext="review"; type="pull-request"; v="0.1.0" ---`)
+	git.CreateCommitOnBranch(dir, "gitmsg/review", "PR\n\n"+`GitMsg: ext="review"; type="pull-request"; v="0.1.0"`)
 
 	cache.Reset()
 	t.Cleanup(func() {
@@ -436,7 +436,7 @@ func TestSyncWorkspaceToCache_cacheError(t *testing.T) {
 func TestProcessReviewCommit_feedbackWithNoBranchInPRRef(t *testing.T) {
 	setupTestDB(t)
 	hash := "fb1234567890"
-	content := "Comment\n\n" + `--- GitMsg: ext="review"; type="feedback"; pull-request="#commit:ab0c12345678"; v="0.1.0" ---`
+	content := "Comment\n\n" + `GitMsg: ext="review"; type="feedback"; pull-request="#commit:ab0c12345678"; v="0.1.0"`
 	insertReviewTestCommit(t, reviewTestRepoURL, hash)
 
 	msg := protocol.ParseMessage(content)

@@ -207,13 +207,13 @@ func TestInsertCommits_withEditsAndCanonical(t *testing.T) {
 	// Insert canonical commit first
 	InsertCommits([]Commit{
 		{Hash: "aabb00112233", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message: "Original\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+			Message: "Original\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
 	})
 
 	// Insert edit with workspace-relative ref (no repo URL, no branch) to cover both fallbacks
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; v=\"0.1.0\"",
 			Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
 	})
 
@@ -234,7 +234,7 @@ func TestInsertCommits_withEditsCanonicalMissing(t *testing.T) {
 	// The version record should NOT be created
 	InsertCommits([]Commit{
 		{Hash: "ccdd44556677", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; v=\"0.1.0\"",
 			Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
 	})
 
@@ -328,13 +328,13 @@ func TestInsertCommits_withEditsRetracted(t *testing.T) {
 	// Insert canonical commit first
 	InsertCommits([]Commit{
 		{Hash: "aabb00112233", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message: "Original\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+			Message: "Original\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
 	})
 
 	// Insert retracted edit
 	InsertCommits([]Commit{
 		{Hash: "eeff88990011", RepoURL: "https://github.com/user/repo", Branch: "main",
-			Message:   "Retracted\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; retracted=\"true\"; v=\"0.1.0\" ---",
+			Message:   "Retracted\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:aabb00112233\"; retracted=\"true\"; v=\"0.1.0\"",
 			Timestamp: time.Date(2025, 10, 21, 14, 0, 0, 0, time.UTC)},
 	})
 

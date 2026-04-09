@@ -58,13 +58,13 @@ Inline feedback (with code-location fields) MUST include `file`, `commit`, and a
 
 ### 1.5. Editing and Retracting
 
-Pull requests MAY be edited or retracted using core versioning (GITMSG.md Section 1.4). State transitions (open -> merged, open -> closed) are edits to the original `pull-request` commit. Draft transitions (adding or removing `draft="true"`) are also edits. Implementations MUST NOT merge a pull request while `draft="true"`. Implementations SHOULD suppress review request notifications for draft pull requests.
+Pull requests MAY be edited or retracted using core versioning (GITMSG.md Section 1.5). State transitions (open -> merged, open -> closed) are edits to the original `pull-request` commit. Draft transitions (adding or removing `draft="true"`) are also edits. Implementations MUST NOT merge a pull request while `draft="true"`. Implementations SHOULD suppress review request notifications for draft pull requests.
 
 Implementations SHOULD include `base-tip` and `head-tip` when creating or editing a pull request. These fields capture the commit hashes (12 characters) that the `base` and `head` branches point to at the time of the commit. When a pull request's code is updated (e.g., after rebase or new commits), implementations SHOULD create an edit with updated `base-tip` and `head-tip` values. The edits chain serves as a version history of the pull request's code state, enabling implementations to compare any two versions via range-diff.
 
 When transitioning to `state="merged"`, implementations SHOULD include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. Implementations MAY use these fields to reconstruct the original diff and commit range after the head branch has been merged into base.
 
-When merging a cross-repository pull request (fork PR), implementations SHOULD first copy the pull request to the upstream review branch with a GitMsg-Ref section preserving the original author's identity. The merge edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
+When merging a cross-repository pull request (fork PR), implementations SHOULD first copy the pull request to the upstream review branch with a `GitMsg-Ref:` trailer preserving the original author's identity. The merge edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
 
 Feedback messages MAY be edited or retracted using core versioning. Implementations SHOULD display an edit indicator on modified messages.
 
@@ -75,10 +75,9 @@ Implementations MUST use GitSocial for pull request comments. The `original` fie
 ```
 Looks great, just one nit on the theme toggle.
 
---- GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="social"; type="comment"; original="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 Nested comment threads use GitSocial's `reply-to` field.
@@ -160,7 +159,7 @@ Configuration MAY include: `require-review` (boolean, default `false`).
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; closes="#commit:abc123456789@gitmsg/pm"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 ### Create Draft Pull Request
@@ -168,7 +167,7 @@ Add dark mode support
 ```
 WIP: Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; draft="true"; base="#branch:main"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; draft="true"; base="#branch:main"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
 ### Mark Draft as Ready
@@ -176,7 +175,7 @@ WIP: Add dark mode support
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:abc123456789@gitmsg/review"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:abc123456789@gitmsg/review"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 ### Approve Pull Request
@@ -184,10 +183,9 @@ Add dark mode support
 ```
 LGTM!
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; review-state="approved"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; review-state="approved"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 ### Inline Review Comment
@@ -195,10 +193,9 @@ LGTM!
 ```
 Consider caching this value
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; commit="def456789abc"; file="src/theme.js"; new-line="42"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; commit="def456789abc"; file="src/theme.js"; new-line="42"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 ### Suggestion
@@ -210,10 +207,9 @@ Use a CSS custom property for the transition
 transition: background-color var(--theme-transition, 200ms) ease;
 ```
 
---- GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; commit="def456789abc"; file="src/theme.css"; new-line="18"; suggestion="true"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="feedback"; pull-request="#commit:abc123456789@gitmsg/review"; commit="def456789abc"; file="src/theme.css"; new-line="18"; suggestion="true"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ~~~
 
 ### Merge Pull Request
@@ -221,13 +217,13 @@ transition: background-color var(--theme-transition, 200ms) ease;
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:abc123456789@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="d4e5f6a1b2c3"; closes="#commit:abc123456789@gitmsg/pm"; merge-base="f1e2d3c4b5a6"; merge-head="d4e5f6a1b2c3"; reviewers="bob@example.com"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:abc123456789@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="#branch:dark-mode"; head-tip="d4e5f6a1b2c3"; closes="#commit:abc123456789@gitmsg/pm"; merge-base="f1e2d3c4b5a6"; merge-head="d4e5f6a1b2c3"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 ### Retract Pull Request
 
 ```
---- GitMsg: ext="review"; edits="#commit:abc123456789@gitmsg/review"; retracted="true"; v="0.1.0" ---
+GitMsg: ext="review"; edits="#commit:abc123456789@gitmsg/review"; retracted="true"; v="0.1.0"
 ```
 
 ### Cross-Forge Pull Request
@@ -235,7 +231,7 @@ Add dark mode support
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
 ### Merge Cross-Repo Pull Request
@@ -245,10 +241,9 @@ Step 1 - Copy fork PR to upstream (preserves original author via GitMsg-Ref):
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0" ---
-
---- GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:abc123456789@gitmsg/review"; v="0.1.0" ---
-> Add dark mode support
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add dark mode support
 ```
 
 Step 2 - Merge edit references the local copy:
@@ -256,5 +251,5 @@ Step 2 - Merge edit references the local copy:
 ```
 Add dark mode support
 
---- GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789abc@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0" ---
+GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789abc@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0"
 ```

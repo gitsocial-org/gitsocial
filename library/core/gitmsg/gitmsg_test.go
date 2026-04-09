@@ -764,7 +764,7 @@ func TestGetHistory_withData(t *testing.T) {
 			Hash:      "aabbccdd1234",
 			RepoURL:   "https://github.com/user/repo",
 			Branch:    "main",
-			Message:   "Hello world\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---",
+			Message:   "Hello world\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"",
 			Timestamp: time.Now().UTC(),
 		},
 	})
@@ -1108,7 +1108,7 @@ func TestGetHistory_withEditChain(t *testing.T) {
 			Hash:      "aabbccdd1234",
 			RepoURL:   "https://github.com/user/repo",
 			Branch:    "main",
-			Message:   "Original\n\n--- GitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\" ---",
+			Message:   "Original\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\"",
 			Timestamp: now.Add(-time.Hour),
 		},
 	})
@@ -1118,7 +1118,7 @@ func TestGetHistory_withEditChain(t *testing.T) {
 			Hash:      "eeff00112233",
 			RepoURL:   "https://github.com/user/repo",
 			Branch:    "main",
-			Message:   "Edited\n\n--- GitMsg: ext=\"social\"; type=\"post\"; edits=\"https://github.com/user/repo#commit:aabbccdd1234@main\"; v=\"0.1.0\" ---",
+			Message:   "Edited\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"https://github.com/user/repo#commit:aabbccdd1234@main\"; v=\"0.1.0\"",
 			Timestamp: now,
 		},
 	})
