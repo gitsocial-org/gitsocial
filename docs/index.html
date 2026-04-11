@@ -4,18 +4,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GitSocial: Git-native cross-forge collaboration: posts, issues, PRs, releases, all in your repo">
+  <meta name="description" content="GitSocial: Git-native cross-forge collaboration platform">
   <meta name="keywords" content="git, social, decentralized, collaboration, issues, pull requests, releases, open source, cross-forge">
   <link rel="canonical" href="https://gitsocial.org/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://gitsocial.org/">
   <meta property="og:title" content="GitSocial">
-  <meta property="og:description" content="Git-native cross-forge collaboration: posts, issues, PRs, releases, all in your repo">
+  <meta property="og:description" content="Git-native cross-forge collaboration platform">
   <meta property="og:image" content="https://gitsocial.org/logo.svg">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="GitSocial">
-  <meta name="twitter:description" content="Git-native cross-forge collaboration: posts, issues, PRs, releases, all in your repo">
-  <title>GitSocial — Git-native cross-forge collaboration</title>
+  <meta name="twitter:description" content="Git-native cross-forge collaboration platform">
+  <title>GitSocial - Git-native cross-forge collaboration platform</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="style.css">
   <script>
@@ -53,62 +53,68 @@
       <img src="logo.svg" alt="GitSocial logo" class="logo">
       <h1>GitSocial</h1>
       <div class="pitch">
-        <p>Git-native cross-forge collaboration:<br />posts, issues, PRs, all in your repo. Own your data, work offline, host anywhere with just git.</p>
+        <p>Git solved distributed collaboration for code. GitSocial extends it beyond code, making your data portable and independent.</p>
       </div>
+    </div>
+
+    <div class="cta-buttons">
+      <a href="https://github.com/gitsocial-org/gitsocial" class="btn btn-secondary">GitHub</a>
+      <a href="https://gitlab.com/gitsocial-org/gitsocial" class="btn btn-secondary">GitLab</a>
+      <a href="https://codeberg.org/GitSocial/GitSocial" class="btn btn-secondary">Codeberg</a>
     </div>
 
     <div class="terminal" role="img" aria-label="GitSocial TUI timeline showing a feature lifecycle">
       <div class="term-bar"><span class="tl-icon">⏱</span>Timeline</div>
       <div class="term-body">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">↩</span><strong>Carol</strong> <span class="tl-dim">· 20m ago · #b7d4e921</span></div>
+        <div class="tl-entry" style="animation-delay: 0.3s">
+          <div class="tl-head"><span class="tl-icon">↩</span><strong class="tl-following">Carol</strong> <span class="tl-dim">· 20m ago · #b7d4e921</span></div>
           <div class="tl-text">Looks stunning on OLED</div>
           <div class="tl-nested">
-            <div class="tl-head"><span class="tl-icon">•</span><strong>Alice</strong> <span class="tl-dim">· 1h ago · ↩ 1 · #a3f1c2b8</span></div>
+            <div class="tl-head"><span class="tl-icon">•</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 1h ago · ↩ 1 · #a3f1c2b8</span></div>
             <div class="tl-text">v0.4.0 shipped! Dark mode by @Bob -- his first PR</div>
           </div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">•</span><strong>Alice</strong> <span class="tl-dim">· 1h ago · ↩ 1 · #a3f1c2b8</span></div>
+        <hr class="tl-sep" style="animation-delay: 0.7s">
+        <div class="tl-entry" style="animation-delay: 0.7s">
+          <div class="tl-head"><span class="tl-icon">•</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 1h ago · ↩ 1 · #a3f1c2b8</span></div>
           <div class="tl-text">v0.4.0 shipped! Dark mode by @Bob -- his first PR</div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">⏏</span><strong>Alice</strong> <span class="tl-dim">· 3h ago · #c8e2f143</span></div>
+        <hr class="tl-sep" style="animation-delay: 1.1s">
+        <div class="tl-entry" style="animation-delay: 1.1s">
+          <div class="tl-head"><span class="tl-icon">⏏</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 3h ago · #c8e2f143</span></div>
           <div class="tl-text">v0.4.0 · linux · darwin · windows</div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">⑂</span><strong>Bob</strong> <span class="tl-dim">· 5h ago · merged · main ← bob/dark-mode · ↩ 1 · #d4a7b356</span></div>
+        <hr class="tl-sep" style="animation-delay: 1.5s">
+        <div class="tl-entry" style="animation-delay: 1.5s">
+          <div class="tl-head"><span class="tl-icon">⑂</span><strong class="tl-following">Bob</strong> <span class="tl-dim">· 5h ago · <span class="tl-state-dim">merged</span> · main ← bob/dark-mode · ↩ 1 · #d4a7b356</span></div>
           <div class="tl-text">Add dark mode via CSS variables</div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">↩</span><strong>Alice</strong> <span class="tl-dim">· 6h ago · #e1f9c469</span></div>
+        <hr class="tl-sep" style="animation-delay: 1.9s">
+        <div class="tl-entry" style="animation-delay: 1.9s">
+          <div class="tl-head"><span class="tl-icon">↩</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 6h ago · #e1f9c469</span></div>
           <div class="tl-text">LGTM!</div>
           <div class="tl-nested">
-            <div class="tl-head"><span class="tl-icon">⑂</span><strong>Bob</strong> <span class="tl-dim">· 1d ago · open · main ← bob/dark-mode · ↩ 1 · #f5b3d27c</span></div>
+            <div class="tl-head"><span class="tl-icon">⑂</span><strong class="tl-following">Bob</strong> <span class="tl-dim">· 1d ago · <span class="tl-following">open</span> · main ← bob/dark-mode · ↩ 1 · #f5b3d27c</span></div>
             <div class="tl-text">Add dark mode via CSS variables</div>
           </div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">⑂</span><strong>Bob</strong> <span class="tl-dim">· 1d ago · open · main ← bob/dark-mode · ↩ 1 · #f5b3d27c</span></div>
+        <hr class="tl-sep" style="animation-delay: 2.3s">
+        <div class="tl-entry" style="animation-delay: 2.3s">
+          <div class="tl-head"><span class="tl-icon">⑂</span><strong class="tl-following">Bob</strong> <span class="tl-dim">· 1d ago · <span class="tl-following">open</span> · main ← bob/dark-mode · ↩ 1 · #f5b3d27c</span></div>
           <div class="tl-text">Add dark mode via CSS variables</div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">↩</span><strong>Bob</strong> <span class="tl-dim">· 2d ago · #a9c1d4e5</span></div>
+        <hr class="tl-sep" style="animation-delay: 2.7s">
+        <div class="tl-entry" style="animation-delay: 2.7s">
+          <div class="tl-head"><span class="tl-icon">↩</span><strong class="tl-following">Bob</strong> <span class="tl-dim">· 2d ago · #a9c1d4e5</span></div>
           <div class="tl-text">Hey! First time here, I'd love to try this</div>
           <div class="tl-nested">
-            <div class="tl-head"><span class="tl-icon">○</span><strong>Alice</strong> <span class="tl-dim">· 3d ago · open · good first issue · ↩ 1 · #b3e5f7a1</span></div>
+            <div class="tl-head"><span class="tl-icon">○</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 3d ago · <span class="tl-following">open</span> · <span class="tl-label">feature</span> · ↩ 1 · #b3e5f7a1</span></div>
             <div class="tl-text">Support dark mode</div>
           </div>
         </div>
-        <hr class="tl-sep">
-        <div class="tl-entry">
-          <div class="tl-head"><span class="tl-icon">○</span><strong>Alice</strong> <span class="tl-dim">· 3d ago · open · good first issue · ↩ 1 · #b3e5f7a1</span></div>
+        <hr class="tl-sep" style="animation-delay: 3.1s">
+        <div class="tl-entry" style="animation-delay: 3.1s">
+          <div class="tl-head"><span class="tl-icon">○</span><strong class="tl-me">Alice</strong> <span class="tl-dim">· 3d ago · <span class="tl-following">open</span> · <span class="tl-label">feature</span> · ↩ 1 · #b3e5f7a1</span></div>
           <div class="tl-text">Support dark mode</div>
         </div>
       </div>
@@ -117,11 +123,8 @@
       </div>
     </div>
 
-    <div class="cta-buttons">
-      <a href="https://github.com/gitsocial-org/gitsocial" class="btn btn-primary">GitHub</a>
-      <a href="https://gitlab.com/gitsocial-org/gitsocial" class="btn btn-secondary">GitLab</a>
-      <a href="https://codeberg.org/GitSocial/GitSocial" class="btn btn-secondary">Codeberg</a>
-    </div>
+    <a href="demo.mp4" class="btn btn-secondary">Watch full demo</a>
+
   </main>
 
   <footer>

@@ -3,33 +3,35 @@
   <img src="documentation/images/gitsocial-icon.png" width="120" height="120">
   <h1>GitSocial</h1>
 
-  *Git-native cross-forge collaboration: posts, issues, PRs, releases, all in your repo*
+  *Git-native cross-forge collaboration platform*
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
-[How It Works](#how-it-works) • [Extensions](#extensions) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Contributing](#contributing)
+[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Extensions](#extensions--integrations) • [Installation](#installation) • [Quick Start](#quick-start) • [Workflows](#workflows) • [Documentation](#documentation)
 
 ![GitSocial TUI](documentation/demo/demo.gif)
 
 </div>
 
+## Why GitSocial
+
+Git solved distributed collaboration for code. GitSocial extends it beyond code, making your data portable and independent.
+
 ## How It Works
 
-- Everything is a commit: posts, issues, PRs, releases stored on `gitmsg/*` branches
-- Syncing is git: `git fetch` to update, `git push` to publish; works offline and peer-to-peer
-- Portable: `git clone --mirror`, no export tools needed
-- CLI, TUI, and JSON-RPC interfaces
+All collaboration data (posts, issues, PRs, etc.) is stored in your git repository as [git commits with structured trailers](specs/GITMSG.md) on `gitmsg/*` branches, syncing via `git fetch` and `git push`. Activity from other repositories appears in your timeline when you add them to your lists.
 
-## Extensions
+## Extensions & Integrations
 
-| Extension | Status | Description |
-|-----------|--------|-------------|
-| **Social** | Stable | Posts, comments, reposts, lists, timeline |
-| **PM** | Stable | Issues, milestones, sprints, boards |
-| **Review** | Stable | Cross-forge PRs, version-aware reviews ([see more](documentation/GITREVIEW-FLOWS.md)) |
-| **Release** | Stable | Releases, artifacts, checksums, signatures, SBOM |
+| Name | Description |
+|------|-------------|
+| **Social** | Git-native social network: posts, comments, lists, and timelines |
+| **PM** | Issues, sprints, and boards (Kanban, Agile, Minimal): portable across hosts, works offline |
+| **Review** | [Cross-forge PRs with version tracking](documentation/GITREVIEW-FLOWS.md), rebase-resilient reviews, and inline suggestions |
+| **Release** | Releases with artifacts, checksums, signatures, and SBOM: stored in git (LFS) or externally |
+| **[Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill)** | AI-assisted workflows for Claude Code, Cursor, and other agents: reports, changelogs, triage, and project insights |
 
 ## Installation
 
@@ -59,75 +61,80 @@ curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/instal
 go install github.com/gitsocial-org/gitsocial/library/cli@latest
 ```
 
-Or download a binary manually from [Releases](https://github.com/gitsocial-org/gitsocial/releases/latest).
+Or download a binary from [Releases](https://github.com/gitsocial-org/gitsocial/releases/latest).
 
 ## Quick Start
 
-Import an existing project and explore it in the TUI:
+Clone your project from GitHub, GitLab, or any host, then from your project directory:
 
 ```bash
-git clone https://github.com/your/repo
-cd repo
 gitsocial import         # imports issues, PRs, releases, discussions
-gitsocial tui
+gitsocial tui            # explore in the terminal
 ```
 
-### CLI Walkthrough
+## Workflows
 
-Start from scratch with the CLI:
+### Follow a project
+
+From your project directory:
 
 ```bash
-# Initialize GitSocial in your repo
-cd repo
+# Initialize and follow a repository
 gitsocial social init
-
-# Create a list and follow a repository
 gitsocial social list create reading
 gitsocial social list add reading https://github.com/someone/interesting-project
 
-# Fetch updates and view timeline
+# Fetch and browse their activity
 gitsocial fetch
 gitsocial social timeline
 
-# Write a post
-gitsocial social post "First post from GitSocial"
-
-# Publish
+# Post, comment, and publish
+gitsocial social post "Working on dark mode support"
+gitsocial social comment <post-id> "Great approach!"
 gitsocial push
 ```
 
+### Open a cross-forge pull request
+
+Fork on any host. The PR works regardless of where your fork lives.
+
+```bash
+git checkout -b feature/my-change         # make changes, commit
+
+gitsocial review pr create \
+  --base main \
+  --head feature/my-change \
+  "Short description of change"
+
+git push origin feature/my-change         # push your branch
+gitsocial push                            # push PR metadata
+```
+
+See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for version tracking, merge strategies, and cross-forge scenarios.
+
 ## Documentation
-
-**[GitReview Flows](documentation/GITREVIEW-FLOWS.md) - PR workflows and cross-forge scenarios**
-
-### Developer Docs
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](documentation/ARCHITECTURE.md) | System design, packages, cache, and dependencies |
-| [CLI Reference](documentation/CLI.md) | Commands, flags, output formats, and scripting |
-| [TUI Diagrams](documentation/TUI-DIAGRAMS.md) | ASCII layouts for every list and detail view |
-| [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
+| [CLI Reference](documentation/CLI.md) | Commands, flags, output formats |
+| [GitReview Flows](documentation/GITREVIEW-FLOWS.md) | Cross-forge PR workflows, version tracking, merge strategies |
+| [Architecture](documentation/ARCHITECTURE.md) | System design, packages, cache |
+| [TUI Layouts](documentation/TUI-DIAGRAMS.md) | ASCII diagrams for every view |
+| [JSON-RPC](documentation/RPC.md) | Editor integration over stdio |
 
-### Integrations
-
-| Integration | Description |
-|-------------|-------------|
-| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | GitSocial for AI agents |
-
-### Protocol Specs
+## Protocol Specifications
 
 | Spec | Description |
 |------|-------------|
-| [GITMSG.md](specs/GITMSG.md) | Core message format, headers, refs, and versioning |
-| [GITSOCIAL.md](specs/GITSOCIAL.md) | Posts, comments, reposts, quotes, and lists |
-| [GITPM.md](specs/GITPM.md) | Issues, milestones, sprints, and hierarchy |
-| [GITREVIEW.md](specs/GITREVIEW.md) | Pull requests, inline feedback, and review states |
-| [GITRELEASE.md](specs/GITRELEASE.md) | Releases with artifacts, checksums, signatures, and SBOM |
+| [GITMSG.md](specs/GITMSG.md) | Core message format, headers, refs, versioning |
+| [GITSOCIAL.md](specs/GITSOCIAL.md) | Posts, comments, reposts, quotes, lists |
+| [GITPM.md](specs/GITPM.md) | Issues, milestones, sprints |
+| [GITREVIEW.md](specs/GITREVIEW.md) | Pull requests, inline feedback, review states |
+| [GITRELEASE.md](specs/GITRELEASE.md) | Releases, artifacts, checksums, signatures, SBOM |
 
 ## Contributing
 
-Platform issues and PRs are disabled on all mirrors — GitSocial uses its own tools for collaboration.
+Platform issues and PRs are disabled on all mirrors. GitSocial uses its own tools for collaboration.
 
 ### Getting Started
 
@@ -145,8 +152,8 @@ gitsocial review pr create \
   --head feature/my-change \
   "Short description of change"
 
-git push origin feature/my-change        # push your branch
-gitsocial push                           # push PR metadata
+git push origin feature/my-change         # push your branch
+gitsocial push                            # push PR metadata
 ```
 
 After your first push, request fork registration in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) so maintainers can discover your PRs and issues.
