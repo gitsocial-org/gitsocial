@@ -26,6 +26,7 @@ type PRFormData struct {
 	Head      []string
 	Reviewers []string
 	Closes    []string
+	DependsOn []string
 	Draft     bool
 }
 
@@ -41,6 +42,7 @@ type PRForm struct {
 	contributors []cache.Contributor
 	branches     []string
 	issues       []pm.Issue
+	openPRs      []review.PullRequest
 	width        int
 	height       int
 	submitted    bool
@@ -52,6 +54,7 @@ type prFormDataMsg struct {
 	Contributors []cache.Contributor
 	Branches     []string
 	Issues       []pm.Issue
+	OpenPRs      []review.PullRequest
 	DefaultBase  string
 	CurrentHead  string
 }
@@ -77,6 +80,11 @@ func loadPRFormData(workdir string) tea.Cmd {
 		if res := pm.GetIssues("", "", []string{"open"}, "", 100); res.Success {
 			issues = res.Data
 		}
+		var openPRs []review.PullRequest
+		branch := gitmsg.GetExtBranch(workdir, "review")
+		if res := review.GetPullRequests(repoURL, branch, []string{"open"}, "", 100); res.Success {
+			openPRs = res.Data
+		}
 		var defaultBase, currentHead string
 		if b, err := git.GetDefaultBranch(workdir); err == nil {
 			defaultBase = b
@@ -88,6 +96,7 @@ func loadPRFormData(workdir string) tea.Cmd {
 			Contributors: contributors,
 			Branches:     branches,
 			Issues:       issues,
+			OpenPRs:      openPRs,
 			DefaultBase:  defaultBase,
 			CurrentHead:  currentHead,
 		}
@@ -114,6 +123,7 @@ func NewPRForm(workdir string, data prFormDataMsg) *PRForm {
 		contributors: data.Contributors,
 		branches:     data.Branches,
 		issues:       data.Issues,
+		openPRs:      data.OpenPRs,
 	}
 	f.data.Reviewers = []string{}
 
@@ -145,12 +155,16 @@ func NewPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *P
 	closes := make([]string, len(pr.Closes))
 	copy(closes, pr.Closes)
 
+	dependsOn := make([]string, len(pr.DependsOn))
+	copy(dependsOn, pr.DependsOn)
+
 	f := &PRForm{
 		workdir:      workdir,
 		prID:         pr.ID,
 		contributors: data.Contributors,
 		branches:     data.Branches,
 		issues:       data.Issues,
+		openPRs:      data.OpenPRs,
 		data: PRFormData{
 			Subject:   pr.Subject,
 			Body:      pr.Body,
@@ -158,6 +172,7 @@ func NewPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *P
 			Head:      head,
 			Reviewers: reviewers,
 			Closes:    closes,
+			DependsOn: dependsOn,
 			Draft:     pr.IsDraft,
 		},
 	}
@@ -225,6 +240,14 @@ func (f *PRForm) buildForm() {
 		Placeholder("Add issue ref...").
 		Options(issueOpts...).
 		Value(&f.data.Closes))
+
+	dependsOnOpts := buildPROptions(f.openPRs, f.prID)
+	fields = append(fields, tuicore.NewTagField().
+		Key("depends-on").
+		Title(pad("Depends on")).
+		Placeholder("Add parent PR for stacking...").
+		Options(dependsOnOpts...).
+		Value(&f.data.DependsOn))
 
 	fields = append(fields,
 		huh.NewConfirm().
@@ -328,6 +351,7 @@ func (f *PRForm) CreatePRFromForm() tea.Cmd {
 			Head:      firstSliceVal(data.Head),
 			Reviewers: data.Reviewers,
 			Closes:    data.Closes,
+			DependsOn: data.DependsOn,
 			Draft:     data.Draft,
 		}
 		result := review.CreatePR(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
@@ -350,6 +374,7 @@ func (f *PRForm) UpdatePRFromForm() tea.Cmd {
 		head := firstSliceVal(data.Head)
 		reviewers := data.Reviewers
 		closes := data.Closes
+		dependsOn := data.DependsOn
 
 		draft := data.Draft
 		opts := review.UpdatePROptions{
@@ -359,6 +384,7 @@ func (f *PRForm) UpdatePRFromForm() tea.Cmd {
 			Head:      &head,
 			Reviewers: &reviewers,
 			Closes:    &closes,
+			DependsOn: &dependsOn,
 			Draft:     &draft,
 		}
 		result := review.UpdatePR(workdir, prID, opts)
@@ -621,6 +647,18 @@ func buildIssueOptions(issues []pm.Issue) []tuicore.TagOption {
 	opts := make([]tuicore.TagOption, 0, len(issues))
 	for _, issue := range issues {
 		opts = append(opts, tuicore.TagOption{Label: issue.Subject, Value: issue.ID})
+	}
+	return opts
+}
+
+// buildPROptions converts open PRs to TagField options, excluding the PR being edited.
+func buildPROptions(prs []review.PullRequest, excludeID string) []tuicore.TagOption {
+	opts := make([]tuicore.TagOption, 0, len(prs))
+	for _, pr := range prs {
+		if pr.ID == excludeID {
+			continue
+		}
+		opts = append(opts, tuicore.TagOption{Label: pr.Subject, Value: pr.ID})
 	}
 	return opts
 }

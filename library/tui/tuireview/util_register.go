@@ -246,6 +246,10 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 	}
 	subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: stateStr})
 
+	if len(pr.DependsOn) > 0 {
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: "stacked"})
+	}
+
 	baseShort := shortenBranchRef(pr.Base)
 	headShort := shortenBranchRef(pr.Head)
 	if baseShort != "" && headShort != "" {

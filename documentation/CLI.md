@@ -383,6 +383,8 @@ gitsocial review pr create "Add feature"                       # Create PR
 gitsocial review pr create "Add feature" --base main --head feature/branch
 gitsocial review pr create "Fix bug" --closes "#commit:abc123@gitmsg/pm"
 gitsocial review pr create "Fix bug" --reviewers alice@x.com,bob@x.com
+gitsocial review pr create "Add routes" --depends-on "#commit:abc123@gitmsg/review"  # Stacked PR
+gitsocial review pr create "Add routes" --base feature/auth --stack               # Auto-detect stack parent
 gitsocial review pr create - < pr-description.md               # Read from stdin
 gitsocial review pr list                                       # List open PRs
 gitsocial review pr list --state merged                        # Filter by state
@@ -400,6 +402,9 @@ gitsocial review pr sync <ref>                                 # Sync head with 
 gitsocial review pr sync <ref> --strategy merge                # Merge base into head
 gitsocial review pr close <ref>                                # Close without merge
 gitsocial review pr retract <ref>                              # Retract
+gitsocial review pr stack <ref>                                # Show full stack from any member
+gitsocial review pr rebase-stack <ref>                         # Cascade rebase all PRs above this one
+gitsocial review pr sync-stack <ref>                           # Update branch tips for all open PRs in the stack
 ```
 
 **Version management:**
@@ -419,6 +424,15 @@ Reviews:
   ✓ bob@example.com      approved (reviewed v2, current is latest, no code changes)
   ✗ carol@example.com    changes requested (reviewed original, current is latest, code changed) [stale]
 ```
+
+**Stacked PRs:** Decompose a large change into an ordered chain of small PRs where each builds on the one below it.
+- `--depends-on <ref>` — explicit dependency on a parent PR
+- `--stack` — auto-detect parent by matching the new PR's base branch to an open PR's head branch
+- `pr merge` refuses to merge if any `depends-on` target is unmerged (enforces bottom-up order)
+- After merge, dependent PRs whose base matched the merged PR's head are auto-retargeted to the merged PR's base
+- `pr rebase-stack <ref>` — walks the stack upward from the given PR and rebases each dependent's head onto its base
+- `pr sync-stack <ref>` — snapshots current branch tips for all open PRs in the stack (no rebase)
+- `pr stack <ref>` — shows the full stack from any member with state icons and position
 
 ### Feedback
 

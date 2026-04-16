@@ -139,6 +139,7 @@ func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 		BaseTip:          cache.ToNullString(msg.Header.Fields["base-tip"]),
 		Head:             cache.ToNullString(head),
 		HeadTip:          cache.ToNullString(msg.Header.Fields["head-tip"]),
+		DependsOn:        cache.ToNullString(msg.Header.Fields["depends-on"]),
 		Closes:           cache.ToNullString(msg.Header.Fields["closes"]),
 		Reviewers:        cache.ToNullString(msg.Header.Fields["reviewers"]),
 		CommitRef:        cache.ToNullString(msg.Header.Fields["commit"]),

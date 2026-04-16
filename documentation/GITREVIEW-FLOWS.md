@@ -17,6 +17,7 @@ Usage scenarios for the review extension. Pull requests live on the author's rep
 - [Version Tracking and Review Staleness](#10-version-tracking-and-review-staleness)
 - [Merge Strategies](#11-merge-strategies)
 - [Branch Sync](#12-branch-sync)
+- [Stacked Pull Requests](#13-stacked-pull-requests)
 
 ---
 
@@ -481,3 +482,123 @@ Keep the head branch up-to-date with the base branch. `pr sync` rebases or merge
 ```
 
 After sync, the version history shows the rebase via range-diff. Reviewers can see what changed (if anything) between the pre-sync and post-sync versions.
+
+---
+
+## 13. Stacked Pull Requests
+
+Decompose a large change into an ordered chain of small PRs. Each PR builds on the one below it — the bottom targets `main`, each subsequent PR targets the previous PR's branch. The `depends-on` field makes the relationship explicit so it survives branch renames and works across forges.
+
+```
+    Alice                              Bob
+      │                                 │
+      ●  push auth-middleware           │
+      ●  pr create PR1                  │
+      │  base=main, head=auth-middleware│
+      │                                 │
+      ●  push auth-routes               │
+      ●  pr create PR2 --stack          │
+      │  base=auth-middleware           │
+      │  head=auth-routes               │
+      │  → auto-sets depends-on=PR1     │
+      │                                 │
+      ●  push auth-tests                │
+      ●  pr create PR3 --stack          │
+      │  → auto-sets depends-on=PR2     │
+      │                                 │
+      │                                 ●  pr stack <PR2>
+      │                                 │  shows full chain
+      │                                 ●  review PR1, approve
+      │                                 │
+      ●  pr merge PR1                   │
+      │  → PR2 auto-retargets to main   │
+      │                                 │
+      ●  pr rebase-stack PR2            │
+      │  → rebases PR2, PR3 onto main   │
+      │                                 ●  review PR2, approve
+      │                                 │
+      ●  pr merge PR2                   │
+      │  → PR3 auto-retargets           │
+```
+
+### Messages
+
+**Alice creates PR1 (root of stack):**
+```
+Add auth middleware
+
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="a1b2c3d4e5f6"; head="#branch:auth-middleware"; head-tip="b2c3d4e5f6a7"; v="0.1.0"
+```
+
+**Alice creates PR2 (stacked on PR1):**
+```
+Add API routes for auth
+
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:auth-middleware"; base-tip="b2c3d4e5f6a7"; head="#branch:auth-routes"; head-tip="c3d4e5f6a7b8"; depends-on="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+ > Add auth middleware
+```
+
+**Alice merges PR1 — PR2 gets auto-retargeted:**
+
+After PR1 is merged, an edit commit is created for PR2 updating its base from `#branch:auth-middleware` to `#branch:main`:
+```
+Add API routes for auth
+
+GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789012@gitmsg/review"; state="open"; base="#branch:main"; base-tip="d4e5f6a7b8c9"; head="#branch:auth-routes"; head-tip="c3d4e5f6a7b8"; depends-on="#commit:abc123456789@gitmsg/review"; v="0.1.0"
+```
+
+The `depends-on` ref still points to the now-merged PR1 — the relationship is preserved as history. Only `base` changes to reflect the new merge target.
+
+### Stack Operations
+
+**View the full stack** from any member:
+```bash
+gitsocial review pr stack <any-member-ref>
+```
+```
+Stack (3 PRs):
+  ✓ #1  Add auth middleware          main ← auth-middleware         [merged]
+  ● #2  Add API routes for auth      auth-middleware ← auth-routes  [open]
+  ● #3  Add auth integration tests   auth-routes ← auth-tests       [open]
+```
+
+**Cascade rebase** — when you update a PR in the middle of a stack, rebase all PRs above it:
+```bash
+gitsocial review pr rebase-stack <pr-ref>
+```
+
+Walks up the chain via `depends-on`. For each dependent: rebases its head branch onto its base and creates an edit with updated tips. Stops on first conflict with a clear error identifying which PR failed.
+
+**Sync stack tips** — snapshot current branch tips for all open PRs (no rebase):
+```bash
+gitsocial review pr sync-stack <pr-ref>
+```
+
+### Merge Ordering
+
+`pr merge` refuses to merge a PR if any of its `depends-on` targets is unmerged. This enforces bottom-up order — you cannot merge PR2 while PR1 is still open.
+
+### Cross-Forge Stacks
+
+Because `depends-on` uses the standard ref format with optional repo URLs, stacks can span forges:
+
+```
+PR1 on GitHub:  base="#branch:main"; depends-on=(none)
+PR2 on GitLab:  base="https://github.com/org/repo#branch:auth-middleware";
+                 depends-on="https://github.com/org/repo#commit:abc123@gitmsg/review"
+```
+
+No forge needs to understand "stacks" natively. Stack metadata lives in the git commit, readable by any GitSocial implementation regardless of hosting.
+
+### Platform Import
+
+When importing PRs from GitHub or GitLab via `gitsocial import review`, stack relationships are auto-detected by matching base branches to head branches across imported PRs (same-repo, open PRs only). Each child PR gets an edit commit adding `depends-on` pointing to the parent.
+
+The detection logic is platform-agnostic: both `FetchReview` adapters populate `BaseBranch`, `HeadBranch`, and `HeadRepo` uniformly on `ImportPR`, so the same matching rules apply regardless of source.
+
+### TUI Support
+
+- **PR list:** Stacked PRs show a `stacked` badge in the subtitle
+- **PR detail:** A "Stack" section renders after the hero card listing all PRs in the chain with state icons and a current-PR marker
+- **Navigation:** `[` jumps to the previous PR in the stack, `]` jumps to the next — without leaving the detail view

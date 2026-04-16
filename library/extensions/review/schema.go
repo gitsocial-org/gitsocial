@@ -12,6 +12,9 @@ func init() {
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN draft INTEGER DEFAULT 0`)
 	})
+	cache.RegisterMigration(func(db *sql.DB) {
+		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN depends_on TEXT`)
+	})
 }
 
 const schema = `
@@ -73,6 +76,7 @@ SELECT
     COALESCE(le.base_tip, p.base_tip) as base_tip,
     COALESCE(le.head, p.head) as head,
     COALESCE(le.head_tip, p.head_tip) as head_tip,
+    COALESCE(le.depends_on, p.depends_on) as depends_on,
     COALESCE(le.closes, p.closes) as closes,
     COALESCE(le.reviewers, p.reviewers) as reviewers,
     COALESCE(le.pull_request_repo_url, p.pull_request_repo_url) as pull_request_repo_url,
@@ -93,7 +97,7 @@ INNER JOIN review_items p ON r.repo_url = p.repo_url AND r.hash = p.hash AND r.b
 LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch
 LEFT JOIN (
     SELECT v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
-           pe.type, pe.state, pe.draft, pe.base, pe.base_tip, pe.head, pe.head_tip, pe.closes, pe.reviewers,
+           pe.type, pe.state, pe.draft, pe.base, pe.base_tip, pe.head, pe.head_tip, pe.depends_on, pe.closes, pe.reviewers,
            pe.pull_request_repo_url, pe.pull_request_hash, pe.pull_request_branch,
            pe.commit_ref, pe.file, pe.old_line, pe.new_line, pe.old_line_end, pe.new_line_end,
            pe.review_state, pe.suggestion,

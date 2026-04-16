@@ -411,6 +411,8 @@
 | `/` | Search |
 | `left` | Prev |
 | `right` | Next |
+| `[` | Previous PR in stack |
+| `]` | Next PR in stack |
 | `p` | Push |
 
 ### PR History

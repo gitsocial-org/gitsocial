@@ -21,6 +21,7 @@ type CreatePROptions struct {
 	BaseTip   string
 	Head      string
 	HeadTip   string
+	DependsOn []string
 	Closes    []string
 	Reviewers []string
 	Labels    []string
@@ -38,6 +39,9 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 	opts.Head = protocol.EnsureBranchRef(opts.Head)
 	opts.Base = protocol.LocalizeRef(opts.Base, repoURL)
 	opts.Head = protocol.LocalizeRef(opts.Head, repoURL)
+	for i, ref := range opts.DependsOn {
+		opts.DependsOn[i] = protocol.LocalizeRef(ref, repoURL)
+	}
 	for i, ref := range opts.Closes {
 		opts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
 	}
@@ -113,6 +117,7 @@ type UpdatePROptions struct {
 	BaseTip   *string
 	Head      *string
 	HeadTip   *string
+	DependsOn *[]string
 	Closes    *[]string
 	Reviewers *[]string
 	Labels    *[]string
@@ -139,6 +144,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 		BaseTip:   pr.BaseTip,
 		Head:      pr.Head,
 		HeadTip:   pr.HeadTip,
+		DependsOn: pr.DependsOn,
 		Closes:    pr.Closes,
 		Reviewers: pr.Reviewers,
 		Labels:    pr.Labels,
@@ -171,6 +177,9 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	if opts.HeadTip != nil {
 		createOpts.HeadTip = *opts.HeadTip
 	}
+	if opts.DependsOn != nil {
+		createOpts.DependsOn = *opts.DependsOn
+	}
 	if opts.Closes != nil {
 		createOpts.Closes = *opts.Closes
 	}
@@ -198,6 +207,9 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	createOpts.Head = protocol.EnsureBranchRef(createOpts.Head)
 	createOpts.Base = protocol.LocalizeRef(createOpts.Base, repoURL)
 	createOpts.Head = protocol.LocalizeRef(createOpts.Head, repoURL)
+	for i, ref := range createOpts.DependsOn {
+		createOpts.DependsOn[i] = protocol.LocalizeRef(ref, repoURL)
+	}
 	for i, ref := range createOpts.Closes {
 		createOpts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
 	}
@@ -244,12 +256,26 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		return result.Err[PullRequest]("INVALID_TARGET", "cannot merge: pull request targets a different repository")
 	}
 
+	// Enforce merge ordering: all depends-on targets must be merged first
+	for _, depRef := range pr.DependsOn {
+		depResult := GetPR(depRef)
+		if !depResult.Success {
+			return result.Err[PullRequest]("UNMET_DEPENDENCY",
+				fmt.Sprintf("cannot merge: dependency %s not found", depRef))
+		}
+		if depResult.Data.State != PRStateMerged {
+			return result.Err[PullRequest]("UNMET_DEPENDENCY",
+				fmt.Sprintf("cannot merge: dependency \"%s\" is %s (must be merged first)", depResult.Data.Subject, depResult.Data.State))
+		}
+	}
+
 	// Copy fork PR to upstream review branch so the merge record is self-contained
 	if existing.RepoURL != repoURL {
 		branch := gitmsg.GetExtBranch(workdir, "review")
 		copyOpts := CreatePROptions{
 			Base:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
 			Head:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
+			DependsOn: pr.DependsOn,
 			Closes:    pr.Closes,
 			Reviewers: pr.Reviewers,
 		}
@@ -359,6 +385,10 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 			log.Debug("auto-close issue failed", "ref", closeRef, "error", closeResult.Error.Message)
 		}
 	}
+
+	// Auto-retarget dependent PRs: if another open PR depends on this one
+	// and its base matches the merged PR's head, retarget it to this PR's base
+	retargetDependents(workdir, res.Data)
 
 	return res
 }
@@ -576,6 +606,30 @@ func resolveRefTip(workdir, repoURL string, parsed protocol.ParsedRef) (string, 
 	return git.ReadRef(workdir, parsed.Value)
 }
 
+// retargetDependents finds open PRs that depend on the merged PR and retargets
+// their base from the merged PR's head to the merged PR's base.
+func retargetDependents(workdir string, merged PullRequest) {
+	dependents := GetDependents(merged.Repository, merged.Branch, extractRefHash(merged.ID))
+	for _, dep := range dependents {
+		if dep.State != PRStateOpen {
+			continue
+		}
+		// Only retarget if dependent's base matches the merged PR's head
+		if dep.Base != merged.Head {
+			continue
+		}
+		newBase := merged.Base
+		UpdatePR(workdir, dep.ID, UpdatePROptions{Base: &newBase})
+		log.Debug("auto-retarget dependent PR", "pr", dep.Subject, "new_base", newBase)
+	}
+}
+
+// extractRefHash extracts the hash from a ref string like "#commit:abc123@branch".
+func extractRefHash(ref string) string {
+	parsed := protocol.ParseRef(ref)
+	return parsed.Value
+}
+
 func buildPRContent(subject, body string, opts CreatePROptions, editsRef string) string {
 	return buildPRContentWithState(subject, body, opts, editsRef, PRStateOpen, nil)
 }
@@ -598,6 +652,9 @@ func buildPRContentWithState(subject, body string, opts CreatePROptions, editsRe
 	}
 	if opts.Base != "" {
 		fields["base"] = opts.Base
+	}
+	if len(opts.DependsOn) > 0 {
+		fields["depends-on"] = strings.Join(opts.DependsOn, ",")
 	}
 	if len(opts.Closes) > 0 {
 		fields["closes"] = strings.Join(opts.Closes, ",")

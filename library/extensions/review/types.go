@@ -18,7 +18,7 @@ const (
 )
 
 // Spec-defined field ordering per GITREVIEW.md
-var prFieldOrder = []string{"state", "draft", "base", "base-tip", "head", "head-tip", "closes", "merge-base", "merge-head", "reviewers", "labels"}
+var prFieldOrder = []string{"state", "draft", "base", "base-tip", "head", "head-tip", "depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels"}
 var feedbackFieldOrder = []string{"pull-request", "commit", "file", "new-line", "new-line-end", "old-line", "old-line-end", "review-state", "suggestion"}
 
 type PRState string
@@ -70,6 +70,7 @@ type PullRequest struct {
 	BaseTip        string
 	Head           string
 	HeadTip        string
+	DependsOn      []string
 	Closes         []string
 	Reviewers      []string
 	Labels         []string

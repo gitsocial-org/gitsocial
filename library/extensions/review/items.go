@@ -22,6 +22,7 @@ type ReviewItem struct {
 	BaseTip            sql.NullString
 	Head               sql.NullString
 	HeadTip            sql.NullString
+	DependsOn          sql.NullString
 	Closes             sql.NullString
 	Reviewers          sql.NullString
 	PullRequestRepoURL sql.NullString
@@ -55,7 +56,7 @@ type ReviewItem struct {
 const baseSelectFromView = `
 	SELECT v.repo_url, v.hash, v.branch,
 	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-	       v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.closes, v.reviewers,
+	       v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
 	       v.pull_request_repo_url, v.pull_request_hash, v.pull_request_branch,
 	       v.commit_ref, v.file, v.old_line, v.new_line, v.old_line_end, v.new_line_end,
 	       v.review_state, v.suggestion,
@@ -70,10 +71,10 @@ func InsertReviewItem(item ReviewItem) error {
 	return cache.ExecLocked(func(db *sql.DB) error {
 		_, err := db.Exec(`
 			INSERT INTO review_items
-			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, closes, reviewers,
+			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers,
 			 pull_request_repo_url, pull_request_hash, pull_request_branch,
 			 commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
 				type = excluded.type,
 				state = excluded.state,
@@ -82,6 +83,7 @@ func InsertReviewItem(item ReviewItem) error {
 				base_tip = excluded.base_tip,
 				head = excluded.head,
 				head_tip = excluded.head_tip,
+				depends_on = excluded.depends_on,
 				closes = excluded.closes,
 				reviewers = excluded.reviewers,
 				pull_request_repo_url = excluded.pull_request_repo_url,
@@ -96,7 +98,7 @@ func InsertReviewItem(item ReviewItem) error {
 				review_state = excluded.review_state,
 				suggestion = excluded.suggestion`,
 			item.RepoURL, item.Hash, item.Branch,
-			item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.Closes, item.Reviewers,
+			item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.DependsOn, item.Closes, item.Reviewers,
 			item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch,
 			item.CommitRef, item.File, item.OldLine, item.NewLine, item.OldLineEnd, item.NewLineEnd,
 			item.ReviewStateField, item.Suggestion,
@@ -118,10 +120,10 @@ func InsertReviewItems(items []ReviewItem) error {
 		defer func() { _ = tx.Rollback() }()
 		stmt, err := tx.Prepare(`
 			INSERT INTO review_items
-			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, closes, reviewers,
+			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers,
 			 pull_request_repo_url, pull_request_hash, pull_request_branch,
 			 commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
 				type = excluded.type,
 				state = excluded.state,
@@ -130,6 +132,7 @@ func InsertReviewItems(items []ReviewItem) error {
 				base_tip = excluded.base_tip,
 				head = excluded.head,
 				head_tip = excluded.head_tip,
+				depends_on = excluded.depends_on,
 				closes = excluded.closes,
 				reviewers = excluded.reviewers,
 				pull_request_repo_url = excluded.pull_request_repo_url,
@@ -150,7 +153,7 @@ func InsertReviewItems(items []ReviewItem) error {
 		for _, item := range items {
 			_, err := stmt.Exec(
 				item.RepoURL, item.Hash, item.Branch,
-				item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.Closes, item.Reviewers,
+				item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.DependsOn, item.Closes, item.Reviewers,
 				item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch,
 				item.CommitRef, item.File, item.OldLine, item.NewLine, item.OldLineEnd, item.NewLineEnd,
 				item.ReviewStateField, item.Suggestion,
@@ -509,7 +512,7 @@ func scanResolvedRow(row *sql.Row) (*ReviewItem, error) {
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.Closes, &item.Reviewers,
+		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
 		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
 		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
 		&item.ReviewStateField, &item.Suggestion,
@@ -531,7 +534,7 @@ func scanResolvedRows(rows *sql.Rows) (*ReviewItem, error) {
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.Closes, &item.Reviewers,
+		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
 		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
 		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
 		&item.ReviewStateField, &item.Suggestion,
@@ -589,6 +592,7 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 		BaseTip:     nullStr(item.BaseTip),
 		Head:        nullStr(item.Head),
 		HeadTip:     nullStr(item.HeadTip),
+		DependsOn:   parseCSV(nullStr(item.DependsOn)),
 		Closes:      parseCSV(nullStr(item.Closes)),
 		Reviewers:   parseCSV(nullStr(item.Reviewers)),
 		Labels:      parseCSV(nullStr(item.Labels)),

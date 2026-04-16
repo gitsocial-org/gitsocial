@@ -22,13 +22,14 @@ Fields (in header order):
 - `base-tip`: Base branch commit hash at time of creation or update, 12 characters (OPTIONAL)
 - `head`: Source branch reference (`<repo-url>#branch:<name>` or `#branch:<name>`)
 - `head-tip`: Head branch commit hash at time of creation or update, 12 characters (OPTIONAL)
+- `depends-on`: MAY contain comma-separated pull request references that this PR depends on (OPTIONAL)
 - `closes`: MAY contain comma-separated issue references to close on merge
 - `merge-base`: Common ancestor commit hash, 12 characters (OPTIONAL, only on `state="merged"` edits)
 - `merge-head`: Head branch commit hash at merge time, 12 characters (OPTIONAL, only on `state="merged"` edits)
 - `reviewers`: MAY contain comma-separated reviewer email addresses
 - `labels`: MAY contain comma-separated scoped values (e.g. `labels="kind/bug,priority/high"`) (OPTIONAL, core field)
 
-Field order: `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`.
+Field order: `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `depends-on`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`.
 
 The `head` and `base` fields support full repository URLs, enabling cross-forge contributions (e.g., GitLab to GitHub).
 
@@ -54,6 +55,8 @@ Inline feedback (with code-location fields) MUST include `file`, `commit`, and a
 ### 1.4. Message Rules
 
 - Pull requests with `closes` SHOULD auto-close referenced issues when merged via core versioning
+- Pull requests with `depends-on` SHOULD NOT be merged until all referenced PRs are merged. Implementations SHOULD enforce bottom-up merge ordering within a stack
+- When a pull request with dependents is merged, implementations SHOULD retarget dependent PRs whose `base` matches the merged PR's `head` to point to the merged PR's `base` instead
 - Suggestions MUST include the replacement code in the message body as a fenced code block (`` ```suggestion ... ``` ``)
 
 ### 1.5. Editing and Retracting
@@ -127,7 +130,7 @@ Configuration MAY include: `require-review` (boolean, default `false`).
   "display": "GitReview",
   "description": "Code contribution and review extension for GitMsg",
   "types": ["pull-request", "feedback"],
-  "fields": ["base", "base-tip", "closes", "commit", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
+  "fields": ["base", "base-tip", "closes", "commit", "depends-on", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
 }
 ```
 
@@ -145,6 +148,7 @@ Configuration MAY include: `require-review` (boolean, default `false`).
 | `new-line-end` | positive integer, 1-indexed |
 | `commit` | 12-character hash |
 | `reviewers` | comma-delimited email addresses |
+| `depends-on` | comma-separated pull request references |
 | `closes` | comma-separated issue references |
 | `base-tip` | 12-character hash |
 | `head-tip` | 12-character hash |

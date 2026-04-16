@@ -125,7 +125,7 @@ extensions/* → core/* → stdlib only
 | `extensions/social` | Social layer | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
 | `extensions/pm` | Project management | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
 | `extensions/release` | Release management | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
-| `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `Processors` |
+| `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
 | `import` | Platform import pipeline | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github` | GitHub adapter | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
 
@@ -141,7 +141,7 @@ extensions/* → core/* → stdlib only
 | `social.Post`, `SocialItem` | `library/extensions/social/` |
 | `pm.Issue`, `Milestone`, `Sprint`, `PMNotification` | `library/extensions/pm/` |
 | `release.Release`, `ReleaseItem`, `ReleaseNotification` | `library/extensions/release/` |
-| `review.PullRequest`, `Feedback`, `ReviewSummary`, `ReviewNotification` | `library/extensions/review/` |
+| `review.PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `library/extensions/review/` |
 | `importpkg.SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `library/import/` |
 
 ### Terminology
@@ -266,7 +266,7 @@ type View interface {
 - `release_items(repo_url, hash, branch, tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom)` - PK: `(repo_url, hash, branch)`
 
 **Review extension:**
-- `review_items(repo_url, hash, branch, type, state, base, base_tip, head, head_tip, closes, reviewers, pull_request_*, commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)` - PK: `(repo_url, hash, branch)`
+- `review_items(repo_url, hash, branch, type, state, base, base_tip, head, head_tip, depends_on, closes, reviewers, pull_request_*, commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)` - PK: `(repo_url, hash, branch)`
 
 **Versioning:** `core_commits.edits` stores raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical()` / `cache.GetLatestVersion()`.
 

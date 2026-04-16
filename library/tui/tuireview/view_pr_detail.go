@@ -40,6 +40,7 @@ type PRDetailView struct {
 	workspaceURL   string
 	focusID        string
 	reviewComments map[int][]social.Post
+	stack          []review.StackEntry
 	behindCount    int
 	versionReviews []review.VersionAwareReview
 	confirm        tuicore.ConfirmDialog
@@ -180,7 +181,11 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 		if _, ok := unpushed[hash]; ok {
 			pr.IsUnpushed = true
 		}
-		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments}
+		var stack []review.StackEntry
+		if stackRes := review.GetStack(prID); stackRes.Success {
+			stack = stackRes.Data
+		}
+		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments, stack: stack}
 	}
 }
 
@@ -210,6 +215,7 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 		}
 		v.comments = msg.comments
+		v.stack = msg.stack
 		prevSelected := v.sectionList.Selected()
 		v.buildSections()
 		if preserveCursor {
@@ -266,6 +272,10 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				return v.navigateSource(state, -1)
 			case "right":
 				return v.navigateSource(state, 1)
+			case "]":
+				return v.navigateStack(1)
+			case "[":
+				return v.navigateStack(-1)
 			case "M":
 				if v.pr != nil && v.pr.State == review.PRStateOpen && !v.pr.IsDraft && v.targetsWorkspace() {
 					v.choice.Show("Merge strategy?", []tuicore.Choice{
@@ -387,6 +397,34 @@ func (v *PRDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd 
 	}
 }
 
+// navigateStack navigates to an adjacent PR in the current stack.
+func (v *PRDetailView) navigateStack(offset int) tea.Cmd {
+	if v.pr == nil || len(v.stack) < 2 {
+		return nil
+	}
+	currentIdx := -1
+	for i, entry := range v.stack {
+		if entry.PullRequest.ID == v.pr.ID {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx < 0 {
+		return nil
+	}
+	targetIdx := currentIdx + offset
+	if targetIdx < 0 || targetIdx >= len(v.stack) {
+		return nil
+	}
+	targetID := v.stack[targetIdx].PullRequest.ID
+	return func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocReviewPRDetail(targetID),
+			Action:   tuicore.NavReplace,
+		}
+	}
+}
+
 // IsInputActive returns true when confirmation or search input is active.
 func (v *PRDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.choice.IsActive() || v.sectionList.IsInputActive()
@@ -422,6 +460,12 @@ func (v *PRDetailView) resolveCurrentReview() (feedbackIdx, commentIdx int) {
 	if v.pr != nil {
 		secIdx++ // PR detail
 	}
+	if len(v.stack) > 0 {
+		if secIdx == sec {
+			return -1, -1
+		}
+		secIdx++
+	}
 	if len(v.commits) > 0 {
 		if secIdx == sec {
 			return -1, -1
@@ -445,8 +489,8 @@ func (v *PRDetailView) focusToID() {
 	// Try comments first
 	for i, c := range v.comments {
 		if c.ID == v.focusID {
-			// Comments offset: 1 (PR) + commits + reviewItems + i
-			offset := 1 + len(v.commits) + len(v.reviewFlatMap) + i
+			// Comments offset: 1 (PR) + stack + commits + reviewItems + i
+			offset := 1 + len(v.stack) + len(v.commits) + len(v.reviewFlatMap) + i
 			v.sectionList.SetSelected(offset)
 			return
 		}
@@ -454,7 +498,7 @@ func (v *PRDetailView) focusToID() {
 	// Try reviews
 	for i, r := range v.reviews {
 		if r.ID == v.focusID {
-			offset := 1 + len(v.commits)
+			offset := 1 + len(v.stack) + len(v.commits)
 			for j, entry := range v.reviewFlatMap {
 				if entry[0] == i && entry[1] == -1 {
 					v.sectionList.SetSelected(offset + j)
@@ -467,7 +511,7 @@ func (v *PRDetailView) focusToID() {
 	for i, comments := range v.reviewComments {
 		for j, c := range comments {
 			if c.ID == v.focusID {
-				offset := 1 + len(v.commits)
+				offset := 1 + len(v.stack) + len(v.commits)
 				for k, entry := range v.reviewFlatMap {
 					if entry[0] == i && entry[1] == j {
 						v.sectionList.SetSelected(offset + k)
@@ -577,6 +621,33 @@ func (v *PRDetailView) buildSections() {
 			},
 		}},
 	})
+	// Stack section
+	if len(v.stack) > 0 {
+		label := fmt.Sprintf(" Stack (%d)", len(v.stack))
+		items := make([]tuicore.SectionItem, 0, len(v.stack))
+		for _, entry := range v.stack {
+			entry := entry
+			items = append(items, tuicore.SectionItem{
+				Render: func(width int, selected bool, searchQuery string, _ *tuicore.AnchorCollector) []string {
+					return v.renderStackRow(entry, width, selected, searchQuery)
+				},
+				SearchText: func() string { return entry.PullRequest.Subject },
+				OnActivate: func() tea.Cmd {
+					targetID := entry.PullRequest.ID
+					if pr != nil && targetID == pr.ID {
+						return nil
+					}
+					return func() tea.Msg {
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocReviewPRDetail(targetID),
+							Action:   tuicore.NavReplace,
+						}
+					}
+				},
+			})
+		}
+		sections = append(sections, tuicore.Section{Label: label, Items: items})
+	}
 	// Commits section
 	if len(v.commits) > 0 {
 		label := fmt.Sprintf(" Commits (%d)", len(v.commits))
@@ -1031,6 +1102,46 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 	return lines
 }
 
+func (v *PRDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string) []string {
+	selectionBar := " "
+	if selected {
+		selectionBar = tuicore.Title.Render("▏")
+	}
+	pr := entry.PullRequest
+	stateIcon := "  "
+	switch pr.State {
+	case review.PRStateMerged:
+		stateIcon = "✓ "
+	case review.PRStateClosed:
+		stateIcon = "✗ "
+	case review.PRStateOpen:
+		if pr.IsDraft {
+			stateIcon = "◌ "
+		} else {
+			stateIcon = "● "
+		}
+	}
+	currentMarker := "  "
+	if v.pr != nil && v.pr.ID == pr.ID {
+		currentMarker = tuicore.Title.Render("▸ ")
+	}
+	position := fmt.Sprintf("#%d", entry.Position+1)
+	subject := pr.Subject
+	if searchQuery != "" {
+		subject = tuicore.HighlightInText(subject, searchQuery)
+	}
+	branches := fmt.Sprintf("%s ← %s", shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
+	line := fmt.Sprintf("%s%s%s  %s  %s  %s",
+		currentMarker,
+		stateIcon,
+		tuicore.Dim.Render(position),
+		subject,
+		tuicore.Dim.Render(branches),
+		tuicore.Dim.Render("["+string(pr.State)+"]"),
+	)
+	return []string{selectionBar + line}
+}
+
 func (v *PRDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
@@ -1295,6 +1406,8 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "[", Label: "stack prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "]", Label: "stack next", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: push},
 	}
 }
@@ -1304,6 +1417,7 @@ type prDetailLoadedMsg struct {
 	reviews        []review.Feedback
 	reviewComments map[int][]social.Post
 	comments       []social.Post
+	stack          []review.StackEntry
 }
 
 type prDetailDiffMsg struct {

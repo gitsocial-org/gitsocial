@@ -189,6 +189,13 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 				stats.UpdatedPRs += u.UpdatedPRs
 				stats.Errors = append(stats.Errors, u.Errors...)
 			}
+			// Stack detection runs after both new imports and updates so newly stacked
+			// relationships (e.g., when a child PR is added to an existing parent on the
+			// platform between runs) are picked up incrementally. Idempotent.
+			if !opts.DryRun {
+				stackErrs := applyStackRelationships(opts, plan, mapping)
+				stats.Errors = append(stats.Errors, stackErrs...)
+			}
 		}
 		flushMapping(opts, mapping)
 		progress("review", PhaseDone, stats, 0, 0, "")
@@ -801,6 +808,88 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		}
 	}
 	return stats
+}
+
+// stackEdge represents a detected parent/child stack relationship between two PRs.
+type stackEdge struct {
+	ChildExternalID  string
+	ParentExternalID string
+}
+
+// detectStackEdges finds same-repo PRs whose base branch matches another PR's head branch.
+// Returns parent/child pairs (ChildExternalID depends on ParentExternalID).
+// Only considers open PRs — stack operations don't apply to merged/closed.
+// Platform-agnostic: operates purely on ImportPR fields populated by any adapter.
+func detectStackEdges(prs []ImportPR) []stackEdge {
+	if len(prs) == 0 {
+		return nil
+	}
+	byHead := make(map[string]ImportPR)
+	for _, pr := range prs {
+		if pr.HeadRepo != "" {
+			continue
+		}
+		if _, exists := byHead[pr.HeadBranch]; !exists {
+			byHead[pr.HeadBranch] = pr
+		}
+	}
+	var edges []stackEdge
+	for _, pr := range prs {
+		if pr.State != "open" || pr.HeadRepo != "" {
+			continue
+		}
+		parent, ok := byHead[pr.BaseBranch]
+		if !ok || parent.Number == pr.Number {
+			continue
+		}
+		edges = append(edges, stackEdge{
+			ChildExternalID:  pr.ExternalID,
+			ParentExternalID: parent.ExternalID,
+		})
+	}
+	return edges
+}
+
+// applyStackRelationships detects stack dependencies and creates edit commits
+// adding depends-on to each child PR. Platform-agnostic — works for GitHub,
+// GitLab, and any other adapter that populates ImportPR uniformly. Idempotent:
+// skips PRs that already have the correct depends-on, enabling safe re-runs
+// during --update mode.
+func applyStackRelationships(opts Options, plan *ReviewPlan, mapping *MappingFile) []ImportError {
+	edges := detectStackEdges(plan.PRs)
+	if len(edges) == 0 {
+		return nil
+	}
+	platform := mapping.Source
+	branch := gitmsg.GetExtBranch(opts.WorkDir, "review")
+	var errors []ImportError
+	var applied int
+	for _, edge := range edges {
+		childHash := mapping.GetHash(MappingKey(platform, "pr", edge.ChildExternalID))
+		parentHash := mapping.GetHash(MappingKey(platform, "pr", edge.ParentExternalID))
+		if childHash == "" || parentHash == "" {
+			continue
+		}
+		childRef := protocol.CreateRef(protocol.RefTypeCommit, childHash, "", branch)
+		parentRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", branch)
+		// Idempotency: skip if child already has exactly this depends-on.
+		if existing := review.GetPR(childRef); existing.Success {
+			if len(existing.Data.DependsOn) == 1 && existing.Data.DependsOn[0] == parentRef {
+				continue
+			}
+		}
+		deps := []string{parentRef}
+		res := review.UpdatePR(opts.WorkDir, childRef, review.UpdatePROptions{DependsOn: &deps})
+		if !res.Success {
+			errors = append(errors, ImportError{ExternalID: edge.ChildExternalID, Type: "pr-stack", Message: res.Error.Message})
+			continue
+		}
+		applied++
+	}
+	if opts.Verbose && applied > 0 {
+		fmt.Printf("  review  linked %d stacked PR(s) via depends-on\n", applied)
+	}
+	return errors
 }
 
 func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {

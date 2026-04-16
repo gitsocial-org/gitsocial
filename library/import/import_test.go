@@ -180,3 +180,103 @@ func TestParseEmailMap_FileNotFound(t *testing.T) {
 		t.Error("expected error for missing file")
 	}
 }
+
+func TestDetectStackEdges_LinearStack(t *testing.T) {
+	prs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "main", HeadBranch: "auth-middleware"},
+		{ExternalID: "2", Number: 2, State: "open", BaseBranch: "auth-middleware", HeadBranch: "auth-routes"},
+		{ExternalID: "3", Number: 3, State: "open", BaseBranch: "auth-routes", HeadBranch: "auth-tests"},
+	}
+	edges := detectStackEdges(prs)
+	if len(edges) != 2 {
+		t.Fatalf("expected 2 edges, got %d: %+v", len(edges), edges)
+	}
+	// PR2 depends on PR1
+	if edges[0].ChildExternalID != "2" || edges[0].ParentExternalID != "1" {
+		t.Errorf("edge[0] = %+v, want child=2 parent=1", edges[0])
+	}
+	// PR3 depends on PR2
+	if edges[1].ChildExternalID != "3" || edges[1].ParentExternalID != "2" {
+		t.Errorf("edge[1] = %+v, want child=3 parent=2", edges[1])
+	}
+}
+
+func TestDetectStackEdges_PlatformAgnostic(t *testing.T) {
+	// Same branch topology imported from GitLab should yield identical edges.
+	// ExternalID format differs per platform (GitHub: PR number, GitLab: MR IID) but
+	// detectStackEdges only cares about the branch structure.
+	gitlabPRs := []ImportPR{
+		{ExternalID: "101", Number: 101, State: "open", BaseBranch: "main", HeadBranch: "feature-a"},
+		{ExternalID: "102", Number: 102, State: "open", BaseBranch: "feature-a", HeadBranch: "feature-b"},
+	}
+	githubPRs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "main", HeadBranch: "feature-a"},
+		{ExternalID: "2", Number: 2, State: "open", BaseBranch: "feature-a", HeadBranch: "feature-b"},
+	}
+	gitlabEdges := detectStackEdges(gitlabPRs)
+	githubEdges := detectStackEdges(githubPRs)
+	if len(gitlabEdges) != 1 || len(githubEdges) != 1 {
+		t.Fatalf("both platforms should produce 1 edge each, got gitlab=%d github=%d", len(gitlabEdges), len(githubEdges))
+	}
+	if gitlabEdges[0].ChildExternalID != "102" || gitlabEdges[0].ParentExternalID != "101" {
+		t.Errorf("gitlab edge = %+v", gitlabEdges[0])
+	}
+	if githubEdges[0].ChildExternalID != "2" || githubEdges[0].ParentExternalID != "1" {
+		t.Errorf("github edge = %+v", githubEdges[0])
+	}
+}
+
+func TestDetectStackEdges_ExcludesForks(t *testing.T) {
+	prs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "main", HeadBranch: "feature-a"},
+		{ExternalID: "2", Number: 2, State: "open", BaseBranch: "feature-a", HeadBranch: "feature-b", HeadRepo: "https://gitlab.com/fork/repo"},
+	}
+	edges := detectStackEdges(prs)
+	if len(edges) != 0 {
+		t.Errorf("fork PR should not produce stack edge, got %+v", edges)
+	}
+}
+
+func TestDetectStackEdges_ExcludesClosed(t *testing.T) {
+	prs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "main", HeadBranch: "feature-a"},
+		{ExternalID: "2", Number: 2, State: "closed", BaseBranch: "feature-a", HeadBranch: "feature-b"},
+		{ExternalID: "3", Number: 3, State: "merged", BaseBranch: "feature-a", HeadBranch: "feature-c"},
+	}
+	edges := detectStackEdges(prs)
+	if len(edges) != 0 {
+		t.Errorf("closed/merged PRs should not produce stack edges, got %+v", edges)
+	}
+}
+
+func TestDetectStackEdges_NoSelfReference(t *testing.T) {
+	// A PR whose base matches its own head (degenerate/invalid data) must not self-link.
+	prs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "feature-a", HeadBranch: "feature-a"},
+	}
+	edges := detectStackEdges(prs)
+	if len(edges) != 0 {
+		t.Errorf("self-referencing PR should not produce edge, got %+v", edges)
+	}
+}
+
+func TestDetectStackEdges_Empty(t *testing.T) {
+	if edges := detectStackEdges(nil); edges != nil {
+		t.Errorf("nil input should return nil, got %+v", edges)
+	}
+	if edges := detectStackEdges([]ImportPR{}); edges != nil {
+		t.Errorf("empty input should return nil, got %+v", edges)
+	}
+}
+
+func TestDetectStackEdges_NoMatch(t *testing.T) {
+	// Two PRs targeting main independently — no stack relationship.
+	prs := []ImportPR{
+		{ExternalID: "1", Number: 1, State: "open", BaseBranch: "main", HeadBranch: "feature-a"},
+		{ExternalID: "2", Number: 2, State: "open", BaseBranch: "main", HeadBranch: "feature-b"},
+	}
+	edges := detectStackEdges(prs)
+	if len(edges) != 0 {
+		t.Errorf("independent PRs should not produce edges, got %+v", edges)
+	}
+}

@@ -143,13 +143,16 @@ func newReviewPRCmd() *cobra.Command {
 		newReviewPRSyncCmd(),
 		newReviewPRReadyCmd(),
 		newReviewPRDraftCmd(),
+		newReviewPRStackCmd(),
+		newReviewPRRebaseStackCmd(),
+		newReviewPRSyncStackCmd(),
 	)
 	return cmd
 }
 
 func newReviewPRCreateCmd() *cobra.Command {
-	var base, head, closesStr, reviewersStr string
-	var draft bool
+	var base, head, dependsOnStr, closesStr, reviewersStr string
+	var draft, stack bool
 
 	cmd := &cobra.Command{
 		Use:   "create <subject>",
@@ -172,10 +175,32 @@ func newReviewPRCreateCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
+			// Auto-detect stack relationship from base branch matching
+			if stack && dependsOnStr == "" && base != "" {
+				if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "ext", "review", "error", err)
+				}
+				normalizedBase := protocol.EnsureBranchRef(base)
+				normalizedBase = protocol.LocalizeRef(normalizedBase, gitmsg.ResolveRepoURL(cfg.WorkDir))
+				matches := review.FindPRByHead(normalizedBase)
+				switch len(matches) {
+				case 1:
+					dependsOnStr = matches[0].ID
+				case 0:
+					// No match — not an error, base may target trunk
+				default:
+					PrintError(cmd, fmt.Sprintf("--stack: %d open PRs have head=%s, use --depends-on to specify which", len(matches), base))
+					os.Exit(ExitInvalidArgs)
+				}
+			}
+
 			opts := review.CreatePROptions{
 				Base:  base,
 				Head:  head,
 				Draft: draft,
+			}
+			if dependsOnStr != "" {
+				opts.DependsOn = splitCSV(dependsOnStr)
 			}
 			if closesStr != "" {
 				opts.Closes = splitCSV(closesStr)
@@ -202,6 +227,8 @@ func newReviewPRCreateCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&base, "base", "", "Target branch ref (e.g., #branch:main)")
 	cmd.Flags().StringVar(&head, "head", "", "Source branch ref (e.g., #branch:feature)")
+	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "PR refs this depends on (comma-separated)")
+	cmd.Flags().BoolVar(&stack, "stack", false, "Auto-detect depends-on from base branch matching")
 	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated)")
 	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer email addresses (comma-separated)")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as a draft pull request")
@@ -636,6 +663,110 @@ func newReviewPRDraftCmd() *cobra.Command {
 	}
 }
 
+func newReviewPRStackCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stack <pr-ref>",
+		Short: "Show the full stack for a pull request",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "review", "error", err)
+			}
+			result := review.GetStack(args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				fmt.Printf("Stack (%d PRs):\n", len(result.Data))
+				for _, entry := range result.Data {
+					pr := entry.PullRequest
+					icon := "  "
+					switch pr.State {
+					case review.PRStateMerged:
+						icon = "✓ "
+					case review.PRStateClosed:
+						icon = "✗ "
+					case review.PRStateOpen:
+						if pr.IsDraft {
+							icon = "◌ "
+						} else {
+							icon = "● "
+						}
+					}
+					baseShort := shortenBranchRef(pr.Base)
+					headShort := shortenBranchRef(pr.Head)
+					fmt.Printf("  %s#%-2d %s  %s ← %s  [%s]\n",
+						icon, entry.Position+1, pr.Subject, baseShort, headShort, pr.State)
+				}
+			}
+		},
+	}
+}
+
+func newReviewPRRebaseStackCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rebase-stack <pr-ref>",
+		Short: "Cascade rebase all PRs above this one in the stack",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "review", "error", err)
+			}
+			result := review.RebaseStack(cfg.WorkDir, args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				for _, pr := range result.Data {
+					fmt.Printf("  Rebased: %s (%s ← %s)\n", pr.Subject, shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
+				}
+				PrintSuccess(cmd, fmt.Sprintf("Rebased %d PR(s) in the stack", len(result.Data)))
+			}
+		},
+	}
+}
+
+func newReviewPRSyncStackCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sync-stack <pr-ref>",
+		Short: "Update branch tips for all open PRs in the stack",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "review", "error", err)
+			}
+			result := review.SyncStackTips(cfg.WorkDir, args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				PrintSuccess(cmd, fmt.Sprintf("Updated tips for %d PR(s)", len(result.Data)))
+			}
+		},
+	}
+}
+
 // --- feedback ---
 
 func newReviewFeedbackCmd() *cobra.Command {
@@ -937,6 +1068,9 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 	}
 	if len(pr.Reviewers) > 0 {
 		fmt.Printf("Reviewers: %s\n", strings.Join(pr.Reviewers, ", "))
+	}
+	if len(pr.DependsOn) > 0 {
+		fmt.Printf("Depends on: %s\n", strings.Join(pr.DependsOn, ", "))
 	}
 	if len(pr.Closes) > 0 {
 		fmt.Printf("Closes: %s\n", strings.Join(pr.Closes, ", "))
