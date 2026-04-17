@@ -78,18 +78,30 @@ func getLocalGitMsgRefs(workdir string) (map[string]string, error) {
 	return parseRefOutput(result.Stdout), nil
 }
 
-// getRemoteGitMsgRefs returns all remote gitmsg refs with their hashes.
+// getRemoteGitMsgRefs returns remote gitmsg refs from locally-tracked remote branches.
+// Uses for-each-ref on refs/remotes/origin/gitmsg/ instead of ls-remote to avoid network calls.
 func getRemoteGitMsgRefs(workdir string) (map[string]string, error) {
 	result, err := git.ExecGit(workdir, []string{
-		"ls-remote",
-		"origin",
-		"refs/gitmsg/*",
+		"for-each-ref",
+		"--format=%(refname) %(objectname)",
+		"refs/remotes/origin/gitmsg/",
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return parseRemoteOutput(result.Stdout), nil
+	// Convert refs/remotes/origin/gitmsg/X → refs/gitmsg/X to match local ref format
+	raw := parseRefOutput(result.Stdout)
+	refs := make(map[string]string, len(raw))
+	for ref, hash := range raw {
+		local := strings.TrimPrefix(ref, "refs/remotes/origin/")
+		if local != ref {
+			refs["refs/"+local] = hash
+		} else {
+			refs[ref] = hash
+		}
+	}
+	return refs, nil
 }
 
 // parseRefOutput parses for-each-ref output into a map.

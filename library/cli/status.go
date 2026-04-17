@@ -10,19 +10,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/extensions/social"
 )
 
 type statusData struct {
-	Repository    string              `json:"repository"`
-	Notifications *notificationStatus `json:"notifications,omitempty"`
-	Cache         *cacheStatus        `json:"cache,omitempty"`
-	Social        *social.StatusData  `json:"social,omitempty"`
-}
-
-type notificationStatus struct {
-	Unread int `json:"unread"`
+	Repository string             `json:"repository"`
+	Cache      *cacheStatus       `json:"cache,omitempty"`
+	Social     *social.StatusData `json:"social,omitempty"`
 }
 
 type cacheStatus struct {
@@ -60,11 +54,7 @@ func getStatusData(cfg *Config) statusData {
 		Repository: getRemoteURL(cfg.WorkDir),
 	}
 
-	if count, err := notifications.GetUnreadCount(cfg.WorkDir); err == nil && count > 0 {
-		status.Notifications = &notificationStatus{Unread: count}
-	}
-
-	if cacheStats, err := cache.GetStats(cfg.CacheDir); err == nil && cacheStats != nil {
+	if cacheStats, err := cache.GetStatsLite(cfg.CacheDir); err == nil && cacheStats != nil {
 		status.Cache = &cacheStatus{
 			Location:     cacheStats.Location,
 			SizeBytes:    cacheStats.TotalBytes,
@@ -95,10 +85,6 @@ func getRemoteURL(workdir string) string {
 // printStatus prints the status data to stdout.
 func printStatus(s statusData) {
 	fmt.Printf("Repository: %s\n", s.Repository)
-
-	if s.Notifications != nil {
-		fmt.Printf("Notifications: %d unread\n", s.Notifications.Unread)
-	}
 
 	if s.Cache != nil {
 		fmt.Println()

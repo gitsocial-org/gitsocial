@@ -41,6 +41,46 @@ type ExtensionStats struct {
 	BySource  map[string]int `json:"bySource"`
 }
 
+// GetStatsLite returns cache stats without filesystem walks. Uses os.Stat for
+// file sizes and os.ReadDir for directory counts — no recursive traversal.
+func GetStatsLite(cacheDir string) (*CacheStats, error) {
+	stats := &CacheStats{
+		Location: cacheDir,
+	}
+
+	dbPath := filepath.Join(cacheDir, "cache.db")
+	if info, err := os.Stat(dbPath); err == nil {
+		stats.DbSizeBytes = info.Size()
+	}
+	stats.TotalBytes = stats.DbSizeBytes
+
+	if entries, err := os.ReadDir(filepath.Join(cacheDir, "repositories")); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				stats.Repositories++
+			}
+		}
+	}
+	if entries, err := os.ReadDir(filepath.Join(cacheDir, "forks")); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				stats.ForkCount++
+			}
+		}
+	}
+
+	mu.RLock()
+	if db != nil {
+		row := db.QueryRow("SELECT COUNT(*) FROM core_commits")
+		if err := row.Scan(&stats.Items); err != nil {
+			slog.Debug("stats lite scan commit count", "error", err)
+		}
+	}
+	mu.RUnlock()
+
+	return stats, nil
+}
+
 // GetStats collects overall cache statistics including size and counts.
 func GetStats(cacheDir string) (*CacheStats, error) {
 	stats := &CacheStats{
