@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
@@ -48,47 +49,26 @@ Examples:
 				}
 			}
 
-			// Try review (PR)
-			if prResult := review.GetPR(bareRef); prResult.Success {
-				pr := prResult.Data
-				pr.ReviewSummary = review.GetReviewSummary(pr.Repository, extractHash(pr.ID), pr.Branch, pr.Reviewers)
-				if cfg.JSONOutput {
-					PrintJSON(pr)
-				} else {
-					printPRDetails(cfg.WorkDir, pr)
+			// Fast dispatch: detect which extension owns this hash via raw table lookup,
+			// then call only the matching getter instead of trying all 4 sequentially.
+			if hits, err := cache.DetectExtension(bareRef); err == nil && len(hits) > 0 {
+				if showByExtension(cmd, cfg, bareRef, workspaceURL, hits[0]) {
+					return
 				}
-				return
 			}
 
-			// Try PM (issue/milestone/sprint)
-			if item, err := pm.GetPMItemByRef(bareRef, workspaceURL); err == nil {
-				issue := pm.PMItemToIssue(*item)
-				if cfg.JSONOutput {
-					PrintJSON(issue)
-				} else {
-					printIssueDetails(issue)
-				}
+			// Fallback: try each extension (handles refs that DetectExtension can't resolve,
+			// e.g. full URL refs or non-hash ref types).
+			if showReview(cmd, cfg, bareRef) {
 				return
 			}
-
-			// Try release
-			if relResult := release.GetSingleRelease(bareRef); relResult.Success {
-				if cfg.JSONOutput {
-					PrintJSON(relResult.Data)
-				} else {
-					printReleaseDetails(relResult.Data)
-				}
+			if showPM(cmd, cfg, bareRef, workspaceURL) {
 				return
 			}
-
-			// Try social
-			if item, err := social.GetSocialItemByRef(bareRef, workspaceURL); err == nil {
-				post := social.SocialItemToPost(*item)
-				if cfg.JSONOutput {
-					PrintJSON(post)
-				} else {
-					fmt.Println(social.FormatPost(post))
-				}
+			if showRelease(cmd, cfg, bareRef) {
+				return
+			}
+			if showSocial(cmd, cfg, bareRef, workspaceURL) {
 				return
 			}
 
@@ -97,4 +77,79 @@ Examples:
 			os.Exit(ExitError)
 		},
 	}
+}
+
+// showByExtension dispatches to the correct extension getter based on a DetectExtension hit.
+func showByExtension(cmd *cobra.Command, cfg *Config, ref, workspaceURL string, hit cache.ExtensionHit) bool {
+	switch hit.Extension {
+	case "review":
+		return showReview(cmd, cfg, ref)
+	case "pm":
+		return showPM(cmd, cfg, ref, workspaceURL)
+	case "release":
+		return showRelease(cmd, cfg, ref)
+	case "social":
+		return showSocial(cmd, cfg, ref, workspaceURL)
+	}
+	return false
+}
+
+// showReview displays a pull request if the ref matches.
+func showReview(_ *cobra.Command, cfg *Config, ref string) bool {
+	prResult := review.GetPR(ref)
+	if !prResult.Success {
+		return false
+	}
+	pr := prResult.Data
+	pr.ReviewSummary = review.GetReviewSummary(pr.Repository, extractHash(pr.ID), pr.Branch, pr.Reviewers)
+	if cfg.JSONOutput {
+		PrintJSON(pr)
+	} else {
+		printPRDetails(cfg.WorkDir, pr)
+	}
+	return true
+}
+
+// showPM displays a PM item (issue/milestone/sprint) if the ref matches.
+func showPM(_ *cobra.Command, cfg *Config, ref, workspaceURL string) bool {
+	item, err := pm.GetPMItemByRef(ref, workspaceURL)
+	if err != nil {
+		return false
+	}
+	issue := pm.PMItemToIssue(*item)
+	if cfg.JSONOutput {
+		PrintJSON(issue)
+	} else {
+		printIssueDetails(issue)
+	}
+	return true
+}
+
+// showRelease displays a release if the ref matches.
+func showRelease(_ *cobra.Command, cfg *Config, ref string) bool {
+	relResult := release.GetSingleRelease(ref)
+	if !relResult.Success {
+		return false
+	}
+	if cfg.JSONOutput {
+		PrintJSON(relResult.Data)
+	} else {
+		printReleaseDetails(relResult.Data)
+	}
+	return true
+}
+
+// showSocial displays a social post if the ref matches.
+func showSocial(_ *cobra.Command, cfg *Config, ref, workspaceURL string) bool {
+	item, err := social.GetSocialItemByRef(ref, workspaceURL)
+	if err != nil {
+		return false
+	}
+	post := social.SocialItemToPost(*item)
+	if cfg.JSONOutput {
+		PrintJSON(post)
+	} else {
+		fmt.Println(social.FormatPost(post))
+	}
+	return true
 }

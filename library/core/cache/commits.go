@@ -375,6 +375,53 @@ func EscapeLike(s string) string {
 	return s
 }
 
+// ExtensionHit identifies which extension table owns a commit hash.
+type ExtensionHit struct {
+	Extension string // "review", "pm", "release", "social"
+	Type      string // extension-specific type (e.g. "pull-request", "issue", "post")
+}
+
+// DetectExtension returns which extension table(s) contain a given hash.
+// Uses direct index lookups on raw tables — no resolved views.
+func DetectExtension(hash string) ([]ExtensionHit, error) {
+	if !isHexString(hash) {
+		return nil, fmt.Errorf("detect extension: invalid hash")
+	}
+	return QueryLocked(func(db *sql.DB) ([]ExtensionHit, error) {
+		var cond string
+		var arg string
+		if len(hash) == 12 {
+			cond = "hash = ?"
+			arg = hash
+		} else {
+			cond = "hash LIKE ? ESCAPE '\\'"
+			arg = EscapeLike(hash) + "%"
+		}
+		query := `SELECT ext, type FROM (
+			SELECT 'review' as ext, type FROM review_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 'pm', type FROM pm_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 'release', tag FROM release_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 'social', type FROM social_items WHERE ` + cond + `
+		)`
+		rows, err := db.Query(query, arg, arg, arg, arg)
+		if err != nil {
+			return nil, fmt.Errorf("detect extension: %w", err)
+		}
+		defer rows.Close()
+		var hits []ExtensionHit
+		for rows.Next() {
+			var h ExtensionHit
+			if rows.Scan(&h.Extension, &h.Type) == nil {
+				hits = append(hits, h)
+			}
+		}
+		return hits, rows.Err()
+	})
+}
+
 // GetCommit returns a cached commit by repo URL, hash prefix, and branch.
 func GetCommit(repoURL, hashPrefix, branch string) (Commit, error) {
 	repoURL = protocol.NormalizeURL(repoURL)
