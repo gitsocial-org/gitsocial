@@ -518,6 +518,10 @@ func getDraftReadyNotifications(workspaceURL, userEmail string, forkURLs []strin
 	return cache.QueryLocked(func(db *sql.DB) ([]notifications.Notification, error) {
 		ph := strings.Repeat("?,", len(forkURLs))
 		ph = ph[:len(ph)-1]
+		// Detect draft→ready transition: the edit sets draft=0, and the original
+		// canonical commit's message contains "Draft: true" in the header.
+		// We check the raw commit message instead of review_items because
+		// syncExtensionFields copies the latest draft value to the canonical row.
 		query := `
 			SELECT ec.repo_url, ec.hash, ec.branch,
 			       COALESCE(ec.origin_author_name, ec.author_name),
@@ -529,10 +533,10 @@ func getDraftReadyNotifications(workspaceURL, userEmail string, forkURLs []strin
 			FROM core_commits_version cv
 			JOIN core_commits ec ON cv.edit_repo_url = ec.repo_url AND cv.edit_hash = ec.hash AND cv.edit_branch = ec.branch
 			JOIN review_items ri_edit ON cv.edit_repo_url = ri_edit.repo_url AND cv.edit_hash = ri_edit.hash AND cv.edit_branch = ri_edit.branch
-			JOIN review_items ri_canon ON cv.canonical_repo_url = ri_canon.repo_url AND cv.canonical_hash = ri_canon.hash AND cv.canonical_branch = ri_canon.branch
+			JOIN core_commits c_canon ON cv.canonical_repo_url = c_canon.repo_url AND cv.canonical_hash = c_canon.hash AND cv.canonical_branch = c_canon.branch
 			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash AND cv.canonical_branch = pr.branch
 			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
-			WHERE ri_canon.draft = 1
+			WHERE c_canon.message LIKE '%' || char(10) || 'Draft: true' || '%'
 			  AND ri_edit.draft = 0
 			  AND pr.type = 'pull-request'
 			  AND pr.repo_url IN (` + ph + `)

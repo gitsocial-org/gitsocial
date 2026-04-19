@@ -283,6 +283,7 @@ func Open(cacheDir string) error {
 	schemaMu.Unlock()
 
 	backfillResolvedTable(db)
+	backfillExtensionFields(db)
 
 	opened = true
 	initErr = nil
@@ -465,4 +466,47 @@ func backfillResolvedTable(database *sql.DB) {
 	}
 
 	log.Info("backfill complete", "commits", sourceCount)
+}
+
+// backfillExtensionFields syncs mutable extension fields from edit rows to canonical
+// rows for all existing edit chains. This is a one-time migration that runs on upgrade
+// from the old ROW_NUMBER-based views to the simplified views.
+// Uses a pragma-guarded flag to avoid re-running on subsequent opens.
+func backfillExtensionFields(database *sql.DB) {
+	// Check if already backfilled using application_id pragma (0 = not done, 42 = done)
+	var appID int
+	if err := database.QueryRow("PRAGMA application_id").Scan(&appID); err != nil || appID == 42 {
+		return
+	}
+	var versionCount int
+	if err := database.QueryRow("SELECT COUNT(*) FROM core_commits_version").Scan(&versionCount); err != nil || versionCount == 0 {
+		_, _ = database.Exec("PRAGMA application_id = 42")
+		return
+	}
+	log.Info("backfilling extension fields from edit chains", "versions", versionCount)
+
+	// Process all edits ordered by timestamp ASC so latest edit's values stick
+	rows, err := database.Query(`
+		SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
+		       v.canonical_repo_url, v.canonical_hash, v.canonical_branch
+		FROM core_commits_version v
+		JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
+		ORDER BY e.timestamp ASC
+	`)
+	if err != nil {
+		log.Error("backfill extension fields query", "error", err)
+		return
+	}
+	defer rows.Close()
+	synced := 0
+	for rows.Next() {
+		var eURL, eHash, eBranch, cURL, cHash, cBranch string
+		if err := rows.Scan(&eURL, &eHash, &eBranch, &cURL, &cHash, &cBranch); err != nil {
+			continue
+		}
+		syncExtensionFields(database, eURL, eHash, eBranch, cURL, cHash, cBranch)
+		synced++
+	}
+	_, _ = database.Exec("PRAGMA application_id = 42")
+	log.Info("backfill extension fields complete", "synced", synced)
 }

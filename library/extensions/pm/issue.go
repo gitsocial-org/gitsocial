@@ -456,6 +456,9 @@ func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {
 		return err
 	}
 
+	// Propagate mutable fields from edit to canonical (extension row now exists)
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: hash, Branch: branch}})
+
 	// Parse and store links
 	blocks := parseRefList(msg.Header.Fields["blocks"], repoURL, branch)
 	blockedBy := parseRefList(msg.Header.Fields["blocked-by"], repoURL, branch)

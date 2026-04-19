@@ -114,4 +114,7 @@ func processReleaseCommit(gc git.Commit, msg *protocol.Message, repoURL, branch 
 	if err := InsertReleaseItem(item); err != nil {
 		log.Debug("insert release item failed", "hash", gc.Hash, "error", err)
 	}
+
+	// Propagate mutable fields from edit to canonical
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: gc.Hash, Branch: branch}})
 }

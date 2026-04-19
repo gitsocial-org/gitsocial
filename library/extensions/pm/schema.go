@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS pm_links (
 CREATE INDEX IF NOT EXISTS idx_pm_links_to ON pm_links(to_repo_url, to_hash, to_branch);
 
 -- Extension: PM resolved view (unified read interface)
--- Resolves PM metadata from latest edit, falling back to canonical (mirrors social pattern)
+-- Mutable fields (state, assignees, due, etc.) are maintained on the canonical's
+-- raw row by syncExtensionFields at edit time, so no ROW_NUMBER subquery is needed.
 DROP VIEW IF EXISTS pm_items_resolved;
 CREATE VIEW pm_items_resolved AS
 SELECT
@@ -75,45 +76,27 @@ SELECT
     r.timestamp,
     r.is_virtual,
     r.stale_since,
-    COALESCE(le.type, p.type) as type,
-    COALESCE(le.state, p.state) as state,
-    COALESCE(le.assignees, p.assignees) as assignees,
-    COALESCE(le.due, p.due) as due,
-    COALESCE(le.start_date, p.start_date) as start_date,
-    COALESCE(le.end_date, p.end_date) as end_date,
-    COALESCE(le.milestone_repo_url, p.milestone_repo_url) as milestone_repo_url,
-    COALESCE(le.milestone_hash, p.milestone_hash) as milestone_hash,
-    COALESCE(le.milestone_branch, p.milestone_branch) as milestone_branch,
-    COALESCE(le.sprint_repo_url, p.sprint_repo_url) as sprint_repo_url,
-    COALESCE(le.sprint_hash, p.sprint_hash) as sprint_hash,
-    COALESCE(le.sprint_branch, p.sprint_branch) as sprint_branch,
-    COALESCE(le.parent_repo_url, p.parent_repo_url) as parent_repo_url,
-    COALESCE(le.parent_hash, p.parent_hash) as parent_hash,
-    COALESCE(le.parent_branch, p.parent_branch) as parent_branch,
-    COALESCE(le.root_repo_url, p.root_repo_url) as root_repo_url,
-    COALESCE(le.root_hash, p.root_hash) as root_hash,
-    COALESCE(le.root_branch, p.root_branch) as root_branch,
+    p.type,
+    p.state,
+    p.assignees,
+    p.due,
+    p.start_date,
+    p.end_date,
+    p.milestone_repo_url,
+    p.milestone_hash,
+    p.milestone_branch,
+    p.sprint_repo_url,
+    p.sprint_hash,
+    p.sprint_branch,
+    p.parent_repo_url,
+    p.parent_hash,
+    p.parent_branch,
+    p.root_repo_url,
+    p.root_hash,
+    p.root_branch,
     COALESCE(r.labels, p.labels) as labels,
     COALESCE(si.comments, 0) as comments
 FROM core_commits_resolved r
 INNER JOIN pm_items p ON r.repo_url = p.repo_url AND r.hash = p.hash AND r.branch = p.branch
-LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch
-LEFT JOIN (
-    SELECT v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
-           pe.type, pe.state, pe.assignees, pe.due, pe.start_date, pe.end_date,
-           pe.milestone_repo_url, pe.milestone_hash, pe.milestone_branch,
-           pe.sprint_repo_url, pe.sprint_hash, pe.sprint_branch,
-           pe.parent_repo_url, pe.parent_hash, pe.parent_branch,
-           pe.root_repo_url, pe.root_hash, pe.root_branch,
-           ROW_NUMBER() OVER (
-               PARTITION BY v.canonical_repo_url, v.canonical_hash, v.canonical_branch
-               ORDER BY e.timestamp DESC
-           ) as rn
-    FROM core_commits_version v
-    JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-    JOIN pm_items pe ON v.edit_repo_url = pe.repo_url AND v.edit_hash = pe.hash AND v.edit_branch = pe.branch
-) le ON le.canonical_repo_url = r.repo_url
-    AND le.canonical_hash = r.hash
-    AND le.canonical_branch = r.branch
-    AND le.rn = 1;
+LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch;
 `

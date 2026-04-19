@@ -274,5 +274,9 @@ func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {
 		Due:     cache.ToNullString(msg.Header.Fields["due"]),
 	}
 
-	return InsertPMItem(item)
+	if err := InsertPMItem(item); err != nil {
+		return err
+	}
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: hash, Branch: branch}})
+	return nil
 }

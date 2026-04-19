@@ -52,6 +52,8 @@ CREATE INDEX IF NOT EXISTS idx_review_pr ON review_items(pull_request_repo_url, 
 CREATE INDEX IF NOT EXISTS idx_review_file ON review_items(file);
 
 -- Extension: Review resolved view (unified read interface)
+-- Mutable fields (state, draft, reviewers, etc.) are maintained on the canonical's
+-- raw row by syncExtensionFields at edit time, so no ROW_NUMBER subquery is needed.
 DROP VIEW IF EXISTS review_items_resolved;
 CREATE VIEW review_items_resolved AS
 SELECT
@@ -69,47 +71,30 @@ SELECT
     r.timestamp,
     r.is_virtual,
     r.stale_since,
-    COALESCE(le.type, p.type) as type,
-    COALESCE(le.state, p.state) as state,
-    COALESCE(le.draft, p.draft) as draft,
-    COALESCE(le.base, p.base) as base,
-    COALESCE(le.base_tip, p.base_tip) as base_tip,
-    COALESCE(le.head, p.head) as head,
-    COALESCE(le.head_tip, p.head_tip) as head_tip,
-    COALESCE(le.depends_on, p.depends_on) as depends_on,
-    COALESCE(le.closes, p.closes) as closes,
-    COALESCE(le.reviewers, p.reviewers) as reviewers,
-    COALESCE(le.pull_request_repo_url, p.pull_request_repo_url) as pull_request_repo_url,
-    COALESCE(le.pull_request_hash, p.pull_request_hash) as pull_request_hash,
-    COALESCE(le.pull_request_branch, p.pull_request_branch) as pull_request_branch,
-    COALESCE(le.commit_ref, p.commit_ref) as commit_ref,
-    COALESCE(le.file, p.file) as file,
-    COALESCE(le.old_line, p.old_line) as old_line,
-    COALESCE(le.new_line, p.new_line) as new_line,
-    COALESCE(le.old_line_end, p.old_line_end) as old_line_end,
-    COALESCE(le.new_line_end, p.new_line_end) as new_line_end,
-    COALESCE(le.review_state, p.review_state) as review_state,
-    COALESCE(le.suggestion, p.suggestion) as suggestion,
+    p.type,
+    p.state,
+    p.draft,
+    p.base,
+    p.base_tip,
+    p.head,
+    p.head_tip,
+    p.depends_on,
+    p.closes,
+    p.reviewers,
+    p.pull_request_repo_url,
+    p.pull_request_hash,
+    p.pull_request_branch,
+    p.commit_ref,
+    p.file,
+    p.old_line,
+    p.new_line,
+    p.old_line_end,
+    p.new_line_end,
+    p.review_state,
+    p.suggestion,
     r.labels,
     COALESCE(si.comments, 0) as comments
 FROM core_commits_resolved r
 INNER JOIN review_items p ON r.repo_url = p.repo_url AND r.hash = p.hash AND r.branch = p.branch
-LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch
-LEFT JOIN (
-    SELECT v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
-           pe.type, pe.state, pe.draft, pe.base, pe.base_tip, pe.head, pe.head_tip, pe.depends_on, pe.closes, pe.reviewers,
-           pe.pull_request_repo_url, pe.pull_request_hash, pe.pull_request_branch,
-           pe.commit_ref, pe.file, pe.old_line, pe.new_line, pe.old_line_end, pe.new_line_end,
-           pe.review_state, pe.suggestion,
-           ROW_NUMBER() OVER (
-               PARTITION BY v.canonical_repo_url, v.canonical_hash, v.canonical_branch
-               ORDER BY e.timestamp DESC
-           ) as rn
-    FROM core_commits_version v
-    JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-    JOIN review_items pe ON v.edit_repo_url = pe.repo_url AND v.edit_hash = pe.hash AND v.edit_branch = pe.branch
-) le ON le.canonical_repo_url = r.repo_url
-    AND le.canonical_hash = r.hash
-    AND le.canonical_branch = r.branch
-    AND le.rn = 1;
+LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch;
 `

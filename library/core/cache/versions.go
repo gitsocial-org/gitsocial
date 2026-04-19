@@ -147,7 +147,8 @@ type EditKey struct {
 func syncExtensionFields(db *sql.DB, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string) {
 	for _, ext := range []struct{ table, cols string }{
 		{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
-		{"pm_items", "state, assignees, due, start_date, end_date"},
+		{"pm_items", "state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch"},
+		{"release_items", "tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom"},
 	} {
 		var exists int
 		if db.QueryRow("SELECT 1 FROM "+ext.table+" WHERE repo_url = ? AND hash = ? AND branch = ?",

@@ -199,6 +199,8 @@ func processReviewCommit(gc git.Commit, msg *protocol.Message, repoURL, branch s
 		if err := InsertReviewItem(*item); err != nil {
 			log.Debug("insert review item failed", "hash", gc.Hash, "error", err)
 		}
+		// Propagate mutable fields from edit to canonical (extension row now exists)
+		cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: gc.Hash, Branch: branch}})
 	}
 }
 

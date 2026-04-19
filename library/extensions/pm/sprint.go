@@ -279,5 +279,9 @@ func cacheSprintFromCommit(workdir, repoURL, hash, branch string) error {
 		EndDate:   cache.ToNullString(msg.Header.Fields["end"]),
 	}
 
-	return InsertPMItem(item)
+	if err := InsertPMItem(item); err != nil {
+		return err
+	}
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: hash, Branch: branch}})
+	return nil
 }
