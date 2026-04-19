@@ -1,6 +1,6 @@
 ╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/17 ─────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏◷  Alice · Apr 9, 2026 · #2ee2dc9a7ba1@gitmsg/pm                                   │
+│  ⌕  Search  ············  /  ││  ▏◷  Alice · Apr 9, 2026 · planned · #2ee2dc9a7ba1@gitmsg/pm                         │
 │  ⚑  Notifications  ·····  @  ││  ▏   Sprint 23: UX Polish                                                            │
 │  ◧  Analytics  ·········  %  ││  ▏                                                                                   │
 │ ──────────────────────────── ││  ▏   Two-week sprint for user experience improvements.                               │
@@ -26,7 +26,7 @@
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   ⑂  Alice ✎ · Apr 9, 2026 · #fc1e2278f228@gitmsg/review                             │
+│                              ││   ⑂  Alice ✎ · Apr 9, 2026 · merged · #fc1e2278f228@gitmsg/review                    │
 │                              ││      Add theme toggle component                                                      │
 │                              ││                                                                                      │
 │                              ││      Clean separation of theme variables.                                            │

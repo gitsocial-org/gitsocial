@@ -69,17 +69,31 @@ type GroupedItem struct {
 
 // Item is an extension-agnostic search result from the database.
 type Item struct {
-	RepoURL     string
-	Hash        string
-	Branch      string
-	AuthorName  string
-	AuthorEmail string
-	Content     string // resolved message body (raw, including headers)
-	Timestamp   time.Time
-	Type        string // "post", "comment", "issue", "pull-request", "release", etc.
-	Extension   string // "social", "pm", "review", "release"
-	IsVirtual   bool
-	IsStale     bool
+	RepoURL     string    `json:"repo_url"`
+	Hash        string    `json:"hash"`
+	Branch      string    `json:"branch"`
+	AuthorName  string    `json:"author_name"`
+	AuthorEmail string    `json:"author_email"`
+	Content     string    `json:"content"`
+	Timestamp   time.Time `json:"timestamp"`
+	Type        string    `json:"type"`
+	Extension   string    `json:"extension"`
+	IsVirtual   bool      `json:"is_virtual,omitempty"`
+	IsStale     bool      `json:"is_stale,omitempty"`
+
+	// Extension-specific fields (populated from LEFT JOIN)
+	State      string `json:"state,omitempty"`
+	Labels     string `json:"labels,omitempty"`
+	Assignees  string `json:"assignees,omitempty"`
+	Reviewers  string `json:"reviewers,omitempty"`
+	Base       string `json:"base,omitempty"`
+	Head       string `json:"head,omitempty"`
+	Draft      bool   `json:"draft,omitempty"`
+	Tag        string `json:"tag,omitempty"`
+	Version    string `json:"version,omitempty"`
+	Prerelease bool   `json:"prerelease,omitempty"`
+	Due        string `json:"due,omitempty"`
+	Comments   int    `json:"comments,omitempty"`
 
 	// Internal fields for grouping (not serialized, populated by enrichForGrouping)
 	groupState     string

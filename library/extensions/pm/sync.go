@@ -88,6 +88,7 @@ func SyncWorkspaceToCache(workdir string) error {
 	if err := InsertPMItems(pmItems); err != nil {
 		log.Debug("batch insert pm items failed", "error", err)
 	}
+	syncEditFields(pmItems)
 	for _, lnk := range links {
 		if err := InsertLinks(repoURL, lnk.hash, branch, lnk.blocks, lnk.blockedBy, lnk.related); err != nil {
 			log.Debug("insert pm links failed", "hash", lnk.hash, "error", err)
@@ -122,11 +123,21 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 	if err := InsertPMItems(pmItems); err != nil {
 		log.Debug("batch insert pm items failed", "error", err)
 	}
+	syncEditFields(pmItems)
 	for _, lnk := range links {
 		if err := InsertLinks(repoURL, lnk.hash, branch, lnk.blocks, lnk.blockedBy, lnk.related); err != nil {
 			log.Debug("insert pm links failed", "hash", lnk.hash, "error", err)
 		}
 	}
+}
+
+// syncEditFields propagates extension fields from edit items to their canonicals.
+func syncEditFields(items []PMItem) {
+	edits := make([]cache.EditKey, 0, len(items))
+	for _, item := range items {
+		edits = append(edits, cache.EditKey{RepoURL: item.RepoURL, Hash: item.Hash, Branch: item.Branch})
+	}
+	cache.SyncEditExtensionFields(edits)
 }
 
 // pmLinkEntry holds link data for batch processing.

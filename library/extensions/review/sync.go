@@ -78,6 +78,7 @@ func SyncWorkspaceToCache(workdir string) error {
 	if err := InsertReviewItems(reviewItems); err != nil {
 		log.Debug("batch insert review items failed", "error", err)
 	}
+	syncEditFields(reviewItems)
 
 	lastSyncedTip.Store(key, tip)
 	_ = cache.SetSyncTip(key, tip)
@@ -100,6 +101,16 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 	if err := InsertReviewItems(reviewItems); err != nil {
 		log.Debug("batch insert review items failed", "error", err)
 	}
+	syncEditFields(reviewItems)
+}
+
+// syncEditFields propagates extension fields from edit items to their canonicals.
+func syncEditFields(items []ReviewItem) {
+	edits := make([]cache.EditKey, 0, len(items))
+	for _, item := range items {
+		edits = append(edits, cache.EditKey{RepoURL: item.RepoURL, Hash: item.Hash, Branch: item.Branch})
+	}
+	cache.SyncEditExtensionFields(edits)
 }
 
 // buildReviewItem builds a ReviewItem from a commit and message without inserting.

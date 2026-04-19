@@ -111,6 +111,40 @@ func syncResolvedVersion(db *sql.DB, editRepoURL, editHash, editBranch, canonica
 	// Propagate mutable extension fields (state, labels, draft, assignees, reviewers)
 	// from the edit's raw row to the canonical's raw row, so search can filter on
 	// raw tables instead of resolved views.
+	syncExtensionFields(db, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
+}
+
+// SyncEditExtensionFields propagates mutable extension fields (state, draft, assignees, etc.)
+// from edit commits' extension rows to their canonical's extension rows.
+// Call after inserting extension rows for commits that may be edits.
+// This is needed because ProcessVersionFromHeader runs before extension rows exist.
+func SyncEditExtensionFields(edits []EditKey) {
+	if len(edits) == 0 {
+		return
+	}
+	_ = ExecLocked(func(db *sql.DB) error {
+		for _, e := range edits {
+			var canonRepoURL, canonHash, canonBranch string
+			err := db.QueryRow(`SELECT canonical_repo_url, canonical_hash, canonical_branch
+				FROM core_commits_version
+				WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
+				e.RepoURL, e.Hash, e.Branch).Scan(&canonRepoURL, &canonHash, &canonBranch)
+			if err != nil {
+				continue
+			}
+			syncExtensionFields(db, e.RepoURL, e.Hash, e.Branch, canonRepoURL, canonHash, canonBranch)
+		}
+		return nil
+	})
+}
+
+// EditKey identifies an edit commit for extension field syncing.
+type EditKey struct {
+	RepoURL, Hash, Branch string
+}
+
+// syncExtensionFields copies mutable fields from an edit's extension row to the canonical's.
+func syncExtensionFields(db *sql.DB, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string) {
 	for _, ext := range []struct{ table, cols string }{
 		{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
 		{"pm_items", "state, assignees, due, start_date, end_date"},

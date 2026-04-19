@@ -25,7 +25,7 @@ func FormatResult(result Result) string {
 
 // formatItem formats a single search result item for text display.
 func formatItem(item ScoredItem) string {
-	lines := make([]string, 0, 2)
+	lines := make([]string, 0, 3)
 
 	header := fmt.Sprintf("%s · %s", item.AuthorName, formatDate(item.Timestamp))
 	if item.Extension != "social" && item.Extension != "unknown" {
@@ -39,7 +39,54 @@ func formatItem(item ScoredItem) string {
 	}
 	lines = append(lines, content)
 
+	// Extension-specific metadata
+	if meta := formatItemMeta(item); meta != "" {
+		lines = append(lines, meta)
+	}
+
 	return strings.Join(lines, "\n")
+}
+
+// formatItemMeta formats extension-specific metadata for a search result.
+func formatItemMeta(item ScoredItem) string {
+	var parts []string
+	if item.State != "" {
+		parts = append(parts, item.State)
+	}
+	if item.Draft {
+		parts = append(parts, "draft")
+	}
+	if item.Base != "" && item.Head != "" {
+		parts = append(parts, fmt.Sprintf("%s ← %s", item.Base, item.Head))
+	}
+	if item.Assignees != "" {
+		parts = append(parts, "assigned:"+item.Assignees)
+	}
+	if item.Reviewers != "" {
+		parts = append(parts, "reviewers:"+item.Reviewers)
+	}
+	if item.Labels != "" {
+		parts = append(parts, "labels:"+item.Labels)
+	}
+	if item.Tag != "" {
+		parts = append(parts, item.Tag)
+	}
+	if item.Version != "" && item.Version != item.Tag {
+		parts = append(parts, item.Version)
+	}
+	if item.Prerelease {
+		parts = append(parts, "pre-release")
+	}
+	if item.Due != "" {
+		parts = append(parts, "due:"+item.Due)
+	}
+	if item.Comments > 0 {
+		parts = append(parts, fmt.Sprintf("↩ %d", item.Comments))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " · ")
 }
 
 // formatGroupedResult formats grouped search results for CLI text display.

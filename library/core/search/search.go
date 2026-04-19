@@ -260,7 +260,8 @@ func queryCount(q searchQuery) (int, error) {
 func queryItems(q searchQuery) ([]Item, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]Item, error) {
 		tables := availableTables(db)
-		selectClause := buildSelect(tables)
+		hasInteractions := tableExists(db, "social_interactions")
+		selectClause := buildSelect(tables, hasInteractions)
 		whereClause, args := buildWhere(q, db)
 		query := selectClause + whereClause + " ORDER BY r.timestamp DESC"
 		if q.SQLLimit > 0 {
@@ -292,12 +293,19 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	var ts, staleSince, message sql.NullString
 	var isVirtual int
 	var socialType, extension, itemType string
+	var state, labels, assignees, due sql.NullString
+	var base, head, reviewers sql.NullString
+	var tag, version sql.NullString
+	var draft, prerelease, comments int
 
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &ts,
 		&isVirtual, &staleSince,
 		&socialType, &extension, &itemType,
+		&state, &labels, &assignees, &due,
+		&draft, &base, &head, &reviewers,
+		&tag, &version, &prerelease, &comments,
 	)
 	if err != nil {
 		return Item{}, err
@@ -320,6 +328,20 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	} else {
 		item.Type = itemType
 	}
+
+	// Extension-specific fields
+	item.State = state.String
+	item.Labels = labels.String
+	item.Assignees = assignees.String
+	item.Due = due.String
+	item.Draft = draft == 1
+	item.Base = base.String
+	item.Head = head.String
+	item.Reviewers = reviewers.String
+	item.Tag = tag.String
+	item.Version = version.String
+	item.Prerelease = prerelease == 1
+	item.Comments = comments
 
 	return item, nil
 }

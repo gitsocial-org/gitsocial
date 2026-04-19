@@ -252,7 +252,10 @@ func extractGroupKeys(item ScoredItem, field string) []string {
 	var val string
 	switch field {
 	case "state":
-		val = item.groupState
+		val = item.State
+		if val == "" {
+			val = item.groupState
+		}
 	case "author":
 		val = item.AuthorEmail
 	case "type":
@@ -317,8 +320,12 @@ func toGroupedItem(item ScoredItem, groupField string) GroupedItem {
 	if groupField != "author" {
 		gi.Author = item.AuthorName
 	}
-	if groupField != "state" && item.groupState != "" {
-		gi.State = item.groupState
+	if groupField != "state" {
+		if item.State != "" {
+			gi.State = item.State
+		} else if item.groupState != "" {
+			gi.State = item.groupState
+		}
 	}
 	if groupField != "label" && item.groupLabels != "" {
 		gi.Labels = item.groupLabels

@@ -92,9 +92,9 @@ func availableTables(db *sql.DB) []extensionTable {
 }
 
 // buildSelect constructs the SELECT with LEFT JOINs for available extension tables.
-func buildSelect(tables []extensionTable) string {
+func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	var socialTypeExpr, extCaseExpr, itemTypeExpr string
-	joins := make([]string, 0, len(tables))
+	joins := make([]string, 0, len(tables)+1)
 
 	// Build COALESCE for social type
 	socialTypeExpr = "'unknown'"
@@ -105,10 +105,17 @@ func buildSelect(tables []extensionTable) string {
 		}
 	}
 
-	// Build CASE for extension detection
+	// Build CASE for extension detection (prefer specific extensions over social)
 	caseParts := make([]string, 0, len(tables))
 	for _, t := range tables {
-		caseParts = append(caseParts, "WHEN "+t.alias+".repo_url IS NOT NULL THEN '"+t.extName+"'")
+		if t.extName != "social" {
+			caseParts = append(caseParts, "WHEN "+t.alias+".repo_url IS NOT NULL THEN '"+t.extName+"'")
+		}
+	}
+	for _, t := range tables {
+		if t.extName == "social" {
+			caseParts = append(caseParts, "WHEN "+t.alias+".repo_url IS NOT NULL THEN '"+t.extName+"'")
+		}
 	}
 	if len(caseParts) > 0 {
 		extCaseExpr = "CASE " + strings.Join(caseParts, " ") + " ELSE 'unknown' END"
@@ -116,10 +123,17 @@ func buildSelect(tables []extensionTable) string {
 		extCaseExpr = "'unknown'"
 	}
 
-	// Build COALESCE for item type
+	// Build COALESCE for item type (prefer specific extensions over social)
 	typeParts := make([]string, 0, len(tables))
 	for _, t := range tables {
-		typeParts = append(typeParts, t.alias+"."+t.typeCol)
+		if t.extName != "social" {
+			typeParts = append(typeParts, t.alias+"."+t.typeCol)
+		}
+	}
+	for _, t := range tables {
+		if t.extName == "social" {
+			typeParts = append(typeParts, t.alias+"."+t.typeCol)
+		}
 	}
 	if len(typeParts) > 0 {
 		itemTypeExpr = "COALESCE(" + strings.Join(typeParts, ", ") + ", 'unknown')"
@@ -127,7 +141,33 @@ func buildSelect(tables []extensionTable) string {
 		itemTypeExpr = "'unknown'"
 	}
 
-	// Build LEFT JOINs
+	// Track available aliases for extension-specific columns
+	has := map[string]bool{}
+	for _, t := range tables {
+		has[t.alias] = true
+	}
+
+	// Build extension-specific column expressions
+	// State resolves through version chain: latest edit's state, then canonical's raw state.
+	// This handles cases where syncResolvedVersion hasn't propagated to the canonical's raw row.
+	stateExpr := buildResolvedStateExpr(has)
+	assigneesExpr := coalesceStr(has, [][2]string{{"pi", "assignees"}})
+	dueExpr := coalesceStr(has, [][2]string{{"pi", "due"}})
+	draftExpr := coalesceInt(has, [][2]string{{"ri", "draft"}})
+	baseExpr := coalesceStr(has, [][2]string{{"ri", "base"}})
+	headExpr := coalesceStr(has, [][2]string{{"ri", "head"}})
+	reviewersExpr := coalesceStr(has, [][2]string{{"ri", "reviewers"}})
+	tagExpr := coalesceStr(has, [][2]string{{"rli", "tag"}})
+	versionExpr := coalesceStr(has, [][2]string{{"rli", "version"}})
+	prereleaseExpr := coalesceInt(has, [][2]string{{"rli", "prerelease"}})
+
+	commentsExpr := "0"
+	if hasInteractions {
+		joins = append(joins, "LEFT JOIN social_interactions sic ON r.repo_url = sic.repo_url AND r.hash = sic.hash AND r.branch = sic.branch")
+		commentsExpr = "COALESCE(sic.comments, 0)"
+	}
+
+	// Build LEFT JOINs for extension tables
 	for _, t := range tables {
 		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash")
 	}
@@ -137,11 +177,104 @@ func buildSelect(tables []extensionTable) string {
 	       r.is_virtual, r.stale_since,
 	       ` + socialTypeExpr + ` as social_type,
 	       ` + extCaseExpr + ` as extension,
-	       ` + itemTypeExpr + ` as item_type
+	       ` + itemTypeExpr + ` as item_type,
+	       ` + stateExpr + ` as item_state,
+	       COALESCE(r.labels, '') as item_labels,
+	       ` + assigneesExpr + ` as item_assignees,
+	       ` + dueExpr + ` as item_due,
+	       ` + draftExpr + ` as item_draft,
+	       ` + baseExpr + ` as item_base,
+	       ` + headExpr + ` as item_head,
+	       ` + reviewersExpr + ` as item_reviewers,
+	       ` + tagExpr + ` as item_tag,
+	       ` + versionExpr + ` as item_version,
+	       ` + prereleaseExpr + ` as item_prerelease,
+	       ` + commentsExpr + ` as item_comments
 	FROM core_commits_resolved r
 	` + strings.Join(joins, "\n\t")
 
 	return query
+}
+
+// buildResolvedStateExpr builds a state expression that resolves through the version chain.
+// Prefers the latest edit's state, falls back to the canonical's raw extension state.
+func buildResolvedStateExpr(has map[string]bool) string {
+	// Build subquery that gets state from the latest edit's extension row
+	var editJoins []string
+	var editCols []string
+	if has["ri"] {
+		editJoins = append(editJoins, "LEFT JOIN review_items _re ON v.edit_repo_url = _re.repo_url AND v.edit_hash = _re.hash AND v.edit_branch = _re.branch")
+		editCols = append(editCols, "_re.state")
+	}
+	if has["pi"] {
+		editJoins = append(editJoins, "LEFT JOIN pm_items _pe ON v.edit_repo_url = _pe.repo_url AND v.edit_hash = _pe.hash AND v.edit_branch = _pe.branch")
+		editCols = append(editCols, "_pe.state")
+	}
+
+	// Fallback: canonical's raw state
+	var rawFallbacks []string
+	if has["ri"] {
+		rawFallbacks = append(rawFallbacks, "ri.state")
+	}
+	if has["pi"] {
+		rawFallbacks = append(rawFallbacks, "pi.state")
+	}
+
+	if len(editJoins) == 0 {
+		if len(rawFallbacks) == 0 {
+			return "''"
+		}
+		return "COALESCE(" + strings.Join(rawFallbacks, ", ") + ", '')"
+	}
+
+	editStateExpr := "COALESCE(" + strings.Join(editCols, ", ") + ")"
+	subquery := "(SELECT " + editStateExpr +
+		" FROM core_commits_version v " + strings.Join(editJoins, " ") +
+		" WHERE v.canonical_repo_url = r.repo_url AND v.canonical_hash = r.hash AND v.canonical_branch = r.branch" +
+		" AND v.is_retracted = 0" +
+		" ORDER BY v.rowid DESC LIMIT 1)"
+
+	parts := make([]string, 0, 1+len(rawFallbacks))
+	parts = append(parts, subquery)
+	parts = append(parts, rawFallbacks...)
+	return "COALESCE(" + strings.Join(parts, ", ") + ", '')"
+}
+
+// stateExistsClause builds a WHERE clause that checks state on both the canonical's
+// raw extension row AND the latest edit's extension row via the version chain.
+func stateExistsClause(table, state string, args *[]interface{}) string {
+	*args = append(*args, state, state)
+	return `(EXISTS (SELECT 1 FROM ` + table + ` _sr WHERE _sr.repo_url = r.repo_url AND _sr.hash = r.hash AND _sr.branch = r.branch AND _sr.state = ?)` +
+		` OR EXISTS (SELECT 1 FROM core_commits_version _sv JOIN ` + table + ` _se ON _sv.edit_repo_url = _se.repo_url AND _sv.edit_hash = _se.hash AND _sv.edit_branch = _se.branch` +
+		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.canonical_branch = r.branch AND _sv.is_retracted = 0 AND _se.state = ?))`
+}
+
+// coalesceStr builds a COALESCE expression for text columns from available aliases.
+func coalesceStr(has map[string]bool, aliasCols [][2]string) string {
+	var parts []string
+	for _, ac := range aliasCols {
+		if has[ac[0]] {
+			parts = append(parts, ac[0]+"."+ac[1])
+		}
+	}
+	if len(parts) == 0 {
+		return "''"
+	}
+	return "COALESCE(" + strings.Join(parts, ", ") + ", '')"
+}
+
+// coalesceInt builds a COALESCE expression for integer columns from available aliases.
+func coalesceInt(has map[string]bool, aliasCols [][2]string) string {
+	var parts []string
+	for _, ac := range aliasCols {
+		if has[ac[0]] {
+			parts = append(parts, ac[0]+"."+ac[1])
+		}
+	}
+	if len(parts) == 0 {
+		return "0"
+	}
+	return "COALESCE(" + strings.Join(parts, ", ") + ", 0)"
 }
 
 // buildWhere constructs WHERE clause and args for search queries.
@@ -243,18 +376,15 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		where = append(where, subq)
 	}
 
-	// Extension-specific filters query raw tables directly.
-	// syncResolvedVersion maintains current state/labels/assignees on the canonical's
-	// raw extension row, so these don't need the slow resolved views.
+	// Extension-specific filters check both the canonical's raw row and the latest
+	// edit's row via the version chain, so stale canonical rows are still matched.
 	if q.State != "" {
 		var stateClauses []string
 		if q.State == "open" || q.State == "closed" || q.State == "canceled" {
-			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM pm_items pir WHERE pir.repo_url = r.repo_url AND pir.hash = r.hash AND pir.branch = r.branch AND pir.state = ?)")
-			args = append(args, q.State)
+			stateClauses = append(stateClauses, stateExistsClause("pm_items", q.State, &args))
 		}
 		if q.State == "open" || q.State == "merged" || q.State == "closed" {
-			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM review_items rir WHERE rir.repo_url = r.repo_url AND rir.hash = r.hash AND rir.branch = r.branch AND rir.state = ?)")
-			args = append(args, q.State)
+			stateClauses = append(stateClauses, stateExistsClause("review_items", q.State, &args))
 		}
 		if len(stateClauses) == 1 {
 			where = append(where, stateClauses[0])

@@ -4,6 +4,7 @@ package tuisocial
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
@@ -59,6 +60,10 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatFullTime(post.Timestamp)})
 	} else {
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(post.Timestamp)})
+	}
+	// Show state for cross-extension items (PRs, issues) right after time
+	if post.HeaderState != "" && post.HeaderExt != "" && post.HeaderExt != "social" {
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: post.HeaderState})
 	}
 	if post.Interactions.Comments > 0 {
 		loc := tuicore.LocDetail(post.ID)
@@ -314,17 +319,110 @@ func MakeSearchFunc(userEmail string, showEmailFn func() bool) tuicore.SearchFun
 		if err != nil {
 			return tuicore.SearchResult{}, err
 		}
-		posts := make([]social.Post, len(result.Results))
+		showEmail := showEmailFn()
+		items := make([]tuicore.DisplayItem, len(result.Results))
 		for i, si := range result.Results {
-			posts[i] = searchItemToPost(si.Item)
+			items[i] = searchItemToDisplayItem(si.Item, userEmail, showEmail)
 		}
 		return tuicore.SearchResult{
-			Items:         PostsToItems(posts, userEmail, showEmailFn()),
+			Items:         items,
 			Total:         result.Total,
 			TotalSearched: result.TotalSearched,
 			HasMore:       result.HasMore,
 		}, nil
 	}
+}
+
+// searchItemToDisplayItem converts a search.Item to the appropriate extension-specific DisplayItem.
+func searchItemToDisplayItem(item search.Item, userEmail string, showEmail bool) tuicore.DisplayItem {
+	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
+	subject, body := protocol.SplitSubjectBody(item.Content)
+
+	switch item.Extension {
+	case "pm":
+		return searchItemToPMDisplayItem(item, id, subject, body)
+	case "review":
+		if item.Type == "pull-request" {
+			return searchItemToReviewDisplayItem(item, id, subject, body)
+		}
+	case "release":
+		return searchItemToReleaseDisplayItem(item, id, subject, body)
+	}
+
+	// Default: social post
+	post := searchItemToPost(item)
+	post.Display.UserEmail = userEmail
+	post.Display.ShowEmail = showEmail
+	di := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
+	if post.HeaderExt != "" && post.HeaderExt != "social" {
+		di.OriginalExt = post.HeaderExt
+		di.OriginalType = post.HeaderType
+	}
+	return di
+}
+
+// searchItemToPMDisplayItem creates a PM issue DisplayItem from a search result.
+func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
+	issue := pm.Issue{
+		ID:         id,
+		Repository: item.RepoURL,
+		Branch:     item.Branch,
+		Author:     pm.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:  item.Timestamp,
+		Subject:    subject,
+		Body:       body,
+		State:      pm.State(item.State),
+		Assignees:  splitNonEmpty(item.Assignees, ","),
+		Labels:     parseSearchLabels(item.Labels),
+		Comments:   item.Comments,
+	}
+	if item.Due != "" {
+		if t, err := time.Parse(time.RFC3339, item.Due); err == nil {
+			issue.Due = &t
+		} else if t, err := time.Parse("2006-01-02", item.Due); err == nil {
+			issue.Due = &t
+		}
+	}
+	return tuicore.NewItem(id, "pm", item.Type, item.Timestamp, issue)
+}
+
+// searchItemToReviewDisplayItem creates a review PR DisplayItem from a search result.
+func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
+	pr := review.PullRequest{
+		ID:         id,
+		Repository: item.RepoURL,
+		Branch:     item.Branch,
+		Author:     review.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:  item.Timestamp,
+		Subject:    subject,
+		Body:       body,
+		State:      review.PRState(item.State),
+		IsDraft:    item.Draft,
+		Base:       item.Base,
+		Head:       item.Head,
+		Reviewers:  splitNonEmpty(item.Reviewers, ","),
+		Labels:     splitNonEmpty(item.Labels, ","),
+		Comments:   item.Comments,
+	}
+	return tuicore.NewItem(id, "review", item.Type, item.Timestamp, pr)
+}
+
+// searchItemToReleaseDisplayItem creates a release DisplayItem from a search result.
+func searchItemToReleaseDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
+	rel := release.Release{
+		ID:         id,
+		Repository: item.RepoURL,
+		Branch:     item.Branch,
+		Author:     release.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:  item.Timestamp,
+		Subject:    subject,
+		Body:       body,
+		Tag:        item.Tag,
+		Version:    item.Version,
+		Prerelease: item.Prerelease,
+		Comments:   item.Comments,
+	}
+	return tuicore.NewItem(id, "release", "release", item.Timestamp, rel)
 }
 
 // searchItemToPost converts a search.Item to a social.Post for card rendering.
@@ -349,12 +447,50 @@ func searchItemToPost(item search.Item) social.Post {
 			CommitHash: item.Hash,
 		},
 	}
-	// Preserve actual extension/type for correct icons and navigation routing
+	// Preserve actual extension/type/state for correct icons and navigation routing
 	if item.Extension != "" && item.Extension != "unknown" {
 		post.HeaderExt = item.Extension
 		post.HeaderType = item.Type
+		post.HeaderState = item.State
 	}
 	return post
+}
+
+// splitNonEmpty splits a string by sep and returns non-empty trimmed parts.
+func splitNonEmpty(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, sep)
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// parseSearchLabels parses comma-separated scoped labels into pm.Label structs.
+func parseSearchLabels(labelsStr string) []pm.Label {
+	if labelsStr == "" {
+		return nil
+	}
+	parts := strings.Split(labelsStr, ",")
+	var labels []pm.Label
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if idx := strings.Index(p, "/"); idx > 0 {
+			labels = append(labels, pm.Label{Scope: p[:idx], Value: p[idx+1:]})
+		} else {
+			labels = append(labels, pm.Label{Value: p})
+		}
+	}
+	return labels
 }
 
 // MakeGetNotificationsFunc creates a GetNotificationsFunc that wraps core notifications.GetAll.
