@@ -52,7 +52,7 @@ Examples:
 			// Fast dispatch: detect which extension owns this hash via raw table lookup,
 			// then call only the matching getter instead of trying all 4 sequentially.
 			if hits, err := cache.DetectExtension(bareRef); err == nil && len(hits) > 0 {
-				if showByExtension(cmd, cfg, bareRef, workspaceURL, hits[0]) {
+				if showByExtension(cmd, cfg, workspaceURL, hits[0]) {
 					return
 				}
 			}
@@ -79,17 +79,48 @@ Examples:
 	}
 }
 
-// showByExtension dispatches to the correct extension getter based on a DetectExtension hit.
-func showByExtension(cmd *cobra.Command, cfg *Config, ref, workspaceURL string, hit cache.ExtensionHit) bool {
+// showByExtension dispatches to the correct extension getter using the full PK from DetectExtension.
+func showByExtension(_ *cobra.Command, cfg *Config, workspaceURL string, hit cache.ExtensionHit) bool {
 	switch hit.Extension {
 	case "review":
-		return showReview(cmd, cfg, ref)
+		item, err := review.GetReviewItem(hit.RepoURL, hit.Hash, hit.Branch)
+		if err != nil || item.Type != string(review.ItemTypePullRequest) {
+			return false
+		}
+		pr := review.ReviewItemToPullRequest(*item)
+		pr.ReviewSummary = review.GetReviewSummary(pr.Repository, extractHash(pr.ID), pr.Branch, pr.Reviewers)
+		if cfg.JSONOutput {
+			PrintJSON(pr)
+		} else {
+			printPRDetails(cfg.WorkDir, pr)
+		}
+		return true
 	case "pm":
-		return showPM(cmd, cfg, ref, workspaceURL)
+		return showPM(nil, cfg, "#commit:"+hit.Hash, workspaceURL)
 	case "release":
-		return showRelease(cmd, cfg, ref)
+		item, err := release.GetReleaseItem(hit.RepoURL, hit.Hash, hit.Branch)
+		if err != nil {
+			return false
+		}
+		rel := release.ReleaseItemToRelease(*item)
+		if cfg.JSONOutput {
+			PrintJSON(rel)
+		} else {
+			printReleaseDetails(rel)
+		}
+		return true
 	case "social":
-		return showSocial(cmd, cfg, ref, workspaceURL)
+		item, err := social.GetSocialItem(hit.RepoURL, hit.Hash, hit.Branch, workspaceURL)
+		if err != nil {
+			return false
+		}
+		post := social.SocialItemToPost(*item)
+		if cfg.JSONOutput {
+			PrintJSON(post)
+		} else {
+			fmt.Println(social.FormatPost(post))
+		}
+		return true
 	}
 	return false
 }

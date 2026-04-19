@@ -1,12 +1,12 @@
 ╭─ ※  GitSocial ───────────────╮╭─ ⑂  Pull Requests · 1/2 ─────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏⑂  Add dark mode support · Alice · TIME     · open · main ← · dark-mode · [✓1]     │
-│  ⚑  Notifications  ·····  @  ││  ▏   Implements theme toggle with system preference detection.                       │
+│  ⌕  Search  ············  /  ││  ▏⑂  Add theme toggle component · Alice · Apr 9, 2026 · merged · main ←              │
+│  ⚑  Notifications  ·····  @  ││  ▏   Clean separation of theme variables.                                            │
 │  ◧  Analytics  ·········  %  ││                                                                                      │
 │ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⌘  Social  ············  T  ││                                                                                      │
-│     ⏱  Timeline              ││   ⑂  Add theme toggle component · Alice · TIME     · merged · main ←                 │
-│     ♥  My Repository         ││      Clean separation of theme variables.                                            │
+│     ⏱  Timeline              ││   ⑂  Add dark mode support · Alice · Apr 9, 2026 · open · main ← · dark-mode         │
+│     ♥  My Repository         ││      Implements theme toggle with system preference detection.                       │
 │     ☷  My Lists             ││                                                                                      │
 │  ▢  PM  ················  B  ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⑂  Review  ············  P  ││                                                                                      │

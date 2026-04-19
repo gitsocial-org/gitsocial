@@ -335,8 +335,8 @@ func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
 		return nil
 	}
 
-	items, hasMore := TrimPage(msg.Result.Items, PageSize)
-	v.pag.HasMore = hasMore
+	items, trimmedMore := TrimPage(msg.Result.Items, PageSize)
+	v.pag.HasMore = trimmedMore || msg.Result.HasMore
 	v.total = msg.Result.Total
 	v.totalItems = msg.Result.TotalSearched
 
@@ -405,8 +405,9 @@ func (v *SearchView) HeaderInfo() (position, total int) {
 }
 
 // TotalSearched returns the total number of items searched.
+// Returns 0 to suppress the "of X" suffix when total already shows the count.
 func (v *SearchView) TotalSearched() int {
-	return v.totalItems
+	return 0
 }
 
 // GetItemAt returns the post ID at the given index.

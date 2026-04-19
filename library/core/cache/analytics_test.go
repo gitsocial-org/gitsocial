@@ -504,11 +504,13 @@ func TestGetAnalytics_excludesStale(t *testing.T) {
 	insertTestCommit(t, repoURL, "fresh_hash_", now.Add(-1*time.Hour))
 	insertTestCommit(t, repoURL, "stale_hash_", now.Add(-2*time.Hour))
 
-	// Mark one commit as stale
+	// Mark one commit as stale (update both source and materialized tables)
 	ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = ?`,
+		db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = ?`,
 			now.Format(time.RFC3339), "stale_hash_")
-		return err
+		db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE hash = ?`,
+			now.Format(time.RFC3339), "stale_hash_")
+		return nil
 	})
 
 	data, err := GetAnalytics("")
@@ -532,11 +534,13 @@ func TestGetAnalytics_excludesEditCommits(t *testing.T) {
 
 	// Create version record making edit_commit an edit of canonical__
 	ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`INSERT INTO core_commits_version
+		db.Exec(`INSERT INTO core_commits_version
 			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
 			VALUES (?, ?, 'main', ?, ?, 'main', 0)`,
 			repoURL, "edit_commit", repoURL, "canonical__")
-		return err
+		db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE hash = ?`, "edit_commit")
+		db.Exec(`UPDATE core_commits_resolved SET has_edits = 1 WHERE hash = ?`, "canonical__")
+		return nil
 	})
 
 	data, err := GetAnalytics("")
@@ -561,11 +565,13 @@ func TestGetAnalytics_excludesRetracted(t *testing.T) {
 
 	// Create version record making retracted__ retracted via retract_edt
 	ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`INSERT INTO core_commits_version
+		db.Exec(`INSERT INTO core_commits_version
 			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
 			VALUES (?, ?, 'main', ?, ?, 'main', 1)`,
 			repoURL, "retract_edt", repoURL, "retracted__")
-		return err
+		db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE hash = ?`, "retract_edt")
+		db.Exec(`UPDATE core_commits_resolved SET is_retracted = 1, has_edits = 1 WHERE hash = ?`, "retracted__")
+		return nil
 	})
 
 	data, err := GetAnalytics("")

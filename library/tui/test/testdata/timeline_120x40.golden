@@ -1,39 +1,39 @@
 ╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/17 ─────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏•  Alice · TIME     · #e620b1fe079d@dark-mode                                      │
-│  ⚑  Notifications  ·····  @  ││  ▏   Initial commit                                                                  │
-│  ◧  Analytics  ·········  %  ││                                                                                      │
-│ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ⌕  Search  ············  /  ││  ▏◷  Alice · Apr 9, 2026 · #2ee2dc9a7ba1@gitmsg/pm                                   │
+│  ⚑  Notifications  ·····  @  ││  ▏   Sprint 23: UX Polish                                                            │
+│  ◧  Analytics  ·········  %  ││  ▏                                                                                   │
+│ ──────────────────────────── ││  ▏   Two-week sprint for user experience improvements.                               │
 │  ⌘  Social  ············  T  ││                                                                                      │
-│     ⏱  Timeline              ││   ◷  Alice · TIME     · #2ee2dc9a7ba1@gitmsg/pm                                      │
-│     ♥  My Repository         ││      Sprint 23: UX Polish                                                            │
-│     ☷  My Lists             ││                                                                                      │
-│  ▢  PM  ················  B  ││      Two-week sprint for user experience improvements.                               │
+│     ⏱  Timeline              ││   ────────────────────────────────────────────────────────────────────────────────   │
+│     ♥  My Repository         ││                                                                                      │
+│     ☷  My Lists             ││   ⏏  Alice · Apr 9, 2026 · #ea0985cc6656@gitmsg/release                              │
+│  ▢  PM  ················  B  ││      Release v2.0.0-beta.1                                                           │
 │  ⑂  Review  ············  P  ││                                                                                      │
-│  ⏏  Release  ···········  R  ││   ────────────────────────────────────────────────────────────────────────────────   │
-│                              ││                                                                                      │
-│                              ││   ◇  Alice · TIME     · #b82c9dbd0c43@gitmsg/pm                                      │
-│                              ││      Release v2.0                                                                    │
-│                              ││                                                                                      │
-│                              ││      Dark mode and dashboard analytics.                                              │
+│  ⏏  Release  ···········  R  ││      Beta release for testing new features.                                          │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   ●  Alice · TIME     · #bc523a72334f@gitmsg/pm                                      │
-│                              ││      Implement real-time notifications                                               │
-│                              ││                                                                                      │
-│                              ││      No longer needed                                                                │
+│                              ││   •  Alice · Apr 9, 2026 · #d4de2bdf6448@main                                        │
+│                              ││      Merge branch 'theme-toggle' into main                                           │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   ●  Alice ✎ · TIME     · #3974cc3cc5d0@gitmsg/pm                                    │
-│                              ││      Add keyboard shortcuts                                                          │
+│                              ││   ⏏  Alice · Apr 9, 2026 · #c46fb8eedbca@gitmsg/release                              │
+│                              ││      Release v1.0.0                                                                  │
 │                              ││                                                                                      │
-│                              ││      Dashboard needs keyboard navigation                                             │
+│                              ││      Pre-built binaries for Linux, macOS, and Windows.                               │
+│                              ││                                                                                      │
+│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ⑂  Alice ✎ · Apr 9, 2026 · #fc1e2278f228@gitmsg/review                             │
+│                              ││      Add theme toggle component                                                      │
+│                              ││                                                                                      │
+│                              ││      Clean separation of theme variables.                                            │
 │ ──────────────────────────── ││                                                                                      │
 │  ⚙  Configuration            ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
-│  ⌨  Settings                 ││   ○  Alice · TIME     · #7351237323f1@gitmsg/pm                                      │
+│  ⌨  Settings                 ││   ↩  Alice · Apr 9, 2026 · #4361a6f5268b@gitmsg/review                               │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  `:focus  f:fetch  q:quit        │
 │.../tui-test-FIXTURE          ││   ?:help                                                                             │

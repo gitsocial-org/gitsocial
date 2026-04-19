@@ -55,6 +55,24 @@ func InsertCommits(commits []Commit) error {
 	}
 	defer versionStmt.Close()
 
+	resolvedStmt, err := tx.Prepare(`
+		INSERT OR IGNORE INTO core_commits_resolved (
+			repo_url, hash, branch, resolved_message, original_message, edits,
+			is_retracted, has_edits, is_edit_commit,
+			author_name, author_email, timestamp,
+			labels, is_virtual, fetched_at, stale_since
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`)
+	if err != nil {
+		return fmt.Errorf("prepare resolved statement: %w", err)
+	}
+	defer resolvedStmt.Close()
+
+	ftsStmt, err := tx.Prepare(`INSERT INTO core_fts (repo_url, hash, branch, content, author) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("prepare fts statement: %w", err)
+	}
+	defer ftsStmt.Close()
+
 	for _, c := range commits {
 		branch := c.Branch
 		if branch == "" {
@@ -90,9 +108,30 @@ func InsertCommits(commits []Commit) error {
 			isRetracted = msg.Header.Fields["retracted"] == "true"
 		}
 
-		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, c.Timestamp.UTC().Format(time.RFC3339), originTime, edits, labels, now, originAuthorName, originAuthorEmail); err != nil {
+		ts := c.Timestamp.UTC().Format(time.RFC3339)
+		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail); err != nil {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
+
+		// Resolved author/timestamp (COALESCE origin over git)
+		resolvedAuthorName := c.AuthorName
+		if originAuthorName != nil {
+			resolvedAuthorName = *originAuthorName
+		}
+		resolvedAuthorEmail := c.AuthorEmail
+		if originAuthorEmail != nil {
+			resolvedAuthorEmail = *originAuthorEmail
+		}
+		resolvedTimestamp := ts
+		if originTime != nil {
+			resolvedTimestamp = *originTime
+		}
+		var labelsVal *string
+		if labels != nil {
+			labelsVal = labels
+		}
+
+		isEditCommit := 0
 
 		// Populate version table if this is an edit and canonical exists
 		if edits != nil && *edits != "" {
@@ -118,8 +157,36 @@ func InsertCommits(commits []Commit) error {
 					if _, err := versionStmt.Exec(repoURL, c.Hash, branch, canonicalRepoURL, parsed.Value, canonicalBranch, retracted); err != nil {
 						return fmt.Errorf("insert version record for %s: %w", c.Hash, err)
 					}
+					isEditCommit = 1
+
+					// Update the canonical's resolved fields
+					_, _ = tx.Exec(`UPDATE core_commits_resolved SET
+						has_edits = 1, resolved_message = ?, labels = COALESCE(?, labels), is_retracted = ?
+						WHERE repo_url = ? AND hash = ? AND branch = ?`,
+						c.Message, labelsVal, retracted,
+						canonicalRepoURL, parsed.Value, canonicalBranch)
+
+					// Update FTS5 for the canonical (content changed)
+					_, _ = tx.Exec(`DELETE FROM core_fts WHERE repo_url = ? AND hash = ? AND branch = ?`,
+						canonicalRepoURL, parsed.Value, canonicalBranch)
+					_, _ = tx.Exec(`INSERT INTO core_fts (repo_url, hash, branch, content, author) VALUES (?, ?, ?, ?, ?)`,
+						canonicalRepoURL, parsed.Value, canonicalBranch,
+						c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
 				}
 			}
+		}
+
+		// Insert into materialized resolved table
+		_, _ = resolvedStmt.Exec(repoURL, c.Hash, branch,
+			c.Message, c.Message, edits,
+			0, 0, isEditCommit,
+			resolvedAuthorName, resolvedAuthorEmail, resolvedTimestamp,
+			labelsVal, 0, now)
+
+		// Insert into FTS5 (skip edit commits — their content updates the canonical)
+		if isEditCommit == 0 {
+			_, _ = ftsStmt.Exec(repoURL, c.Hash, branch,
+				c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
 		}
 	}
 
@@ -167,6 +234,8 @@ func MarkCommitsStale(repoURL, branch string, liveHashes map[string]bool) (int, 
 				now, repoURL, hash, branch); err != nil {
 				return 0, fmt.Errorf("mark stale %s: %w", hash, err)
 			}
+			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				now, repoURL, hash, branch)
 		}
 		for _, hash := range toUnstale {
 			if _, err := db.Exec(
@@ -174,6 +243,8 @@ func MarkCommitsStale(repoURL, branch string, liveHashes map[string]bool) (int, 
 				repoURL, hash, branch); err != nil {
 				return 0, fmt.Errorf("unstale %s: %w", hash, err)
 			}
+			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = NULL WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				repoURL, hash, branch)
 		}
 		return len(toStale), nil
 	})
@@ -324,6 +395,8 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 				now, repoURL, k.hash, k.branch); err != nil {
 				return 0, fmt.Errorf("mark stale %s: %w", k.hash, err)
 			}
+			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				now, repoURL, k.hash, k.branch)
 		}
 		for _, k := range toUnstale {
 			if _, err := db.Exec(
@@ -331,6 +404,8 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 				repoURL, k.hash, k.branch); err != nil {
 				return 0, fmt.Errorf("unstale %s: %w", k.hash, err)
 			}
+			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = NULL WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				repoURL, k.hash, k.branch)
 		}
 		return len(toStale), nil
 	})
@@ -345,8 +420,9 @@ func ResetRepositoryData(repoURL string) error {
 			"social_items", "social_interactions",
 			"pm_items", "release_items", "review_items",
 			"core_commits_version", "core_mentions",
-			"core_notification_reads", "core_commits",
+			"core_notification_reads", "core_commits_resolved", "core_commits",
 		}
+		_, _ = db.Exec(`DELETE FROM core_fts WHERE repo_url = ?`, repoURL)
 		for _, table := range tables {
 			if _, err := db.Exec(`DELETE FROM `+table+` WHERE repo_url = ?`, repoURL); err != nil {
 				// Table may not exist if extension not loaded — skip
@@ -375,10 +451,13 @@ func EscapeLike(s string) string {
 	return s
 }
 
-// ExtensionHit identifies which extension table owns a commit hash.
+// ExtensionHit identifies which extension table owns a commit hash, with its full primary key.
 type ExtensionHit struct {
 	Extension string // "review", "pm", "release", "social"
 	Type      string // extension-specific type (e.g. "pull-request", "issue", "post")
+	RepoURL   string
+	Hash      string
+	Branch    string
 }
 
 // DetectExtension returns which extension table(s) contain a given hash.
@@ -397,14 +476,14 @@ func DetectExtension(hash string) ([]ExtensionHit, error) {
 			cond = "hash LIKE ? ESCAPE '\\'"
 			arg = EscapeLike(hash) + "%"
 		}
-		query := `SELECT ext, type FROM (
-			SELECT 'review' as ext, type FROM review_items WHERE ` + cond + `
+		query := `SELECT ext, type, repo_url, hash, branch FROM (
+			SELECT 'review' as ext, type, repo_url, hash, branch FROM review_items WHERE ` + cond + `
 			UNION ALL
-			SELECT 'pm', type FROM pm_items WHERE ` + cond + `
+			SELECT 'pm', type, repo_url, hash, branch FROM pm_items WHERE ` + cond + `
 			UNION ALL
-			SELECT 'release', tag FROM release_items WHERE ` + cond + `
+			SELECT 'release', tag, repo_url, hash, branch FROM release_items WHERE ` + cond + `
 			UNION ALL
-			SELECT 'social', type FROM social_items WHERE ` + cond + `
+			SELECT 'social', type, repo_url, hash, branch FROM social_items WHERE ` + cond + `
 		)`
 		rows, err := db.Query(query, arg, arg, arg, arg)
 		if err != nil {
@@ -414,7 +493,7 @@ func DetectExtension(hash string) ([]ExtensionHit, error) {
 		var hits []ExtensionHit
 		for rows.Next() {
 			var h ExtensionHit
-			if rows.Scan(&h.Extension, &h.Type) == nil {
+			if rows.Scan(&h.Extension, &h.Type, &h.RepoURL, &h.Hash, &h.Branch) == nil {
 				hits = append(hits, h)
 			}
 		}

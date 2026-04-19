@@ -65,7 +65,7 @@ func enrichForGrouping(items []ScoredItem, field string) {
 	})
 }
 
-// enrichPM queries pm_items_resolved for state, labels, assignees, scoped to result set items.
+// enrichPM queries pm_items for state, labels, assignees, scoped to result set items.
 func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field string) {
 	if field != "state" && field != "label" && field != "assignee" && field != "milestone" {
 		return
@@ -74,7 +74,7 @@ func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field 
 	hashFilter, hashArgs := buildHashFilter(keyIndex)
 	query := `SELECT repo_url, hash, branch, state, labels, assignees,
 		milestone_repo_url, milestone_hash, milestone_branch
-		FROM pm_items_resolved WHERE type IN ('issue', 'milestone', 'sprint') AND ` + hashFilter
+		FROM pm_items WHERE type IN ('issue', 'milestone', 'sprint') AND ` + hashFilter
 	rows, err := db.Query(query, hashArgs...)
 	if err != nil {
 		return
@@ -107,7 +107,7 @@ func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field 
 	}
 }
 
-// enrichReview queries review_items_resolved for state, labels, reviewers, base, scoped to result set items.
+// enrichReview queries review_items for state, labels, reviewers, base, scoped to result set items.
 func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field string) {
 	if field != "state" && field != "label" && field != "reviewer" && field != "base" {
 		return
@@ -115,7 +115,7 @@ func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, fi
 
 	hashFilter, hashArgs := buildHashFilter(keyIndex)
 	query := `SELECT repo_url, hash, branch, state, labels, reviewers, base
-		FROM review_items_resolved WHERE type = 'pull-request' AND ` + hashFilter
+		FROM review_items WHERE type = 'pull-request' AND ` + hashFilter
 	rows, err := db.Query(query, hashArgs...)
 	if err != nil {
 		return

@@ -4,6 +4,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/protocol"
@@ -74,13 +75,56 @@ func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonica
 		if isRetracted {
 			retracted = 1
 		}
-		_, err := db.Exec(`
+		if _, err := db.Exec(`
 			INSERT OR REPLACE INTO core_commits_version
 			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted)
-		return err
+			editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted); err != nil {
+			return err
+		}
+		syncResolvedVersion(db, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted)
+		return nil
 	})
+}
+
+// syncResolvedVersion updates core_commits_resolved and extension raw tables
+// when a version record is created, so that the canonical row reflects the
+// latest edit's state. This allows search to query raw tables directly
+// instead of going through the slow resolved views.
+func syncResolvedVersion(db *sql.DB, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string, retracted int) {
+	// Mark the edit commit
+	_, _ = db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		editRepoURL, editHash, editBranch)
+	// Get the edit commit's message and labels for the canonical
+	var editMessage, editLabels sql.NullString
+	_ = db.QueryRow(`SELECT message, labels FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		editRepoURL, editHash, editBranch).Scan(&editMessage, &editLabels)
+	// Update the canonical's resolved fields
+	if editMessage.Valid {
+		_, _ = db.Exec(`UPDATE core_commits_resolved SET has_edits = 1, resolved_message = ?, is_retracted = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+			editMessage.String, retracted, canonicalRepoURL, canonicalHash, canonicalBranch)
+	}
+	if editLabels.Valid {
+		_, _ = db.Exec(`UPDATE core_commits_resolved SET labels = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+			editLabels.String, canonicalRepoURL, canonicalHash, canonicalBranch)
+	}
+	// Propagate mutable extension fields (state, labels, draft, assignees, reviewers)
+	// from the edit's raw row to the canonical's raw row, so search can filter on
+	// raw tables instead of resolved views.
+	for _, ext := range []struct{ table, cols string }{
+		{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
+		{"pm_items", "state, assignees, due, start_date, end_date"},
+	} {
+		var exists int
+		if db.QueryRow("SELECT 1 FROM "+ext.table+" WHERE repo_url = ? AND hash = ? AND branch = ?",
+			editRepoURL, editHash, editBranch).Scan(&exists) != nil {
+			continue
+		}
+		for _, col := range strings.Split(ext.cols, ", ") {
+			_, _ = db.Exec("UPDATE "+ext.table+" SET "+col+" = (SELECT "+col+" FROM "+ext.table+" WHERE repo_url = ? AND hash = ? AND branch = ?) WHERE repo_url = ? AND hash = ? AND branch = ?",
+				editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
+		}
+	}
 }
 
 // GetLatestVersion returns the latest version of a commit.
@@ -366,6 +410,7 @@ func ReconcileVersions() (int, error) {
 				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				p.editRepoURL, p.editHash, p.editBranch, p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch, retracted); err == nil {
 				created++
+				syncResolvedVersion(db, p.editRepoURL, p.editHash, p.editBranch, p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch, retracted)
 			}
 		}
 		return nil

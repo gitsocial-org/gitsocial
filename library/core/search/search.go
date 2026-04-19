@@ -138,6 +138,18 @@ func Search(workdir string, params Params) (Result, error) {
 	q.Milestone = params.Milestone
 	q.Sprint = params.Sprint
 
+	// Push LIMIT into SQL when possible. For group-by, we need all rows.
+	// For text queries, FTS5 provides relevance so SQL LIMIT is safe.
+	if params.GroupBy == "" && params.Limit > 0 {
+		q.SQLLimit = params.Limit + params.Offset
+	}
+
+	// When SQL LIMIT is active, get the true total count for pagination
+	var trueTotal int
+	if q.SQLLimit > 0 {
+		trueTotal, _ = queryCount(q)
+	}
+
 	items, err := queryItems(q)
 	if err != nil {
 		return Result{}, err
@@ -173,6 +185,9 @@ func Search(workdir string, params Params) (Result, error) {
 	}
 
 	total := len(results)
+	if trueTotal > total {
+		total = trueTotal
+	}
 	if params.Offset > 0 {
 		if params.Offset >= len(results) {
 			results = nil
@@ -180,7 +195,7 @@ func Search(workdir string, params Params) (Result, error) {
 			results = results[params.Offset:]
 		}
 	}
-	hasMore := len(results) > params.Limit
+	hasMore := len(results) > params.Limit || (trueTotal > 0 && params.Offset+params.Limit < trueTotal)
 	if len(results) > params.Limit {
 		results = results[:params.Limit]
 	}
@@ -189,7 +204,7 @@ func Search(workdir string, params Params) (Result, error) {
 		Query:           params.Query,
 		Results:         results,
 		Total:           total,
-		TotalSearched:   len(items),
+		TotalSearched:   total,
 		HasMore:         hasMore,
 		ExecutionTimeMs: time.Since(startTime).Milliseconds(),
 	}, nil
@@ -230,13 +245,28 @@ func resolveListID(value string) string {
 	return value
 }
 
+// queryCount returns the total count of items matching the search filters (no LIMIT).
+func queryCount(q searchQuery) (int, error) {
+	return cache.QueryLocked(func(db *sql.DB) (int, error) {
+		whereClause, args := buildWhere(q, db)
+		query := "SELECT COUNT(*) FROM core_commits_resolved r" + whereClause
+		var count int
+		err := db.QueryRow(query, args...).Scan(&count)
+		return count, err
+	})
+}
+
 // queryItems fetches items from the database matching scope and filters.
 func queryItems(q searchQuery) ([]Item, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]Item, error) {
 		tables := availableTables(db)
 		selectClause := buildSelect(tables)
-		whereClause, args := buildWhere(q)
+		whereClause, args := buildWhere(q, db)
 		query := selectClause + whereClause + " ORDER BY r.timestamp DESC"
+		if q.SQLLimit > 0 {
+			query += " LIMIT ?"
+			args = append(args, q.SQLLimit)
+		}
 
 		rows, err := db.Query(query, args...)
 		if err != nil {
@@ -349,7 +379,7 @@ func scoreAndFilter(items []Item, params Params, parsed parsedQuery) []ScoredIte
 			}
 
 			if score == 0 {
-				continue
+				score = 1.0 // SQL already filtered via FTS/LIKE; keep for ranking
 			}
 		} else if len(hashTerms) > 0 {
 			score = 20.0

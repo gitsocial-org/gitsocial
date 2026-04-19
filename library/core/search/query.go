@@ -19,6 +19,7 @@ type searchQuery struct {
 	ExtFilter    *ExtFilter // extension table filter
 	Since        *time.Time
 	Until        *time.Time
+	SQLLimit     int // pushed to SQL LIMIT; 0 = no limit
 
 	// Text search filters (pushed to SQL for performance)
 	TextSearch   string // text to search in message and author fields
@@ -144,7 +145,7 @@ func buildSelect(tables []extensionTable) string {
 }
 
 // buildWhere constructs WHERE clause and args for search queries.
-func buildWhere(q searchQuery) (string, []interface{}) {
+func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	var args []interface{}
 	var where []string
 
@@ -202,10 +203,15 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 		args = append(args, q.Until.Format(time.RFC3339))
 	}
 
-	// Text search: filter by message content or author in SQL
+	// Text search: use FTS5 index when available, fall back to LIKE
 	if q.TextSearch != "" {
-		where = append(where, "(r.resolved_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
-		args = append(args, q.TextSearch, q.TextSearch, q.TextSearch)
+		if ftsAvailable(db) {
+			where = append(where, "r.hash IN (SELECT hash FROM core_fts WHERE core_fts MATCH ?)")
+			args = append(args, ftsQuery(q.TextSearch))
+		} else {
+			where = append(where, "(r.resolved_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+			args = append(args, q.TextSearch, q.TextSearch, q.TextSearch)
+		}
 	}
 	if q.AuthorFilter != "" {
 		where = append(where, "(r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
@@ -237,18 +243,17 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 		where = append(where, subq)
 	}
 
-	// Extension-specific filters use resolved views to get current state after edits.
-	// Raw tables only reflect creation-time values; resolved views COALESCE edit values.
+	// Extension-specific filters query raw tables directly.
+	// syncResolvedVersion maintains current state/labels/assignees on the canonical's
+	// raw extension row, so these don't need the slow resolved views.
 	if q.State != "" {
 		var stateClauses []string
-		// pm: open, closed, canceled
 		if q.State == "open" || q.State == "closed" || q.State == "canceled" {
-			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM pm_items_resolved pir WHERE pir.repo_url = r.repo_url AND pir.hash = r.hash AND pir.branch = r.branch AND pir.state = ?)")
+			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM pm_items pir WHERE pir.repo_url = r.repo_url AND pir.hash = r.hash AND pir.branch = r.branch AND pir.state = ?)")
 			args = append(args, q.State)
 		}
-		// review: open, merged, closed
 		if q.State == "open" || q.State == "merged" || q.State == "closed" {
-			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM review_items_resolved rir WHERE rir.repo_url = r.repo_url AND rir.hash = r.hash AND rir.branch = r.branch AND rir.state = ?)")
+			stateClauses = append(stateClauses, "EXISTS (SELECT 1 FROM review_items rir WHERE rir.repo_url = r.repo_url AND rir.hash = r.hash AND rir.branch = r.branch AND rir.state = ?)")
 			args = append(args, q.State)
 		}
 		if len(stateClauses) == 1 {
@@ -258,7 +263,7 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 		}
 	}
 	if q.Draft {
-		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir2 WHERE rir2.repo_url = r.repo_url AND rir2.hash = r.hash AND rir2.branch = r.branch AND rir2.draft = 1)")
+		where = append(where, "EXISTS (SELECT 1 FROM review_items rir2 WHERE rir2.repo_url = r.repo_url AND rir2.hash = r.hash AND rir2.branch = r.branch AND rir2.draft = 1)")
 	}
 	if q.Prerelease {
 		where = append(where, "EXISTS (SELECT 1 FROM release_items rli2 WHERE rli2.repo_url = r.repo_url AND rli2.hash = r.hash AND rli2.branch = r.branch AND rli2.prerelease = 1)")
@@ -268,41 +273,40 @@ func buildWhere(q searchQuery) (string, []interface{}) {
 		args = append(args, q.Tag)
 	}
 	if q.Base != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir3 WHERE rir3.repo_url = r.repo_url AND rir3.hash = r.hash AND rir3.branch = r.branch AND rir3.base = ?)")
+		where = append(where, "EXISTS (SELECT 1 FROM review_items rir3 WHERE rir3.repo_url = r.repo_url AND rir3.hash = r.hash AND rir3.branch = r.branch AND rir3.base = ?)")
 		args = append(args, q.Base)
 	}
 	if q.Milestone != "" {
-		where = append(where, `EXISTS (SELECT 1 FROM pm_items_resolved pir2 WHERE pir2.repo_url = r.repo_url AND pir2.hash = r.hash AND pir2.branch = r.branch
+		where = append(where, `EXISTS (SELECT 1 FROM pm_items pir2 WHERE pir2.repo_url = r.repo_url AND pir2.hash = r.hash AND pir2.branch = r.branch
 			AND pir2.milestone_hash IS NOT NULL
 			AND EXISTS (SELECT 1 FROM core_commits mc WHERE mc.repo_url = pir2.milestone_repo_url AND mc.hash = pir2.milestone_hash AND mc.branch = pir2.milestone_branch AND mc.message LIKE ? || '%'))`)
 		args = append(args, q.Milestone)
 	}
 	if q.Sprint != "" {
-		where = append(where, `EXISTS (SELECT 1 FROM pm_items_resolved pir3 WHERE pir3.repo_url = r.repo_url AND pir3.hash = r.hash AND pir3.branch = r.branch
+		where = append(where, `EXISTS (SELECT 1 FROM pm_items pir3 WHERE pir3.repo_url = r.repo_url AND pir3.hash = r.hash AND pir3.branch = r.branch
 			AND pir3.sprint_hash IS NOT NULL
 			AND EXISTS (SELECT 1 FROM core_commits sc WHERE sc.repo_url = pir3.sprint_repo_url AND sc.hash = pir3.sprint_hash AND sc.branch = pir3.sprint_branch AND sc.message LIKE ? || '%'))`)
 		args = append(args, q.Sprint)
 	}
 	if q.Labels != "" {
-		// Match any of the provided labels (OR logic). Labels are comma-separated in DB.
 		labelList := splitCSV(q.Labels)
 		labelClauses := make([]string, 0, 2*len(labelList))
 		for _, label := range labelList {
 			labelClauses = append(labelClauses,
-				"EXISTS (SELECT 1 FROM pm_items_resolved pir4 WHERE pir4.repo_url = r.repo_url AND pir4.hash = r.hash AND pir4.branch = r.branch AND pir4.labels LIKE '%' || ? || '%')")
+				"EXISTS (SELECT 1 FROM pm_items pir4 WHERE pir4.repo_url = r.repo_url AND pir4.hash = r.hash AND pir4.branch = r.branch AND pir4.labels LIKE '%' || ? || '%')")
 			args = append(args, label)
 			labelClauses = append(labelClauses,
-				"EXISTS (SELECT 1 FROM review_items_resolved rir4 WHERE rir4.repo_url = r.repo_url AND rir4.hash = r.hash AND rir4.branch = r.branch AND rir4.labels LIKE '%' || ? || '%')")
+				"EXISTS (SELECT 1 FROM review_items rir4 WHERE rir4.repo_url = r.repo_url AND rir4.hash = r.hash AND rir4.branch = r.branch AND rir4.labels LIKE '%' || ? || '%')")
 			args = append(args, label)
 		}
 		where = append(where, "("+strings.Join(labelClauses, " OR ")+")")
 	}
 	if q.Assignee != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM pm_items_resolved pir5 WHERE pir5.repo_url = r.repo_url AND pir5.hash = r.hash AND pir5.branch = r.branch AND (',' || REPLACE(pir5.assignees, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		where = append(where, "EXISTS (SELECT 1 FROM pm_items pir5 WHERE pir5.repo_url = r.repo_url AND pir5.hash = r.hash AND pir5.branch = r.branch AND (',' || REPLACE(pir5.assignees, ' ', '') || ',') LIKE '%,' || ? || ',%')")
 		args = append(args, q.Assignee)
 	}
 	if q.Reviewer != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM review_items_resolved rir5 WHERE rir5.repo_url = r.repo_url AND rir5.hash = r.hash AND rir5.branch = r.branch AND (',' || REPLACE(rir5.reviewers, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		where = append(where, "EXISTS (SELECT 1 FROM review_items rir5 WHERE rir5.repo_url = r.repo_url AND rir5.hash = r.hash AND rir5.branch = r.branch AND (',' || REPLACE(rir5.reviewers, ' ', '') || ',') LIKE '%,' || ? || ',%')")
 		args = append(args, q.Reviewer)
 	}
 
@@ -325,4 +329,28 @@ func splitCSV(s string) []string {
 		}
 	}
 	return result
+}
+
+// ftsAvailable checks whether the core_fts FTS5 table exists.
+func ftsAvailable(db *sql.DB) bool {
+	if db == nil {
+		return false
+	}
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='core_fts'").Scan(&count)
+	return err == nil && count > 0
+}
+
+// ftsQuery converts a text search string to an FTS5 MATCH query.
+// Each word becomes a quoted term; multiple words are ANDed (FTS5 default).
+func ftsQuery(text string) string {
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return text
+	}
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = `"` + strings.ReplaceAll(w, `"`, `""`) + `"*`
+	}
+	return strings.Join(quoted, " ")
 }

@@ -288,13 +288,15 @@ func InsertSocialItem(item SocialItem) error {
 		var wasVirtual int
 		if err := db.QueryRow(`SELECT is_virtual FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
 			item.RepoURL, item.Hash, item.Branch).Scan(&wasVirtual); err == nil && wasVirtual == 1 {
-			_, err := db.Exec(`
+			if _, err := db.Exec(`
 				UPDATE core_commits SET is_virtual = 0, fetched_at = datetime('now')
 				WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				item.RepoURL, item.Hash, item.Branch)
-			if err != nil {
+				item.RepoURL, item.Hash, item.Branch); err != nil {
 				return err
 			}
+			_, _ = db.Exec(`UPDATE core_commits_resolved SET is_virtual = 0, fetched_at = datetime('now')
+				WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				item.RepoURL, item.Hash, item.Branch)
 		}
 
 		// Insert or update social_items
