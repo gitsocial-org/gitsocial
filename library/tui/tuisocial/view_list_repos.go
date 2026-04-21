@@ -190,6 +190,12 @@ func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			}
 		}
+	default:
+		if v.inputMode {
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }

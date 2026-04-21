@@ -137,6 +137,17 @@ func (v *ForksView) Update(msg tea.Msg, state *State) tea.Cmd {
 				break
 			}
 		}
+	default:
+		if v.inputMode {
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
+		if v.searchActive {
+			var cmd tea.Cmd
+			v.searchInput, cmd = v.searchInput.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }

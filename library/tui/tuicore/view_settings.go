@@ -130,6 +130,12 @@ func (v *SettingsView) Update(msg tea.Msg, state *State) tea.Cmd {
 		if v.data != nil {
 			state.ShowEmailOnCards = v.data.Display.ShowEmail
 		}
+	default:
+		if v.editMode {
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }

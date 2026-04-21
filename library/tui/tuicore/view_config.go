@@ -125,6 +125,12 @@ func (v *ConfigView) Update(msg tea.Msg, state *State) tea.Cmd {
 		return v.handleKey(msg, state.Workdir)
 	case ConfigViewLoadedMsg:
 		v.HandleLoaded(msg)
+	default:
+		if v.editMode || v.addMode {
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }
