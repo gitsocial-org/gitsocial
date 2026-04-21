@@ -133,6 +133,8 @@ Messages MAY include a `labels` field containing comma-separated scoped values i
 - Labels are a core field: available to all extensions without manifest declaration
 - Extensions define the position of `labels` within their field order
 
+Messages MAY use `vocab/<name>` labels to declare a formal taxonomy, with `<name>/*` labels carrying terms from that taxonomy (e.g., `vocab/dewey,dewey/005.8`).
+
 ### 1.8. Commit Trailers
 
 Regular commits (without `GitMsg:` trailers) MAY use git trailers to reference GitMsg items. Implementations MUST recognize these trailer keys:
