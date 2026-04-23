@@ -204,14 +204,41 @@ Core protocol configuration MUST be stored at `refs/gitmsg/core/config` as JSON.
 
 Core configuration MAY include: `forks` (array of repository URLs for cross-fork collaboration).
 
-### 3.2. Extension Requirements
+### 3.2. Identity Verification
+
+A signed commit is "verified" when its `(signing key, author email)` pair is attested by an external authority. Verification is a property of the binding, not of an individual commit: once a `(key, email)` binding is verified, every signed commit matching that binding is verified.
+
+Implementations MUST NOT reject unsigned commits; unsigned commits are unverified. Implementations MAY consult any number of attestation sources; sources attest the binding independently. A binding is verified when at least one source affirms it, and an implementation MUST NOT treat a non-affirmative response from one source as evidence against another.
+
+This protocol defines one attestation source: the domain-owner well-known endpoint. For commits whose author email is on a domain the user controls, implementations MAY fetch `https://<domain>/.well-known/gitmsg-id.json`. The response MUST be a JSON document of the form:
+
+```json
+{
+  "identities": {
+    "<local-part>": {
+      "key": "ssh-ed25519 AAAAC3...",
+      "repo": "https://example.com/user/repo"
+    }
+  }
+}
+```
+
+Each entry MUST contain `key`; `repo` is OPTIONAL.
+
+A document fetched from host `<host>` attests bindings at `<host>` only. Implementations MUST NOT treat such a document as attesting a binding at any other domain. The binding is verified when the document contains an entry whose `<local-part>` matches the local part of the author email and whose `key` matches the commit's signing key.
+
+If the email's exact host has no document, implementations MAY apply a single mail-subdomain fallback: for an email at `<prefix>.<parent>` where `<prefix>` is one of `mail`, `email`, `smtp`, `imap`, `pop`, or `mx`, the document at `<parent>` MAY also attest the binding at `<prefix>.<parent>`. Implementations MUST NOT walk more than one level up, and MUST NOT apply the fallback when `<parent>` contains no dot (which would attempt fetches against TLDs).
+
+Implementations MAY consult additional attestation sources, such as forge-published key/UID mappings or forge commit-verification APIs. The conventions of those services are defined by their providers and are out of scope for this specification.
+
+### 3.3. Extension Requirements
 
 - MUST store data under `refs/gitmsg/<extension-name>/`
 - MUST validate extension compatibility before processing
 - SHOULD handle unknown extensions gracefully
 - Configuration MUST be stored at `refs/gitmsg/<extension-name>/config` as JSON
 
-### 3.3. Branch Resolution
+### 3.4. Branch Resolution
 
 Extensions store content on a dedicated branch. Implementations MUST resolve the content branch using the following algorithm:
 
@@ -221,7 +248,7 @@ Extensions store content on a dedicated branch. Implementations MUST resolve the
 
 Implementations MUST only scan the resolved branch for extension content.
 
-### 3.4. Manifest
+### 3.5. Manifest
 
 Extension manifests enable cross-extension discovery and compatibility. When an extension encounters a reference to another extension's message, it fetches the referenced commit to read its extension declaration and uses the manifest to understand that extension's message types and fields.
 
@@ -266,6 +293,9 @@ Core fields (`type`, `author`, `email`, `time`, `ref`, `edits`, `retracted`, `la
 - Mention: `@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`
 - Trailer key: `^(Fixes|Closes|Resolves|Implements|Refs):$`
 - Trailer line: `^(Fixes|Closes|Resolves|Implements|Refs): .+$`
+- Identity key (SSH): `^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/=]+$`
+- Identity key (GPG): `^gpg:[A-Fa-f0-9]{16,40}$`
+- DNS well-known: `https://<domain>/.well-known/gitmsg-id.json`
 
 ## Appendix: Examples
 
