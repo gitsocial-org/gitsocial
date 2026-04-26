@@ -141,13 +141,15 @@ func (v *TimelineView) Refresh(state *tuicore.State) tea.Cmd {
 	return v.loadPosts()
 }
 
-// loadPosts fetches timeline posts from the social API.
+// loadPosts fetches timeline posts from the social API. The total count is
+// loaded asynchronously so the page render isn't blocked on a multi-second
+// COUNT(*).
 func (v *TimelineView) loadPosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	gitRoot := v.gitRoot
 	limit := v.pag.Limit()
-	return func() tea.Msg {
+	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{
 			Limit:   limit + 1,
 			GitRoot: gitRoot,
@@ -156,9 +158,12 @@ func (v *TimelineView) loadPosts() tea.Cmd {
 			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		total := social.CountTimeline(workdir, gitRoot)
-		return TimelineLoadedMsg{Posts: posts, HasMore: hasMore, Total: total}
+		return TimelineLoadedMsg{Posts: posts, HasMore: hasMore}
 	}
+	countCmd := func() tea.Msg {
+		return TimelineCountLoadedMsg{Total: social.CountTimeline(workdir, gitRoot)}
+	}
+	return tea.Batch(pageCmd, countCmd)
 }
 
 // loadMorePosts fetches the next page of timeline posts.
@@ -203,6 +208,8 @@ func (v *TimelineView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 	case TimelineLoadedMsg:
 		v.handleLoaded(msg)
+	case TimelineCountLoadedMsg:
+		v.pag.SetTotal(msg.Total)
 	}
 	return nil
 }
@@ -322,12 +329,12 @@ func (v *TimelineView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 }
 
 // HeaderInfo returns position and total for the header display.
-func (v *TimelineView) HeaderInfo() (position, total int) {
+func (v *TimelineView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 || v.pag.Loading {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cardlist.Selected() + 1, v.pag.Total(len(items))
+	return v.cardlist.Selected() + 1, v.pag.TotalDisplay(len(items))
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.

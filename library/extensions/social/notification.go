@@ -32,9 +32,10 @@ const userThreadsCTE = `
 `
 
 // followedReposCondition filters thread-participation notifications to repos the workspace follows.
-// Parameter: workdir
+// Parameter: workdir. Uses alias `s` for social_items — caller queries must
+// alias the table as `s`.
 const followedReposCondition = `
-	v.original_repo_url IN (
+	s.original_repo_url IN (
 		SELECT lr.repo_url FROM core_list_repositories lr
 		JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
 `
@@ -48,28 +49,36 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 	userEmail := git.GetUserEmail(workdir)
 
 	items, err := cache.QueryLocked(func(db *sql.DB) ([]notificationRow, error) {
+		// Drive from social_items (small, indexed by type) instead of
+		// social_items_resolved (which scans core_commits — 6+ s on a
+		// 1M-commit cache).
 		query := `
 			WITH ` + userThreadsCTE + `
-			SELECT v.repo_url, v.hash, v.branch, v.type,
-			       v.original_repo_url, v.original_hash, v.original_branch,
-			       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
-			       v.resolved_message, v.original_message, v.author_name, v.author_email, v.timestamp,
-			       v.is_virtual,
-			       v.comments, v.reposts, v.quotes,
+			SELECT s.repo_url, s.hash, s.branch, s.type,
+			       s.original_repo_url, s.original_hash, s.original_branch,
+			       s.reply_to_repo_url, s.reply_to_hash, s.reply_to_branch,
+			       COALESCE(c.resolved_message, c.message), c.message,
+			       COALESCE(c.origin_author_name, c.author_name),
+			       COALESCE(c.origin_author_email, c.author_email),
+			       COALESCE(c.origin_time, c.timestamp),
+			       c.is_virtual,
+			       COALESCE(i.comments, 0), COALESCE(i.reposts, 0), COALESCE(i.quotes, 0),
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
-			FROM social_items_resolved v
-			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
-			WHERE v.type IN ('comment', 'repost', 'quote')
-			  AND v.repo_url != ?
-			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			FROM social_items s
+			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+			LEFT JOIN social_interactions i ON s.repo_url = i.repo_url AND s.hash = i.hash AND s.branch = i.branch
+			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
+			WHERE s.type IN ('comment', 'repost', 'quote')
+			  AND s.repo_url != ?
+			  AND COALESCE(c.origin_author_email, c.author_email) != ?
+			  AND NOT c.is_edit_commit AND NOT c.is_retracted
 			  AND (
-			    v.original_repo_url = ?
+			    s.original_repo_url = ?
 			    OR (EXISTS (
 			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = v.original_repo_url
-			        AND ut.original_hash = v.original_hash
-			        AND ut.original_branch = v.original_branch
+			      WHERE ut.original_repo_url = s.original_repo_url
+			        AND ut.original_hash = s.original_hash
+			        AND ut.original_branch = s.original_branch
 			    ) AND ` + followedReposCondition + `)
 			  )
 		`
@@ -79,7 +88,7 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 			query += " AND r.repo_url IS NULL"
 		}
 
-		query += " ORDER BY v.timestamp DESC"
+		query += " ORDER BY COALESCE(c.origin_time, c.timestamp) DESC"
 
 		if filter.Limit > 0 {
 			query += " LIMIT ?"
@@ -240,21 +249,23 @@ func GetUnreadCount(workdir string) (int, error) {
 
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var itemCount, followCount int
+		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
 		if err := db.QueryRow(`
 			WITH `+userThreadsCTE+`
-			SELECT COUNT(*) FROM social_items_resolved v
-			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
-			WHERE v.type IN ('comment', 'repost', 'quote')
-			  AND v.repo_url != ?
-			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			SELECT COUNT(*) FROM social_items s
+			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
+			WHERE s.type IN ('comment', 'repost', 'quote')
+			  AND s.repo_url != ?
+			  AND COALESCE(c.origin_author_email, c.author_email) != ?
+			  AND NOT c.is_edit_commit AND NOT c.is_retracted
 			  AND (
-			    v.original_repo_url = ?
+			    s.original_repo_url = ?
 			    OR (EXISTS (
 			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = v.original_repo_url
-			        AND ut.original_hash = v.original_hash
-			        AND ut.original_branch = v.original_branch
+			      WHERE ut.original_repo_url = s.original_repo_url
+			        AND ut.original_hash = s.original_hash
+			        AND ut.original_branch = s.original_branch
 			    ) AND `+followedReposCondition+`)
 			  )
 			  AND r.repo_url IS NULL
@@ -282,22 +293,24 @@ func MarkAllAsRead(workdir string) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
+		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
-			SELECT v.repo_url, v.hash, v.branch, ? FROM social_items_resolved v
-			LEFT JOIN core_notification_reads r ON v.repo_url = r.repo_url AND v.hash = r.hash AND v.branch = r.branch
-			WHERE v.type IN ('comment', 'repost', 'quote')
-			  AND v.repo_url != ?
-			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			SELECT s.repo_url, s.hash, s.branch, ? FROM social_items s
+			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
+			WHERE s.type IN ('comment', 'repost', 'quote')
+			  AND s.repo_url != ?
+			  AND COALESCE(c.origin_author_email, c.author_email) != ?
+			  AND NOT c.is_edit_commit AND NOT c.is_retracted
 			  AND (
-			    v.original_repo_url = ?
+			    s.original_repo_url = ?
 			    OR (EXISTS (
 			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = v.original_repo_url
-			        AND ut.original_hash = v.original_hash
-			        AND ut.original_branch = v.original_branch
+			      WHERE ut.original_repo_url = s.original_repo_url
+			        AND ut.original_hash = s.original_hash
+			        AND ut.original_branch = s.original_branch
 			    ) AND `+followedReposCondition+`)
 			  )
 			  AND r.repo_url IS NULL
@@ -326,22 +339,24 @@ func MarkAllAsUnread(workdir string) error {
 	}
 	userEmail := git.GetUserEmail(workdir)
 	return cache.ExecLocked(func(db *sql.DB) error {
+		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			DELETE FROM core_notification_reads
 			WHERE (repo_url, hash, branch) IN (
-				SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v
-				WHERE v.type IN ('comment', 'repost', 'quote')
-				  AND v.repo_url != ?
-				  AND v.author_email != ?
-				  AND NOT v.is_edit_commit AND NOT v.is_retracted
+				SELECT s.repo_url, s.hash, s.branch FROM social_items s
+				JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+				WHERE s.type IN ('comment', 'repost', 'quote')
+				  AND s.repo_url != ?
+				  AND COALESCE(c.origin_author_email, c.author_email) != ?
+				  AND NOT c.is_edit_commit AND NOT c.is_retracted
 				  AND (
-				    v.original_repo_url = ?
+				    s.original_repo_url = ?
 				    OR (EXISTS (
 				      SELECT 1 FROM user_threads ut
-				      WHERE ut.original_repo_url = v.original_repo_url
-				        AND ut.original_hash = v.original_hash
-				        AND ut.original_branch = v.original_branch
+				      WHERE ut.original_repo_url = s.original_repo_url
+				        AND ut.original_hash = s.original_hash
+				        AND ut.original_branch = s.original_branch
 				    ) AND `+followedReposCondition+`)
 				  )
 			)

@@ -571,12 +571,12 @@ func (v *ForksView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *ForksView) HeaderInfo() (position, total int) {
+func (v *ForksView) HeaderInfo() (position int, total string) {
 	indices := v.filteredIndices()
 	if len(indices) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cursor + 1, len(indices)
+	return v.cursor + 1, fmt.Sprintf("%d", len(indices))
 }
 
 // Bindings returns keybindings for the forks view.

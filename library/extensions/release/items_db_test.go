@@ -187,13 +187,16 @@ func TestGetReleaseItems_scanNullError(t *testing.T) {
 		db.Exec("DROP VIEW IF EXISTS release_items_resolved")
 		_, err := db.Exec(`CREATE VIEW release_items_resolved AS
 			SELECT r.repo_url, r.hash, r.branch,
-			       r.author_name, r.author_email, r.resolved_message, r.timestamp,
+			       r.effective_author_name AS author_name,
+			       r.effective_author_email AS author_email,
+			       r.effective_message AS resolved_message,
+			       r.effective_timestamp AS timestamp,
 			       p.tag, p.version, p.prerelease, p.artifacts, p.artifact_url,
 			       p.checksums, p.signed_by,
 			       r.edits, NULL as is_virtual, r.is_retracted, r.has_edits,
 			       r.is_edit_commit,
 			       0 as comments
-			FROM core_commits_resolved r
+			FROM core_commits r
 			INNER JOIN release_items p ON r.repo_url = p.repo_url AND r.hash = p.hash AND r.branch = p.branch`)
 		return err
 	})

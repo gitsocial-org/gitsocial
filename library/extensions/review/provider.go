@@ -521,7 +521,7 @@ func getDraftReadyNotifications(workspaceURL, userEmail string, forkURLs []strin
 		// Detect draft→ready transition: the edit sets draft=0, and the original
 		// canonical commit's message contains "Draft: true" in the header.
 		// We check the raw commit message instead of review_items because
-		// syncExtensionFields copies the latest draft value to the canonical row.
+		// applyEditToCanonical copies the latest draft value to the canonical row.
 		query := `
 			SELECT ec.repo_url, ec.hash, ec.branch,
 			       COALESCE(ec.origin_author_name, ec.author_name),

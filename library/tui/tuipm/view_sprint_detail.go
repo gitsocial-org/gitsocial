@@ -477,8 +477,8 @@ func (v *SprintDetailView) Title() string {
 }
 
 // HeaderInfo returns position info.
-func (v *SprintDetailView) HeaderInfo() (position, total int) {
-	return 0, 0
+func (v *SprintDetailView) HeaderInfo() (position int, total string) {
+	return 0, ""
 }
 
 // Bindings returns keybindings for this view.

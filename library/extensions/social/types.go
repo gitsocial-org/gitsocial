@@ -47,6 +47,7 @@ type Display struct {
 	IsWorkspacePost    bool
 	FollowsYou         bool
 	IsNotificationRead bool
+	IsVerified         bool
 	Badge              string
 	UserEmail          string // Current user's email for own-post detection in rendering
 	ShowEmail          bool   // Whether to show email in card header

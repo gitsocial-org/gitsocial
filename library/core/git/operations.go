@@ -108,38 +108,50 @@ func GetCommitSignerKey(workdir, hash string) (format string, key string, err er
 	return "gpg", keyID, nil
 }
 
+// signerKeyBatchSize bounds how many hashes are passed to a single `git log
+// --no-walk` invocation. Large repos (kernel-scale: 1M+ commits) would exceed
+// OS argv limits if all hashes were passed at once.
+const signerKeyBatchSize = 500
+
 // GetCommitSignerKeys returns a map of commit hash → signer key for the given hashes.
-// Unsigned commits are omitted from the result. Uses a single git log invocation per
-// repository for performance.
+// Unsigned commits are omitted from the result. Internally batches the lookup so
+// argv stays well under platform limits regardless of input size.
 func GetCommitSignerKeys(workdir string, hashes []string) (map[string]string, error) {
 	if len(hashes) == 0 {
 		return nil, nil
 	}
-	args := make([]string, 0, 3+len(hashes))
-	args = append(args, "log", "--no-walk", "--format=%H"+unitSep+"%GK")
-	args = append(args, hashes...)
-	result, err := ExecGit(workdir, args)
-	if err != nil {
-		return nil, fmt.Errorf("batch get signer keys: %w", err)
-	}
 	out := make(map[string]string, len(hashes))
-	for _, line := range strings.Split(result.Stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	for start := 0; start < len(hashes); start += signerKeyBatchSize {
+		end := start + signerKeyBatchSize
+		if end > len(hashes) {
+			end = len(hashes)
 		}
-		parts := strings.SplitN(line, unitSep, 2)
-		if len(parts) != 2 {
-			continue
+		batch := hashes[start:end]
+		args := make([]string, 0, 3+len(batch))
+		args = append(args, "log", "--no-walk", "--format=%H"+unitSep+"%GK")
+		args = append(args, batch...)
+		result, err := ExecGit(workdir, args)
+		if err != nil {
+			return nil, fmt.Errorf("batch get signer keys (chunk %d-%d): %w", start, end, err)
 		}
-		fullHash := strings.TrimSpace(parts[0])
-		key := strings.TrimSpace(parts[1])
-		if fullHash == "" || key == "" {
-			continue
-		}
-		out[fullHash] = key
-		if len(fullHash) >= 12 {
-			out[fullHash[:12]] = key
+		for _, line := range strings.Split(result.Stdout, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, unitSep, 2)
+			if len(parts) != 2 {
+				continue
+			}
+			fullHash := strings.TrimSpace(parts[0])
+			key := strings.TrimSpace(parts[1])
+			if fullHash == "" || key == "" {
+				continue
+			}
+			out[fullHash] = key
+			if len(fullHash) >= 12 {
+				out[fullHash[:12]] = key
+			}
 		}
 	}
 	return out, nil

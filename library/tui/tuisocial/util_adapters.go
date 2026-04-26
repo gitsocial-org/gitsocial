@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/search"
@@ -237,10 +236,8 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		card.Header.IsOwnRepo = true
 	}
 
-	// Verified: signing key is bound to the author email via forge or DNS attestation
-	if post.Repository != "" && authorEmail != "" && post.Display.CommitHash != "" {
-		card.Header.IsVerified = identity.IsVerifiedCommit(post.Repository, post.Display.CommitHash, authorEmail)
-	}
+	// Verified: precomputed at post-load time so render never blocks on the cache.
+	card.Header.IsVerified = post.Display.IsVerified
 
 	return card
 }

@@ -53,24 +53,24 @@ CREATE INDEX IF NOT EXISTS idx_review_file ON review_items(file);
 
 -- Extension: Review resolved view (unified read interface)
 -- Mutable fields (state, draft, reviewers, etc.) are maintained on the canonical's
--- raw row by syncExtensionFields at edit time, so no ROW_NUMBER subquery is needed.
+-- raw row by applyEditToCanonical at edit time, so no ROW_NUMBER subquery is needed.
 DROP VIEW IF EXISTS review_items_resolved;
 CREATE VIEW review_items_resolved AS
 SELECT
-    r.repo_url,
-    r.hash,
-    r.branch,
-    r.resolved_message,
-    r.original_message,
-    r.edits,
-    r.is_retracted,
-    r.has_edits,
-    r.is_edit_commit,
-    r.author_name,
-    r.author_email,
-    r.timestamp,
-    r.is_virtual,
-    r.stale_since,
+    c.repo_url,
+    c.hash,
+    c.branch,
+    c.effective_message AS resolved_message,
+    c.message AS original_message,
+    c.edits,
+    c.is_retracted,
+    c.has_edits,
+    c.is_edit_commit,
+    c.effective_author_name AS author_name,
+    c.effective_author_email AS author_email,
+    c.effective_timestamp AS timestamp,
+    c.is_virtual,
+    c.stale_since,
     p.type,
     p.state,
     p.draft,
@@ -92,9 +92,9 @@ SELECT
     p.new_line_end,
     p.review_state,
     p.suggestion,
-    r.labels,
+    c.labels,
     COALESCE(si.comments, 0) as comments
-FROM core_commits_resolved r
-INNER JOIN review_items p ON r.repo_url = p.repo_url AND r.hash = p.hash AND r.branch = p.branch
-LEFT JOIN social_interactions si ON r.repo_url = si.repo_url AND r.hash = si.hash AND r.branch = si.branch;
+FROM core_commits c
+INNER JOIN review_items p ON c.repo_url = p.repo_url AND c.hash = p.hash AND c.branch = p.branch
+LEFT JOIN social_interactions si ON c.repo_url = si.repo_url AND c.hash = si.hash AND c.branch = si.branch;
 `

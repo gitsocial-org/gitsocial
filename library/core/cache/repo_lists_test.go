@@ -24,7 +24,7 @@ SELECT r.*, COALESCE(s.type, 'post') as type,
     s.original_repo_url, s.original_hash, s.original_branch,
     s.reply_to_repo_url, s.reply_to_hash, s.reply_to_branch,
     COALESCE(i.comments, 0) as comments, COALESCE(i.reposts, 0) as reposts, COALESCE(i.quotes, 0) as quotes
-FROM core_commits_resolved r
+FROM core_commits r
 LEFT JOIN social_items s ON r.repo_url = s.repo_url AND r.hash = s.hash AND r.branch = s.branch
 LEFT JOIN social_interactions i ON r.repo_url = i.repo_url AND r.hash = i.hash AND r.branch = i.branch;
 CREATE TABLE IF NOT EXISTS social_notification_reads (

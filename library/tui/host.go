@@ -17,7 +17,7 @@ import (
 
 type (
 	headerInfoProvider interface {
-		HeaderInfo() (position, total int)
+		HeaderInfo() (position int, total string)
 	}
 
 	searchHeaderProvider interface {
@@ -314,15 +314,15 @@ func (h *Host) currentTitleFor(view tuicore.View) string {
 	if view != nil {
 		if provider, ok := view.(headerInfoProvider); ok {
 			pos, total := provider.HeaderInfo()
-			if total > 0 {
+			if total != "" {
 				if searchProvider, ok := view.(searchHeaderProvider); ok {
 					if totalSearched := searchProvider.TotalSearched(); totalSearched > 0 {
-						parts = append(parts, fmt.Sprintf("%d/%d of %d", pos, total, totalSearched))
+						parts = append(parts, fmt.Sprintf("%d/%s of %d", pos, total, totalSearched))
 					} else {
-						parts = append(parts, fmt.Sprintf("%d/%d", pos, total))
+						parts = append(parts, fmt.Sprintf("%d/%s", pos, total))
 					}
 				} else {
-					parts = append(parts, fmt.Sprintf("%d/%d", pos, total))
+					parts = append(parts, fmt.Sprintf("%d/%s", pos, total))
 				}
 			}
 		}

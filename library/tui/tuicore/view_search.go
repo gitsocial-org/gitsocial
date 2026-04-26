@@ -393,15 +393,15 @@ func (v *SearchView) IsInputActive() bool {
 }
 
 // HeaderInfo returns position and total for the header display.
-func (v *SearchView) HeaderInfo() (position, total int) {
+func (v *SearchView) HeaderInfo() (position int, total string) {
 	items := v.results.Items()
 	if len(items) == 0 {
-		return 0, 0
+		return 0, ""
 	}
 	if v.total > 0 {
-		return v.results.Selected() + 1, v.total
+		return v.results.Selected() + 1, fmt.Sprintf("%d", v.total)
 	}
-	return v.results.Selected() + 1, len(items)
+	return v.results.Selected() + 1, fmt.Sprintf("%d", len(items))
 }
 
 // TotalSearched returns the total number of items searched.

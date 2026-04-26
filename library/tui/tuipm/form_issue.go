@@ -564,18 +564,20 @@ type IssueFormView struct {
 	height     int
 }
 
-// NewIssueFormView creates a new issue form view.
-func NewIssueFormView(workdir string) *IssueFormView {
-	return &IssueFormView{
-		form: NewIssueForm(workdir),
-	}
+// NewIssueFormView creates a new issue form view. The form itself is
+// constructed lazily in Activate to avoid running expensive contributor /
+// milestone / sprint queries at TUI startup on large repositories.
+func NewIssueFormView(_ string) *IssueFormView {
+	return &IssueFormView{}
 }
 
 // SetSize sets the view dimensions.
 func (v *IssueFormView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
-	v.form.SetSize(w, h)
+	if v.form != nil {
+		v.form.SetSize(w, h)
+	}
 }
 
 // Activate creates a fresh form and initializes it.

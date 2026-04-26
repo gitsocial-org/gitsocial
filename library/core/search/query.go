@@ -149,7 +149,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 
 	// Build extension-specific column expressions
 	// State resolves through version chain: latest edit's state, then canonical's raw state.
-	// This handles cases where syncResolvedVersion hasn't propagated to the canonical's raw row.
+	// This handles cases where applyEditToCanonical hasn't propagated to the canonical's raw row.
 	stateExpr := buildResolvedStateExpr(has)
 	assigneesExpr := coalesceStr(has, [][2]string{{"pi", "assignees"}})
 	dueExpr := coalesceStr(has, [][2]string{{"pi", "due"}})
@@ -173,7 +173,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	}
 
 	query := `SELECT r.repo_url, r.hash, r.branch,
-	       r.author_name, r.author_email, r.resolved_message, r.timestamp,
+	       r.effective_author_name, r.effective_author_email, r.effective_message, r.effective_timestamp,
 	       r.is_virtual, r.stale_since,
 	       ` + socialTypeExpr + ` as social_type,
 	       ` + extCaseExpr + ` as extension,
@@ -190,7 +190,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	       ` + versionExpr + ` as item_version,
 	       ` + prereleaseExpr + ` as item_prerelease,
 	       ` + commentsExpr + ` as item_comments
-	FROM core_commits_resolved r
+	FROM core_commits r
 	` + strings.Join(joins, "\n\t")
 
 	return query
@@ -327,12 +327,12 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	}
 
 	if q.Since != nil {
-		where = append(where, "r.timestamp >= ?")
+		where = append(where, "r.effective_timestamp >= ?")
 		args = append(args, q.Since.Format(time.RFC3339))
 	}
 
 	if q.Until != nil {
-		where = append(where, "r.timestamp <= ?")
+		where = append(where, "r.effective_timestamp <= ?")
 		args = append(args, q.Until.Format(time.RFC3339))
 	}
 
@@ -342,12 +342,12 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 			where = append(where, "r.hash IN (SELECT hash FROM core_fts WHERE core_fts MATCH ?)")
 			args = append(args, ftsQuery(q.TextSearch))
 		} else {
-			where = append(where, "(r.resolved_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+			where = append(where, "(r.effective_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
 			args = append(args, q.TextSearch, q.TextSearch, q.TextSearch)
 		}
 	}
 	if q.AuthorFilter != "" {
-		where = append(where, "(r.author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+		where = append(where, "(r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
 		args = append(args, q.AuthorFilter, q.AuthorFilter)
 	}
 	if q.HashPrefix != "" {

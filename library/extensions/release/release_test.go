@@ -633,7 +633,7 @@ func TestEditRelease_getFailed(t *testing.T) {
 			BEGIN
 				UPDATE core_commits_version SET is_retracted = 1
 				WHERE edit_hash = NEW.edit_hash AND edit_branch = NEW.edit_branch;
-				UPDATE core_commits_resolved SET is_retracted = 1
+				UPDATE core_commits SET is_retracted = 1
 				WHERE repo_url = NEW.canonical_repo_url AND hash = NEW.canonical_hash AND branch = NEW.canonical_branch;
 			END`)
 		return err

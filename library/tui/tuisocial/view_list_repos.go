@@ -424,9 +424,9 @@ func (v *ListReposView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *ListReposView) HeaderInfo() (position, total int) {
+func (v *ListReposView) HeaderInfo() (position int, total string) {
 	if len(v.repos) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cursor + 1, len(v.repos)
+	return v.cursor + 1, fmt.Sprintf("%d", len(v.repos))
 }

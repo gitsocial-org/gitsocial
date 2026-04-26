@@ -249,7 +249,7 @@ func resolveListID(value string) string {
 func queryCount(q searchQuery) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		whereClause, args := buildWhere(q, db)
-		query := "SELECT COUNT(*) FROM core_commits_resolved r" + whereClause
+		query := "SELECT COUNT(*) FROM core_commits r" + whereClause
 		var count int
 		err := db.QueryRow(query, args...).Scan(&count)
 		return count, err
@@ -263,7 +263,7 @@ func queryItems(q searchQuery) ([]Item, error) {
 		hasInteractions := tableExists(db, "social_interactions")
 		selectClause := buildSelect(tables, hasInteractions)
 		whereClause, args := buildWhere(q, db)
-		query := selectClause + whereClause + " ORDER BY r.timestamp DESC"
+		query := selectClause + whereClause + " ORDER BY r.effective_timestamp DESC"
 		if q.SQLLimit > 0 {
 			query += " LIMIT ?"
 			args = append(args, q.SQLLimit)

@@ -508,7 +508,7 @@ func TestGetAnalytics_excludesStale(t *testing.T) {
 	ExecLocked(func(db *sql.DB) error {
 		db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = ?`,
 			now.Format(time.RFC3339), "stale_hash_")
-		db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE hash = ?`,
+		db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = ?`,
 			now.Format(time.RFC3339), "stale_hash_")
 		return nil
 	})
@@ -538,8 +538,8 @@ func TestGetAnalytics_excludesEditCommits(t *testing.T) {
 			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
 			VALUES (?, ?, 'main', ?, ?, 'main', 0)`,
 			repoURL, "edit_commit", repoURL, "canonical__")
-		db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE hash = ?`, "edit_commit")
-		db.Exec(`UPDATE core_commits_resolved SET has_edits = 1 WHERE hash = ?`, "canonical__")
+		db.Exec(`UPDATE core_commits SET is_edit_commit = 1 WHERE hash = ?`, "edit_commit")
+		db.Exec(`UPDATE core_commits SET has_edits = 1 WHERE hash = ?`, "canonical__")
 		return nil
 	})
 
@@ -569,8 +569,8 @@ func TestGetAnalytics_excludesRetracted(t *testing.T) {
 			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
 			VALUES (?, ?, 'main', ?, ?, 'main', 1)`,
 			repoURL, "retract_edt", repoURL, "retracted__")
-		db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE hash = ?`, "retract_edt")
-		db.Exec(`UPDATE core_commits_resolved SET is_retracted = 1, has_edits = 1 WHERE hash = ?`, "retracted__")
+		db.Exec(`UPDATE core_commits SET is_edit_commit = 1 WHERE hash = ?`, "retract_edt")
+		db.Exec(`UPDATE core_commits SET is_retracted = 1, has_edits = 1 WHERE hash = ?`, "retracted__")
 		return nil
 	})
 

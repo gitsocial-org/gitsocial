@@ -79,6 +79,10 @@ type Model struct {
 
 	// View cache — avoids JoinHorizontal + zone.Scan when nothing changed
 	vc *viewCache
+
+	// bgSyncCh streams progress + completion messages from the background
+	// workspace history sync started by initWorkspace. Drained by drainBgSyncCmd.
+	bgSyncCh chan tea.Msg
 }
 
 // viewCache stores the last composed output to skip JoinHorizontal + zone.Scan
@@ -265,6 +269,7 @@ func NewModel(workdir, cacheDir string) Model {
 		focus:    FocusContent,
 		registry: registry,
 		vc:       &viewCache{},
+		bgSyncCh: make(chan tea.Msg, 32),
 	}
 }
 
@@ -351,13 +356,58 @@ func (m Model) loadInitialCacheSize() tea.Cmd {
 	}
 }
 
-// initWorkspace syncs the workspace to cache at startup.
+// bgSyncProgressMsg is emitted from the background history sync goroutine
+// after each chunk of older commits is processed.
+type bgSyncProgressMsg struct {
+	Processed int
+	Total     int
+}
+
+// bgSyncCompletedMsg signals the background history sync has finished.
+type bgSyncCompletedMsg struct{}
+
+// initWorkspace syncs the workspace to cache at startup. The quick pass
+// (most-recent quickPassLimit commits + extension refs) runs synchronously so
+// the UI has data to render. The remaining history is processed in a
+// background goroutine and streamed to Update via m.bgSyncCh.
 func (m Model) initWorkspace() tea.Cmd {
+	workdir := m.workdir
+	ch := m.bgSyncCh
 	return func() tea.Msg {
-		if err := fetch.SyncWorkspace(m.workdir); err != nil {
-			log.Debug("workspace sync failed", "error", err)
+		if err := fetch.SyncWorkspaceQuick(workdir); err != nil {
+			log.Debug("workspace quick sync failed", "error", err)
 		}
+		go func() {
+			defer close(ch)
+			err := fetch.SyncWorkspaceContinue(workdir, func(p fetch.SyncProgress) {
+				select {
+				case ch <- bgSyncProgressMsg{Processed: p.Processed, Total: p.Total}:
+				default:
+					// Channel full — drop progress update; final completion still arrives.
+				}
+			})
+			if err != nil {
+				log.Debug("workspace background sync failed", "error", err)
+			}
+			ch <- bgSyncCompletedMsg{}
+		}()
 		return tuicore.WorkspaceInitializedMsg{}
+	}
+}
+
+// drainBgSyncCmd reads one message from the background sync channel and
+// returns it. Re-dispatched by Update after each bg message until the
+// channel is closed.
+func drainBgSyncCmd(ch chan tea.Msg) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
 	}
 }
 
@@ -463,7 +513,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadInitialStatus(),
 			m.loadInitialUnpushedCount(),
 			m.loadInitialUnpushedLFSCount(),
+			drainBgSyncCmd(m.bgSyncCh),
 		)
+
+	case bgSyncProgressMsg:
+		// Each progress message means a chunk of older commits just landed.
+		// Bump IdentityGeneration so card lists re-query against the larger
+		// cache, then keep draining.
+		m.host.State().IdentityGeneration++
+		return m, tea.Batch(m.host.RefreshView(), drainBgSyncCmd(m.bgSyncCh))
+
+	case bgSyncCompletedMsg:
+		// Background history sync done. Final refresh to ensure everything is in sync.
+		m.host.State().IdentityGeneration++
+		return m, m.host.RefreshView()
 
 	case tuicore.TriggerFetchMsg:
 		if !m.isFetching {
@@ -1013,19 +1076,24 @@ func (m Model) saveWorkspaceModeAndFetch(mode string) tea.Cmd {
 	}
 }
 
-// refreshTimeline reloads timeline posts from the database.
+// refreshTimeline reloads timeline posts from the database. The total count
+// is dispatched as a separate message so the page render isn't blocked on
+// COUNT(*).
 func (m Model) refreshTimeline() tea.Cmd {
 	workdir := m.workdir
 	gitRoot := m.host.State().GitRoot
-	return func() tea.Msg {
+	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: tuicore.PageSize + 1, GitRoot: gitRoot})
 		if !result.Success {
 			return tuisocial.TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
-		total := social.CountTimeline(workdir, gitRoot)
-		return tuisocial.TimelineLoadedMsg{Posts: posts, HasMore: hasMore, Total: total}
+		return tuisocial.TimelineLoadedMsg{Posts: posts, HasMore: hasMore}
 	}
+	countCmd := func() tea.Msg {
+		return tuisocial.TimelineCountLoadedMsg{Total: social.CountTimeline(workdir, gitRoot)}
+	}
+	return tea.Batch(pageCmd, countCmd)
 }
 
 // fetchAddedRepo fetches a repository that was just added to a list (full history).

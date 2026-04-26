@@ -4,6 +4,7 @@ package cache
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,8 +49,17 @@ func RegisterMigration(fn func(*sql.DB)) {
 	extensionMigrations = append(extensionMigrations, fn)
 }
 
+// schemaVersion is bumped whenever the core schema changes in a way that
+// requires reseeding the cache. Open() compares user_version to this and
+// nukes-and-recreates the file when it lags. Bump on every breaking change.
+const schemaVersion = 1
+
 const coreSchema = `
--- Core: Raw commits (1:1 with git, per repo+branch)
+-- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
+-- is_edit_commit flags + resolved_message column carry version-resolution state
+-- maintained by applyEditToCanonical. The effective_* generated columns expose
+-- the COALESCE'd "what to display" view so callers don't repeat the COALESCE
+-- inline and indices can be plain (not expression-based).
 CREATE TABLE IF NOT EXISTS core_commits (
     repo_url TEXT NOT NULL,
     hash TEXT NOT NULL,
@@ -67,6 +77,22 @@ CREATE TABLE IF NOT EXISTS core_commits (
     origin_author_name TEXT,
     origin_author_email TEXT,
     signer_key TEXT,
+    is_retracted INTEGER NOT NULL DEFAULT 0,
+    has_edits INTEGER NOT NULL DEFAULT 0,
+    is_edit_commit INTEGER NOT NULL DEFAULT 0,
+    resolved_message TEXT,
+    -- Generated columns: VIRTUAL (recomputed on access; indexed values stored
+    -- in the index). effective_message picks the latest edit's content when
+    -- one exists; effective_author_*/timestamp prefer origin_* (set on
+    -- imported content) over the raw git author/timestamp.
+    effective_message TEXT GENERATED ALWAYS AS
+        (COALESCE(resolved_message, message)) VIRTUAL,
+    effective_author_name TEXT GENERATED ALWAYS AS
+        (COALESCE(origin_author_name, author_name)) VIRTUAL,
+    effective_author_email TEXT GENERATED ALWAYS AS
+        (COALESCE(origin_author_email, author_email)) VIRTUAL,
+    effective_timestamp TEXT GENERATED ALWAYS AS
+        (COALESCE(origin_time, timestamp)) VIRTUAL,
     PRIMARY KEY (repo_url, hash, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_core_commits_timestamp ON core_commits(timestamp DESC);
@@ -77,6 +103,15 @@ CREATE INDEX IF NOT EXISTS idx_core_commits_edits ON core_commits(edits) WHERE e
 CREATE INDEX IF NOT EXISTS idx_core_commits_virtual ON core_commits(repo_url, hash, branch) WHERE is_virtual = 1;
 CREATE INDEX IF NOT EXISTS idx_core_commits_stale ON core_commits(repo_url, branch) WHERE stale_since IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_core_commits_author ON core_commits(repo_url, author_email, timestamp DESC) WHERE author_email != '';
+-- Plain indices on the generated effective_* columns. Replaces three
+-- expression indices (idx_core_commits_eff_*) keyed on COALESCE expressions —
+-- planner picks these up reliably without expression-matching heuristics.
+CREATE INDEX IF NOT EXISTS idx_core_commits_eff_timestamp
+    ON core_commits(effective_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_core_commits_repo_eff_timestamp
+    ON core_commits(repo_url, effective_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_core_commits_eff_author
+    ON core_commits(repo_url, effective_author_email, effective_timestamp DESC);
 
 -- Core: Version tracking (edit relationships)
 CREATE TABLE IF NOT EXISTS core_commits_version (
@@ -92,33 +127,6 @@ CREATE TABLE IF NOT EXISTS core_commits_version (
     FOREIGN KEY (canonical_repo_url, canonical_hash, canonical_branch) REFERENCES core_commits(repo_url, hash, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_core_commits_version_canonical ON core_commits_version(canonical_repo_url, canonical_hash, canonical_branch);
-
--- Core: Resolved commits (materialized table, maintained at insert time)
--- Replaces the old correlated-subquery VIEW for indexed access.
--- Same columns, now with indexes that extension views can use.
-CREATE TABLE IF NOT EXISTS core_commits_resolved (
-    repo_url TEXT NOT NULL,
-    hash TEXT NOT NULL,
-    branch TEXT NOT NULL,
-    resolved_message TEXT,
-    original_message TEXT,
-    edits TEXT,
-    is_retracted INTEGER DEFAULT 0,
-    has_edits INTEGER DEFAULT 0,
-    is_edit_commit INTEGER DEFAULT 0,
-    author_name TEXT,
-    author_email TEXT,
-    timestamp TEXT,
-    labels TEXT,
-    is_virtual INTEGER DEFAULT 0,
-    fetched_at TEXT,
-    stale_since TEXT,
-    PRIMARY KEY (repo_url, hash, branch)
-);
-CREATE INDEX IF NOT EXISTS idx_ccr_timestamp ON core_commits_resolved(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_ccr_repo_timestamp ON core_commits_resolved(repo_url, timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_ccr_author ON core_commits_resolved(author_email, timestamp DESC) WHERE author_email != '';
-CREATE INDEX IF NOT EXISTS idx_ccr_stale ON core_commits_resolved(repo_url, branch) WHERE stale_since IS NOT NULL;
 
 -- Core: Full-text search index
 CREATE VIRTUAL TABLE IF NOT EXISTS core_fts USING fts5(
@@ -238,6 +246,22 @@ func Open(cacheDir string) error {
 	}
 
 	dbPath := filepath.Join(cacheDir, "cache.db")
+
+	// If an existing cache predates the current schemaVersion, nuke it and
+	// reseed on next fetch. We treat schema migrations as cheap since the
+	// cache is an index, not a source of truth — re-fetching from origin
+	// repos is always possible.
+	if needsReseed(dbPath) {
+		log.Info("cache schema is older than current; deleting and recreating", "path", dbPath)
+		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+			log.Warn("failed to remove stale cache", "path", dbPath, "error", err)
+		}
+		// Also remove WAL/SHM siblings so the fresh DB starts clean.
+		_ = os.Remove(dbPath + "-wal")
+		_ = os.Remove(dbPath + "-shm")
+		_ = os.Remove(dbPath + "-journal")
+	}
+
 	connStr := dbPath + "?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_cache_size=-65536&_mmap_size=268435456&_temp_store=MEMORY"
 
 	var err error
@@ -251,22 +275,15 @@ func Open(cacheDir string) error {
 
 	db.SetMaxOpenConns(16)
 
-	// Migration: drop the old core_commits_resolved VIEW (if present) so the
-	// CREATE TABLE IF NOT EXISTS in coreSchema succeeds. This is a one-time
-	// upgrade from the correlated-subquery view to the materialized table.
-	_, _ = db.Exec(`DROP VIEW IF EXISTS core_commits_resolved`)
-	// Migration: add signer_key column for identity verification (M6).
-	_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN signer_key TEXT`)
-	// Migration: drop the legacy core_identities table — registered identities
-	// were removed from the protocol; verification is via core_verified_bindings only.
-	_, _ = db.Exec(`DROP TABLE IF EXISTS core_identities`)
-
 	if _, err := db.Exec(coreSchema); err != nil {
 		log.Error("cache core schema init failed", "error", err)
 		db.Close()
 		db = nil
 		initErr = err
 		return err
+	}
+	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+		log.Warn("cache user_version set failed", "error", err)
 	}
 	schemaMu.Lock()
 	names := make([]string, 0, len(extensionSchemas))
@@ -289,13 +306,29 @@ func Open(cacheDir string) error {
 	}
 	schemaMu.Unlock()
 
-	backfillResolvedTable(db)
-	backfillExtensionFields(db)
-
 	opened = true
 	initErr = nil
 	log.Debug("cache opened", "path", dbPath, "duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+// needsReseed returns true when the cache file at dbPath exists but its
+// PRAGMA user_version is older than schemaVersion. A non-existent file or a
+// file at the current version returns false.
+func needsReseed(dbPath string) bool {
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return false
+	}
+	probe, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
+	if err != nil {
+		return false
+	}
+	defer probe.Close()
+	var version int
+	if err := probe.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return false
+	}
+	return version < schemaVersion
 }
 
 // Close closes the database connection.
@@ -370,150 +403,4 @@ func RunAnalyze() error {
 		_, err := db.Exec("ANALYZE")
 		return err
 	})
-}
-
-// backfillResolvedTable populates core_commits_resolved from core_commits
-// if the table is empty (first run after converting from VIEW to TABLE).
-func backfillResolvedTable(database *sql.DB) {
-	var count int
-	if err := database.QueryRow("SELECT COUNT(*) FROM core_commits_resolved").Scan(&count); err != nil || count > 0 {
-		return
-	}
-	var sourceCount int
-	if err := database.QueryRow("SELECT COUNT(*) FROM core_commits").Scan(&sourceCount); err != nil || sourceCount == 0 {
-		return
-	}
-	log.Info("backfilling core_commits_resolved", "commits", sourceCount)
-
-	// Step 1: insert all commits with base resolved fields
-	if _, err := database.Exec(`
-		INSERT OR IGNORE INTO core_commits_resolved (
-			repo_url, hash, branch, resolved_message, original_message, edits,
-			is_retracted, has_edits, is_edit_commit,
-			author_name, author_email, timestamp,
-			labels, is_virtual, fetched_at, stale_since
-		)
-		SELECT
-			c.repo_url, c.hash, c.branch,
-			c.message, c.message, c.edits,
-			0, 0, 0,
-			COALESCE(c.origin_author_name, c.author_name),
-			COALESCE(c.origin_author_email, c.author_email),
-			COALESCE(c.origin_time, c.timestamp),
-			c.labels, c.is_virtual, c.fetched_at, c.stale_since
-		FROM core_commits c
-	`); err != nil {
-		log.Error("backfill resolved insert", "error", err)
-		return
-	}
-
-	// Step 2: mark edit commits
-	if _, err := database.Exec(`
-		UPDATE core_commits_resolved SET is_edit_commit = 1
-		WHERE EXISTS (
-			SELECT 1 FROM core_commits_version v
-			WHERE v.edit_repo_url = core_commits_resolved.repo_url
-			  AND v.edit_hash = core_commits_resolved.hash
-			  AND v.edit_branch = core_commits_resolved.branch
-		)
-	`); err != nil {
-		log.Error("backfill resolved mark edits", "error", err)
-	}
-
-	// Step 3: resolve canonical rows (latest edit message, labels, retraction)
-	if _, err := database.Exec(`
-		UPDATE core_commits_resolved SET
-			has_edits = 1,
-			resolved_message = COALESCE(
-				(SELECT e.message FROM core_commits_version v
-				 JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-				 WHERE v.canonical_repo_url = core_commits_resolved.repo_url
-				   AND v.canonical_hash = core_commits_resolved.hash
-				   AND v.canonical_branch = core_commits_resolved.branch
-				 ORDER BY e.timestamp DESC LIMIT 1),
-				core_commits_resolved.original_message
-			),
-			is_retracted = COALESCE(
-				(SELECT v.is_retracted FROM core_commits_version v
-				 JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-				 WHERE v.canonical_repo_url = core_commits_resolved.repo_url
-				   AND v.canonical_hash = core_commits_resolved.hash
-				   AND v.canonical_branch = core_commits_resolved.branch
-				 ORDER BY e.timestamp DESC LIMIT 1),
-				0
-			),
-			labels = COALESCE(
-				(SELECT e.labels FROM core_commits_version v
-				 JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-				 WHERE v.canonical_repo_url = core_commits_resolved.repo_url
-				   AND v.canonical_hash = core_commits_resolved.hash
-				   AND v.canonical_branch = core_commits_resolved.branch
-				 ORDER BY e.timestamp DESC LIMIT 1),
-				core_commits_resolved.labels
-			)
-		WHERE EXISTS (
-			SELECT 1 FROM core_commits_version v
-			WHERE v.canonical_repo_url = core_commits_resolved.repo_url
-			  AND v.canonical_hash = core_commits_resolved.hash
-			  AND v.canonical_branch = core_commits_resolved.branch
-		)
-	`); err != nil {
-		log.Error("backfill resolved canonicals", "error", err)
-	}
-
-	// Step 4: backfill FTS5
-	if _, err := database.Exec(`
-		INSERT INTO core_fts (repo_url, hash, branch, content, author)
-		SELECT repo_url, hash, branch, resolved_message,
-			   COALESCE(author_name, '') || ' ' || COALESCE(author_email, '')
-		FROM core_commits_resolved
-		WHERE NOT is_edit_commit
-	`); err != nil {
-		log.Error("backfill fts", "error", err)
-	}
-
-	log.Info("backfill complete", "commits", sourceCount)
-}
-
-// backfillExtensionFields syncs mutable extension fields from edit rows to canonical
-// rows for all existing edit chains. This is a one-time migration that runs on upgrade
-// from the old ROW_NUMBER-based views to the simplified views.
-// Uses a pragma-guarded flag to avoid re-running on subsequent opens.
-func backfillExtensionFields(database *sql.DB) {
-	// Check if already backfilled using application_id pragma (0 = not done, 42 = done)
-	var appID int
-	if err := database.QueryRow("PRAGMA application_id").Scan(&appID); err != nil || appID == 42 {
-		return
-	}
-	var versionCount int
-	if err := database.QueryRow("SELECT COUNT(*) FROM core_commits_version").Scan(&versionCount); err != nil || versionCount == 0 {
-		_, _ = database.Exec("PRAGMA application_id = 42")
-		return
-	}
-	log.Info("backfilling extension fields from edit chains", "versions", versionCount)
-
-	// Process all edits ordered by timestamp ASC so latest edit's values stick
-	rows, err := database.Query(`
-		SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
-		       v.canonical_repo_url, v.canonical_hash, v.canonical_branch
-		FROM core_commits_version v
-		JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-		ORDER BY e.timestamp ASC
-	`)
-	if err != nil {
-		log.Error("backfill extension fields query", "error", err)
-		return
-	}
-	defer rows.Close()
-	synced := 0
-	for rows.Next() {
-		var eURL, eHash, eBranch, cURL, cHash, cBranch string
-		if err := rows.Scan(&eURL, &eHash, &eBranch, &cURL, &cHash, &cBranch); err != nil {
-			continue
-		}
-		syncExtensionFields(database, eURL, eHash, eBranch, cURL, cHash, cBranch)
-		synced++
-	}
-	_, _ = database.Exec("PRAGMA application_id = 42")
-	log.Info("backfill extension fields complete", "synced", synced)
 }

@@ -38,24 +38,26 @@ CREATE TABLE IF NOT EXISTS social_interactions (
     PRIMARY KEY (repo_url, hash, branch)
 );
 
--- Extension: Social resolved view (unified read interface)
+-- Extension: Social resolved view (unified read interface).
+-- Projects core_commits' generated effective_* columns under the legacy
+-- output names (resolved_message, author_name, etc.) so consumers don't change.
 DROP VIEW IF EXISTS social_items_resolved;
 CREATE VIEW social_items_resolved AS
 SELECT
-    r.repo_url,
-    r.hash,
-    r.branch,
-    r.resolved_message,
-    r.original_message,
-    r.edits,
-    r.is_retracted,
-    r.has_edits,
-    r.is_edit_commit,
-    r.author_name,
-    r.author_email,
-    r.timestamp,
-    r.is_virtual,
-    r.stale_since,
+    c.repo_url,
+    c.hash,
+    c.branch,
+    c.effective_message AS resolved_message,
+    c.message AS original_message,
+    c.edits,
+    c.is_retracted,
+    c.has_edits,
+    c.is_edit_commit,
+    c.effective_author_name AS author_name,
+    c.effective_author_email AS author_email,
+    c.effective_timestamp AS timestamp,
+    c.is_virtual,
+    c.stale_since,
     COALESCE(s.type, 'post') as type,
     s.original_repo_url,
     s.original_hash,
@@ -66,9 +68,9 @@ SELECT
     COALESCE(i.comments, 0) as comments,
     COALESCE(i.reposts, 0) as reposts,
     COALESCE(i.quotes, 0) as quotes
-FROM core_commits_resolved r
-LEFT JOIN social_items s ON r.repo_url = s.repo_url AND r.hash = s.hash AND r.branch = s.branch
-LEFT JOIN social_interactions i ON r.repo_url = i.repo_url AND r.hash = i.hash AND r.branch = i.branch;
+FROM core_commits c
+LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
+LEFT JOIN social_interactions i ON c.repo_url = i.repo_url AND c.hash = i.hash AND c.branch = i.branch;
 
 -- Extension: Social notifications read state (legacy, migrated to core_notification_reads)
 CREATE TABLE IF NOT EXISTS social_notification_reads (

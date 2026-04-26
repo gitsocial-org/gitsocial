@@ -64,22 +64,17 @@ const baseSelectFromView = `
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
-// baseDirectSelect bypasses social_items_resolved and core_commits_resolved views,
-// joining core_commits directly with inline version resolution. This avoids view
-// materialization issues with large tables (e.g. 1M+ commits).
+// baseDirectSelect bypasses the social_items_resolved view, joining
+// core_commits directly. Resolved-state fields (resolved_message,
+// is_retracted, has_edits) are read from inline columns on core_commits, kept
+// in sync by applyEditToCanonical on every edit insert + reconcile pass.
 // Column order matches scanResolvedRows/scanResolvedRow.
 // Caller binds: workspace_url (for sf join), then WHERE params.
 const baseDirectSelect = `
 	SELECT c.repo_url, c.hash, c.branch,
 	       COALESCE(c.origin_author_name, c.author_name),
 	       COALESCE(c.origin_author_email, c.author_email),
-	       COALESCE(
-	           (SELECT e.message FROM core_commits_version v
-	            JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-	            WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
-	            ORDER BY e.timestamp DESC LIMIT 1),
-	           c.message
-	       ),
+	       COALESCE(c.resolved_message, c.message),
 	       c.message,
 	       COALESCE(c.origin_time, c.timestamp),
 	       COALESCE(s.type, 'post'),
@@ -88,17 +83,8 @@ const baseDirectSelect = `
 	       c.edits,
 	       COALESCE(i.comments, 0), COALESCE(i.reposts, 0), COALESCE(i.quotes, 0),
 	       c.is_virtual,
-	       COALESCE(
-	           (SELECT v.is_retracted FROM core_commits_version v
-	            JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-	            WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
-	            ORDER BY e.timestamp DESC LIMIT 1),
-	           0
-	       ),
-	       EXISTS (
-	           SELECT 1 FROM core_commits_version v
-	           WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
-	       ),
+	       c.is_retracted,
+	       c.has_edits,
 	       c.stale_since,
 	       (sf.repo_url IS NOT NULL)
 	FROM core_commits c
@@ -294,9 +280,6 @@ func InsertSocialItem(item SocialItem) error {
 				item.RepoURL, item.Hash, item.Branch); err != nil {
 				return err
 			}
-			_, _ = db.Exec(`UPDATE core_commits_resolved SET is_virtual = 0, fetched_at = datetime('now')
-				WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				item.RepoURL, item.Hash, item.Branch)
 		}
 
 		// Insert or update social_items
@@ -856,28 +839,28 @@ func GetAllItems(q SocialQuery) ([]SocialItem, error) {
 // GetThread retrieves all replies in a comment thread from a root post.
 func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		// CTE walks social_items for reply_to chain, then joins core_commits directly
-		// (bypasses views to avoid materializing 1M+ rows).
+		// Collect descendants (reply_to chain) and quotes/reposts (original_*=root)
+		// into a single matches CTE so the outer query can drive by PK lookup.
+		// Why: a previous OR between (c.PK IN descendants) and (s.original_*=?)
+		// forced a full scan of core_commits — 6+ seconds on a 1M-commit cache.
 		query := `
 			WITH RECURSIVE descendants AS (
 				SELECT ? as repo_url, ? as hash, ? as branch
 				UNION
 				SELECT si.repo_url, si.hash, si.branch FROM social_items si
 				INNER JOIN descendants d ON si.reply_to_repo_url = d.repo_url AND si.reply_to_hash = d.hash AND si.reply_to_branch = d.branch
+			), matches AS (
+				SELECT repo_url, hash, branch FROM descendants
+				UNION
+				SELECT repo_url, hash, branch FROM social_items
+				WHERE original_repo_url = ? AND original_hash = ? AND original_branch = ?
 			)` + baseDirectSelect + `
-			WHERE ((c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM descendants)
-			   OR (s.original_repo_url = ? AND s.original_hash = ? AND s.original_branch = ?))
-			   AND NOT EXISTS (SELECT 1 FROM core_commits_version v WHERE v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch)
-			   AND COALESCE(
-			       (SELECT v.is_retracted FROM core_commits_version v
-			        JOIN core_commits e ON v.edit_repo_url = e.repo_url AND v.edit_hash = e.hash AND v.edit_branch = e.branch
-			        WHERE v.canonical_repo_url = c.repo_url AND v.canonical_hash = c.hash AND v.canonical_branch = c.branch
-			        ORDER BY e.timestamp DESC LIMIT 1),
-			       0
-			   ) = 0
+			WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM matches)
+			   AND c.is_edit_commit = 0
+			   AND c.is_retracted = 0
 			ORDER BY COALESCE(c.origin_time, c.timestamp)`
 
-		rows, err := db.Query(query, rootRepoURL, rootHash, rootBranch, workspaceURL, rootRepoURL, rootHash, rootBranch)
+		rows, err := db.Query(query, rootRepoURL, rootHash, rootBranch, rootRepoURL, rootHash, rootBranch, workspaceURL)
 		if err != nil {
 			return nil, err
 		}
@@ -910,7 +893,7 @@ func ResolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (R
 		return ResolvedVersion{}, err
 	}
 
-	// Get the canonical item - core_commits_resolved view provides latest content via resolved_message
+	// Get the canonical item — core_commits.effective_message exposes the latest content
 	item, err := GetSocialItem(canonicalRepoURL, canonicalHash, canonicalBranch, workspaceURL)
 	if err != nil {
 		return ResolvedVersion{}, err

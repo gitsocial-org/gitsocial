@@ -466,8 +466,8 @@ func (v *MilestoneDetailView) Title() string {
 }
 
 // HeaderInfo returns position info.
-func (v *MilestoneDetailView) HeaderInfo() (position, total int) {
-	return 0, 0
+func (v *MilestoneDetailView) HeaderInfo() (position int, total string) {
+	return 0, ""
 }
 
 // Bindings returns keybindings for this view.

@@ -21,6 +21,13 @@ type RepositoryLoadedMsg struct {
 	Err     error
 }
 
+// RepositoryCountLoadedMsg is sent when the repository total count finishes
+// loading. Sent independently of RepositoryLoadedMsg because COUNT(*) over
+// huge repos (e.g. linux kernel) can take many seconds.
+type RepositoryCountLoadedMsg struct {
+	Total int
+}
+
 // ListsLoadedMsg is sent when lists are loaded
 type ListsLoadedMsg struct {
 	Lists []social.List
@@ -109,6 +116,20 @@ type TimelineLoadedMsg struct {
 	Append  bool
 	Total   int // total timeline items (only set on initial load)
 	Err     error
+}
+
+// TimelineCountLoadedMsg is sent when the timeline total count finishes
+// loading. Sent independently of TimelineLoadedMsg to keep the page render
+// off the COUNT path.
+type TimelineCountLoadedMsg struct {
+	Total int
+}
+
+// ListPostsCountLoadedMsg is sent when a list's total count finishes loading.
+// ListID lets the receiving view ignore counts for stale list selections.
+type ListPostsCountLoadedMsg struct {
+	ListID string
+	Total  int
 }
 
 // FetchCompletedMsg is sent when fetch completes

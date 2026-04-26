@@ -1,7 +1,11 @@
 // util_pagination.go - Shared cursor-based infinite scroll pagination
 package tuicore
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"fmt"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // PageSize is the standard page size for all paginated views.
 const PageSize = 100
@@ -40,6 +44,33 @@ func (p *Pagination) Total(loaded int) int {
 		return p.totalCount
 	}
 	return loaded
+}
+
+// TotalDisplay returns a header-friendly representation of the total.
+// Renders "523", "12.3K", "1.3M" when the count is known; returns "<loaded>+"
+// while the async count is still in flight (totalCount unset and HasMore true).
+// Used by HeaderInfo so users see "1/100+" instead of a misleading "1/100" on
+// huge repos before COUNT(*) returns.
+func (p *Pagination) TotalDisplay(loaded int) string {
+	if p.totalCount > loaded {
+		return humanCount(p.totalCount)
+	}
+	if p.HasMore && p.totalCount == 0 {
+		return fmt.Sprintf("%d+", loaded)
+	}
+	return humanCount(loaded)
+}
+
+// humanCount formats counts as 523, 12.3K, 1.3M.
+func humanCount(n int) string {
+	switch {
+	case n < 10_000:
+		return fmt.Sprintf("%d", n)
+	case n < 1_000_000:
+		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	}
 }
 
 // ResetForRefresh clears pagination but preserves enough items to maintain scroll position.

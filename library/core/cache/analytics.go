@@ -114,7 +114,7 @@ func repoFilter(alias, repoURL string) (string, []any) {
 	return " AND " + col + " = ?", []any{repoURL}
 }
 
-// GetAnalytics collects analytics data from core_commits_resolved and extension tables.
+// GetAnalytics collects analytics data from core_commits and extension tables.
 // When repoURL is non-empty, results are scoped to that single repository.
 func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	mu.RLock()
@@ -133,8 +133,8 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	data := &AnalyticsData{RepoURL: repoURL}
 
 	// Commits per day (30 days)
-	q := `SELECT DATE(v.timestamp) d, COUNT(*) c FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + ` GROUP BY d ORDER BY d`
+	q := `SELECT DATE(v.effective_timestamp) d, COUNT(*) c FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + ` GROUP BY d ORDER BY d`
 	args := append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err := db.Query(q, args...)
 	if err == nil {
@@ -150,8 +150,8 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	}
 
 	// Previous 30 days total (for trend)
-	q = `SELECT COUNT(*) FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp BETWEEN ? AND ?` + rfv
+	q = `SELECT COUNT(*) FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp BETWEEN ? AND ?` + rfv
 	args = append([]any{sixtyDaysAgo, thirtyDaysAgo}, rfvArgs...)
 	row := db.QueryRow(q, args...)
 	logScanErr(row.Scan(&data.PrevTotalCommits))
@@ -159,9 +159,9 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	// Top repos by commit count (30d) — skip when scoped to single repo
 	if repoURL == "" {
 		rows, err = db.Query(`SELECT v.repo_url, COUNT(*) cnt,
-			MAX(v.timestamp) last_ts
-			FROM core_commits_resolved v
-			WHERE `+resolvedFilter+` AND v.timestamp > ?
+			MAX(v.effective_timestamp) last_ts
+			FROM core_commits v
+			WHERE `+resolvedFilter+` AND v.effective_timestamp > ?
 			GROUP BY v.repo_url ORDER BY cnt DESC LIMIT 8`, thirtyDaysAgo)
 		if err == nil {
 			defer rows.Close()
@@ -178,17 +178,17 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 			logScanErr(rows.Err())
 		}
 		for i := range data.RepoActivity {
-			row := db.QueryRow(`SELECT COUNT(*) FROM core_commits_resolved v
-				WHERE `+resolvedFilter+` AND v.repo_url = ? AND v.timestamp BETWEEN ? AND ?`,
+			row := db.QueryRow(`SELECT COUNT(*) FROM core_commits v
+				WHERE `+resolvedFilter+` AND v.repo_url = ? AND v.effective_timestamp BETWEEN ? AND ?`,
 				data.RepoActivity[i].URL, sixtyDaysAgo, thirtyDaysAgo)
 			logScanErr(row.Scan(&data.RepoActivity[i].PrevCount))
 		}
 	}
 
 	// Contributors (30d) — author_name/email are COALESCE'd with origin in the view
-	q = `SELECT v.author_name, v.author_email, COUNT(*) c FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
-		GROUP BY v.author_email ORDER BY c DESC LIMIT 8`
+	q = `SELECT v.effective_author_name, v.effective_author_email, COUNT(*) c FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
+		GROUP BY v.effective_author_email ORDER BY c DESC LIMIT 8`
 	args = append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err = db.Query(q, args...)
 	if err == nil {
@@ -203,15 +203,15 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	}
 
 	// Total unique contributors
-	q = `SELECT COUNT(DISTINCT v.author_email) FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv
+	q = `SELECT COUNT(DISTINCT v.effective_author_email) FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv
 	args = append([]any{thirtyDaysAgo}, rfvArgs...)
 	row = db.QueryRow(q, args...)
 	logScanErr(row.Scan(&data.TotalContributors))
 
 	// Day of week distribution
-	q = `SELECT CAST(strftime('%w', v.timestamp) AS INTEGER) dow, COUNT(*) c
-		FROM core_commits_resolved v WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + ` GROUP BY dow`
+	q = `SELECT CAST(strftime('%w', v.effective_timestamp) AS INTEGER) dow, COUNT(*) c
+		FROM core_commits v WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + ` GROUP BY dow`
 	args = append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err = db.Query(q, args...)
 	if err == nil {
@@ -231,8 +231,8 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	logScanErr(row.Scan(&data.TrackedRepos))
 
 	// Active repos this month
-	q = `SELECT COUNT(DISTINCT v.repo_url) FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv
+	q = `SELECT COUNT(DISTINCT v.repo_url) FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv
 	args = append([]any{thirtyDaysAgo}, rfvArgs...)
 	row = db.QueryRow(q, args...)
 	logScanErr(row.Scan(&data.ActiveRepos))
@@ -392,9 +392,9 @@ func GetNetworkAnalytics(workdir string) *NetworkAnalytics {
 	inClause, inArgs := listFilter("v", listRepos)
 
 	// Top repos by commit count (30d)
-	q := `SELECT v.repo_url, COUNT(*) cnt, MAX(v.timestamp) last_ts
-		FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + inClause + `
+	q := `SELECT v.repo_url, COUNT(*) cnt, MAX(v.effective_timestamp) last_ts
+		FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + inClause + `
 		GROUP BY v.repo_url ORDER BY cnt DESC LIMIT 8`
 	rows, err := db.Query(q, append([]any{thirtyDaysAgo}, inArgs...)...)
 	if err == nil {
@@ -412,15 +412,15 @@ func GetNetworkAnalytics(workdir string) *NetworkAnalytics {
 		logScanErr(rows.Err())
 	}
 	for i := range na.Repos {
-		row := db.QueryRow(`SELECT COUNT(*) FROM core_commits_resolved v
-			WHERE `+resolvedFilter+` AND v.repo_url = ? AND v.timestamp BETWEEN ? AND ?`,
+		row := db.QueryRow(`SELECT COUNT(*) FROM core_commits v
+			WHERE `+resolvedFilter+` AND v.repo_url = ? AND v.effective_timestamp BETWEEN ? AND ?`,
 			na.Repos[i].URL, sixtyDaysAgo, thirtyDaysAgo)
 		logScanErr(row.Scan(&na.Repos[i].PrevCount))
 	}
 
 	na.TrackedRepos = len(listRepos)
-	q = `SELECT COUNT(DISTINCT v.repo_url) FROM core_commits_resolved v
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + inClause
+	q = `SELECT COUNT(DISTINCT v.repo_url) FROM core_commits v
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + inClause
 	row := db.QueryRow(q, append([]any{thirtyDaysAgo}, inArgs...)...)
 	logScanErr(row.Scan(&na.ActiveRepos))
 
@@ -454,8 +454,8 @@ func queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) 
 
 	// Top repos by post count (30d)
 	q := `SELECT v.repo_url, COUNT(*) cnt
-		FROM social_items s JOIN core_commits_resolved v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
-		WHERE s.type='post' AND ` + resolvedFilter + ` AND v.timestamp > ?` + inClause + `
+		FROM social_items s JOIN core_commits v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
+		WHERE s.type='post' AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + inClause + `
 		GROUP BY v.repo_url ORDER BY cnt DESC LIMIT 8`
 	rows, err := db.Query(q, append([]any{thirtyDaysAgo}, inArgs...)...)
 	if err == nil {
@@ -471,8 +471,8 @@ func queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) 
 	// Previous period for trends
 	for i := range ns.RepoActivity {
 		row := db.QueryRow(`SELECT COUNT(*) FROM social_items s
-			JOIN core_commits_resolved v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
-			WHERE s.type='post' AND `+resolvedFilter+` AND v.repo_url=? AND v.timestamp BETWEEN ? AND ?`,
+			JOIN core_commits v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
+			WHERE s.type='post' AND `+resolvedFilter+` AND v.repo_url=? AND v.effective_timestamp BETWEEN ? AND ?`,
 			ns.RepoActivity[i].URL, sixtyDaysAgo, thirtyDaysAgo)
 		logScanErr(row.Scan(&ns.RepoActivity[i].PrevPosts))
 	}
@@ -487,8 +487,8 @@ func queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) 
 		{"repost", &ns.TotalReposts},
 	} {
 		q = `SELECT COUNT(*) FROM social_items s
-			JOIN core_commits_resolved v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
-			WHERE s.type=? AND ` + resolvedFilter + ` AND v.timestamp > ?` + inClause
+			JOIN core_commits v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
+			WHERE s.type=? AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + inClause
 		row := db.QueryRow(q, append([]any{typ.name, thirtyDaysAgo}, inArgs...)...)
 		logScanErr(row.Scan(typ.total))
 	}
@@ -504,7 +504,7 @@ func queryNetworkPM(listRepos []string) *NetworkPM {
 	q := `SELECT v.repo_url,
 		SUM(CASE WHEN p.state='open' THEN 1 ELSE 0 END) open_cnt,
 		SUM(CASE WHEN p.state='closed' THEN 1 ELSE 0 END) closed_cnt
-		FROM pm_items p JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='issue' AND ` + resolvedFilter + inClause + `
 		GROUP BY v.repo_url ORDER BY open_cnt DESC LIMIT 8`
 	rows, err := db.Query(q, inArgs...)
@@ -530,10 +530,10 @@ func queryNetworkRelease(thirtyDaysAgo string, listRepos []string) *NetworkRelea
 	inClause, inArgs := listFilter("v", listRepos)
 
 	// 5 most recent releases
-	q := `SELECT v.repo_url, COALESCE(r.version, r.tag, 'unknown'), v.timestamp
-		FROM release_items r JOIN core_commits_resolved v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
+	q := `SELECT v.repo_url, COALESCE(r.version, r.tag, 'unknown'), v.effective_timestamp
+		FROM release_items r JOIN core_commits v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
 		WHERE ` + resolvedFilter + inClause + `
-		ORDER BY v.timestamp DESC LIMIT 5`
+		ORDER BY v.effective_timestamp DESC LIMIT 5`
 	rows, err := db.Query(q, inArgs...)
 	if err == nil {
 		defer rows.Close()
@@ -552,8 +552,8 @@ func queryNetworkRelease(thirtyDaysAgo string, listRepos []string) *NetworkRelea
 
 	// This month: total releases and distinct repos
 	q = `SELECT COUNT(*), COUNT(DISTINCT v.repo_url)
-		FROM release_items r JOIN core_commits_resolved v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + inClause
+		FROM release_items r JOIN core_commits v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + inClause
 	row := db.QueryRow(q, append([]any{thirtyDaysAgo}, inArgs...)...)
 	logScanErr(row.Scan(&nr.TotalMonth, &nr.RepoCount))
 
@@ -568,7 +568,7 @@ func queryNetworkReview(listRepos []string) *NetworkReview {
 	q := `SELECT v.repo_url,
 		SUM(CASE WHEN rv.state='open' THEN 1 ELSE 0 END) open_cnt,
 		SUM(CASE WHEN rv.state='merged' THEN 1 ELSE 0 END) merged_cnt
-		FROM review_items rv JOIN core_commits_resolved v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
+		FROM review_items rv JOIN core_commits v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
 		WHERE rv.type='pull-request' AND ` + resolvedFilter + inClause + `
 		GROUP BY v.repo_url ORDER BY open_cnt DESC LIMIT 8`
 	rows, err := db.Query(q, inArgs...)
@@ -619,9 +619,9 @@ func querySocialAnalytics(thirtyDaysAgo, sixtyDaysAgo, repoURL string) *SocialAn
 		{"comment", &sa.CommentsPerDay, &sa.TotalComments, &sa.PrevComments},
 		{"repost", &sa.RepostsPerDay, &sa.TotalReposts, &sa.PrevReposts},
 	} {
-		q := `SELECT DATE(v.timestamp) d, COUNT(*) cnt
-			FROM social_items s JOIN core_commits_resolved v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
-			WHERE s.type=? AND ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
+		q := `SELECT DATE(v.effective_timestamp) d, COUNT(*) cnt
+			FROM social_items s JOIN core_commits v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
+			WHERE s.type=? AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
 			GROUP BY d ORDER BY d`
 		args := append([]any{item.typ, thirtyDaysAgo}, rfvArgs...)
 		rows, err := db.Query(q, args...)
@@ -636,8 +636,8 @@ func querySocialAnalytics(thirtyDaysAgo, sixtyDaysAgo, repoURL string) *SocialAn
 			rows.Close()
 		}
 		q = `SELECT COUNT(*) FROM social_items s
-			JOIN core_commits_resolved v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
-			WHERE s.type=? AND ` + resolvedFilter + ` AND v.timestamp BETWEEN ? AND ?` + rfv
+			JOIN core_commits v ON s.repo_url=v.repo_url AND s.hash=v.hash AND s.branch=v.branch
+			WHERE s.type=? AND ` + resolvedFilter + ` AND v.effective_timestamp BETWEEN ? AND ?` + rfv
 		args = append([]any{item.typ, sixtyDaysAgo, thirtyDaysAgo}, rfvArgs...)
 		row := db.QueryRow(q, args...)
 		logScanErr(row.Scan(item.prev))
@@ -652,21 +652,21 @@ func queryPMAnalytics(thirtyDaysAgo, repoURL string) *PMAnalytics {
 
 	// Open/closed counts — join with resolved view for correctness
 	q := `SELECT COUNT(*) FROM pm_items p
-		JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='issue' AND p.state='open' AND ` + resolvedFilter + rfv
 	row := db.QueryRow(q, rfvArgs...)
 	logScanErr(row.Scan(&pa.OpenIssues))
 
 	q = `SELECT COUNT(*) FROM pm_items p
-		JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='issue' AND p.state='closed' AND ` + resolvedFilter + rfv
 	row = db.QueryRow(q, rfvArgs...)
 	logScanErr(row.Scan(&pa.ClosedIssues))
 
 	// Opened per day
-	q = `SELECT DATE(v.timestamp) d, COUNT(*) cnt
-		FROM pm_items p JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
-		WHERE p.type='issue' AND ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
+	q = `SELECT DATE(v.effective_timestamp) d, COUNT(*) cnt
+		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		WHERE p.type='issue' AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
 		GROUP BY d ORDER BY d`
 	args := append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err := db.Query(q, args...)
@@ -681,9 +681,9 @@ func queryPMAnalytics(thirtyDaysAgo, repoURL string) *PMAnalytics {
 	}
 
 	// Closed per day
-	q = `SELECT DATE(v.timestamp) d, COUNT(*) cnt
-		FROM pm_items p JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
-		WHERE p.type='issue' AND p.state='closed' AND ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
+	q = `SELECT DATE(v.effective_timestamp) d, COUNT(*) cnt
+		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		WHERE p.type='issue' AND p.state='closed' AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
 		GROUP BY d ORDER BY d`
 	args = append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err = db.Query(q, args...)
@@ -698,19 +698,19 @@ func queryPMAnalytics(thirtyDaysAgo, repoURL string) *PMAnalytics {
 	}
 
 	// Average age of open issues
-	q = `SELECT CAST(AVG(julianday('now') - julianday(v.timestamp)) AS INTEGER)
-		FROM pm_items p JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+	q = `SELECT CAST(AVG(julianday('now') - julianday(v.effective_timestamp)) AS INTEGER)
+		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='issue' AND p.state='open' AND ` + resolvedFilter + rfv
 	row = db.QueryRow(q, rfvArgs...)
 	logScanErr(row.Scan(&pa.AvgAgeDays))
 
 	// Milestones
-	q = `SELECT v.resolved_message, p.due,
+	q = `SELECT v.effective_message, p.due,
 		(SELECT COUNT(*) FROM pm_items i WHERE i.type='issue'
 			AND i.milestone_repo_url=p.repo_url AND i.milestone_hash=p.hash AND i.milestone_branch=p.branch) total,
 		(SELECT COUNT(*) FROM pm_items i WHERE i.type='issue' AND i.state='closed'
 			AND i.milestone_repo_url=p.repo_url AND i.milestone_hash=p.hash AND i.milestone_branch=p.branch) closed
-		FROM pm_items p JOIN core_commits_resolved v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
+		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='milestone' AND p.state='open' AND ` + resolvedFilter + rfv + `
 		ORDER BY p.due ASC LIMIT 5`
 	rows, err = db.Query(q, rfvArgs...)
@@ -739,10 +739,10 @@ func queryReleaseAnalytics(thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
 	ra := &ReleaseAnalytics{}
 	rfv, rfvArgs := repoFilter("v", repoURL)
 
-	q := `SELECT COALESCE(r.version, r.tag, 'unknown'), v.timestamp
-		FROM release_items r JOIN core_commits_resolved v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
+	q := `SELECT COALESCE(r.version, r.tag, 'unknown'), v.effective_timestamp
+		FROM release_items r JOIN core_commits v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
 		WHERE ` + resolvedFilter + rfv + `
-		ORDER BY v.timestamp DESC LIMIT 3`
+		ORDER BY v.effective_timestamp DESC LIMIT 3`
 	rows, err := db.Query(q, rfvArgs...)
 	if err == nil {
 		for rows.Next() {
@@ -758,9 +758,9 @@ func queryReleaseAnalytics(thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
 		rows.Close()
 	}
 
-	q = `SELECT DATE(v.timestamp) d, COUNT(*) cnt
-		FROM release_items r JOIN core_commits_resolved v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
-		WHERE ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
+	q = `SELECT DATE(v.effective_timestamp) d, COUNT(*) cnt
+		FROM release_items r JOIN core_commits v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
+		WHERE ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
 		GROUP BY d ORDER BY d`
 	args := append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err = db.Query(q, args...)
@@ -777,8 +777,8 @@ func queryReleaseAnalytics(thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
 
 	var total int
 	var firstTS, lastTS *string
-	q = `SELECT COUNT(*), MIN(v.timestamp), MAX(v.timestamp)
-		FROM release_items r JOIN core_commits_resolved v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
+	q = `SELECT COUNT(*), MIN(v.effective_timestamp), MAX(v.effective_timestamp)
+		FROM release_items r JOIN core_commits v ON r.repo_url=v.repo_url AND r.hash=v.hash AND r.branch=v.branch
 		WHERE ` + resolvedFilter + rfv
 	row := db.QueryRow(q, rfvArgs...)
 	if row.Scan(&total, &firstTS, &lastTS) == nil {
@@ -814,16 +814,16 @@ func queryReviewAnalytics(thirtyDaysAgo, repoURL string) *ReviewAnalytics {
 		{"closed", &rva.ClosedPRs},
 	} {
 		q := `SELECT COUNT(*) FROM review_items rv
-			JOIN core_commits_resolved v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
+			JOIN core_commits v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
 			WHERE rv.type='pull-request' AND rv.state=? AND ` + resolvedFilter + rfv
 		row := db.QueryRow(q, append([]any{item.state}, rfvArgs...)...)
 		logScanErr(row.Scan(item.count))
 	}
 
 	// PRs per day (30d)
-	q := `SELECT DATE(v.timestamp) d, COUNT(*) cnt
-		FROM review_items rv JOIN core_commits_resolved v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
-		WHERE rv.type='pull-request' AND ` + resolvedFilter + ` AND v.timestamp > ?` + rfv + `
+	q := `SELECT DATE(v.effective_timestamp) d, COUNT(*) cnt
+		FROM review_items rv JOIN core_commits v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
+		WHERE rv.type='pull-request' AND ` + resolvedFilter + ` AND v.effective_timestamp > ?` + rfv + `
 		GROUP BY d ORDER BY d`
 	args := append([]any{thirtyDaysAgo}, rfvArgs...)
 	rows, err := db.Query(q, args...)
@@ -839,7 +839,7 @@ func queryReviewAnalytics(thirtyDaysAgo, repoURL string) *ReviewAnalytics {
 
 	// Total feedback count
 	q = `SELECT COUNT(*) FROM review_items rv
-		JOIN core_commits_resolved v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
+		JOIN core_commits v ON rv.repo_url=v.repo_url AND rv.hash=v.hash AND rv.branch=v.branch
 		WHERE rv.type='feedback' AND ` + resolvedFilter + rfv
 	row := db.QueryRow(q, rfvArgs...)
 	logScanErr(row.Scan(&rva.TotalFeedback))

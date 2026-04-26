@@ -201,7 +201,9 @@ func (v *RepositoryView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadPosts()
 }
 
-// loadPosts fetches posts for the current repository.
+// loadPosts fetches posts for the current repository. The total count is
+// loaded asynchronously so the page render isn't blocked on a multi-second
+// COUNT(*) over huge repos.
 func (v *RepositoryView) loadPosts() tea.Cmd {
 	v.pag.StartLoading()
 	v.pag.Cursor = ""
@@ -218,15 +220,18 @@ func (v *RepositoryView) loadPosts() tea.Cmd {
 	isWs := v.isWorkspace
 	repoURL := v.url
 	repoBranch := v.branch
-	return func() tea.Msg {
+	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
 			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		total := social.CountRepository(workdir, repoURL, repoBranch, isWs)
-		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore, Total: total}
+		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore}
 	}
+	countCmd := func() tea.Msg {
+		return RepositoryCountLoadedMsg{Total: social.CountRepository(workdir, repoURL, repoBranch, isWs)}
+	}
+	return tea.Batch(pageCmd, countCmd)
 }
 
 // loadMorePosts fetches the next page of repository posts.
@@ -369,6 +374,8 @@ func (v *RepositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		switch msg := msg.(type) {
 		case RepositoryLoadedMsg:
 			v.handleLoaded(msg)
+		case RepositoryCountLoadedMsg:
+			v.pag.SetTotal(msg.Total)
 		case RepositoryFetchedMsg:
 			return v.handleFetched(msg)
 		}
@@ -526,12 +533,12 @@ func (v *RepositoryView) URL() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *RepositoryView) HeaderInfo() (position, total int) {
+func (v *RepositoryView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cardlist.Selected() + 1, v.pag.Total(len(items))
+	return v.cardlist.Selected() + 1, v.pag.TotalDisplay(len(items))
 }
 
 // Title returns the fully formatted header for the repository view.
@@ -539,8 +546,8 @@ func (v *RepositoryView) HeaderInfo() (position, total int) {
 func (v *RepositoryView) Title() string {
 	if v.isWorkspace {
 		pos, total := v.HeaderInfo()
-		if total > 0 {
-			return tuicore.MeTitle.Render("♥  " + v.name + " · " + fmt.Sprintf("%d/%d", pos, total))
+		if total != "" {
+			return tuicore.MeTitle.Render("♥  " + v.name + " · " + fmt.Sprintf("%d/%s", pos, total))
 		}
 		return tuicore.MeTitle.Render("♥  " + v.name)
 	}
@@ -552,8 +559,8 @@ func (v *RepositoryView) Title() string {
 	pos, total := v.HeaderInfo()
 	var styledParts []string
 	counter := ""
-	if total > 0 {
-		counter = fmt.Sprintf("%d/%d", pos, total)
+	if total != "" {
+		counter = fmt.Sprintf("%d/%s", pos, total)
 	}
 	switch status {
 	case FollowStatusMutual:

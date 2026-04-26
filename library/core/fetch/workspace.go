@@ -12,6 +12,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/log"
 )
 
+// quickPassLimit is how many of the most-recent commits the quick sync
+// pass loads before returning. Sized to be enough for an immediately useful
+// timeline / extension view (~screenful x N) without making the first launch
+// slow on large repos like the Linux kernel (1.4M commits). The remaining
+// history is processed in a background goroutine afterwards.
+const quickPassLimit = 10000
+
 // WorkspaceSyncFunc processes pre-fetched commits for an extension.
 // workdir is the git working directory, extBranch is the extension-specific
 // branch (e.g. "gitmsg/pm"), defaultBranch is the repo default (e.g. "main").
@@ -30,9 +37,21 @@ func RegisterProcessor(ext string, fn WorkspaceSyncFunc) {
 	processors[ext] = fn
 }
 
-// SyncWorkspace performs a unified workspace sync with combined tip check,
-// single git log --all, and parallel extension processing.
-func SyncWorkspace(workdir string) error {
+// workspaceSyncContext bundles the resolved state shared between the quick
+// pass and the background continuation.
+type workspaceSyncContext struct {
+	workdir       string
+	repoURL       string
+	defaultBranch string
+	branches      map[string]string
+	procs         map[string]WorkspaceSyncFunc
+	combinedTip   string
+	tipKey        string
+}
+
+// resolveWorkspaceSyncContext gathers the per-sync state once. Returns nil
+// when no work is needed (tips unchanged since last full sync).
+func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 	processorMu.RLock()
 	procs := make(map[string]WorkspaceSyncFunc, len(processors))
 	for k, v := range processors {
@@ -46,7 +65,6 @@ func SyncWorkspace(workdir string) error {
 		defaultBranch = "main"
 	}
 
-	// Resolve branches and read tips
 	branches := map[string]string{"default": defaultBranch}
 	for ext := range procs {
 		branches[ext] = gitmsg.GetExtBranch(workdir, ext)
@@ -67,7 +85,6 @@ func SyncWorkspace(workdir string) error {
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
 
-	// Skip if nothing changed since last sync
 	if combinedTip != "" {
 		if persisted, err := cache.GetSyncTip(tipKey); err == nil && persisted == combinedTip {
 			return nil
@@ -76,21 +93,32 @@ func SyncWorkspace(workdir string) error {
 
 	_ = cache.InsertRepository(cache.Repository{URL: repoURL, Branch: "*", StoragePath: workdir})
 
-	// Single git log --all instead of separate subprocess per extension
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true})
-	if err != nil {
-		return err
+	return &workspaceSyncContext{
+		workdir:       workdir,
+		repoURL:       repoURL,
+		defaultBranch: defaultBranch,
+		branches:      branches,
+		procs:         procs,
+		combinedTip:   combinedTip,
+		tipKey:        tipKey,
 	}
+}
 
+// processCommitBatch inserts a batch of git commits into the cache and runs
+// each registered extension processor against them.
+func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
+	if len(commits) == 0 {
+		return nil
+	}
 	cacheCommits := make([]cache.Commit, 0, len(commits))
 	for _, gc := range commits {
 		branch := CleanRefname(gc.Refname)
 		if branch == "" {
-			branch = defaultBranch
+			branch = ctx.defaultBranch
 		}
 		cacheCommits = append(cacheCommits, cache.Commit{
 			Hash:        gc.Hash,
-			RepoURL:     repoURL,
+			RepoURL:     ctx.repoURL,
 			Branch:      branch,
 			AuthorName:  gc.Author,
 			AuthorEmail: gc.Email,
@@ -104,29 +132,106 @@ func SyncWorkspace(workdir string) error {
 	if _, err := cache.ReconcileVersions(); err != nil {
 		log.Debug("workspace sync reconcile failed", "error", err)
 	}
-
-	// Dispatch to extension processors in parallel
 	var wg sync.WaitGroup
-	for ext, proc := range procs {
+	for ext, proc := range ctx.procs {
 		ext := ext
 		proc := proc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			proc(commits, workdir, repoURL, branches[ext], defaultBranch)
+			proc(commits, ctx.workdir, ctx.repoURL, ctx.branches[ext], ctx.defaultBranch)
 		}()
 	}
 	wg.Wait()
+	return nil
+}
 
-	// Mark stale across all branches
-	liveHashes := make(map[string]bool, len(commits))
-	for _, c := range commits {
+// SyncWorkspace runs the full sync — quick pass plus background continuation
+// inline. Use this from non-interactive callers (CLI, tests) that should
+// only return when the cache is fully populated. On a repo where there's
+// nothing new since the last full sync, returns immediately.
+func SyncWorkspace(workdir string) error {
+	if err := SyncWorkspaceQuick(workdir); err != nil {
+		return err
+	}
+	return SyncWorkspaceContinue(workdir, nil)
+}
+
+// SyncWorkspaceQuick processes the most recent quickPassLimit commits and
+// returns. Use from interactive callers (TUI startup) that need the cache
+// populated enough to render an immediately useful view; pair with a
+// background SyncWorkspaceContinue for the rest of history.
+//
+// Returns nil without touching the cache when nothing has changed since
+// the last full sync.
+func SyncWorkspaceQuick(workdir string) error {
+	ctx := resolveWorkspaceSyncContext(workdir)
+	if ctx == nil {
+		return nil // tips unchanged
+	}
+
+	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Limit: quickPassLimit})
+	if err != nil {
+		return err
+	}
+	return processCommitBatch(ctx, commits)
+}
+
+// SyncProgress is reported by SyncWorkspaceContinue after each chunk.
+type SyncProgress struct {
+	Processed int
+	Total     int
+}
+
+// SyncWorkspaceContinue processes commits older than what SyncWorkspace
+// loaded. Runs in chunks so the cache write lock releases between batches and
+// the UI stays responsive. Calls onProgress (non-blocking) after each chunk.
+// Records the sync tip only after the full pass completes, so an interrupted
+// background sync resumes correctly on next launch.
+func SyncWorkspaceContinue(workdir string, onProgress func(SyncProgress)) error {
+	ctx := resolveWorkspaceSyncContext(workdir)
+	if ctx == nil {
+		return nil // tips unchanged — quick pass already covered everything
+	}
+
+	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true})
+	if err != nil {
+		return err
+	}
+
+	// Skip the head of the list (already processed by SyncWorkspace) and
+	// process the tail in chunks.
+	if len(commits) <= quickPassLimit {
+		return finalizeWorkspaceSync(ctx, commits)
+	}
+	rest := commits[quickPassLimit:]
+	total := len(rest)
+	for start := 0; start < len(rest); start += quickPassLimit {
+		end := start + quickPassLimit
+		if end > len(rest) {
+			end = len(rest)
+		}
+		if err := processCommitBatch(ctx, rest[start:end]); err != nil {
+			log.Debug("workspace background sync chunk failed", "error", err, "start", start)
+		}
+		if onProgress != nil {
+			onProgress(SyncProgress{Processed: end, Total: total})
+		}
+	}
+
+	return finalizeWorkspaceSync(ctx, commits)
+}
+
+// finalizeWorkspaceSync runs the per-sync wrap-up: stale-marking against the
+// full live hash set, plus tip recording so subsequent syncs short-circuit.
+func finalizeWorkspaceSync(ctx *workspaceSyncContext, allCommits []git.Commit) error {
+	liveHashes := make(map[string]bool, len(allCommits))
+	for _, c := range allCommits {
 		liveHashes[c.Hash] = true
 	}
-	_, _ = cache.MarkCommitsStaleByRepo(repoURL, liveHashes)
-
-	if combinedTip != "" {
-		_ = cache.SetSyncTip(tipKey, combinedTip)
+	_, _ = cache.MarkCommitsStaleByRepo(ctx.repoURL, liveHashes)
+	if ctx.combinedTip != "" {
+		_ = cache.SetSyncTip(ctx.tipKey, ctx.combinedTip)
 	}
 	return nil
 }

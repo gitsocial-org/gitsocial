@@ -112,11 +112,12 @@ func (v *ListPostsView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadListPosts(listID)
 }
 
-// loadListPosts fetches posts for a local list.
+// loadListPosts fetches posts for a local list. The total count is loaded
+// asynchronously so the page render isn't blocked on COUNT(*).
 func (v *ListPostsView) loadListPosts(listID string) tea.Cmd {
 	workdir := v.workdir
 	limit := v.pag.Limit()
-	return func() tea.Msg {
+	pageCmd := func() tea.Msg {
 		var list *social.List
 		listResult := social.GetList(workdir, listID)
 		if listResult.Success {
@@ -127,9 +128,12 @@ func (v *ListPostsView) loadListPosts(listID string) tea.Cmd {
 			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		total := social.CountListPosts(listID)
-		return ListPostsLoadedMsg{ListID: listID, List: list, Posts: posts, HasMore: hasMore, Total: total}
+		return ListPostsLoadedMsg{ListID: listID, List: list, Posts: posts, HasMore: hasMore}
 	}
+	countCmd := func() tea.Msg {
+		return ListPostsCountLoadedMsg{ListID: listID, Total: social.CountListPosts(listID)}
+	}
+	return tea.Batch(pageCmd, countCmd)
 }
 
 // loadMoreListPosts fetches the next page of list posts.
@@ -186,8 +190,13 @@ func (v *ListPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return v.handleKey(key)
 		}
 	default:
-		if msg, ok := msg.(ListPostsLoadedMsg); ok {
+		switch msg := msg.(type) {
+		case ListPostsLoadedMsg:
 			v.handleLoaded(msg)
+		case ListPostsCountLoadedMsg:
+			if msg.ListID == v.list.ID {
+				v.pag.SetTotal(msg.Total)
+			}
 		}
 	}
 	return nil
@@ -307,12 +316,12 @@ func (v *ListPostsView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *ListPostsView) HeaderInfo() (position, total int) {
+func (v *ListPostsView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cardlist.Selected() + 1, v.pag.Total(len(items))
+	return v.cardlist.Selected() + 1, v.pag.TotalDisplay(len(items))
 }
 
 // ToggleListView switches to repos view.

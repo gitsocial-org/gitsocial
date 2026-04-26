@@ -1114,9 +1114,9 @@ func (v *PostView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header display.
-func (v *PostView) HeaderInfo() (position, total int) {
+func (v *PostView) HeaderInfo() (position int, total string) {
 	if v.sourceTotal > 0 {
-		return v.sourceIndex + 1, v.sourceTotal
+		return v.sourceIndex + 1, fmt.Sprintf("%d", v.sourceTotal)
 	}
-	return 0, 0
+	return 0, ""
 }

@@ -488,18 +488,18 @@ func (v *IssuesView) Title() string {
 	}
 	items := v.cardList.Items()
 	if len(items) > 0 {
-		return fmt.Sprintf("%s · %d/%d", title, v.cardList.Selected()+1, v.pag.Total(len(items)))
+		return fmt.Sprintf("%s · %d/%s", title, v.cardList.Selected()+1, v.pag.TotalDisplay(len(items)))
 	}
 	return title
 }
 
 // HeaderInfo returns position info for the title.
-func (v *IssuesView) HeaderInfo() (position, total int) {
+func (v *IssuesView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cardList.Selected() + 1, v.pag.Total(len(items))
+	return v.cardList.Selected() + 1, v.pag.TotalDisplay(len(items))
 }
 
 // Bindings returns keybindings for this view.

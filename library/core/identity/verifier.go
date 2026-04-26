@@ -217,6 +217,63 @@ func IsVerifiedCommit(repoURL, hash, email string) bool {
 	return err == nil && found
 }
 
+// IsVerifiedCommitBatch resolves verification for many commits in a single
+// query. Returns a map keyed by commit hash with true when a positive binding
+// covers (commit signer key, email). Hashes with no positive binding are
+// absent from the map. Empty inputs return an empty map.
+func IsVerifiedCommitBatch(repoURL string, hashes []string, email string) map[string]bool {
+	out := make(map[string]bool)
+	if repoURL == "" || email == "" || len(hashes) == 0 {
+		return out
+	}
+	email = NormalizeEmail(email)
+	dnsFilter, dnsArgs := dnsSourceFilter()
+	dnsFilter = strings.Replace(dnsFilter, " AND source", " AND b.source", 1)
+
+	placeholders := make([]string, len(hashes))
+	for i := range hashes {
+		placeholders[i] = "?"
+	}
+	args := []interface{}{email}
+	args = append(args, dnsArgs...)
+	args = append(args, repoURL)
+	for _, h := range hashes {
+		args = append(args, h)
+	}
+
+	query := `
+		SELECT DISTINCT c.hash FROM core_commits c
+		JOIN core_verified_bindings b
+		  ON b.email = ?
+		 AND b.verified = 1
+		 AND (c.signer_key = b.key_fingerprint
+		      OR c.signer_key LIKE '%' || b.key_fingerprint
+		      OR b.key_fingerprint LIKE '%' || c.signer_key)` + dnsFilter + `
+		WHERE c.repo_url = ? AND c.signer_key IS NOT NULL
+		  AND c.hash IN (` + strings.Join(placeholders, ",") + `)`
+
+	verified, err := cache.QueryLocked(func(db *sql.DB) (map[string]bool, error) {
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		result := make(map[string]bool)
+		for rows.Next() {
+			var h string
+			if err := rows.Scan(&h); err != nil {
+				return nil, err
+			}
+			result[h] = true
+		}
+		return result, rows.Err()
+	})
+	if err != nil {
+		return out
+	}
+	return verified
+}
+
 // LookupBinding returns the best cached binding for display: any positive
 // (preferring forge_api, then forge_gpg, then dns) or the most recent negative
 // if no positive exists. Returns nil when no fresh row matches.

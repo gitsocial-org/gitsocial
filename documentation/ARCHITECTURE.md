@@ -279,16 +279,28 @@ type View interface {
 
 ### Resolved Views
 
-`core_commits_resolved` resolves versioning (edits, retractions) via LEFT JOINs on `core_commits_version`. It COALESCEs `origin_author_name`/`origin_author_email` over git author fields so imported content shows the original author. Each extension then has a resolved view that LEFT JOINs its tables onto `core_commits_resolved`:
+`core_commits` carries `effective_*` generated columns (`effective_message`, `effective_author_name`, `effective_author_email`, `effective_timestamp`) that COALESCE the latest edit's content (`resolved_message`) and origin-author/origin-time (set on imported content) over the raw fields. Each extension has a `*_items_resolved` view that joins its tables onto `core_commits` and projects the generated columns under the legacy display names:
 
 ```sql
 CREATE VIEW {ext}_items_resolved AS
-SELECT r.*, COALESCE(e.type, 'default') as type, e.field1, ...
-FROM core_commits_resolved r
-LEFT JOIN {ext}_items e ON r.repo_url = e.repo_url AND r.hash = e.hash AND r.branch = e.branch;
+SELECT
+    c.effective_message AS resolved_message,
+    c.effective_author_name AS author_name,
+    c.effective_timestamp AS timestamp,
+    ...,
+    COALESCE(e.type, 'default') as type, e.field1, ...
+FROM core_commits c
+LEFT JOIN {ext}_items e ON c.repo_url = e.repo_url AND c.hash = e.hash AND c.branch = e.branch;
 ```
 
-This ensures items are found regardless of whether they have extension-specific records.
+This ensures items are found regardless of whether they have extension-specific records. The denormalized resolved-state columns (`resolved_message`, `has_edits`, `is_retracted`) are written exclusively by `applyEditToCanonical` (`core/cache/versions.go`).
+
+**When to bypass the view:** the `*_items_resolved` views are right for typical list/show queries where the WHERE clause is on `core_commits` columns (timestamp, repo_url, etc.) and the result needs every commit-as-an-item. Bypass them — JOIN `core_commits` directly to the extension table — when:
+
+- The WHERE clause is highly selective on extension columns (e.g., `pm_items.state = 'open'`, `social_items.original_*`). Driving from the small extension table avoids a planner mishap where `core_commits` (millions of rows) becomes the outer table.
+- The query uses a recursive CTE over extension relationships (e.g., walking `social_items.reply_to_*`).
+
+Examples already in the codebase: `social.GetThread` (recursive CTE on `social_items`), `social.GetNotifications` (drives from `social_items` joined to `core_commits`). Both bypass the resolved view because the view forced a full scan on a 1M-commit cache.
 
 ### Refs and Keys
 

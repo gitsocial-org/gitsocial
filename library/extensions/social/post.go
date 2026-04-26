@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 )
@@ -247,13 +248,14 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 
+	var result Result[[]Post]
 	switch {
 	case scope == "timeline":
-		return getTimeline(workdir, workspaceURL, opts)
+		result = getTimeline(workdir, workspaceURL, opts)
 	case scope == "repository:my":
-		return getMyPosts(workdir, workspaceURL, opts)
+		result = getMyPosts(workdir, workspaceURL, opts)
 	case scope == "repository:workspace":
-		return getWorkspaceRepository(workdir, workspaceURL, opts)
+		result = getWorkspaceRepository(workdir, workspaceURL, opts)
 	case strings.HasPrefix(scope, "repository:"):
 		rest := strings.TrimPrefix(scope, "repository:")
 		repoURL := rest
@@ -262,19 +264,23 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 			repoURL = rest[:idx]
 			branch = rest[idx+1:]
 		}
-		return getRepositoryPosts(repoURL, branch, workspaceURL, opts)
+		result = getRepositoryPosts(repoURL, branch, workspaceURL, opts)
 	case strings.HasPrefix(scope, "list:"):
 		listID := strings.TrimPrefix(scope, "list:")
-		return getListPosts(listID, workspaceURL, opts)
+		result = getListPosts(listID, workspaceURL, opts)
 	case strings.HasPrefix(scope, "post:"):
 		postID := strings.TrimPrefix(scope, "post:")
-		return getSinglePost(postID, workspaceURL)
+		result = getSinglePost(postID, workspaceURL)
 	case strings.HasPrefix(scope, "thread:"):
 		postID := strings.TrimPrefix(scope, "thread:")
-		return getThreadPosts(workdir, postID, workspaceURL)
+		result = getThreadPosts(workdir, postID, workspaceURL)
 	default:
 		return Failure[[]Post]("INVALID_SCOPE", "Unknown scope: "+scope)
 	}
+	if result.Success {
+		annotateVerified(result.Data)
+	}
+	return result
 }
 
 type GetPostsOptions struct {
@@ -643,6 +649,43 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	result = append(result, sorted...)
 
 	return Success(result)
+}
+
+// annotateVerified resolves verification once per (repoURL, email) group and
+// stamps Display.IsVerified on each post in place. This keeps the per-card
+// renderer free of cache lookups so re-renders never block on the cache write
+// lock during background workspace sync.
+func annotateVerified(posts []Post) {
+	groups := make(map[string]map[string][]int)
+	for i, p := range posts {
+		if p.Repository == "" || p.Author.Email == "" || p.Display.CommitHash == "" {
+			continue
+		}
+		email := identity.NormalizeEmail(p.Author.Email)
+		if email == "" {
+			continue
+		}
+		repo := groups[p.Repository]
+		if repo == nil {
+			repo = make(map[string][]int)
+			groups[p.Repository] = repo
+		}
+		repo[email] = append(repo[email], i)
+	}
+	for repo, byEmail := range groups {
+		for email, indices := range byEmail {
+			hashes := make([]string, 0, len(indices))
+			for _, i := range indices {
+				hashes = append(hashes, posts[i].Display.CommitHash)
+			}
+			verified := identity.IsVerifiedCommitBatch(repo, hashes, email)
+			for _, i := range indices {
+				if verified[posts[i].Display.CommitHash] {
+					posts[i].Display.IsVerified = true
+				}
+			}
+		}
+	}
 }
 
 // getParentChain retrieves ancestor posts for building thread context.

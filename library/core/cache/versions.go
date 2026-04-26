@@ -4,11 +4,148 @@ package cache
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 )
+
+// sqlExecutor is the subset of *sql.DB / *sql.Tx that applyEditToCanonical
+// uses, so the same implementation can be invoked from inside an in-flight
+// transaction (insertCommitsTxn) or a top-level ExecLocked call.
+type sqlExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// editableExtensionTables enumerates the per-extension column lists that
+// applyEditToCanonical propagates from an edit's row to the canonical's row.
+// Listed once here so the column inventory has a single source of truth.
+var editableExtensionTables = []struct{ table, cols string }{
+	{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
+	{"pm_items", "state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch"},
+	{"release_items", "tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom"},
+}
+
+// applyEditToCanonical is the single writer of denormalized resolved state.
+// Given a canonical's coordinates, it picks the latest edit from
+// core_commits_version + core_commits and propagates that edit's content into:
+//
+//   - core_commits.has_edits / resolved_message / is_retracted / labels (the
+//     canonical's row)
+//   - core_commits.is_edit_commit (the edit's row, defensive — insertCommitsTxn
+//     already sets this on insert)
+//   - mutable extension columns on review_items / pm_items / release_items
+//     (canonical's row, copied from the edit's row in a single UPDATE per table)
+//   - core_fts (canonical's row, replaced with the edit's content)
+//
+// No-op when the canonical has no edits in core_commits_version yet.
+// Idempotent: repeated calls converge to the same state. All write paths
+// (insertCommitsTxn, InsertVersion, ReconcileVersions, SyncEditExtensionFields)
+// route through this function — no other code should write the columns above.
+func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canonicalBranch string) error {
+	var editRepoURL, editHash, editBranch string
+	var editMessage string
+	var editLabels sql.NullString
+	var editIsRetracted int
+	err := tx.QueryRow(`
+		SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
+		       c.message, c.labels, v.is_retracted
+		FROM core_commits_version v
+		JOIN core_commits c
+		  ON v.edit_repo_url = c.repo_url
+		 AND v.edit_hash = c.hash
+		 AND v.edit_branch = c.branch
+		WHERE v.canonical_repo_url = ?
+		  AND v.canonical_hash = ?
+		  AND v.canonical_branch = ?
+		ORDER BY c.timestamp DESC, v.edit_hash DESC
+		LIMIT 1`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	).Scan(&editRepoURL, &editHash, &editBranch, &editMessage, &editLabels, &editIsRetracted)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("apply edit: find latest edit for %s/%s@%s: %w", canonicalRepoURL, canonicalHash, canonicalBranch, err)
+	}
+
+	var labelsArg interface{}
+	if editLabels.Valid {
+		labelsArg = editLabels.String
+	}
+	if _, err := tx.Exec(`
+		UPDATE core_commits
+		SET has_edits = 1,
+		    resolved_message = ?,
+		    is_retracted = ?,
+		    labels = COALESCE(?, labels)
+		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		editMessage, editIsRetracted, labelsArg,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	); err != nil {
+		return fmt.Errorf("apply edit: update canonical: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+		UPDATE core_commits SET is_edit_commit = 1
+		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		editRepoURL, editHash, editBranch,
+	); err != nil {
+		return fmt.Errorf("apply edit: mark edit row: %w", err)
+	}
+
+	for _, ext := range editableExtensionTables {
+		// Skip silently on any error: sql.ErrNoRows means this extension has no
+		// row for the edit (so nothing to propagate); "no such table" means the
+		// extension's schema isn't registered in this DB (cache-only tests).
+		// Either way, the propagation is a no-op for this table.
+		var exists int
+		if err := tx.QueryRow(`SELECT 1 FROM `+ext.table+`
+			WHERE repo_url = ? AND hash = ? AND branch = ?`,
+			editRepoURL, editHash, editBranch,
+		).Scan(&exists); err != nil {
+			continue
+		}
+		// Row-value SET copies all mutable columns in one statement.
+		// Pre-checking the edit row above avoids the row-value-with-no-rows
+		// gotcha (SQLite would NULL the canonical's columns).
+		if _, err := tx.Exec(`UPDATE `+ext.table+` SET (`+ext.cols+`) =
+			(SELECT `+ext.cols+` FROM `+ext.table+`
+			 WHERE repo_url = ? AND hash = ? AND branch = ?)
+			WHERE repo_url = ? AND hash = ? AND branch = ?`,
+			editRepoURL, editHash, editBranch,
+			canonicalRepoURL, canonicalHash, canonicalBranch,
+		); err != nil {
+			return fmt.Errorf("apply edit: propagate %s fields: %w", ext.table, err)
+		}
+	}
+
+	var resolvedAuthorName, resolvedAuthorEmail string
+	if err := tx.QueryRow(`
+		SELECT COALESCE(origin_author_name, author_name),
+		       COALESCE(origin_author_email, author_email)
+		FROM core_commits
+		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	).Scan(&resolvedAuthorName, &resolvedAuthorEmail); err != nil {
+		return fmt.Errorf("apply edit: read canonical author: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM core_fts
+		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	); err != nil {
+		return fmt.Errorf("apply edit: delete canonical fts: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO core_fts (repo_url, hash, branch, content, author)
+		VALUES (?, ?, ?, ?, ?)`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+		editMessage, resolvedAuthorName+" "+resolvedAuthorEmail,
+	); err != nil {
+		return fmt.Errorf("apply edit: insert canonical fts: %w", err)
+	}
+
+	return nil
+}
 
 type Version struct {
 	EditRepoURL      string
@@ -59,10 +196,10 @@ func ProcessVersionFromHeader(msg *protocol.Message, commitHash, repoURL, branch
 	_ = InsertVersion(repoURL, commitHash, branch, canonical.RepoURL, canonical.Hash, canonical.Branch, isRetracted)
 }
 
-// InsertVersion stores an edit relationship between commits.
+// InsertVersion stores an edit relationship between commits and applies the
+// edit's state to the canonical via the unified writer.
 func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string, isRetracted bool) error {
 	return ExecLocked(func(db *sql.DB) error {
-		// Validate canonical commit exists
 		var count int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
 			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&count); err != nil {
@@ -82,47 +219,30 @@ func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonica
 			editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted); err != nil {
 			return err
 		}
-		syncResolvedVersion(db, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted)
-		return nil
+		return applyEditToCanonical(db, canonicalRepoURL, canonicalHash, canonicalBranch)
 	})
 }
 
-// syncResolvedVersion updates core_commits_resolved and extension raw tables
-// when a version record is created, so that the canonical row reflects the
-// latest edit's state. This allows search to query raw tables directly
-// instead of going through the slow resolved views.
-func syncResolvedVersion(db *sql.DB, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string, retracted int) {
-	// Mark the edit commit
-	_, _ = db.Exec(`UPDATE core_commits_resolved SET is_edit_commit = 1 WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		editRepoURL, editHash, editBranch)
-	// Get the edit commit's message and labels for the canonical
-	var editMessage, editLabels sql.NullString
-	_ = db.QueryRow(`SELECT message, labels FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		editRepoURL, editHash, editBranch).Scan(&editMessage, &editLabels)
-	// Update the canonical's resolved fields
-	if editMessage.Valid {
-		_, _ = db.Exec(`UPDATE core_commits_resolved SET has_edits = 1, resolved_message = ?, is_retracted = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			editMessage.String, retracted, canonicalRepoURL, canonicalHash, canonicalBranch)
-	}
-	if editLabels.Valid {
-		_, _ = db.Exec(`UPDATE core_commits_resolved SET labels = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			editLabels.String, canonicalRepoURL, canonicalHash, canonicalBranch)
-	}
-	// Propagate mutable extension fields (state, labels, draft, assignees, reviewers)
-	// from the edit's raw row to the canonical's raw row, so search can filter on
-	// raw tables instead of resolved views.
-	syncExtensionFields(db, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
+// EditKey identifies an edit commit for extension field syncing.
+type EditKey struct {
+	RepoURL, Hash, Branch string
 }
 
-// SyncEditExtensionFields propagates mutable extension fields (state, draft, assignees, etc.)
-// from edit commits' extension rows to their canonical's extension rows.
-// Call after inserting extension rows for commits that may be edits.
-// This is needed because ProcessVersionFromHeader runs before extension rows exist.
+// SyncEditExtensionFields re-applies each edit's content to its canonical via
+// the unified writer. Callers (extension fetch hooks) invoke this after they
+// insert the edit's extension row, since ProcessVersionFromHeader runs before
+// extension rows exist and the canonical's extension columns therefore weren't
+// propagated on the first pass.
+//
+// The function name is preserved for caller compatibility; the work it does
+// now also includes resolved_message / is_retracted / FTS, all idempotent.
 func SyncEditExtensionFields(edits []EditKey) {
 	if len(edits) == 0 {
 		return
 	}
 	_ = ExecLocked(func(db *sql.DB) error {
+		type canonicalKey struct{ repoURL, hash, branch string }
+		seen := make(map[canonicalKey]struct{}, len(edits))
 		for _, e := range edits {
 			var canonRepoURL, canonHash, canonBranch string
 			err := db.QueryRow(`SELECT canonical_repo_url, canonical_hash, canonical_branch
@@ -132,34 +252,15 @@ func SyncEditExtensionFields(edits []EditKey) {
 			if err != nil {
 				continue
 			}
-			syncExtensionFields(db, e.RepoURL, e.Hash, e.Branch, canonRepoURL, canonHash, canonBranch)
+			k := canonicalKey{canonRepoURL, canonHash, canonBranch}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			_ = applyEditToCanonical(db, canonRepoURL, canonHash, canonBranch)
 		}
 		return nil
 	})
-}
-
-// EditKey identifies an edit commit for extension field syncing.
-type EditKey struct {
-	RepoURL, Hash, Branch string
-}
-
-// syncExtensionFields copies mutable fields from an edit's extension row to the canonical's.
-func syncExtensionFields(db *sql.DB, editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string) {
-	for _, ext := range []struct{ table, cols string }{
-		{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
-		{"pm_items", "state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch"},
-		{"release_items", "tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom"},
-	} {
-		var exists int
-		if db.QueryRow("SELECT 1 FROM "+ext.table+" WHERE repo_url = ? AND hash = ? AND branch = ?",
-			editRepoURL, editHash, editBranch).Scan(&exists) != nil {
-			continue
-		}
-		for _, col := range strings.Split(ext.cols, ", ") {
-			_, _ = db.Exec("UPDATE "+ext.table+" SET "+col+" = (SELECT "+col+" FROM "+ext.table+" WHERE repo_url = ? AND hash = ? AND branch = ?) WHERE repo_url = ? AND hash = ? AND branch = ?",
-				editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
-		}
-	}
 }
 
 // GetLatestVersion returns the latest version of a commit.
@@ -426,9 +527,13 @@ func ReconcileVersions() (int, error) {
 		return 0, nil
 	}
 
-	// Phase 2: Write version records under write lock
+	// Phase 2: Write version records and apply each affected canonical exactly
+	// once. Multiple edits targeting the same canonical fold into a single
+	// applyEditToCanonical call (which already picks the latest by timestamp).
+	type canonicalKey struct{ repoURL, hash, branch string }
 	created := 0
 	err = ExecLocked(func(db *sql.DB) error {
+		canonicals := make(map[canonicalKey]struct{}, len(pending))
 		for _, p := range pending {
 			var exists int
 			if err := db.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
@@ -445,7 +550,12 @@ func ReconcileVersions() (int, error) {
 				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				p.editRepoURL, p.editHash, p.editBranch, p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch, retracted); err == nil {
 				created++
-				syncResolvedVersion(db, p.editRepoURL, p.editHash, p.editBranch, p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch, retracted)
+				canonicals[canonicalKey{p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch}] = struct{}{}
+			}
+		}
+		for k := range canonicals {
+			if err := applyEditToCanonical(db, k.repoURL, k.hash, k.branch); err != nil {
+				return fmt.Errorf("reconcile: %w", err)
 			}
 		}
 		return nil

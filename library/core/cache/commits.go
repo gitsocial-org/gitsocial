@@ -22,12 +22,65 @@ type Commit struct {
 	SignerKey   string
 }
 
+// commitInsertBatchSize bounds how many commits go into a single InsertCommits
+// orchestration unit. The background workspace sync reports progress per batch,
+// so this number governs the granularity of progress updates.
+const commitInsertBatchSize = 10000
+
+// commitTxnSize bounds how many commits go into a single SQL transaction (and
+// therefore how long the cache write lock is held). Smaller transactions cost a
+// little more BEGIN/COMMIT overhead in aggregate, but they shorten the worst
+// case wait for concurrent readers (UI renders during kernel-scale background
+// sync) by ~10×.
+const commitTxnSize = 1000
+
 // InsertCommits batch inserts commits and populates version records for edits.
+// Inputs larger than commitInsertBatchSize are processed in chunks; each chunk
+// is further split into commitTxnSize transactions so the write lock releases
+// between transactions and concurrent readers can interleave.
 func InsertCommits(commits []Commit) error {
 	if len(commits) == 0 {
 		return nil
 	}
+	for start := 0; start < len(commits); start += commitInsertBatchSize {
+		end := start + commitInsertBatchSize
+		if end > len(commits) {
+			end = len(commits)
+		}
+		if err := insertCommitsBatch(commits[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+// insertCommitsBatch processes one orchestration chunk by splitting it into
+// per-transaction slices of at most commitTxnSize. Each slice acquires the
+// write lock independently so readers can interleave between transactions.
+func insertCommitsBatch(commits []Commit) error {
+	for start := 0; start < len(commits); start += commitTxnSize {
+		end := start + commitTxnSize
+		if end > len(commits) {
+			end = len(commits)
+		}
+		if err := insertCommitsTxn(commits[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// insertCommitsTxn inserts up to commitTxnSize commits in a single transaction.
+//
+// This function only writes rows that belong to the commits being inserted:
+// the commit's own core_commits row, its FTS row (when not an edit), and the
+// edit→canonical link in core_commits_version (when the canonical is already
+// in the cache). All denormalized resolved-state on canonical rows
+// (resolved_message, has_edits, is_retracted, labels, FTS, mutable extension
+// columns) is written by applyEditToCanonical, called once per affected
+// canonical at the end of the loop. This keeps the canonical-update logic in
+// one place — see versions.go.
+func insertCommitsTxn(commits []Commit) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if db == nil {
@@ -41,8 +94,12 @@ func InsertCommits(commits []Commit) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	commitStmt, err := tx.Prepare(`
-		INSERT OR IGNORE INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp, origin_time, edits, labels, fetched_at, origin_author_name, origin_author_email, signer_key)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT OR IGNORE INTO core_commits (
+			repo_url, hash, branch, author_name, author_email, message, timestamp,
+			origin_time, edits, labels, fetched_at,
+			origin_author_name, origin_author_email, signer_key,
+			is_edit_commit
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare commit statement: %w", err)
 	}
@@ -56,23 +113,14 @@ func InsertCommits(commits []Commit) error {
 	}
 	defer versionStmt.Close()
 
-	resolvedStmt, err := tx.Prepare(`
-		INSERT OR IGNORE INTO core_commits_resolved (
-			repo_url, hash, branch, resolved_message, original_message, edits,
-			is_retracted, has_edits, is_edit_commit,
-			author_name, author_email, timestamp,
-			labels, is_virtual, fetched_at, stale_since
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`)
-	if err != nil {
-		return fmt.Errorf("prepare resolved statement: %w", err)
-	}
-	defer resolvedStmt.Close()
-
 	ftsStmt, err := tx.Prepare(`INSERT INTO core_fts (repo_url, hash, branch, content, author) VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare fts statement: %w", err)
 	}
 	defer ftsStmt.Close()
+
+	type canonicalKey struct{ repoURL, hash, branch string }
+	canonicals := make(map[canonicalKey]struct{})
 
 	for _, c := range commits {
 		branch := c.Branch
@@ -110,14 +158,7 @@ func InsertCommits(commits []Commit) error {
 		}
 
 		ts := c.Timestamp.UTC().Format(time.RFC3339)
-		// Always store signer_key as a string (empty for unsigned). NULL is
-		// reserved for legacy rows fetched before signer extraction shipped;
-		// the backfill scans NULL rows only.
-		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey); err != nil {
-			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
-		}
-
-		// Resolved author/timestamp (COALESCE origin over git)
+		// Resolved author/email/timestamp (COALESCE origin over git) — used for FTS author column.
 		resolvedAuthorName := c.AuthorName
 		if originAuthorName != nil {
 			resolvedAuthorName = *originAuthorName
@@ -126,18 +167,25 @@ func InsertCommits(commits []Commit) error {
 		if originAuthorEmail != nil {
 			resolvedAuthorEmail = *originAuthorEmail
 		}
-		resolvedTimestamp := ts
-		if originTime != nil {
-			resolvedTimestamp = *originTime
-		}
-		var labelsVal *string
-		if labels != nil {
-			labelsVal = labels
-		}
 
 		isEditCommit := 0
+		// Determine whether this is an edit commit by parsing edits trailer.
+		// Even if the canonical isn't yet in the cache, we know this commit edits something.
+		if edits != nil && *edits != "" {
+			isEditCommit = 1
+		}
 
-		// Populate version table if this is an edit and canonical exists
+		// Always store signer_key as a string (empty for unsigned). NULL is
+		// reserved for legacy rows fetched before signer extraction shipped;
+		// the backfill scans NULL rows only.
+		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit); err != nil {
+			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
+		}
+
+		// Populate version-table link if this is an edit and canonical exists.
+		// Edits whose canonical isn't in cache yet are picked up later by
+		// ReconcileVersions. Either way, the canonical's resolved-state is
+		// applied below via applyEditToCanonical, not inline.
 		if edits != nil && *edits != "" {
 			parsed := protocol.ParseRef(*edits)
 			if parsed.Value != "" {
@@ -149,8 +197,6 @@ func InsertCommits(commits []Commit) error {
 				if canonicalBranch == "" {
 					canonicalBranch = branch
 				}
-				// Only insert version record if canonical commit exists in cache
-				// (edits may arrive before their canonicals in decentralized fetch)
 				var exists int
 				if err := tx.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
 					canonicalRepoURL, parsed.Value, canonicalBranch).Scan(&exists); err == nil {
@@ -161,36 +207,26 @@ func InsertCommits(commits []Commit) error {
 					if _, err := versionStmt.Exec(repoURL, c.Hash, branch, canonicalRepoURL, parsed.Value, canonicalBranch, retracted); err != nil {
 						return fmt.Errorf("insert version record for %s: %w", c.Hash, err)
 					}
-					isEditCommit = 1
-
-					// Update the canonical's resolved fields
-					_, _ = tx.Exec(`UPDATE core_commits_resolved SET
-						has_edits = 1, resolved_message = ?, labels = COALESCE(?, labels), is_retracted = ?
-						WHERE repo_url = ? AND hash = ? AND branch = ?`,
-						c.Message, labelsVal, retracted,
-						canonicalRepoURL, parsed.Value, canonicalBranch)
-
-					// Update FTS5 for the canonical (content changed)
-					_, _ = tx.Exec(`DELETE FROM core_fts WHERE repo_url = ? AND hash = ? AND branch = ?`,
-						canonicalRepoURL, parsed.Value, canonicalBranch)
-					_, _ = tx.Exec(`INSERT INTO core_fts (repo_url, hash, branch, content, author) VALUES (?, ?, ?, ?, ?)`,
-						canonicalRepoURL, parsed.Value, canonicalBranch,
-						c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
+					canonicals[canonicalKey{canonicalRepoURL, parsed.Value, canonicalBranch}] = struct{}{}
 				}
 			}
 		}
 
-		// Insert into materialized resolved table
-		_, _ = resolvedStmt.Exec(repoURL, c.Hash, branch,
-			c.Message, c.Message, edits,
-			0, 0, isEditCommit,
-			resolvedAuthorName, resolvedAuthorEmail, resolvedTimestamp,
-			labelsVal, 0, now)
-
-		// Insert into FTS5 (skip edit commits — their content updates the canonical)
+		// Insert into FTS5 for non-edit commits. Edit commits don't get their
+		// own FTS row; their content reaches FTS via the canonical's row,
+		// which applyEditToCanonical refreshes below.
 		if isEditCommit == 0 {
 			_, _ = ftsStmt.Exec(repoURL, c.Hash, branch,
 				c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
+		}
+	}
+
+	// Apply each affected canonical exactly once. If multiple edits in this
+	// batch target the same canonical, applyEditToCanonical picks the latest
+	// by timestamp, so per-canonical work doesn't scale with edit count.
+	for k := range canonicals {
+		if err := applyEditToCanonical(tx, k.repoURL, k.hash, k.branch); err != nil {
+			return fmt.Errorf("apply edit to canonical %s/%s@%s: %w", k.repoURL, k.hash, k.branch, err)
 		}
 	}
 
@@ -238,8 +274,6 @@ func MarkCommitsStale(repoURL, branch string, liveHashes map[string]bool) (int, 
 				now, repoURL, hash, branch); err != nil {
 				return 0, fmt.Errorf("mark stale %s: %w", hash, err)
 			}
-			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				now, repoURL, hash, branch)
 		}
 		for _, hash := range toUnstale {
 			if _, err := db.Exec(
@@ -247,8 +281,6 @@ func MarkCommitsStale(repoURL, branch string, liveHashes map[string]bool) (int, 
 				repoURL, hash, branch); err != nil {
 				return 0, fmt.Errorf("unstale %s: %w", hash, err)
 			}
-			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = NULL WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				repoURL, hash, branch)
 		}
 		return len(toStale), nil
 	})
@@ -261,20 +293,20 @@ type Contributor struct {
 }
 
 // GetContributors returns distinct authors for a repository, ordered by most recent activity.
+//
+// SQLite's "bare column" rule: when SELECT pairs a non-aggregated column with
+// MAX()/MIN(), the bare column comes from the row that produced the max/min.
+// This avoids the self-join the previous implementation needed and runs in
+// hundreds of milliseconds (vs ~30s) on a 1.4M-row commits table.
 func GetContributors(repoURL string) ([]Contributor, error) {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return QueryLocked(func(db *sql.DB) ([]Contributor, error) {
 		rows, err := db.Query(`
-			SELECT c.author_name, c.author_email
-			FROM core_commits c
-			INNER JOIN (
-				SELECT author_email, MAX(timestamp) as latest
-				FROM core_commits
-				WHERE author_email != '' AND repo_url = ?
-				GROUP BY author_email
-			) g ON c.author_email = g.author_email AND c.timestamp = g.latest AND c.repo_url = ?
-			GROUP BY c.author_email
-			ORDER BY g.latest DESC`, repoURL, repoURL)
+			SELECT author_name, author_email, MAX(timestamp) AS latest
+			FROM core_commits
+			WHERE author_email != '' AND repo_url = ?
+			GROUP BY author_email
+			ORDER BY latest DESC`, repoURL)
 		if err != nil {
 			return nil, fmt.Errorf("query contributors: %w", err)
 		}
@@ -282,7 +314,8 @@ func GetContributors(repoURL string) ([]Contributor, error) {
 		var contributors []Contributor
 		for rows.Next() {
 			var c Contributor
-			if err := rows.Scan(&c.Name, &c.Email); err != nil {
+			var latest string
+			if err := rows.Scan(&c.Name, &c.Email, &latest); err != nil {
 				return nil, fmt.Errorf("scan contributor: %w", err)
 			}
 			contributors = append(contributors, c)
@@ -295,16 +328,11 @@ func GetContributors(repoURL string) ([]Contributor, error) {
 func GetAllContributors() ([]Contributor, error) {
 	return QueryLocked(func(db *sql.DB) ([]Contributor, error) {
 		rows, err := db.Query(`
-			SELECT c.author_name, c.author_email
-			FROM core_commits c
-			INNER JOIN (
-				SELECT author_email, MAX(timestamp) as latest
-				FROM core_commits
-				WHERE author_email != ''
-				GROUP BY author_email
-			) g ON c.author_email = g.author_email AND c.timestamp = g.latest
-			GROUP BY c.author_email
-			ORDER BY g.latest DESC`)
+			SELECT author_name, author_email, MAX(timestamp) AS latest
+			FROM core_commits
+			WHERE author_email != ''
+			GROUP BY author_email
+			ORDER BY latest DESC`)
 		if err != nil {
 			return nil, fmt.Errorf("query all contributors: %w", err)
 		}
@@ -312,7 +340,8 @@ func GetAllContributors() ([]Contributor, error) {
 		var contributors []Contributor
 		for rows.Next() {
 			var c Contributor
-			if err := rows.Scan(&c.Name, &c.Email); err != nil {
+			var latest string
+			if err := rows.Scan(&c.Name, &c.Email, &latest); err != nil {
 				return nil, fmt.Errorf("scan contributor: %w", err)
 			}
 			contributors = append(contributors, c)
@@ -320,6 +349,11 @@ func GetAllContributors() ([]Contributor, error) {
 		return contributors, rows.Err()
 	})
 }
+
+// hashFilterBatchSize bounds how many hashes are passed in a single SQL IN clause.
+// SQLite's SQLITE_LIMIT_VARIABLE_NUMBER defaults to 32766; we stay well under it
+// to keep query plans manageable on huge repos (e.g. linux-kernel-scale 1M+ commits).
+const hashFilterBatchSize = 5000
 
 // FilterUnfetchedCommitsByRepo returns hashes not yet in the cache for any branch of this repo.
 func FilterUnfetchedCommitsByRepo(repoURL string, hashes []string) ([]string, error) {
@@ -331,29 +365,39 @@ func FilterUnfetchedCommitsByRepo(repoURL string, hashes []string) ([]string, er
 	if db == nil {
 		return nil, ErrNotOpen
 	}
-	placeholders := strings.Repeat("?,", len(hashes))
-	placeholders = placeholders[:len(placeholders)-1]
-	query := `SELECT hash FROM core_commits WHERE repo_url = ? AND hash IN (` + placeholders + `)`
-	args := make([]interface{}, len(hashes)+1)
-	args[0] = protocol.NormalizeURL(repoURL)
-	for i, h := range hashes {
-		args[i+1] = h
-	}
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	fetched := make(map[string]bool)
-	for rows.Next() {
-		var hash string
-		if err := rows.Scan(&hash); err != nil {
+	normURL := protocol.NormalizeURL(repoURL)
+	fetched := make(map[string]bool, len(hashes))
+	for start := 0; start < len(hashes); start += hashFilterBatchSize {
+		end := start + hashFilterBatchSize
+		if end > len(hashes) {
+			end = len(hashes)
+		}
+		batch := hashes[start:end]
+		placeholders := strings.Repeat("?,", len(batch))
+		placeholders = placeholders[:len(placeholders)-1]
+		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND hash IN (` + placeholders + `)`
+		args := make([]interface{}, 0, len(batch)+1)
+		args = append(args, normURL)
+		for _, h := range batch {
+			args = append(args, h)
+		}
+		rows, err := db.Query(query, args...)
+		if err != nil {
 			return nil, err
 		}
-		fetched[hash] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			fetched[hash] = true
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
 	}
 	var unfetched []string
 	for _, hash := range hashes {
@@ -399,8 +443,6 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 				now, repoURL, k.hash, k.branch); err != nil {
 				return 0, fmt.Errorf("mark stale %s: %w", k.hash, err)
 			}
-			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				now, repoURL, k.hash, k.branch)
 		}
 		for _, k := range toUnstale {
 			if _, err := db.Exec(
@@ -408,8 +450,6 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 				repoURL, k.hash, k.branch); err != nil {
 				return 0, fmt.Errorf("unstale %s: %w", k.hash, err)
 			}
-			_, _ = db.Exec(`UPDATE core_commits_resolved SET stale_since = NULL WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				repoURL, k.hash, k.branch)
 		}
 		return len(toStale), nil
 	})
@@ -424,7 +464,7 @@ func ResetRepositoryData(repoURL string) error {
 			"social_items", "social_interactions",
 			"pm_items", "release_items", "review_items",
 			"core_commits_version", "core_mentions",
-			"core_notification_reads", "core_commits_resolved", "core_commits",
+			"core_notification_reads", "core_commits",
 		}
 		_, _ = db.Exec(`DELETE FROM core_fts WHERE repo_url = ?`, repoURL)
 		for _, table := range tables {
@@ -537,33 +577,39 @@ func FilterUnfetchedCommits(repoURL, branch string, hashes []string) ([]string, 
 	if db == nil {
 		return nil, ErrNotOpen
 	}
-	placeholders := strings.Repeat("?,", len(hashes))
-	placeholders = placeholders[:len(placeholders)-1]
-	query := `SELECT hash FROM core_commits WHERE repo_url = ? AND branch = ? AND hash IN (` + placeholders + `)`
-
-	args := make([]interface{}, len(hashes)+2)
-	args[0] = protocol.NormalizeURL(repoURL)
-	args[1] = branch
-	for i, h := range hashes {
-		args[i+2] = h
-	}
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	fetched := make(map[string]bool)
-	for rows.Next() {
-		var hash string
-		if err := rows.Scan(&hash); err != nil {
+	normURL := protocol.NormalizeURL(repoURL)
+	fetched := make(map[string]bool, len(hashes))
+	for start := 0; start < len(hashes); start += hashFilterBatchSize {
+		end := start + hashFilterBatchSize
+		if end > len(hashes) {
+			end = len(hashes)
+		}
+		batch := hashes[start:end]
+		placeholders := strings.Repeat("?,", len(batch))
+		placeholders = placeholders[:len(placeholders)-1]
+		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND branch = ? AND hash IN (` + placeholders + `)`
+		args := make([]interface{}, 0, len(batch)+2)
+		args = append(args, normURL, branch)
+		for _, h := range batch {
+			args = append(args, h)
+		}
+		rows, err := db.Query(query, args...)
+		if err != nil {
 			return nil, err
 		}
-		fetched[hash] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			fetched[hash] = true
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
 	}
 
 	var unfetched []string

@@ -2,6 +2,7 @@
 package tuicore
 
 import (
+	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -472,12 +473,12 @@ func (v *NotificationsView) IsInputActive() bool {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *NotificationsView) HeaderInfo() (position, total int) {
+func (v *NotificationsView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 {
-		return 0, 0
+		return 0, ""
 	}
-	return v.cardlist.Selected() + 1, len(items)
+	return v.cardlist.Selected() + 1, fmt.Sprintf("%d", len(items))
 }
 
 // GetItemAt returns the post ID at the given index.
