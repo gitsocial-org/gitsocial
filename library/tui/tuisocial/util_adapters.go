@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/search"
@@ -234,6 +235,11 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 	// Own repo: post is from the workspace repository
 	if post.Display.IsWorkspacePost {
 		card.Header.IsOwnRepo = true
+	}
+
+	// Verified: signing key is bound to the author email via forge or DNS attestation
+	if post.Repository != "" && authorEmail != "" && post.Display.CommitHash != "" {
+		card.Header.IsVerified = identity.IsVerifiedCommit(post.Repository, post.Display.CommitHash, authorEmail)
 	}
 
 	return card

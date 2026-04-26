@@ -276,6 +276,8 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocConfig("social")
 	case "config.pm":
 		return LocPMConfig
+	case "config.identity":
+		return LocIdentity
 	case "cache":
 		return LocCache
 	case "pm", "pm.board":

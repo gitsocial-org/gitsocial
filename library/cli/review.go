@@ -1042,7 +1042,7 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 	} else {
 		fmt.Printf("State: %s\n", pr.State)
 	}
-	fmt.Printf("Author: %s <%s>\n", pr.Author.Name, pr.Author.Email)
+	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(pr.Author.Name, pr.Author.Email, pr.Repository, protocol.ParseRef(pr.ID).Value))
 	fmt.Printf("Created: %s\n", pr.Timestamp.Format(time.RFC3339))
 	if pr.Base != "" {
 		fmt.Printf("Base: %s\n", pr.Base)

@@ -314,9 +314,46 @@ type CardHeader struct {
 	IsEdited       bool         // True if post has been edited
 	IsRetracted    bool         // True if post has been deleted
 	IsStale        bool         // True if commit no longer exists in live branch
+	IsVerified     bool         // True if commit's signing key is bound to the author email by an attestation source
 }
 
 // TitleStyle returns the appropriate style for the header title based on flags.
+// BadgeStyle returns the style for the verified ⚿ badge, mirroring the
+// author's relationship color so the title and badge read as one visual unit.
+// Default (no relationship) maps to the IdentityFollowing palette, matching
+// the title's default color.
+func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
+	var c string
+	switch {
+	case h.IsMe:
+		c = IdentityMe
+		if dimmed {
+			c = IdentityMeMuted
+		}
+	case h.IsAssigned:
+		c = IdentityAssigned
+		if dimmed {
+			c = IdentityAssignedMuted
+		}
+	case h.IsOwnRepo:
+		c = IdentityOwnRepo
+		if dimmed {
+			c = IdentityOwnRepoMuted
+		}
+	case h.IsMutualFollow:
+		c = IdentityMutual
+		if dimmed {
+			c = IdentityMutualMuted
+		}
+	default:
+		c = IdentityFollowing
+		if dimmed {
+			c = IdentityMuted
+		}
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+}
+
 func (h CardHeader) TitleStyle(dimmed bool) lipgloss.Style {
 	if h.IsMe {
 		if dimmed {

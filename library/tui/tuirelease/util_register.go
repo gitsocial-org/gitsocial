@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/tui/tuicore"
@@ -203,6 +204,9 @@ func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tu
 	}
 	if opts.WorkspaceURL != "" && rel.Repository == opts.WorkspaceURL {
 		card.Header.IsOwnRepo = true
+	}
+	if rel.Repository != "" && relEmail != "" {
+		card.Header.IsVerified = identity.IsVerifiedCommit(rel.Repository, protocol.ParseRef(rel.ID).Value, relEmail)
 	}
 	return card
 }

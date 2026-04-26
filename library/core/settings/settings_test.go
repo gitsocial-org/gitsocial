@@ -307,6 +307,32 @@ func TestListAll(t *testing.T) {
 	}
 }
 
+func TestIdentityDNSVerification(t *testing.T) {
+	s := DefaultSettings()
+	if s.Identity.DNSVerification {
+		t.Error("identity.dns_verification should default to false")
+	}
+	got, ok := Get(s, "identity.dns_verification")
+	if !ok || got != "false" {
+		t.Errorf("Get(identity.dns_verification) = (%q, %v); want (\"false\", true)", got, ok)
+	}
+	if err := Set(s, "identity.dns_verification", "true"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if !s.Identity.DNSVerification {
+		t.Error("Set should have flipped the field to true")
+	}
+	if got, _ := Get(s, "identity.dns_verification"); got != "true" {
+		t.Errorf("after Set, Get = %q; want \"true\"", got)
+	}
+	if err := Set(s, "identity.dns_verification", "garbage"); err == nil {
+		t.Error("Set should reject non-boolean values")
+	}
+	if !IsEnum("identity.dns_verification") {
+		t.Error("identity.dns_verification should be an enum (true/false)")
+	}
+}
+
 func TestParseKey(t *testing.T) {
 	tests := []struct {
 		key         string

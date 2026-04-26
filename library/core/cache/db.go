@@ -66,9 +66,11 @@ CREATE TABLE IF NOT EXISTS core_commits (
     stale_since TEXT,
     origin_author_name TEXT,
     origin_author_email TEXT,
+    signer_key TEXT,
     PRIMARY KEY (repo_url, hash, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_core_commits_timestamp ON core_commits(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_core_commits_signer ON core_commits(signer_key, author_email) WHERE signer_key IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_core_commits_repo_timestamp ON core_commits(repo_url, timestamp);
 CREATE INDEX IF NOT EXISTS idx_core_commits_repo_branch ON core_commits(repo_url, branch);
 CREATE INDEX IF NOT EXISTS idx_core_commits_edits ON core_commits(edits) WHERE edits IS NOT NULL;
@@ -253,6 +255,11 @@ func Open(cacheDir string) error {
 	// CREATE TABLE IF NOT EXISTS in coreSchema succeeds. This is a one-time
 	// upgrade from the correlated-subquery view to the materialized table.
 	_, _ = db.Exec(`DROP VIEW IF EXISTS core_commits_resolved`)
+	// Migration: add signer_key column for identity verification (M6).
+	_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN signer_key TEXT`)
+	// Migration: drop the legacy core_identities table — registered identities
+	// were removed from the protocol; verification is via core_verified_bindings only.
+	_, _ = db.Exec(`DROP TABLE IF EXISTS core_identities`)
 
 	if _, err := db.Exec(coreSchema); err != nil {
 		log.Error("cache core schema init failed", "error", err)

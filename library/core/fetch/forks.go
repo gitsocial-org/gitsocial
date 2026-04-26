@@ -94,7 +94,7 @@ func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, erro
 		}); err != nil {
 			log.Debug("insert fork repository failed", "url", forkURL, "branch", branch, "error", err)
 		}
-		count, err := ProcessCommits(gitCommits, forkURL, branch, processors)
+		count, err := ProcessCommits(forkDir, gitCommits, forkURL, branch, processors)
 		if err != nil {
 			log.Debug("process fork commits failed", "fork", forkURL, "branch", branch, "error", err)
 			continue

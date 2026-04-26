@@ -22,9 +22,9 @@
 │                              ││    extensions.review     true  (true · false)                                        │
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││                                                                                      │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
+│                              ││  Identity                                                                            │
+│                              ││    identity.dns_verific                                                              │
+│                              ││  ation                 false  (false · true)                                         │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │

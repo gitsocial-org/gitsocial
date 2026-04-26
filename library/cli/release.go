@@ -15,6 +15,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 )
 
@@ -555,7 +556,7 @@ func printReleaseDetails(rel release.Release) {
 		fmt.Println("Pre-release: yes")
 	}
 
-	fmt.Printf("Author: %s <%s>\n", rel.Author.Name, rel.Author.Email)
+	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(rel.Author.Name, rel.Author.Email, rel.Repository, protocol.ParseRef(rel.ID).Value))
 	fmt.Printf("Created: %s\n", rel.Timestamp.Format(time.RFC3339))
 
 	if len(rel.Artifacts) > 0 {

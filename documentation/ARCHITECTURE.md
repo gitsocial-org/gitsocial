@@ -59,6 +59,7 @@ gitmsg/
 │   │   ├── cache/                  # SQLite operations
 │   │   ├── storage/                # Bare repo management
 │   │   ├── fetch/                  # Fetch orchestration + processing
+│   │   ├── identity/               # Identity declarations + verification
 │   │   ├── search/                 # Cross-extension search
 │   │   └── result/                 # Result[T] type
 │   ├── extensions/
@@ -112,7 +113,7 @@ extensions/* → core/* → stdlib only
 
 | Package | Purpose | Key Exports |
 |---------|---------|-------------|
-| `core/git` | Git operations | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase` |
+| `core/git` | Git operations | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `CreateSignedCommitTree`, `VerifyCommitSignature`, `GetCommitSignerKey` |
 | `core/protocol` | Message parsing | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `IsClosingTrailer` |
 | `core/cache` | SQLite operations | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg` | Protocol-level storage | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
@@ -122,6 +123,8 @@ extensions/* → core/* → stdlib only
 | `core/search` | Cross-extension search | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result` | Result type | `Result[T]`, `Success`, `Failure` |
 | `core/notifications` | Notification aggregation | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
+| `core/identity` | Identity verification | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
+| `core/identity/forge` | Forge adapters for identity verification | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
 | `extensions/social` | Social layer | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
 | `extensions/pm` | Project management | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
 | `extensions/release` | Release management | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
@@ -138,6 +141,8 @@ extensions/* → core/* → stdlib only
 | `cache.Repository`, `Commit`, `TrailerRef` | `library/core/cache/` |
 | `result.Result[T]` | `library/core/result/` |
 | `notifications.Notification`, `Provider`, `Filter` | `library/core/notifications/` |
+| `identity.Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `library/core/identity/` |
+| `forge.Forge`, `GPGKey`, `CommitVerification` | `library/core/identity/forge/` |
 | `social.Post`, `SocialItem` | `library/extensions/social/` |
 | `pm.Issue`, `Milestone`, `Sprint`, `PMNotification` | `library/extensions/pm/` |
 | `release.Release`, `ReleaseItem`, `ReleaseNotification` | `library/extensions/release/` |
@@ -256,6 +261,8 @@ type View interface {
 - `core_notification_reads(repo_url, hash, branch, read_at)` - PK: `(repo_url, hash, branch)`
 - `core_mentions(repo_url, hash, branch, email)` - PK: `(repo_url, hash, branch, email)`
 - `core_trailer_refs(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key, trailer_value)` - PK: `(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key)`
+- `core_identity_dns(email, key, repo, resolved_at)` - PK: `email` — caches DNS well-known lookups (24h TTL).
+- `core_verified_bindings(key_fingerprint, email, source, forge_host, forge_account, verified, resolved_at)` - PK: `(key_fingerprint, email, source, forge_host)` — caches per-source attestations. See [Identity Verification](IDENTITY.md) for the trust model and source list.
 
 **Social extension:**
 - `social_items(repo_url, hash, branch, type, original_*, reply_to_*)` - PK: `(repo_url, hash, branch)`
@@ -334,6 +341,7 @@ gitsocial
 ├── history             # View edit history
 ├── notifications       # View/manage notifications
 ├── fork                # Add, remove, list registered forks
+├── id                  # Identity management (init, show, list, verify, remove, resolve)
 ├── tui                 # Launch TUI
 │
 ├── import              # Import from external platforms
@@ -400,7 +408,7 @@ library/tui/
 ├── host.go                   # View dispatch + shared state
 │
 ├── tuicore/                  # Infrastructure + core views
-│   ├── view_*.go             # Routable views (cache, config, notifications, search, settings)
+│   ├── view_*.go             # Routable views (cache, config, identity, notifications, search, settings)
 │   ├── component_*.go        # Reusable components (nav_panel, version_picker, confirm, choice)
 │   ├── registry_*.go         # Global registries (action, card, nav, view)
 │   ├── util_*.go             # Utilities (render, keys, router, types, syntax, diff, etc.)

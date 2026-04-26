@@ -40,6 +40,111 @@ func GetUserEmail(workdir string) string {
 	return strings.TrimSpace(result.Stdout)
 }
 
+// GetUserName returns the configured git user name.
+func GetUserName(workdir string) string {
+	result, err := ExecGit(workdir, []string{"config", "user.name"})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(result.Stdout)
+}
+
+// GetGitConfig reads a git config value.
+func GetGitConfig(workdir, key string) string {
+	result, err := ExecGit(workdir, []string{"config", key})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(result.Stdout)
+}
+
+// CreateSignedCommitTree creates a signed commit with empty tree, returning the full hash.
+func CreateSignedCommitTree(workdir, message, parent string) (string, error) {
+	args := []string{"commit-tree", emptyTree, "-m", message, "-S"}
+	if parent != "" {
+		args = append(args, "-p", parent)
+	}
+	hash, err := execGitSimple(workdir, args)
+	if err != nil {
+		return "", fmt.Errorf("signed commit-tree: %w", err)
+	}
+	return strings.TrimSpace(hash), nil
+}
+
+// VerifyCommitSignature checks the signature on a commit.
+// Returns the raw output from git verify-commit (good-sig info) or error if unsigned/invalid.
+func VerifyCommitSignature(workdir, hash string) (string, error) {
+	result, err := ExecGit(workdir, []string{"verify-commit", "--raw", hash})
+	if err != nil {
+		return "", fmt.Errorf("verify-commit %s: %w", hash, err)
+	}
+	// verify-commit outputs signature info to stderr
+	output := result.Stderr
+	if output == "" {
+		output = result.Stdout
+	}
+	return output, nil
+}
+
+// GetCommitSignerKey extracts the signing key fingerprint from a commit.
+// For SSH: returns the key fingerprint. For GPG: returns the key ID.
+func GetCommitSignerKey(workdir, hash string) (format string, key string, err error) {
+	result, err := ExecGit(workdir, []string{"log", "-1", "--format=%GK%n%GG", hash})
+	if err != nil {
+		return "", "", fmt.Errorf("get signer key: %w", err)
+	}
+	lines := strings.SplitN(strings.TrimSpace(result.Stdout), "\n", 2)
+	if len(lines) == 0 || lines[0] == "" {
+		return "", "", fmt.Errorf("commit %s is not signed", hash)
+	}
+	keyID := strings.TrimSpace(lines[0])
+	sigInfo := ""
+	if len(lines) > 1 {
+		sigInfo = lines[1]
+	}
+	if strings.Contains(sigInfo, "ssh") || strings.HasPrefix(keyID, "SHA256:") {
+		return "ssh", keyID, nil
+	}
+	return "gpg", keyID, nil
+}
+
+// GetCommitSignerKeys returns a map of commit hash → signer key for the given hashes.
+// Unsigned commits are omitted from the result. Uses a single git log invocation per
+// repository for performance.
+func GetCommitSignerKeys(workdir string, hashes []string) (map[string]string, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+	args := make([]string, 0, 3+len(hashes))
+	args = append(args, "log", "--no-walk", "--format=%H"+unitSep+"%GK")
+	args = append(args, hashes...)
+	result, err := ExecGit(workdir, args)
+	if err != nil {
+		return nil, fmt.Errorf("batch get signer keys: %w", err)
+	}
+	out := make(map[string]string, len(hashes))
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, unitSep, 2)
+		if len(parts) != 2 {
+			continue
+		}
+		fullHash := strings.TrimSpace(parts[0])
+		key := strings.TrimSpace(parts[1])
+		if fullHash == "" || key == "" {
+			continue
+		}
+		out[fullHash] = key
+		if len(fullHash) >= 12 {
+			out[fullHash[:12]] = key
+		}
+	}
+	return out, nil
+}
+
 // Init initializes a new git repository in the given directory.
 func Init(workdir string, initialBranch string) error {
 	args := []string{"init"}

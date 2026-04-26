@@ -185,7 +185,7 @@ func TestProcessCommits_insertsNewCommits(t *testing.T) {
 		{Hash: "bbb222", Message: "second", Author: "Bob", Email: "bob@test.com", Timestamp: now},
 	}
 
-	count, err := ProcessCommits(commits, repoURL, branch, nil)
+	count, err := ProcessCommits("", commits, repoURL, branch, nil)
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -226,7 +226,7 @@ func TestProcessCommits_filtersAlreadyFetched(t *testing.T) {
 		{Hash: "bbb222", Message: "second", Author: "Bob", Email: "bob@test.com", Timestamp: now},
 	}
 
-	count, err := ProcessCommits(gitCommits, repoURL, branch, nil)
+	count, err := ProcessCommits("", gitCommits, repoURL, branch, nil)
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -253,7 +253,7 @@ func TestProcessCommits_callsProcessors(t *testing.T) {
 		mu.Unlock()
 	}
 
-	count, err := ProcessCommits(commits, repoURL, branch, []CommitProcessor{proc})
+	count, err := ProcessCommits("", commits, repoURL, branch, []CommitProcessor{proc})
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -286,7 +286,7 @@ func TestProcessCommits_parsesGitMsgHeaders(t *testing.T) {
 		receivedMsg = msg
 	}
 
-	_, err := ProcessCommits(commits, repoURL, branch, []CommitProcessor{proc})
+	_, err := ProcessCommits("", commits, repoURL, branch, []CommitProcessor{proc})
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -316,7 +316,7 @@ func TestProcessCommits_nilMsgForPlainCommits(t *testing.T) {
 		receivedMsg = msg
 	}
 
-	_, err := ProcessCommits(commits, repoURL, branch, []CommitProcessor{proc})
+	_, err := ProcessCommits("", commits, repoURL, branch, []CommitProcessor{proc})
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -328,7 +328,7 @@ func TestProcessCommits_nilMsgForPlainCommits(t *testing.T) {
 func TestProcessCommits_emptySlice(t *testing.T) {
 	t.Parallel()
 
-	count, err := ProcessCommits(nil, "https://example.com/test/pc-empty", "main", nil)
+	count, err := ProcessCommits("", nil, "https://example.com/test/pc-empty", "main", nil)
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -350,7 +350,7 @@ func TestProcessCommits_multipleProcessors(t *testing.T) {
 	proc1 := func(commit git.Commit, msg *protocol.Message, rURL, b string) { calls1++ }
 	proc2 := func(commit git.Commit, msg *protocol.Message, rURL, b string) { calls2++ }
 
-	_, err := ProcessCommits(commits, repoURL, branch, []CommitProcessor{proc1, proc2})
+	_, err := ProcessCommits("", commits, repoURL, branch, []CommitProcessor{proc1, proc2})
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -375,7 +375,7 @@ func TestProcessCommits_passesCorrectArgs(t *testing.T) {
 		gotHash = commit.Hash
 	}
 
-	_, err := ProcessCommits(commits, repoURL, branch, []CommitProcessor{proc})
+	_, err := ProcessCommits("", commits, repoURL, branch, []CommitProcessor{proc})
 	if err != nil {
 		t.Fatalf("ProcessCommits() error = %v", err)
 	}
@@ -462,7 +462,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		commits := []git.Commit{
 			{Hash: "aaa111", Message: "test", Author: "Alice", Email: "alice@test.com", Timestamp: time.Now()},
 		}
-		_, err := ProcessCommits(commits, "https://example.com/repo", "main", nil)
+		_, err := ProcessCommits("", commits, "https://example.com/repo", "main", nil)
 		if err == nil {
 			t.Error("expected error after renaming core_commits")
 		}
@@ -477,7 +477,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		commits := []git.Commit{
 			{Hash: "aaa111", Message: "test", Author: "Alice", Email: "alice@test.com", Timestamp: time.Now()},
 		}
-		_, err := ProcessCommits(commits, "https://example.com/repo", "main", nil)
+		_, err := ProcessCommits("", commits, "https://example.com/repo", "main", nil)
 		if err == nil {
 			t.Error("expected error with insert trigger")
 		}

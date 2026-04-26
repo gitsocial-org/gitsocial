@@ -93,6 +93,11 @@ type State struct {
 	// Error log (session-level warnings and errors for the error log panel)
 	ErrorLog []LogEntry
 
+	// IdentityGeneration is bumped after each fetch (when verified bindings may
+	// have changed), so card lists know to re-render verified badges on next
+	// activation.
+	IdentityGeneration int
+
 	// Border styling (set by views, cleared on navigation)
 	BorderVariant string // "", "error", "warning"
 

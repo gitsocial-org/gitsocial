@@ -565,6 +565,10 @@
 | `home` | First |
 | `end` | Last |
 
+### Identity
+
+Read-only status view. Displays your git signing configuration and the cached verification status for your `(signing key, email)` binding.
+
 ### Cache
 
 | Key | Action |

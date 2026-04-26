@@ -18,7 +18,7 @@ var ambiguousFallbacks = map[rune]string{
 	'◉': "@", // FISHEYE (post detail)
 	'▦': "#", // SQUARE WITH CROSSHATCH (board)
 	'♥': "*", // BLACK HEART SUIT (my repo)
-	'⚿': "=", // SQUARED KEY (DM)
+	'⚿': "=", // SQUARED KEY (identity/verified)
 	'⛨': "+", // BLACK CROSS ON SHIELD (security)
 	'⛫': "^", // CASTLE (infrastructure)
 }

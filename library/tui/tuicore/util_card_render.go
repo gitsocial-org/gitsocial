@@ -442,11 +442,15 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 		str.WriteString(RetractedBadge.Render("[RETRACTED]"))
 		str.WriteString(" ")
 	}
-	titleText := header.TitleStyle(opts.Dimmed).Render(header.Title)
+	titleText := header.TitleStyle(opts.Dimmed).Render(stripVerifiedIcon(header.Title))
 	if header.TitleLink != nil {
 		titleText = opts.Anchors.Mark(titleText, *header.TitleLink)
 	}
 	str.WriteString(titleText)
+	if header.IsVerified {
+		str.WriteString(" ")
+		str.WriteString(header.BadgeStyle(opts.Dimmed).Render(SafeIcon("⚿")))
+	}
 
 	rest := ""
 	if header.Badge != "" {
@@ -1004,4 +1008,9 @@ func Hyperlink(linkURL, text string) string {
 // LinkStyle applies link color and underline without an OSC 8 hyperlink.
 func LinkStyle(text string) string {
 	return "\x1b[38;5;" + AccentHyperlink + ";4m" + text + "\x1b[39;24m"
+}
+
+// stripVerifiedIcon removes the verified icon from user-controlled text to prevent spoofing.
+func stripVerifiedIcon(s string) string {
+	return strings.ReplaceAll(s, "⚿", "")
 }

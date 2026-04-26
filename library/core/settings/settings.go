@@ -16,6 +16,15 @@ type Settings struct {
 	Log        LogSettings        `json:"log"`
 	Display    DisplaySettings    `json:"display"`
 	Extensions ExtensionsSettings `json:"extensions"`
+	Identity   IdentitySettings   `json:"identity"`
+}
+
+// IdentitySettings controls per-user identity verification policy.
+type IdentitySettings struct {
+	// DNSVerification enables fetching .well-known/gitmsg-id.json for verification.
+	// Defaults to false: domain-owner attestation is a weaker trust path than
+	// forge attestation, and is opt-in.
+	DNSVerification bool `json:"dns_verification"`
 }
 
 type ExtensionsSettings struct {
@@ -64,6 +73,9 @@ func DefaultSettings() *Settings {
 			PM:      true,
 			Release: true,
 			Review:  true,
+		},
+		Identity: IdentitySettings{
+			DNSVerification: false,
 		},
 	}
 }
@@ -136,6 +148,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.FormatBool(s.Extensions.Release), true
 	case "extensions.review":
 		return strconv.FormatBool(s.Extensions.Review), true
+	case "identity.dns_verification":
+		return strconv.FormatBool(s.Identity.DNSVerification), true
 	case "fetch.workspace_mode":
 		return "(per-repo)", true
 	default:
@@ -193,6 +207,11 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("extensions.review must be true or false")
 		}
 		s.Extensions.Review = value == "true"
+	case "identity.dns_verification":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("identity.dns_verification must be true or false")
+		}
+		s.Identity.DNSVerification = value == "true"
 	case "fetch.workspace_mode":
 		return fmt.Errorf("use settings view to change workspace mode (per-repo setting)")
 	default:
@@ -214,6 +233,7 @@ func ListKeys() []string {
 		"extensions.pm",
 		"extensions.review",
 		"extensions.release",
+		"identity.dns_verification",
 	}
 }
 
@@ -243,14 +263,15 @@ func ParseKey(key string) (section, name string, ok bool) {
 }
 
 var EnumOptions = map[string][]string{
-	"log.level":            {"debug", "info", "warn", "error"},
-	"output.color":         {"auto", "always", "never"},
-	"display.show_email":   {"false", "true"},
-	"fetch.workspace_mode": {"default", "*"},
-	"extensions.social":    {"true", "false"},
-	"extensions.pm":        {"true", "false"},
-	"extensions.release":   {"true", "false"},
-	"extensions.review":    {"true", "false"},
+	"log.level":                 {"debug", "info", "warn", "error"},
+	"output.color":              {"auto", "always", "never"},
+	"display.show_email":        {"false", "true"},
+	"fetch.workspace_mode":      {"default", "*"},
+	"extensions.social":         {"true", "false"},
+	"extensions.pm":             {"true", "false"},
+	"extensions.release":        {"true", "false"},
+	"extensions.review":         {"true", "false"},
+	"identity.dns_verification": {"false", "true"},
 }
 
 // GetWorkspaceMode returns the workspace fetch mode for a given repo URL.

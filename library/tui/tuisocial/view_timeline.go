@@ -20,6 +20,7 @@ type TimelineView struct {
 	showEmail    bool
 	restoreIndex int // cursor position to restore after refresh (-1 = none)
 	pag          tuicore.Pagination
+	identityGen  int // tracks State.IdentityGeneration to detect verified badge staleness
 }
 
 // Bindings returns keybindings for the timeline view.
@@ -109,6 +110,12 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 	}
 	if v.gitRoot == "" {
 		v.gitRoot = state.GitRoot
+	}
+	// Identity changed: force full reload so verified badges update
+	if v.identityGen != state.IdentityGeneration {
+		v.identityGen = state.IdentityGeneration
+		v.cardlist.SetItems(nil)
+		return v.loadPosts()
 	}
 	// Navigating back with data already loaded: restore cursor, skip reload
 	if v.restoreIndex >= 0 && len(v.cardlist.Items()) > 0 {

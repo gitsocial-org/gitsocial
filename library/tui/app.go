@@ -18,6 +18,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/fetch"
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/notifications"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
@@ -202,6 +203,7 @@ func NewModel(workdir, cacheDir string) Model {
 
 	// Apply display settings
 	state.ShowEmailOnCards = userSettings.Display.ShowEmail
+	identity.SetDNSVerificationEnabled(userSettings.Identity.DNSVerification)
 
 	// Register core views
 	settingsView := tuicore.NewSettingsView()
@@ -218,6 +220,9 @@ func NewModel(workdir, cacheDir string) Model {
 
 	forksView := tuicore.NewForksView(workdir)
 	host.AddView("/config/forks", forksView)
+
+	identityView := tuicore.NewIdentityView(workdir)
+	host.AddView("/config/identity", identityView)
 
 	cacheView := tuicore.NewCacheView()
 	host.AddView("/cache", cacheView)

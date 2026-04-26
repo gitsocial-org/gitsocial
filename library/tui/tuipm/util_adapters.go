@@ -5,9 +5,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gitsocial-org/gitsocial/core/identity"
+	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/tui/tuicore"
 )
+
+// hashFromRef extracts the commit hash from an item's ref-style ID.
+func hashFromRef(id string) string {
+	parsed := protocol.ParseRef(id)
+	return parsed.Value
+}
 
 // IssueToCardOptions configures how an Issue is converted to a Card
 type IssueToCardOptions struct {
@@ -107,6 +115,9 @@ func IssueToCardWithOptions(issue pm.Issue, opts IssueToCardOptions) tuicore.Car
 			IsRetracted: issue.IsRetracted,
 		},
 		Stats: stats,
+	}
+	if issue.Repository != "" && issue.Author.Email != "" {
+		card.Header.IsVerified = identity.IsVerifiedCommit(issue.Repository, hashFromRef(issue.ID), issue.Author.Email)
 	}
 	return card
 }
@@ -232,6 +243,9 @@ func MilestoneToCardWithOptions(milestone pm.Milestone, opts MilestoneToCardOpti
 	}
 	if opts.WorkspaceURL != "" && milestone.Repository == opts.WorkspaceURL {
 		card.Header.IsOwnRepo = true
+	}
+	if milestone.Repository != "" && milestone.Author.Email != "" {
+		card.Header.IsVerified = identity.IsVerifiedCommit(milestone.Repository, hashFromRef(milestone.ID), milestone.Author.Email)
 	}
 	return card
 }
@@ -366,6 +380,9 @@ func SprintToCardWithOptions(sprint pm.Sprint, opts SprintToCardOptions) tuicore
 	}
 	if opts.WorkspaceURL != "" && sprint.Repository == opts.WorkspaceURL {
 		card.Header.IsOwnRepo = true
+	}
+	if sprint.Repository != "" && sprint.Author.Email != "" {
+		card.Header.IsVerified = identity.IsVerifiedCommit(sprint.Repository, hashFromRef(sprint.ID), sprint.Author.Email)
 	}
 	return card
 }

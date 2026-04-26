@@ -81,10 +81,19 @@ func (v *ConfigView) Extension() string {
 
 // Activate loads the config when the view becomes active.
 func (v *ConfigView) Activate(state *State) tea.Cmd {
+	if ext := state.Router.Location().Param("extension"); ext != "" {
+		v.extension = ext
+	}
 	v.editMode = false
 	v.addMode = false
 	v.addKey = ""
 	return v.loadConfig(state.Workdir)
+}
+
+// keysHiddenByDedicatedViews are config keys that have their own dedicated views
+// and should not appear in the raw config key-value list.
+var keysHiddenByDedicatedViews = map[string]map[string]bool{
+	"core": {"forks": true},
 }
 
 // loadConfig loads extension configuration from git config.
@@ -92,6 +101,15 @@ func (v *ConfigView) loadConfig(workdir string) tea.Cmd {
 	ext := v.extension
 	return func() tea.Msg {
 		keys := gitmsg.ListExtConfig(workdir, ext)
+		if hidden := keysHiddenByDedicatedViews[ext]; len(hidden) > 0 {
+			filtered := keys[:0]
+			for _, kv := range keys {
+				if !hidden[kv.Key] {
+					filtered = append(filtered, kv)
+				}
+			}
+			keys = filtered
+		}
 		return ConfigViewLoadedMsg{Extension: ext, Keys: keys}
 	}
 }

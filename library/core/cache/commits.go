@@ -19,6 +19,7 @@ type Commit struct {
 	Message     string
 	Timestamp   time.Time
 	FetchedAt   time.Time
+	SignerKey   string
 }
 
 // InsertCommits batch inserts commits and populates version records for edits.
@@ -40,8 +41,8 @@ func InsertCommits(commits []Commit) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	commitStmt, err := tx.Prepare(`
-		INSERT OR IGNORE INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp, origin_time, edits, labels, fetched_at, origin_author_name, origin_author_email)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		INSERT OR IGNORE INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp, origin_time, edits, labels, fetched_at, origin_author_name, origin_author_email, signer_key)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare commit statement: %w", err)
 	}
@@ -109,7 +110,10 @@ func InsertCommits(commits []Commit) error {
 		}
 
 		ts := c.Timestamp.UTC().Format(time.RFC3339)
-		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail); err != nil {
+		// Always store signer_key as a string (empty for unsigned). NULL is
+		// reserved for legacy rows fetched before signer extraction shipped;
+		// the backfill scans NULL rows only.
+		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey); err != nil {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
 

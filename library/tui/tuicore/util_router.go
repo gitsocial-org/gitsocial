@@ -267,6 +267,9 @@ var LocReviewPRs = Location{Path: "/review/prs"}
 // LocForks creates a location for the forks management view.
 var LocForks = Location{Path: "/config/forks"}
 
+// LocIdentity creates a location for the identity management view.
+var LocIdentity = Location{Path: "/config/identity"}
+
 // LocReviewPRDetail creates a location for a review PR detail view.
 func LocReviewPRDetail(prID string) Location {
 	return Location{Path: "/review/pr", Params: map[string]string{"prID": prID}}
@@ -514,14 +517,15 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	r.Register(NavItem{ID: "ops", Label: "Operations", Icon: "⎈", Order: 6, Enabled: false})
 	r.Register(NavItem{ID: "security", Label: "Security", Icon: "⛨", Order: 7, Enabled: false})
 	r.Register(NavItem{ID: "portfolio", Label: "Portfolio", Icon: "⧉", Order: 8, Enabled: false})
-	r.Register(NavItem{ID: "dm", Label: "DM", Icon: "⚿", Order: 9, Enabled: false})
+	r.Register(NavItem{ID: "dm", Label: "DM", Icon: "✉", Order: 9, Enabled: false})
 
 	// Config domain with sub-items
 	r.Register(NavItem{ID: "config", Label: "Configuration", Icon: "⚙", Order: 10, Enabled: true})
-	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: true})
-	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
-	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: true})
-	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
+	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: false})
+	r.Register(NavItem{ID: "config.identity", Label: "Identity", Icon: "⚿", Parent: "config", Order: 1, Enabled: true})
+	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 2, Enabled: true})
+	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 3, Enabled: false})
+	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 4, Enabled: true})
 
 	// Cache and Settings
 	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 11, Enabled: true})

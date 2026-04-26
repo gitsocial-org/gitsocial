@@ -9,7 +9,7 @@
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
-[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Extensions](#extensions--integrations) • [Installation](#installation) • [Quick Start](#quick-start) • [Workflows](#workflows) • [Documentation](#documentation)
+[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Extensions](#extensions--integrations) • [Installation](#installation) • [Quick Start](#quick-start) • [Workflows](#workflows) • [Identity](#identity--verification) • [Documentation](#documentation)
 
 ![GitSocial TUI](documentation/demo/demo.gif)
 
@@ -96,7 +96,7 @@ gitsocial push
 
 ### Open a cross-forge pull request
 
-Fork on any host. The PR works regardless of where your fork lives.
+PRs work across any host. Your fork can live on GitHub, GitLab, Codeberg, or a self-hosted server.
 
 ```bash
 git checkout -b feature/my-change         # make changes, commit
@@ -112,12 +112,17 @@ gitsocial push                            # push PR metadata
 
 See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for version tracking, merge strategies, and cross-forge scenarios.
 
+## Identity & Verification
+
+Identity and verification work without a central authority. The verified badge (⚿) requires the commit's signing key to be bound to the author email via one of three [external attestation sources](specs/GITMSG.md#32-identity-verification): a forge GPG endpoint, a forge commits API (which also covers SSH signatures), or DNS via `/.well-known/gitmsg-id.json`.
+
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
 | [CLI Reference](documentation/CLI.md) | Commands, flags, output formats |
 | [GitReview Flows](documentation/GITREVIEW-FLOWS.md) | Cross-forge PR workflows, version tracking, merge strategies |
+| [Identity Verification](documentation/IDENTITY.md) | Trust model, attestation sources, caching |
 | [Architecture](documentation/ARCHITECTURE.md) | System design, packages, cache |
 | [TUI Layouts](documentation/TUI-DIAGRAMS.md) | ASCII diagrams for every view |
 | [JSON-RPC](documentation/RPC.md) | Editor integration over stdio |

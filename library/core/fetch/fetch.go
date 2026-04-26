@@ -322,7 +322,7 @@ func fetchFullHistoryAllBranches(storageDir, repoURL, fallbackBranch string, pro
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
 	deleteHEADBranchCommits(repoURL)
-	count, err := processAllBranchCommits(gitCommits, repoURL, fallbackBranch, processors)
+	count, err := processAllBranchCommits(storageDir, gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err
 	}
@@ -359,7 +359,7 @@ func fetchIncrementalAllBranches(storageDir, repoURL, fallbackBranch string, sin
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
 	deleteHEADBranchCommits(repoURL)
-	count, err := processAllBranchCommits(gitCommits, repoURL, fallbackBranch, processors)
+	count, err := processAllBranchCommits(storageDir, gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err
 	}
@@ -384,7 +384,7 @@ func fetchFullHistory(storageDir, repoURL, branch string, processors []CommitPro
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
-	count, err := ProcessCommits(gitCommits, repoURL, branch, processors)
+	count, err := ProcessCommits(storageDir, gitCommits, repoURL, branch, processors)
 	if err != nil {
 		return 0, err
 	}
@@ -420,7 +420,7 @@ func fetchIncremental(storageDir, repoURL, branch string, sinceTime time.Time, p
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
-	count, err := ProcessCommits(gitCommits, repoURL, branch, processors)
+	count, err := ProcessCommits(storageDir, gitCommits, repoURL, branch, processors)
 	if err != nil {
 		return 0, err
 	}
@@ -455,7 +455,7 @@ func fetch30DayWindow(storageDir, repoURL, branch, since, before string, process
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
-	count, err := ProcessCommits(gitCommits, repoURL, branch, processors)
+	count, err := ProcessCommits(storageDir, gitCommits, repoURL, branch, processors)
 	if err != nil {
 		return 0, err
 	}

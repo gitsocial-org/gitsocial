@@ -198,13 +198,26 @@ View and manage notifications.
 gitsocial notifications                        # Show unread
 gitsocial notifications --all                  # Show all
 gitsocial notifications --limit 50             # Limit results
-gitsocial notifications --type mention,follow   # Filter by type
+gitsocial notifications --type mention,follow  # Filter by type
 gitsocial notifications count                  # Unread count
 gitsocial notifications read <id>              # Mark as read (commit ref or repo#follow)
 gitsocial notifications read-all               # Mark all as read
 gitsocial notifications unread <id>            # Mark as unread
 gitsocial notifications unread-all             # Mark all as unread
 ```
+
+### gitsocial id
+
+Verify commit signatures and resolve identities. See [Identity Verification](IDENTITY.md) for the trust model, sources, and caching behavior.
+
+```
+gitsocial id verify <commit>                   # Verify a commit's binding
+gitsocial id resolve <email>                   # Resolve an identity via DNS well-known
+```
+
+Requires git signing configured (`user.signingkey` and `gpg.format`). Supports SSH and GPG keys.
+
+DNS-based verification (`/.well-known/gitmsg-id.json`) is **off by default** — see [IDENTITY.md](IDENTITY.md#why-dns-is-opt-in) for the rationale. Enable with `gitsocial settings set identity.dns_verification true` or via the TUI Settings view.
 
 ### gitsocial tui
 

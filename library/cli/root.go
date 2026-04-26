@@ -12,6 +12,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/settings"
 )
@@ -85,6 +86,7 @@ func initLogging(jsonOutput bool) {
 		if lvl, ok := settings.Get(s, "log.level"); ok {
 			level = log.ParseLevel(lvl)
 		}
+		identity.SetDNSVerificationEnabled(s.Identity.DNSVerification)
 	}
 
 	mode := log.ModeText

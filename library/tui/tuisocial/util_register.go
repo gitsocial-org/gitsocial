@@ -278,6 +278,9 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 	if cacheStats, err := cache.GetStats(ctx.CacheDir()); err == nil {
 		ctx.Nav().SetCacheSize(cache.FormatBytes(cacheStats.TotalBytes))
 	}
+	// Bump IdentityGeneration so card lists invalidate cached verified badges —
+	// the verifier resolves new bindings as part of fetch.
+	ctx.Host().State().IdentityGeneration++
 	var msgCmd tea.Cmd
 	if errCount := len(msg.Stats.Errors); errCount > 0 {
 		warnMsg := fmt.Sprintf("Fetch complete (%d errors)", errCount)

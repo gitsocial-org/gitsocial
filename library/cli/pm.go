@@ -1354,7 +1354,7 @@ func printIssueDetails(issue pm.Issue) {
 	fmt.Printf("Issue: %s\n", issue.ID)
 	fmt.Printf("State: %s\n", stateDisplay)
 	fmt.Printf("Subject: %s\n", issue.Subject)
-	fmt.Printf("Author: %s <%s>\n", issue.Author.Name, issue.Author.Email)
+	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(issue.Author.Name, issue.Author.Email, issue.Repository, protocol.ParseRef(issue.ID).Value))
 	fmt.Printf("Created: %s\n", issue.Timestamp.Format(time.RFC3339))
 
 	if len(issue.Labels) > 0 {
