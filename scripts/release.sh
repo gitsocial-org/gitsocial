@@ -72,6 +72,14 @@ CREATE_ARGS=(
 "$BIN" release create - "${CREATE_ARGS[@]}" < "$NOTES"
 
 # --- push ---
-git lfs push origin --all
+NEW_ARTIFACT_REF="refs/gitmsg/release/v$VERSION/artifacts"
+git lfs push origin "$NEW_ARTIFACT_REF"
 git push origin gitmsg/release
 git push origin 'refs/gitmsg/*:refs/gitmsg/*'
+
+# --- prune older artifact refs on origin (keep only latest) ---
+git ls-remote origin 'refs/gitmsg/release/*/artifacts' \
+  | awk -v keep="$NEW_ARTIFACT_REF" '$2 != keep {print $2}' \
+  | while read -r ref; do
+      git push origin --delete "$ref" || true
+    done

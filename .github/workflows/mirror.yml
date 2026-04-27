@@ -16,7 +16,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
 
       - run: scripts/mirror.sh gitlab "https://oauth2:${{ secrets.GITLAB_PAT }}@gitlab.com/gitsocial-org/gitsocial.git"
 
@@ -27,6 +26,5 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
 
       - run: scripts/mirror.sh codeberg "https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/gitsocial.git"
