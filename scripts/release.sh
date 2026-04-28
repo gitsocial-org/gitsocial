@@ -72,7 +72,7 @@ CREATE_ARGS=(
 "$BIN" release create - "${CREATE_ARGS[@]}" < "$NOTES"
 
 # --- push ---
-NEW_ARTIFACT_REF="refs/gitmsg/release/v$VERSION/artifacts"
+NEW_ARTIFACT_REF="refs/gitmsg/release/$VERSION/artifacts"
 git lfs push origin "$NEW_ARTIFACT_REF"
 git push origin gitmsg/release
 git push origin 'refs/gitmsg/*:refs/gitmsg/*'
