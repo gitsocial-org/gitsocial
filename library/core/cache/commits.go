@@ -181,6 +181,21 @@ func insertCommitsTxn(commits []Commit) error {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
 
+		// Populate normalized core_labels rows from the comma-string. For
+		// canonicals this is the authored value; for edits the canonical's
+		// row is later refreshed by applyEditToCanonical with the edit's
+		// labels. Empty/nil labels means we DELETE existing rows and INSERT
+		// none — INSERT OR IGNORE on the commit means the labels haven't
+		// actually changed when the row was already there, so the rebuild
+		// is a no-op write.
+		labelsStr := ""
+		if labels != nil {
+			labelsStr = *labels
+		}
+		if err := RebuildCSVLinkingTable(tx, "core_labels", "label", repoURL, c.Hash, branch, labelsStr); err != nil {
+			return fmt.Errorf("rebuild core_labels for %s: %w", c.Hash, err)
+		}
+
 		// Populate version-table link if this is an edit and canonical exists.
 		// Edits whose canonical isn't in cache yet are picked up later by
 		// ReconcileVersions. Either way, the canonical's resolved-state is
@@ -459,10 +474,11 @@ func ResetRepositoryData(repoURL string) error {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return ExecLocked(func(db *sql.DB) error {
 		tables := []string{
+			"pm_assignees", "review_reviewers",
 			"social_items", "social_interactions",
 			"pm_items", "release_items", "review_items",
 			"core_commits_version", "core_mentions",
-			"core_notification_reads", "core_commits",
+			"core_notification_reads", "core_labels", "core_commits",
 		}
 		_, _ = db.Exec(`DELETE FROM core_fts WHERE repo_url = ?`, repoURL)
 		for _, table := range tables {

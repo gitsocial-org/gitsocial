@@ -67,9 +67,16 @@ const baseSelectFromView = `
 `
 
 // InsertReviewItem inserts or updates a review item in the cache database.
+// Wrapped in a single transaction with the review_reviewers rebuild so search
+// can never observe a stale linking-table state.
 func InsertReviewItem(item ReviewItem) error {
 	return cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.Exec(`
 			INSERT INTO review_items
 			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers,
 			 pull_request_repo_url, pull_request_hash, pull_request_branch,
@@ -102,8 +109,14 @@ func InsertReviewItem(item ReviewItem) error {
 			item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch,
 			item.CommitRef, item.File, item.OldLine, item.NewLine, item.OldLineEnd, item.NewLineEnd,
 			item.ReviewStateField, item.Suggestion,
-		)
-		return err
+		); err != nil {
+			return err
+		}
+		if err := cache.RebuildCSVLinkingTable(tx, "review_reviewers", "email",
+			item.RepoURL, item.Hash, item.Branch, nullStr(item.Reviewers)); err != nil {
+			return err
+		}
+		return tx.Commit()
 	})
 }
 
@@ -151,14 +164,17 @@ func InsertReviewItems(items []ReviewItem) error {
 		}
 		defer stmt.Close()
 		for _, item := range items {
-			_, err := stmt.Exec(
+			if _, err := stmt.Exec(
 				item.RepoURL, item.Hash, item.Branch,
 				item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.DependsOn, item.Closes, item.Reviewers,
 				item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch,
 				item.CommitRef, item.File, item.OldLine, item.NewLine, item.OldLineEnd, item.NewLineEnd,
 				item.ReviewStateField, item.Suggestion,
-			)
-			if err != nil {
+			); err != nil {
+				return err
+			}
+			if err := cache.RebuildCSVLinkingTable(tx, "review_reviewers", "email",
+				item.RepoURL, item.Hash, item.Branch, nullStr(item.Reviewers)); err != nil {
 				return err
 			}
 		}

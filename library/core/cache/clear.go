@@ -45,6 +45,8 @@ func DeleteRepository(repoURL string) error {
 		}
 		defer func() { _ = tx.Rollback() }()
 		deletes := []string{
+			"DELETE FROM pm_assignees WHERE repo_url = ?",
+			"DELETE FROM review_reviewers WHERE repo_url = ?",
 			"DELETE FROM social_items WHERE repo_url = ?",
 			"DELETE FROM social_interactions WHERE repo_url = ?",
 			"DELETE FROM social_followers WHERE repo_url = ? OR workspace_url = ?",
@@ -59,6 +61,7 @@ func DeleteRepository(repoURL string) error {
 			"DELETE FROM core_mentions WHERE repo_url = ?",
 			"DELETE FROM core_fetch_ranges WHERE repo_url = ?",
 			"DELETE FROM core_list_repositories WHERE repo_url = ?",
+			"DELETE FROM core_labels WHERE repo_url = ?",
 			"DELETE FROM core_commits WHERE repo_url = ?",
 			"DELETE FROM core_repositories WHERE url = ?",
 		}

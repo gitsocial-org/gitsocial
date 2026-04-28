@@ -428,23 +428,23 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	}
 	if q.Labels != "" {
 		labelList := splitCSV(q.Labels)
-		labelClauses := make([]string, 0, 2*len(labelList))
+		labelClauses := make([]string, 0, len(labelList))
 		for _, label := range labelList {
+			// core_labels is the linking-table normalization of
+			// core_commits.labels — indexed by label so OR-of-labels filters
+			// fan out to indexed equality lookups instead of substring scans.
 			labelClauses = append(labelClauses,
-				"EXISTS (SELECT 1 FROM pm_items pir4 WHERE pir4.repo_url = r.repo_url AND pir4.hash = r.hash AND pir4.branch = r.branch AND pir4.labels LIKE '%' || ? || '%')")
-			args = append(args, label)
-			labelClauses = append(labelClauses,
-				"EXISTS (SELECT 1 FROM review_items rir4 WHERE rir4.repo_url = r.repo_url AND rir4.hash = r.hash AND rir4.branch = r.branch AND rir4.labels LIKE '%' || ? || '%')")
+				"EXISTS (SELECT 1 FROM core_labels cl WHERE cl.repo_url = r.repo_url AND cl.hash = r.hash AND cl.branch = r.branch AND cl.label = ?)")
 			args = append(args, label)
 		}
 		where = append(where, "("+strings.Join(labelClauses, " OR ")+")")
 	}
 	if q.Assignee != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM pm_items pir5 WHERE pir5.repo_url = r.repo_url AND pir5.hash = r.hash AND pir5.branch = r.branch AND (',' || REPLACE(pir5.assignees, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		where = append(where, "EXISTS (SELECT 1 FROM pm_assignees pa WHERE pa.repo_url = r.repo_url AND pa.hash = r.hash AND pa.branch = r.branch AND pa.email = ?)")
 		args = append(args, q.Assignee)
 	}
 	if q.Reviewer != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM review_items rir5 WHERE rir5.repo_url = r.repo_url AND rir5.hash = r.hash AND rir5.branch = r.branch AND (',' || REPLACE(rir5.reviewers, ' ', '') || ',') LIKE '%,' || ? || ',%')")
+		where = append(where, "EXISTS (SELECT 1 FROM review_reviewers rr WHERE rr.repo_url = r.repo_url AND rr.hash = r.hash AND rr.branch = r.branch AND rr.email = ?)")
 		args = append(args, q.Reviewer)
 	}
 

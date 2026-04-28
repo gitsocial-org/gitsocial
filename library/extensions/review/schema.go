@@ -51,6 +51,18 @@ CREATE INDEX IF NOT EXISTS idx_review_state ON review_items(state);
 CREATE INDEX IF NOT EXISTS idx_review_pr ON review_items(pull_request_repo_url, pull_request_hash, pull_request_branch);
 CREATE INDEX IF NOT EXISTS idx_review_file ON review_items(file);
 
+-- Extension: Review reviewers normalized for indexed search. Maintained
+-- alongside review_items.reviewers (the comma-separated source-of-truth).
+CREATE TABLE IF NOT EXISTS review_reviewers (
+    repo_url TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    email TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, email),
+    FOREIGN KEY (repo_url, hash, branch) REFERENCES review_items(repo_url, hash, branch)
+);
+CREATE INDEX IF NOT EXISTS idx_review_reviewers_email ON review_reviewers(email);
+
 -- Extension: Review resolved view (unified read interface)
 -- Mutable fields (state, draft, reviewers, etc.) are maintained on the canonical's
 -- raw row by applyEditToCanonical at edit time, so no ROW_NUMBER subquery is needed.

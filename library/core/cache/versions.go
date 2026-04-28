@@ -17,13 +17,41 @@ type sqlExecutor interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
+// csvLinkSpec describes a CSV column on an extension table that has a
+// normalized linking-table sibling (e.g., pm_items.assignees → pm_assignees).
+// applyEditToCanonical rebuilds the linking-table rows for the canonical
+// after propagating the column from the edit's row.
+type csvLinkSpec struct {
+	col       string // column on the extension table (e.g. "assignees")
+	linkTable string // linking table name (e.g. "pm_assignees")
+	valueCol  string // value column on the linking table (e.g. "email")
+}
+
 // editableExtensionTables enumerates the per-extension column lists that
 // applyEditToCanonical propagates from an edit's row to the canonical's row.
 // Listed once here so the column inventory has a single source of truth.
-var editableExtensionTables = []struct{ table, cols string }{
-	{"review_items", "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers"},
-	{"pm_items", "state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch"},
-	{"release_items", "tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom"},
+var editableExtensionTables = []struct {
+	table, cols string
+	csvLinks    []csvLinkSpec
+}{
+	{
+		table: "review_items",
+		cols:  "state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers",
+		csvLinks: []csvLinkSpec{
+			{col: "reviewers", linkTable: "review_reviewers", valueCol: "email"},
+		},
+	},
+	{
+		table: "pm_items",
+		cols:  "state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch",
+		csvLinks: []csvLinkSpec{
+			{col: "assignees", linkTable: "pm_assignees", valueCol: "email"},
+		},
+	},
+	{
+		table: "release_items",
+		cols:  "tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom",
+	},
 }
 
 // applyEditToCanonical is the single writer of denormalized resolved state.
@@ -86,6 +114,21 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		return fmt.Errorf("apply edit: update canonical: %w", err)
 	}
 
+	// Rebuild core_labels for the canonical from its (possibly just-updated)
+	// labels column. Read back rather than using editLabels directly because
+	// the UPDATE used COALESCE — when the edit didn't set labels we want to
+	// keep the canonical's existing rows in sync with whatever's there.
+	var canonicalLabels sql.NullString
+	if err := tx.QueryRow(`SELECT labels FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	).Scan(&canonicalLabels); err != nil {
+		return fmt.Errorf("apply edit: read canonical labels: %w", err)
+	}
+	if err := RebuildCSVLinkingTable(tx, "core_labels", "label",
+		canonicalRepoURL, canonicalHash, canonicalBranch, canonicalLabels.String); err != nil {
+		return fmt.Errorf("apply edit: rebuild core_labels: %w", err)
+	}
+
 	if _, err := tx.Exec(`
 		UPDATE core_commits SET is_edit_commit = 1
 		WHERE repo_url = ? AND hash = ? AND branch = ?`,
@@ -117,6 +160,23 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 			canonicalRepoURL, canonicalHash, canonicalBranch,
 		); err != nil {
 			return fmt.Errorf("apply edit: propagate %s fields: %w", ext.table, err)
+		}
+		// Rebuild any CSV linking tables that mirror columns we just copied.
+		for _, link := range ext.csvLinks {
+			var csv sql.NullString
+			if err := tx.QueryRow(`SELECT `+link.col+` FROM `+ext.table+`
+				WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				canonicalRepoURL, canonicalHash, canonicalBranch,
+			).Scan(&csv); err != nil {
+				if err == sql.ErrNoRows {
+					continue
+				}
+				return fmt.Errorf("apply edit: read canonical %s.%s: %w", ext.table, link.col, err)
+			}
+			if err := RebuildCSVLinkingTable(tx, link.linkTable, link.valueCol,
+				canonicalRepoURL, canonicalHash, canonicalBranch, csv.String); err != nil {
+				return fmt.Errorf("apply edit: rebuild %s: %w", link.linkTable, err)
+			}
 		}
 	}
 

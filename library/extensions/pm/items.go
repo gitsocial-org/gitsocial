@@ -64,9 +64,16 @@ const baseSelectFromView = `
 `
 
 // InsertPMItem inserts or updates a PM item in the cache database.
+// Wrapped in a single transaction with the pm_assignees rebuild so search
+// can never observe a stale linking-table state.
 func InsertPMItem(item PMItem) error {
 	return cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.Exec(`
 			INSERT INTO pm_items
 			(repo_url, hash, branch, type, state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch, labels)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -90,31 +97,31 @@ func InsertPMItem(item PMItem) error {
 				root_hash = excluded.root_hash,
 				root_branch = excluded.root_branch,
 				labels = excluded.labels`,
-			item.RepoURL,
-			item.Hash,
-			item.Branch,
-			item.Type,
-			item.State,
-			item.Assignees,
-			item.Due,
-			item.StartDate,
-			item.EndDate,
-			item.MilestoneRepoURL,
-			item.MilestoneHash,
-			item.MilestoneBranch,
-			item.SprintRepoURL,
-			item.SprintHash,
-			item.SprintBranch,
-			item.ParentRepoURL,
-			item.ParentHash,
-			item.ParentBranch,
-			item.RootRepoURL,
-			item.RootHash,
-			item.RootBranch,
+			item.RepoURL, item.Hash, item.Branch,
+			item.Type, item.State, item.Assignees,
+			item.Due, item.StartDate, item.EndDate,
+			item.MilestoneRepoURL, item.MilestoneHash, item.MilestoneBranch,
+			item.SprintRepoURL, item.SprintHash, item.SprintBranch,
+			item.ParentRepoURL, item.ParentHash, item.ParentBranch,
+			item.RootRepoURL, item.RootHash, item.RootBranch,
 			item.Labels,
-		)
-		return err
+		); err != nil {
+			return err
+		}
+		if err := cache.RebuildCSVLinkingTable(tx, "pm_assignees", "email",
+			item.RepoURL, item.Hash, item.Branch, nullStrPM(item.Assignees)); err != nil {
+			return err
+		}
+		return tx.Commit()
 	})
+}
+
+// nullStrPM unwraps a sql.NullString to its underlying value (empty when invalid).
+func nullStrPM(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
 }
 
 // InsertPMItems batch-inserts multiple PM items in a single transaction.
@@ -157,7 +164,7 @@ func InsertPMItems(items []PMItem) error {
 		}
 		defer stmt.Close()
 		for _, item := range items {
-			_, err := stmt.Exec(
+			if _, err := stmt.Exec(
 				item.RepoURL, item.Hash, item.Branch,
 				item.Type, item.State,
 				item.Assignees, item.Due, item.StartDate, item.EndDate,
@@ -166,8 +173,11 @@ func InsertPMItems(items []PMItem) error {
 				item.ParentRepoURL, item.ParentHash, item.ParentBranch,
 				item.RootRepoURL, item.RootHash, item.RootBranch,
 				item.Labels,
-			)
-			if err != nil {
+			); err != nil {
+				return err
+			}
+			if err := cache.RebuildCSVLinkingTable(tx, "pm_assignees", "email",
+				item.RepoURL, item.Hash, item.Branch, nullStrPM(item.Assignees)); err != nil {
 				return err
 			}
 		}

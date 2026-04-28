@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS pm_links (
 );
 CREATE INDEX IF NOT EXISTS idx_pm_links_to ON pm_links(to_repo_url, to_hash, to_branch);
 
+-- Extension: PM assignees normalized for indexed search. Maintained alongside
+-- pm_items.assignees (the comma-separated source-of-truth for display).
+CREATE TABLE IF NOT EXISTS pm_assignees (
+    repo_url TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    email TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, email),
+    FOREIGN KEY (repo_url, hash, branch) REFERENCES pm_items(repo_url, hash, branch)
+);
+CREATE INDEX IF NOT EXISTS idx_pm_assignees_email ON pm_assignees(email);
+
 -- Extension: PM resolved view (unified read interface).
 -- Resolved-state columns live directly on core_commits; mutable extension
 -- fields (state, assignees, due, etc.) are maintained on the canonical's pm_items

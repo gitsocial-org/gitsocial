@@ -61,7 +61,7 @@ func RegisterMigration(fn func(*sql.DB)) {
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 1
+const schemaVersion = 2
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -140,6 +140,20 @@ CREATE TABLE IF NOT EXISTS core_commits_version (
     FOREIGN KEY (canonical_repo_url, canonical_hash, canonical_branch) REFERENCES core_commits(repo_url, hash, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_core_commits_version_canonical ON core_commits_version(canonical_repo_url, canonical_hash, canonical_branch);
+
+-- Core: protocol-level labels normalized into linking-table form so search
+-- can do indexed lookups instead of LIKE-on-comma-string scans.
+-- Maintained by RebuildCSVLinkingTable whenever core_commits.labels is
+-- written; core_commits.labels remains the source-of-truth for display.
+CREATE TABLE IF NOT EXISTS core_labels (
+    repo_url TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    label TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, label),
+    FOREIGN KEY (repo_url, hash, branch) REFERENCES core_commits(repo_url, hash, branch)
+);
+CREATE INDEX IF NOT EXISTS idx_core_labels_label ON core_labels(label);
 
 -- Core: Full-text search index
 CREATE VIRTUAL TABLE IF NOT EXISTS core_fts USING fts5(
