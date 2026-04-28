@@ -417,7 +417,7 @@ func TestGetNetworkAnalytics_withReleaseData(t *testing.T) {
 func TestRepoHasExtRows(t *testing.T) {
 	setupTestDBWithAllSchemas(t)
 
-	if repoHasExtRows("social_items", "") {
+	if repoHasExtRows(dbPtr.Load(), "social_items", "") {
 		t.Error("should be false for empty table")
 	}
 
@@ -430,13 +430,13 @@ func TestRepoHasExtRows(t *testing.T) {
 		return nil
 	})
 
-	if !repoHasExtRows("social_items", "") {
+	if !repoHasExtRows(dbPtr.Load(), "social_items", "") {
 		t.Error("should be true after insert (unscoped)")
 	}
-	if !repoHasExtRows("social_items", repoURL) {
+	if !repoHasExtRows(dbPtr.Load(), "social_items", repoURL) {
 		t.Error("should be true after insert (scoped)")
 	}
-	if repoHasExtRows("social_items", "https://github.com/other/repo") {
+	if repoHasExtRows(dbPtr.Load(), "social_items", "https://github.com/other/repo") {
 		t.Error("should be false for different repo")
 	}
 }
@@ -475,7 +475,7 @@ func TestGetAnalytics_releasePerMonth(t *testing.T) {
 func TestGetListRepoURLs_queryError(t *testing.T) {
 	setupTestDB(t)
 	ExecLocked(func(db *sql.DB) error { _, err := db.Exec("DROP TABLE core_list_repositories"); return err })
-	urls := getListRepoURLs("/ws")
+	urls := getListRepoURLs(dbPtr.Load(), "/ws")
 	if urls != nil {
 		t.Errorf("getListRepoURLs() should return nil when table is dropped, got %v", urls)
 	}
@@ -483,7 +483,7 @@ func TestGetListRepoURLs_queryError(t *testing.T) {
 
 func TestGetListRepoURLs_dbNotOpen(t *testing.T) {
 	Reset()
-	urls := getListRepoURLs("/tmp/test")
+	urls := getListRepoURLs(dbPtr.Load(), "/tmp/test")
 	if urls != nil {
 		t.Errorf("getListRepoURLs() should return nil when db not open, got %v", urls)
 	}
@@ -491,7 +491,7 @@ func TestGetListRepoURLs_dbNotOpen(t *testing.T) {
 
 func TestRepoHasExtRows_dbNotOpen(t *testing.T) {
 	Reset()
-	if repoHasExtRows("social_items", "") {
+	if repoHasExtRows(dbPtr.Load(), "social_items", "") {
 		t.Error("should be false when db not open")
 	}
 }

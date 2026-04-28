@@ -17,8 +17,7 @@ type ExternalRepoList struct {
 
 // InsertExternalRepoList stores a list from an external repository.
 func InsertExternalRepoList(list ExternalRepoList) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -67,8 +66,7 @@ func InsertExternalRepoList(list ExternalRepoList) error {
 
 // GetExternalRepoLists returns all lists defined by a repository.
 func GetExternalRepoLists(repoURL string) ([]ExternalRepoList, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -150,8 +148,7 @@ func GetExternalRepoLists(repoURL string) ([]ExternalRepoList, error) {
 
 // GetExternalRepoListCount returns the number of lists from a repository.
 func GetExternalRepoListCount(repoURL string) (int, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return 0, ErrNotOpen
 	}
@@ -162,8 +159,7 @@ func GetExternalRepoListCount(repoURL string) (int, error) {
 
 // DeleteExternalRepoLists removes all cached lists from a repository.
 func DeleteExternalRepoLists(repoURL string) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}

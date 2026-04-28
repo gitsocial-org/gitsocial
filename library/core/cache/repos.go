@@ -15,8 +15,7 @@ type RepositoryFetchMeta struct {
 
 // GetRepositoryFetchMeta returns commit statistics for a repository.
 func GetRepositoryFetchMeta(url string) (*RepositoryFetchMeta, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -49,8 +48,7 @@ func GetRepositoryFetchMeta(url string) (*RepositoryFetchMeta, error) {
 // IsRepositoryInAnyList checks if a repository URL is in any list for the given workdir.
 // This is the canonical way to determine if a repo is "followed".
 func IsRepositoryInAnyList(url, workdir string) bool {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return false
 	}
@@ -75,8 +73,7 @@ type Repository struct {
 
 // InsertRepository stores or updates repository metadata.
 func InsertRepository(repo Repository) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -94,8 +91,7 @@ func InsertRepository(repo Repository) error {
 
 // GetRepository retrieves a repository by URL.
 func GetRepository(url string) (*Repository, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -118,8 +114,7 @@ func GetRepository(url string) (*Repository, error) {
 
 // GetRepositories returns all tracked repositories.
 func GetRepositories() ([]Repository, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -173,8 +168,7 @@ func GetRepositoryMeta(repoURL, key string) (string, error) {
 
 // UpdateRepositoryLastFetch updates the last fetch timestamp for a repository.
 func UpdateRepositoryLastFetch(url string) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}

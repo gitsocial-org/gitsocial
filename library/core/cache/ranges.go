@@ -26,8 +26,7 @@ type DateGap struct {
 
 // InsertFetchRange creates a new fetch range record for tracking.
 func InsertFetchRange(repoURL, rangeStart, rangeEnd string) (int64, error) {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return 0, ErrNotOpen
 	}
@@ -43,8 +42,7 @@ func InsertFetchRange(repoURL, rangeStart, rangeEnd string) (int64, error) {
 
 // UpdateFetchRangeStatus updates the completion status of a fetch range.
 func UpdateFetchRangeStatus(id int64, status string, commitCount int, errMsg string) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -63,8 +61,7 @@ func UpdateFetchRangeStatus(id int64, status string, commitCount int, errMsg str
 
 // GetFetchRanges returns all fetch ranges for a repository.
 func GetFetchRanges(repoURL string) ([]FetchRange, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -83,8 +80,7 @@ func GetFetchRanges(repoURL string) ([]FetchRange, error) {
 
 // FindMissingRanges finds date gaps that haven't been fetched yet.
 func FindMissingRanges(repoURL, desiredStart, desiredEnd string) ([]DateGap, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -174,8 +170,7 @@ func scanFetchRanges(rows *sql.Rows) ([]FetchRange, error) {
 
 // HasFetchRanges returns true if the repo has any completed fetch ranges.
 func HasFetchRanges(repoURL string) bool {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return false
 	}
@@ -194,8 +189,7 @@ func HasFetchRanges(repoURL string) bool {
 // GetFetchedMonths returns distinct months that have been fetched for a repo.
 // Returns sorted list like ["2026-01", "2025-12", "2025-11"] (newest first).
 func GetFetchedMonths(repoURL string) ([]string, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}

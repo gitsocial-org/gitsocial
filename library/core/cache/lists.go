@@ -27,8 +27,7 @@ type ListRepository struct {
 
 // InsertList stores a list with all its repositories.
 func InsertList(list CachedList) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -77,8 +76,7 @@ func InsertList(list CachedList) error {
 
 // GetLists returns all lists for a workdir with their repositories.
 func GetLists(workdir string) ([]CachedList, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -170,8 +168,7 @@ func GetLists(workdir string) ([]CachedList, error) {
 
 // AddRepositoryToList adds a repository to a list.
 func AddRepositoryToList(listID, repoURL, branch string) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -190,8 +187,7 @@ func AddRepositoryToList(listID, repoURL, branch string) error {
 
 // RemoveRepositoryFromList removes a repository from a list.
 func RemoveRepositoryFromList(listID, repoURL string) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -208,8 +204,7 @@ func RemoveRepositoryFromList(listID, repoURL string) error {
 
 // GetListIDs returns all list IDs for a workdir.
 func GetListIDs(workdir string) ([]string, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}

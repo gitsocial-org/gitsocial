@@ -2,6 +2,7 @@
 package cache
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -117,9 +118,7 @@ func repoFilter(alias, repoURL string) (string, []any) {
 // GetAnalytics collects analytics data from core_commits and extension tables.
 // When repoURL is non-empty, results are scoped to that single repository.
 func GetAnalytics(repoURL string) (*AnalyticsData, error) {
-	mu.RLock()
-	defer mu.RUnlock()
-
+	db := dbPtr.Load()
 	if db == nil {
 		return &AnalyticsData{}, nil
 	}
@@ -238,23 +237,23 @@ func GetAnalytics(repoURL string) (*AnalyticsData, error) {
 	logScanErr(row.Scan(&data.ActiveRepos))
 
 	// Extension: Social
-	if repoHasExtRows("social_items", repoURL) {
-		data.Social = querySocialAnalytics(thirtyDaysAgo, sixtyDaysAgo, repoURL)
+	if repoHasExtRows(db, "social_items", repoURL) {
+		data.Social = querySocialAnalytics(db, thirtyDaysAgo, sixtyDaysAgo, repoURL)
 	}
 
 	// Extension: PM
-	if repoHasExtRows("pm_items", repoURL) {
-		data.PM = queryPMAnalytics(thirtyDaysAgo, repoURL)
+	if repoHasExtRows(db, "pm_items", repoURL) {
+		data.PM = queryPMAnalytics(db, thirtyDaysAgo, repoURL)
 	}
 
 	// Extension: Release
-	if repoHasExtRows("release_items", repoURL) {
-		data.Release = queryReleaseAnalytics(thirtyDaysAgo, repoURL)
+	if repoHasExtRows(db, "release_items", repoURL) {
+		data.Release = queryReleaseAnalytics(db, thirtyDaysAgo, repoURL)
 	}
 
 	// Extension: Review
-	if repoHasExtRows("review_items", repoURL) {
-		data.Review = queryReviewAnalytics(thirtyDaysAgo, repoURL)
+	if repoHasExtRows(db, "review_items", repoURL) {
+		data.Review = queryReviewAnalytics(db, thirtyDaysAgo, repoURL)
 	}
 
 	return data, nil
@@ -329,7 +328,7 @@ type NetworkReviewRepo struct {
 }
 
 // getListRepoURLs returns all repo URLs in the workspace's lists.
-func getListRepoURLs(workdir string) []string {
+func getListRepoURLs(db *sql.DB, workdir string) []string {
 	if db == nil {
 		return nil
 	}
@@ -372,15 +371,13 @@ func listFilter(alias string, urls []string) (string, []any) {
 
 // GetNetworkAnalytics returns cross-repo analytics scoped to repos in the workspace's lists.
 func GetNetworkAnalytics(workdir string) *NetworkAnalytics {
-	mu.RLock()
-	defer mu.RUnlock()
-
 	na := &NetworkAnalytics{}
+	db := dbPtr.Load()
 	if db == nil {
 		return na
 	}
 
-	listRepos := getListRepoURLs(workdir)
+	listRepos := getListRepoURLs(db, workdir)
 	if len(listRepos) == 0 {
 		return na
 	}
@@ -425,30 +422,30 @@ func GetNetworkAnalytics(workdir string) *NetworkAnalytics {
 	logScanErr(row.Scan(&na.ActiveRepos))
 
 	// Social: repos by post count
-	if repoHasExtRows("social_items", "") {
-		na.Social = queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo, listRepos)
+	if repoHasExtRows(db, "social_items", "") {
+		na.Social = queryNetworkSocial(db, thirtyDaysAgo, sixtyDaysAgo, listRepos)
 	}
 
 	// PM: repos by open issue count
-	if repoHasExtRows("pm_items", "") {
-		na.PM = queryNetworkPM(listRepos)
+	if repoHasExtRows(db, "pm_items", "") {
+		na.PM = queryNetworkPM(db, listRepos)
 	}
 
 	// Release: recent releases across network
-	if repoHasExtRows("release_items", "") {
-		na.Release = queryNetworkRelease(thirtyDaysAgo, listRepos)
+	if repoHasExtRows(db, "release_items", "") {
+		na.Release = queryNetworkRelease(db, thirtyDaysAgo, listRepos)
 	}
 
 	// Review: PRs across network
-	if repoHasExtRows("review_items", "") {
-		na.Review = queryNetworkReview(listRepos)
+	if repoHasExtRows(db, "review_items", "") {
+		na.Review = queryNetworkReview(db, listRepos)
 	}
 
 	return na
 }
 
 // queryNetworkSocial gathers cross-repo social rankings scoped to list repos.
-func queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) *NetworkSocial {
+func queryNetworkSocial(db *sql.DB, thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) *NetworkSocial {
 	ns := &NetworkSocial{}
 	inClause, inArgs := listFilter("v", listRepos)
 
@@ -497,7 +494,7 @@ func queryNetworkSocial(thirtyDaysAgo, sixtyDaysAgo string, listRepos []string) 
 }
 
 // queryNetworkPM gathers cross-repo issue rankings scoped to list repos.
-func queryNetworkPM(listRepos []string) *NetworkPM {
+func queryNetworkPM(db *sql.DB, listRepos []string) *NetworkPM {
 	np := &NetworkPM{}
 	inClause, inArgs := listFilter("v", listRepos)
 
@@ -525,7 +522,7 @@ func queryNetworkPM(listRepos []string) *NetworkPM {
 }
 
 // queryNetworkRelease gathers cross-repo release activity scoped to list repos.
-func queryNetworkRelease(thirtyDaysAgo string, listRepos []string) *NetworkRelease {
+func queryNetworkRelease(db *sql.DB, thirtyDaysAgo string, listRepos []string) *NetworkRelease {
 	nr := &NetworkRelease{}
 	inClause, inArgs := listFilter("v", listRepos)
 
@@ -561,7 +558,7 @@ func queryNetworkRelease(thirtyDaysAgo string, listRepos []string) *NetworkRelea
 }
 
 // queryNetworkReview gathers cross-repo PR rankings scoped to list repos.
-func queryNetworkReview(listRepos []string) *NetworkReview {
+func queryNetworkReview(db *sql.DB, listRepos []string) *NetworkReview {
 	nrv := &NetworkReview{}
 	inClause, inArgs := listFilter("v", listRepos)
 
@@ -589,7 +586,7 @@ func queryNetworkReview(listRepos []string) *NetworkReview {
 }
 
 // repoHasExtRows checks if an extension table has rows, optionally filtered by repo.
-func repoHasExtRows(table, repoURL string) bool {
+func repoHasExtRows(db *sql.DB, table, repoURL string) bool {
 	if db == nil {
 		return false
 	}
@@ -606,7 +603,7 @@ func repoHasExtRows(table, repoURL string) bool {
 }
 
 // querySocialAnalytics gathers social extension metrics. Must be called with mu held.
-func querySocialAnalytics(thirtyDaysAgo, sixtyDaysAgo, repoURL string) *SocialAnalytics {
+func querySocialAnalytics(db *sql.DB, thirtyDaysAgo, sixtyDaysAgo, repoURL string) *SocialAnalytics {
 	sa := &SocialAnalytics{}
 	rfv, rfvArgs := repoFilter("v", repoURL)
 	for _, item := range []struct {
@@ -646,7 +643,7 @@ func querySocialAnalytics(thirtyDaysAgo, sixtyDaysAgo, repoURL string) *SocialAn
 }
 
 // queryPMAnalytics gathers PM extension metrics. Must be called with mu held.
-func queryPMAnalytics(thirtyDaysAgo, repoURL string) *PMAnalytics {
+func queryPMAnalytics(db *sql.DB, thirtyDaysAgo, repoURL string) *PMAnalytics {
 	pa := &PMAnalytics{}
 	rfv, rfvArgs := repoFilter("v", repoURL)
 
@@ -735,7 +732,7 @@ func queryPMAnalytics(thirtyDaysAgo, repoURL string) *PMAnalytics {
 }
 
 // queryReleaseAnalytics gathers release extension metrics. Must be called with mu held.
-func queryReleaseAnalytics(thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
+func queryReleaseAnalytics(db *sql.DB, thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
 	ra := &ReleaseAnalytics{}
 	rfv, rfvArgs := repoFilter("v", repoURL)
 
@@ -800,7 +797,7 @@ func queryReleaseAnalytics(thirtyDaysAgo, repoURL string) *ReleaseAnalytics {
 }
 
 // queryReviewAnalytics gathers review extension metrics. Must be called with mu held.
-func queryReviewAnalytics(thirtyDaysAgo, repoURL string) *ReviewAnalytics {
+func queryReviewAnalytics(db *sql.DB, thirtyDaysAgo, repoURL string) *ReviewAnalytics {
 	rva := &ReviewAnalytics{}
 	rfv, rfvArgs := repoFilter("v", repoURL)
 

@@ -81,8 +81,7 @@ func insertCommitsBatch(commits []Commit) error {
 // canonical at the end of the loop. This keeps the canonical-update logic in
 // one place — see versions.go.
 func insertCommitsTxn(commits []Commit) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
@@ -360,8 +359,7 @@ func FilterUnfetchedCommitsByRepo(repoURL string, hashes []string) ([]string, er
 	if len(hashes) == 0 {
 		return nil, nil
 	}
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}
@@ -572,8 +570,7 @@ func FilterUnfetchedCommits(repoURL, branch string, hashes []string) ([]string, 
 		return nil, nil
 	}
 
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return nil, ErrNotOpen
 	}

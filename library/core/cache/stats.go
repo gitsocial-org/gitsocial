@@ -69,14 +69,12 @@ func GetStatsLite(cacheDir string) (*CacheStats, error) {
 		}
 	}
 
-	mu.RLock()
-	if db != nil {
+	if db := dbPtr.Load(); db != nil {
 		row := db.QueryRow("SELECT COUNT(*) FROM core_commits")
 		if err := row.Scan(&stats.Items); err != nil {
 			slog.Debug("stats lite scan commit count", "error", err)
 		}
 	}
-	mu.RUnlock()
 
 	return stats, nil
 }
@@ -104,14 +102,12 @@ func GetStats(cacheDir string) (*CacheStats, error) {
 	runtime.ReadMemStats(&memStats)
 	stats.MemoryBytes = int64(memStats.Alloc)
 
-	mu.RLock()
-	if db != nil {
+	if db := dbPtr.Load(); db != nil {
 		row := db.QueryRow("SELECT COUNT(*) FROM core_commits")
 		if err := row.Scan(&stats.Items); err != nil {
 			slog.Debug("stats scan commit count", "error", err)
 		}
 	}
-	mu.RUnlock()
 
 	// Get all repos by size (acquires its own lock)
 	stats.TopRepos = getTopRepositoriesBySize(cacheDir, 0)
@@ -222,8 +218,7 @@ func getTopRepositoriesBySize(cacheDir string, limit int) []RepositoryInfo {
 	// Build maps of storage paths to last_fetch times and repo URLs from database
 	lastFetchMap := make(map[string]time.Time)
 	repoURLMap := make(map[string]string)
-	mu.RLock()
-	if db != nil {
+	if db := dbPtr.Load(); db != nil {
 		rows, err := db.Query("SELECT url, storage_path, last_fetch FROM core_repositories")
 		if err == nil {
 			for rows.Next() {
@@ -241,7 +236,6 @@ func getTopRepositoriesBySize(cacheDir string, limit int) []RepositoryInfo {
 			rows.Close()
 		}
 	}
-	mu.RUnlock()
 
 	repos := make([]RepositoryInfo, 0, len(entries))
 	for _, entry := range entries {
@@ -355,8 +349,7 @@ func FormatBytesMB(b int64) string {
 
 // GetExtensionStats returns statistics for a specific extension.
 func GetExtensionStats(extension string) (*ExtensionStats, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 
 	stats := &ExtensionStats{
 		Extension: extension,
@@ -409,8 +402,7 @@ func GetExtensionStats(extension string) (*ExtensionStats, error) {
 
 // GetLastFetch returns the most recent fetch timestamp across all repos.
 func GetLastFetch() (time.Time, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 
 	if db == nil {
 		return time.Time{}, nil

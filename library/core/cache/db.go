@@ -1,4 +1,12 @@
-// db.go - SQLite database initialization, schema migrations, and locking
+// db.go - SQLite database initialization, schema migrations, and access.
+//
+// Concurrency model: the package-level *sql.DB is held in an atomic.Pointer
+// so readers and writers can load it without acquiring a lock. SQLite's WAL
+// journal already serializes writers and allows concurrent readers at the
+// engine level, and database/sql's internal connection pool handles
+// goroutine safety — an in-process mutex on every cache call would only
+// re-serialize what the driver already serializes correctly. The only
+// remaining lock guards Open / Close / Reset (singleton lifecycle).
 package cache
 
 import (
@@ -9,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -19,10 +28,10 @@ import (
 var ErrNotOpen = errors.New("cache: database not open")
 
 var (
-	db      *sql.DB
+	dbPtr   atomic.Pointer[sql.DB]
 	initErr error
 	opened  bool
-	mu      sync.RWMutex
+	mu      sync.Mutex // serializes Open/Close/Reset; never held during DB operations
 )
 
 // Extension schema registration
@@ -112,6 +121,10 @@ CREATE INDEX IF NOT EXISTS idx_core_commits_repo_eff_timestamp
     ON core_commits(repo_url, effective_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_core_commits_eff_author
     ON core_commits(repo_url, effective_author_email, effective_timestamp DESC);
+-- DetectExtension and search hash-prefix filters scan by hash without a
+-- repo_url, so the (repo_url, hash, branch) PK can't be used. A plain
+-- index on hash makes "hash LIKE 'abc%'" an index range scan.
+CREATE INDEX IF NOT EXISTS idx_core_commits_hash ON core_commits(hash);
 
 -- Core: Version tracking (edit relationships)
 CREATE TABLE IF NOT EXISTS core_commits_version (
@@ -231,7 +244,7 @@ func Open(cacheDir string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if opened && db != nil {
+	if opened && dbPtr.Load() != nil {
 		return nil
 	}
 	if opened && initErr != nil {
@@ -262,27 +275,44 @@ func Open(cacheDir string) error {
 		_ = os.Remove(dbPath + "-journal")
 	}
 
-	connStr := dbPath + "?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_cache_size=-65536&_mmap_size=268435456&_temp_store=MEMORY"
+	// Pragmas applied to every pool connection. busy_timeout=30s gives
+	// concurrent writers a generous window to wait for the WAL writer slot
+	// before the driver returns SQLITE_BUSY. The _pragma=name(value) syntax
+	// is modernc.org/sqlite's canonical form — applied per-connection at
+	// connect time. _txlock=immediate makes every transaction acquire the
+	// writer lock at BEGIN (instead of lazily on first write), which lets
+	// busy_timeout work correctly under concurrent transactions: without
+	// it, two DEFERRED txns can both BEGIN, both attempt to upgrade to
+	// writer at first write, and one fails immediately with BUSY because
+	// the upgrade path doesn't honor the busy timeout reliably.
+	connStr := dbPath +
+		"?_txlock=immediate" +
+		"&_pragma=journal_mode(WAL)" +
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=busy_timeout(30000)" +
+		"&_pragma=cache_size(-65536)" +
+		"&_pragma=mmap_size(268435456)" +
+		"&_pragma=temp_store(MEMORY)"
 
-	var err error
-	db, err = sql.Open("sqlite", connStr)
+	d, err := sql.Open("sqlite", connStr)
 	if err != nil {
 		log.Error("cache open failed", "error", err)
-		db = nil
 		initErr = err
+		opened = true
 		return err
 	}
 
-	db.SetMaxOpenConns(16)
+	d.SetMaxOpenConns(16)
+	d.SetMaxIdleConns(16) // matches MaxOpenConns so reusable connections don't get torn down idle
 
-	if _, err := db.Exec(coreSchema); err != nil {
+	if _, err := d.Exec(coreSchema); err != nil {
 		log.Error("cache core schema init failed", "error", err)
-		db.Close()
-		db = nil
+		_ = d.Close()
 		initErr = err
+		opened = true
 		return err
 	}
-	if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+	if _, err := d.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
 		log.Warn("cache user_version set failed", "error", err)
 	}
 	schemaMu.Lock()
@@ -292,20 +322,21 @@ func Open(cacheDir string) error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if _, err := db.Exec(extensionSchemas[name]); err != nil {
+		if _, err := d.Exec(extensionSchemas[name]); err != nil {
 			log.Error("cache extension schema init failed", "extension", name, "error", err)
 			schemaMu.Unlock()
-			db.Close()
-			db = nil
+			_ = d.Close()
 			initErr = err
+			opened = true
 			return err
 		}
 	}
 	for _, fn := range extensionMigrations {
-		fn(db)
+		fn(d)
 	}
 	schemaMu.Unlock()
 
+	dbPtr.Store(d)
 	opened = true
 	initErr = nil
 	log.Debug("cache opened", "path", dbPath, "duration_ms", time.Since(start).Milliseconds())
@@ -331,49 +362,50 @@ func needsReseed(dbPath string) bool {
 	return version < schemaVersion
 }
 
-// Close closes the database connection.
+// Close runs PRAGMA optimize (so the next Open starts with fresh planner
+// stats) and closes the database connection.
 func Close() error {
 	mu.Lock()
 	defer mu.Unlock()
-	if db != nil {
-		return db.Close()
+	d := dbPtr.Swap(nil)
+	if d == nil {
+		return nil
 	}
-	return nil
+	_, _ = d.Exec("PRAGMA optimize")
+	return d.Close()
 }
 
 // Reset closes the database and resets singleton state for testing.
 func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
-	if db != nil {
-		db.Close()
-		db = nil
+	if d := dbPtr.Swap(nil); d != nil {
+		_ = d.Close()
 	}
 	opened = false
 	initErr = nil
 }
 
-// DB returns the underlying database connection.
+// DB returns the underlying database connection (nil if not open).
 func DB() *sql.DB {
-	mu.RLock()
-	defer mu.RUnlock()
-	return db
+	return dbPtr.Load()
 }
 
-// ExecLocked executes a write operation with exclusive lock.
+// ExecLocked runs fn with the current *sql.DB. The name is preserved for
+// caller compatibility; the function no longer holds a process-level mutex —
+// concurrency is handled by SQLite WAL and the database/sql connection pool.
 func ExecLocked(fn func(*sql.DB) error) error {
-	mu.Lock()
-	defer mu.Unlock()
+	db := dbPtr.Load()
 	if db == nil {
 		return ErrNotOpen
 	}
 	return fn(db)
 }
 
-// QueryLocked executes a read operation with shared lock.
+// QueryLocked runs fn with the current *sql.DB. See ExecLocked for the
+// concurrency model.
 func QueryLocked[T any](fn func(*sql.DB) (T, error)) (T, error) {
-	mu.RLock()
-	defer mu.RUnlock()
+	db := dbPtr.Load()
 	if db == nil {
 		var zero T
 		return zero, ErrNotOpen

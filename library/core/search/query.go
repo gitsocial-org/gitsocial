@@ -347,8 +347,16 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		}
 	}
 	if q.AuthorFilter != "" {
-		where = append(where, "(r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
-		args = append(args, q.AuthorFilter, q.AuthorFilter)
+		// Author search via FTS5 column-restricted MATCH ('author:term').
+		// FTS5 has the author column already indexed; the LIKE fallback only
+		// runs when FTS5 isn't compiled in (e.g., minimal SQLite builds).
+		if ftsAvailable(db) {
+			where = append(where, "r.hash IN (SELECT hash FROM core_fts WHERE core_fts MATCH ?)")
+			args = append(args, "author:"+ftsQuery(q.AuthorFilter))
+		} else {
+			where = append(where, "(r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
+			args = append(args, q.AuthorFilter, q.AuthorFilter)
+		}
 	}
 	if q.HashPrefix != "" {
 		where = append(where, "r.hash LIKE ? || '%'")

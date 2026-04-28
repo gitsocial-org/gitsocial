@@ -94,7 +94,10 @@ CREATE TABLE IF NOT EXISTS social_followers (
     commit_hash TEXT,
     PRIMARY KEY (repo_url, workspace_url)
 );
-CREATE INDEX IF NOT EXISTS idx_social_followers_workspace ON social_followers(workspace_url);
+-- Composite index covers the timeline LEFT JOIN
+-- "ON v.repo_url = sf.repo_url AND sf.workspace_url = ?", which would
+-- otherwise iterate per-row; the compound key lets it be a single seek.
+CREATE INDEX IF NOT EXISTS idx_social_followers_workspace_repo ON social_followers(workspace_url, repo_url);
 
 -- Extension: Social repo lists (cached lists from external repositories)
 CREATE TABLE IF NOT EXISTS social_repo_lists (

@@ -179,6 +179,12 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 		log.Debug("reconciled version records", "count", reconciled)
 	}
 
+	// Refresh planner stats after a fetch cycle so subsequent reads (timeline,
+	// search) get accurate row-count estimates for the new data.
+	if err := cache.RunAnalyze(); err != nil {
+		log.Debug("post-fetch ANALYZE failed", "error", err)
+	}
+
 	log.Info("fetch complete", "repos", stats.Repositories, "items", stats.Items, "errors", len(stats.Errors), "duration_ms", time.Since(start).Milliseconds())
 	return result.Ok(stats)
 }
