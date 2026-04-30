@@ -393,12 +393,19 @@ func handleRepostCreated(msg RepostCreatedMsg, ctx tuicore.AppContext) (bool, te
 func handlePostEdited(msg PostEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Host().SetSaving(false)
 	if sh, ok := ctx.Host().(SocialHost); ok {
-		state := ctx.Host().State()
-		post := msg.Post
-		post.Display.UserEmail = state.UserEmail
-		post.Display.ShowEmail = state.ShowEmailOnCards
-		updatedItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
-		sh.UpdateDisplayItem(updatedItem)
+		canonicalID := msg.Post.EditOf
+		if canonicalID == "" {
+			canonicalID = msg.Post.ID
+		}
+		result := social.GetPosts(ctx.Workdir(), "post:"+canonicalID, nil)
+		if result.Success && len(result.Data) > 0 {
+			state := ctx.Host().State()
+			post := result.Data[0]
+			post.Display.UserEmail = state.UserEmail
+			post.Display.ShowEmail = state.ShowEmailOnCards
+			updatedItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
+			sh.UpdateDisplayItem(updatedItem)
+		}
 	}
 	return true, ctx.Host().RefreshView()
 }

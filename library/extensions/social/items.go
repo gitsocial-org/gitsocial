@@ -27,6 +27,8 @@ type SocialItem struct {
 	Content     string
 	AuthorName  string
 	AuthorEmail string
+	EditorName  string
+	EditorEmail string
 	Timestamp   time.Time
 	EditOf      sql.NullString
 	IsRetracted bool
@@ -59,6 +61,7 @@ const baseSelectFromView = `
 	       v.edits, v.comments, v.reposts, v.quotes,
 	       v.is_virtual, v.is_retracted, v.has_edits,
 	       v.stale_since,
+	       v.editor_name, v.editor_email,
 	       (sf.repo_url IS NOT NULL) as follows_workspace
 	FROM social_items_resolved v
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
@@ -86,6 +89,7 @@ const baseDirectSelect = `
 	       c.is_retracted,
 	       c.has_edits,
 	       c.stale_since,
+	       c.resolved_editor_name, c.resolved_editor_email,
 	       (sf.repo_url IS NOT NULL)
 	FROM core_commits c
 	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
@@ -966,7 +970,7 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 // Column order matches baseSelectFromView constant.
 func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	var item SocialItem
-	var ts, message, originalMessage, staleSince sql.NullString
+	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -975,7 +979,8 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 		&item.OriginalRepoURL, &item.OriginalHash, &item.OriginalBranch,
 		&item.ReplyToRepoURL, &item.ReplyToHash, &item.ReplyToBranch,
 		&item.EditOf, &item.Comments, &item.Reposts, &item.Quotes,
-		&isVirtual, &isRetracted, &hasEdits, &staleSince, &followsWorkspace,
+		&isVirtual, &isRetracted, &hasEdits, &staleSince,
+		&editorName, &editorEmail, &followsWorkspace,
 	)
 	if err != nil {
 		return nil, err
@@ -993,6 +998,8 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	if ts.Valid {
 		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
 	}
+	item.EditorName = editorName.String
+	item.EditorEmail = editorEmail.String
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
@@ -1004,7 +1011,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 // scanResolvedRows scans multiple rows from baseSelectFromView queries.
 func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	var item SocialItem
-	var ts, message, originalMessage, staleSince sql.NullString
+	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -1013,7 +1020,8 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 		&item.OriginalRepoURL, &item.OriginalHash, &item.OriginalBranch,
 		&item.ReplyToRepoURL, &item.ReplyToHash, &item.ReplyToBranch,
 		&item.EditOf, &item.Comments, &item.Reposts, &item.Quotes,
-		&isVirtual, &isRetracted, &hasEdits, &staleSince, &followsWorkspace,
+		&isVirtual, &isRetracted, &hasEdits, &staleSince,
+		&editorName, &editorEmail, &followsWorkspace,
 	)
 	if err != nil {
 		return nil, err
@@ -1031,6 +1039,8 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	if ts.Valid {
 		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
 	}
+	item.EditorName = editorName.String
+	item.EditorEmail = editorEmail.String
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
@@ -1095,6 +1105,8 @@ func SocialItemToPost(item SocialItem) Post {
 		OriginalPostID:    originalPostID,
 		ParentCommentID:   parentCommentID,
 		EditOf:            editOf,
+		EditorName:        item.EditorName,
+		EditorEmail:       item.EditorEmail,
 		IsRetracted:       item.IsRetracted,
 		IsEdited:          item.IsEdited,
 		IsVirtual:         item.IsVirtual,

@@ -41,6 +41,15 @@ var (
 	schemaMu            sync.Mutex
 )
 
+func init() {
+	RegisterMigration(func(db *sql.DB) {
+		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_name TEXT`)
+	})
+	RegisterMigration(func(db *sql.DB) {
+		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_email TEXT`)
+	})
+}
+
 // RegisterSchema registers an extension schema to be executed after core schema.
 // Extensions should call this in their init() function.
 func RegisterSchema(name, schema string) {
@@ -90,6 +99,8 @@ CREATE TABLE IF NOT EXISTS core_commits (
     has_edits INTEGER NOT NULL DEFAULT 0,
     is_edit_commit INTEGER NOT NULL DEFAULT 0,
     resolved_message TEXT,
+    resolved_editor_name TEXT,
+    resolved_editor_email TEXT,
     -- Generated columns: VIRTUAL (recomputed on access; indexed values stored
     -- in the index). effective_message picks the latest edit's content when
     -- one exists; effective_author_*/timestamp prefer origin_* (set on

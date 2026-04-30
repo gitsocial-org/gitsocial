@@ -23,6 +23,14 @@ const (
 
 var noopCmd tea.Cmd = func() tea.Msg { return nil }
 
+// isPostMutable returns true when the post is owned by the workspace and lives
+// on a gitmsg/* branch. Posts on code branches are excluded because edit/retract
+// would create a sibling commit on the social branch that diverges from the
+// real git history (see social.EditPost / RetractPost guards).
+func isPostMutable(post social.Post) bool {
+	return post.Display.IsWorkspacePost && strings.HasPrefix(post.Branch, "gitmsg/")
+}
+
 type matchLocation struct {
 	postIndex int
 	matchNum  int
@@ -85,7 +93,7 @@ func (v *PostView) Bindings() []tuicore.Binding {
 					return false, nil
 				}
 				post, ok := ItemToPost(item)
-				if !ok || !post.Display.IsWorkspacePost {
+				if !ok || !isPostMutable(post) {
 					return false, nil
 				}
 				return true, ctx.Panel.EditPost()
@@ -100,7 +108,7 @@ func (v *PostView) Bindings() []tuicore.Binding {
 					return false, nil
 				}
 				post, ok := ItemToPost(item)
-				if !ok || !post.Display.IsWorkspacePost {
+				if !ok || !isPostMutable(post) {
 					return false, nil
 				}
 				return true, ctx.Panel.RetractPost()
@@ -698,9 +706,12 @@ func (v *PostView) Render(state *tuicore.State) string {
 			exclude["h"] = true
 		}
 		if !v.post.Display.IsWorkspacePost {
-			exclude["e"] = true
 			exclude["D"] = true
 			exclude["d"] = true
+		}
+		if !isPostMutable(v.post) {
+			exclude["e"] = true
+			exclude["X"] = true
 		}
 		if v.post.Display.CommitHash == "" {
 			exclude["d"] = true

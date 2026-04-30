@@ -55,6 +55,8 @@ SELECT
     c.is_edit_commit,
     c.effective_author_name AS author_name,
     c.effective_author_email AS author_email,
+    c.resolved_editor_name AS editor_name,
+    c.resolved_editor_email AS editor_email,
     c.effective_timestamp AS timestamp,
     c.is_virtual,
     c.stale_since,

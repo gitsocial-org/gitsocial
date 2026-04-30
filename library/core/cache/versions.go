@@ -4,6 +4,7 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/core/protocol"
@@ -72,12 +73,14 @@ var editableExtensionTables = []struct {
 // route through this function — no other code should write the columns above.
 func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canonicalBranch string) error {
 	var editRepoURL, editHash, editBranch string
-	var editMessage string
+	var editMessage, editAuthorName, editAuthorEmail string
 	var editLabels sql.NullString
 	var editIsRetracted int
 	err := tx.QueryRow(`
 		SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
-		       c.message, c.labels, v.is_retracted
+		       c.message, c.labels, v.is_retracted,
+		       COALESCE(c.origin_author_name, c.author_name),
+		       COALESCE(c.origin_author_email, c.author_email)
 		FROM core_commits_version v
 		JOIN core_commits c
 		  ON v.edit_repo_url = c.repo_url
@@ -89,12 +92,29 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		ORDER BY c.timestamp DESC, v.edit_hash DESC
 		LIMIT 1`,
 		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&editRepoURL, &editHash, &editBranch, &editMessage, &editLabels, &editIsRetracted)
+	).Scan(&editRepoURL, &editHash, &editBranch, &editMessage, &editLabels, &editIsRetracted,
+		&editAuthorName, &editAuthorEmail)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("apply edit: find latest edit for %s/%s@%s: %w", canonicalRepoURL, canonicalHash, canonicalBranch, err)
+	}
+
+	var resolvedAuthorName, resolvedAuthorEmail string
+	if err := tx.QueryRow(`
+		SELECT COALESCE(origin_author_name, author_name),
+		       COALESCE(origin_author_email, author_email)
+		FROM core_commits
+		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		canonicalRepoURL, canonicalHash, canonicalBranch,
+	).Scan(&resolvedAuthorName, &resolvedAuthorEmail); err != nil {
+		return fmt.Errorf("apply edit: read canonical author: %w", err)
+	}
+	var editorNameArg, editorEmailArg interface{}
+	if !strings.EqualFold(strings.TrimSpace(editAuthorEmail), strings.TrimSpace(resolvedAuthorEmail)) {
+		editorNameArg = editAuthorName
+		editorEmailArg = editAuthorEmail
 	}
 
 	var labelsArg interface{}
@@ -105,10 +125,12 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		UPDATE core_commits
 		SET has_edits = 1,
 		    resolved_message = ?,
+		    resolved_editor_name = ?,
+		    resolved_editor_email = ?,
 		    is_retracted = ?,
 		    labels = COALESCE(?, labels)
 		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		editMessage, editIsRetracted, labelsArg,
+		editMessage, editorNameArg, editorEmailArg, editIsRetracted, labelsArg,
 		canonicalRepoURL, canonicalHash, canonicalBranch,
 	); err != nil {
 		return fmt.Errorf("apply edit: update canonical: %w", err)
@@ -180,16 +202,6 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		}
 	}
 
-	var resolvedAuthorName, resolvedAuthorEmail string
-	if err := tx.QueryRow(`
-		SELECT COALESCE(origin_author_name, author_name),
-		       COALESCE(origin_author_email, author_email)
-		FROM core_commits
-		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&resolvedAuthorName, &resolvedAuthorEmail); err != nil {
-		return fmt.Errorf("apply edit: read canonical author: %w", err)
-	}
 	if _, err := tx.Exec(`DELETE FROM core_fts
 		WHERE repo_url = ? AND hash = ? AND branch = ?`,
 		canonicalRepoURL, canonicalHash, canonicalBranch,

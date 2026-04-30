@@ -120,6 +120,7 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 			Subtitle:    subtitleParts,
 			Icon:        "•",
 			IsEdited:    post.IsEdited,
+			EditedBy:    post.EditorName,
 			IsRetracted: post.IsRetracted,
 			IsStale:     post.IsStale,
 		},

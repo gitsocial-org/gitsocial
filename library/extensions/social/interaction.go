@@ -348,9 +348,16 @@ func EditPost(workdir, targetPostID, newContent string) Result[Post] {
 	if targetItem == nil {
 		return Failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
+	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
+		return Failure[Post]("INVALID_TARGET", "Cannot edit posts on code branches; reply with a comment instead")
+	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
+		return Failure[Post]("INVALID_TARGET", "Cannot edit posts owned by another repository")
+	}
 
 	// Resolve to canonical ID via core_commits_version
 	targetRepoURL := targetItem.RepoURL
@@ -458,9 +465,16 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 	if targetItem == nil {
 		return Failure[bool]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
+	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
+		return Failure[bool]("INVALID_TARGET", "Cannot retract posts on code branches")
+	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
+		return Failure[bool]("INVALID_TARGET", "Cannot retract posts owned by another repository")
+	}
 
 	// Resolve to canonical ID via core_commits_version
 	targetRepoURL := targetItem.RepoURL

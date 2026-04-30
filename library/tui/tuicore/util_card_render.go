@@ -457,7 +457,11 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 		rest += " " + header.Badge
 	}
 	if header.IsEdited {
-		rest += " ✎"
+		if header.EditedBy != "" {
+			rest += " · ✎ " + header.EditedBy
+		} else {
+			rest += " ✎"
+		}
 	}
 	if rest != "" {
 		str.WriteString(Dim.Render(rest))

@@ -66,6 +66,8 @@ type Post struct {
 	OriginalPostID  string
 	ParentCommentID string
 	EditOf          string
+	EditorName      string
+	EditorEmail     string
 	IsRetracted     bool
 	IsEdited        bool
 	Depth           int

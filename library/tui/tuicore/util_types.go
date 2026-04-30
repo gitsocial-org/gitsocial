@@ -313,6 +313,7 @@ type CardHeader struct {
 	IsOwnRepo      bool         // True if item is from the workspace repository (cyan title)
 	IsAssigned     bool         // True if assigned to current user (purple title)
 	IsEdited       bool         // True if post has been edited
+	EditedBy       string       // Display name of last editor when distinct from the author
 	IsRetracted    bool         // True if post has been deleted
 	IsStale        bool         // True if commit no longer exists in live branch
 	IsVerified     bool         // True if commit's signing key is bound to the author email by an attestation source
