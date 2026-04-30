@@ -254,7 +254,7 @@ func (l *CardList) updateKey(msg tea.KeyPressMsg) (consumed, activate bool, link
 		if l.selected >= 0 && l.selected < len(l.items) {
 			return true, true, nil
 		}
-	case "tab":
+	case ";":
 		if l.selected >= 0 && l.selected < len(l.items) {
 			card := l.items[l.selected].ToCard(l.itemResolver)
 			links := card.AllLinks()
@@ -268,7 +268,7 @@ func (l *CardList) updateKey(msg tea.KeyPressMsg) (consumed, activate bool, link
 			l.viewDirty = true
 			return true, false, nil
 		}
-	case "shift+tab":
+	case ",":
 		if l.selected >= 0 && l.selected < len(l.items) {
 			card := l.items[l.selected].ToCard(l.itemResolver)
 			links := card.AllLinks()

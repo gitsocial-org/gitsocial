@@ -23,13 +23,13 @@ var (
 
 	// Global keys that appear dimmed in footer, in display order
 	// "/" and "@" are shown in sidebar instead (Search [/], Notifications [@])
-	globalKeyOrder = []string{"`", "f", "tab", "q", "?"}
-	globalKeys     = map[string]bool{"`": true, "f": true, "tab": true, "q": true, "?": true}
+	globalKeyOrder = []string{"tab", "f", "q", "?"}
+	globalKeys     = map[string]bool{"tab": true, "f": true, "q": true, "?": true}
 
 	// Hidden keys - functional but not shown in footer
 	// "/" and "@" are shown in sidebar; extension keys (T, B, etc.) are highlighted in sidebar
 	// Navigation aliases (j/k, ctrl+d/u, up/down, enter, home/end) are documented in ? help
-	hiddenKeys = map[string]bool{"esc": true, "/": true, "@": true, "%": true, "!": true, "T": true, "B": true, "P": true, "R": true, "A": true, "S": true, "D": true, "O": true, "left": true, "right": true, "home": true, "end": true, "j": true, "k": true, "ctrl+d": true, "ctrl+u": true, "up": true, "down": true, "enter": true}
+	hiddenKeys = map[string]bool{"esc": true, "/": true, "@": true, "%": true, "!": true, "T": true, "B": true, "P": true, "R": true, "A": true, "S": true, "D": true, "O": true, "left": true, "right": true, "home": true, "end": true, "j": true, "k": true, "ctrl+d": true, "ctrl+u": true, "up": true, "down": true, "enter": true, "shift+tab": true}
 )
 
 // RenderSyncingFooter renders the syncing progress footer

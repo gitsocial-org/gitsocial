@@ -10,8 +10,8 @@ var CardListKeys = []KeyDoc{
 	{Key: "ctrl+d / pgdown", Label: "Half-page down"},
 	{Key: "ctrl+u / pgup", Label: "Half-page up"},
 	{Key: "enter", Label: "Open selected"},
-	{Key: "tab", Label: "Next link"},
-	{Key: "shift+tab", Label: "Previous link"},
+	{Key: ";", Label: "Next link"},
+	{Key: ",", Label: "Previous link"},
 }
 
 // SectionListKeys defines the shared navigation keys for SectionList-based views.
@@ -23,8 +23,8 @@ var SectionListKeys = []KeyDoc{
 	{Key: "ctrl+d / pgdown", Label: "Half-page down"},
 	{Key: "ctrl+u / pgup", Label: "Half-page up"},
 	{Key: "enter", Label: "Activate selected item or link"},
-	{Key: "tab", Label: "Next link"},
-	{Key: "shift+tab", Label: "Previous link"},
+	{Key: ";", Label: "Next link"},
+	{Key: ",", Label: "Previous link"},
 	{Key: "/", Label: "Start inline search"},
 }
 

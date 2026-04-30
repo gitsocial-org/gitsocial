@@ -35,6 +35,6 @@
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││   ↩  Alice · TIME     · #4361a6f5268b@gitmsg/review                                  │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  `:focus  f:fetch  q:quit        │
+│ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  tab:focus  f:fetch  q:quit      │
 │.../tui-test-FIXTURE          ││   ?:help                                                                             │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

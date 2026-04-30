@@ -374,10 +374,10 @@ func (v *PostView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd 
 			v.selectedIndex = len(v.thread) - 1
 			v.focusedLink = -1
 		}
-	case "tab":
+	case ";":
 		v.cycleLinkForward()
 		return noopCmd
-	case "shift+tab":
+	case ",":
 		v.cycleLinkBackward()
 		return noopCmd
 	case "enter":

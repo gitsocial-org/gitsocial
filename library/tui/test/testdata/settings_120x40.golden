@@ -36,5 +36,5 @@
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   e:edit  `:focus  f:fetch  q:quit  ?:help                                           │
+│.../tui-test-FIXTURE          ││   e:edit  tab:focus  f:fetch  q:quit  ?:help                                         │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

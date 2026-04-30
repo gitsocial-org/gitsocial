@@ -36,5 +36,5 @@
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   N:new  m:mine  r:refresh  F:forks  p:push  `:focus  f:fetch  q:quit  ?:help        │
+│.../tui-test-FIXTURE          ││   N:new  m:mine  r:refresh  F:forks  p:push  tab:focus  f:fetch  q:quit  ?:help      │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

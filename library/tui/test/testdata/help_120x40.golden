@@ -36,5 +36,5 @@
 │  ⌨  Settings                 ││  • Right panel: content area for the active view                                     │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   `:focus  f:fetch  q:quit                                                           │
+│.../tui-test-FIXTURE          ││   tab:focus  f:fetch  q:quit                                                         │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

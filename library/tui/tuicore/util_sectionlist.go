@@ -241,9 +241,9 @@ func (sl *SectionList) updateKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "pgdown", "ctrl+d":
 		sl.pageDown()
 		return true, nil
-	case "tab":
+	case ";":
 		return sl.cycleLinkForward(), nil
-	case "shift+tab":
+	case ",":
 		return sl.cycleLinkBackward(), nil
 	case "enter":
 		if sl.focusedLink >= 0 {

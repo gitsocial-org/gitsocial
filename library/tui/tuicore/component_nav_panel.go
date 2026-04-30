@@ -77,14 +77,14 @@ func (p *NavPanel) Update(msg tea.Msg) (*NavPanel, tea.Cmd) {
 		case "home":
 			p.cursorID = NavIDSearch
 			p.viewDirty = true
-			return p, nil
+			return p, p.previewCmd()
 		case "end":
 			items := p.getFlatItems()
 			if len(items) > 0 {
 				p.cursorID = items[len(items)-1].ID
 				p.viewDirty = true
 			}
-			return p, nil
+			return p, p.previewCmd()
 		case "enter":
 			return p.commitNavigation()
 		case "esc", "tab":
@@ -105,7 +105,7 @@ func (p *NavPanel) Update(msg tea.Msg) (*NavPanel, tea.Cmd) {
 				}
 				p.viewDirty = true
 			}
-			return p, nil
+			return p, p.previewCmd()
 		}
 	}
 	return p, nil
@@ -226,7 +226,7 @@ func (p *NavPanel) moveCursor(delta int) (*NavPanel, tea.Cmd) {
 		if len(items) > 0 {
 			p.cursorID = items[0].ID
 		}
-		return p, nil
+		return p, p.previewCmd()
 	}
 
 	// Find next enabled item
@@ -238,7 +238,18 @@ func (p *NavPanel) moveCursor(delta int) (*NavPanel, tea.Cmd) {
 			break
 		}
 	}
-	return p, nil
+	return p, p.previewCmd()
+}
+
+// previewCmd returns a navigate command that updates the right panel without stealing focus.
+func (p *NavPanel) previewCmd() tea.Cmd {
+	if p.cursorID == p.router.NavItemID() {
+		return nil
+	}
+	loc := p.cursorToLocation()
+	return func() tea.Msg {
+		return NavigateMsg{Location: loc, Action: NavReplace, KeepFocus: true}
+	}
 }
 
 // commitNavigation commits the current cursor selection.

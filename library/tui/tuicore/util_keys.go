@@ -211,7 +211,7 @@ var ExtensionKeys = []GlobalKey{
 	{Key: "I", Domain: DomainInfra, Target: Global, Label: "infrastructure"}, // placeholder
 	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},       // placeholder
 	{Key: "S", Domain: DomainSecurity, Target: Global, Label: "security"},    // placeholder
-	{Key: ">", Domain: DomainDM, Target: Global, Label: "dm"},                // placeholder
+	{Key: "|", Domain: DomainDM, Target: Global, Label: "dm"},                // placeholder
 	{Key: "F", Domain: DomainPortfolio, Target: Global, Label: "overview"},   // placeholder
 }
 
@@ -304,16 +304,23 @@ func RegisterGlobalKeys(r *Registry) {
 		},
 	})
 
+	focusToggle := func(ctx *HandlerContext) (bool, tea.Cmd) {
+		if ctx.ToggleFocus != nil {
+			ctx.ToggleFocus()
+		}
+		return true, nil
+	}
 	r.Register(Binding{
-		Key:      "`",
+		Key:      "tab",
 		Label:    "focus",
 		Contexts: []Context{Global},
-		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
-			if ctx.ToggleFocus != nil {
-				ctx.ToggleFocus()
-			}
-			return true, nil
-		},
+		Handler:  focusToggle,
+	})
+	r.Register(Binding{
+		Key:      "shift+tab",
+		Label:    "focus",
+		Contexts: []Context{Global},
+		Handler:  focusToggle,
 	})
 
 	r.Register(Binding{

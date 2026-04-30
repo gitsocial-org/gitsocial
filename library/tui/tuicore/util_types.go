@@ -51,6 +51,7 @@ type NavigateMsg struct {
 	SourceIndex int    // Current index in source list
 	SourceTotal int    // Total items in source list
 	SearchQuery string // Search query for highlighting in detail view
+	KeepFocus   bool   // Don't switch focus to content (used for nav-panel auto-preview)
 }
 
 type NavAction int

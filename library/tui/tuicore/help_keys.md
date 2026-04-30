@@ -13,8 +13,8 @@
 | `ctrl+d / pgdown` | Half-page down |
 | `ctrl+u / pgup` | Half-page up |
 | `enter` | Open selected |
-| `tab` | Next link |
-| `shift+tab` | Previous link |
+| `;` | Next link |
+| `,` | Previous link |
 
 ### SectionList (used by: Issue Detail, Milestone Detail, Sprint Detail, Release Detail, PR Detail)
 
@@ -27,8 +27,8 @@
 | `ctrl+d / pgdown` | Half-page down |
 | `ctrl+u / pgup` | Half-page up |
 | `enter` | Activate selected item or link |
-| `tab` | Next link |
-| `shift+tab` | Previous link |
+| `;` | Next link |
+| `,` | Previous link |
 | `/` | Start inline search |
 
 ### VersionPicker (used by: History, Issue History, Milestone History, Sprint History, PR History)
@@ -61,7 +61,7 @@
 | `%` | Analytics | Everywhere except Analytics |
 | `f` | Fetch updates | Everywhere except Detail/Thread/History |
 | `/` | Search | Everywhere except Search |
-| `` ` `` | Toggle nav/content focus | Global |
+| `tab` | Toggle nav/content focus | Global |
 | `q` | Quit | Global |
 | `?` | Help | Global |
 
@@ -77,7 +77,7 @@
 | `I` | Infrastructure | Infrastructure | Planned |
 | `O` | Operations | Operations | Planned |
 | `S` | Security | Security | Planned |
-| `D` | DM | Dm | Planned |
+| `|` | DM | Dm | Planned |
 | `F` | Portfolio | Overview | Planned |
 
 ---

@@ -56,7 +56,7 @@ func writeGlobalKeys(b *strings.Builder) {
 	}
 	b.WriteString("| `f` | Fetch updates | Everywhere except Detail/Thread/History |\n")
 	b.WriteString("| `/` | Search | Everywhere except Search |\n")
-	b.WriteString("| `` ` `` | Toggle nav/content focus | Global |\n")
+	b.WriteString("| `tab` | Toggle nav/content focus | Global |\n")
 	b.WriteString("| `q` | Quit | Global |\n")
 	b.WriteString("| `?` | Help | Global |\n")
 	b.WriteString("\n")
@@ -96,7 +96,7 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 	}
 	// Filter out keys that are global or hidden from per-view display
 	globalKeys := map[string]bool{
-		"`": true, "q": true, "?": true,
+		"q": true, "?": true,
 		"T": true, "B": true, "P": true, "R": true,
 		"@": true, "%": true,
 	}

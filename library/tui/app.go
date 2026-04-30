@@ -646,12 +646,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Delegate to focused panel for unhandled messages
+	// Delegate to focused panel for unhandled messages.
+	// Non-key/mouse messages (async load results, etc.) always go to the host
+	// so right-panel views update during nav-cursor preview.
 	var cmd tea.Cmd
-	switch m.focus {
-	case FocusNav:
-		_, cmd = m.nav.Update(msg)
-	case FocusContent:
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseMsg:
+		switch m.focus {
+		case FocusNav:
+			_, cmd = m.nav.Update(msg)
+		case FocusContent:
+			cmd = m.host.Update(msg)
+		}
+	default:
 		cmd = m.host.Update(msg)
 	}
 	return m, cmd
@@ -892,8 +899,10 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 	} else if msg.Action != tuicore.NavBack {
 		m.host.State().DetailSource = nil
 	}
-	// Always focus content after navigation
-	m.setFocus(FocusContent)
+	// Focus content after navigation, unless caller asked to keep focus (nav preview)
+	if !msg.KeepFocus {
+		m.setFocus(FocusContent)
+	}
 	return m, m.host.ActivateView()
 }
 
