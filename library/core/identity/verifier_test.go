@@ -160,6 +160,8 @@ func TestHostOf(t *testing.T) {
 
 // --- Cache-backed lookups ---
 
+func ptrString(s string) *string { return &s }
+
 func setupTestCache(t *testing.T) {
 	t.Helper()
 	cache.Reset()
@@ -255,7 +257,7 @@ func TestIsVerifiedCommit(t *testing.T) {
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: hash, RepoURL: repoURL, Branch: "main",
 		AuthorName: "Alice", AuthorEmail: email,
-		Message: "test", Timestamp: time.Now(), SignerKey: fp,
+		Message: "test", Timestamp: time.Now(), SignerKey: ptrString(fp),
 	}}); err != nil {
 		t.Fatalf("InsertCommits: %v", err)
 	}

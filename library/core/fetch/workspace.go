@@ -132,6 +132,7 @@ func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
 	if _, err := cache.ReconcileVersions(); err != nil {
 		log.Debug("workspace sync reconcile failed", "error", err)
 	}
+	backfillRepoSignerKeys(ctx.workdir, ctx.repoURL)
 	var wg sync.WaitGroup
 	for ext, proc := range ctx.procs {
 		ext := ext

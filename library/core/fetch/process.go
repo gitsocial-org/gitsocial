@@ -41,11 +41,16 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 		newHashes = append(newHashes, gc.Hash)
 	}
 
-	signerKeys := lookupSignerKeys(storageDir, newHashes)
+	signerKeys, lookedUp := lookupSignerKeys(storageDir, newHashes)
 	newCommits := make([]cache.Commit, 0, len(newGitCommits))
 	candidates := make([]identity.VerifyCandidate, 0, len(newGitCommits))
 	for _, gc := range newGitCommits {
-		signer := identity.NormalizeSignerKey(signerKeys[gc.Hash])
+		var signerPtr *string
+		var signer string
+		if lookedUp {
+			signer = identity.NormalizeSignerKey(signerKeys[gc.Hash])
+			signerPtr = &signer
+		}
 		newCommits = append(newCommits, cache.Commit{
 			Hash:        gc.Hash,
 			RepoURL:     repoURL,
@@ -54,7 +59,7 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 			AuthorEmail: gc.Email,
 			Message:     gc.Message,
 			Timestamp:   gc.Timestamp,
-			SignerKey:   signer,
+			SignerKey:   signerPtr,
 		})
 		if signer != "" && gc.Email != "" {
 			candidates = append(candidates, identity.VerifyCandidate{
@@ -135,11 +140,16 @@ func processAllBranchCommits(storageDir string, gitCommits []git.Commit, repoURL
 		newHashes = append(newHashes, gc.Hash)
 	}
 
-	signerKeys := lookupSignerKeys(storageDir, newHashes)
+	signerKeys, lookedUp := lookupSignerKeys(storageDir, newHashes)
 	newCommits := make([]cache.Commit, 0, len(newGitCommits))
 	candidates := make([]identity.VerifyCandidate, 0, len(newGitCommits))
 	for _, gc := range newGitCommits {
-		signer := identity.NormalizeSignerKey(signerKeys[gc.Hash])
+		var signerPtr *string
+		var signer string
+		if lookedUp {
+			signer = identity.NormalizeSignerKey(signerKeys[gc.Hash])
+			signerPtr = &signer
+		}
 		newCommits = append(newCommits, cache.Commit{
 			Hash:        gc.Hash,
 			RepoURL:     repoURL,
@@ -148,7 +158,7 @@ func processAllBranchCommits(storageDir string, gitCommits []git.Commit, repoURL
 			AuthorEmail: gc.Email,
 			Message:     gc.Message,
 			Timestamp:   gc.Timestamp,
-			SignerKey:   signer,
+			SignerKey:   signerPtr,
 		})
 		if signer != "" && gc.Email != "" {
 			candidates = append(candidates, identity.VerifyCandidate{
@@ -196,16 +206,18 @@ func backfillRepoSignerKeys(storageDir, repoURL string) {
 	}
 }
 
-// lookupSignerKeys batch-fetches signing keys for commits via git log. Errors are
-// non-fatal — unsigned commits and lookup failures both yield missing entries.
-func lookupSignerKeys(storageDir string, hashes []string) map[string]string {
+// lookupSignerKeys batch-fetches signing keys for commits via git log.
+// Returns (keys, true) on success — missing-from-map means unsigned. Returns
+// (nil, false) when git lookup fails entirely; callers should write NULL
+// signer_key for those commits so backfill retries them next fetch.
+func lookupSignerKeys(storageDir string, hashes []string) (map[string]string, bool) {
 	if storageDir == "" || len(hashes) == 0 {
-		return map[string]string{}
+		return map[string]string{}, true
 	}
 	keys, err := git.GetCommitSignerKeys(storageDir, hashes)
 	if err != nil {
 		log.Debug("batch signer key lookup", "error", err, "count", len(hashes))
-		return map[string]string{}
+		return nil, false
 	}
-	return keys
+	return keys, true
 }

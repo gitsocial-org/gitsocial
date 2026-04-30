@@ -19,7 +19,7 @@ type Commit struct {
 	Message     string
 	Timestamp   time.Time
 	FetchedAt   time.Time
-	SignerKey   string
+	SignerKey   *string
 }
 
 // commitInsertBatchSize bounds how many commits go into a single InsertCommits
@@ -174,9 +174,9 @@ func insertCommitsTxn(commits []Commit) error {
 			isEditCommit = 1
 		}
 
-		// Always store signer_key as a string (empty for unsigned). NULL is
-		// reserved for legacy rows fetched before signer extraction shipped;
-		// the backfill scans NULL rows only.
+		// signer_key: empty string = signed-extraction confirmed-unsigned;
+		// NULL = unknown (legacy row, or git lookup failed at insert time).
+		// Backfill only retries NULL rows.
 		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit); err != nil {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
