@@ -335,8 +335,9 @@ gitsocial pm issue comments <ref>                  # List comments
 ### Milestones
 
 ```
-gitsocial pm milestone create "v1.0"               # Create milestone
+gitsocial pm milestone create "v1.0"               # Create milestone (refuses with DUPLICATE if same title exists)
 gitsocial pm milestone create "v1.0" --due 2024-06-01
+gitsocial pm milestone create "v1.0" --allow-duplicate   # Override duplicate-title check
 gitsocial pm milestone list                        # List open milestones
 gitsocial pm milestone list --state all            # All states
 gitsocial pm milestone show <ref>                  # Show details + linked issues
@@ -430,6 +431,8 @@ gitsocial review pr sync-stack <ref>                           # Update branch t
 - `pr create` resolves tips through `ResolveBranchTip` — it consults a local remote-tracking ref when one of workdir's git remotes points at the PR's repo URL (typical: workspace's origin), otherwise `ls-remote` against the URL. Workspace-scoped PRs additionally fall back to `refs/heads/<branch>` so unpushed work can still be recorded. Refuses (`HEAD_NOT_FOUND`) if the head branch isn't resolvable; pass `--allow-unpublished-head` to override (e.g., for queued-up local PRs that haven't been pushed yet)
 - `pr create` also warns when the local head branch is ahead of origin so unpushed commits aren't accidentally omitted from the PR
 - `pr merge` refuses (`HEAD_NOT_FOUND` / `BASE_NOT_FOUND`) when either branch is missing, instead of silently flipping the PR to `merged` with no actual git merge. The merge always runs through plumbing (`merge-tree` + `commit-tree` + `update-ref`) so the user's working tree is never touched, regardless of strategy or whether they're checked out on the base branch
+- `pr merge` refuses (`MERGE_INCOMPLETE`) when `merge-base` or `merge-head` cannot be computed — required by `specs/GITREVIEW.md` §1.5 on `state="merged"` edits, since they're the only durable record of the merged commit range once the head branch is deleted
+- `pr merge` auto-closes referenced issues; if a teammate retracted one concurrently, the close is logged with `RETRACTED` (the merge itself still succeeds)
 
 **Merge strategies:**
 - `ff` (default) — fast-forward if possible, otherwise merge commit
@@ -500,6 +503,7 @@ gitsocial release create "v1.0" --artifact-url https://cdn.example.com/releases/
 gitsocial release create "v1.0" --prerelease                   # Pre-release
 gitsocial release create "v1.0" --signed-by ABCDEF123          # Signed
 gitsocial release create "v1.0" --sbom sbom.spdx.json          # With SBOM
+gitsocial release create "v1.0" --tag v1.0.0 --allow-duplicate # Override duplicate-tag check (refused with DUPLICATE otherwise)
 gitsocial release create - < release-notes.md                  # Read from stdin
 gitsocial release edit <ref> --version 1.0.1                   # Edit version
 gitsocial release edit <ref> --tag v1.0.1 --body "Updated"     # Edit tag + body

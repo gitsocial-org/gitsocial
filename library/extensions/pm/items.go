@@ -185,6 +185,25 @@ func InsertPMItems(items []PMItem) error {
 	})
 }
 
+// IsItemRetracted reports whether the canonical PM item at this composite
+// key has a retraction edit recorded. Bypasses the resolved view's
+// is_retracted filter so callers (e.g., CloseIssue from auto-close) can
+// distinguish "issue retracted" from "issue not found" — both look the
+// same to GetPMItem.
+func IsItemRetracted(repoURL, hash, branch string) (bool, error) {
+	return cache.QueryLocked(func(db *sql.DB) (bool, error) {
+		var isRetracted int
+		err := db.QueryRow(`
+			SELECT is_retracted FROM core_commits
+			WHERE repo_url = ? AND hash = ? AND branch = ?`,
+			repoURL, hash, branch).Scan(&isRetracted)
+		if err != nil {
+			return false, err
+		}
+		return isRetracted == 1, nil
+	})
+}
+
 // GetPMItem retrieves a single PM item by its composite key.
 func GetPMItem(repoURL, hash, branch string) (*PMItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*PMItem, error) {

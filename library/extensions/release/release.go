@@ -25,7 +25,11 @@ type CreateReleaseOptions struct {
 	Checksums   string
 	SignedBy    string
 	SBOM        string
-	Origin      *protocol.Origin
+	// AllowDuplicate skips the tag-uniqueness check. Set when the
+	// caller has accepted that an existing release with the same tag
+	// is OK (e.g., re-creating after a retraction).
+	AllowDuplicate bool
+	Origin         *protocol.Origin
 }
 
 type EditReleaseOptions struct {
@@ -41,8 +45,17 @@ type EditReleaseOptions struct {
 	SBOM        *string
 }
 
-// CreateRelease creates a new release on the release branch.
+// CreateRelease creates a new release on the release branch. Refuses
+// with `DUPLICATE` when a non-retracted release with the same tag
+// exists, unless opts.AllowDuplicate is set. Tag uniqueness matters for
+// CI/CD lookups by tag.
 func CreateRelease(workdir, subject, body string, opts CreateReleaseOptions) Result[Release] {
+	if !opts.AllowDuplicate && opts.Tag != "" {
+		if existing, err := GetReleaseItemByTagOrVersion(opts.Tag); err == nil && existing != nil {
+			return result.Err[Release]("DUPLICATE",
+				fmt.Sprintf("release with tag %q already exists (pass --allow-duplicate to override)", opts.Tag))
+		}
+	}
 	branch := gitmsg.GetExtBranch(workdir, "release")
 	content := buildReleaseContent(subject, body, opts, "")
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)

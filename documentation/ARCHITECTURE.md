@@ -312,6 +312,11 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 **Virtual commits**: Referenced in `GitMsg-Ref` but not yet fetched. Stored with `is_virtual = 1` and full metadata. When fetched, `is_virtual` flips to `0`.
 
+**Workspace refs (`refs/gitmsg/*`)**: extension data branches (`gitmsg/<ext>`) and three classes of state refs:
+- `refs/gitmsg/<ext>/config` — per-extension JSON config (single ref)
+- `refs/gitmsg/core/forks/<urlHash>` — one ref per registered fork (per-element layout, no shared write target — concurrent fork adds across clones don't collide)
+- `refs/gitmsg/<ext>/lists/<name>/_meta` + `.../items/<refHash>` — list metadata at `_meta`, members as per-element refs (same rationale; metadata lives under `_meta` because git refuses to create child refs while a same-named parent ref exists)
+
 ### Fetch Rules
 
 | Repo Type | Cache (core_commits) | Storage (repositories/) |

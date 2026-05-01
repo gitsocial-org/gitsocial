@@ -14,14 +14,33 @@ import (
 )
 
 type CreateMilestoneOptions struct {
-	State  State
-	Due    *time.Time
-	Origin *protocol.Origin
+	State State
+	Due   *time.Time
+	// AllowDuplicate skips the title-uniqueness check. Set when the
+	// caller has accepted that an existing milestone with the same
+	// title is OK (e.g., re-creating after a retraction).
+	AllowDuplicate bool
+	Origin         *protocol.Origin
 }
 
-// CreateMilestone creates a new milestone on the PM branch.
+// CreateMilestone creates a new milestone on the PM branch. Refuses with
+// `DUPLICATE` when a non-retracted milestone with the same title exists,
+// unless opts.AllowDuplicate is set.
 func CreateMilestone(workdir, title, body string, opts CreateMilestoneOptions) Result[Milestone] {
 	branch := gitmsg.GetExtBranch(workdir, "pm")
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	if !opts.AllowDuplicate {
+		existing := GetMilestones(repoURL, branch, nil, "", 0)
+		if existing.Success {
+			for _, m := range existing.Data {
+				if m.Title == title {
+					return result.Err[Milestone]("DUPLICATE",
+						fmt.Sprintf("milestone %q already exists (pass --allow-duplicate to override)", title))
+				}
+			}
+		}
+	}
 
 	state := opts.State
 	if state == "" {
@@ -33,7 +52,6 @@ func CreateMilestone(workdir, title, body string, opts CreateMilestoneOptions) R
 		return result.Err[Milestone]("COMMIT_FAILED", err.Error())
 	}
 
-	repoURL := gitmsg.ResolveRepoURL(workdir)
 	if err := cacheMilestoneFromCommit(workdir, repoURL, hash, branch); err != nil {
 		return result.Err[Milestone]("CACHE_FAILED", err.Error())
 	}

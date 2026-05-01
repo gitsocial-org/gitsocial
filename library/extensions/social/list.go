@@ -3,6 +3,7 @@ package social
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/gitsocial-org/gitsocial/core/cache"
 	"github.com/gitsocial-org/gitsocial/core/git"
@@ -114,9 +115,7 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 		}
 	}
 
-	data.Repositories = append(data.Repositories, repoRef)
-
-	if err := gitmsg.WriteList(workdir, socialExtension, listID, *data); err != nil {
+	if err := gitmsg.AddListMember(workdir, socialExtension, listID, repoRef); err != nil {
 		return FailureWithDetails[string]("GIT_ERROR", "Failed to update list", err)
 	}
 
@@ -135,23 +134,18 @@ func RemoveRepositoryFromList(workdir, listID, repoURL string) Result[struct{}] 
 		return Failure[struct{}]("LIST_NOT_FOUND", "List '"+listID+"' not found")
 	}
 
-	newRepos := make([]string, 0, len(data.Repositories))
-	found := false
+	var foundRef string
 	for _, repo := range data.Repositories {
-		if repo == repoURL || repo == repoURL+"#branch:main" {
-			found = true
-			continue
+		if repo == repoURL || strings.HasPrefix(repo, repoURL+"#branch:") {
+			foundRef = repo
+			break
 		}
-		newRepos = append(newRepos, repo)
 	}
-
-	if !found {
+	if foundRef == "" {
 		return Failure[struct{}]("REPOSITORY_NOT_FOUND", "Repository not in list")
 	}
 
-	data.Repositories = newRepos
-
-	if err := gitmsg.WriteList(workdir, socialExtension, listID, *data); err != nil {
+	if err := gitmsg.RemoveListMember(workdir, socialExtension, listID, foundRef); err != nil {
 		return FailureWithDetails[struct{}]("GIT_ERROR", "Failed to update list", err)
 	}
 

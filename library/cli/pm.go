@@ -727,6 +727,7 @@ func newPMMilestoneShowCmd() *cobra.Command {
 
 func newPMMilestoneCreateCmd() *cobra.Command {
 	var dueDateStr string
+	var allowDuplicate bool
 
 	cmd := &cobra.Command{
 		Use:   "create <title>",
@@ -764,7 +765,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
-			opts := pm.CreateMilestoneOptions{}
+			opts := pm.CreateMilestoneOptions{AllowDuplicate: allowDuplicate}
 
 			if dueDateStr != "" {
 				t, err := time.Parse("2006-01-02", dueDateStr)
@@ -793,6 +794,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
+	cmd.Flags().BoolVar(&allowDuplicate, "allow-duplicate", false, "Allow creating a milestone with a title that already exists")
 
 	return cmd
 }

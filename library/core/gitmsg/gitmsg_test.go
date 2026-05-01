@@ -368,14 +368,15 @@ func TestWriteList_ReadList(t *testing.T) {
 	dir := initTestRepo(t)
 
 	data := ListData{
-		Version:      "0.1.0",
-		ID:           "test-list",
-		Name:         "Test List",
-		Repositories: []string{"https://github.com/user/repo"},
+		Version: "0.1.0",
+		ID:      "test-list",
+		Name:    "Test List",
 	}
-	err := WriteList(dir, "social", "following", data)
-	if err != nil {
+	if err := WriteList(dir, "social", "following", data); err != nil {
 		t.Fatalf("WriteList() error = %v", err)
+	}
+	if err := AddListMember(dir, "social", "following", "https://github.com/user/repo"); err != nil {
+		t.Fatalf("AddListMember() error = %v", err)
 	}
 
 	result, err := ReadList(dir, "social", "following")
@@ -410,11 +411,11 @@ func TestWriteList_update(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 
-	data1 := ListData{Version: "0.1.0", ID: "list1", Name: "List 1", Repositories: []string{"repo1"}}
-	WriteList(dir, "social", "following", data1)
+	WriteList(dir, "social", "following", ListData{Version: "0.1.0", ID: "list1", Name: "List 1"})
+	AddListMember(dir, "social", "following", "repo1")
 
-	data2 := ListData{Version: "0.1.0", ID: "list1", Name: "List 1 Updated", Repositories: []string{"repo1", "repo2"}}
-	WriteList(dir, "social", "following", data2)
+	WriteList(dir, "social", "following", ListData{Version: "0.1.0", ID: "list1", Name: "List 1 Updated"})
+	AddListMember(dir, "social", "following", "repo2")
 
 	result, _ := ReadList(dir, "social", "following")
 	if result.Name != "List 1 Updated" {
@@ -475,13 +476,8 @@ func TestFindListAdditionTime(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 
-	data := ListData{
-		Version:      "0.1.0",
-		ID:           "list1",
-		Name:         "Following",
-		Repositories: []string{"https://github.com/user/repo"},
-	}
-	WriteList(dir, "social", "following", data)
+	WriteList(dir, "social", "following", ListData{Version: "0.1.0", ID: "list1", Name: "Following"})
+	AddListMember(dir, "social", "following", "https://github.com/user/repo")
 
 	ts, hash, found := FindListAdditionTime(dir, "social", "following", "https://github.com/user/repo")
 	if !found {

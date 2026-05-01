@@ -14,6 +14,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/extensions/release"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/extensions/social"
+
+	// Register the gitmsg-divergence notification provider.
+	_ "github.com/gitsocial-org/gitsocial/core/gitmsg/divergence"
 )
 
 // newNotificationsCmd creates the parent command for viewing and managing notifications.

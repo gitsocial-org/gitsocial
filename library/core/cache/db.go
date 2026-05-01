@@ -285,6 +285,18 @@ func Open(cacheDir string) error {
 
 	dbPath := filepath.Join(cacheDir, "cache.db")
 
+	// Refuse to open a cache whose schema is newer than this binary
+	// supports. Older binaries silently misreading newer caches (missing
+	// columns surfacing as NULLs, missing tables erroring out at query
+	// time) is a worse failure mode than a clear error here.
+	if cacheVer, ok := readUserVersion(dbPath); ok && cacheVer > schemaVersion {
+		err := fmt.Errorf("cache schema version %d is newer than this binary supports (%d) — upgrade gitsocial",
+			cacheVer, schemaVersion)
+		initErr = err
+		opened = true
+		return err
+	}
+
 	// If an existing cache predates the current schemaVersion, nuke it and
 	// reseed on next fetch. We treat schema migrations as cheap since the
 	// cache is an index, not a source of truth — re-fetching from origin
@@ -372,19 +384,27 @@ func Open(cacheDir string) error {
 // PRAGMA user_version is older than schemaVersion. A non-existent file or a
 // file at the current version returns false.
 func needsReseed(dbPath string) bool {
+	v, ok := readUserVersion(dbPath)
+	return ok && v < schemaVersion
+}
+
+// readUserVersion probes a cache file for its PRAGMA user_version. Returns
+// (0, false) for missing files, unreadable files, or query errors —
+// callers treat that as "no opinion."
+func readUserVersion(dbPath string) (int, bool) {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return false
+		return 0, false
 	}
 	probe, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
 	if err != nil {
-		return false
+		return 0, false
 	}
 	defer probe.Close()
 	var version int
 	if err := probe.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
-		return false
+		return 0, false
 	}
-	return version < schemaVersion
+	return version, true
 }
 
 // Close runs PRAGMA optimize (so the next Open starts with fresh planner

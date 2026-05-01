@@ -131,6 +131,7 @@ func newReleaseCreateCmd() *cobra.Command {
 	var checksums string
 	var signedBy string
 	var sbom string
+	var allowDuplicate bool
 
 	cmd := &cobra.Command{
 		Use:   "create <subject>",
@@ -169,13 +170,14 @@ func newReleaseCreateCmd() *cobra.Command {
 			}
 
 			opts := release.CreateReleaseOptions{
-				Tag:         tag,
-				Version:     version,
-				Prerelease:  prerelease,
-				ArtifactURL: artifactURL,
-				Checksums:   checksums,
-				SignedBy:    signedBy,
-				SBOM:        sbom,
+				Tag:            tag,
+				Version:        version,
+				Prerelease:     prerelease,
+				ArtifactURL:    artifactURL,
+				Checksums:      checksums,
+				SignedBy:       signedBy,
+				SBOM:           sbom,
+				AllowDuplicate: allowDuplicate,
 			}
 
 			if artifactsStr != "" {
@@ -211,6 +213,7 @@ func newReleaseCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename (e.g., SHA256SUMS)")
 	cmd.Flags().StringVar(&signedBy, "signed-by", "", "Key fingerprint for release signature")
 	cmd.Flags().StringVar(&sbom, "sbom", "", "SBOM filename (e.g., sbom.spdx.json)")
+	cmd.Flags().BoolVar(&allowDuplicate, "allow-duplicate", false, "Allow creating a release with a tag that already exists")
 
 	return cmd
 }

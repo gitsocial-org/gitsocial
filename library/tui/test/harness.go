@@ -168,7 +168,14 @@ func shouldSkipCmd(cmd tea.Cmd) bool {
 }
 
 // execCmd runs a tea.Cmd synchronously with a timeout, skipping known blockers
-// and any command that takes longer than 50ms (likely a timer/sleep).
+// and any command that takes longer than the budget (likely a timer/sleep).
+//
+// Budget is generous enough to cover real work — view Activate functions that
+// do a few SQL queries and git invocations. Each `git` invocation is ~15ms on
+// modern hardware (process start + .git lookup), so a path with 2-3 git calls
+// + a SQL query lands around 50-100ms; we want that to complete, not be
+// classified as a timer. Tighten this only if test runtime balloons; loosen
+// only if real Activate work starts timing out.
 func execCmd(cmd tea.Cmd) tea.Msg {
 	if shouldSkipCmd(cmd) {
 		return nil
@@ -178,7 +185,7 @@ func execCmd(cmd tea.Cmd) tea.Msg {
 	select {
 	case msg := <-done:
 		return msg
-	case <-time.After(50 * time.Millisecond):
+	case <-time.After(500 * time.Millisecond):
 		return nil
 	}
 }

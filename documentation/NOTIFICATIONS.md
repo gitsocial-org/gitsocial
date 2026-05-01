@@ -38,9 +38,14 @@ All types exclude self-authored actions.
 | Review | `head-deleted` | Workspace + Forks | An open PR's head branch no longer exists on its remote |
 | Review | `base-deleted` | Workspace + Forks | An open PR's base branch no longer exists on its remote |
 | Release | `new-release` | Followed | A repo in your lists publishes a release |
+| gitmsg-divergence | `branch-diverged` | Workspace | A local `gitmsg/<ext>` branch has unpushed commits and diverges from origin (`gitsocial push` would be rejected; run rebase) |
 
 The four `*-advanced` / `*-deleted` notifications are computed from
 `review_branch_observations` (refreshed after each `gitsocial fetch`) compared
 against the PR's stored tips. They self-clear once the PR catches up — no
 explicit "mark as read" needed. Audience is the PR author and listed
 reviewers.
+
+The `branch-diverged` notification is computed on each poll from
+`git.ValidatePushPreconditions` and self-clears once the rebase + push
+lands.

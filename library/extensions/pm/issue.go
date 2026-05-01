@@ -207,8 +207,18 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	return result.Ok(PMItemToIssue(*item))
 }
 
-// CloseIssue changes an issue's state to closed.
+// CloseIssue changes an issue's state to closed. Refuses if the
+// canonical issue has been retracted (a teammate may have retracted it
+// concurrently between when the close was requested and when it ran).
 func CloseIssue(workdir, issueRef string) Result[Issue] {
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+	ref := protocol.ResolveRefWithDefaults(issueRef, repoURL, "gitmsg/pm")
+	if ref.Hash != "" {
+		if retracted, _ := IsItemRetracted(ref.RepoURL, ref.Hash, ref.Branch); retracted {
+			return result.Err[Issue]("RETRACTED",
+				"cannot close: issue was retracted")
+		}
+	}
 	closed := StateClosed
 	return UpdateIssue(workdir, issueRef, UpdateIssueOptions{State: &closed})
 }

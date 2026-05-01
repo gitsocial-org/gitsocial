@@ -74,13 +74,24 @@ func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	tipParts := make([]string, 0, len(branches)*2)
+	tipParts := make([]string, 0, len(branches)*2+1)
 	for _, name := range names {
 		branch := branches[name]
 		tip, _ := git.ReadRef(workdir, branch)
 		tipParts = append(tipParts, tip)
 		remoteTip, _ := git.ReadRef(workdir, "origin/"+branch)
 		tipParts = append(tipParts, remoteTip)
+	}
+	// Also fold in every remote tracking ref under refs/remotes/origin/ so a
+	// push to a feature branch (which doesn't appear in the per-branch loop
+	// above) invalidates the sync cache and forces re-ingest. Without this,
+	// `gitsocial fetch` short-circuits when `main` and the gitmsg/* branches
+	// haven't moved, leaving feature-branch commits out of core_commits and
+	// off the timeline.
+	if result, err := git.ExecGit(workdir, []string{
+		"for-each-ref", "--format=%(objectname)", "refs/remotes/origin/",
+	}); err == nil {
+		tipParts = append(tipParts, strings.TrimSpace(result.Stdout))
 	}
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
