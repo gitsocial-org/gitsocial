@@ -411,6 +411,28 @@ func GetUnpushedCommits(workdir, branch string) (map[string]struct{}, error) {
 	return hashes, nil
 }
 
+// GetAllUnpushedCommits returns hashes of every local commit that origin doesn't have,
+// across all local branches and tags. Used by views that aggregate items spanning
+// multiple branches (e.g. timeline mixing gitmsg/* items with feature-branch commits).
+func GetAllUnpushedCommits(workdir string) (map[string]struct{}, error) {
+	result, err := ExecGit(workdir, []string{
+		"rev-list", "--abbrev-commit", "--abbrev=12",
+		"--branches", "--tags", "--not", "--remotes=origin/*",
+	})
+	if err != nil {
+		slog.Debug("rev-list all unpushed", "error", err)
+		return map[string]struct{}{}, nil
+	}
+	hashes := make(map[string]struct{})
+	for _, h := range strings.Split(result.Stdout, "\n") {
+		h = strings.TrimSpace(h)
+		if h != "" {
+			hashes[h] = struct{}{}
+		}
+	}
+	return hashes, nil
+}
+
 // GetAllCommitHashes returns all commit hashes in the repository (all refs, excluding gitmsg/config).
 func GetAllCommitHashes(workdir string) (map[string]bool, error) {
 	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", "--exclude=refs/gitmsg/config", "--all"})

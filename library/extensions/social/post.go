@@ -393,11 +393,12 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 		}
 	}
 
-	// Get unpushed commits for workspace posts (skip on fast initial load)
+	// Get all locally-unpushed commits so cross-extension items and
+	// feature-branch commits shown on the timeline get the badge.
+	// Skip on fast initial load.
 	var unpushed map[string]struct{}
 	if !opts.SkipUnpushed {
-		branch := gitmsg.GetExtBranch(workdir, "social")
-		unpushed, _ = git.GetUnpushedCommits(workdir, branch)
+		unpushed, _ = git.GetAllUnpushedCommits(workdir)
 	}
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
@@ -456,8 +457,7 @@ func getMyPosts(workdir string, workspaceURL string, opts *GetPostsOptions) Resu
 	if err := SyncWorkspaceToCache(workdir); err != nil {
 		log.Warn("sync workspace to cache failed", "error", err)
 	}
-	branch := gitmsg.GetExtBranch(workdir, "social")
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
+	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetAllItems(SocialQuery{
 		RepoURL:          workspaceURL,
@@ -514,8 +514,7 @@ func getWorkspaceRepository(workdir string, workspaceURL string, opts *GetPostsO
 	if err := SyncWorkspaceToCache(workdir); err != nil {
 		log.Warn("sync workspace to cache failed", "error", err)
 	}
-	branch := gitmsg.GetExtBranch(workdir, "social")
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
+	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetAllItems(SocialQuery{
 		RepoURL:          workspaceURL,
@@ -591,9 +590,9 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		branch = "main"
 	}
 
-	// Get unpushed commits for workspace posts
-	workspaceBranch := gitmsg.GetExtBranch(workdir, "social")
-	unpushed, _ := git.GetUnpushedCommits(workdir, workspaceBranch)
+	// Get all locally-unpushed commits so cross-extension items in
+	// the thread (PR comments, issue comments) get the badge.
+	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetThread(parsed.Repository, parsed.Value, branch, workspaceURL)
 	if err != nil {
