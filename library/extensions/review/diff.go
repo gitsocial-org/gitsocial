@@ -169,7 +169,10 @@ func fetchFromWorkspace(forkDir, workdir, branch string) {
 }
 
 // ResolvePRDiff resolves the full diff range for a pull request.
-// Handles single-commit mode, fork fetching, merged PR state, SHA pinning, and merge-base.
+// Handles single-commit mode, fork fetching, merged PR state, SHA pinning,
+// and merge-base. Cross-fork PRs pin only the head (base resolves through
+// upstream fetch + merge-base); workspace PRs pin both sides when the
+// stored tips are reachable. The single applyPinPolicy helper covers both.
 func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) DiffContext {
 	baseRef, headRef := qualifyPRRefs(workdir, pr)
 	ctx := ResolveDiffContext(workdir, cacheDir, baseRef, headRef)
@@ -180,18 +183,11 @@ func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) Dif
 		}
 		return DiffContext{Workdir: dir, Base: commit + "^", Head: commit}
 	}
-	isForkPR := ctx.Workdir != workdir
 	if pr.State == PRStateMerged {
 		resolveMergedDiff(&ctx, workdir, pr)
-	} else if isForkPR {
-		// Only pin head — base is resolved via upstream fetch + merge-base
-		if pr.HeadTip != "" {
-			if _, err := git.ReadRef(ctx.Workdir, pr.HeadTip); err == nil {
-				ctx.Head = pr.HeadTip
-			}
-		}
 	} else {
-		pinToCommitSHAs(&ctx, workdir, pr.BaseTip, pr.HeadTip)
+		isForkPR := ctx.Workdir != workdir
+		applyPinPolicy(&ctx, workdir, pr, isForkPR)
 	}
 	if ctx.Base == "" || ctx.Head == "" {
 		return ctx
@@ -202,27 +198,38 @@ func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) Dif
 	return ctx
 }
 
-// pinToCommitSHAs pins diff refs to platform-provided commit SHAs when resolvable.
-func pinToCommitSHAs(ctx *DiffContext, workdir, baseTip, headTip string) {
-	if headTip == "" {
+// applyPinPolicy pins diff refs to the PR's stored tips when reachable. For
+// cross-fork PRs only the head tip is pinned (the base ref resolves via the
+// upstream fetch into the fork bare repo and a subsequent merge-base
+// collapse). For workspace PRs both tips are pinned together when both
+// resolve in the same directory; if only the head resolves, pin head only —
+// matches the old "pin-both with fallback to pin-head" behavior.
+func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR bool) {
+	if pr.HeadTip == "" {
 		return
 	}
 	dirs := []string{ctx.Workdir, workdir}
-	if baseTip != "" {
+	if !isForkPR && pr.BaseTip != "" {
 		for _, dir := range dirs {
-			if _, err := git.ReadRef(dir, baseTip); err == nil {
-				if _, err := git.ReadRef(dir, headTip); err == nil {
-					ctx.Base = baseTip
-					ctx.Head = headTip
-					ctx.Workdir = dir
-					return
-				}
+			if _, err := git.ReadRef(dir, pr.BaseTip); err != nil {
+				continue
 			}
+			if _, err := git.ReadRef(dir, pr.HeadTip); err != nil {
+				continue
+			}
+			ctx.Base = pr.BaseTip
+			ctx.Head = pr.HeadTip
+			ctx.Workdir = dir
+			return
 		}
 	}
+	dirs = []string{ctx.Workdir}
+	if !isForkPR {
+		dirs = append(dirs, workdir)
+	}
 	for _, dir := range dirs {
-		if _, err := git.ReadRef(dir, headTip); err == nil {
-			ctx.Head = headTip
+		if _, err := git.ReadRef(dir, pr.HeadTip); err == nil {
+			ctx.Head = pr.HeadTip
 			ctx.Workdir = dir
 			return
 		}

@@ -286,35 +286,6 @@ func TestGetMergeBase_error(t *testing.T) {
 	}
 }
 
-func TestMergeBranches_currentBranch_resolveHeadError(t *testing.T) {
-	dir := initTestRepo(t)
-	ExecGit(dir, []string{"checkout", "-b", "feature"})
-	CreateCommit(dir, CommitOptions{Message: "feat", AllowEmpty: true})
-	ExecGit(dir, []string{"checkout", "main"})
-
-	mergeHappened := false
-	restore := SetExecutor(mockExecutor(func(args []string) (*ExecResult, error, bool) {
-		if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "HEAD" {
-			if mergeHappened {
-				return nil, errMock, true
-			}
-		}
-		if len(args) >= 2 && args[0] == "merge" {
-			mergeHappened = true
-		}
-		return nil, nil, false
-	}))
-	defer restore()
-
-	_, err := MergeBranches(dir, "main", "feature")
-	if err == nil {
-		t.Fatal("should error when rev-parse HEAD fails after merge")
-	}
-	if !strings.Contains(err.Error(), "resolve HEAD after merge") {
-		t.Errorf("error = %v, want 'resolve HEAD after merge'", err)
-	}
-}
-
 func TestMergeBranches_fastForward_resolveHeadError(t *testing.T) {
 	dir := initTestRepo(t)
 	ExecGit(dir, []string{"checkout", "-b", "feature"})

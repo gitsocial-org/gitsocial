@@ -761,6 +761,17 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 			stateOrigin = buildStateChangeOrigin(entry.item.MergedByName, entry.item.MergedByEmail, entry.item.MergedAt, platform, opts.RepoURL, platformPath(platform, "pr", entry.item.ExternalID))
 			mBase = entry.mergeBase
 			mHead = entry.mergeHead
+			// GITREVIEW.md §1.5: state="merged" edits MUST include both
+			// merge-base and merge-head. The prepare phase falls back to
+			// pr.MergeCommit / baseTip; if both fallbacks failed, leave
+			// the PR open rather than write a non-conformant edit.
+			if mBase == "" || mHead == "" {
+				stats.Errors = append(stats.Errors, ImportError{
+					Type:    "pr-state",
+					Message: fmt.Sprintf("PR %s: cannot record merged state (missing merge-base/merge-head); imported as open", entry.item.ExternalID),
+				})
+				continue
+			}
 		} else {
 			stateOrigin = buildStateChangeOrigin(entry.item.ClosedByName, entry.item.ClosedByEmail, entry.item.ClosedAt, platform, opts.RepoURL, platformPath(platform, "pr", entry.item.ExternalID))
 		}

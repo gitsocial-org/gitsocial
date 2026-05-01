@@ -63,6 +63,9 @@ var (
 			Foreground(lipgloss.Color(TextSecondary)).
 			Background(lipgloss.Color(BgSelected))
 
+	Warning = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(StatusWarning))
+
 	Bold = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(TextPrimary))

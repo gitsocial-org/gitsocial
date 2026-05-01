@@ -33,4 +33,14 @@ All types exclude self-authored actions.
 | Review | `pr-merged` | Any | A PR you authored is merged by someone else |
 | Review | `pr-closed` | Any | A PR you authored is closed by someone else |
 | Review | `pr-ready` | Forks | A draft PR on a registered fork is marked ready for review |
+| Review | `head-advanced` | Workspace + Forks | An open PR's head branch advanced on its remote past the stored `head-tip` (run `pr update` to refresh) |
+| Review | `base-advanced` | Workspace + Forks | An open PR's base branch advanced on its remote past the stored `base-tip` |
+| Review | `head-deleted` | Workspace + Forks | An open PR's head branch no longer exists on its remote |
+| Review | `base-deleted` | Workspace + Forks | An open PR's base branch no longer exists on its remote |
 | Release | `new-release` | Followed | A repo in your lists publishes a release |
+
+The four `*-advanced` / `*-deleted` notifications are computed from
+`review_branch_observations` (refreshed after each `gitsocial fetch`) compared
+against the PR's stored tips. They self-clear once the PR catches up — no
+explicit "mark as read" needed. Audience is the PR author and listed
+reviewers.

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/extensions/review"
 	"github.com/gitsocial-org/gitsocial/tui/tuicore"
 )
@@ -17,6 +18,10 @@ var stackChildID string
 // Idempotent: safe to call across multiple tests in the same package run.
 func setupStack(t *testing.T, f *Fixture) string {
 	stackSetupOnce.Do(func() {
+		// Create the stacked branch so CreatePR's tip resolution can find it.
+		if _, err := git.ExecGit(f.Workdir, []string{"branch", "dark-mode-ui", "dark-mode"}); err != nil {
+			t.Fatalf("git branch dark-mode-ui: %v", err)
+		}
 		res := review.CreatePR(f.Workdir, "Stacked: add dark mode toggle UI", "Adds the toggle UI layer on top of dark mode support.", review.CreatePROptions{
 			Base:      "dark-mode",
 			Head:      "dark-mode-ui",

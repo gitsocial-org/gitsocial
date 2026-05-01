@@ -29,6 +29,11 @@ type CreatePROptions struct {
 	MergeHead string
 	Draft     bool
 	Origin    *protocol.Origin
+	// AllowUnpublishedHead skips the "head branch resolvable" check. Set this
+	// only when the caller has a reason to record a tip-less PR (e.g., tests
+	// that don't exercise branch resolution). Production callers should leave
+	// this false so unpushed branches are caught early.
+	AllowUnpublishedHead bool
 }
 
 // CreatePR creates a new pull request on the review branch.
@@ -48,22 +53,19 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 
 	// Auto-resolve branch tips if not already set
 	if opts.BaseTip == "" {
-		baseParsed := protocol.ParseRef(opts.Base)
-		if baseParsed.Value != "" {
-			tip, err := resolveRefTip(workdir, repoURL, baseParsed)
-			if err == nil && len(tip) >= 12 {
-				opts.BaseTip = tip[:12]
-			}
+		if tip, err := resolveTipForWrite(workdir, repoURL, protocol.ParseRef(opts.Base)); err == nil && len(tip) >= 12 {
+			opts.BaseTip = tip[:12]
 		}
 	}
 	if opts.HeadTip == "" {
-		headParsed := protocol.ParseRef(opts.Head)
-		if headParsed.Value != "" {
-			tip, err := resolveRefTip(workdir, repoURL, headParsed)
-			if err == nil && len(tip) >= 12 {
-				opts.HeadTip = tip[:12]
-			}
+		if tip, err := resolveTipForWrite(workdir, repoURL, protocol.ParseRef(opts.Head)); err == nil && len(tip) >= 12 {
+			opts.HeadTip = tip[:12]
 		}
+	}
+
+	if opts.Head != "" && opts.HeadTip == "" && !opts.AllowUnpublishedHead {
+		return result.Err[PullRequest]("HEAD_NOT_FOUND",
+			fmt.Sprintf("head branch %q not found on origin or locally — push it first?", opts.Head))
 	}
 
 	content := buildPRContent(subject, body, opts, "")
@@ -149,6 +151,11 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 		Reviewers: pr.Reviewers,
 		Labels:    pr.Labels,
 		Draft:     pr.IsDraft,
+		// Preserve merge-base / merge-head when editing an already-merged
+		// PR (e.g., subject tweak). The opts overrides below take effect
+		// only when the caller explicitly passes them.
+		MergeBase: pr.MergeBase,
+		MergeHead: pr.MergeHead,
 	}
 	if opts.Origin != nil {
 		createOpts.Origin = opts.Origin
@@ -200,6 +207,20 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	}
 	if opts.Body != nil {
 		body = *opts.Body
+	}
+
+	// GITREVIEW.md §1.5: state="merged" edits MUST carry merge-base and
+	// merge-head. Reject the transition at the API boundary so direct
+	// UpdatePR callers can't bypass MergePR's pre-flight checks.
+	if state == PRStateMerged {
+		if createOpts.MergeBase == "" {
+			return result.Err[PullRequest]("MERGE_INCOMPLETE",
+				"cannot record state=merged without merge-base")
+		}
+		if createOpts.MergeHead == "" {
+			return result.Err[PullRequest]("MERGE_INCOMPLETE",
+				"cannot record state=merged without merge-head")
+		}
 	}
 
 	// Normalize and localize refs before committing
@@ -308,70 +329,102 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	// Snapshot merge-base and head hash before the merge (lost after FF merge)
 	baseName := protocol.ParseRef(pr.Base).Value
 	headParsed := protocol.ParseRef(pr.Head)
-	headName := headParsed.Value
-
-	// Fetch remote head branch into a temporary local branch for merging
-	headRemote := headParsed.Repository != "" && headParsed.Repository != repoURL
-	if headRemote && headName != "" {
-		refspec := fmt.Sprintf("+refs/heads/%s:refs/heads/_gitmsg-merge-tmp", headName)
-		if _, err := git.ExecGit(workdir, []string{"fetch", headParsed.Repository, refspec, "--no-tags"}); err != nil {
-			return result.Err[PullRequest]("FETCH_FAILED",
-				fmt.Sprintf("cannot fetch remote branch %s: %s", headName, err))
-		}
-		headName = "_gitmsg-merge-tmp"
-		defer func() { _, _ = git.ExecGit(workdir, []string{"branch", "-D", "_gitmsg-merge-tmp"}) }()
+	headBranch := headParsed.Value
+	headSourceURL := headParsed.Repository
+	if headSourceURL == "" {
+		headSourceURL = repoURL
 	}
-	var mergeBase, mergeHead string
-	if baseName != "" && headName != "" {
-		mergeBase, _ = git.GetMergeBase(workdir, baseName, headName)
-		if len(mergeBase) > 12 {
-			mergeBase = mergeBase[:12]
+
+	// merge-base / merge-head are REQUIRED by GITREVIEW.md §1.5 on
+	// state="merged" edits — they're the only durable record of the merged
+	// commit range once the head branch is deleted. Refuse early if either
+	// PR ref is malformed; the merge can't produce a complete record.
+	if baseName == "" {
+		return result.Err[PullRequest]("MERGE_INCOMPLETE",
+			"cannot merge: base ref missing or not a branch ref")
+	}
+	if headBranch == "" {
+		return result.Err[PullRequest]("MERGE_INCOMPLETE",
+			"cannot merge: head ref missing or not a branch ref")
+	}
+
+	// Fetch the PR's head into a temporary local branch for merging,
+	// regardless of whether it lives in the workspace or a fork. This makes
+	// the merge use whatever the live remote tip is — same source of truth
+	// as ResolveBranchTip — and lets the merge primitives operate against
+	// uniform refs/heads/<temp> on both paths.
+	const tempHeadBranch = "_gitmsg-merge-tmp"
+	if err := fetchHeadIntoTemp(workdir, headSourceURL, headBranch, tempHeadBranch); err != nil {
+		return result.Err[PullRequest]("HEAD_NOT_FOUND",
+			fmt.Sprintf("cannot fetch head branch %q from %s: %s", headBranch, headSourceURL, err))
+	}
+	defer func() { _, _ = git.ExecGit(workdir, []string{"branch", "-D", tempHeadBranch}) }()
+	headName := tempHeadBranch
+	if _, err := git.ReadRef(workdir, baseName); err != nil {
+		return result.Err[PullRequest]("BASE_NOT_FOUND",
+			fmt.Sprintf("base branch %q not found locally", baseName))
+	}
+
+	// Compute merge-base / merge-head BEFORE running the merge, so a failure
+	// here aborts cleanly without leaving a half-merged state. Both fields
+	// must be present in the merged-state edit per spec §1.5.
+	mergeBaseFull, err := git.GetMergeBase(workdir, baseName, headName)
+	if err != nil || mergeBaseFull == "" {
+		errMsg := "no common ancestor"
+		if err != nil {
+			errMsg = err.Error()
 		}
-		mergeHead, _ = git.ReadRef(workdir, headName)
-		if len(mergeHead) > 12 {
-			mergeHead = mergeHead[:12]
+		return result.Err[PullRequest]("MERGE_INCOMPLETE",
+			fmt.Sprintf("cannot compute merge-base for %s..%s: %s", baseName, headBranch, errMsg))
+	}
+	mergeHeadFull, err := git.ReadRef(workdir, headName)
+	if err != nil || mergeHeadFull == "" {
+		errMsg := "ref not found"
+		if err != nil {
+			errMsg = err.Error()
 		}
+		return result.Err[PullRequest]("MERGE_INCOMPLETE",
+			fmt.Sprintf("cannot resolve merge-head from %s: %s", headBranch, errMsg))
+	}
+	mergeBase := mergeBaseFull
+	if len(mergeBase) > 12 {
+		mergeBase = mergeBase[:12]
+	}
+	mergeHead := mergeHeadFull
+	if len(mergeHead) > 12 {
+		mergeHead = mergeHead[:12]
 	}
 
 	// Perform actual git merge of head into base
-	if baseName != "" && headName != "" {
-		var mergeErr error
-		switch strategy {
-		case MergeStrategySquash:
-			_, mergeErr = git.SquashMerge(workdir, baseName, headName, pr.Subject)
-		case MergeStrategyRebase:
-			_, mergeErr = git.RebaseMerge(workdir, baseName, headName)
-		case MergeStrategyMerge:
-			_, mergeErr = git.ForceMerge(workdir, baseName, headName)
-		default:
-			_, mergeErr = git.MergeBranches(workdir, baseName, headName)
-		}
-		if mergeErr != nil {
-			return result.Err[PullRequest]("MERGE_FAILED", mergeErr.Error())
-		}
+	var mergeErr error
+	switch strategy {
+	case MergeStrategySquash:
+		_, mergeErr = git.SquashMerge(workdir, baseName, headName, pr.Subject)
+	case MergeStrategyRebase:
+		_, mergeErr = git.RebaseMerge(workdir, baseName, headName)
+	case MergeStrategyMerge:
+		_, mergeErr = git.ForceMerge(workdir, baseName, headName)
+	default:
+		_, mergeErr = git.MergeBranches(workdir, baseName, headName)
+	}
+	if mergeErr != nil {
+		return result.Err[PullRequest]("MERGE_FAILED", mergeErr.Error())
 	}
 
 	merged := PRStateMerged
-	opts := UpdatePROptions{State: &merged}
-	if mergeBase != "" {
-		opts.MergeBase = &mergeBase
-	}
-	if mergeHead != "" {
-		opts.MergeHead = &mergeHead
+	opts := UpdatePROptions{
+		State:     &merged,
+		MergeBase: &mergeBase,
+		MergeHead: &mergeHead,
 	}
 	// Capture branch tips at merge time
-	var baseTip, headTip string
-	if baseName != "" {
-		if tip, err := git.ReadRef(workdir, baseName); err == nil && len(tip) >= 12 {
-			baseTip = tip[:12]
-			opts.BaseTip = &baseTip
-		}
+	if tip, err := git.ReadRef(workdir, baseName); err == nil && len(tip) >= 12 {
+		baseTip := tip[:12]
+		opts.BaseTip = &baseTip
 	}
-	if headName != "" {
-		if tip, err := git.ReadRef(workdir, headName); err == nil && len(tip) >= 12 {
-			headTip = tip[:12]
-			opts.HeadTip = &headTip
-		}
+	if tip, err := git.ReadRef(workdir, headName); err == nil && len(tip) >= 12 {
+		headTip := tip[:12]
+		opts.HeadTip = &headTip
 	}
 	res := UpdatePR(workdir, prRef, opts)
 	if !res.Success {
@@ -445,7 +498,11 @@ func ConvertToDraft(workdir, prRef string) Result[PullRequest] {
 	return UpdatePR(workdir, prRef, UpdatePROptions{Draft: &draft})
 }
 
-// UpdatePRTips resolves current base/head branch tips and creates an edit with updated tips.
+// UpdatePRTips resolves current base/head branch tips and creates an edit with
+// updated tips. Returns the existing PR unchanged when nothing has moved
+// (avoids edit-storm noise on the gitmsg/review branch). Returns an error if
+// either branch can no longer be resolved — silent no-op edits used to be
+// emitted for deleted branches, masking the problem.
 func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
@@ -458,16 +515,33 @@ func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 	}
 	opts := UpdatePROptions{}
 	if baseParsed := protocol.ParseRef(pr.Base); baseParsed.Value != "" {
-		if tip, err := resolveRefTip(workdir, repoURL, baseParsed); err == nil && len(tip) >= 12 {
+		tip, err := resolveTipForWrite(workdir, repoURL, baseParsed)
+		if err != nil {
+			return result.Err[PullRequest]("BASE_UNRESOLVED",
+				fmt.Sprintf("cannot resolve base %q: %s", pr.Base, err))
+		}
+		if len(tip) >= 12 {
 			baseTip := tip[:12]
-			opts.BaseTip = &baseTip
+			if baseTip != pr.BaseTip {
+				opts.BaseTip = &baseTip
+			}
 		}
 	}
 	if headParsed := protocol.ParseRef(pr.Head); headParsed.Value != "" {
-		if tip, err := resolveRefTip(workdir, repoURL, headParsed); err == nil && len(tip) >= 12 {
-			headTip := tip[:12]
-			opts.HeadTip = &headTip
+		tip, err := resolveTipForWrite(workdir, repoURL, headParsed)
+		if err != nil {
+			return result.Err[PullRequest]("HEAD_UNRESOLVED",
+				fmt.Sprintf("cannot resolve head %q: %s", pr.Head, err))
 		}
+		if len(tip) >= 12 {
+			headTip := tip[:12]
+			if headTip != pr.HeadTip {
+				opts.HeadTip = &headTip
+			}
+		}
+	}
+	if opts.BaseTip == nil && opts.HeadTip == nil {
+		return result.Ok(pr)
 	}
 	return UpdatePR(workdir, prRef, opts)
 }
@@ -598,12 +672,30 @@ func RemoveFork(workdir, forkURL string) error {
 	return gitmsg.RemoveFork(workdir, forkURL)
 }
 
-// resolveRefTip reads the branch tip hash, using ls-remote for cross-fork refs.
-func resolveRefTip(workdir, repoURL string, parsed protocol.ParsedRef) (string, error) {
-	if parsed.Repository != "" && parsed.Repository != repoURL {
-		return git.ReadRemoteRef(workdir, parsed.Repository, parsed.Value)
+// fetchHeadIntoTemp populates refs/heads/<tempBranch> in workdir with the
+// tip of <branch> on <sourceURL>. For the workspace's own URL, the source
+// is the origin tracking ref (refs/remotes/<remote>/<branch>) when one of
+// the workdir's git remotes points at sourceURL — falls back to the local
+// refs/heads/<branch>. For any other URL, runs `git fetch <sourceURL>
+// +refs/heads/<branch>:refs/heads/<tempBranch>`. Either way, the merge
+// primitives downstream see a consistent refs/heads/<tempBranch>.
+func fetchHeadIntoTemp(workdir, sourceURL, branch, tempBranch string) error {
+	normalized := protocol.NormalizeURL(sourceURL)
+	if remoteName := findRemoteForURL(workdir, normalized); remoteName != "" {
+		// Local repo already has the data — copy the remote tracking ref
+		// into the temp branch (preferred) or the local branch if no
+		// tracking ref exists.
+		if tip, err := git.ReadRef(workdir, "refs/remotes/"+remoteName+"/"+branch); err == nil && tip != "" {
+			return git.WriteRef(workdir, "refs/heads/"+tempBranch, tip)
+		}
+		if tip, err := git.ReadRef(workdir, branch); err == nil && tip != "" {
+			return git.WriteRef(workdir, "refs/heads/"+tempBranch, tip)
+		}
+		return fmt.Errorf("branch %q not found locally", branch)
 	}
-	return git.ReadRef(workdir, parsed.Value)
+	refspec := fmt.Sprintf("+refs/heads/%s:refs/heads/%s", branch, tempBranch)
+	_, err := git.ExecGit(workdir, []string{"fetch", sourceURL, refspec, "--no-tags"})
+	return err
 }
 
 // retargetDependents finds open PRs that depend on the merged PR and retargets

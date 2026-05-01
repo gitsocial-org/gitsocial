@@ -458,26 +458,12 @@ func GetMergeBase(workdir, base, head string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// MergeBranches merges the head branch into the base branch.
-// If the current branch is the base, uses git merge directly. Otherwise uses plumbing commands.
+// MergeBranches merges the head branch into the base branch via plumbing
+// commands (merge-tree + commit-tree + update-ref). Never invokes
+// `git merge`, so the user's working tree is not touched even when they
+// happen to be checked out on the base branch — consistent with
+// SquashMerge / RebaseMerge / ForceMerge.
 func MergeBranches(workdir, base, head string) (string, error) {
-	current, _ := GetCurrentBranch(workdir)
-
-	if current == base {
-		_, err := ExecGit(workdir, []string{"merge", "--no-edit", head})
-		if err != nil {
-			if _, abortErr := ExecGit(workdir, []string{"merge", "--abort"}); abortErr != nil {
-				slog.Warn("merge abort failed", "error", abortErr, "base", base, "head", head)
-			}
-			return "", fmt.Errorf("merge conflicts between %s and %s", base, head)
-		}
-		hash, err := execGitSimple(workdir, []string{"rev-parse", "HEAD"})
-		if err != nil {
-			return "", fmt.Errorf("resolve HEAD after merge: %w", err)
-		}
-		return strings.TrimSpace(hash), nil
-	}
-
 	// Check if fast-forward is possible
 	_, err := ExecGit(workdir, []string{"merge-base", "--is-ancestor", "refs/heads/" + base, "refs/heads/" + head})
 	if err == nil {
@@ -776,13 +762,76 @@ func CommitFiles(workdir, ref, message string, files map[string][]byte) (string,
 	return strings.TrimSpace(shortHash), nil
 }
 
-// RangeDiff runs git range-diff between two commit ranges.
+// RangeDiff runs git range-diff between two commit ranges. Handles the
+// degenerate case where one range is empty (BaseTip == HeadTip — common for
+// PRs created against a branch that hadn't diverged yet) by synthesizing
+// range-diff-format output: `git range-diff A..A B..C` is rejected by git
+// itself with "fatal: need two commit ranges", but downstream consumers
+// (interdiff view, PatchesEqual) need a coherent answer.
 func RangeDiff(workdir, oldBase, oldHead, newBase, newHead string) (string, error) {
+	oldEmpty := oldBase == oldHead
+	newEmpty := newBase == newHead
+	if oldEmpty && newEmpty {
+		return "", nil
+	}
+	if oldEmpty || newEmpty {
+		return synthesizeRangeDiff(workdir, oldBase, oldHead, newBase, newHead)
+	}
 	result, err := ExecGit(workdir, []string{"range-diff", oldBase + ".." + oldHead, newBase + ".." + newHead})
 	if err != nil {
 		return "", fmt.Errorf("range-diff: %w", err)
 	}
 	return result.Stdout, nil
+}
+
+// synthesizeRangeDiff produces range-diff-style output when one side of the
+// comparison has no commits. Each commit on the non-empty side is rendered
+// as `N: -------- > N: <sha> <subject>` (added) or `N: <sha> ... < N: --------`
+// (removed), followed by its indented patch — matching the format `git
+// range-diff` uses and the interdiff renderer expects.
+func synthesizeRangeDiff(workdir, oldBase, oldHead, newBase, newHead string) (string, error) {
+	var (
+		fullRange string
+		addedSide bool // true → commits go on the right (>); false → left (<)
+	)
+	if oldBase == oldHead {
+		fullRange = newBase + ".." + newHead
+		addedSide = true
+	} else {
+		fullRange = oldBase + ".." + oldHead
+		addedSide = false
+	}
+	logRes, err := ExecGit(workdir, []string{"log", "--reverse", "--pretty=format:%h %s", fullRange})
+	if err != nil {
+		return "", fmt.Errorf("range-diff log: %w", err)
+	}
+	logOut := strings.TrimSpace(logRes.Stdout)
+	if logOut == "" {
+		return "", nil
+	}
+	var out strings.Builder
+	for i, line := range strings.Split(logOut, "\n") {
+		if line == "" {
+			continue
+		}
+		sha, subj, _ := strings.Cut(line, " ")
+		n := i + 1
+		if addedSide {
+			fmt.Fprintf(&out, "%d:  -------- > %d:  %s %s\n", n, n, sha, subj)
+		} else {
+			fmt.Fprintf(&out, "%d:  %s %s < %d:  --------\n", n, sha, subj, n)
+		}
+		diffRes, err := ExecGit(workdir, []string{"show", "--no-color", "--format=", sha})
+		if err != nil {
+			continue
+		}
+		for _, dl := range strings.Split(strings.TrimRight(diffRes.Stdout, "\n"), "\n") {
+			out.WriteString("    ")
+			out.WriteString(dl)
+			out.WriteByte('\n')
+		}
+	}
+	return out.String(), nil
 }
 
 // PatchesEqual uses range-diff to check if two patch series have identical content.

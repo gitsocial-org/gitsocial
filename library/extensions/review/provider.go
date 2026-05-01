@@ -89,6 +89,8 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 		result = append(result, drNotifs...)
 	}
 
+	result = append(result, getBranchStateNotifications(workspaceURL, userEmail, forks)...)
+
 	if filter.Limit > 0 && len(result) > filter.Limit {
 		result = result[:filter.Limit]
 	}
@@ -124,7 +126,8 @@ func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error)
 	if err != nil {
 		drCount = 0
 	}
-	return forkCount + fbCount + rrCount + scCount + drCount, nil
+	bsCount := len(getBranchStateNotifications(workspaceURL, userEmail, forks))
+	return forkCount + fbCount + rrCount + scCount + drCount + bsCount, nil
 }
 
 // getForkPRNotifications returns notifications for PRs created on fork repos targeting the workspace.

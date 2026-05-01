@@ -274,6 +274,7 @@ type View interface {
 
 **Review extension:**
 - `review_items(repo_url, hash, branch, type, state, base, base_tip, head, head_tip, depends_on, closes, reviewers, pull_request_*, commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)` - PK: `(repo_url, hash, branch)`
+- `review_branch_observations(repo_url, branch, tip, branch_exists, observed_at)` - PK: `(repo_url, branch)` — transient cache of the live remote tip for every branch any open PR's head or base points at, across the workspace and registered forks. Refreshed by `RefreshOpenPRBranches` after fetch; consumed by the `head-advanced` / `head-deleted` / `base-advanced` / `base-deleted` notifications.
 
 **Versioning:** `core_commits.edits` stores raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical()` / `cache.GetLatestVersion()`.
 

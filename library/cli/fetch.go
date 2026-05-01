@@ -192,6 +192,7 @@ func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.
 	extraProcessors := append(pm.Processors(), review.Processors()...)
 	extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 	opts.ExtraProcessors = extraProcessors
+	opts.ExtraHooks = review.PostFetchHooks()
 	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 	forkProcessors := append(review.Processors(), pm.Processors()...)
 	forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())

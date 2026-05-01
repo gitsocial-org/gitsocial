@@ -35,6 +35,7 @@ type FetchOptions struct {
 	Parallel         int
 	FetchAllBranches bool
 	ExtraProcessors  []fetch.CommitProcessor
+	ExtraHooks       []fetch.PostFetchHook
 	OnProgress       func(repoURL string, processed, total int)
 }
 
@@ -88,7 +89,11 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
 	if len(opts.ExtraProcessors) > 0 {
 		processors = append(processors, opts.ExtraProcessors...)
 	}
-	coreResult := fetch.FetchAll(workdir, cacheDir, coreOpts, repos, processors, socialHooks())
+	hooks := socialHooks()
+	if len(opts.ExtraHooks) > 0 {
+		hooks = append(hooks, opts.ExtraHooks...)
+	}
+	coreResult := fetch.FetchAll(workdir, cacheDir, coreOpts, repos, processors, hooks)
 	return convertResult(coreResult)
 }
 

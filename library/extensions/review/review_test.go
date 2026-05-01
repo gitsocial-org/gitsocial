@@ -506,8 +506,9 @@ func TestMergeOperations(t *testing.T) {
 	t.Run("MergePR_remoteHead", func(t *testing.T) {
 		dir := initTestRepo(t)
 		res := CreatePR(dir, "Remote head PR", "", CreatePROptions{
-			Base: "#branch:main",
-			Head: "https://github.com/remote/repo#branch:feature",
+			Base:                 "#branch:main",
+			Head:                 "https://github.com/remote/repo#branch:feature",
+			AllowUnpublishedHead: true, // remote URL intentionally unreachable
 		})
 		if !res.Success {
 			t.Fatalf("CreatePR() failed: %s", res.Error.Message)
@@ -516,8 +517,8 @@ func TestMergeOperations(t *testing.T) {
 		if mergeRes.Success {
 			t.Error("should fail when cannot fetch remote head")
 		}
-		if mergeRes.Error.Code != "FETCH_FAILED" {
-			t.Errorf("Error.Code = %q, want FETCH_FAILED", mergeRes.Error.Code)
+		if mergeRes.Error.Code != "HEAD_NOT_FOUND" {
+			t.Errorf("Error.Code = %q, want HEAD_NOT_FOUND", mergeRes.Error.Code)
 		}
 	})
 }

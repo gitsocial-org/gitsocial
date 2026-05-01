@@ -152,7 +152,7 @@ func newReviewPRCmd() *cobra.Command {
 
 func newReviewPRCreateCmd() *cobra.Command {
 	var base, head, dependsOnStr, closesStr, reviewersStr string
-	var draft, stack bool
+	var draft, stack, allowUnpublished bool
 
 	cmd := &cobra.Command{
 		Use:   "create <subject>",
@@ -194,10 +194,22 @@ func newReviewPRCreateCmd() *cobra.Command {
 				}
 			}
 
+			// Warn when local head has unpushed commits — those won't be in the PR.
+			if head != "" && !cfg.JSONOutput {
+				headParsed := protocol.ParseRef(protocol.LocalizeRef(protocol.EnsureBranchRef(head), gitmsg.ResolveRepoURL(cfg.WorkDir)))
+				if headParsed.Repository == "" && headParsed.Value != "" {
+					if unpushed, err := git.GetUnpushedCommits(cfg.WorkDir, headParsed.Value); err == nil && len(unpushed) > 0 {
+						fmt.Printf("warning: local %s is %d commit(s) ahead of origin — those commits won't be in the PR until you push.\n",
+							headParsed.Value, len(unpushed))
+					}
+				}
+			}
+
 			opts := review.CreatePROptions{
-				Base:  base,
-				Head:  head,
-				Draft: draft,
+				Base:                 base,
+				Head:                 head,
+				Draft:                draft,
+				AllowUnpublishedHead: allowUnpublished,
 			}
 			if dependsOnStr != "" {
 				opts.DependsOn = splitCSV(dependsOnStr)
@@ -232,6 +244,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated)")
 	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer email addresses (comma-separated)")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as a draft pull request")
+	cmd.Flags().BoolVar(&allowUnpublished, "allow-unpublished-head", false, "Allow creation when head branch is not resolvable on origin")
 
 	return cmd
 }
@@ -1044,11 +1057,15 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 	}
 	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(pr.Author.Name, pr.Author.Email, pr.Repository, protocol.ParseRef(pr.ID).Value))
 	fmt.Printf("Created: %s\n", pr.Timestamp.Format(time.RFC3339))
+	var observation *review.PRObservation
+	if pr.State == review.PRStateOpen {
+		observation = review.ObserveLivePR(workdir, pr)
+	}
 	if pr.Base != "" {
-		fmt.Printf("Base: %s\n", pr.Base)
+		fmt.Printf("Base: %s%s\n", pr.Base, formatTipStaleMarker("base", pr.BaseTip, observation))
 	}
 	if pr.Head != "" {
-		fmt.Printf("Head: %s\n", pr.Head)
+		fmt.Printf("Head: %s%s\n", pr.Head, formatTipStaleMarker("head", pr.HeadTip, observation))
 	}
 	// Fork info
 	headParsed := protocol.ParseRef(pr.Head)
@@ -1111,6 +1128,33 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 		fmt.Println()
 		fmt.Println(pr.Body)
 	}
+}
+
+// formatTipStaleMarker returns " ⚠ ..." text when origin's observed tip on
+// the given side ("head"/"base") differs from the PR's stored tip, or when
+// the branch is missing on origin. Returns empty when in sync or no
+// observation has been recorded.
+func formatTipStaleMarker(side, storedTip string, obs *review.PRObservation) string {
+	if obs == nil {
+		return ""
+	}
+	var exists bool
+	var observedTip string
+	switch side {
+	case "head":
+		exists, observedTip = obs.HeadExists, obs.HeadTip
+	case "base":
+		exists, observedTip = obs.BaseExists, obs.BaseTip
+	default:
+		return ""
+	}
+	if !exists {
+		return "  ⚠ deleted on origin"
+	}
+	if observedTip == "" || observedTip == storedTip {
+		return ""
+	}
+	return "  ⚠ updated to #" + observedTip + " (run `pr update`)"
 }
 
 func printVersionAwareReview(r review.VersionAwareReview) {

@@ -23,7 +23,19 @@ func TestMain(m *testing.M) {
 	git.ExecGit(dir, []string{"config", "user.email", "test@test.com"})
 	git.ExecGit(dir, []string{"config", "user.name", "Test User"})
 	git.CreateCommit(dir, git.CommitOptions{Message: "Initial commit", AllowEmpty: true})
+	// Pre-create a `feature` branch so tests using `Head: "feature"` resolve to
+	// a real tip without needing per-test branch setup. Tests exercising
+	// other branch names create them inline.
+	git.ExecGit(dir, []string{"branch", "feature"})
 	git.ExecGit(dir, []string{"remote", "add", "origin", "https://github.com/test/repo.git"})
+	// Plant remote tracking refs for main/feature to mirror the post-fetch
+	// state of a real workspace. Branch observation tests rely on these
+	// existing so origin/main isn't reported as "deleted".
+	mainTip, _ := git.ReadRef(dir, "main")
+	if mainTip != "" {
+		_ = git.WriteRef(dir, "refs/remotes/origin/main", mainTip)
+		_ = git.WriteRef(dir, "refs/remotes/origin/feature", mainTip)
+	}
 	repoTemplate = dir
 
 	cacheDir, _ := os.MkdirTemp("", "review-test-cache-*")

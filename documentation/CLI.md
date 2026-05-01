@@ -398,6 +398,7 @@ gitsocial review pr create "Fix bug" --closes "#commit:abc123@gitmsg/pm"
 gitsocial review pr create "Fix bug" --reviewers alice@x.com,bob@x.com
 gitsocial review pr create "Add routes" --depends-on "#commit:abc123@gitmsg/review"  # Stacked PR
 gitsocial review pr create "Add routes" --base feature/auth --stack               # Auto-detect stack parent
+gitsocial review pr create "WIP" --allow-unpublished-head                        # Skip head-resolvable check
 gitsocial review pr create - < pr-description.md               # Read from stdin
 gitsocial review pr list                                       # List open PRs
 gitsocial review pr list --state merged                        # Filter by state
@@ -421,9 +422,14 @@ gitsocial review pr sync-stack <ref>                           # Update branch t
 ```
 
 **Version management:**
-- `pr update` signals "new code ready for review" — captures current base-tip and head-tip as a new version in the edits chain
+- `pr update` signals "new code ready for review" — captures current base-tip and head-tip as a new version in the edits chain. Returns the existing PR unchanged when tips haven't moved (no edit-storm noise on `gitmsg/review`); errors out (`HEAD_UNRESOLVED` / `BASE_UNRESOLVED`) when a branch can no longer be resolved
 - `pr diff` uses `git range-diff` to compare patch series between versions, showing what the author actually changed vs. what was just rebased
 - `pr show --versions` displays a table of all versions with base-tip, head-tip, author, and date
+
+**Branch resolution:**
+- `pr create` resolves tips through `ResolveBranchTip` — it consults a local remote-tracking ref when one of workdir's git remotes points at the PR's repo URL (typical: workspace's origin), otherwise `ls-remote` against the URL. Workspace-scoped PRs additionally fall back to `refs/heads/<branch>` so unpushed work can still be recorded. Refuses (`HEAD_NOT_FOUND`) if the head branch isn't resolvable; pass `--allow-unpublished-head` to override (e.g., for queued-up local PRs that haven't been pushed yet)
+- `pr create` also warns when the local head branch is ahead of origin so unpushed commits aren't accidentally omitted from the PR
+- `pr merge` refuses (`HEAD_NOT_FOUND` / `BASE_NOT_FOUND`) when either branch is missing, instead of silently flipping the PR to `merged` with no actual git merge. The merge always runs through plumbing (`merge-tree` + `commit-tree` + `update-ref`) so the user's working tree is never touched, regardless of strategy or whether they're checked out on the base branch
 
 **Merge strategies:**
 - `ff` (default) — fast-forward if possible, otherwise merge commit

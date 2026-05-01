@@ -15,7 +15,43 @@ func init() {
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN depends_on TEXT`)
 	})
+	// Branch observations table: transient cache of the live remote tip for
+	// each branch that any open PR's head or base points at. Populated by
+	// RefreshOpenPRBranches after fetch; consumed by notifications and the
+	// PR detail view to flag PRs whose stored tips have drifted from
+	// the remote. Keyed by (repo_url, branch) so workspace and fork branches
+	// share the same cache.
+	cache.RegisterMigration(func(db *sql.DB) {
+		_, _ = db.Exec(branchObservationsSchema)
+	})
+	// Migrate from the original per-PR observation schema to the
+	// per-(repo_url, branch) schema. Drop the old table — observations are
+	// transient and the next fetch repopulates the new table from scratch.
+	cache.RegisterMigration(func(db *sql.DB) {
+		var pkCols string
+		_ = db.QueryRow(`
+            SELECT GROUP_CONCAT(name, ',') FROM pragma_table_info('review_branch_observations')
+            WHERE pk > 0 ORDER BY pk`).Scan(&pkCols)
+		if pkCols == "pr_repo_url,pr_hash,pr_branch" {
+			_, _ = db.Exec(`DROP TABLE review_branch_observations`)
+			_, _ = db.Exec(branchObservationsSchema)
+		}
+	})
 }
+
+const branchObservationsSchema = `
+CREATE TABLE IF NOT EXISTS review_branch_observations (
+    repo_url    TEXT NOT NULL,
+    branch      TEXT NOT NULL,
+    tip         TEXT,
+    branch_exists INTEGER NOT NULL DEFAULT 1,
+    observed_at TEXT NOT NULL,
+    PRIMARY KEY (repo_url, branch)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_review_branch_obs_missing
+    ON review_branch_observations(repo_url, branch)
+    WHERE branch_exists = 0;
+`
 
 const schema = `
 -- Extension: Review items (pull requests and feedback)

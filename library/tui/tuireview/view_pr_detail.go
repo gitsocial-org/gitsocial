@@ -43,6 +43,7 @@ type PRDetailView struct {
 	stack          []review.StackEntry
 	behindCount    int
 	versionReviews []review.VersionAwareReview
+	observation    *review.PRObservation
 	confirm        tuicore.ConfirmDialog
 	choice         tuicore.ChoiceDialog
 	sectionList    *tuicore.SectionList
@@ -185,7 +186,13 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 		if stackRes := review.GetStack(prID); stackRes.Success {
 			stack = stackRes.Data
 		}
-		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments, stack: stack}
+		// Branch observation: cache-only here so this hot path stays cheap
+		// (one SQL lookup per side; no `git` invocations). The cache is
+		// populated by the post-fetch hook in RefreshOpenPRBranches; if no
+		// row exists yet, we render no marker and the user picks up the
+		// state on their next `gitsocial fetch`.
+		observation := review.PRObservationFromCache(v.workspaceURL, pr)
+		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments, stack: stack, observation: observation}
 	}
 }
 
@@ -216,6 +223,7 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		v.comments = msg.comments
 		v.stack = msg.stack
+		v.observation = msg.observation
 		prevSelected := v.sectionList.Selected()
 		v.buildSections()
 		if preserveCursor {
@@ -354,6 +362,13 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 							Action:   tuicore.NavPush,
 						}
 					}
+				}
+			case "u":
+				// UpdatePRTips short-circuits to a no-op when nothing has
+				// moved, so this binding stays available for any open
+				// workspace PR without a divergence-detection gate.
+				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
+					return v.doUpdateTips()
 				}
 			case "S":
 				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
@@ -864,6 +879,47 @@ func (v *PRDetailView) doConvertToDraft() tea.Cmd {
 	}
 }
 
+func (v *PRDetailView) doUpdateTips() tea.Cmd {
+	prID := v.pr.ID
+	workdir := v.workdir
+	return func() tea.Msg {
+		result := review.UpdatePRTips(workdir, prID)
+		if !result.Success {
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+		}
+		return PRUpdatedMsg{PR: result.Data}
+	}
+}
+
+// tipStaleMarker returns a `⚠ ...` suffix when the cached observation for the
+// given side ("head" or "base") differs from the PR's stored tip, or when the
+// branch is gone on origin. Empty when in sync or no observation is available.
+func (v *PRDetailView) tipStaleMarker(side, storedTip string) string {
+	if v.observation == nil {
+		return ""
+	}
+	if v.pr == nil || v.pr.State != review.PRStateOpen {
+		return ""
+	}
+	var exists bool
+	var observedTip string
+	switch side {
+	case "head":
+		exists, observedTip = v.observation.HeadExists, v.observation.HeadTip
+	case "base":
+		exists, observedTip = v.observation.BaseExists, v.observation.BaseTip
+	default:
+		return ""
+	}
+	if !exists {
+		return "  " + tuicore.Warning.Render("⚠ deleted on origin")
+	}
+	if observedTip == "" || observedTip == storedTip {
+		return ""
+	}
+	return "  " + tuicore.Warning.Render("⚠ updated to #"+observedTip+" (press u)")
+}
+
 func (v *PRDetailView) doRetract() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -1010,6 +1066,9 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		if pr.BaseTip != "" {
 			baseText += tuicore.Dim.Render(" · #" + pr.BaseTip)
 		}
+		if marker := v.tipStaleMarker("base", pr.BaseTip); marker != "" {
+			baseText += marker
+		}
 		lines = append(lines, selectionBar+styles.Label.Render("Base")+baseText)
 	}
 	if pr.Head != "" {
@@ -1030,6 +1089,9 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		}
 		if pr.HeadTip != "" {
 			headText += tuicore.Dim.Render(" · #" + pr.HeadTip)
+		}
+		if marker := v.tipStaleMarker("head", pr.HeadTip); marker != "" {
+			headText += marker
 		}
 		lines = append(lines, selectionBar+styles.Label.Render("Head")+headText)
 	}
@@ -1398,6 +1460,7 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "D", Label: "draft", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "S", Label: "sync", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "u", Label: "update tips", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "i", Label: "interdiff", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: tuicore.RawViewHandler},
@@ -1418,6 +1481,7 @@ type prDetailLoadedMsg struct {
 	reviewComments map[int][]social.Post
 	comments       []social.Post
 	stack          []review.StackEntry
+	observation    *review.PRObservation
 }
 
 type prDetailDiffMsg struct {
