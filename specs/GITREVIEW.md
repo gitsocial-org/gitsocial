@@ -24,8 +24,8 @@ Fields (in header order):
 - `head-tip`: Head branch commit hash at time of creation or update, 12 characters (OPTIONAL)
 - `depends-on`: MAY contain comma-separated pull request references that this PR depends on (OPTIONAL)
 - `closes`: MAY contain comma-separated issue references to close on merge
-- `merge-base`: Common ancestor commit hash, 12 characters (OPTIONAL, only on `state="merged"` edits)
-- `merge-head`: Head branch commit hash at merge time, 12 characters (OPTIONAL, only on `state="merged"` edits)
+- `merge-base`: Common ancestor commit hash, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
+- `merge-head`: Head branch commit hash at merge time, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
 - `reviewers`: MAY contain comma-separated reviewer email addresses
 - `labels`: MAY contain comma-separated scoped values (e.g. `labels="kind/bug,priority/high"`) (OPTIONAL, core field)
 
@@ -65,7 +65,7 @@ Pull requests MAY be edited or retracted using core versioning (GITMSG.md Sectio
 
 Implementations SHOULD include `base-tip` and `head-tip` when creating or editing a pull request. These fields capture the commit hashes (12 characters) that the `base` and `head` branches point to at the time of the commit. When a pull request's code is updated (e.g., after rebase or new commits), implementations SHOULD create an edit with updated `base-tip` and `head-tip` values. The edits chain serves as a version history of the pull request's code state, enabling implementations to compare any two versions via range-diff.
 
-When transitioning to `state="merged"`, implementations SHOULD include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. Implementations MAY use these fields to reconstruct the original diff and commit range after the head branch has been merged into base.
+When transitioning to `state="merged"`, implementations MUST include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. These two fields are the only durable record of the merged commit range — `head-tip` and `base-tip` describe the live branches at edit time, but the head branch may be deleted afterward, leaving `merge-base..merge-head` as the sole reconstruction path for the diff. Implementations MUST refuse to record a `state="merged"` edit when either field cannot be computed (e.g., the head branch is missing or the merge-base is unreachable).
 
 When merging a cross-repository pull request (fork PR), implementations SHOULD first copy the pull request to the upstream review branch with a `GitMsg-Ref:` trailer preserving the original author's identity. The merge edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
 
@@ -152,8 +152,8 @@ Configuration MAY include: `require-review` (boolean, default `false`).
 | `closes` | comma-separated issue references |
 | `base-tip` | 12-character hash |
 | `head-tip` | 12-character hash |
-| `merge-base` | 12-character hash |
-| `merge-head` | 12-character hash |
+| `merge-base` | 12-character hash; required when `state="merged"`, prohibited otherwise |
+| `merge-head` | 12-character hash; required when `state="merged"`, prohibited otherwise |
 | `suggestion` | `true` |
 
 ## Appendix: Examples
