@@ -49,7 +49,7 @@ codeberg_delete_lfs() {
   local csrf
   csrf=$(printf '%s\n' "$html" \
     | grep -oE 'name="_csrf" value="[^"]*"' \
-    | head -1 | sed 's/.*value="//; s/".*//')
+    | head -1 | sed 's/.*value="//; s/".*//') || true
   if [ -z "$csrf" ]; then
     echo "warning: no CSRF token in settings/lfs; skipping cleanup on $host" >&2
     return 0
