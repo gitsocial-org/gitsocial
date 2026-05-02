@@ -413,7 +413,8 @@ func (p *NavPanel) View() string {
 
 	selectedStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(TextPrimary)).
-		Background(lipgloss.Color(BgSelected))
+		Background(lipgloss.Color(BgSelected)).
+		Bold(true)
 	normalStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(TextNormal))
 

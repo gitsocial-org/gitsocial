@@ -32,7 +32,7 @@ const (
 
 // Backgrounds
 const (
-	BgSelected = "236"
+	BgSelected = "240"
 	BgFooter   = "236"
 )
 
