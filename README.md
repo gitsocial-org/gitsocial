@@ -114,7 +114,7 @@ See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for version tracking, me
 
 ## Identity & Verification
 
-Identity and verification work without a central authority. The verified badge (⚿) requires the commit's signing key to be bound to the author email via one of three [external attestation sources](specs/GITMSG.md#32-identity-verification): a forge GPG endpoint, a forge commits API (which also covers SSH signatures), or DNS via `/.well-known/gitmsg-id.json`.
+Identity and verification work without a central authority. The verified badge (⚿) requires the commit's signing key to be bound to the author email via one of three [external attestation sources](documentation/IDENTITY.md#sources): a forge GPG endpoint, a forge commits API (which also covers SSH signatures), or DNS via `/.well-known/gitmsg-id.json`.
 
 ## Documentation
 
