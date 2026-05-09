@@ -202,16 +202,22 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		}
 	}
 
-	if _, err := tx.Exec(`DELETE FROM core_fts
+	// Refresh the canonical's FTS row to point at the latest edit's content.
+	// FTS5 is in contentless mode keyed on core_commits.rowid; resolve the
+	// canonical's rowid once, then DELETE+INSERT (contentless tables don't
+	// support UPDATE).
+	var canonicalRowid int64
+	if err := tx.QueryRow(`SELECT rowid FROM core_commits
 		WHERE repo_url = ? AND hash = ? AND branch = ?`,
 		canonicalRepoURL, canonicalHash, canonicalBranch,
-	); err != nil {
+	).Scan(&canonicalRowid); err != nil {
+		return fmt.Errorf("apply edit: read canonical rowid: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM core_fts WHERE rowid = ?`, canonicalRowid); err != nil {
 		return fmt.Errorf("apply edit: delete canonical fts: %w", err)
 	}
-	if _, err := tx.Exec(`INSERT INTO core_fts (repo_url, hash, branch, content, author)
-		VALUES (?, ?, ?, ?, ?)`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-		editMessage, resolvedAuthorName+" "+resolvedAuthorEmail,
+	if _, err := tx.Exec(`INSERT INTO core_fts(rowid, content, author) VALUES (?, ?, ?)`,
+		canonicalRowid, editMessage, resolvedAuthorName+" "+resolvedAuthorEmail,
 	); err != nil {
 		return fmt.Errorf("apply edit: insert canonical fts: %w", err)
 	}

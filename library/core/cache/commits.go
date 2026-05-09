@@ -112,7 +112,7 @@ func insertCommitsTxn(commits []Commit) error {
 	}
 	defer versionStmt.Close()
 
-	ftsStmt, err := tx.Prepare(`INSERT INTO core_fts (repo_url, hash, branch, content, author) VALUES (?, ?, ?, ?, ?)`)
+	ftsStmt, err := tx.Prepare(`INSERT INTO core_fts(rowid, content, author) VALUES (?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare fts statement: %w", err)
 	}
@@ -177,7 +177,8 @@ func insertCommitsTxn(commits []Commit) error {
 		// signer_key: empty string = signed-extraction confirmed-unsigned;
 		// NULL = unknown (legacy row, or git lookup failed at insert time).
 		// Backfill only retries NULL rows.
-		if _, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit); err != nil {
+		commitResult, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit)
+		if err != nil {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
 
@@ -228,10 +229,15 @@ func insertCommitsTxn(commits []Commit) error {
 
 		// Insert into FTS5 for non-edit commits. Edit commits don't get their
 		// own FTS row; their content reaches FTS via the canonical's row,
-		// which applyEditToCanonical refreshes below.
+		// which applyEditToCanonical refreshes below. Skip when the commit
+		// row already existed (INSERT OR IGNORE no-op'd, RowsAffected == 0)
+		// — the FTS row is already there. This is what fixes the historical
+		// 3× FTS-row bloat from re-fetches.
 		if isEditCommit == 0 {
-			_, _ = ftsStmt.Exec(repoURL, c.Hash, branch,
-				c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
+			if affected, _ := commitResult.RowsAffected(); affected == 1 {
+				rowid, _ := commitResult.LastInsertId()
+				_, _ = ftsStmt.Exec(rowid, c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
+			}
 		}
 	}
 
@@ -480,7 +486,9 @@ func ResetRepositoryData(repoURL string) error {
 			"core_commits_version", "core_mentions",
 			"core_notification_reads", "core_labels", "core_commits",
 		}
-		_, _ = db.Exec(`DELETE FROM core_fts WHERE repo_url = ?`, repoURL)
+		// Delete FTS rows by rowid via subquery on core_commits — must run
+		// before core_commits is deleted below, otherwise the subquery is empty.
+		_, _ = db.Exec(`DELETE FROM core_fts WHERE rowid IN (SELECT rowid FROM core_commits WHERE repo_url = ?)`, repoURL)
 		for _, table := range tables {
 			if _, err := db.Exec(`DELETE FROM `+table+` WHERE repo_url = ?`, repoURL); err != nil {
 				// Table may not exist if extension not loaded — skip

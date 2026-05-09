@@ -339,7 +339,7 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	// Text search: use FTS5 index when available, fall back to LIKE
 	if q.TextSearch != "" {
 		if ftsAvailable(db) {
-			where = append(where, "r.hash IN (SELECT hash FROM core_fts WHERE core_fts MATCH ?)")
+			where = append(where, "r.rowid IN (SELECT rowid FROM core_fts WHERE core_fts MATCH ?)")
 			args = append(args, ftsQuery(q.TextSearch))
 		} else {
 			where = append(where, "(r.effective_message LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")
@@ -351,7 +351,7 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		// FTS5 has the author column already indexed; the LIKE fallback only
 		// runs when FTS5 isn't compiled in (e.g., minimal SQLite builds).
 		if ftsAvailable(db) {
-			where = append(where, "r.hash IN (SELECT hash FROM core_fts WHERE core_fts MATCH ?)")
+			where = append(where, "r.rowid IN (SELECT rowid FROM core_fts WHERE core_fts MATCH ?)")
 			args = append(args, "author:"+ftsQuery(q.AuthorFilter))
 		} else {
 			where = append(where, "(r.effective_author_name LIKE '%' || ? || '%' COLLATE NOCASE OR r.effective_author_email LIKE '%' || ? || '%' COLLATE NOCASE)")

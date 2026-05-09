@@ -70,7 +70,7 @@ func RegisterMigration(fn func(*sql.DB)) {
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 2
+const schemaVersion = 3
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -166,10 +166,14 @@ CREATE TABLE IF NOT EXISTS core_labels (
 );
 CREATE INDEX IF NOT EXISTS idx_core_labels_label ON core_labels(label);
 
--- Core: Full-text search index
+-- Core: Full-text search index. Contentless mode (content='') drops the
+-- ~46% of cache.db that the default storage mode wastes duplicating
+-- core_commits.message into core_fts_content. contentless_delete=1 lets us
+-- DELETE by rowid alone without re-supplying the original indexed strings.
+-- Rows are keyed on core_commits.rowid; callers JOIN on rowid.
 CREATE VIRTUAL TABLE IF NOT EXISTS core_fts USING fts5(
-    repo_url UNINDEXED, hash UNINDEXED, branch UNINDEXED,
-    content, author
+    content, author,
+    content='', contentless_delete=1
 );
 
 -- Core: Repository tracking
