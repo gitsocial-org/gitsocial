@@ -44,7 +44,7 @@
 | `ctrl+d / pgdown` | Half-page down |
 | `ctrl+u / pgup` | Half-page up |
 | `enter` | Open detail |
-| `esc / b` | Back (or exit detail) |
+| `esc` | Back (or exit detail) |
 | `left` | Previous version |
 | `right` | Next version |
 
@@ -126,7 +126,7 @@
 | `e` | Edit |
 | `X` | Retract |
 | `h` | History |
-| `v` | Raw |
+| `v` | Raw (full commit message) |
 | `r` | Repository |
 | `/` | Search |
 | `n` | Next match |
@@ -151,7 +151,7 @@
 | `e` | Edit |
 | `X` | Retract |
 | `h` | History |
-| `v` | Raw |
+| `v` | Raw (full commit message) |
 | `r` | Repository |
 | `/` | Search |
 | `n` | Next match |
@@ -214,7 +214,7 @@
 
 | Key | Action |
 |-----|--------|
-| `a` | Add repository |
+| `a` | Add repository (`url [branch \| *]`) |
 | `x` | Remove repository |
 | `j` | Down |
 | `k` | Up |
@@ -250,6 +250,7 @@
 |-----|--------|
 | `n` | Quick create |
 | `N` | Full create |
+| `F` | Forks |
 | `x` | Collapse col |
 | `s` | Swimlanes |
 | `r` | Refresh |
@@ -270,7 +271,8 @@
 | CardList navigation | (see Shared Navigation) |
 | `n` | Quick create |
 | `N` | New |
-| `F` | Filter |
+| `f` | Filter |
+| `F` | Forks |
 | `m` | My issues |
 | `r` | Refresh |
 | `p` | Push |
@@ -285,7 +287,9 @@
 | `m` | Milestone |
 | `s` | Sprint |
 | `h` | History |
+| `v` | Raw (full commit message) |
 | `/` | Search |
+| `C` | Close |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
@@ -317,8 +321,9 @@
 | `c` | Comment |
 | `e` | Edit |
 | `h` | History |
+| `v` | Raw (full commit message) |
 | `/` | Search |
-| `D` | Close |
+| `C` | Close |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
@@ -350,6 +355,7 @@
 | `c` | Comment |
 | `e` | Edit |
 | `h` | History |
+| `v` | Raw (full commit message) |
 | `/` | Search |
 | `X` | Retract |
 | `left` | Prev |
@@ -391,17 +397,22 @@
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
 | `d` | Diff |
+| `i` | Interdiff (range-diff between versions) |
 | `r` | Review |
 | `c` | Comment |
-| `M` | Merge |
+| `M` | Merge (strategy picker) |
 | `C` | Close |
+| `S` | Sync branch (rebase/merge) |
 | `e` | Edit |
 | `h` | History |
+| `v` | Raw (full commit message) |
 | `X` | Retract |
 | `A` | Apply suggestion |
 | `/` | Search |
 | `left` | Prev |
 | `right` | Next |
+| `[` | Previous PR in stack |
+| `]` | Next PR in stack |
 | `p` | Push |
 
 ### PR History
@@ -409,7 +420,17 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
-| `/` | Search |
+
+### Interdiff
+
+| Key | Action |
+|-----|--------|
+| `j / down` | Scroll down |
+| `k / up` | Scroll up |
+| `g / home` | Jump to top |
+| `G / end` | Jump to bottom |
+| `[` | Previous version pair |
+| `]` | Next version pair |
 
 ### Files Changed
 
@@ -417,28 +438,20 @@
 |-----|--------|
 | `c` | Comment |
 | `enter` | Expand/collapse |
-| `v` | Split/unified |
+| `v` | View mode (unified → split → fullscreen → unified) |
 | `tab` | Next file |
 | `[/]` | Prev/next hunk |
 | `n/N` | Next/prev comment |
 | `f` | Fold hunk |
 | `/` | Search |
 | `e` | Expand context |
+| `E` | Expand/collapse all files |
 | `j` | Scroll down |
 | `k` | Scroll up |
 | `ctrl+d` | Half-page down |
 | `ctrl+u` | Half-page up |
-| `esc` | Exit mode |
+| `esc` | Exit fullscreen / back |
 | `p` | Push |
-
-### Forks
-
-| Key | Action |
-|-----|--------|
-| `a` | Add fork |
-| `D` | Remove fork |
-| `enter` | Open repo |
-| `/` | Search |
 
 ---
 
@@ -452,23 +465,51 @@
 | `N` | New |
 | `r` | Refresh |
 | `p` | Push |
+| `L` | Push LFS |
 
 ### Release Detail
 
 | Key | Action |
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
+| `s` | SBOM |
 | `e` | Edit |
 | `c` | Comment |
+| `v` | Raw (full commit message) |
 | `/` | Search |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
+| `L` | Push LFS |
+
+### Release SBOM
+
+| Key | Action |
+|-----|--------|
+| SectionList navigation | (see Shared Navigation) |
+| `/` | Search |
 
 ---
 
 ## Core Views
+
+### Commit Diff
+
+| Key | Action |
+|-----|--------|
+| `enter` | Expand/collapse |
+| `v` | View mode (unified → split → fullscreen → unified) |
+| `tab` | Next file |
+| `[/]` | Prev/next hunk |
+| `f` | Fold hunk |
+| `E` | Expand/collapse all files |
+| `/` | Search |
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `esc` | Exit fullscreen / back |
 
 ### Analytics
 
@@ -509,26 +550,67 @@
 | `p` | Push |
 | `/` | Search |
 
+### Forks
+
+| Key | Action |
+|-----|--------|
+| `a` | Add fork |
+| `x` | Remove fork |
+| `v` | Sort (name / fetched / commits) |
+| `/` | Search (live filter) |
+| `enter` | Open repo |
+| `j/k` | Up / down |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `home` | First |
+| `end` | Last |
+
+### Identity
+
+Read-only status view. Displays your git signing configuration and the cached verification status for your `(signing key, email)` binding.
+
 ### Cache
 
 | Key | Action |
 |-----|--------|
-| `c` | Clear db |
-| `x` | Clear repos |
-| `D` | Clear all |
+| `x` | Delete selected |
+| `C` | Clear all |
+| `D` | Clear db |
+| `X` | Clear repos |
+| `F` | Clear forks |
 | `r` | Refresh |
+| `/` | Search |
+
+### Help
+
+| Key | Action |
+|-----|--------|
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `home` | Top |
+| `end` | Bottom |
 | `/` | Search |
 
 ---
 
 ## Mouse Support
 
-All views support mouse wheel scrolling and click-to-select/activate. CardList and SectionList views provide full mouse support including link zone clicking via the AnchorCollector system. Simple list views (List Picker, List Repos, Repository Lists, PM Config, Settings, Config) support wheel scroll and click-to-select/activate via zone marking. Board view supports column header clicks and issue selection. Cache view is action-based with no cursor, so mouse is not applicable.
+All views support mouse wheel scrolling and click-to-select/activate. CardList and SectionList views provide full mouse support including link zone clicking via the AnchorCollector system. Simple list views (List Picker, List Repos, Repository Lists, PM Config, Settings, Config) support wheel scroll and click-to-select/activate via zone marking. Board view supports column header clicks and issue selection. Cache view supports cursor selection for per-item deletion.
 
 ## Confirmation Dialogs
 
-Retract, delete, merge, close, and remove actions show a `[y/n]` confirmation prompt:
+Retract, delete, close, and remove actions show a `[y/n]` confirmation prompt:
 - `y` / `Y` - Confirm action
 - `n` / `N` / `esc` - Cancel
 
 All confirmations use the shared `ConfirmDialog` component.
+
+## Choice Dialogs
+
+Merge and sync actions show a multi-choice prompt with labeled keys:
+- Merge: `[f]ast-forward  [s]quash  [r]ebase  [m]erge  esc`
+- Sync: `[r]ebase  [m]erge  esc`
+
+Choice dialogs use the shared `ChoiceDialog` component.

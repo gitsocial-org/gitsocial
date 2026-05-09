@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-//go:generate cp ../../../../documentation/TUI-HELP.md help.md
-//go:generate cp ../../../../documentation/TUI-KEYS.md help_keys.md
+//go:generate cp ../../../documentation/TUI-HELP.md help.md
+//go:generate cp ../../../documentation/TUI-KEYS.md help_keys.md
 
 //go:embed help.md
 var helpContent string
