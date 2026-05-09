@@ -369,7 +369,9 @@ type bgSyncCompletedMsg struct{}
 // initWorkspace syncs the workspace to cache at startup. The quick pass
 // (most-recent quickPassLimit commits + extension refs) runs synchronously so
 // the UI has data to render. The remaining history is processed in a
-// background goroutine and streamed to Update via m.bgSyncCh.
+// background goroutine, followed by identity backfill (signer-key extraction
+// + binding verification — slow on a fresh cache because of forge HTTPS).
+// All bg work streams progress + completion via m.bgSyncCh.
 func (m Model) initWorkspace() tea.Cmd {
 	workdir := m.workdir
 	ch := m.bgSyncCh
@@ -389,6 +391,7 @@ func (m Model) initWorkspace() tea.Cmd {
 			if err != nil {
 				log.Debug("workspace background sync failed", "error", err)
 			}
+			fetch.BackfillWorkspaceIdentity(workdir)
 			ch <- bgSyncCompletedMsg{}
 		}()
 		return tuicore.WorkspaceInitializedMsg{}
@@ -508,6 +511,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tuicore.WorkspaceInitializedMsg:
 		m.host.SetSyncing(false)
+		// Quick pass is done; the timeline can render. Background goroutine
+		// continues with older history + identity verification — flag that so
+		// the footer shows a subtle indicator instead of going silent.
+		m.host.State().BackgroundSyncing = true
 		return m, tea.Batch(
 			m.host.RefreshView(),
 			m.loadInitialStatus(),
@@ -524,8 +531,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.host.RefreshView(), drainBgSyncCmd(m.bgSyncCh))
 
 	case bgSyncCompletedMsg:
-		// Background history sync done. Final refresh to ensure everything is in sync.
+		// Background history sync + identity backfill done. Final refresh so
+		// verification badges populate; clear the BackgroundSyncing footer flag.
 		m.host.State().IdentityGeneration++
+		m.host.State().BackgroundSyncing = false
 		return m, m.host.RefreshView()
 
 	case tuicore.TriggerFetchMsg:

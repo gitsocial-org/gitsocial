@@ -66,6 +66,13 @@ type State struct {
 	Saving     bool
 	Retracting bool
 
+	// BackgroundSyncing is true while the post-startup background goroutine
+	// is still running history continuation and/or identity backfill. Distinct
+	// from Syncing (which gates the timeline render); this lets the footer
+	// show a subtle indicator that work is still happening after the timeline
+	// has appeared.
+	BackgroundSyncing bool
+
 	// Fetch info (for progress display)
 	FetchRepos int
 	FetchLists int
@@ -190,6 +197,8 @@ func (w *ViewWrapper) Render(content, footer string) string {
 		footer = RenderRetractingFooter(w.ContentWidth())
 	} else if w.state.Message != "" {
 		footer = RenderMessageFooter(w.state.Message, w.state.MessageType, w.ContentWidth())
+	} else if w.state.BackgroundSyncing {
+		footer = RenderBackgroundSyncFooter(w.ContentWidth())
 	}
 	var b strings.Builder
 	b.WriteString(content)

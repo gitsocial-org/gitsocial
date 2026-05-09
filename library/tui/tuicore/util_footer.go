@@ -37,6 +37,13 @@ func RenderSyncingFooter(width int) string {
 	return footerStyle.Width(width).Render(keyStyle.Render("Syncing workspace..."))
 }
 
+// RenderBackgroundSyncFooter renders a dim indicator while the post-startup
+// background goroutine continues processing older commits and verifying
+// identity bindings. The timeline is already interactive at this point.
+func RenderBackgroundSyncFooter(width int) string {
+	return footerStyle.Width(width).Render(Dim.Render("Background sync in progress..."))
+}
+
 // RenderLoadingFooter renders a subtle loading indicator in the footer
 func RenderLoadingFooter(width int) string {
 	return footerStyle.Width(width).Render(Dim.Render("Loading..."))

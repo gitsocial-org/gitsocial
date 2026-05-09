@@ -143,7 +143,13 @@ func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
 	if _, err := cache.ReconcileVersions(); err != nil {
 		log.Debug("workspace sync reconcile failed", "error", err)
 	}
-	backfillRepoSignerKeys(ctx.workdir, ctx.repoURL)
+	// Identity backfill (signer-key extraction + binding verification) used to
+	// run inline here. On a fresh cache it took tens of seconds for moderate
+	// repos (forge HTTPS round-trips dominate) and blocked the TUI's empty
+	// timeline. Callers that want the enrichment now invoke
+	// BackfillWorkspaceIdentity from a background goroutine after the cache is
+	// populated; the timeline renders immediately and verification badges
+	// appear once bindings resolve.
 	var wg sync.WaitGroup
 	for ext, proc := range ctx.procs {
 		ext := ext
@@ -159,14 +165,31 @@ func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
 }
 
 // SyncWorkspace runs the full sync — quick pass plus background continuation
-// inline. Use this from non-interactive callers (CLI, tests) that should
-// only return when the cache is fully populated. On a repo where there's
-// nothing new since the last full sync, returns immediately.
+// plus identity backfill inline. Use this from non-interactive callers (CLI,
+// tests) that should only return when the cache is fully populated. On a repo
+// where there's nothing new since the last full sync, returns immediately.
 func SyncWorkspace(workdir string) error {
 	if err := SyncWorkspaceQuick(workdir); err != nil {
 		return err
 	}
-	return SyncWorkspaceContinue(workdir, nil)
+	if err := SyncWorkspaceContinue(workdir, nil); err != nil {
+		return err
+	}
+	BackfillWorkspaceIdentity(workdir)
+	return nil
+}
+
+// BackfillWorkspaceIdentity runs the slow identity work for the workspace —
+// signer-key extraction via git log and binding verification via forge HTTPS
+// calls. Used to live inline in processCommitBatch but blocked the TUI on a
+// fresh cache (the forge round-trips dominate); interactive callers (TUI) now
+// run this in a background goroutine after the timeline has already rendered.
+func BackfillWorkspaceIdentity(workdir string) {
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+	if repoURL == "" {
+		return
+	}
+	backfillRepoSignerKeys(workdir, repoURL)
 }
 
 // SyncWorkspaceQuick processes the most recent quickPassLimit commits and
