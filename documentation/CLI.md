@@ -3,16 +3,15 @@
 ## Table of Contents
 
 - [Command Structure](#command-structure)
-- [Core Commands](#core-commands)
-- [Social Extension](#social-extension)
-- [Project Management](#project-management-gitsocial-pm)
-- [Code Review](#code-review-gitsocial-review)
-- [Release Extension](#release-extension-gitsocial-release)
+- [Extensions](#extensions)
 - [Import](#import-gitsocial-import)
+- [Core Commands](#core-commands)
 - [Reference Format](#reference-format)
 - [Exit Codes](#exit-codes)
 - [Environment Variables](#environment-variables)
 - [Scripting](#scripting)
+
+This document covers the cross-cutting CLI: global flags, core commands shared across extensions, import, reference format, exit codes, env vars, and scripting. **Per-extension commands live in each extension's doc** — see [Extensions](#extensions).
 
 ---
 
@@ -31,6 +30,109 @@ gitsocial [--json] <command> [subcommand] [args...] [flags]
 - `--help` - Show help
 
 **Extensions:** `social`, `pm`, `release`, `review`
+
+---
+
+## Extensions
+
+Each extension owns its own command surface. Use `--help` for authoritative flag-level detail; the per-extension docs walk through concepts and workflows.
+
+| Extension | Doc | Top-level commands |
+|-----------|-----|--------------------|
+| Social | [SOCIAL.md](SOCIAL.md) | `social init`, `status`, `config`, `post`, `comment`, `repost`, `quote`, `edit`, `retract`, `timeline`, `fetch`, `list`, `followers` |
+| PM | [PM.md](PM.md) | `pm init`, `status`, `config`, `issue`, `milestone`, `sprint`, `board` |
+| Review | [REVIEW.md](REVIEW.md) | `review init`, `status`, `config`, `pr`, `feedback`, `fork` |
+| Release | [RELEASE.md](RELEASE.md) | `release init`, `status`, `config`, `create`, `edit`, `retract`, `list`, `show`, `artifacts`, `sbom` |
+
+---
+
+## Import (gitsocial import)
+
+Import data from external platforms (GitHub, GitLab, Gitea, etc.) into GitSocial extensions. Auto-detects host type from URL using `protocol.DetectHost()`.
+
+When no URL is provided, the origin remote of the current repository is used. When no subcommand is given, imports everything (same as `import all`).
+
+### Usage
+
+```
+gitsocial import [url]                  # Import all from URL or origin remote
+gitsocial import all [url]              # Everything in dependency order (pm → release → review → social)
+gitsocial import pm [url]               # Milestones + issues
+gitsocial import release [url]          # Releases + artifact metadata
+gitsocial import review [url]           # Fork registrations + pull/merge requests
+gitsocial import social [url]           # Discussions/posts + comments (GitHub only)
+```
+
+### URL Formats
+
+Any format is accepted — normalized automatically. When omitted, origin remote is used.
+
+```
+gitsocial import pm                              # uses origin remote
+gitsocial import pm https://github.com/org/repo
+gitsocial import pm git@github.com:org/repo.git
+gitsocial import pm github.com/org/repo
+```
+
+### Flags
+
+```
+gitsocial import [url]
+  -n, --limit int          Max items per type (default: 50)
+      --since string       Only import items after date (YYYY-MM-DD)
+      --dry-run            Print what would be imported without creating commits
+      --map-file string    Path to ID mapping file (default: ~/.cache/gitsocial/imports/<repo>.json)
+      --labels string      Label mapping: auto, raw, skip (default: auto)
+      --skip-bots          Skip bot-authored items (default: true)
+      --host string        Force host type: github, gitlab, gitea, bitbucket
+      --api-url string     Custom API base URL for self-hosted instances
+      --token string       API token (default: from platform CLI or env)
+      --state string       Filter by state: open, closed, merged, all (default: all)
+      --email-map string   Path to username=email mapping file
+  -v, --verbose            Print each item as it's imported
+```
+
+### Examples
+
+```bash
+# Import everything from origin remote
+gitsocial import
+
+# Import everything from a specific URL
+gitsocial import all https://github.com/example-org/example
+
+# Import only issues and milestones
+gitsocial import pm https://github.com/example-org/example
+
+# Import only open issues from origin
+gitsocial import pm --state open
+
+# Import releases from GitLab
+gitsocial import release https://gitlab.com/example-org/example
+
+# Self-hosted GitLab with explicit host type
+gitsocial import all https://git.company.com/team/project --host gitlab
+
+# Dry run — see what would be imported
+gitsocial import --dry-run
+
+# Re-run is idempotent (skips already-imported items via map file)
+gitsocial import all https://github.com/example-org/example
+```
+
+### Host Detection
+
+| Domain | Detected As |
+|--------|-------------|
+| `github.com` | GitHub (`gh` CLI) |
+| `gitlab.com`, contains `gitlab` | GitLab (REST API) |
+| `codeberg.org`, contains `gitea` | Gitea (REST API) |
+| `bitbucket.org`, contains `bitbucket` | Bitbucket (REST API) |
+| Unknown | Probes API endpoints, or use `--host` |
+
+### Mapping File
+
+Import writes `~/.cache/gitsocial/imports/<url-slug>.json` to track `{platform}:{type}:{id}` → GitSocial commit hash. Re-running skips already-imported items. Override with `--map-file`.
 
 ---
 
@@ -244,373 +346,6 @@ Generate documentation.
 ```
 gitsocial docs keybindings                     # Generate keybinding docs
 ```
-
----
-
-## Social Extension
-
-```
-gitsocial social init                              # Initialize social extension
-gitsocial social init --branch <name>              # Custom branch
-gitsocial social status                            # Show social status
-gitsocial social config get|set|list               # Manage config
-
-gitsocial social post "Hello world"                # Create post
-gitsocial social post - < message.txt              # Read from stdin
-gitsocial social comment <post-id> "Great idea!"   # Comment on a post
-gitsocial social repost <post-id>                  # Repost
-gitsocial social quote <post-id> "Adding thoughts" # Quote with commentary
-gitsocial social edit <post-id> <new-text>         # Edit post
-gitsocial social retract <post-id>                 # Retract post
-
-gitsocial social timeline                          # View timeline
-gitsocial social timeline --list reading           # From specific list
-gitsocial social timeline --repo workspace         # Current repository only
-gitsocial social timeline --repo <url>             # Specific repository
-gitsocial social timeline --limit 50               # Limit results
-
-gitsocial social fetch                             # Fetch social updates
-gitsocial social fetch --list reading              # Fetch specific list
-gitsocial social fetch <url>                       # Fetch specific repo
-
-gitsocial social list create <id>                  # Create list
-gitsocial social list create <id> --name "Display" # With display name
-gitsocial social list delete <id>                  # Delete list
-gitsocial social list add <id> <url>               # Add repo to list
-gitsocial social list add <id> <url> -b <branch>   # With specific branch
-gitsocial social list add <id> <url> --all-branches # Follow all branches
-gitsocial social list remove <id> <url>            # Remove repo from list
-gitsocial social list show [name]                  # Show list(s)
-gitsocial social list ls                           # List all lists
-gitsocial social list repo <url>                   # Show lists from a repo
-
-gitsocial social followers                         # List followers
-```
-
----
-
-## Project Management (gitsocial pm)
-
-### Setup
-
-```
-gitsocial pm init                                  # Initialize (default: kanban)
-gitsocial pm init --framework scrum                # Choose framework
-gitsocial pm init --branch <name>                  # Custom branch
-gitsocial pm status                                # Show PM status
-gitsocial pm config get|set|list                   # Manage config
-```
-
-Frameworks: `minimal`, `kanban` (default), `scrum`
-
-### Issues
-
-```
-gitsocial pm issue create "Title"                  # Create issue
-gitsocial pm issue create "Title" -l kind/bug,priority/high  # With labels
-gitsocial pm issue create "Title" -a alice@x.com   # With assignee
-gitsocial pm issue create "Title" -d 2024-06-01    # With due date
-gitsocial pm issue create - < issue.txt            # Read from stdin
-gitsocial pm issue list                            # List open issues
-gitsocial pm issue list --state closed             # Filter by state
-gitsocial pm issue list --labels kind/bug          # Filter by labels
-gitsocial pm issue list --filter "priority:high"   # Filter query
-gitsocial pm issue list --sort due:asc             # Sort by field
-gitsocial pm issue list --repo <url>               # From remote repo
-gitsocial pm issue show <ref>                      # Show issue details
-gitsocial pm issue close <ref>                     # Close issue
-gitsocial pm issue reopen <ref>                    # Reopen issue
-gitsocial pm issue comment <ref> "Comment text"    # Add comment
-gitsocial pm issue comments <ref>                  # List comments
-```
-
-**Issue list filter syntax:**
-- `state:open` — Filter by state
-- `assignees:alice@x.com` — Filter by assignee
-- `priority:high` — Filter by label
-- `-kind:chore` — Exclude label
-- `due:today`, `due:overdue`, `due:week` — Due date filters
-- `"search text"` — Text search
-
-### Milestones
-
-```
-gitsocial pm milestone create "v1.0"               # Create milestone (refuses with DUPLICATE if same title exists)
-gitsocial pm milestone create "v1.0" --due 2024-06-01
-gitsocial pm milestone create "v1.0" --allow-duplicate   # Override duplicate-title check
-gitsocial pm milestone list                        # List open milestones
-gitsocial pm milestone list --state all            # All states
-gitsocial pm milestone show <ref>                  # Show details + linked issues
-gitsocial pm milestone close <ref>
-gitsocial pm milestone reopen <ref>
-gitsocial pm milestone cancel <ref>
-gitsocial pm milestone delete <ref>
-```
-
-### Sprints
-
-```
-gitsocial pm sprint create "Sprint 1" --start 2024-01-01 --end 2024-01-14
-gitsocial pm sprint list                           # List active/planned
-gitsocial pm sprint list --state all               # All states
-gitsocial pm sprint show <ref>                     # Show details + linked issues
-gitsocial pm sprint start <ref>
-gitsocial pm sprint complete <ref>
-gitsocial pm sprint cancel <ref>
-gitsocial pm sprint delete <ref>
-```
-
-### Board
-
-```
-gitsocial pm board                                 # Kanban board view
-```
-
----
-
-## Code Review (gitsocial review)
-
-### Setup
-
-```
-gitsocial review init                              # Initialize (branch: gitmsg/review)
-gitsocial review init --branch reviews             # Custom branch
-gitsocial review status                            # Show review status
-gitsocial review config get|set|list               # Manage config
-```
-
-### Forks
-
-Register fork repositories so their PRs and issues are discovered during fetch.
-Forks are managed at the core level via `gitsocial fork` (also available as `gitsocial review fork`).
-
-```
-gitsocial fork add <url>                           # Register a fork
-gitsocial fork remove <url>                        # Remove a fork
-gitsocial fork list                                # List registered forks
-```
-
-### Pull Requests
-
-```
-gitsocial review pr create "Add feature"                       # Create PR
-gitsocial review pr create "Add feature" --base main --head feature/branch
-gitsocial review pr create "Fix bug" --closes "#commit:abc123@gitmsg/pm"
-gitsocial review pr create "Fix bug" --reviewers alice@x.com,bob@x.com
-gitsocial review pr create "Add routes" --depends-on "#commit:abc123@gitmsg/review"  # Stacked PR
-gitsocial review pr create "Add routes" --base feature/auth --stack               # Auto-detect stack parent
-gitsocial review pr create "WIP" --allow-unpublished-head                        # Skip head-resolvable check
-gitsocial review pr create - < pr-description.md               # Read from stdin
-gitsocial review pr list                                       # List open PRs
-gitsocial review pr list --state merged                        # Filter by state
-gitsocial review pr list --repo <url>                          # From remote repo
-gitsocial review pr show <ref>                                 # Show details + feedback
-gitsocial review pr show <ref> --versions                      # Include version history
-gitsocial review pr update <ref>                               # Capture branch tips as new version
-gitsocial review pr diff <ref>                                 # Range-diff between last two versions
-gitsocial review pr diff <ref> --from 0 --to 2                 # Between specific versions
-gitsocial review pr merge <ref>                                # Merge (default: fast-forward)
-gitsocial review pr merge <ref> --strategy squash              # Squash merge
-gitsocial review pr merge <ref> --strategy rebase              # Rebase merge
-gitsocial review pr merge <ref> --strategy merge               # Force merge commit
-gitsocial review pr sync <ref>                                 # Sync head with base (default: rebase)
-gitsocial review pr sync <ref> --strategy merge                # Merge base into head
-gitsocial review pr close <ref>                                # Close without merge
-gitsocial review pr retract <ref>                              # Retract
-gitsocial review pr stack <ref>                                # Show full stack from any member
-gitsocial review pr rebase-stack <ref>                         # Cascade rebase all PRs above this one
-gitsocial review pr sync-stack <ref>                           # Update branch tips for all open PRs in the stack
-```
-
-**Version management:**
-- `pr update` signals "new code ready for review" — captures current base-tip and head-tip as a new version in the edits chain. Returns the existing PR unchanged when tips haven't moved (no edit-storm noise on `gitmsg/review`); errors out (`HEAD_UNRESOLVED` / `BASE_UNRESOLVED`) when a branch can no longer be resolved
-- `pr diff` uses `git range-diff` to compare patch series between versions, showing what the author actually changed vs. what was just rebased
-- `pr show --versions` displays a table of all versions with base-tip, head-tip, author, and date
-
-**Branch resolution:**
-- `pr create` resolves tips through `ResolveBranchTip` — it consults a local remote-tracking ref when one of workdir's git remotes points at the PR's repo URL (typical: workspace's origin), otherwise `ls-remote` against the URL. Workspace-scoped PRs additionally fall back to `refs/heads/<branch>` so unpushed work can still be recorded. Refuses (`HEAD_NOT_FOUND`) if the head branch isn't resolvable; pass `--allow-unpublished-head` to override (e.g., for queued-up local PRs that haven't been pushed yet)
-- `pr create` also warns when the local head branch is ahead of origin so unpushed commits aren't accidentally omitted from the PR
-- `pr merge` refuses (`HEAD_NOT_FOUND` / `BASE_NOT_FOUND`) when either branch is missing, instead of silently flipping the PR to `merged` with no actual git merge. The merge always runs through plumbing (`merge-tree` + `commit-tree` + `update-ref`) so the user's working tree is never touched, regardless of strategy or whether they're checked out on the base branch
-- `pr merge` refuses (`MERGE_INCOMPLETE`) when `merge-base` or `merge-head` cannot be computed — required by `specs/GITREVIEW.md` §1.5 on `state="merged"` edits, since they're the only durable record of the merged commit range once the head branch is deleted
-- `pr merge` auto-closes referenced issues; if a teammate retracted one concurrently, the close is logged with `RETRACTED` (the merge itself still succeeds)
-
-**Merge strategies:**
-- `ff` (default) — fast-forward if possible, otherwise merge commit
-- `squash` — squash all head commits into one on base
-- `rebase` — replay head commits individually onto base
-- `merge` — always create a merge commit, even if fast-forward is possible
-
-**Review staleness:** `pr show` displays version-aware review status. Uses `git range-diff` to distinguish pure rebases from actual code changes:
-```
-Reviews:
-  ✓ bob@example.com      approved (reviewed v2, current is latest, no code changes)
-  ✗ carol@example.com    changes requested (reviewed original, current is latest, code changed) [stale]
-```
-
-**Stacked PRs:** Decompose a large change into an ordered chain of small PRs where each builds on the one below it.
-- `--depends-on <ref>` — explicit dependency on a parent PR
-- `--stack` — auto-detect parent by matching the new PR's base branch to an open PR's head branch
-- `pr merge` refuses to merge if any `depends-on` target is unmerged (enforces bottom-up order)
-- After merge, dependent PRs whose base matched the merged PR's head are auto-retargeted to the merged PR's base
-- `pr rebase-stack <ref>` — walks the stack upward from the given PR and rebases each dependent's head onto its base
-- `pr sync-stack <ref>` — snapshots current branch tips for all open PRs in the stack (no rebase)
-- `pr stack <ref>` — shows the full stack from any member with state icons and position
-
-### Feedback
-
-```
-gitsocial review feedback approve <pr-ref>                     # Approve
-gitsocial review feedback approve <pr-ref> -m "LGTM"          # With message
-gitsocial review feedback request-changes <pr-ref> -m "Fix X" # Request changes
-
-# Inline comments
-gitsocial review feedback comment "Fix this" --pr <ref> --file src/auth.go --commit abc123456789 --new-line 42
-gitsocial review feedback comment "Fix range" --pr <ref> --file src/auth.go --commit abc123 --new-line 42 --new-line-end 50
-gitsocial review feedback comment "Old code" --pr <ref> --file src/auth.go --commit abc123 --old-line 42
-gitsocial review feedback comment "Suggestion" --pr <ref> --file src/auth.go --commit abc123 --new-line 42 --suggest
-```
-
-**Inline comment flags:**
-- `--pr` - Pull request ref (required)
-- `--file` - File path (required for inline)
-- `--commit` - Commit hash, 12+ chars (required for inline)
-- `--old-line` - Line in old file version (1-indexed)
-- `--new-line` - Line in new file version (1-indexed)
-- `--old-line-end` - End line in old file version
-- `--new-line-end` - End line in new file version
-- `--suggest` - Mark as code suggestion
-
----
-
-## Release Extension (gitsocial release)
-
-### Setup
-
-```
-gitsocial release init                             # Initialize (branch: gitmsg/release)
-gitsocial release init --branch releases           # Custom branch
-gitsocial release status                           # Show release status
-gitsocial release config get|set|list              # Manage config
-```
-
-### Create & Manage
-
-```
-gitsocial release create "v1.0 Release"                        # Create release
-gitsocial release create "v1.0" --version 1.0.0 --tag v1.0.0  # With version + tag
-gitsocial release create "v1.0" --artifacts "app.tar.gz,app.zip" --checksums SHA256SUMS
-gitsocial release create "v1.0" --artifact-url https://cdn.example.com/releases/v1.0/
-gitsocial release create "v1.0" --prerelease                   # Pre-release
-gitsocial release create "v1.0" --signed-by ABCDEF123          # Signed
-gitsocial release create "v1.0" --sbom sbom.spdx.json          # With SBOM
-gitsocial release create "v1.0" --tag v1.0.0 --allow-duplicate # Override duplicate-tag check (refused with DUPLICATE otherwise)
-gitsocial release create - < release-notes.md                  # Read from stdin
-gitsocial release edit <ref> --version 1.0.1                   # Edit version
-gitsocial release edit <ref> --tag v1.0.1 --body "Updated"     # Edit tag + body
-gitsocial release edit <ref> --sbom sbom.cdx.json              # Update SBOM
-gitsocial release retract <ref>                                # Retract
-```
-
-### Query
-
-```
-gitsocial release list                             # List releases (default: 20)
-gitsocial release list -n 50                       # List more
-gitsocial release list --repo <url>                # From remote repo
-gitsocial release show <ref>                       # Show release details
-gitsocial release sbom <ref>                       # Show SBOM details (packages, licenses)
-gitsocial release sbom <ref> --raw                 # Raw SBOM JSON output
-```
-
----
-
-## Import (gitsocial import)
-
-Import data from external platforms (GitHub, GitLab, Gitea, etc.) into GitSocial extensions. Auto-detects host type from URL using `protocol.DetectHost()`.
-
-When no URL is provided, the origin remote of the current repository is used. When no subcommand is given, imports everything (same as `import all`).
-
-### Usage
-
-```
-gitsocial import [url]                  # Import all from URL or origin remote
-gitsocial import all [url]              # Everything in dependency order (pm → release → review → social)
-gitsocial import pm [url]               # Milestones + issues
-gitsocial import release [url]          # Releases + artifact metadata
-gitsocial import review [url]           # Fork registrations + pull/merge requests
-gitsocial import social [url]           # Discussions/posts + comments (GitHub only)
-```
-
-### URL Formats
-
-Any format is accepted — normalized automatically. When omitted, origin remote is used.
-
-```
-gitsocial import pm                              # uses origin remote
-gitsocial import pm https://github.com/org/repo
-gitsocial import pm git@github.com:org/repo.git
-gitsocial import pm github.com/org/repo
-```
-
-### Flags
-
-```
-gitsocial import [url]
-  -n, --limit int          Max items per type (default: 50)
-      --since string       Only import items after date (YYYY-MM-DD)
-      --dry-run            Print what would be imported without creating commits
-      --map-file string    Path to ID mapping file (default: ~/.cache/gitsocial/imports/<repo>.json)
-      --labels string      Label mapping: auto, raw, skip (default: auto)
-      --skip-bots          Skip bot-authored items (default: true)
-      --host string        Force host type: github, gitlab, gitea, bitbucket
-      --api-url string     Custom API base URL for self-hosted instances
-      --token string       API token (default: from platform CLI or env)
-      --state string       Filter by state: open, closed, merged, all (default: all)
-      --email-map string   Path to username=email mapping file
-  -v, --verbose            Print each item as it's imported
-```
-
-### Examples
-
-```bash
-# Import everything from origin remote
-gitsocial import
-
-# Import everything from a specific URL
-gitsocial import all https://github.com/example-org/example
-
-# Import only issues and milestones
-gitsocial import pm https://github.com/example-org/example
-
-# Import only open issues from origin
-gitsocial import pm --state open
-
-# Import releases from GitLab
-gitsocial import release https://gitlab.com/example-org/example
-
-# Self-hosted GitLab with explicit host type
-gitsocial import all https://git.company.com/team/project --host gitlab
-
-# Dry run — see what would be imported
-gitsocial import --dry-run
-
-# Re-run is idempotent (skips already-imported items via map file)
-gitsocial import all https://github.com/example-org/example
-```
-
-### Host Detection
-
-| Domain | Detected As |
-|--------|-------------|
-| `github.com` | GitHub (`gh` CLI) |
-| `gitlab.com`, contains `gitlab` | GitLab (REST API) |
-| `codeberg.org`, contains `gitea` | Gitea (REST API) |
-| `bitbucket.org`, contains `bitbucket` | Bitbucket (REST API) |
-| Unknown | Probes API endpoints, or use `--host` |
-
-### Mapping File
-
-Import writes `~/.cache/gitsocial/imports/<url-slug>.json` to track `{platform}:{type}:{id}` → GitSocial commit hash. Re-running skips already-imported items. Override with `--map-file`.
 
 ---
 

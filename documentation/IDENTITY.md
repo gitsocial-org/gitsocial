@@ -2,7 +2,7 @@
 
 ## Overview
 
-GitSocial considers a signed commit **verified** when its `(signing key, author email)` pair has been attested by an external authority. Verification is a property of the binding, not the individual commit: once a `(key, email)` binding is verified, every signed commit matching it is verified.
+GitSocial considers a signed commit **verified** when its `(signing key, author email)` pair has been attested by an external authority. Verified commits display a ⚿ badge next to the author in the CLI and TUI. Verification is a property of the binding, not the individual commit: once a `(key, email)` binding is verified, every signed commit matching it is verified.
 
 Unsigned commits are **unverified**. They are never rejected.
 

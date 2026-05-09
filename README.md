@@ -9,7 +9,7 @@
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
-[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Extensions](#extensions--integrations) • [Installation](#installation) • [Quick Start](#quick-start) • [Workflows](#workflows) • [Identity](#identity--verification) • [Documentation](#documentation)
+[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
 ![GitSocial TUI](documentation/demo/demo.gif)
 
@@ -23,21 +23,13 @@ Git solved distributed collaboration for code. GitSocial extends it beyond code,
 
 All collaboration data (posts, issues, PRs, etc.) is stored in your git repository as [git commits with structured trailers](specs/GITMSG.md) on `gitmsg/*` branches, syncing via `git fetch` and `git push`. Activity from other repositories appears in your timeline when you add them to your lists.
 
-## Extensions & Integrations
-
-| Name | Description |
-|------|-------------|
-| **Social** | Git-native social network: posts, comments, lists, and timelines |
-| **PM** | Issues, sprints, and boards (Kanban, Agile, Minimal): portable across hosts, works offline |
-| **Review** | [Cross-forge PRs with version tracking](documentation/GITREVIEW-FLOWS.md), rebase-resilient reviews, and inline suggestions |
-| **Release** | Releases with artifacts, checksums, signatures, and SBOM: stored in git (LFS) or externally |
-| **[Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill)** | AI-assisted workflows for Claude Code, Cursor, and other agents: reports, changelogs, triage, and project insights |
-
 ## Installation
 
-**Homebrew** (macOS / Linux):
+**macOS / Linux**:
 ```bash
 brew install gitsocial-org/tap/gitsocial
+# or
+curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/install.sh | sh
 ```
 
 If macOS blocks the binary ("cannot verify developer"), run:
@@ -45,15 +37,10 @@ If macOS blocks the binary ("cannot verify developer"), run:
 xattr -d com.apple.quarantine $(which gitsocial)
 ```
 
-**Scoop** (Windows):
+**Windows**:
 ```bash
 scoop bucket add gitsocial https://github.com/gitsocial-org/scoop-bucket.git
 scoop install gitsocial
-```
-
-**Shell script** (macOS / Linux):
-```bash
-curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/install.sh | sh
 ```
 
 **Go**:
@@ -72,70 +59,33 @@ gitsocial import         # imports issues, PRs, releases, discussions
 gitsocial tui            # explore in the terminal
 ```
 
-## Workflows
-
-### Follow a project
-
-From your project directory:
-
-```bash
-# Initialize and follow a repository
-gitsocial social init
-gitsocial social list create reading
-gitsocial social list add reading https://github.com/someone/interesting-project
-
-# Fetch and browse their activity
-gitsocial fetch
-gitsocial social timeline
-
-# Post, comment, and publish
-gitsocial social post "Working on dark mode support"
-gitsocial social comment <post-id> "Great approach!"
-gitsocial push
-```
-
-### Open a cross-forge pull request
-
-PRs work across any host. Your fork can live on GitHub, GitLab, Codeberg, or a self-hosted server.
-
-```bash
-git checkout -b feature/my-change         # make changes, commit
-
-gitsocial review pr create \
-  --base main \
-  --head feature/my-change \
-  "Short description of change"
-
-git push origin feature/my-change         # push your branch
-gitsocial push                            # push PR metadata
-```
-
-See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for version tracking, merge strategies, and cross-forge scenarios.
-
-## Identity & Verification
-
-Identity and verification work without a central authority. The verified badge (⚿) requires the commit's signing key to be bound to the author email via one of three [external attestation sources](documentation/IDENTITY.md#sources): a forge GPG endpoint, a forge commits API (which also covers SSH signatures), or DNS via `/.well-known/gitmsg-id.json`.
-
 ## Documentation
+
+### Concepts
 
 | Document | Description |
 |----------|-------------|
-| [CLI Reference](documentation/CLI.md) | Commands, flags, output formats |
-| [GitReview Flows](documentation/GITREVIEW-FLOWS.md) | Cross-forge PR workflows, version tracking, merge strategies |
-| [Identity Verification](documentation/IDENTITY.md) | Trust model, attestation sources, caching |
-| [Architecture](documentation/ARCHITECTURE.md) | System design, packages, cache |
-| [TUI Layouts](documentation/TUI-DIAGRAMS.md) | ASCII diagrams for every view |
-| [JSON-RPC](documentation/RPC.md) | Editor integration over stdio |
+| [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
+| [Identity Verification](documentation/IDENTITY.md) | Decentralized trust model, attestation sources, caching |
+| [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
 
-## Protocol Specifications
+### Extensions
 
-| Spec | Description |
-|------|-------------|
-| [GITMSG.md](specs/GITMSG.md) | Core message format, headers, refs, versioning |
-| [GITSOCIAL.md](specs/GITSOCIAL.md) | Posts, comments, reposts, quotes, lists |
-| [GITPM.md](specs/GITPM.md) | Issues, milestones, sprints |
-| [GITREVIEW.md](specs/GITREVIEW.md) | Pull requests, inline feedback, review states |
-| [GITRELEASE.md](specs/GITRELEASE.md) | Releases, artifacts, checksums, signatures, SBOM |
+| Document | Description | Spec |
+|----------|-------------|------|
+| [Social](documentation/SOCIAL.md) | Posts, comments, lists, timeline, followers | [GitSocial](specs/GITSOCIAL.md) |
+| [PM](documentation/PM.md) | Issues, milestones, sprints, labels, boards | [GitPM](specs/GITPM.md) |
+| [Review](documentation/REVIEW.md) | Pull requests, feedback, forks, version tracking, cross-forge scenarios | [GitReview](specs/GITREVIEW.md) |
+| [Release](documentation/RELEASE.md) | Releases, artifacts, checksums, signatures, SBOM | [GitRelease](specs/GITRELEASE.md) |
+
+### Clients
+
+| Document | Description |
+|----------|-------------|
+| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | AI-assisted workflows for Claude Code, Cursor, and other agents |
+| [TUI](documentation/TUI-DIAGRAMS.md) | Per-view layout diagrams (see also [keybindings](documentation/TUI-KEYS.md)) |
+| [CLI](documentation/CLI.md) | Commands, flags, output formats |
+| [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
 
 ## Contributing
 
@@ -146,6 +96,7 @@ Platform issues and PRs are disabled on all mirrors. GitSocial uses its own tool
 1. Install GitSocial (see [Installation](#installation))
 2. Fork the repository on any host (GitHub, GitLab, Codeberg, or self-hosted)
 3. Clone your fork: `git clone https://your-host.com/you/gitsocial`
+4. Read [Architecture](documentation/ARCHITECTURE.md) for system design, packages, and cache layout
 
 ### Submitting Pull Requests
 
@@ -163,7 +114,7 @@ gitsocial push                            # push PR metadata
 
 After your first push, request fork registration in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) so maintainers can discover your PRs and issues.
 
-See [GitReview Flows](documentation/GITREVIEW-FLOWS.md) for the full cross-forge PR workflow.
+See [Review](documentation/REVIEW.md) for the full cross-forge PR workflow.
 
 ### Reporting Bugs & Requesting Features
 

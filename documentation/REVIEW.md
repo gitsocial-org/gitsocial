@@ -1,8 +1,72 @@
-# GitReview Flows
+# Review Extension
 
-Usage scenarios for the review extension. Pull requests live on the author's repository and are discovered by reviewers via fetch/follow.
+Pull requests and review feedback stored as commits on the `gitmsg/review` branch. PRs live on the author's repository and are discovered by reviewers via fetch/follow.
 
-## Table of Contents
+> **Spec:** [GITREVIEW.md](../specs/GITREVIEW.md) — wire format for pull requests, feedback, review states, and version tracking.
+
+## Initialize
+
+```
+gitsocial review init                  # creates refs/gitmsg/review/config and the gitmsg/review branch
+gitsocial review init -b <branch>      # initialize on a custom branch
+gitsocial review config get / set / list
+```
+
+## Pull requests
+
+```
+gitsocial review pr create "Add dark mode" \
+    --base '#branch:main' --head '#branch:dark-mode' \
+    --reviewers bob@example.com,carol@example.com \
+    --closes <issue-ref> \
+    --stack                              # auto-set depends-on from base→head matching
+
+gitsocial review pr list
+gitsocial review pr show <ref>
+gitsocial review pr update <ref>         # capture new branch tips as a new version
+gitsocial review pr sync <ref> [--strategy rebase|merge]
+gitsocial review pr merge <ref> [--strategy fast-forward|squash|rebase|merge]
+gitsocial review pr close <ref>
+gitsocial review pr retract <ref>
+gitsocial review pr draft <ref>          # open → draft
+gitsocial review pr ready <ref>          # draft → open
+gitsocial review pr diff <ref>           # range-diff between PR versions
+gitsocial review pr stack <ref>          # show the full stack
+gitsocial review pr rebase-stack <ref>   # cascade rebase PRs above
+gitsocial review pr sync-stack <ref>     # snapshot tips for all PRs in stack
+```
+
+`--base` and `--head` accept any ref (`#branch:<name>` for local, `<url>#branch:<name>` for cross-forge — see [§2 Cross-Forge Contribution](#2-cross-forge-contribution)). `--depends-on` sets stack relationships explicitly when `--stack` auto-detection isn't enough.
+
+## Feedback
+
+```
+gitsocial review feedback approve <pr-ref> [-m "LGTM"]
+gitsocial review feedback request-changes <pr-ref> -m "Reasoning..."
+gitsocial review feedback comment "Consider caching this" \
+    --pr <pr-ref> --commit <12-char-sha> --file path/to.go \
+    --new-line 42 [--new-line-end 50] [--old-line 40] [--suggest]
+```
+
+Reviews are tied to the version the reviewer saw; force-push doesn't auto-dismiss them. See [Version Tracking and Review Staleness](#10-version-tracking-and-review-staleness).
+
+## Forks
+
+```
+gitsocial review fork add <fork-url>     # alias for `gitsocial fork add`
+gitsocial review fork list
+gitsocial review fork remove <fork-url>
+```
+
+PRs from registered forks appear in `pr list` and trigger `fork-pr` notifications. See [Fork PR Discovery](#3-fork-pr-discovery) for the full flow.
+
+The TUI's review section (`P` from any screen — Pull Requests) provides the PR list, detail, files-changed, interdiff, history, and feedback flows.
+
+---
+
+## Flows — Table of Contents
+
+The remainder of this document walks through usage scenarios in detail.
 
 - [Why GitSocial Reviews](#why-gitsocial-reviews)
 - [Same-Repo Pull Request](#1-same-repo-pull-request)
