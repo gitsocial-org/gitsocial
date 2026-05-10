@@ -324,16 +324,6 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 						}
 					}
 				}
-			case "i":
-				if v.pr != nil && v.pr.IsEdited {
-					prID := v.pr.ID
-					return func() tea.Msg {
-						return tuicore.NavigateMsg{
-							Location: tuicore.LocReviewInterdiff(prID),
-							Action:   tuicore.NavPush,
-						}
-					}
-				}
 			case "e":
 				if v.pr != nil {
 					return func() tea.Msg {
@@ -1462,7 +1452,6 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "S", Label: "sync", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "u", Label: "update tips", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "i", Label: "interdiff", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: tuicore.RawViewHandler},
 		{Key: "X", Label: "retract", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "A", Label: "apply suggestion", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},

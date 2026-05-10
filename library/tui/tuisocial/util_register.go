@@ -37,6 +37,7 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/list/repos", Context: tuicore.ListRepos, Title: "List Repos", Icon: "☷"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/lists", Context: tuicore.RepoLists, Title: "Repository Lists", Icon: "☷"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history", Context: tuicore.History, Title: "History", Icon: "◉", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history/diff", Context: tuicore.HistoryDiff, Title: "Post Diff", Icon: "◉"})
 
 	tuicore.RegisterMessageHandler(handleSocialMessages)
 	// Register nav targets for social types (wildcard covers post, comment, repost, quote)
@@ -159,6 +160,7 @@ func Register(host tuicore.ViewHost) {
 	listPosts.SetShowEmail(state.ShowEmailOnCards)
 	listRepos := NewListReposView(state.Workdir)
 	history := NewHistoryView(state.Workdir)
+	historyDiff := NewPostHistoryDiffView(state.Workdir)
 	repoLists := NewRepoListsView(state.Workdir)
 	host.AddView("/social/timeline", timeline)
 	host.AddView("/social/detail", post)
@@ -170,6 +172,7 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/list", listPosts)
 	host.AddView("/social/list/repos", listRepos)
 	host.AddView("/social/history", history)
+	host.AddView("/social/history/diff", historyDiff)
 	host.AddView("/social/repository/lists", repoLists)
 }
 

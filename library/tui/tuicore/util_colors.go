@@ -73,14 +73,14 @@ var (
 
 // Diff
 const (
-	DiffAdded         = "#4ae04a" // soft green
-	DiffRemoved       = "#e06c75" // muted red
-	DiffAddedBg       = "#1a3524" // subtle dark green
-	DiffRemovedBg     = "#3b1a1e" // subtle dark red
-	DiffHunkHeader    = "36"      // cyan
-	DiffLineNum       = "240"     // dim
-	DiffWordAdded     = "46"      // bright green (word-level)
-	DiffWordRemoved   = "203"     // bright red (word-level)
-	DiffWordAddedBg   = "#2a5a34" // word-level added background
-	DiffWordRemovedBg = "#5a2a2e" // word-level removed background
+	DiffAdded              = "#4ae04a" // soft green
+	DiffRemoved            = "#e06c75" // muted red
+	DiffAddedBg            = "#15291c" // subtle dark green, muted
+	DiffRemovedBg          = "#3b1a1e" // subtle dark red
+	DiffIntraLineAddedBg   = "#2a5a34" // brighter green for changed words on added lines
+	DiffIntraLineRemovedBg = "#6a2a2e" // brighter red for changed words on removed lines
+	DiffFileHeaderBg       = "#1a2438" // subtle dark blue, same brightness band as +/- BGs
+	DiffHunkHeader         = "36"      // cyan
+	DiffLineNum            = "240"     // dim
+	DiffCommentFG          = "#a8a39c" // muted gray brighter than chroma's default so comments stay legible on Diff{Added,Removed}Bg
 )

@@ -285,6 +285,20 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Post Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -359,6 +373,20 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Issue Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -402,6 +430,20 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Milestone Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -444,6 +486,20 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Sprint Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -510,6 +566,21 @@
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `i` | Interdiff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### PR Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -529,6 +600,7 @@
 | `/` | Search |
 | `e` | Expand context |
 | `E` | Expand/collapse all |
+| `w` | Wrap |
 | `j` | Scroll down |
 | `k` | Scroll up |
 | `ctrl+d` | Half-page down |

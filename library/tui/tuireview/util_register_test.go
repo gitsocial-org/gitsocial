@@ -322,28 +322,6 @@ func TestReviewNotificationCardRenderer(t *testing.T) {
 	}
 }
 
-func TestStripAnsi(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"no ansi", "hello world", "hello world"},
-		{"color", "\x1b[31mRed\x1b[0m", "Red"},
-		{"bold", "\x1b[1mBold\x1b[0m", "Bold"},
-		{"multiple", "\x1b[31m\x1b[1mBoldRed\x1b[0m", "BoldRed"},
-		{"empty", "", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := stripAnsi(tt.input)
-			if got != tt.want {
-				t.Errorf("stripAnsi(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFirstSliceVal(t *testing.T) {
 	tests := []struct {
 		name  string

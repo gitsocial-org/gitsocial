@@ -168,6 +168,12 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return cmd
 		}
 	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "d":
+			return v.openDescriptionDiff(state)
+		case "i":
+			return v.openInterdiff(state)
+		}
 		handled, cmd := v.picker.HandleKey(msg.String())
 		if handled {
 			return cmd
@@ -222,7 +228,31 @@ func (v *PRHistoryView) Title() string {
 	return title
 }
 
+// openDescriptionDiff navigates to the PR description-text diff for the cursor pair.
+// PR versions are ASC (oldest first), so the older neighbor is at offset -1. Picker
+// items carry commit hashes but the diff loader emits synthetic "v<idx>" IDs, so
+// pass an itemID mapper.
+func (v *PRHistoryView) openDescriptionDiff(state *tuicore.State) tea.Cmd {
+	return tuicore.OpenHistoryDiff(v.picker, state, "prID", tuicore.LocReviewPRHistoryDiff, -1,
+		func(_ tuicore.VersionItem, idx int) string { return fmt.Sprintf("v%d", idx) })
+}
+
+// openInterdiff navigates to the existing PR range-diff (interdiff) view.
+func (v *PRHistoryView) openInterdiff(state *tuicore.State) tea.Cmd {
+	prID := state.Router.Location().Param("prID")
+	return func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocReviewInterdiff(prID),
+			Action:   tuicore.NavPush,
+		}
+	}
+}
+
 // Bindings returns view-specific key bindings.
 func (v *PRHistoryView) Bindings() []tuicore.Binding {
-	return nil
+	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
+		{Key: "i", Label: "interdiff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
+	}
 }

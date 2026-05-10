@@ -108,7 +108,7 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 		if k.Key == "esc" && k.Label == "back" {
 			continue
 		}
-		// Skip global fetch binding (but keep view-specific "f" like fold hunk)
+		// Skip global fetch binding (but keep view-specific "f" labels)
 		if k.Key == "f" && k.Label == "fetch" {
 			continue
 		}

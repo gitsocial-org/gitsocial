@@ -115,6 +115,12 @@ func (h *Harness) CurrentContext() tuicore.Context {
 	return tuicore.GetContextForPath(h.CurrentPath())
 }
 
+// CurrentView returns the active view object, used by tests that inspect
+// view-internal state via reflection.
+func (h *Harness) CurrentView() tuicore.View {
+	return h.model.CurrentView()
+}
+
 // BindingsForContext returns all registered bindings for a context.
 func (h *Harness) BindingsForContext(ctx tuicore.Context) []tuicore.Binding {
 	return h.model.Registry().ForContext(ctx)

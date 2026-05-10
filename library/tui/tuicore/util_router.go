@@ -132,6 +132,15 @@ func LocHistory(postID string) Location {
 	return Location{Path: "/social/history", Params: map[string]string{"postID": postID}}
 }
 
+// LocHistoryDiff creates a location for a post-history version diff.
+func LocHistoryDiff(postID, fromID, toID string) Location {
+	return Location{Path: "/social/history/diff", Params: map[string]string{
+		"postID": postID,
+		"from":   fromID,
+		"to":     toID,
+	}}
+}
+
 // LocRepoLists creates a location for a repository's defined lists.
 func LocRepoLists(repoURL string) Location {
 	return Location{Path: "/social/repository/lists", Params: map[string]string{"url": repoURL}}
@@ -177,6 +186,15 @@ func LocPMIssueHistory(issueID string) Location {
 	return Location{Path: "/pm/issue/history", Params: map[string]string{"issueID": issueID}}
 }
 
+// LocPMIssueHistoryDiff creates a location for an issue-history version diff.
+func LocPMIssueHistoryDiff(issueID, fromID, toID string) Location {
+	return Location{Path: "/pm/issue/history/diff", Params: map[string]string{
+		"issueID": issueID,
+		"from":    fromID,
+		"to":      toID,
+	}}
+}
+
 // LocPMConfig creates a location for PM configuration.
 var LocPMConfig = Location{Path: "/pm/config"}
 
@@ -210,6 +228,15 @@ func LocPMMilestoneHistory(milestoneID string) Location {
 	return Location{Path: "/pm/milestone/history", Params: map[string]string{"milestoneID": milestoneID}}
 }
 
+// LocPMMilestoneHistoryDiff creates a location for a milestone-history version diff.
+func LocPMMilestoneHistoryDiff(milestoneID, fromID, toID string) Location {
+	return Location{Path: "/pm/milestone/history/diff", Params: map[string]string{
+		"milestoneID": milestoneID,
+		"from":        fromID,
+		"to":          toID,
+	}}
+}
+
 // LocPMSprints creates a location for the PM sprints list.
 var LocPMSprints = Location{Path: "/pm/sprints"}
 
@@ -238,6 +265,15 @@ func LocPMEditSprint(sprintID string) Location {
 // LocPMSprintHistory creates a location for a sprint's edit history.
 func LocPMSprintHistory(sprintID string) Location {
 	return Location{Path: "/pm/sprint/history", Params: map[string]string{"sprintID": sprintID}}
+}
+
+// LocPMSprintHistoryDiff creates a location for a sprint-history version diff.
+func LocPMSprintHistoryDiff(sprintID, fromID, toID string) Location {
+	return Location{Path: "/pm/sprint/history/diff", Params: map[string]string{
+		"sprintID": sprintID,
+		"from":     fromID,
+		"to":       toID,
+	}}
 }
 
 // LocReleaseList creates a location for the release list view.
@@ -291,6 +327,15 @@ func LocReviewFeedback(prID, state string) Location {
 // LocReviewPRHistory creates a location for a PR's edit history.
 func LocReviewPRHistory(prID string) Location {
 	return Location{Path: "/review/pr/history", Params: map[string]string{"prID": prID}}
+}
+
+// LocReviewPRHistoryDiff creates a location for a PR-history version diff.
+func LocReviewPRHistoryDiff(prID, fromID, toID string) Location {
+	return Location{Path: "/review/pr/history/diff", Params: map[string]string{
+		"prID": prID,
+		"from": fromID,
+		"to":   toID,
+	}}
 }
 
 // LocReviewInterdiff creates a location for the interdiff (range-diff) view.

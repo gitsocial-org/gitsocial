@@ -22,6 +22,8 @@ type PRVersion struct {
 	AuthorName  string    `json:"author_name"`
 	AuthorEmail string    `json:"author_email"`
 	Timestamp   time.Time `json:"timestamp"`
+	Subject     string    `json:"subject,omitempty"`
+	Body        string    `json:"body,omitempty"`
 	BaseTip     string    `json:"base_tip,omitempty"`
 	HeadTip     string    `json:"head_tip,omitempty"`
 	State       PRState   `json:"state"`
@@ -115,6 +117,13 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 			v.HeadTip = msg.Header.Fields["head-tip"]
 			v.State = PRState(msg.Header.Fields["state"])
 			v.IsRetracted = msg.Header.Fields["retracted"] == "true"
+		}
+		body := protocol.ExtractCleanContent(r.Message)
+		if idx := indexOfNewline(body); idx >= 0 {
+			v.Subject = body[:idx]
+			v.Body = body[idx+1:]
+		} else {
+			v.Subject = body
 		}
 		// Labels: 0=original, last=latest, middle=v1,v2,...
 		switch {
@@ -259,6 +268,16 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 		})
 	}
 	return result.Ok(reviews)
+}
+
+// indexOfNewline returns the index of the first newline in s, or -1 if none.
+func indexOfNewline(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			return i
+		}
+	}
+	return -1
 }
 
 // extractHashFromID extracts the hash portion from a PR ID ref.

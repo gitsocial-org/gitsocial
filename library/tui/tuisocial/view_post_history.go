@@ -152,6 +152,9 @@ func (v *HistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return cmd
 		}
 	case tea.KeyPressMsg:
+		if msg.String() == "d" {
+			return tuicore.OpenHistoryDiff(v.picker, state, "postID", tuicore.LocHistoryDiff, 1, nil)
+		}
 		handled, cmd := v.picker.HandleKey(msg.String())
 		if handled {
 			return cmd
@@ -214,5 +217,8 @@ func (v *HistoryView) Title() string {
 
 // Bindings returns view-specific key bindings.
 func (v *HistoryView) Bindings() []tuicore.Binding {
-	return nil
+	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.History}, Handler: noop},
+	}
 }

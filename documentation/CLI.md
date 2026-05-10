@@ -387,6 +387,7 @@ Short form: when unambiguous, use just the hash prefix (e.g., `abc123`).
 | `GITSOCIAL_EDITOR` | Editor for messages (falls back to `$EDITOR`) |
 | `GITSOCIAL_PAGER` | Pager for output (falls back to `$PAGER`) |
 | `GITSOCIAL_NO_COLOR` | Disable colors |
+| `GITSOCIAL_PPROF` | Capture a profile for the current run: `cpu` → `/tmp/gitsocial-cpu.pprof`, `mem` → `/tmp/gitsocial-mem.pprof`, `trace` → `/tmp/gitsocial.trace`. Output written on clean exit; analyze with `go tool pprof` / `go tool trace`. |
 
 ---
 

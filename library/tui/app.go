@@ -128,6 +128,9 @@ func (m *Model) Router() *tuicore.Router { return m.router }
 // Host returns the host context for message handlers.
 func (m *Model) Host() tuicore.HostContext { return m.host }
 
+// CurrentView returns the view at the router's current path. Test accessor.
+func (m *Model) CurrentView() tuicore.View { return m.host.CurrentView() }
+
 // Nav returns the nav context for message handlers.
 func (m *Model) Nav() tuicore.NavContext { return m.nav }
 

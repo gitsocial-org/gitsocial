@@ -22,6 +22,7 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/edit-pr", Context: tuicore.ReviewPRDetail, Title: "Edit Pull Request", Icon: "⑂", NavItemID: "review.prs", Component: "SectionList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/feedback", Context: tuicore.ReviewPRDetail, Title: "Feedback", Icon: "⑂", NavItemID: "review.prs", Component: "SectionList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history", Context: tuicore.ReviewPRHistory, Title: "PR History", Icon: "⑂", NavItemID: "review.prs", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history/diff", Context: tuicore.ReviewPRHistoryDiff, Title: "PR Diff", Icon: "⑂", NavItemID: "review.prs"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/diff", Context: tuicore.ReviewDiff, Title: "Files Changed", Icon: "⑂", NavItemID: "review.prs"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/interdiff", Context: tuicore.ReviewInterdiff, Title: "Interdiff", Icon: "⑂", NavItemID: "review.prs"})
 	tuicore.RegisterMessageHandler(handleReviewMessages)
@@ -410,6 +411,7 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/review/edit-pr", NewPREditFormView(state.Workdir))
 	host.AddView("/review/feedback", NewFeedbackFormView(state.Workdir))
 	host.AddView("/review/pr/history", NewPRHistoryView(state.Workdir))
+	host.AddView("/review/pr/history/diff", NewPRHistoryDiffView(state.Workdir))
 	host.AddView("/review/diff", NewDiffView(state.Workdir))
 	host.AddView("/review/pr/interdiff", NewInterdiffView(state.Workdir))
 }

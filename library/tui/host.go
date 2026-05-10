@@ -355,6 +355,12 @@ func (h *Host) IsInputActive() bool {
 	return false
 }
 
+// CurrentView returns the view registered for the router's current path,
+// or nil when no match. Public accessor for tests.
+func (h *Host) CurrentView() tuicore.View {
+	return h.resolveView()
+}
+
 // resolveView finds the view matching the current route.
 func (h *Host) resolveView() tuicore.View {
 	loc := h.state.Router.Location()
