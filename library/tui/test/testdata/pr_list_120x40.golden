@@ -4,14 +4,14 @@
 │  ⚑  Notifications  ·····  @  ││  ▏   Clean separation of theme variables.                                            │
 │  ◧  Analytics  ·········  %  ││                                                                                      │
 │ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ⌘  Social  ············  T  ││                                                                                      │
+│  ⌘  Social  ············  S  ││                                                                                      │
 │     ⏱  Timeline              ││   ⑂  Add dark mode support · Alice · TIME     · open · main ← · dark-mode · [✓1]     │
 │     ♥  My Repository         ││      Implements theme toggle with system preference detection.                       │
 │     ☷  My Lists             ││                                                                                      │
-│  ▢  PM  ················  B  ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ⑂  Review  ············  P  ││                                                                                      │
+│  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ⑂  Review  ············  R  ││                                                                                      │
 │     ⑂  Pull Requests         ││                                                                                      │
-│  ⏏  Release  ···········  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │

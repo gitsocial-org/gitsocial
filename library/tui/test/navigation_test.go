@@ -14,10 +14,10 @@ func TestNavigation(t *testing.T) {
 			key  string
 			path string
 		}{
-			{"T", "/social/timeline"},
-			{"B", "/pm/board"},
-			{"P", "/review/prs"},
-			{"R", "/release/list"},
+			{"S", "/social/timeline"},
+			{"P", "/pm/board"},
+			{"R", "/review/prs"},
+			{"V", "/release/list"},
 		}
 		for _, tt := range tests {
 			t.Run("key_"+tt.key, func(t *testing.T) {

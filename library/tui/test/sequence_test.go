@@ -16,11 +16,11 @@ func TestSequence(t *testing.T) {
 			key  string
 			path string
 		}{
-			{"T", "/social/timeline"},
-			{"B", "/pm/board"},
-			{"P", "/review/prs"},
-			{"R", "/release/list"},
-			{"T", "/social/timeline"},
+			{"S", "/social/timeline"},
+			{"P", "/pm/board"},
+			{"R", "/review/prs"},
+			{"V", "/release/list"},
+			{"S", "/social/timeline"},
 		}
 		for _, step := range steps {
 			h.SendKey(step.key)
@@ -44,7 +44,7 @@ func TestSequence(t *testing.T) {
 		}
 	})
 	t.Run("IssuesFlow", func(t *testing.T) {
-		h.SendKey("B")
+		h.SendKey("P")
 		assertNotEmpty(t, h.Rendered())
 		h.Navigate("/pm/issues")
 		assertContains(t, h.Rendered(), f.IssueSubject)
@@ -67,9 +67,9 @@ func TestSequence(t *testing.T) {
 		h.Navigate("/social/timeline")
 		h.Navigate("/pm/issues")
 		h.Navigate("/pm/board")
-		h.SendKey("R")
+		h.SendKey("V")
 		if h.CurrentPath() != "/release/list" {
-			t.Errorf("after R: path = %q, want /release/list", h.CurrentPath())
+			t.Errorf("after V: path = %q, want /release/list", h.CurrentPath())
 		}
 		assertNotEmpty(t, h.Rendered())
 	})

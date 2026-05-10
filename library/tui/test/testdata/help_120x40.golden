@@ -4,13 +4,13 @@
 │  ⚑  Notifications  ·····  @  ││                                                                                      │
 │  ◧  Analytics  ·········  %  ││  Git-native collaboration — posts, issues, PRs, releases, all in your repo.          │
 │ ──────────────────────────── ││                                                                                      │
-│  ⌘  Social  ············  T  ││  ## How It Works                                                                     │
+│  ⌘  Social  ············  S  ││  ## How It Works                                                                     │
 │     ⏱  Timeline              ││                                                                                      │
 │     ♥  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
 │     ☷  My Lists             ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
-│  ▢  PM  ················  B  ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
-│  ⑂  Review  ············  P  ││  with  git clone --mirror  — no API scraping, no data loss.                          │
-│  ⏏  Release  ···········  R  ││                                                                                      │
+│  ▢  PM  ················  P  ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
+│  ⑂  Review  ············  R  ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│  ⏏  Release  ···········  V  ││                                                                                      │
 │                              ││  ## Workflow                                                                         │
 │                              ││                                                                                      │
 │                              ││  • Fetch — Pull updates from repositories you follow                                 │

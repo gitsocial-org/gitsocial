@@ -16,7 +16,7 @@
 | `;` | Next link |
 | `,` | Previous link |
 
-### SectionList (used by: Issue Detail, Milestone Detail, Sprint Detail, Release Detail, PR Detail)
+### SectionList (used by: Issue Detail, Milestone Detail, Sprint Detail, Release Detail, SBOM, PR Detail)
 
 | Key | Action |
 |-----|--------|
@@ -44,7 +44,7 @@
 | `ctrl+d / pgdown` | Half-page down |
 | `ctrl+u / pgup` | Half-page up |
 | `enter` | Open detail |
-| `esc` | Back (or exit detail) |
+| `esc / b` | Back (or exit detail) |
 | `left` | Previous version |
 | `right` | Next version |
 
@@ -59,6 +59,7 @@
 | `esc` | Go back | Everywhere except Timeline |
 | `@` | Notifications | Everywhere except Notifications |
 | `%` | Analytics | Everywhere except Analytics |
+| `!` | Errors | Everywhere except Error Log |
 | `f` | Fetch updates | Everywhere except Detail/Thread/History |
 | `/` | Search | Everywhere except Search |
 | `tab` | Toggle nav/content focus | Global |
@@ -69,14 +70,14 @@
 
 | Key | Extension | Target View | Status |
 |-----|-----------|-------------|--------|
-| `T` | Social | Timeline | Active |
-| `B` | PM | Board | Active |
-| `P` | Review | Pull Requests | Active |
-| `R` | Release | Releases | Active |
+| `S` | Social | Timeline | Active |
+| `P` | PM | Board | Active |
+| `R` | Review | Pull Requests | Active |
+| `V` | Release | Releases | Active |
 | `C` | CI/CD | Actions | Planned |
 | `I` | Infrastructure | Infrastructure | Planned |
 | `O` | Operations | Operations | Planned |
-| `S` | Security | Security | Planned |
+| `Y` | Security | Security | Planned |
 | `|` | DM | Dm | Planned |
 | `F` | Portfolio | Overview | Planned |
 
@@ -94,6 +95,9 @@
 | `p` | Push |
 | `l` | Lists |
 | `r` | Refresh |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Search
 
@@ -104,6 +108,20 @@
 | `down` | To results |
 | `up` | To input |
 | `/` | Search |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Search Help
+
+| Key | Action |
+|-----|--------|
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Notifications
 
@@ -116,6 +134,9 @@
 | `U` | Unread all |
 | `r` | Refresh |
 | `F` | Filter |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Post Detail
 
@@ -126,7 +147,8 @@
 | `e` | Edit |
 | `X` | Retract |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `d` | Diff |
+| `v` | Raw |
 | `r` | Repository |
 | `/` | Search |
 | `n` | Next match |
@@ -141,6 +163,9 @@
 | `end` | Bottom |
 | `enter` | Activate |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Thread
 
@@ -151,7 +176,8 @@
 | `e` | Edit |
 | `X` | Retract |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `d` | Diff |
+| `v` | Raw |
 | `r` | Repository |
 | `/` | Search |
 | `n` | Next match |
@@ -166,6 +192,9 @@
 | `end` | Bottom |
 | `enter` | Activate |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Repository
 
@@ -177,6 +206,9 @@
 | `[` | Older |
 | `]` | Newer |
 | `r` | Refresh |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### My Repository
 
@@ -187,6 +219,9 @@
 | `p` | Push |
 | `l` | Lists |
 | `r` | Refresh |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### List Picker
 
@@ -200,7 +235,10 @@
 | `j` | Down |
 | `k` | Up |
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### List Posts
 
@@ -209,18 +247,24 @@
 | CardList navigation | (see Shared Navigation) |
 | `m` | More |
 | `r` | Repositories |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### List Repos
 
 | Key | Action |
 |-----|--------|
-| `a` | Add repository (`url [branch \| *]`) |
+| `a` | Add repository |
 | `x` | Remove repository |
 | `j` | Down |
 | `k` | Up |
 | `enter` | Open repo |
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Repository Lists
 
@@ -231,14 +275,20 @@
 | `j` | Down |
 | `k` | Up |
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### History
 
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ---
 
@@ -262,7 +312,10 @@
 | `end` | Last |
 | `enter` | Open issue |
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Issues
 
@@ -276,6 +329,9 @@
 | `m` | My issues |
 | `r` | Refresh |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Issue Detail
 
@@ -287,20 +343,26 @@
 | `m` | Milestone |
 | `s` | Sprint |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `v` | Raw |
 | `/` | Search |
 | `C` | Close |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Issue History
 
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Milestones
 
@@ -312,6 +374,9 @@
 | `m` | Mine |
 | `r` | Refresh |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Milestone Detail
 
@@ -321,20 +386,26 @@
 | `c` | Comment |
 | `e` | Edit |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `v` | Raw |
 | `/` | Search |
 | `C` | Close |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Milestone History
 
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Sprints
 
@@ -346,6 +417,9 @@
 | `m` | Mine |
 | `r` | Refresh |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Sprint Detail
 
@@ -355,26 +429,35 @@
 | `c` | Comment |
 | `e` | Edit |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `v` | Raw |
 | `/` | Search |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Sprint History
 
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### PM Config
 
 | Key | Action |
 |-----|--------|
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ---
 
@@ -390,6 +473,9 @@
 | `r` | Refresh |
 | `F` | Forks |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### PR Detail
 
@@ -397,40 +483,37 @@
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
 | `d` | Diff |
-| `i` | Interdiff (range-diff between versions) |
 | `r` | Review |
 | `c` | Comment |
-| `M` | Merge (strategy picker) |
+| `M` | Merge |
 | `C` | Close |
-| `S` | Sync branch (rebase/merge) |
+| `D` | Draft |
 | `e` | Edit |
+| `u` | Update tips |
 | `h` | History |
-| `v` | Raw (full commit message) |
+| `i` | Interdiff |
+| `v` | Raw |
 | `X` | Retract |
 | `A` | Apply suggestion |
 | `/` | Search |
 | `left` | Prev |
 | `right` | Next |
-| `[` | Previous PR in stack |
-| `]` | Next PR in stack |
+| `[` | Stack prev |
+| `]` | Stack next |
 | `p` | Push |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### PR History
 
 | Key | Action |
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
-
-### Interdiff
-
-| Key | Action |
-|-----|--------|
-| `j / down` | Scroll down |
-| `k / up` | Scroll up |
-| `g / home` | Jump to top |
-| `G / end` | Jump to bottom |
-| `[` | Previous version pair |
-| `]` | Next version pair |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Files Changed
 
@@ -438,20 +521,33 @@
 |-----|--------|
 | `c` | Comment |
 | `enter` | Expand/collapse |
-| `v` | View mode (unified → split → fullscreen → unified) |
+| `v` | View mode |
 | `tab` | Next file |
 | `[/]` | Prev/next hunk |
 | `n/N` | Next/prev comment |
 | `f` | Fold hunk |
 | `/` | Search |
 | `e` | Expand context |
-| `E` | Expand/collapse all files |
+| `E` | Expand/collapse all |
 | `j` | Scroll down |
 | `k` | Scroll up |
 | `ctrl+d` | Half-page down |
 | `ctrl+u` | Half-page up |
-| `esc` | Exit fullscreen / back |
+| `esc` | Exit mode |
 | `p` | Push |
+| `!` | Errors |
+| `shift+tab` | Focus |
+
+### Interdiff
+
+| Key | Action |
+|-----|--------|
+| `[` | Prev version |
+| `]` | Next version |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ---
 
@@ -465,51 +561,43 @@
 | `N` | New |
 | `r` | Refresh |
 | `p` | Push |
-| `L` | Push LFS |
+| `L` | Push lfs |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Release Detail
 
 | Key | Action |
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
-| `s` | SBOM |
+| `s` | Sbom |
 | `e` | Edit |
 | `c` | Comment |
-| `v` | Raw (full commit message) |
+| `v` | Raw |
 | `/` | Search |
 | `X` | Retract |
 | `left` | Prev |
 | `right` | Next |
 | `p` | Push |
-| `L` | Push LFS |
+| `L` | Push lfs |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
-### Release SBOM
+### SBOM
 
 | Key | Action |
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
 | `/` | Search |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ---
 
 ## Core Views
-
-### Commit Diff
-
-| Key | Action |
-|-----|--------|
-| `enter` | Expand/collapse |
-| `v` | View mode (unified → split → fullscreen → unified) |
-| `tab` | Next file |
-| `[/]` | Prev/next hunk |
-| `f` | Fold hunk |
-| `E` | Expand/collapse all files |
-| `/` | Search |
-| `j` | Scroll down |
-| `k` | Scroll up |
-| `ctrl+d` | Half-page down |
-| `ctrl+u` | Half-page up |
-| `esc` | Exit fullscreen / back |
 
 ### Analytics
 
@@ -522,7 +610,10 @@
 | `ctrl+u` | Half-page up |
 | `home` | Top |
 | `end` | Bottom |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Settings
 
@@ -534,7 +625,10 @@
 | `k` | Up |
 | `home` | First |
 | `end` | Last |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Config
 
@@ -548,26 +642,10 @@
 | `home` | First |
 | `end` | Last |
 | `p` | Push |
+| `!` | Errors |
 | `/` | Search |
-
-### Forks
-
-| Key | Action |
-|-----|--------|
-| `a` | Add fork |
-| `x` | Remove fork |
-| `v` | Sort (name / fetched / commits) |
-| `/` | Search (live filter) |
-| `enter` | Open repo |
-| `j/k` | Up / down |
-| `ctrl+d` | Half-page down |
-| `ctrl+u` | Half-page up |
-| `home` | First |
-| `end` | Last |
-
-### Identity
-
-Read-only status view. Displays your git signing configuration and the cached verification status for your `(signing key, email)` binding.
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Cache
 
@@ -579,7 +657,10 @@ Read-only status view. Displays your git signing configuration and the cached ve
 | `X` | Clear repos |
 | `F` | Clear forks |
 | `r` | Refresh |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ### Help
 
@@ -591,26 +672,56 @@ Read-only status view. Displays your git signing configuration and the cached ve
 | `ctrl+u` | Half-page up |
 | `home` | Top |
 | `end` | Bottom |
+| `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Error Log
+
+| Key | Action |
+|-----|--------|
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Commit Diff
+
+| Key | Action |
+|-----|--------|
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Forks
+
+| Key | Action |
+|-----|--------|
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Identity
+
+| Key | Action |
+|-----|--------|
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
 
 ---
 
 ## Mouse Support
 
-All views support mouse wheel scrolling and click-to-select/activate. CardList and SectionList views provide full mouse support including link zone clicking via the AnchorCollector system. Simple list views (List Picker, List Repos, Repository Lists, PM Config, Settings, Config) support wheel scroll and click-to-select/activate via zone marking. Board view supports column header clicks and issue selection. Cache view supports cursor selection for per-item deletion.
+All views support mouse wheel scrolling and click-to-select/activate. CardList and SectionList views provide full mouse support including link zone clicking via the AnchorCollector system. Simple list views (List Picker, List Repos, Repository Lists, PM Config, Settings, Config) support wheel scroll and click-to-select/activate via zone marking. Board view supports column header clicks and issue selection. Cache view is action-based with no cursor, so mouse is not applicable.
 
 ## Confirmation Dialogs
 
-Retract, delete, close, and remove actions show a `[y/n]` confirmation prompt:
+Retract, delete, merge, close, and remove actions show a `[y/n]` confirmation prompt:
 - `y` / `Y` - Confirm action
 - `n` / `N` / `esc` - Cancel
 
 All confirmations use the shared `ConfirmDialog` component.
-
-## Choice Dialogs
-
-Merge and sync actions show a multi-choice prompt with labeled keys:
-- Merge: `[f]ast-forward  [s]quash  [r]ebase  [m]erge  esc`
-- Sync: `[r]ebase  [m]erge  esc`
-
-Choice dialogs use the shared `ChoiceDialog` component.

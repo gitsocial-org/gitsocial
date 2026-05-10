@@ -4,13 +4,13 @@
 │  ⚑  Notifications  ·····  @  ││  ▸ fetch.parallel        4                                                           │
 │  ◧  Analytics  ·········  %  ││    fetch.timeout         30                                                          │
 │ ──────────────────────────── ││                                                                                      │
-│  ⌘  Social  ············  T  ││  Workspace                                                                           │
+│  ⌘  Social  ············  S  ││  Workspace                                                                           │
 │     ⏱  Timeline              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
 │     ♥  My Repository         ││                                                                                      │
 │     ☷  My Lists             ││  Output                                                                              │
-│  ▢  PM  ················  B  ││    output.color          auto  (auto · always · never)                               │
-│  ⑂  Review  ············  P  ││                                                                                      │
-│  ⏏  Release  ···········  R  ││  Log                                                                                 │
+│  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
+│  ⑂  Review  ············  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││  Log                                                                                 │
 │                              ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
 │                              ││  Display                                                                             │

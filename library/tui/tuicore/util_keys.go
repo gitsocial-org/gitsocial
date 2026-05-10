@@ -203,14 +203,14 @@ var CoreKeys = []GlobalKey{
 // ExtensionKeys defines global extension shortcuts (uppercase, highlighted in sidebar).
 // See KEYS.md for design rationale.
 var ExtensionKeys = []GlobalKey{
-	{Key: "T", Domain: DomainSocial, Target: Timeline, Label: "timeline"},
-	{Key: "B", Domain: DomainPM, Target: PMBoard, Label: "boards"},
-	{Key: "P", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
-	{Key: "R", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
+	{Key: "S", Domain: DomainSocial, Target: Timeline, Label: "timeline"},
+	{Key: "P", Domain: DomainPM, Target: PMBoard, Label: "boards"},
+	{Key: "R", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
+	{Key: "V", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
 	{Key: "C", Domain: DomainCICD, Target: Global, Label: "actions"},         // placeholder
 	{Key: "I", Domain: DomainInfra, Target: Global, Label: "infrastructure"}, // placeholder
 	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},       // placeholder
-	{Key: "S", Domain: DomainSecurity, Target: Global, Label: "security"},    // placeholder
+	{Key: "Y", Domain: DomainSecurity, Target: Global, Label: "security"},    // placeholder
 	{Key: "|", Domain: DomainDM, Target: Global, Label: "dm"},                // placeholder
 	{Key: "F", Domain: DomainPortfolio, Target: Global, Label: "overview"},   // placeholder
 }
@@ -258,7 +258,7 @@ func RegisterGlobalKeys(r *Registry) {
 		})
 	}
 
-	// Register extension keys (T, B, P, R, A, S, D, O - uppercase, highlighted in sidebar)
+	// Register extension keys (S, P, R, V, C, I, O, Y, |, F - uppercase, highlighted in sidebar)
 	for _, ek := range ExtensionKeys {
 		ek := ek // capture for closure
 		// Skip placeholders (Target == Global means not implemented)

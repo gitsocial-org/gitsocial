@@ -97,7 +97,7 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 	// Filter out keys that are global or hidden from per-view display
 	globalKeys := map[string]bool{
 		"q": true, "?": true,
-		"T": true, "B": true, "P": true, "R": true,
+		"S": true, "P": true, "R": true, "V": true,
 		"@": true, "%": true,
 	}
 	for _, k := range ctx.Keys {
