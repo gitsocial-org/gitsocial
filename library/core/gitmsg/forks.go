@@ -28,23 +28,24 @@ var legacyForksMigrated sync.Map // workdir → bool
 // Migrates legacy forks (stored as a JSON array in core config) into the
 // per-element ref layout on first call per workdir, then reads from the
 // new layout exclusively.
+//
+// Each fork ref's commit subject is the normalized URL (see AddFork), so a
+// single `for-each-ref` extracts every URL in one subprocess — important on
+// hot interactive paths where a workspace may have thousands of forks.
 func GetForks(workdir string) []string {
 	migrateLegacyForks(workdir)
-	refs, err := git.ListRefs(workdir, "core/forks/")
-	if err != nil || len(refs) == 0 {
+	result, err := git.ExecGit(workdir, []string{
+		"for-each-ref",
+		"--format=%(contents:subject)",
+		forksRefPrefix,
+	})
+	if err != nil || result.Stdout == "" {
 		return nil
 	}
-	out := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		hash, err := git.ReadRef(workdir, "refs/gitmsg/"+ref)
-		if err != nil {
-			continue
-		}
-		msg, err := git.GetCommitMessage(workdir, hash)
-		if err != nil {
-			continue
-		}
-		url := strings.TrimSpace(msg)
+	lines := strings.Split(result.Stdout, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		url := strings.TrimSpace(line)
 		if url != "" {
 			out = append(out, url)
 		}
