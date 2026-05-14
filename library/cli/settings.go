@@ -64,6 +64,8 @@ func newSettingsGetCmd() *cobra.Command {
 }
 
 // newSettingsSetCmd creates the command to set a settings key-value pair.
+// Writes are dispatched to the personal-config ref; the bare repo is auto-
+// initialized at PersonalRepoPath() on first write.
 func newSettingsSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <key> <value>",
@@ -74,26 +76,9 @@ func newSettingsSetCmd() *cobra.Command {
 			key := args[0]
 			value := args[1]
 
-			path, err := settings.DefaultPath()
-			if err != nil {
-				PrintError(cmd, "failed to get settings path: "+err.Error())
-				os.Exit(ExitError)
-			}
-
-			s, err := settings.Load(path)
-			if err != nil {
-				PrintError(cmd, "failed to load settings: "+err.Error())
-				os.Exit(ExitError)
-			}
-
-			if err := settings.Set(s, key, value); err != nil {
+			if err := settings.NewManager().Write(key, value); err != nil {
 				PrintError(cmd, err.Error())
 				os.Exit(ExitInvalidArgs)
-			}
-
-			if err := settings.Save(path, s); err != nil {
-				PrintError(cmd, "failed to save settings: "+err.Error())
-				os.Exit(ExitError)
 			}
 
 			if cfg.JSONOutput {

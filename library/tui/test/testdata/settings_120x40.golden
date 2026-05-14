@@ -1,28 +1,28 @@
 ╭─ ※  GitSocial ───────────────╮╭─ ⌨  Settings ────────────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  Fetch                                                                               │
+│  ⌕  Search  ············  /  ││  Fetch  · synced                                                                     │
 │  ⚑  Notifications  ·····  @  ││  ▸ fetch.parallel        4                                                           │
 │  ◧  Analytics  ·········  %  ││    fetch.timeout         30                                                          │
 │ ──────────────────────────── ││                                                                                      │
 │  ⌘  Social  ············  S  ││  Workspace                                                                           │
 │     ⏱  Timeline              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
 │     ♥  My Repository         ││                                                                                      │
-│     ☷  My Lists             ││  Output                                                                              │
+│     ☷  My Lists             ││  Output  · synced                                                                    │
 │  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
 │  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  Log                                                                                 │
+│  ⏏  Release  ···········  V  ││  Log  · synced                                                                       │
 │                              ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
-│                              ││  Display                                                                             │
+│                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
 │                              ││                                                                                      │
-│                              ││  Extensions                                                                          │
+│                              ││  Extensions  · synced                                                                │
 │                              ││    extensions.social     true  (true · false)                                        │
 │                              ││    extensions.pm         true  (true · false)                                        │
 │                              ││    extensions.review     true  (true · false)                                        │
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││                                                                                      │
-│                              ││  Identity                                                                            │
+│                              ││  Identity  · synced                                                                  │
 │                              ││    identity.dns_verific                                                              │
 │                              ││  ation                 false  (false · true)                                         │
 │                              ││                                                                                      │

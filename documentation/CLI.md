@@ -186,12 +186,22 @@ gitsocial config list
 
 ### gitsocial settings
 
-Manage local user settings (stored in `~/.config/gitmsg/settings.json`).
+Manage user settings. Each key is scoped — local (this host, in `~/.config/gitsocial/settings.json`) or personal (synced across machines via `refs/gitmsg/core/config`). Writes route by scope automatically; see [SETTINGS.md](SETTINGS.md) for the full key list and the scope model.
 
 ```
 gitsocial settings get <key>
 gitsocial settings set <key> <value>
 gitsocial settings list
+```
+
+### gitsocial personal
+
+Manage the personal bare repo that holds your synced preferences (and, where applicable, the personal-tier data of extensions). See [SETTINGS.md](SETTINGS.md#cross-machine-sync) for the sync workflow.
+
+```
+gitsocial personal init [--remote <url>]
+gitsocial personal sync [--push | --fetch]
+gitsocial personal status
 ```
 
 ### gitsocial explore

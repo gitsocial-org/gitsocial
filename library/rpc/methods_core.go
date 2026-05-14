@@ -328,19 +328,8 @@ func coreSetSetting() HandlerFunc {
 		if p.Key == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "key is required"}
 		}
-		path, err := settings.DefaultPath()
-		if err != nil {
-			return nil, appError(CodeAppInternal, "INTERNAL", "failed to resolve settings path")
-		}
-		s, err := settings.Load(path)
-		if err != nil {
-			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("load settings: %s", err))
-		}
-		if err := settings.Set(s, p.Key, p.Value); err != nil {
+		if err := settings.NewManager().Write(p.Key, p.Value); err != nil {
 			return nil, appError(CodeInvalidArg, "INVALID_ARGUMENT", err.Error())
-		}
-		if err := settings.Save(path, s); err != nil {
-			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("save settings: %s", err))
 		}
 		return true, nil
 	}
@@ -482,14 +471,5 @@ func resolveRPCWorkspaceMode(workdir string) bool {
 	if originURL == "" {
 		return false
 	}
-	settingsPath, err := settings.DefaultPath()
-	if err != nil {
-		return false
-	}
-	s, err := settings.Load(settingsPath)
-	if err != nil {
-		return false
-	}
-	mode := settings.GetWorkspaceMode(s, originURL)
-	return mode == "*"
+	return settings.GetWorkspaceMode(originURL) == "*"
 }

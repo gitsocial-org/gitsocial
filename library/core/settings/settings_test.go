@@ -2,9 +2,7 @@
 package settings
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -205,62 +203,15 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func TestSaveAndLoad(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-
-	s := DefaultSettings()
-	s.Fetch.Parallel = 8
-	s.Log.Level = "debug"
-
-	if err := Save(path, s); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	loaded, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	if loaded.Fetch.Parallel != 8 {
-		t.Errorf("Fetch.Parallel = %d, want 8", loaded.Fetch.Parallel)
-	}
-	if loaded.Log.Level != "debug" {
-		t.Errorf("Log.Level = %q, want %q", loaded.Log.Level, "debug")
-	}
-}
-
-func TestLoad_nonExistentFile(t *testing.T) {
-	s, err := Load("/nonexistent/path/settings.json")
+func TestLoad_ReturnsDefaults(t *testing.T) {
+	// Point the personal-repo env at a missing path so the overlay is a no-op.
+	t.Setenv("GITSOCIAL_PERSONAL_REPO", "/tmp/gitsocial-test-nonexistent-load")
+	s, err := Load("")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 	if s.Fetch.Parallel != 4 {
 		t.Errorf("Should return defaults, got Fetch.Parallel = %d", s.Fetch.Parallel)
-	}
-}
-
-func TestLoad_invalidJSON(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "settings.json")
-	os.WriteFile(path, []byte("not json"), 0644)
-
-	_, err := Load(path)
-	if err == nil {
-		t.Error("Load() should fail for invalid JSON")
-	}
-}
-
-func TestSave_createsDirectory(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "subdir", "settings.json")
-
-	if err := Save(path, DefaultSettings()); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Error("File should exist after Save")
 	}
 }
 
@@ -399,71 +350,26 @@ func TestNextEnumValue(t *testing.T) {
 }
 
 func TestDefaultPath(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "")
 	p, err := DefaultPath()
 	if err != nil {
 		t.Fatalf("DefaultPath() error = %v", err)
 	}
-	suffix := filepath.Join(".config", "gitmsg", "settings.json")
+	suffix := filepath.Join(".config", "gitsocial", "settings.json")
 	if !strings.HasSuffix(p, suffix) {
 		t.Errorf("DefaultPath() = %q, want suffix %q", p, suffix)
 	}
 }
 
-func TestSave_andLoad_roundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "roundtrip.json")
-
-	s := DefaultSettings()
-	s.Extensions.Social = false
-	s.Extensions.PM = false
-	s.Extensions.Release = false
-	s.Extensions.Review = false
-	s.Display.ShowEmail = true
-
-	if err := Save(path, s); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	loaded, err := Load(path)
+func TestDefaultPath_XDG(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/xdg-test")
+	p, err := DefaultPath()
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("DefaultPath() error = %v", err)
 	}
-
-	if loaded.Extensions.Social != false {
-		t.Errorf("Extensions.Social = %v, want false", loaded.Extensions.Social)
-	}
-	if loaded.Extensions.PM != false {
-		t.Errorf("Extensions.PM = %v, want false", loaded.Extensions.PM)
-	}
-	if loaded.Extensions.Release != false {
-		t.Errorf("Extensions.Release = %v, want false", loaded.Extensions.Release)
-	}
-	if loaded.Extensions.Review != false {
-		t.Errorf("Extensions.Review = %v, want false", loaded.Extensions.Review)
-	}
-	if loaded.Display.ShowEmail != true {
-		t.Errorf("Display.ShowEmail = %v, want true", loaded.Display.ShowEmail)
-	}
-}
-
-func TestLoad_unreadableFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("chmod not supported on Windows")
-	}
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "unreadable.json")
-
-	if err := os.WriteFile(path, []byte(`{"fetch":{}}`), 0644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-	if err := os.Chmod(path, 0000); err != nil {
-		t.Fatalf("Chmod() error = %v", err)
-	}
-
-	_, err := Load(path)
-	if err == nil {
-		t.Error("Load() should fail for unreadable file")
+	want := filepath.Join("/tmp/xdg-test", "gitsocial", "settings.json")
+	if p != want {
+		t.Errorf("DefaultPath() under XDG_CONFIG_HOME = %q, want %q", p, want)
 	}
 }
 
@@ -563,39 +469,6 @@ func TestSet_extensionsReview_valid(t *testing.T) {
 	}
 	if s.Extensions.Review != false {
 		t.Errorf("Extensions.Review = %v, want false", s.Extensions.Review)
-	}
-}
-
-func TestSave_mkdirFails(t *testing.T) {
-	dir := t.TempDir()
-	blocker := filepath.Join(dir, "blocked")
-	os.WriteFile(blocker, []byte("x"), 0644)
-	path := filepath.Join(blocker, "sub", "settings.json")
-
-	err := Save(path, DefaultSettings())
-	if err == nil {
-		t.Error("Save() should fail when MkdirAll fails")
-	}
-	if !strings.Contains(err.Error(), "failed to create settings directory") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestSave_writeFileFails(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("chmod not supported on Windows")
-	}
-	dir := t.TempDir()
-	os.Chmod(dir, 0555)
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
-	path := filepath.Join(dir, "settings.json")
-
-	err := Save(path, DefaultSettings())
-	if err == nil {
-		t.Error("Save() should fail when directory is read-only")
-	}
-	if !strings.Contains(err.Error(), "failed to write settings") {
-		t.Errorf("unexpected error: %v", err)
 	}
 }
 

@@ -108,6 +108,7 @@ func main() {
 		newImportCmd(),
 		newForkCmd(),
 		newIDCmd(),
+		newPersonalCmd(),
 	)
 
 	// Extension commands (auto-registered via init())

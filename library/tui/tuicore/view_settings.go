@@ -217,38 +217,29 @@ func (v *SettingsView) editOrCycleSetting() tea.Cmd {
 		if originURL == "" {
 			return nil
 		}
-		current := settings.GetWorkspaceMode(v.data, originURL)
+		current := settings.GetWorkspaceMode(originURL)
 		if current == "" {
 			current = "default"
 		}
 		next := settings.NextEnumValue(key, current)
-		settings.SetWorkspaceMode(v.data, originURL, next)
-		path, _ := settings.DefaultPath()
-		if err := settings.Save(path, v.data); err != nil {
+		if err := settings.WriteWorkspaceMode(originURL, next); err != nil {
 			log.Warn("failed to save workspace mode setting", "error", err)
 			v.err = "Failed to save: " + err.Error()
 		}
-		return nil
+		return v.loadSettings()
 	}
 	if settings.IsEnum(key) {
 		current, _ := settings.Get(v.data, key)
 		next := settings.NextEnumValue(key, current)
-		if err := settings.Set(v.data, key, next); err != nil {
-			log.Warn("failed to set setting", "key", key, "error", err)
-			v.err = "Failed to save: " + err.Error()
-			return nil
-		}
-		path, _ := settings.DefaultPath()
-		if err := settings.Save(path, v.data); err != nil {
+		if err := v.writeSetting(key, next); err != nil {
 			log.Warn("failed to save setting", "key", key, "error", err)
 			v.err = "Failed to save: " + err.Error()
 			return nil
 		}
-		v.keys = settings.ListAll(v.data)
 		v.notifyDisplayChange()
 		v.notifyExtensionChange()
 		v.notifyIdentityChange()
-		return nil
+		return v.loadSettings()
 	}
 	v.editMode = true
 	v.input.SetValue(v.keys[v.cursor].Value)
@@ -263,22 +254,47 @@ func (v *SettingsView) saveCurrentSetting() tea.Cmd {
 	}
 	key := v.keys[v.cursor].Key
 	value := v.input.Value()
-	if err := settings.Set(v.data, key, value); err != nil {
+	if err := v.writeSetting(key, value); err != nil {
 		v.err = err.Error()
 		return nil
 	}
-	path, _ := settings.DefaultPath()
-	if err := settings.Save(path, v.data); err != nil {
-		v.err = err.Error()
-		return nil
-	}
-	v.keys = settings.ListAll(v.data)
 	v.notifyDisplayChange()
 	v.notifyExtensionChange()
 	v.editMode = false
 	v.input.Blur()
 	v.err = ""
-	return nil
+	return v.loadSettings()
+}
+
+// writeSetting dispatches a settings write through the Manager so the value
+// lands in the personal-config ref. The personal bare repo is auto-initialized
+// on first write.
+func (v *SettingsView) writeSetting(key, value string) error {
+	return settings.NewManager().Write(key, value)
+}
+
+// categoryScopeLabel returns a dim suffix like " · synced" or " · local"
+// describing where this category's keys live. Mixed-scope categories return
+// the empty string so the header stays uncluttered.
+func categoryScopeLabel(keys []string) string {
+	if len(keys) == 0 {
+		return ""
+	}
+	first, ok := settings.Lookup(keys[0])
+	if !ok {
+		return ""
+	}
+	for _, k := range keys[1:] {
+		spec, ok := settings.Lookup(k)
+		if !ok || spec.Scope != first.Scope {
+			return ""
+		}
+	}
+	switch first.Scope {
+	case settings.ScopePersonalConfig:
+		return "  " + Dim.Render("· synced")
+	}
+	return ""
 }
 
 // notifyDisplayChange notifies the callback of display setting changes.
@@ -311,7 +327,7 @@ func (v *SettingsView) resolveWorkspaceMode(state *State) string {
 	if originURL == "" {
 		return "(no origin)"
 	}
-	mode := settings.GetWorkspaceMode(v.data, originURL)
+	mode := settings.GetWorkspaceMode(originURL)
 	if mode == "" {
 		return "(not set)"
 	}
@@ -356,7 +372,8 @@ func (v *SettingsView) Render(state *State) string {
 		if lines >= innerHeight-3 {
 			break
 		}
-		b.WriteString(RenderHeader(rs, cat.name))
+		header := cat.name + categoryScopeLabel(cat.keys)
+		b.WriteString(RenderHeader(rs, header))
 		b.WriteString("\n")
 		lines++
 

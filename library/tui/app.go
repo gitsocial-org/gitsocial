@@ -1021,9 +1021,7 @@ func (m Model) checkWorkspaceMode() tea.Cmd {
 		if originURL == "" {
 			return m.triggerFetchDirectly(false)
 		}
-		settingsPath, _ := settings.DefaultPath()
-		s, _ := settings.Load(settingsPath)
-		mode := settings.GetWorkspaceMode(s, originURL)
+		mode := settings.GetWorkspaceMode(originURL)
 		if mode != "" {
 			return m.triggerFetchDirectly(mode == "*")
 		}
@@ -1086,10 +1084,7 @@ func (m Model) saveWorkspaceModeAndFetch(mode string) tea.Cmd {
 	return func() tea.Msg {
 		originURL := protocol.NormalizeURL(git.GetOriginURL(workdir))
 		if originURL != "" {
-			settingsPath, _ := settings.DefaultPath()
-			s, _ := settings.Load(settingsPath)
-			settings.SetWorkspaceMode(s, originURL, mode)
-			if err := settings.Save(settingsPath, s); err != nil {
+			if err := settings.WriteWorkspaceMode(originURL, mode); err != nil {
 				log.Warn("failed to save workspace fetch mode", "error", err)
 			}
 		}

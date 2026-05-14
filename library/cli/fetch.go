@@ -136,22 +136,13 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 	if originURL == "" {
 		return false
 	}
-	settingsPath, err := settings.DefaultPath()
-	if err != nil {
-		return false
-	}
-	s, err := settings.Load(settingsPath)
-	if err != nil {
-		return false
-	}
-	mode := settings.GetWorkspaceMode(s, originURL)
+	mode := settings.GetWorkspaceMode(originURL)
 	if mode != "" {
 		return mode == "*"
 	}
 	if jsonOutput {
-		settings.SetWorkspaceMode(s, originURL, "default")
-		if err := settings.Save(settingsPath, s); err != nil {
-			slog.Warn("save settings", "error", err)
+		if err := settings.WriteWorkspaceMode(originURL, "default"); err != nil {
+			slog.Warn("save workspace mode", "error", err)
 		}
 		return false
 	}
@@ -173,9 +164,8 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 	} else {
 		mode = "default"
 	}
-	settings.SetWorkspaceMode(s, originURL, mode)
-	if err := settings.Save(settingsPath, s); err != nil {
-		slog.Warn("save settings", "error", err)
+	if err := settings.WriteWorkspaceMode(originURL, mode); err != nil {
+		slog.Warn("save workspace mode", "error", err)
 	}
 	fmt.Println()
 	return mode == "*"

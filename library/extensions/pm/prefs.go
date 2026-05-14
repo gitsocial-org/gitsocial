@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/gitsocial-org/gitsocial/core/settings"
 )
 
 // UserPrefs stores per-repo board preferences.
@@ -51,11 +53,11 @@ func SaveUserPrefs(repoURL string, prefs UserPrefs) error {
 func userPrefsPath(repoURL string) string {
 	hash := sha256.Sum256([]byte(repoURL))
 	hashStr := hex.EncodeToString(hash[:8])
-	configDir, err := os.UserConfigDir()
+	configDir, err := settings.UserConfigDir()
 	if err != nil {
 		configDir = os.Getenv("HOME")
 	}
-	return filepath.Join(configDir, "gitmsg", "boards", hashStr+".json")
+	return filepath.Join(configDir, "gitsocial", "boards", hashStr+".json")
 }
 
 // IsColumnCollapsed checks if a column is collapsed in user preferences.

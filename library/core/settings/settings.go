@@ -1,22 +1,23 @@
-// settings.go - User settings management with file persistence
+// settings.go - In-memory Settings struct + legacy Get/Set used by the
+// overlay path. All persistence lives in personal_backend.go (refs/gitmsg/
+// core/config in the personal bare repo); no file is written to disk.
 package settings
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
 
+// Settings is the runtime view of all configurable values. It's populated by
+// Load() from defaults + personal-config overlay; nothing writes it to disk.
 type Settings struct {
-	Fetch      FetchSettings      `json:"fetch"`
-	Output     OutputSettings     `json:"output"`
-	Log        LogSettings        `json:"log"`
-	Display    DisplaySettings    `json:"display"`
-	Extensions ExtensionsSettings `json:"extensions"`
-	Identity   IdentitySettings   `json:"identity"`
+	Fetch      FetchSettings
+	Output     OutputSettings
+	Log        LogSettings
+	Display    DisplaySettings
+	Extensions ExtensionsSettings
+	Identity   IdentitySettings
 }
 
 // IdentitySettings controls per-user identity verification policy.
@@ -24,35 +25,35 @@ type IdentitySettings struct {
 	// DNSVerification enables fetching .well-known/gitmsg-id.json for verification.
 	// Defaults to false: domain-owner attestation is a weaker trust path than
 	// forge attestation, and is opt-in.
-	DNSVerification bool `json:"dns_verification"`
+	DNSVerification bool
 }
 
 type ExtensionsSettings struct {
-	Social  bool `json:"social"`
-	PM      bool `json:"pm"`
-	Release bool `json:"release"`
-	Review  bool `json:"review"`
+	Social  bool
+	PM      bool
+	Release bool
+	Review  bool
 }
 
 type FetchSettings struct {
-	Parallel       int               `json:"parallel"`
-	Timeout        int               `json:"timeout"`
-	WorkspaceModes map[string]string `json:"workspace_modes,omitempty"`
+	Parallel       int
+	Timeout        int
+	WorkspaceModes map[string]string
 }
 
 type OutputSettings struct {
-	Color string `json:"color"`
+	Color string
 }
 
 type LogSettings struct {
-	Level string `json:"level"`
+	Level string
 }
 
 type DisplaySettings struct {
-	ShowEmail bool `json:"show_email"`
+	ShowEmail bool
 }
 
-// DefaultSettings returns settings with default values.
+// DefaultSettings returns settings with default values matching the Registry.
 func DefaultSettings() *Settings {
 	return &Settings{
 		Fetch: FetchSettings{
@@ -80,54 +81,44 @@ func DefaultSettings() *Settings {
 	}
 }
 
-// DefaultPath returns the default settings file path.
-func DefaultPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".config", "gitmsg", "settings.json"), nil
-}
-
-// Load reads settings from a file, returning defaults if not found.
-func Load(path string) (*Settings, error) {
+// Load returns the runtime Settings view: defaults overlaid with values from
+// the personal-config ref. The path argument is ignored (kept for compatibility
+// with callers that still pass DefaultPath()).
+func Load(_ string) (*Settings, error) {
 	s := DefaultSettings()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return s, nil
-		}
-		return nil, err
-	}
-
-	if err := json.Unmarshal(data, s); err != nil {
-		return nil, fmt.Errorf("failed to parse settings: %w", err)
-	}
-
+	overlayPersonalConfig(s)
+	s.Fetch.WorkspaceModes = LoadWorkspaceModes()
 	return s, nil
 }
 
-// Save writes settings to a file.
-func Save(path string, s *Settings) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create settings directory: %w", err)
-	}
-
-	data, err := json.MarshalIndent(s, "", "  ")
+// DefaultPath returns a vestigial path under the user-config directory. The
+// file isn't actually read or written anymore (personal repo is the store),
+// but callers passing this to Load() still work.
+func DefaultPath() (string, error) {
+	dir, err := UserConfigDir()
 	if err != nil {
-		return fmt.Errorf("failed to marshal settings: %w", err)
+		return "", err
 	}
-
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write settings: %w", err)
-	}
-
-	return nil
+	return dir + "/gitsocial/settings.json", nil
 }
 
-// Get retrieves a setting value by key.
+// overlayPersonalConfig applies values from the personal-config ref onto the
+// in-memory *Settings for every Registry key declared at ScopePersonalConfig.
+// Errors from validation or a missing personal repo are silently ignored —
+// the overlay is best-effort, since a missing repo must not stop the CLI.
+func overlayPersonalConfig(s *Settings) {
+	pb := NewPersonalConfigBackend()
+	for _, spec := range Registry {
+		if spec.Scope != ScopePersonalConfig {
+			continue
+		}
+		if v, ok := pb.Get(spec.Key); ok && v != "" {
+			_ = Set(s, spec.Key, v)
+		}
+	}
+}
+
+// Get retrieves a setting value by key from the in-memory *Settings.
 func Get(s *Settings, key string) (string, bool) {
 	switch key {
 	case "fetch.parallel":
@@ -157,7 +148,9 @@ func Get(s *Settings, key string) (string, bool) {
 	}
 }
 
-// Set updates a setting value by key with validation.
+// Set updates a setting value by key with validation, mutating the in-memory
+// *Settings. Used by the overlay path to apply personal-config values onto
+// the struct.
 func Set(s *Settings, key, value string) error {
 	switch key {
 	case "fetch.parallel":
@@ -272,23 +265,6 @@ var EnumOptions = map[string][]string{
 	"extensions.release":        {"true", "false"},
 	"extensions.review":         {"true", "false"},
 	"identity.dns_verification": {"false", "true"},
-}
-
-// GetWorkspaceMode returns the workspace fetch mode for a given repo URL.
-// Returns "" if not set (first time), "default", or "*".
-func GetWorkspaceMode(s *Settings, repoURL string) string {
-	if s.Fetch.WorkspaceModes == nil {
-		return ""
-	}
-	return s.Fetch.WorkspaceModes[repoURL]
-}
-
-// SetWorkspaceMode saves the workspace fetch mode for a given repo URL.
-func SetWorkspaceMode(s *Settings, repoURL, mode string) {
-	if s.Fetch.WorkspaceModes == nil {
-		s.Fetch.WorkspaceModes = make(map[string]string)
-	}
-	s.Fetch.WorkspaceModes[repoURL] = mode
 }
 
 // IsEnum checks if a setting has enumerated options.
