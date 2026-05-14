@@ -10,12 +10,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/core/git"
 	"github.com/gitsocial-org/gitsocial/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/core/identity"
+	"github.com/gitsocial-org/gitsocial/core/settings"
 )
 
 var CoreIdentity = RegisterContext("core.identity")
 
 func init() {
-	RegisterViewMeta(ViewMeta{Path: "/config/identity", Context: CoreIdentity, Title: "Identity", Icon: "⚿", NavItemID: "config.identity"})
+	RegisterViewMeta(ViewMeta{Path: "/config/identity", Context: CoreIdentity, Title: "Identity", Icon: "⚿", NavItemID: "identity"})
 }
 
 // IdentityView shows the user's git signing config and the cached binding for
@@ -39,14 +40,38 @@ func (v *IdentityView) Activate(state *State) tea.Cmd { return nil }
 // Deactivate is a no-op.
 func (v *IdentityView) Deactivate() {}
 
-// Update handles messages — none for this read-only view.
-func (v *IdentityView) Update(msg tea.Msg, state *State) tea.Cmd { return nil }
+// Update handles key presses for policy toggles.
+func (v *IdentityView) Update(msg tea.Msg, state *State) tea.Cmd {
+	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "d" {
+		v.toggleDNSVerification()
+	}
+	return nil
+}
 
 // IsInputActive returns false — the view never owns input.
 func (v *IdentityView) IsInputActive() bool { return false }
 
-// Bindings returns no key bindings.
-func (v *IdentityView) Bindings() []Binding { return nil }
+// Bindings returns the policy-toggle keys.
+func (v *IdentityView) Bindings() []Binding {
+	noop := func(*HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []Binding{
+		{Key: "d", Label: "toggle DNS verification", Contexts: []Context{CoreIdentity}, Handler: noop},
+	}
+}
+
+// toggleDNSVerification flips identity.dns_verification through the settings
+// Manager (lands in the personal repo) and syncs the in-process verifier flag.
+func (v *IdentityView) toggleDNSVerification() {
+	next := !identity.IsDNSVerificationEnabled()
+	val := "false"
+	if next {
+		val = "true"
+	}
+	if err := settings.NewManager().Write("identity.dns_verification", val); err != nil {
+		return
+	}
+	identity.SetDNSVerificationEnabled(next)
+}
 
 // Render renders the view.
 func (v *IdentityView) Render(state *State) string {
@@ -126,6 +151,16 @@ func (v *IdentityView) Render(state *State) string {
 			}
 		}
 	}
+
+	b.WriteString("\n")
+	b.WriteString(RenderHeader(rs, "Policies"))
+	b.WriteString("\n")
+	dnsState := "off"
+	if identity.IsDNSVerificationEnabled() {
+		dnsState = "on"
+	}
+	b.WriteString(RenderRow(rs, "DNS verification", dnsState+"  "+Dim.Render("(d to toggle)"), "", false))
+	b.WriteString("\n")
 
 	footer := RenderFooter(state.Registry, CoreIdentity, wrapper.ContentWidth(), nil)
 	return wrapper.Render(b.String(), footer)

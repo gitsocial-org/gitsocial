@@ -10,7 +10,6 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/identity"
 	"github.com/gitsocial-org/gitsocial/core/log"
 	"github.com/gitsocial-org/gitsocial/core/protocol"
 	"github.com/gitsocial-org/gitsocial/core/settings"
@@ -238,7 +237,6 @@ func (v *SettingsView) editOrCycleSetting() tea.Cmd {
 		}
 		v.notifyDisplayChange()
 		v.notifyExtensionChange()
-		v.notifyIdentityChange()
 		return v.loadSettings()
 	}
 	v.editMode = true
@@ -314,13 +312,6 @@ func (v *SettingsView) notifyExtensionChange() {
 	}
 }
 
-// notifyIdentityChange syncs identity-related settings into the verifier.
-func (v *SettingsView) notifyIdentityChange() {
-	if v.data != nil {
-		identity.SetDNSVerificationEnabled(v.data.Identity.DNSVerification)
-	}
-}
-
 // resolveWorkspaceMode returns the workspace mode for the current workdir.
 func (v *SettingsView) resolveWorkspaceMode(state *State) string {
 	originURL := protocol.NormalizeURL(git.GetOriginURL(state.Workdir))
@@ -359,7 +350,6 @@ func (v *SettingsView) Render(state *State) string {
 		{"Log", []string{"log.level"}},
 		{"Display", []string{"display.show_email"}},
 		{"Extensions", []string{"extensions.social", "extensions.pm", "extensions.review", "extensions.release"}},
-		{"Identity", []string{"identity.dns_verification"}},
 	}
 
 	rs := DefaultRowStyles()

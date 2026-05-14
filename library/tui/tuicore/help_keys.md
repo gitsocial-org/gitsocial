@@ -295,10 +295,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -383,10 +383,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -440,10 +440,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -496,10 +496,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -547,7 +547,6 @@
 | `e` | Edit |
 | `u` | Update tips |
 | `h` | History |
-| `i` | Interdiff |
 | `v` | Raw |
 | `X` | Retract |
 | `A` | Apply suggestion |
@@ -577,10 +576,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -590,23 +589,18 @@
 
 | Key | Action |
 |-----|--------|
-| `c` | Comment |
 | `enter` | Expand/collapse |
+| `e/E` | Expand |
+| `w` | Wrap |
 | `v` | View mode |
 | `tab` | Next file |
 | `[/]` | Prev/next hunk |
-| `n/N` | Next/prev comment |
-| `f` | Fold hunk |
 | `/` | Search |
-| `e` | Expand context |
-| `E` | Expand/collapse all |
-| `w` | Wrap |
 | `j` | Scroll down |
 | `k` | Scroll up |
 | `ctrl+d` | Half-page down |
 | `ctrl+u` | Half-page up |
-| `esc` | Exit mode |
-| `p` | Push |
+| `c` | Comment |
 | `!` | Errors |
 | `shift+tab` | Focus |
 
@@ -779,6 +773,7 @@
 
 | Key | Action |
 |-----|--------|
+| `d` | Toggle DNS verification |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |

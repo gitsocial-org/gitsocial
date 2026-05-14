@@ -33,7 +33,7 @@ DNS is off by default. To enable:
 gitsocial settings set identity.dns_verification true
 ```
 
-Or in the TUI: `Settings → Identity → identity.dns_verification`. When off, the verifier doesn't fetch `/.well-known/gitmsg-id.json` and cached DNS bindings are excluded from `IsVerified`. Takes effect immediately.
+Or in the TUI: open the `Identity` view and press `d` to toggle. When off, the verifier doesn't fetch `/.well-known/gitmsg-id.json` and cached DNS bindings are excluded from `IsVerified`. Takes effect immediately.
 
 ## Forge API token
 
@@ -99,4 +99,4 @@ sqlite3 ~/.cache/gitsocial/cache.db \
     "SELECT hash, author_email, signer_key FROM core_commits WHERE signer_key IS NOT NULL LIMIT 10"
 ```
 
-The TUI's `Configuration → Identity` view shows your own `(signing key, email)` binding state and the source that verified it.
+The TUI's `Identity` view shows your own `(signing key, email)` binding state and the source that verified it.

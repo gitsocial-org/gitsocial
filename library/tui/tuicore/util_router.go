@@ -564,15 +564,15 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	r.Register(NavItem{ID: "portfolio", Label: "Portfolio", Icon: "⧉", Order: 8, Enabled: false})
 	r.Register(NavItem{ID: "dm", Label: "DM", Icon: "✉", Order: 9, Enabled: false})
 
-	// Config domain with sub-items
+	// Config domain with sub-items (project/extension config only)
 	r.Register(NavItem{ID: "config", Label: "Configuration", Icon: "⚙", Order: 10, Enabled: true})
 	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: false})
-	r.Register(NavItem{ID: "config.identity", Label: "Identity", Icon: "⚿", Parent: "config", Order: 1, Enabled: true})
-	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 2, Enabled: true})
-	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 3, Enabled: false})
-	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 4, Enabled: true})
+	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
+	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: false})
+	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
 
-	// Cache and Settings
-	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 11, Enabled: true})
-	r.Register(NavItem{ID: "settings", Label: "Settings", Icon: "⌨", Order: 12, Enabled: true})
+	// Top-level user concerns (Identity, Cache, Settings)
+	r.Register(NavItem{ID: "identity", Label: "Identity", Icon: "⚿", Order: 11, Enabled: true})
+	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 12, Enabled: true})
+	r.Register(NavItem{ID: "settings", Label: "Settings", Icon: "⌨", Order: 13, Enabled: true})
 }

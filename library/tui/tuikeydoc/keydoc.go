@@ -56,6 +56,7 @@ func CollectAll() []DomainDoc {
 	// Register core views
 	host.AddView("/settings", tuicore.NewSettingsView())
 	host.AddView("/config", tuicore.NewConfigView())
+	host.AddView("/config/identity", tuicore.NewIdentityView(""))
 	host.AddView("/cache", tuicore.NewCacheView())
 	host.AddView("/analytics", tuicore.NewAnalyticsView())
 	host.AddView("/help", tuicore.NewHelpView())

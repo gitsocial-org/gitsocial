@@ -22,9 +22,8 @@
 │                              ││    extensions.review     true  (true · false)                                        │
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││                                                                                      │
-│                              ││  Identity  · synced                                                                  │
-│                              ││    identity.dns_verific                                                              │
-│                              ││  ation                 false  (false · true)                                         │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
@@ -32,6 +31,7 @@
 │                              ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
 │  ⚙  Configuration            ││                                                                                      │
+│  ⚿  Identity                 ││                                                                                      │
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │

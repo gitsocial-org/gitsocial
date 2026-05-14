@@ -8,7 +8,7 @@ Read order: env var (when env-scoped) → personal repo → registry default.
 
 | Key                         | Type | Default     | Notes                                                   |
 |-----------------------------|------|-------------|---------------------------------------------------------|
-| `identity.dns_verification` | bool | `false`     | Trust DNS `.well-known/gitmsg-id.json` for attestation. |
+| `identity.dns_verification` | bool | `false`     | Trust DNS `.well-known/gitmsg-id.json` for attestation. Toggled in the TUI under `Identity → Policies`. |
 | `output.color`              | enum | `auto`      | `auto` / `always` / `never`.                            |
 | `display.show_email`        | bool | `false`     | Show author email alongside name on cards.              |
 | `log.level`                 | enum | `info`      | `debug` / `info` / `warn` / `error`.                    |

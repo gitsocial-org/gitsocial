@@ -29,9 +29,9 @@
 │                              ││   ⑂  Alice ⇡ ✎ · TIME     · merged · #fc1e2278f228@gitmsg/review                     │
 │                              ││      Add theme toggle component                                                      │
 │                              ││                                                                                      │
-│                              ││      Clean separation of theme variables.                                            │
-│ ──────────────────────────── ││                                                                                      │
-│  ⚙  Configuration            ││   ────────────────────────────────────────────────────────────────────────────────   │
+│ ──────────────────────────── ││      Clean separation of theme variables.                                            │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⚿  Identity                 ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││   ↩  Alice ⇡ · TIME     · #4361a6f5268b@gitmsg/review                                │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
