@@ -329,11 +329,11 @@ func (v *IssuesView) GetItemCount() int {
 
 func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
-	case "f":
+	case "F":
 		v.showAll = !v.showAll
 		v.pag.Reset()
 		return v.loadIssues()
-	case "F":
+	case "K":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocForks,
@@ -443,11 +443,11 @@ func (v *IssuesView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		content = "Loading issues..."
 	} else if len(v.cardList.Items()) == 0 {
-		filter := "open"
 		if v.showAll {
-			filter = "all"
+			content = tuicore.Dim.Render("  No issues")
+		} else {
+			content = tuicore.Dim.Render("  No open issues")
 		}
-		content = tuicore.Dim.Render(fmt.Sprintf("  No %s issues", filter))
 	} else {
 		listHeight := wrapper.ContentHeight()
 		if v.quickCreateMode {
@@ -514,9 +514,9 @@ func (v *IssuesView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
-		{Key: "f", Label: "filter", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
-		{Key: "F", Label: "forks", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
-		{Key: "m", Label: "my issues", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "K", Label: "forks", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: push},

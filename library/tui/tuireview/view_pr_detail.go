@@ -1458,8 +1458,7 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "[", Label: "stack prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "]", Label: "stack next", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "[/]", Label: "prev/next stack", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: push},
 	}
 }

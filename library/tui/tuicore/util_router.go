@@ -297,6 +297,20 @@ func LocReleaseSBOM(releaseID string) Location {
 	return Location{Path: "/release/sbom", Params: map[string]string{"releaseID": releaseID}}
 }
 
+// LocReleaseHistory creates a location for a release's edit history.
+func LocReleaseHistory(releaseID string) Location {
+	return Location{Path: "/release/history", Params: map[string]string{"releaseID": releaseID}}
+}
+
+// LocReleaseHistoryDiff creates a location for a release-history version diff.
+func LocReleaseHistoryDiff(releaseID, fromID, toID string) Location {
+	return Location{Path: "/release/history/diff", Params: map[string]string{
+		"releaseID": releaseID,
+		"from":      fromID,
+		"to":        toID,
+	}}
+}
+
 // LocReviewPRs creates a location for the review PR list view.
 var LocReviewPRs = Location{Path: "/review/prs"}
 

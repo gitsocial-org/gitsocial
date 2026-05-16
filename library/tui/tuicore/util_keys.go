@@ -125,18 +125,23 @@ func (r *Registry) RegisterView(v BindingProvider) {
 	}
 }
 
-// Resolve finds the binding for a key in the given context.
-func (r *Registry) Resolve(ctx Context, key string) *Binding {
+// Resolve returns all bindings matching the key in the given context, in
+// registration order. Callers should try handlers in order and stop at the
+// first one that reports it handled the key. This lets a view register a
+// label-only binding (handler returns false) without shadowing a later global
+// binding for the same key.
+func (r *Registry) Resolve(ctx Context, key string) []*Binding {
+	var matches []*Binding
 	for i := range r.bindings {
 		b := &r.bindings[i]
 		if b.Key != key {
 			continue
 		}
 		if containsContext(b.Contexts, ctx) {
-			return b
+			matches = append(matches, b)
 		}
 	}
-	return nil
+	return matches
 }
 
 // ForContext returns all bindings active in the given context.

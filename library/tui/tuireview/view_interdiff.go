@@ -264,7 +264,6 @@ func (v *InterdiffView) Title() string {
 func (v *InterdiffView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
-		{Key: "[", Label: "prev version", Contexts: []tuicore.Context{tuicore.ReviewInterdiff}, Handler: noop},
-		{Key: "]", Label: "next version", Contexts: []tuicore.Context{tuicore.ReviewInterdiff}, Handler: noop},
+		{Key: "[/]", Label: "prev/next version", Contexts: []tuicore.Context{tuicore.ReviewInterdiff}, Handler: noop},
 	}
 }

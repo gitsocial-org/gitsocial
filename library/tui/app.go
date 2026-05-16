@@ -730,11 +730,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Fall back to registry handlers
+	// Fall back to registry handlers. Resolve returns all matching bindings
+	// (e.g. a view's label-only entry plus a global handler); try each until
+	// one reports it handled the key so label-only noops don't shadow globals.
 	ctx := m.host.CurrentContext()
-	if binding := m.registry.Resolve(ctx, key); binding != nil {
+	bindings := m.registry.Resolve(ctx, key)
+	if len(bindings) > 0 {
 		handlerCtx := m.buildHandlerContext()
-		if binding.Handler != nil {
+		for _, binding := range bindings {
+			if binding.Handler == nil {
+				continue
+			}
 			if handled, cmd := binding.Handler(handlerCtx); handled {
 				return m, cmd
 			}

@@ -31,7 +31,7 @@
 | `,` | Previous link |
 | `/` | Start inline search |
 
-### VersionPicker (used by: History, Issue History, Milestone History, Sprint History, PR History)
+### VersionPicker (used by: History, Issue History, Milestone History, Sprint History, Release History, PR History)
 
 | Key | Action |
 |-----|--------|
@@ -103,7 +103,6 @@
 
 | Key | Action |
 |-----|--------|
-| `enter` | Search/open |
 | `esc` | Exit input |
 | `down` | To results |
 | `up` | To input |
@@ -161,7 +160,6 @@
 | `ctrl+u` | Half-page up |
 | `home` | Top |
 | `end` | Bottom |
-| `enter` | Activate |
 | `p` | Push |
 | `!` | Errors |
 | `tab` | Focus |
@@ -190,7 +188,6 @@
 | `ctrl+u` | Half-page up |
 | `home` | Top |
 | `end` | Bottom |
-| `enter` | Activate |
 | `p` | Push |
 | `!` | Errors |
 | `tab` | Focus |
@@ -203,8 +200,7 @@
 | CardList navigation | (see Shared Navigation) |
 | `l` | Lists |
 | `a` | Add to my lists |
-| `[` | Older |
-| `]` | Newer |
+| `[/]` | Older/newer |
 | `r` | Refresh |
 | `!` | Errors |
 | `tab` | Focus |
@@ -230,8 +226,6 @@
 | `n` | New list |
 | `D` | Delete list |
 | `m` | My repo |
-| `a` | Create |
-| `enter` | Open/add |
 | `j` | Down |
 | `k` | Up |
 | `p` | Push |
@@ -259,7 +253,6 @@
 | `x` | Remove repository |
 | `j` | Down |
 | `k` | Up |
-| `enter` | Open repo |
 | `p` | Push |
 | `!` | Errors |
 | `/` | Search |
@@ -270,7 +263,6 @@
 
 | Key | Action |
 |-----|--------|
-| `enter` | View posts |
 | `r` | Repositories |
 | `j` | Down |
 | `k` | Up |
@@ -313,10 +305,11 @@
 | Key | Action |
 |-----|--------|
 | `n` | Quick create |
-| `N` | Full create |
-| `F` | Forks |
+| `N` | New |
+| `m` | Mine |
 | `x` | Collapse col |
 | `s` | Swimlanes |
+| `K` | Forks |
 | `r` | Refresh |
 | `up` | Up |
 | `down` | Down |
@@ -324,7 +317,6 @@
 | `right` | Next col |
 | `home` | First |
 | `end` | Last |
-| `enter` | Open issue |
 | `p` | Push |
 | `!` | Errors |
 | `/` | Search |
@@ -338,9 +330,9 @@
 | CardList navigation | (see Shared Navigation) |
 | `n` | Quick create |
 | `N` | New |
-| `f` | Filter |
-| `F` | Forks |
-| `m` | My issues |
+| `F` | Filter |
+| `m` | Mine |
+| `K` | Forks |
 | `r` | Refresh |
 | `p` | Push |
 | `!` | Errors |
@@ -397,7 +389,7 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
-| `N` | New |
+| `n` | New |
 | `F` | Filter |
 | `m` | Mine |
 | `r` | Refresh |
@@ -454,7 +446,7 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
-| `N` | New |
+| `n` | New |
 | `F` | Filter |
 | `m` | Mine |
 | `r` | Refresh |
@@ -524,10 +516,11 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
-| `N` | New |
+| `n` | New |
+| `F` | Filter |
 | `m` | Mine |
+| `K` | Forks |
 | `r` | Refresh |
-| `F` | Forks |
 | `p` | Push |
 | `!` | Errors |
 | `tab` | Focus |
@@ -553,8 +546,7 @@
 | `/` | Search |
 | `left` | Prev |
 | `right` | Next |
-| `[` | Stack prev |
-| `]` | Stack next |
+| `[/]` | Prev/next stack |
 | `p` | Push |
 | `!` | Errors |
 | `tab` | Focus |
@@ -589,7 +581,6 @@
 
 | Key | Action |
 |-----|--------|
-| `enter` | Expand/collapse |
 | `e/E` | Expand |
 | `w` | Wrap |
 | `v` | View mode |
@@ -608,8 +599,7 @@
 
 | Key | Action |
 |-----|--------|
-| `[` | Prev version |
-| `]` | Next version |
+| `[/]` | Prev/next version |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -624,7 +614,7 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
-| `N` | New |
+| `n` | New |
 | `r` | Refresh |
 | `p` | Push |
 | `L` | Push lfs |
@@ -640,6 +630,7 @@
 | `s` | Sbom |
 | `e` | Edit |
 | `c` | Comment |
+| `h` | History |
 | `v` | Raw |
 | `/` | Search |
 | `X` | Retract |
@@ -658,6 +649,30 @@
 | SectionList navigation | (see Shared Navigation) |
 | `/` | Search |
 | `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Release History
+
+| Key | Action |
+|-----|--------|
+| VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Release Diff
+
+| Key | Action |
+|-----|--------|
+| `e/E` | Expand |
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `!` | Errors |
+| `/` | Search |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -686,7 +701,6 @@
 | Key | Action |
 |-----|--------|
 | `e` | Edit |
-| `enter` | Edit/cycle |
 | `j` | Down |
 | `k` | Up |
 | `home` | First |

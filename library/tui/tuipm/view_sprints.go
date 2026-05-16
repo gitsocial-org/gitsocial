@@ -287,7 +287,7 @@ func (v *SprintsView) GetItemCount() int {
 
 func (v *SprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
-	case "N":
+	case "n":
 		if v.isRemote {
 			return nil
 		}
@@ -383,11 +383,11 @@ func (v *SprintsView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		content = "Loading sprints..."
 	} else if len(v.cardList.Items()) == 0 {
-		filter := "active/planned"
 		if v.showAll {
-			filter = "all"
+			content = tuicore.Dim.Render("  No sprints")
+		} else {
+			content = tuicore.Dim.Render("  No active/planned sprints")
 		}
-		content = tuicore.Dim.Render(fmt.Sprintf("  No %s sprints", filter))
 	} else {
 		v.cardList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 		content = v.cardList.View()
@@ -442,7 +442,7 @@ func (v *SprintsView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},
 		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},
 		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},

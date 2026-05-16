@@ -26,6 +26,7 @@ type PRsView struct {
 	showEmail      bool
 	userEmail      string
 	assigneeFilter string // "" = all, "me" = my PRs
+	showAll        bool   // false = open only, true = open + merged + closed
 	allPRs         []review.PullRequest
 	cardList       *tuicore.CardList
 	searchActive   bool
@@ -185,7 +186,7 @@ func (v *PRsView) IsInputActive() bool {
 
 func (v *PRsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
-	case "N":
+	case "n":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocReviewNewPR,
@@ -200,11 +201,15 @@ func (v *PRsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		v.applyFilter()
 		return nil
+	case "F":
+		v.showAll = !v.showAll
+		v.pag.Reset()
+		return v.loadPRs()
 	case "r":
 		v.restoreIndex = v.cardList.Selected()
 		v.pag.ResetForRefresh(len(v.cardList.Items()))
 		return v.loadPRs()
-	case "F":
+	case "K":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocForks,
@@ -290,7 +295,11 @@ func (v *PRsView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		content = "Loading pull requests..."
 	} else if len(v.cardList.Items()) == 0 {
-		content = tuicore.Dim.Render("  No pull requests found")
+		if v.showAll {
+			content = tuicore.Dim.Render("  No pull requests")
+		} else {
+			content = tuicore.Dim.Render("  No open pull requests")
+		}
 	} else {
 		v.cardList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 		content = v.cardList.View()
@@ -308,7 +317,11 @@ func (v *PRsView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *PRsView) Title() string {
-	title := "⑂  Pull Requests"
+	stateFilter := "Open"
+	if v.showAll {
+		stateFilter = "All"
+	}
+	title := fmt.Sprintf("⑂  %s Pull Requests", stateFilter)
 	if v.assigneeFilter == "me" {
 		title += " · Mine"
 	}
@@ -341,10 +354,11 @@ func (v *PRsView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
+		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
 		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
+		{Key: "K", Label: "forks", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
-		{Key: "F", Label: "forks", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReviewPRs}, Handler: push},
 	}
@@ -362,13 +376,14 @@ func (v *PRsView) loadPRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	limit := v.pag.Limit()
+	states := v.stateFilter()
 	return func() tea.Msg {
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		v.workspaceURL = repoURL
 		branch := gitmsg.GetExtBranch(workdir, "review")
 		forks := review.GetForks(workdir)
 
-		res := review.GetPullRequestsWithForks(repoURL, branch, forks, nil, "", limit+1)
+		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, "", limit+1)
 		if !res.Success {
 			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
 		}
@@ -393,7 +408,7 @@ func (v *PRsView) loadPRs() tea.Cmd {
 			}
 		}
 
-		total := review.CountPRsWithForks(repoURL, branch, forks, nil)
+		total := review.CountPRsWithForks(repoURL, branch, forks, states)
 		return prsLoadedMsg{prs: prs, hasMore: hasMore, total: total}
 	}
 }
@@ -402,12 +417,13 @@ func (v *PRsView) loadMorePRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
+	states := v.stateFilter()
 	return func() tea.Msg {
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		branch := gitmsg.GetExtBranch(workdir, "review")
 		forks := review.GetForks(workdir)
 
-		res := review.GetPullRequestsWithForks(repoURL, branch, forks, nil, cursor, tuicore.PageSize+1)
+		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
 		if !res.Success {
 			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
 		}
@@ -444,4 +460,12 @@ func (v *PRsView) LoadMorePosts() tea.Cmd {
 func extractHashFromID(id string) string {
 	parsed := protocol.ParseRef(id)
 	return parsed.Value
+}
+
+// stateFilter returns the PR states to query based on the showAll toggle.
+func (v *PRsView) stateFilter() []string {
+	if v.showAll {
+		return []string{"open", "merged", "closed"}
+	}
+	return []string{"open"}
 }

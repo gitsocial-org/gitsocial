@@ -822,7 +822,6 @@ func (c *DiffViewCore) SharedBindings(ctx Context) []Binding {
 	noop := func(_ *HandlerContext) (bool, tea.Cmd) { return false, nil }
 	contexts := []Context{ctx}
 	return []Binding{
-		{Key: "enter", Label: "expand/collapse", Contexts: contexts, Handler: noop},
 		{Key: "e/E", Label: "expand", Contexts: contexts, Handler: noop},
 		{Key: "w", Label: "wrap", Contexts: contexts, Handler: noop},
 		{Key: "v", Label: "view mode", Contexts: contexts, Handler: noop},

@@ -35,7 +35,6 @@ func (v *RepoListsView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "enter", Label: "view posts", Contexts: []tuicore.Context{tuicore.RepoLists}, Handler: noop},
 		{Key: "r", Label: "repositories", Contexts: []tuicore.Context{tuicore.RepoLists}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.RepoLists}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.RepoLists}, Handler: noop},

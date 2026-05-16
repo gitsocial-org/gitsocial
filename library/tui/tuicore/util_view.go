@@ -151,9 +151,11 @@ var (
 
 // Release extension contexts - registered via init()
 var (
-	ReleaseList   = RegisterContext("release.list")
-	ReleaseDetail = RegisterContext("release.detail")
-	ReleaseSBOM   = RegisterContext("release.sbom")
+	ReleaseList        = RegisterContext("release.list")
+	ReleaseDetail      = RegisterContext("release.detail")
+	ReleaseSBOM        = RegisterContext("release.sbom")
+	ReleaseHistory     = RegisterContext("release.history")
+	ReleaseHistoryDiff = RegisterContext("release.history_diff")
 )
 
 // Review extension contexts - registered via init()

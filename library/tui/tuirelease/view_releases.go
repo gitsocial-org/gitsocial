@@ -182,7 +182,7 @@ func (v *ReleasesView) IsInputActive() bool {
 
 func (v *ReleasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
-	case "N":
+	case "n":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocReleaseNew,
@@ -317,7 +317,7 @@ func (v *ReleasesView) Bindings() []tuicore.Binding {
 		return true, ctx.StartLFSPush()
 	}
 	return []tuicore.Binding{
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: push},

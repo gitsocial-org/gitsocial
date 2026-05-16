@@ -37,7 +37,6 @@ func (v *SettingsView) Bindings() []Binding {
 	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []Binding{
 		{Key: "e", Label: "edit", Contexts: []Context{Settings}, Handler: noop},
-		{Key: "enter", Label: "edit/cycle", Contexts: []Context{Settings}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []Context{Settings}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []Context{Settings}, Handler: noop},
 		{Key: "home", Label: "first", Contexts: []Context{Settings}, Handler: noop},

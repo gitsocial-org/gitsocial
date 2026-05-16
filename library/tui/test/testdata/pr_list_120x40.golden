@@ -1,14 +1,14 @@
-╭─ ※  GitSocial ───────────────╮╭─ ⑂  Pull Requests · 1/2 ─────────────────────────────────────────────────────────────╮
+╭─ ※  GitSocial ───────────────╮╭─ ⑂  Open Pull Requests · 1/1 ────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏⑂  Add theme toggle component · Alice · TIME     · merged · main ←                 │
-│  ⚑  Notifications  ·····  @  ││  ▏   Clean separation of theme variables.                                            │
+│  ⌕  Search  ············  /  ││  ▏⑂  Add dark mode support · Alice · TIME     · open · main ← · dark-mode · [✓1]     │
+│  ⚑  Notifications  ·····  @  ││  ▏   Implements theme toggle with system preference detection.                       │
 │  ◧  Analytics  ·········  %  ││                                                                                      │
 │ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⌘  Social  ············  S  ││                                                                                      │
-│     ⏱  Timeline              ││   ⑂  Add dark mode support · Alice · TIME     · open · main ← · dark-mode · [✓1]     │
-│     ♥  My Repository         ││      Implements theme toggle with system preference detection.                       │
+│     ⏱  Timeline              ││                                                                                      │
+│     ♥  My Repository         ││                                                                                      │
 │     ☷  My Lists             ││                                                                                      │
-│  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ▢  PM  ················  P  ││                                                                                      │
 │  ⑂  Review  ············  R  ││                                                                                      │
 │     ⑂  Pull Requests         ││                                                                                      │
 │  ⏏  Release  ···········  V  ││                                                                                      │
@@ -35,6 +35,6 @@
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   N:new  m:mine  r:refresh  F:forks  p:push  tab:focus  f:fetch  q:quit  ?:help      │
+│ ──────────────────────────── ││   n:new  F:filter  m:mine  K:forks  r:refresh  p:push  tab:focus  f:fetch  q:quit    │
+│.../tui-test-FIXTURE          ││   ?:help                                                                             │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

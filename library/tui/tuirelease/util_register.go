@@ -20,6 +20,8 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/new", Context: tuicore.ReleaseDetail, Title: "New Release", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/edit", Context: tuicore.ReleaseDetail, Title: "Edit Release", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/sbom", Context: tuicore.ReleaseSBOM, Title: "SBOM", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history", Context: tuicore.ReleaseHistory, Title: "Release History", Icon: "⏏", NavItemID: "release", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history/diff", Context: tuicore.ReleaseHistoryDiff, Title: "Release Diff", Icon: "⏏", NavItemID: "release"})
 	tuicore.RegisterMessageHandler(handleReleaseMessages)
 	tuicore.RegisterNavTarget(
 		tuicore.ItemType{Extension: "release", Type: "release"},
@@ -219,6 +221,8 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/release/new", NewReleaseFormView(state.Workdir))
 	host.AddView("/release/edit", NewReleaseEditFormView(state.Workdir))
 	host.AddView("/release/sbom", NewReleaseSBOMView(state.Workdir))
+	host.AddView("/release/history", NewReleaseHistoryView(state.Workdir))
+	host.AddView("/release/history/diff", NewReleaseHistoryDiffView(state.Workdir))
 }
 
 // ReleaseCreatedMsg is sent when a release is created.

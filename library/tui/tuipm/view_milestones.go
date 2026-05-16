@@ -299,7 +299,7 @@ func (v *MilestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 		v.restoreIndex = v.cardList.Selected()
 		v.pag.ResetForRefresh(len(v.cardList.Items()))
 		return v.loadMilestones()
-	case "N":
+	case "n":
 		if v.isRemote {
 			return nil
 		}
@@ -379,11 +379,11 @@ func (v *MilestonesView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		content = "Loading milestones..."
 	} else if len(v.cardList.Items()) == 0 {
-		filter := "open"
 		if v.showAll {
-			filter = "all"
+			content = tuicore.Dim.Render("  No milestones")
+		} else {
+			content = tuicore.Dim.Render("  No open milestones")
 		}
-		content = tuicore.Dim.Render(fmt.Sprintf("  No %s milestones", filter))
 	} else {
 		v.cardList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 		content = v.cardList.View()
@@ -438,7 +438,7 @@ func (v *MilestonesView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},
 		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},
 		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},

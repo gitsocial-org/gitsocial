@@ -55,16 +55,15 @@ func TestStackBindings(t *testing.T) {
 	h := New(t, f.Workdir, f.CacheDir)
 
 	bindings := h.BindingsForContext(tuicore.ReviewPRDetail)
-	wantKeys := map[string]bool{"[": false, "]": false}
+	found := false
 	for _, b := range bindings {
-		if _, ok := wantKeys[b.Key]; ok {
-			wantKeys[b.Key] = true
+		if b.Key == "[/]" {
+			found = true
+			break
 		}
 	}
-	for key, found := range wantKeys {
-		if !found {
-			t.Errorf("expected %q binding to be registered on ReviewPRDetail context", key)
-		}
+	if !found {
+		t.Errorf("expected %q binding to be registered on ReviewPRDetail context", "[/]")
 	}
 	// Also ensure Registration doesn't panic for the stacked PR
 	_ = f

@@ -21,11 +21,14 @@ import (
 type BoardView struct {
 	workdir         string
 	repoURL         string
+	userEmail       string
 	width           int
 	height          int
-	board           pm.BoardView
+	board           pm.BoardView // filtered view used for rendering
+	allBoard        pm.BoardView // unfiltered load result
 	prefs           pm.UserPrefs
 	loaded          bool
+	assigneeFilter  string // "" = all, "me" = my issues
 	selectedCol     int
 	selectedRow     int
 	scrollOffset    int
@@ -45,6 +48,7 @@ func NewBoardView(workdir string) *BoardView {
 	tuicore.StyleTextInput(&input, tuicore.Title, tuicore.Normal, tuicore.Dim)
 	return &BoardView{
 		workdir:      workdir,
+		userEmail:    git.GetUserEmail(workdir),
 		quickInput:   input,
 		zonePrefix:   zone.NewPrefix(),
 		lastClickCol: -1,
@@ -102,10 +106,11 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case BoardLoadedMsg:
 		if msg.Err == nil {
-			v.board = msg.Board
+			v.allBoard = msg.Board
 			v.repoURL = msg.RepoURL
 			v.prefs = msg.Prefs
 			v.loaded = true
+			v.applyFilter()
 		}
 		return nil
 
@@ -251,7 +256,7 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 			go func() { _ = pm.SaveUserPrefs(repoURL, prefs) }()
 		}
 		return nil
-	case "F":
+	case "K":
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocForks,
@@ -265,8 +270,68 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 		prefs := v.prefs
 		go func() { _ = pm.SaveUserPrefs(repoURL, prefs) }()
 		return nil
+	case "m":
+		if v.assigneeFilter == "" {
+			v.assigneeFilter = "me"
+		} else {
+			v.assigneeFilter = ""
+		}
+		v.applyFilter()
+		return nil
 	}
 	return nil
+}
+
+// applyFilter rebuilds v.board from v.allBoard based on the active filters.
+// Currently only assigneeFilter ("me") is supported; column structure is preserved.
+func (v *BoardView) applyFilter() {
+	if v.assigneeFilter == "" || v.userEmail == "" {
+		v.board = v.allBoard
+		return
+	}
+	filtered := pm.BoardView{
+		ID:      v.allBoard.ID,
+		Name:    v.allBoard.Name,
+		Columns: make([]pm.BoardColumn, len(v.allBoard.Columns)),
+	}
+	for i, col := range v.allBoard.Columns {
+		var mine []pm.Issue
+		for _, issue := range col.Issues {
+			if isIssueMine(issue, v.userEmail) {
+				mine = append(mine, issue)
+			}
+		}
+		filtered.Columns[i] = pm.BoardColumn{
+			Name:   col.Name,
+			Label:  col.Label,
+			WIP:    col.WIP,
+			Issues: mine,
+		}
+	}
+	v.board = filtered
+	// Clamp selection in case the active column shrank.
+	if v.selectedCol >= 0 && v.selectedCol < len(v.board.Columns) {
+		colLen := len(v.board.Columns[v.selectedCol].Issues)
+		if v.selectedRow >= colLen {
+			v.selectedRow = colLen - 1
+			if v.selectedRow < 0 {
+				v.selectedRow = 0
+			}
+		}
+	}
+}
+
+// isIssueMine returns true if the issue is authored by or assigned to email.
+func isIssueMine(issue pm.Issue, email string) bool {
+	if strings.EqualFold(issue.Author.Email, email) {
+		return true
+	}
+	for _, a := range issue.Assignees {
+		if strings.EqualFold(a, email) {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *BoardView) handleMouse(msg tea.MouseMsg) tea.Cmd {
@@ -702,7 +767,11 @@ func (v *BoardView) Title() string {
 	}
 	// Capitalize first letter
 	framework = strings.ToUpper(framework[:1]) + framework[1:]
-	return "▦  Boards " + tuicore.Dim.Render("· "+framework)
+	title := "▦  Boards " + tuicore.Dim.Render("· "+framework)
+	if v.assigneeFilter == "me" {
+		title += " · Mine"
+	}
+	return title
 }
 
 // Bindings returns keybindings for this view.
@@ -716,10 +785,11 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 	}
 	return []tuicore.Binding{
 		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
-		{Key: "N", Label: "full create", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
-		{Key: "F", Label: "forks", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "x", Label: "collapse col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "s", Label: "swimlanes", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "K", Label: "forks", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "up", Label: "up", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "down", Label: "down", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
@@ -727,7 +797,6 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "home", Label: "first", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "end", Label: "last", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
-		{Key: "enter", Label: "open issue", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: push},
 	}
 }

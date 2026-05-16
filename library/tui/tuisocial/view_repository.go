@@ -68,11 +68,7 @@ func (v *RepositoryView) Bindings() []tuicore.Binding {
 				}
 				return true, ctx.Panel.SearchInRepository()
 			}},
-		{Key: "[", Label: "older", Contexts: []tuicore.Context{tuicore.Repository},
-			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
-				return false, nil // Handled by view
-			}},
-		{Key: "]", Label: "newer", Contexts: []tuicore.Context{tuicore.Repository},
+		{Key: "[/]", Label: "older/newer", Contexts: []tuicore.Context{tuicore.Repository},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				return false, nil // Handled by view
 			}},

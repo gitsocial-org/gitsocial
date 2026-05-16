@@ -66,8 +66,6 @@ func (v *ListPickerView) Bindings() []tuicore.Binding {
 				}
 				return true, ctx.Panel.OpenMyRepo()
 			}},
-		{Key: "a", Label: "create", Contexts: []tuicore.Context{tuicore.ListPicker}, Handler: noop},
-		{Key: "enter", Label: "open/add", Contexts: []tuicore.Context{tuicore.ListPicker}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.ListPicker}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.ListPicker}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ListPicker}, Handler: push},
@@ -274,17 +272,6 @@ func (v *ListPickerView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 				}
 			}
 		}
-	case "a":
-		v.inputMode = true
-		v.idInputFocused = false
-		v.idError = ""
-		v.input.Blur()
-		v.input.Reset()
-		v.input.Placeholder = ""
-		v.idInput.Blur()
-		v.idInput.Reset()
-		v.idInput.Placeholder = ""
-		return v.input.Focus()
 	case "D":
 		if len(v.lists) > 0 && v.cursor < len(v.lists) {
 			listID := v.lists[v.cursor].ID

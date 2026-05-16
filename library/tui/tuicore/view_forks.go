@@ -587,7 +587,6 @@ func (v *ForksView) Bindings() []Binding {
 		{Key: "x", Label: "remove fork", Contexts: []Context{CoreForks}, Handler: noop},
 		{Key: "v", Label: "sort", Contexts: []Context{CoreForks}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []Context{CoreForks}, Handler: noop},
-		{Key: "enter", Label: "open repo", Contexts: []Context{CoreForks}, Handler: noop},
 	}
 }
 

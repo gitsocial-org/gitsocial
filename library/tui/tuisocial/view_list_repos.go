@@ -49,7 +49,6 @@ func (v *ListReposView) Bindings() []tuicore.Binding {
 		{Key: "x", Label: "remove repository", Contexts: []tuicore.Context{tuicore.ListRepos}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.ListRepos}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.ListRepos}, Handler: noop},
-		{Key: "enter", Label: "open repo", Contexts: []tuicore.Context{tuicore.ListRepos}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ListRepos}, Handler: push},
 	}
 }

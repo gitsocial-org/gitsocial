@@ -452,7 +452,6 @@ func (v *SearchView) SelectedDisplayItem() (DisplayItem, bool) {
 func (v *SearchView) Bindings() []Binding {
 	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []Binding{
-		{Key: "enter", Label: "search/open", Contexts: []Context{Search}, Handler: noop},
 		{Key: "esc", Label: "exit input", Contexts: []Context{Search}, Handler: noop},
 		{Key: "down", Label: "to results", Contexts: []Context{Search}, Handler: noop},
 		{Key: "up", Label: "to input", Contexts: []Context{Search}, Handler: noop},

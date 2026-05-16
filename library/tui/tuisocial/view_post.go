@@ -145,7 +145,6 @@ func (v *PostView) Bindings() []tuicore.Binding {
 		{Key: "ctrl+u", Label: "half-page up", Contexts: []tuicore.Context{tuicore.Detail, tuicore.Thread}, Handler: noop},
 		{Key: "home", Label: "top", Contexts: []tuicore.Context{tuicore.Detail, tuicore.Thread}, Handler: noop},
 		{Key: "end", Label: "bottom", Contexts: []tuicore.Context{tuicore.Detail, tuicore.Thread}, Handler: noop},
-		{Key: "enter", Label: "activate", Contexts: []tuicore.Context{tuicore.Detail, tuicore.Thread}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.Detail, tuicore.Thread}, Handler: push},
 	}
 }

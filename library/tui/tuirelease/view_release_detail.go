@@ -218,6 +218,16 @@ func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					v.confirm.Show("Retract this release?", false, func() tea.Cmd { return v.doRetract() })
 					return nil
 				}
+			case "h":
+				if v.rel != nil && v.rel.IsEdited {
+					releaseID := v.rel.ID
+					return func() tea.Msg {
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocReleaseHistory(releaseID),
+							Action:   tuicore.NavPush,
+						}
+					}
+				}
 			}
 		}
 	}
@@ -548,6 +558,7 @@ func (v *ReleaseDetailView) Bindings() []tuicore.Binding {
 		{Key: "s", Label: "sbom", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
+		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: tuicore.RawViewHandler},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
 		{Key: "X", Label: "retract", Contexts: []tuicore.Context{tuicore.ReleaseDetail}, Handler: noop},
