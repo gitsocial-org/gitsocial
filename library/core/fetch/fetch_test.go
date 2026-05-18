@@ -482,7 +482,7 @@ func TestCacheErrorPaths(t *testing.T) {
 			t.Error("expected error with insert trigger")
 		}
 	})
-	t.Run("FetchFullHistory_processError", func(t *testing.T) {
+	t.Run("FetchFullHistoryAllBranches_processError", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping integration test")
 		}
@@ -492,12 +492,12 @@ func TestCacheErrorPaths(t *testing.T) {
 			_, err := db.Exec(`CREATE TRIGGER block_commit_insert BEFORE INSERT ON core_commits BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
 			return err
 		})
-		_, err := fetchFullHistory(dir, "https://example.com/proc-err", "main", nil)
+		_, err := fetchFullHistoryAllBranches(dir, "https://example.com/proc-err", "main", nil)
 		if err == nil {
 			t.Error("expected error from processCommits")
 		}
 	})
-	t.Run("FetchIncremental_processError", func(t *testing.T) {
+	t.Run("FetchIncrementalAllBranches_processError", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping integration test")
 		}
@@ -508,7 +508,7 @@ func TestCacheErrorPaths(t *testing.T) {
 			return err
 		})
 		sinceTime := time.Now().AddDate(0, 0, -1)
-		_, err := fetchIncremental(dir, "https://example.com/incr-err", "main", sinceTime, nil)
+		_, err := fetchIncrementalAllBranches(dir, "https://example.com/incr-err", "main", sinceTime, nil)
 		if err == nil {
 			t.Error("expected error from processCommits")
 		}
@@ -745,9 +745,9 @@ func TestFetchFullHistory(t *testing.T) {
 	dir, commits := initTestRepo(t, 3)
 	repoURL := "https://example.com/fullhistory"
 
-	count, err := fetchFullHistory(dir, repoURL, "main", nil)
+	count, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
 	if err != nil {
-		t.Fatalf("fetchFullHistory() error = %v", err)
+		t.Fatalf("fetchFullHistoryAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -791,9 +791,9 @@ func TestFetchFullHistory_withProcessor(t *testing.T) {
 	var processed int
 	proc := func(commit git.Commit, msg *protocol.Message, rURL, b string) { processed++ }
 
-	count, err := fetchFullHistory(dir, repoURL, "main", []CommitProcessor{proc})
+	count, err := fetchFullHistoryAllBranches(dir, repoURL, "main", []CommitProcessor{proc})
 	if err != nil {
-		t.Fatalf("fetchFullHistory() error = %v", err)
+		t.Fatalf("fetchFullHistoryAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -811,14 +811,14 @@ func TestFetchFullHistory_idempotent(t *testing.T) {
 	dir, _ := initTestRepo(t, 3)
 	repoURL := "https://example.com/fullhistory-idem"
 
-	count1, err := fetchFullHistory(dir, repoURL, "main", nil)
+	count1, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
 	if err != nil {
-		t.Fatalf("first fetchFullHistory() error = %v", err)
+		t.Fatalf("first fetchFullHistoryAllBranches() error = %v", err)
 	}
 
-	count2, err := fetchFullHistory(dir, repoURL, "main", nil)
+	count2, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
 	if err != nil {
-		t.Fatalf("second fetchFullHistory() error = %v", err)
+		t.Fatalf("second fetchFullHistoryAllBranches() error = %v", err)
 	}
 	if count2 != 0 {
 		t.Errorf("second fetch count = %d, want 0 (all already cached)", count2)
@@ -840,9 +840,9 @@ func TestFetchIncremental(t *testing.T) {
 
 	// Use yesterday to ensure all today's commits are included (git --since uses date granularity)
 	sinceTime := time.Now().AddDate(0, 0, -1)
-	count, err := fetchIncremental(dir, repoURL, "main", sinceTime, nil)
+	count, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
 	if err != nil {
-		t.Fatalf("fetchIncremental() error = %v", err)
+		t.Fatalf("fetchIncrementalAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -859,9 +859,9 @@ func TestFetchIncremental_onlyNewCommits(t *testing.T) {
 
 	// Fetch all first (use yesterday to avoid date boundary issues)
 	sinceTime := time.Now().AddDate(0, 0, -1)
-	_, err := fetchIncremental(dir, repoURL, "main", sinceTime, nil)
+	_, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
 	if err != nil {
-		t.Fatalf("first fetchIncremental() error = %v", err)
+		t.Fatalf("first fetchIncrementalAllBranches() error = %v", err)
 	}
 
 	// Add a new commit
@@ -870,9 +870,9 @@ func TestFetchIncremental_onlyNewCommits(t *testing.T) {
 	}
 
 	// Fetch again — only the new commit should be counted
-	count, err := fetchIncremental(dir, repoURL, "main", sinceTime, nil)
+	count, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
 	if err != nil {
-		t.Fatalf("second fetchIncremental() error = %v", err)
+		t.Fatalf("second fetchIncrementalAllBranches() error = %v", err)
 	}
 	if count != 1 {
 		t.Errorf("count = %d, want 1 (only the new commit)", count)
