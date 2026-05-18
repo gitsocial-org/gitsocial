@@ -626,7 +626,7 @@ func TestGetTimeline(t *testing.T) {
 	insertItemsTestCommit(t, wsURL, "tl_112345678")
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tl_112345678", Branch: itemsTestBranch, Type: "post"})
 
-	items, err := GetTimeline(nil, wsURL, 10, "")
+	items, err := GetTimeline(nil, wsURL, nil, 10, "")
 	if err != nil {
 		t.Fatalf("GetTimeline() error = %v", err)
 	}
@@ -637,7 +637,7 @@ func TestGetTimeline(t *testing.T) {
 
 func TestGetTimeline_empty(t *testing.T) {
 	setupTestDB(t)
-	items, err := GetTimeline(nil, "", 10, "")
+	items, err := GetTimeline(nil, "", nil, 10, "")
 	if err != nil {
 		t.Fatalf("GetTimeline(empty) error = %v", err)
 	}
@@ -1220,7 +1220,7 @@ func TestGetTimeline_withListIDs(t *testing.T) {
 	})
 	insertItemsTestCommit(t, itemsTestRepoURL, "tlli12345678")
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "tlli12345678", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetTimeline([]string{"tl-list-ids"}, "", 10, "")
+	items, err := GetTimeline([]string{"tl-list-ids"}, "", nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1249,12 +1249,68 @@ func TestGetTimeline_withListIDsAndWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tlbth_ws___1", Branch: "main", Type: "post"})
-	items, err := GetTimeline([]string{"tl-both"}, wsURL, 10, "")
+	items, err := GetTimeline([]string{"tl-both"}, wsURL, nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
 	if len(items) < 2 {
 		t.Errorf("expected at least 2 (list + workspace), got %d", len(items))
+	}
+}
+
+func TestGetTimeline_withForks(t *testing.T) {
+	setupTestDB(t)
+	wsURL := "https://github.com/ws/forktl"
+	forkURL := "https://codeberg.org/fork/forktl"
+
+	// Workspace post.
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: "tlfork_ws_01", RepoURL: wsURL, Branch: "gitmsg/social",
+		AuthorName: "T", AuthorEmail: "t@t.com", Message: "ws post",
+		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tlfork_ws_01", Branch: "gitmsg/social", Type: "post"})
+
+	// Fork has the same workspace post duplicated under its own repo_url
+	// (forks fetch refs/heads/gitmsg/* verbatim).
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: "tlfork_ws_01", RepoURL: forkURL, Branch: "gitmsg/social",
+		AuthorName: "T", AuthorEmail: "t@t.com", Message: "ws post",
+		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Fork-only commit.
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: "tlfork_uniq1", RepoURL: forkURL, Branch: "gitmsg/pm",
+		AuthorName: "U", AuthorEmail: "u@u.com", Message: "fork issue",
+		Timestamp: time.Date(2025, 10, 22, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := GetTimeline(nil, wsURL, []string{forkURL}, 10, "")
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	var sawWSDup, sawForkUniq bool
+	for _, it := range items {
+		if it.Hash == "tlfork_ws_01" && it.RepoURL == forkURL {
+			sawWSDup = true
+		}
+		if it.Hash == "tlfork_uniq1" && it.RepoURL == forkURL {
+			sawForkUniq = true
+		}
+	}
+	if sawWSDup {
+		t.Error("fork copy of workspace commit should be deduplicated")
+	}
+	if !sawForkUniq {
+		t.Error("fork-only commit should appear on timeline")
 	}
 }
 
@@ -1482,7 +1538,7 @@ func TestInsertSocialItem_quoteAncestorInteraction(t *testing.T) {
 func TestGetTimeline_noUnionsReturnsNil(t *testing.T) {
 	setupTestDB(t)
 	// No list IDs and no workspace URL → empty unions → returns nil
-	items, err := GetTimeline(nil, "", 0, "")
+	items, err := GetTimeline(nil, "", nil, 0, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1499,7 +1555,7 @@ func TestGetTimeline_withLimit(t *testing.T) {
 		insertItemsTestCommit(t, wsURL, h)
 		InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: h, Branch: itemsTestBranch, Type: "post"})
 	}
-	items, err := GetTimeline(nil, wsURL, 2, "")
+	items, err := GetTimeline(nil, wsURL, nil, 2, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}

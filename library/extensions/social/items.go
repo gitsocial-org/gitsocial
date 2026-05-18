@@ -609,8 +609,8 @@ func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
 	})
 }
 
-// GetTimeline retrieves posts from subscribed lists and workspace combined.
-func GetTimeline(listIDs []string, workspaceURL string, limit int, cursor string) ([]SocialItem, error) {
+// GetTimeline retrieves posts from subscribed lists, workspace, and registered forks combined.
+func GetTimeline(listIDs []string, workspaceURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		var unions []string
 		var args []interface{}
@@ -636,6 +636,24 @@ func GetTimeline(listIDs []string, workspaceURL string, limit int, cursor string
 		if workspaceURL != "" {
 			unions = append(unions, baseSelectFromView+" WHERE v.repo_url = ?"+gitmsgFilter+editFilter)
 			args = append(args, workspaceURL)
+			args = append(args, workspaceURL)
+			if cursor != "" {
+				args = append(args, cursor)
+			}
+		}
+
+		if len(forkURLs) > 0 {
+			ph := strings.Repeat("?,", len(forkURLs))
+			ph = ph[:len(ph)-1]
+			// Forks fetch our gitmsg/* branches verbatim, so most fork commits
+			// are duplicates of workspace commits under a different repo_url.
+			// Only surface fork commits whose hash isn't already in the workspace.
+			dedup := " AND NOT EXISTS (SELECT 1 FROM core_commits c2 WHERE c2.hash = v.hash AND c2.repo_url = ?)"
+			unions = append(unions, baseSelectFromView+" WHERE v.repo_url IN ("+ph+")"+gitmsgFilter+dedup+editFilter)
+			args = append(args, workspaceURL)
+			for _, u := range forkURLs {
+				args = append(args, u)
+			}
 			args = append(args, workspaceURL)
 			if cursor != "" {
 				args = append(args, cursor)
@@ -672,7 +690,7 @@ func GetTimeline(listIDs []string, workspaceURL string, limit int, cursor string
 }
 
 // GetTimelineCount returns the total number of timeline items (without pagination).
-func GetTimelineCount(listIDs []string, workspaceURL string) (int, error) {
+func GetTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var unions []string
 		var args []interface{}
@@ -690,6 +708,17 @@ func GetTimelineCount(listIDs []string, workspaceURL string) (int, error) {
 
 		if workspaceURL != "" {
 			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v WHERE v.repo_url = ?"+gitmsgFilter+editFilter)
+			args = append(args, workspaceURL)
+		}
+
+		if len(forkURLs) > 0 {
+			ph := strings.Repeat("?,", len(forkURLs))
+			ph = ph[:len(ph)-1]
+			dedup := " AND NOT EXISTS (SELECT 1 FROM core_commits c2 WHERE c2.hash = v.hash AND c2.repo_url = ?)"
+			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v WHERE v.repo_url IN ("+ph+")"+gitmsgFilter+dedup+editFilter)
+			for _, u := range forkURLs {
+				args = append(args, u)
+			}
 			args = append(args, workspaceURL)
 		}
 

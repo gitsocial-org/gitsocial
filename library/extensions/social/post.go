@@ -402,7 +402,8 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 	}
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
-	items, err := GetTimeline(listIDs, workspaceURL, opts.Limit, opts.Cursor)
+	forkURLs := gitmsg.GetForks(workdir)
+	items, err := GetTimeline(listIDs, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
 	if err != nil {
 		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get timeline", err)
 	}
@@ -431,7 +432,8 @@ func CountTimeline(workdir, gitRoot string) int {
 	}
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	listIDs, _ := cache.GetListIDs(gitRoot)
-	count, _ := GetTimelineCount(listIDs, workspaceURL)
+	forkURLs := gitmsg.GetForks(workdir)
+	count, _ := GetTimelineCount(listIDs, workspaceURL, forkURLs)
 	return count
 }
 
@@ -448,7 +450,7 @@ func CountRepository(workdir, repoURL, branch string, isWorkspace bool) int {
 
 // CountListPosts returns the total number of posts in a list.
 func CountListPosts(listID string) int {
-	count, _ := GetTimelineCount([]string{listID}, "")
+	count, _ := GetTimelineCount([]string{listID}, "", nil)
 	return count
 }
 
@@ -546,7 +548,7 @@ func getListPosts(listID string, _ string, opts *GetPostsOptions) Result[[]Post]
 		cursor = opts.Cursor
 	}
 	// Don't include workspace posts - only show posts from repos in the list
-	items, err := GetTimeline([]string{listID}, "", limit, cursor)
+	items, err := GetTimeline([]string{listID}, "", nil, limit, cursor)
 	if err != nil {
 		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
 	}
