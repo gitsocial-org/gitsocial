@@ -4,11 +4,11 @@ package fetch
 import (
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/identity"
-	"github.com/gitsocial-org/gitsocial/core/log"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/identity"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // CommitProcessor is called for each newly fetched commit after it's inserted into core_commits.

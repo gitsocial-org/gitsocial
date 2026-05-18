@@ -4,7 +4,7 @@ package pm
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestNavRegistration(t *testing.T) {

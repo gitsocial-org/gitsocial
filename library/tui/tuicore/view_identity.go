@@ -7,10 +7,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/identity"
-	"github.com/gitsocial-org/gitsocial/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/identity"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
 var CoreIdentity = RegisterContext("core.identity")

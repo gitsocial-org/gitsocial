@@ -13,8 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/gitsocial-org/gitsocial/tui"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 var zoneOnce sync.Once

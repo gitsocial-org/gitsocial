@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // RegisterSocialMethods registers social.* methods on the server.

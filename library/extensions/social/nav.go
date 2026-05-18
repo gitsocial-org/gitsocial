@@ -1,7 +1,7 @@
 // nav.go - Navigation registry items and view metadata for social extension
 package social
 
-import "github.com/gitsocial-org/gitsocial/tui/tuicore"
+import "github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 
 // RegisterNavItems registers social extension navigation items
 func RegisterNavItems(r *tuicore.NavRegistry) {

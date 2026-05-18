@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 type PushResult struct {

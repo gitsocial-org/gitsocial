@@ -4,7 +4,7 @@ package diff
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 // fixtureDiff builds a small two-file diff for tests.

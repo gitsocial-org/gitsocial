@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
-	"github.com/gitsocial-org/gitsocial/extensions/release"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/extensions/release"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // ReleaseFormData holds the form field values.

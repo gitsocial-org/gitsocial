@@ -1,7 +1,7 @@
 // schema.go - Social extension database schema
 package social
 
-import "github.com/gitsocial-org/gitsocial/core/cache"
+import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
 func init() {
 	cache.RegisterSchema("social", schema)

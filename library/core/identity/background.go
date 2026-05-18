@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"sync"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 // backfillBatchLimit caps how many NULL-signer_key commits we backfill per

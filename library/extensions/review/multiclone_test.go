@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // TestMultiCloneCollab walks through the canonical "two devs share an origin"

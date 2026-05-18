@@ -8,11 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/log"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore/diff"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
 // DiffView displays files changed in a pull request.

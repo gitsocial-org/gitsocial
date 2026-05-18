@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 )
 
 func TestFormatTipStaleMarker(t *testing.T) {

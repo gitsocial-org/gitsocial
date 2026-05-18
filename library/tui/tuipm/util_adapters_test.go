@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestIssueItem_ItemType(t *testing.T) {

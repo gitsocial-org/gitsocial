@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 // EnsureForkRepository creates a minimal bare repo for diff operations.

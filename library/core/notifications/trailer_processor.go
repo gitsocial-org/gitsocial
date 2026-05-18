@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"log/slog"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/fetch"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // TrailerProcessor returns a CommitProcessor that extracts git trailer references

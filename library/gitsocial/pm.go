@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 )
 
 const pmExt = "pm"

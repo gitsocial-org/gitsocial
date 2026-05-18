@@ -4,7 +4,7 @@ package social
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 func TestGetPostType(t *testing.T) {

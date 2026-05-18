@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/tui"
+	"github.com/gitsocial-org/gitsocial/library/tui"
 )
 
 var version = "dev"

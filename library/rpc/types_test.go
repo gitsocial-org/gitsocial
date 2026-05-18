@@ -4,7 +4,7 @@ package rpc
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 func TestAppErrorCode(t *testing.T) {

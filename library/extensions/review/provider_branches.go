@@ -10,8 +10,8 @@ package review
 import (
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // getBranchStateNotifications surfaces head-advanced / head-deleted /

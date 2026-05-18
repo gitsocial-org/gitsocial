@@ -69,7 +69,7 @@ gitmsg/
 │   │   └── review/                 # Pull requests, code reviews
 │   ├── import/                     # Platform import pipeline
 │   │   └── github/                # GitHub adapter (gh CLI)
-│   ├── cli/                        # CLI commands
+│   ├── gitsocial/                  # CLI commands (main package — produces gitsocial binary)
 │   └── tui/                        # TUI views
 ├── clients/
 │   └── vscode/                     # VSCode extension (planned)
@@ -82,7 +82,7 @@ gitmsg/
 ```
 extensions/* → core/* → stdlib only
      ↓            ↓
-    cli/        (no circular refs)
+  gitsocial/    (no circular refs)
     tui/
     import/  → extensions/* + core/protocol
 ```
@@ -489,9 +489,9 @@ If more ceremony needed, we over-engineered.
 ### Build & Run
 
 ```bash
-go build -o /tmp/gitsocial ./library    # Build CLI
-/tmp/gitsocial social timeline          # Run command
-/tmp/gitsocial tui                      # Launch TUI
+cd library && go build -o /tmp/gitsocial ./gitsocial    # Build CLI
+/tmp/gitsocial social timeline                          # Run command
+/tmp/gitsocial tui                                      # Launch TUI
 ```
 
 ### Test & Lint

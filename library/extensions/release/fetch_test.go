@@ -4,7 +4,7 @@ package release
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 func TestProcessors(t *testing.T) {

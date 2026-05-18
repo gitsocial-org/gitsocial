@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 )
 
 // RegisterPMMethods registers pm.* methods on the server.

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 type reviewNotificationProvider struct{}

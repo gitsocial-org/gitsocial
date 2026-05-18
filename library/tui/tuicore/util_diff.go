@@ -12,7 +12,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 var (

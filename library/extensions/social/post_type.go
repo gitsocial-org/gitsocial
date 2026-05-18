@@ -1,7 +1,7 @@
 // post_type.go - Social post type classification
 package social
 
-import "github.com/gitsocial-org/gitsocial/core/protocol"
+import "github.com/gitsocial-org/gitsocial/library/core/protocol"
 
 // socialFieldOrder declares the spec-defined field ordering for social headers (GITSOCIAL.md 1.2).
 var socialFieldOrder = []string{"reply-to", "original"}

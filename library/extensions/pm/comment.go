@@ -2,9 +2,9 @@
 package pm
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/result"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // CommentOnItem creates a comment on a PM item (issue, milestone, sprint) using the social extension.

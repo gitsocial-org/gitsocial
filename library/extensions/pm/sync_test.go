@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 
-	_ "github.com/gitsocial-org/gitsocial/extensions/social"
+	_ "github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 func setupTestDB(t *testing.T) {

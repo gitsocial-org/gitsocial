@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // InterdiffView displays range-diff output between two PR versions.

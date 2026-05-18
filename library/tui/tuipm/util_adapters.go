@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/identity"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/core/identity"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // hashFromRef extracts the commit hash from an item's ref-style ID.

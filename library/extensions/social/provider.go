@@ -2,8 +2,8 @@
 package social
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 type notificationProvider struct{}

@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 var stackSetupOnce sync.Once

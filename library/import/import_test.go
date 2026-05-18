@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 )
 
 func TestBuildOrigin(t *testing.T) {

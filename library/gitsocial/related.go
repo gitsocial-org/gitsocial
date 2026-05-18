@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // newRelatedCmd creates the command for finding related repositories.

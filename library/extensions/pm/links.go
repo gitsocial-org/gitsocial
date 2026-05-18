@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 // InsertLinks writes link rows for an issue, replacing any existing links.

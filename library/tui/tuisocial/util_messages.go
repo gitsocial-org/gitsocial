@@ -2,8 +2,8 @@
 package tuisocial
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // ThreadLoadedMsg is sent when thread data is loaded

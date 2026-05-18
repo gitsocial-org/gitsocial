@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // sqlExecutor is the subset of *sql.DB / *sql.Tx that applyEditToCanonical

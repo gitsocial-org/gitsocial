@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 var sharedFixture *Fixture

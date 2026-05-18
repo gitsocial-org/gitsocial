@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/log"
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 const lfsThreshold = 1 << 20 // 1MB

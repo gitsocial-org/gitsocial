@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 var probeClient = &http.Client{Timeout: 5 * time.Second}

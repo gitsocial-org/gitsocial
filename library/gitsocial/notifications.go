@@ -8,15 +8,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/extensions/release"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/release"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 
 	// Register the gitmsg-divergence notification provider.
-	_ "github.com/gitsocial-org/gitsocial/core/gitmsg/divergence"
+	_ "github.com/gitsocial-org/gitsocial/library/core/gitmsg/divergence"
 )
 
 // newNotificationsCmd creates the parent command for viewing and managing notifications.

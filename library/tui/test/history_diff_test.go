@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // TestHistoryDiffFooter asserts each history-diff context registers exactly the

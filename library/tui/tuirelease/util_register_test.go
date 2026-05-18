@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/extensions/release"
+	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 )
 
 func TestBoolToYesNo(t *testing.T) {

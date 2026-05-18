@@ -5,7 +5,7 @@ package diff
 import (
 	"fmt"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 // DisplayRow is a cell-model Row, optionally with split-mode halves.

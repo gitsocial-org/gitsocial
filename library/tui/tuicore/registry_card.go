@@ -4,8 +4,8 @@ package tuicore
 import (
 	"sync"
 
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // itemToCardRegistry maps ext/type to card renderers

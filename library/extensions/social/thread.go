@@ -4,7 +4,7 @@ package social
 import (
 	"sort"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // normalizedKey creates a unique key from a post ID for map lookups.

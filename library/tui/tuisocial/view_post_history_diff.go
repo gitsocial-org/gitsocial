@@ -4,10 +4,10 @@ package tuisocial
 import (
 	"fmt"
 
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // NewPostHistoryDiffView creates a HistoryDiffView wired to social post history.

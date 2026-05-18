@@ -10,15 +10,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/fetch"
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/notifications"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/core/settings"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // newFetchCmd creates the command for fetching updates from subscribed repositories.

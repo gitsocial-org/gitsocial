@@ -1,7 +1,7 @@
 // social.go - GitLab social stub (no Discussions equivalent)
 package gitlab
 
-import importpkg "github.com/gitsocial-org/gitsocial/import"
+import importpkg "github.com/gitsocial-org/gitsocial/library/import"
 
 // FetchSocial returns an empty plan — GitLab has no Discussions feature.
 func (a *Adapter) FetchSocial(opts importpkg.FetchOptions) (*importpkg.SocialPlan, error) {

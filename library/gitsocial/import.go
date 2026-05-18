@@ -12,11 +12,11 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	importpkg "github.com/gitsocial-org/gitsocial/import"
-	ghimport "github.com/gitsocial-org/gitsocial/import/github"
-	glimport "github.com/gitsocial-org/gitsocial/import/gitlab"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	importpkg "github.com/gitsocial-org/gitsocial/library/import"
+	ghimport "github.com/gitsocial-org/gitsocial/library/import/github"
+	glimport "github.com/gitsocial-org/gitsocial/library/import/gitlab"
 )
 
 type importFlags struct {

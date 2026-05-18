@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 const maxLineSize = 1024 * 1024 // 1MB

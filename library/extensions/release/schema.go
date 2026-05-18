@@ -1,7 +1,7 @@
 // schema.go - Release extension database schema
 package release
 
-import "github.com/gitsocial-org/gitsocial/core/cache"
+import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
 func init() {
 	cache.RegisterSchema("release", schema)

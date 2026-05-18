@@ -4,8 +4,8 @@ package review
 import (
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 type Result[T any] = result.Result[T]

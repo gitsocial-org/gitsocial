@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 var fencePattern = regexp.MustCompile("(?s)```[^\n]*\n(.*?)\n```")

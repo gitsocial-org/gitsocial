@@ -16,8 +16,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 const forksRefPrefix = "refs/gitmsg/core/forks/"

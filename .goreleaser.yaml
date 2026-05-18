@@ -4,7 +4,7 @@ project_name: gitsocial
 
 builds:
   - dir: library
-    main: ./cli
+    main: ./gitsocial
     binary: gitsocial
     ldflags:
       - -s -w -X main.version={{.Version}}

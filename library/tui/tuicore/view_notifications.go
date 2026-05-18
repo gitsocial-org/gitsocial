@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 // NotificationsLoadedMsg is sent when notifications are loaded.

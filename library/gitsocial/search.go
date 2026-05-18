@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/search"
+	"github.com/gitsocial-org/gitsocial/library/core/search"
 )
 
 // newSearchCmd creates the command for searching posts with filters.

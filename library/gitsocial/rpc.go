@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/rpc"
+	"github.com/gitsocial-org/gitsocial/library/rpc"
 )
 
 // newRPCCmd creates the command for starting the JSON-RPC stdio server.

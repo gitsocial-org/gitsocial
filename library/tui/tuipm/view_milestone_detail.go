@@ -7,13 +7,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
-	"github.com/gitsocial-org/gitsocial/tui/tuisocial"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
 // MilestoneDetailView displays a single milestone with issues and comments.

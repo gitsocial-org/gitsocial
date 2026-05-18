@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gitsocial-org/gitsocial/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
 // UserPrefs stores per-repo board preferences.

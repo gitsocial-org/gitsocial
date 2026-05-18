@@ -4,9 +4,9 @@ package tuipm
 import (
 	"fmt"
 
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // loadPMHistoryVersionsKey returns a loader that reads the route param under paramKey,

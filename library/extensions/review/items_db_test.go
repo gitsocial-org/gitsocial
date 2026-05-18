@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 func TestInsertReviewItem(t *testing.T) {

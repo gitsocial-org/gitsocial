@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 )
 
 // --- Pure function tests ---

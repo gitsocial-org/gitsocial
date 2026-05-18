@@ -4,7 +4,7 @@ package rpc
 import (
 	"encoding/json"
 
-	"github.com/gitsocial-org/gitsocial/extensions/release"
+	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 )
 
 // RegisterReleaseMethods registers release.* methods on the server.

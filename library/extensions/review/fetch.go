@@ -2,8 +2,8 @@
 package review
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/fetch"
-	"github.com/gitsocial-org/gitsocial/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 // FetchRepository fetches review data from a remote repository.

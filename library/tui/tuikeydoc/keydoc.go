@@ -4,11 +4,11 @@ package tuikeydoc
 import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
-	"github.com/gitsocial-org/gitsocial/tui/tuipm"
-	"github.com/gitsocial-org/gitsocial/tui/tuirelease"
-	"github.com/gitsocial-org/gitsocial/tui/tuireview"
-	"github.com/gitsocial-org/gitsocial/tui/tuisocial"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuipm"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
 // KeyDoc represents a single keybinding for documentation.

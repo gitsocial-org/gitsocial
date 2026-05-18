@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
 // newSettingsCmd creates the parent command for managing user settings.

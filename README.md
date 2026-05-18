@@ -45,7 +45,7 @@ scoop install gitsocial
 
 **Go**:
 ```bash
-go install github.com/gitsocial-org/gitsocial/library/cli@latest
+go install github.com/gitsocial-org/gitsocial/library/gitsocial@latest
 ```
 
 Or download a binary from [Releases](https://github.com/gitsocial-org/gitsocial/releases/latest).

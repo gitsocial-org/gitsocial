@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 const configVersion = "0.1.0"

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 // validGroupByFields lists fields that can be used with --group-by.

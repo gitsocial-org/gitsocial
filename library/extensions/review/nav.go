@@ -1,7 +1,7 @@
 // nav.go - Navigation registry items and view metadata for review extension
 package review
 
-import "github.com/gitsocial-org/gitsocial/tui/tuicore"
+import "github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 
 // RegisterNavItems registers review extension navigation items.
 func RegisterNavItems(r *tuicore.NavRegistry) {

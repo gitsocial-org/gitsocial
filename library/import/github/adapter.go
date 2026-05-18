@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	importpkg "github.com/gitsocial-org/gitsocial/import"
+	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
 // userProfile holds a resolved GitHub user's display name and email.

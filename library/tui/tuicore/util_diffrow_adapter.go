@@ -11,7 +11,7 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/colorprofile"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore/diff"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
 // init configures the diff renderer for the host terminal's color profile.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 func TestBuildPRContent_minimal(t *testing.T) {

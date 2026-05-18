@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 func TestReviewItemToPullRequest(t *testing.T) {

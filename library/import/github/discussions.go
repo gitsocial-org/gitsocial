@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/log"
-	importpkg "github.com/gitsocial-org/gitsocial/import"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
+	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
 type ghDiscussion struct {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuikeydoc"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuikeydoc"
 )
 
 func newDocsCmd() *cobra.Command {

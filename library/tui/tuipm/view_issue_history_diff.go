@@ -2,7 +2,7 @@
 package tuipm
 
 import (
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // NewIssueHistoryDiffView creates a HistoryDiffView wired to issue history.

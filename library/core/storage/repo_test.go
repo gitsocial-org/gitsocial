@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 var baseSourceRepoDir string

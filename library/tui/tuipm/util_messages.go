@@ -1,7 +1,7 @@
 // messages.go - PM extension TUI messages
 package tuipm
 
-import "github.com/gitsocial-org/gitsocial/extensions/pm"
+import "github.com/gitsocial-org/gitsocial/library/extensions/pm"
 
 // IssueCreatedMsg signals that an issue was created.
 type IssueCreatedMsg struct {

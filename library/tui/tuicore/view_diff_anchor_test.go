@@ -5,7 +5,7 @@ package tuicore
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore/diff"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
 func mkRow(file, hunk, old, new int) diff.DisplayRow {

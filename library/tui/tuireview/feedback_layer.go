@@ -9,9 +9,9 @@ package tuireview
 import (
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/extensions/review"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore/diff"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
 // feedbackLayer interleaves inline PR feedback rows into a DisplayPlan.

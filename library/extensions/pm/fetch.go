@@ -2,7 +2,7 @@
 package pm
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 )
 
 // FetchRepository fetches PM data from a remote repository.

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 // Notification represents a unified notification from any extension.

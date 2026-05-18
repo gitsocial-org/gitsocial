@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 var gitTimeout = 30 * time.Second

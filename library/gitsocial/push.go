@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
 // newPushCmd creates the command for pushing local changes to remote.

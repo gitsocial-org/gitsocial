@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/cache"
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 
-	_ "github.com/gitsocial-org/gitsocial/extensions/social"
+	_ "github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 var baseRepoDir string

@@ -4,7 +4,7 @@ package rpc
 import (
 	"encoding/json"
 
-	"github.com/gitsocial-org/gitsocial/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 type Request struct {

@@ -6,7 +6,7 @@
 package diff
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 // LogicalRow is the smallest stable unit: one source line of one file.

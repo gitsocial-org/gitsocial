@@ -22,7 +22,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/gitsocial-org/gitsocial/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 var ErrNotOpen = errors.New("cache: database not open")

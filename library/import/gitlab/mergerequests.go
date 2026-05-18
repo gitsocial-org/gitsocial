@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"time"
 
-	importpkg "github.com/gitsocial-org/gitsocial/import"
+	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
 type glDiffRefs struct {

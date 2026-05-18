@@ -11,7 +11,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/gitsocial-org/gitsocial/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files")

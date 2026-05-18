@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/core/search"
+	"github.com/gitsocial-org/gitsocial/library/core/search"
 )
 
 // RegisterSearchMethods registers search methods on the server.

@@ -1,7 +1,7 @@
 // schema.go - PM extension database schema
 package pm
 
-import "github.com/gitsocial-org/gitsocial/core/cache"
+import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
 func init() {
 	cache.RegisterSchema("pm", schema)

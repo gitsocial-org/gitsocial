@@ -2,8 +2,8 @@
 package review
 
 import (
-	"github.com/gitsocial-org/gitsocial/core/result"
-	"github.com/gitsocial-org/gitsocial/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // GetPRComments retrieves all social comments on a pull request.

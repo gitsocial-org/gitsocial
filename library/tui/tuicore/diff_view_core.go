@@ -14,8 +14,8 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/gitsocial-org/gitsocial/core/git"
-	"github.com/gitsocial-org/gitsocial/tui/tuicore/diff"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
 // ExtraKey is a wrapper-installed key hook. Return handled=true to consume
