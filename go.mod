@@ -1,4 +1,4 @@
-module github.com/gitsocial-org/gitsocial/library
+module github.com/gitsocial-org/gitsocial
 
 go 1.25.8
 

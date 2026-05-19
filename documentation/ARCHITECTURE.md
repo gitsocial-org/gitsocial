@@ -489,7 +489,7 @@ If more ceremony needed, we over-engineered.
 ### Build & Run
 
 ```bash
-cd library && go build -o /tmp/gitsocial ./gitsocial    # Build CLI
+go build -o /tmp/gitsocial ./library/gitsocial         # Build CLI
 /tmp/gitsocial social timeline                          # Run command
 /tmp/gitsocial tui                                      # Launch TUI
 ```
@@ -502,17 +502,16 @@ go test ./library/core/cache    # Specific package
 go test -v ./...                 # Verbose output
 go test -race ./...              # Race detector
 go test -cover ./...             # Coverage summary
-cd library && golangci-lint run --fix ./...  # Lint & fix code
+golangci-lint run --fix ./...    # Lint & fix code
 
 # TUI tests (headless integration)
-# run from library/
-go test ./tui/test/...                       # All TUI tests
-go test ./tui/test/ -run Smoke               # Smoke: all keys × all views
-go test ./tui/test/ -run Display             # Content rendering
-go test ./tui/test/ -run Golden              # Golden file comparison
-go test ./tui/test/ -run Golden -update      # Regenerate golden files
-go test ./tui/test/ -run Navigation          # View transitions
-go test ./tui/test/ -run Sequence            # Multi-step flows
+go test ./library/tui/test/...                       # All TUI tests
+go test ./library/tui/test/ -run Smoke               # Smoke: all keys × all views
+go test ./library/tui/test/ -run Display             # Content rendering
+go test ./library/tui/test/ -run Golden              # Golden file comparison
+go test ./library/tui/test/ -run Golden -update      # Regenerate golden files
+go test ./library/tui/test/ -run Navigation          # View transitions
+go test ./library/tui/test/ -run Sequence            # Multi-step flows
 ```
 
 See `documentation/TUI-TESTS.md` for the full TUI test suite documentation.

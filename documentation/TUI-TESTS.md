@@ -15,15 +15,14 @@ Headless integration tests that exercise every view and keybinding. Inspired by 
 ## Running
 
 ```bash
-# run from library/
-go test ./tui/test/...                       # all TUI tests
-go test ./tui/test/ -run Smoke               # smoke only
-go test ./tui/test/ -run Display             # display only
-go test ./tui/test/ -run Golden              # golden file comparison
-go test ./tui/test/ -run Golden -update      # regenerate golden files
-go test ./tui/test/ -run Navigation          # navigation only
-go test ./tui/test/ -run Sequence            # sequence only
-go test -v ./tui/test/ -run PR               # verbose, PR-related
+go test ./library/tui/test/...                       # all TUI tests
+go test ./library/tui/test/ -run Smoke               # smoke only
+go test ./library/tui/test/ -run Display             # display only
+go test ./library/tui/test/ -run Golden              # golden file comparison
+go test ./library/tui/test/ -run Golden -update      # regenerate golden files
+go test ./library/tui/test/ -run Navigation          # navigation only
+go test ./library/tui/test/ -run Sequence            # sequence only
+go test -v ./library/tui/test/ -run PR               # verbose, PR-related
 ```
 
 Tests create temp dirs, no external dependencies. Total runtime ~35s (dominated by smoke test's all-keys × all-views matrix).
