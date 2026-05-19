@@ -21,7 +21,7 @@ Git solved distributed collaboration for code. GitSocial extends it beyond code,
 
 ## How It Works
 
-All collaboration data (posts, issues, PRs, etc.) is stored in your git repository as [git commits with structured trailers](specs/GITMSG.md) on `gitmsg/*` branches, syncing via `git fetch` and `git push`. Activity from other repositories appears in your timeline when you add them to your lists.
+All collaboration data (posts, issues, PRs, etc.) is stored in your git repository as [git commits with structured trailers](specs/GITMSG.md) on `gitmsg/*` branches, syncing via `git fetch` and `git push`. Activity from other repositories appears in your timeline when you add them to your [lists](specs/GITMSG.md#2-lists).
 
 ## Installation
 
