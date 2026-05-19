@@ -189,7 +189,12 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 	args := []string{"log"}
 
 	if opts.All {
-		args = append(args, "--exclude=refs/gitmsg/config", "--exclude=HEAD", "--exclude=refs/remotes/*/HEAD", "--all")
+		// Exclude tags so a commit's `%S` source ref resolves to the branch that
+		// reaches it, not whichever tag git happens to scan first. Otherwise
+		// every ancestor of a tag gets attributed to `refs/tags/X` and stored
+		// with branch="tags/X" instead of "main", duplicating commits on the
+		// timeline once the same hash later resyncs under a branch.
+		args = append(args, "--exclude=refs/gitmsg/config", "--exclude=HEAD", "--exclude=refs/remotes/*/HEAD", "--exclude=refs/tags/*", "--all")
 	} else {
 		branch := opts.Branch
 		if branch == "" {

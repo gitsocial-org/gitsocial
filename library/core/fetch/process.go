@@ -89,7 +89,10 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 	return len(newCommits), nil
 }
 
-// CleanRefname strips ref prefixes to produce a short branch name.
+// CleanRefname strips ref prefixes to produce a short branch name. Tag refs
+// return "" so callers fall back to the default branch — tags are not branches
+// and storing "tags/X" in core_commits.branch attributes ancestor commits to
+// the tag rather than the branch that owns them.
 func CleanRefname(ref string) string {
 	if ref == "" || ref == "HEAD" || strings.HasSuffix(ref, "/HEAD") {
 		return ""
@@ -104,7 +107,7 @@ func CleanRefname(ref string) string {
 		return strings.TrimPrefix(ref, "refs/remotes/")
 	}
 	if strings.HasPrefix(ref, "refs/tags/") {
-		return "tags/" + strings.TrimPrefix(ref, "refs/tags/")
+		return ""
 	}
 	return ref
 }

@@ -48,6 +48,9 @@ func init() {
 	RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_email TEXT`)
 	})
+	RegisterMigration(func(db *sql.DB) {
+		_, _ = db.Exec(`DELETE FROM core_commits WHERE branch LIKE 'tags/%'`)
+	})
 }
 
 // RegisterSchema registers an extension schema to be executed after core schema.
