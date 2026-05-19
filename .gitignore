@@ -4,11 +4,20 @@ CLAUDE.md
 .claude/
 
 # Build outputs
+bin/
 build/
 dist/
+tmp/
+*.exe
+*.test
+*.out
 
 # Dependencies
 node_modules/
+vendor/
+
+# Tooling
+.air.toml
 
 # Test artifacts (consolidated)
 .test-artifacts/

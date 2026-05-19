@@ -17,7 +17,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Build
-        run: go build -o /dev/null ./library/gitsocial
+        run: go build -o /dev/null ./cli/gitsocial
 
       - name: Test
         run: go test -coverprofile=coverage.out ./...

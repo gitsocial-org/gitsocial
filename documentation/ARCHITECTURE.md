@@ -51,6 +51,8 @@ Single Go library with thin clients connecting via RPC/HTTP.
 
 ```
 gitmsg/
+├── cli/
+│   └── gitsocial/                  # CLI commands (main package — produces gitsocial binary)
 ├── library/                        # Go library
 │   ├── core/
 │   │   ├── git/                    # Git operations
@@ -69,7 +71,6 @@ gitmsg/
 │   │   └── review/                 # Pull requests, code reviews
 │   ├── import/                     # Platform import pipeline
 │   │   └── github/                # GitHub adapter (gh CLI)
-│   ├── gitsocial/                  # CLI commands (main package — produces gitsocial binary)
 │   └── tui/                        # TUI views
 ├── clients/
 │   └── vscode/                     # VSCode extension (planned)
@@ -80,11 +81,11 @@ gitmsg/
 ### Layer Dependencies
 
 ```
-extensions/* → core/* → stdlib only
-     ↓            ↓
-  gitsocial/    (no circular refs)
-    tui/
-    import/  → extensions/* + core/protocol
+library/extensions/* → library/core/* → stdlib only
+          ↓                 ↓
+  cli/gitsocial/        (no circular refs)
+  library/tui/
+  library/import/  → library/extensions/* + library/core/protocol
 ```
 
 ---
@@ -489,9 +490,9 @@ If more ceremony needed, we over-engineered.
 ### Build & Run
 
 ```bash
-go build -o /tmp/gitsocial ./library/gitsocial         # Build CLI
-/tmp/gitsocial social timeline                          # Run command
-/tmp/gitsocial tui                                      # Launch TUI
+go build -o bin/gitsocial ./cli/gitsocial    # Build CLI
+bin/gitsocial social timeline                 # Run command
+bin/gitsocial tui                             # Launch TUI
 ```
 
 ### Test & Lint
