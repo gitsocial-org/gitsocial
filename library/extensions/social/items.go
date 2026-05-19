@@ -135,14 +135,7 @@ func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch strin
 		postType = t
 	}
 
-	lines := strings.Split(ref.Metadata, "\n")
-	var contentLines []string
-	for _, line := range lines {
-		if strings.HasPrefix(line, ">") {
-			contentLines = append(contentLines, strings.TrimPrefix(strings.TrimPrefix(line, ">"), " "))
-		}
-	}
-	content := strings.Join(contentLines, "\n")
+	content := protocol.UnquoteContent(ref.Metadata)
 	if content == "" {
 		return nil
 	}
@@ -230,25 +223,19 @@ func InsertSocialItems(items []SocialItem) error {
 func InsertSocialItem(item SocialItem) error {
 	return cache.ExecLocked(func(db *sql.DB) error {
 		if item.IsVirtual {
-			// Insert virtual row into core_commits first
-			_, err := db.Exec(`
-				INSERT INTO core_commits
-				(repo_url, hash, branch, author_name, author_email, message, timestamp, is_virtual)
-				VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO NOTHING`,
-				item.RepoURL,
-				item.Hash,
-				item.Branch,
-				item.AuthorName,
-				item.AuthorEmail,
-				item.Content,
-				item.Timestamp.Format(time.RFC3339),
-			)
-			if err != nil {
+			if err := cache.UpsertVirtualCommit(db, cache.VirtualCommit{
+				RepoURL:     item.RepoURL,
+				Hash:        item.Hash,
+				Branch:      item.Branch,
+				AuthorName:  item.AuthorName,
+				AuthorEmail: item.AuthorEmail,
+				Message:     item.Content,
+				Timestamp:   item.Timestamp,
+			}); err != nil {
 				return err
 			}
 			// Insert into social_items
-			_, err = db.Exec(`
+			_, err := db.Exec(`
 				INSERT INTO social_items
 				(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

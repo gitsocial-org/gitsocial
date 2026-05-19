@@ -126,6 +126,25 @@ func QuoteContent(content string) string {
 	return strings.Join(lines, "\n")
 }
 
+// UnquoteContent reverses QuoteContent: extracts blockquoted content from GitMsg-Ref
+// metadata by keeping only lines starting with ">" and stripping the marker.
+// Lines that don't start with ">" are ignored (they aren't part of the quoted content).
+func UnquoteContent(metadata string) string {
+	if metadata == "" {
+		return ""
+	}
+	var out []string
+	for _, line := range strings.Split(metadata, "\n") {
+		if !strings.HasPrefix(line, ">") {
+			continue
+		}
+		stripped := strings.TrimPrefix(line, ">")
+		stripped = strings.TrimPrefix(stripped, " ")
+		out = append(out, stripped)
+	}
+	return strings.Join(out, "\n")
+}
+
 // FormatMessage assembles content, header, and refs into a commit message.
 func FormatMessage(content string, header Header, references []Ref) string {
 	parts := make([]string, 0, 2+len(references)+1)

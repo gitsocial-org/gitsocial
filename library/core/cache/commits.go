@@ -22,6 +22,50 @@ type Commit struct {
 	SignerKey   *string
 }
 
+// VirtualCommit is the snapshot payload for a placeholder core_commits row
+// created from a GitMsg-Ref trailer on a GitMsg-typed message (see GITMSG.md
+// §1.3). All fields come from the snapshot itself.
+type VirtualCommit struct {
+	RepoURL     string
+	Hash        string
+	Branch      string
+	AuthorName  string
+	AuthorEmail string
+	Message     string
+	Timestamp   time.Time
+}
+
+// UpsertVirtualCommit inserts a placeholder commit (is_virtual=1) when no row
+// for (repo_url, hash, branch) exists. Existing rows are left untouched: a real
+// fetched row outranks any snapshot, and an already-present virtual row is
+// kept (first snapshot wins to avoid thrash from competing references).
+//
+// Callers must already hold the cache write lock (e.g. via ExecLocked) and
+// pass the locked *sql.DB so the upsert participates in the surrounding
+// operation rather than racing for its own connection.
+func UpsertVirtualCommit(db *sql.DB, vc VirtualCommit) error {
+	if vc.RepoURL == "" || vc.Hash == "" || vc.Branch == "" {
+		return fmt.Errorf("upsert virtual commit: repo/hash/branch required")
+	}
+	_, err := db.Exec(`
+		INSERT INTO core_commits
+		(repo_url, hash, branch, author_name, author_email, message, timestamp, is_virtual)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+		ON CONFLICT(repo_url, hash, branch) DO NOTHING`,
+		vc.RepoURL,
+		vc.Hash,
+		vc.Branch,
+		vc.AuthorName,
+		vc.AuthorEmail,
+		vc.Message,
+		vc.Timestamp.Format(time.RFC3339),
+	)
+	if err != nil {
+		return fmt.Errorf("upsert virtual commit: %w", err)
+	}
+	return nil
+}
+
 // commitInsertBatchSize bounds how many commits go into a single InsertCommits
 // orchestration unit. The background workspace sync reports progress per batch,
 // so this number governs the granularity of progress updates.

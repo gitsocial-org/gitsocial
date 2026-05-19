@@ -277,6 +277,30 @@ func TestQuoteContent(t *testing.T) {
 	}
 }
 
+func TestUnquoteContent(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"single line", "> hello", "hello"},
+		{"multi-line", "> first\n> second\n> third", "first\nsecond\nthird"},
+		{"blank line marker", "> first\n>\n> third", "first\n\nthird"},
+		{"no leading space after marker", ">hello", "hello"},
+		{"non-quoted lines dropped", "> kept\nnot quoted\n> also kept", "kept\nalso kept"},
+		{"roundtrip with QuoteContent", QuoteContent("line one\nline two"), "line one\nline two"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnquoteContent(tt.in)
+			if got != tt.want {
+				t.Errorf("UnquoteContent(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFormatMessage(t *testing.T) {
 	tests := []struct {
 		name       string
