@@ -1,8 +1,8 @@
 // scopes.go - Typed allow-list of every settings key, with declared scope and type.
 // Adding a key requires a code change here; callers cannot write to keys absent
-// from Registry. Phase 1 declares every editable key at ScopeLocal; the
-// personal-config ref is wired in Phase 2 (memo branch), at which point the
-// user-scoped subset flips to ScopePersonalConfig.
+// from Registry. Editable keys are scoped to the personal config ref
+// (refs/gitmsg/core/config in the personal bare repo, synced across hosts); the
+// remaining keys are read-only process environment.
 package settings
 
 import (
