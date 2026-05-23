@@ -29,6 +29,12 @@ type SocialItem struct {
 	AuthorEmail string
 	EditorName  string
 	EditorEmail string
+	// Latest edit commit's ref (always set when edited; same-author or distinct editor).
+	// Used to verify the edit commit's signature against editorEmail (distinct) or
+	// authorEmail (same author) — see annotateVerified.
+	EditRepoURL string
+	EditHash    string
+	EditBranch  string
 	Timestamp   time.Time
 	EditOf      sql.NullString
 	IsRetracted bool
@@ -62,6 +68,7 @@ const baseSelectFromView = `
 	       v.is_virtual, v.is_retracted, v.has_edits,
 	       v.stale_since,
 	       v.editor_name, v.editor_email,
+	       v.edit_repo_url, v.edit_hash, v.edit_branch,
 	       (sf.repo_url IS NOT NULL) as follows_workspace
 	FROM social_items_resolved v
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
@@ -90,6 +97,7 @@ const baseDirectSelect = `
 	       c.has_edits,
 	       c.stale_since,
 	       c.resolved_editor_name, c.resolved_editor_email,
+	       c.resolved_edit_repo_url, c.resolved_edit_hash, c.resolved_edit_branch,
 	       (sf.repo_url IS NOT NULL)
 	FROM core_commits c
 	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
@@ -959,6 +967,7 @@ func GetEditHistoryPosts(repoURL, hash, branch string, workspaceURL string) ([]P
 	for _, item := range items {
 		posts = append(posts, SocialItemToPost(item))
 	}
+	annotateVerified(posts)
 	return posts, nil
 }
 
@@ -987,6 +996,7 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
+	var editRepoURL, editHash, editBranch sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -996,7 +1006,9 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 		&item.ReplyToRepoURL, &item.ReplyToHash, &item.ReplyToBranch,
 		&item.EditOf, &item.Comments, &item.Reposts, &item.Quotes,
 		&isVirtual, &isRetracted, &hasEdits, &staleSince,
-		&editorName, &editorEmail, &followsWorkspace,
+		&editorName, &editorEmail,
+		&editRepoURL, &editHash, &editBranch,
+		&followsWorkspace,
 	)
 	if err != nil {
 		return nil, err
@@ -1016,6 +1028,9 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	}
 	item.EditorName = editorName.String
 	item.EditorEmail = editorEmail.String
+	item.EditRepoURL = editRepoURL.String
+	item.EditHash = editHash.String
+	item.EditBranch = editBranch.String
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
@@ -1028,6 +1043,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
+	var editRepoURL, editHash, editBranch sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -1037,7 +1053,9 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 		&item.ReplyToRepoURL, &item.ReplyToHash, &item.ReplyToBranch,
 		&item.EditOf, &item.Comments, &item.Reposts, &item.Quotes,
 		&isVirtual, &isRetracted, &hasEdits, &staleSince,
-		&editorName, &editorEmail, &followsWorkspace,
+		&editorName, &editorEmail,
+		&editRepoURL, &editHash, &editBranch,
+		&followsWorkspace,
 	)
 	if err != nil {
 		return nil, err
@@ -1057,6 +1075,9 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	}
 	item.EditorName = editorName.String
 	item.EditorEmail = editorEmail.String
+	item.EditRepoURL = editRepoURL.String
+	item.EditHash = editHash.String
+	item.EditBranch = editBranch.String
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
@@ -1123,6 +1144,9 @@ func SocialItemToPost(item SocialItem) Post {
 		EditOf:            editOf,
 		EditorName:        item.EditorName,
 		EditorEmail:       item.EditorEmail,
+		EditRepoURL:       item.EditRepoURL,
+		EditHash:          item.EditHash,
+		EditBranch:        item.EditBranch,
 		IsRetracted:       item.IsRetracted,
 		IsEdited:          item.IsEdited,
 		IsVirtual:         item.IsVirtual,

@@ -317,6 +317,10 @@ type CardHeader struct {
 	IsRetracted    bool         // True if post has been deleted
 	IsStale        bool         // True if commit no longer exists in live branch
 	IsVerified     bool         // True if commit's signing key is bound to the author email by an attestation source
+	// IsEditorVerified is set when the latest edit commit's signing key is bound to the editor's
+	// email by an attestation source. Only used for distinct-editor edits — for same-author
+	// edits the edit verification is folded into IsVerified (AND). Renders as a ⚿ next to EditedBy.
+	IsEditorVerified bool
 }
 
 // TitleStyle returns the appropriate style for the header title based on flags.

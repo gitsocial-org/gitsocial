@@ -48,9 +48,13 @@ type Display struct {
 	FollowsYou         bool
 	IsNotificationRead bool
 	IsVerified         bool
-	Badge              string
-	UserEmail          string // Current user's email for own-post detection in rendering
-	ShowEmail          bool   // Whether to show email in card header
+	// IsEditorVerified is set by annotateVerified when the latest edit commit is
+	// signed by a key verified-bound to the editor's email (distinct-editor case).
+	// For same-author edits the edit verification is folded into IsVerified (AND).
+	IsEditorVerified bool
+	Badge            string
+	UserEmail        string // Current user's email for own-post detection in rendering
+	ShowEmail        bool   // Whether to show email in card header
 }
 
 type Post struct {
@@ -68,6 +72,12 @@ type Post struct {
 	EditOf          string
 	EditorName      string
 	EditorEmail     string
+	// Latest edit commit's ref (always set when edited). Used by annotateVerified
+	// to run the edit-commit verification pass against editorEmail (distinct) or
+	// authorEmail (same author).
+	EditRepoURL     string
+	EditHash        string
+	EditBranch      string
 	IsRetracted     bool
 	IsEdited        bool
 	Depth           int

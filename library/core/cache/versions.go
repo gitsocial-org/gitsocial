@@ -127,10 +127,15 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		    resolved_message = ?,
 		    resolved_editor_name = ?,
 		    resolved_editor_email = ?,
+		    resolved_edit_repo_url = ?,
+		    resolved_edit_hash = ?,
+		    resolved_edit_branch = ?,
 		    is_retracted = ?,
 		    labels = COALESCE(?, labels)
 		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		editMessage, editorNameArg, editorEmailArg, editIsRetracted, labelsArg,
+		editMessage, editorNameArg, editorEmailArg,
+		editRepoURL, editHash, editBranch,
+		editIsRetracted, labelsArg,
 		canonicalRepoURL, canonicalHash, canonicalBranch,
 	); err != nil {
 		return fmt.Errorf("apply edit: update canonical: %w", err)

@@ -50,6 +50,9 @@ func (p PostVersionItem) RenderListEntry(index, total int, label string, selecte
 	if p.ShowEmail && p.Post.Author.Email != "" {
 		name += " <" + p.Post.Author.Email + ">"
 	}
+	if p.Post.Display.IsVerified {
+		name += " " + tuicore.SafeIcon("⚿")
+	}
 	header := fmt.Sprintf("Version %d (%s) - %s - %s - %s", total-index, label, hash, name, p.Post.Timestamp.Format("2006-01-02 15:04:05"))
 	var b strings.Builder
 	if selected {

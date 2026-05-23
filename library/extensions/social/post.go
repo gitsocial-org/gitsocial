@@ -652,41 +652,88 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	return Success(result)
 }
 
-// annotateVerified resolves verification once per (repoURL, email) group and
-// stamps Display.IsVerified on each post in place. This keeps the per-card
+// annotateVerified resolves verification per post and stamps Display.IsVerified
+// and Display.IsEditorVerified in place. Two batched passes keep the per-card
 // renderer free of cache lookups so re-renders never block on the cache write
 // lock during background workspace sync.
+//
+// Pass 1 verifies the canonical commit against the author email. Pass 2 verifies
+// the latest edit commit (when present) against either the editor's email
+// (distinct-editor case) or the author's email (same-author edit). Combine rule:
+//   - no edit → IsVerified = canonical verified.
+//   - same-author edit → IsVerified = canonical AND edit verified; no editor badge.
+//   - distinct editor → IsVerified = canonical; IsEditorVerified = edit verified.
 func annotateVerified(posts []Post) {
-	groups := make(map[string]map[string][]int)
-	for i, p := range posts {
+	canonVerified := batchVerify(posts, func(p *Post) (string, string, string) {
 		if p.Repository == "" || p.Author.Email == "" || p.Display.CommitHash == "" {
+			return "", "", ""
+		}
+		return p.Repository, p.Display.CommitHash, p.Author.Email
+	})
+	editVerified := batchVerify(posts, func(p *Post) (string, string, string) {
+		if p.EditHash == "" || p.EditRepoURL == "" {
+			return "", "", ""
+		}
+		email := p.EditorEmail
+		if email == "" {
+			email = p.Author.Email
+		}
+		return p.EditRepoURL, p.EditHash, email
+	})
+	for i := range posts {
+		if posts[i].EditHash == "" {
+			posts[i].Display.IsVerified = canonVerified[i]
 			continue
 		}
-		email := identity.NormalizeEmail(p.Author.Email)
+		if posts[i].EditorEmail == "" {
+			posts[i].Display.IsVerified = canonVerified[i] && editVerified[i]
+			continue
+		}
+		posts[i].Display.IsVerified = canonVerified[i]
+		posts[i].Display.IsEditorVerified = editVerified[i]
+	}
+}
+
+// batchVerify groups posts by (repo, normalized email) — using key(post) to
+// extract (repoURL, hash, email) per post — then runs one IsVerifiedCommitBatch
+// per group. Returns a per-index bool slice. Posts where key returns any empty
+// string are skipped (left false).
+func batchVerify(posts []Post, key func(*Post) (repo, hash, email string)) []bool {
+	groups := make(map[string]map[string][]int)
+	hashes := make([]string, len(posts))
+	for i := range posts {
+		repo, hash, email := key(&posts[i])
+		if repo == "" || hash == "" || email == "" {
+			continue
+		}
+		email = identity.NormalizeEmail(email)
 		if email == "" {
 			continue
 		}
-		repo := groups[p.Repository]
-		if repo == nil {
-			repo = make(map[string][]int)
-			groups[p.Repository] = repo
+		byEmail := groups[repo]
+		if byEmail == nil {
+			byEmail = make(map[string][]int)
+			groups[repo] = byEmail
 		}
-		repo[email] = append(repo[email], i)
+		byEmail[email] = append(byEmail[email], i)
+		hashes[i] = hash
 	}
+	out := make([]bool, len(posts))
 	for repo, byEmail := range groups {
 		for email, indices := range byEmail {
-			hashes := make([]string, 0, len(indices))
+			groupHashes := make([]string, 0, len(indices))
 			for _, i := range indices {
-				hashes = append(hashes, posts[i].Display.CommitHash)
+				groupHashes = append(groupHashes, hashes[i])
 			}
-			verified := identity.IsVerifiedCommitBatch(repo, hashes, email)
+			res := identity.IsVerifiedCommitBatch(repo, groupHashes, email)
 			for _, i := range indices {
-				if verified[posts[i].Display.CommitHash] {
-					posts[i].Display.IsVerified = true
+				if res[hashes[i]] {
+					out[i] = true
 				}
 			}
 		}
 	}
+	return out
 }
 
 // getParentChain retrieves ancestor posts for building thread context.

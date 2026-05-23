@@ -459,6 +459,9 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 	if header.IsEdited {
 		if header.EditedBy != "" {
 			rest += " · ✎ " + header.EditedBy
+			if header.IsEditorVerified {
+				rest += " " + SafeIcon("⚿")
+			}
 		} else {
 			rest += " ✎"
 		}

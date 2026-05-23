@@ -239,6 +239,7 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 
 	// Verified: precomputed at post-load time so render never blocks on the cache.
 	card.Header.IsVerified = post.Display.IsVerified
+	card.Header.IsEditorVerified = post.Display.IsEditorVerified
 
 	return card
 }
