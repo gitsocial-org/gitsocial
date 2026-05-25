@@ -29,19 +29,81 @@ func RequiredLabel(s string) string {
 	return s + " " + lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("*")
 }
 
-// FormFooter renders a form footer with keybinding hints and any validation errors.
-func FormFooter(hint string, errs []error) string {
-	errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError))
-	var parts []string
+// FormFooter renders form keybinding hints in the same key:label style as
+// every other footer in the TUI. Pass withEditor=true for forms whose body
+// implements EditorEscapeForm so the ctrl+e $EDITOR escape-hatch is
+// advertised. Validation errors render after the bindings in StatusError red.
+// The surrounding BgFooter bar is applied by ViewWrapper.Render.
+func FormFooter(withEditor bool, errs []error) string {
+	bindings := []Binding{
+		{Key: "tab/shift+tab", Label: "navigate"},
+		{Key: "enter", Label: "confirm"},
+	}
+	if withEditor {
+		bindings = append(bindings, Binding{Key: "ctrl+e", Label: "editor"})
+	}
+	bindings = append(bindings, Binding{Key: "esc", Label: "cancel"})
+
+	parts := make([]string, 0, len(bindings)+len(errs))
+	for _, b := range bindings {
+		parts = append(parts, kv(b.Key, b.Label, false))
+	}
+	errStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(StatusError)).
+		Background(lipgloss.Color(BgFooter))
 	for _, e := range errs {
 		if e != nil {
 			parts = append(parts, errStyle.Render(e.Error()))
 		}
 	}
-	if len(parts) > 0 {
-		return Dim.Render(hint) + "  " + strings.Join(parts, "  ")
+	return joinFooter(parts)
+}
+
+// FormKeyMap returns the shared huh key map used by all forms: esc to cancel.
+func FormKeyMap() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
+	return km
+}
+
+// NewLabelsField creates the standard Labels TagField used uniformly across
+// forms — same key, title, and styling. Labels sits below the body in every
+// form, so it doesn't need to column-align with the inline fields above; the
+// title carries a single trailing space for breathing room before "> ". Pass
+// an optional placeholder to show domain-specific examples (e.g. memo's
+// "expires/<date>"); leave empty for the generic scoped-label hint.
+func NewLabelsField(value *[]string, placeholder string) *TagField {
+	if placeholder == "" {
+		placeholder = "topic/area, kind/note, ..."
 	}
-	return Dim.Render(hint)
+	t := NewTagField()
+	// Labels sits at the bottom of every form, just above the submit row.
+	// Outdent it by 1 column (PaddingLeft 0 instead of the default 1) and
+	// reserve a blank line above it to visually separate the body from the
+	// labels/submit footer of the form.
+	t.flushLeft = true
+	t.marginTop = 1
+	return t.
+		Key("labels").
+		Title("Labels ").
+		Placeholder(placeholder).
+		Value(value)
+}
+
+// BodyHeight returns the WithHeight value for a form's multi-line body field
+// such that the body fills exactly the space left over by every other field.
+// `totalHeight` is the form's outer height; `otherRowsTotal` is the summed
+// rendered height of every non-body field in the form (each inline single-row
+// field counts as 1). The "+1" matches the same offset callers apply when
+// passing `h + 1` to form.WithHeight — together they place the submit row
+// just one blank line above the wrapper footer. Minimum 5 so a tiny terminal
+// still shows a usable text area.
+func BodyHeight(totalHeight, otherRowsTotal int) int {
+	h := totalHeight - otherRowsTotal + 1
+	if h < 5 {
+		return 5
+	}
+	return h
 }
 
 // FormTheme returns a customized huh theme for all forms.
@@ -57,7 +119,7 @@ func FormTheme() huh.Theme {
 		t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(FormGreen)
 		t.Focused.SelectedPrefix = lipgloss.NewStyle().Foreground(FormGreen).SetString("✓ ")
 
-		t.Focused.FocusedButton = lipgloss.NewStyle().
+		t.Focused.FocusedButton = t.Focused.FocusedButton.
 			Foreground(lipgloss.Color("255")).
 			Background(FormGreen)
 
@@ -350,17 +412,20 @@ func (s *SubmitField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 
 func (s *SubmitField) View() string {
 	styles := s.activeStyles()
-	padded := " " + s.label + " "
+	// Outdent the submit row by 1 column to match the Labels field above it.
+	base := styles.Base.PaddingLeft(0)
 	if s.focused {
 		btn := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255")).
-			Background(FormGreenDark)
-		return styles.Base.Width(s.width).Render(btn.Render(padded))
+			Background(FormGreenDark).
+			Padding(0, 2)
+		return base.Width(s.width).Render(btn.Render(s.label))
 	}
 	btn := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("250")).
-		Background(lipgloss.Color("237"))
-	return styles.Base.Width(s.width).Render(btn.Render(padded))
+		Background(lipgloss.Color("237")).
+		Padding(0, 2)
+	return base.Width(s.width).Render(btn.Render(s.label))
 }
 
 func (s *SubmitField) Focus() tea.Cmd {

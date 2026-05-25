@@ -20,8 +20,8 @@ const (
 
 // Spec-defined field ordering per GITPM.md
 var issueFieldOrder = []string{"state", "assignees", "due", "milestone", "sprint", "parent", "root", "blocks", "blocked-by", "related", "labels"}
-var milestoneFieldOrder = []string{"state", "due"}
-var sprintFieldOrder = []string{"state", "start", "end"}
+var milestoneFieldOrder = []string{"state", "due", "labels"}
+var sprintFieldOrder = []string{"state", "start", "end", "labels"}
 
 type State string
 
@@ -92,6 +92,7 @@ type Milestone struct {
 	Body        string
 	State       State
 	Due         *time.Time
+	Labels      []string
 	IsEdited    bool
 	IsRetracted bool
 	IsUnpushed  bool
@@ -111,6 +112,7 @@ type Sprint struct {
 	State       SprintState
 	Start       time.Time
 	End         time.Time
+	Labels      []string
 	IsEdited    bool
 	IsRetracted bool
 	IsUnpushed  bool

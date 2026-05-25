@@ -74,32 +74,29 @@ func TestSequence(t *testing.T) {
 		}
 		assertNotEmpty(t, h.Rendered())
 	})
-	t.Run("PostEditTriggersEditor", func(t *testing.T) {
+	t.Run("PostEditOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocDetail(f.PostID))
 		if h.CurrentPath() != "/social/detail" {
 			t.Fatalf("expected /social/detail, got %q", h.CurrentPath())
 		}
 		assertContains(t, h.Rendered(), f.EditedContent)
-		before := h.SkippedExecN
 		h.SendKey("e")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'e' on post detail did not trigger editor (execMsg not produced)")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("expected /social/post-form after 'e', got %q", h.CurrentPath())
 		}
 	})
-	t.Run("PostCommentTriggersEditor", func(t *testing.T) {
+	t.Run("PostCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocDetail(f.PostID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on post detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("expected /social/post-form after 'c', got %q", h.CurrentPath())
 		}
 	})
-	t.Run("PostRepostTriggersEditor", func(t *testing.T) {
+	t.Run("PostRepostOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocDetail(f.PostID))
-		before := h.SkippedExecN
 		h.SendKey("y")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'y' on post detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("expected /social/post-form after 'y', got %q", h.CurrentPath())
 		}
 	})
 	t.Run("PostRetractShowsConfirm", func(t *testing.T) {
@@ -146,12 +143,11 @@ func TestSequence(t *testing.T) {
 			t.Errorf("pressing 'e' on issue detail: path = %q, want /pm/edit-issue", h.CurrentPath())
 		}
 	})
-	t.Run("IssueCommentTriggersEditor", func(t *testing.T) {
+	t.Run("IssueCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocPMIssueDetail(f.IssueID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on issue detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("pressing 'c' on issue detail: path = %q, want /social/post-form", h.CurrentPath())
 		}
 	})
 	t.Run("MilestoneEditNavigates", func(t *testing.T) {
@@ -164,12 +160,11 @@ func TestSequence(t *testing.T) {
 			t.Errorf("pressing 'e' on milestone detail: path = %q, want /pm/edit-milestone", h.CurrentPath())
 		}
 	})
-	t.Run("MilestoneCommentTriggersEditor", func(t *testing.T) {
+	t.Run("MilestoneCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocPMMilestoneDetail(f.MilestoneID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on milestone detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("pressing 'c' on milestone detail: path = %q, want /social/post-form", h.CurrentPath())
 		}
 	})
 	t.Run("SprintEditNavigates", func(t *testing.T) {
@@ -182,12 +177,11 @@ func TestSequence(t *testing.T) {
 			t.Errorf("pressing 'e' on sprint detail: path = %q, want /pm/edit-sprint", h.CurrentPath())
 		}
 	})
-	t.Run("SprintCommentTriggersEditor", func(t *testing.T) {
+	t.Run("SprintCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocPMSprintDetail(f.SprintID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on sprint detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("pressing 'c' on sprint detail: path = %q, want /social/post-form", h.CurrentPath())
 		}
 	})
 	t.Run("ReleaseEditNavigates", func(t *testing.T) {
@@ -200,12 +194,11 @@ func TestSequence(t *testing.T) {
 			t.Errorf("pressing 'e' on release detail: path = %q, want /release/edit", h.CurrentPath())
 		}
 	})
-	t.Run("ReleaseCommentTriggersEditor", func(t *testing.T) {
+	t.Run("ReleaseCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocReleaseDetail(f.ReleaseID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on release detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("pressing 'c' on release detail: path = %q, want /social/post-form", h.CurrentPath())
 		}
 	})
 	t.Run("PREditNavigates", func(t *testing.T) {
@@ -218,12 +211,11 @@ func TestSequence(t *testing.T) {
 			t.Errorf("pressing 'e' on PR detail: path = %q, want /review/edit-pr", h.CurrentPath())
 		}
 	})
-	t.Run("PRCommentTriggersEditor", func(t *testing.T) {
+	t.Run("PRCommentOpensForm", func(t *testing.T) {
 		h.NavigateTo(tuicore.LocReviewPRDetail(f.PRID))
-		before := h.SkippedExecN
 		h.SendKey("c")
-		if h.SkippedExecN <= before {
-			t.Error("pressing 'c' on PR detail did not trigger editor")
+		if h.CurrentPath() != "/social/post-form" {
+			t.Errorf("pressing 'c' on PR detail: path = %q, want /social/post-form", h.CurrentPath())
 		}
 	})
 	t.Run("MultipleViewRenders", func(t *testing.T) {

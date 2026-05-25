@@ -196,7 +196,7 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 func (v *PRHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.ReviewPRHistory, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.ReviewPRHistory, nil)
 	return wrapper.Render(content, footer)
 }
 

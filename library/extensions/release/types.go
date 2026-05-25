@@ -31,6 +31,7 @@ type Release struct {
 	Checksums   string
 	SignedBy    string
 	SBOM        string
+	Labels      []string
 	IsEdited    bool
 	IsRetracted bool
 	IsUnpushed  bool

@@ -162,7 +162,7 @@ func (v *IdentityView) Render(state *State) string {
 	b.WriteString(RenderRow(rs, "DNS verification", dnsState+"  "+Dim.Render("(d to toggle)"), "", false))
 	b.WriteString("\n")
 
-	footer := RenderFooter(state.Registry, CoreIdentity, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, CoreIdentity, nil)
 	return wrapper.Render(b.String(), footer)
 }
 

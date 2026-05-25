@@ -590,14 +590,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tuicore.EditorDoneMsg:
-		return m.handleEditorDone(msg)
-
-	case tuicore.EditorErrorMsg:
-		m.host.State().AddLogEntry(tuicore.LogSeverityError, msg.Err.Error(), "editor")
-		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
-		return m, m.host.SetMessageWithTimeout("Failed to open editor: "+msg.Err.Error(), tuicore.MessageTypeError, 8*time.Second)
-
 	case tuicore.LogErrorMsg:
 		if msg.Message != "" {
 			m.host.State().AddLogEntry(msg.Severity, msg.Message, msg.Context)
@@ -614,20 +606,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		openBrowser(filepath.Dir(msg.path))
 		return m, m.host.SetMessageWithTimeout("Saved to "+msg.path, tuicore.MessageTypeSuccess, 5*time.Second)
-
-	case tuicore.OpenEditorMsg:
-		mode := tuicore.EditorModePost
-		switch msg.Mode {
-		case "edit":
-			mode = tuicore.EditorModeEdit
-		case "comment":
-			mode = tuicore.EditorModeComment
-		case "repost":
-			mode = tuicore.EditorModeRepost
-		case "issue":
-			mode = tuicore.EditorModeIssue
-		}
-		return m.openEditorWithContent(mode, msg.TargetID, msg.InitialContent)
 
 	}
 
@@ -797,20 +775,6 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			}
 			return m.host.ActivateView()
 		},
-		OpenEditor: func(mode, targetID string) tea.Cmd {
-			switch mode {
-			case "post":
-				_, cmd := m.handleNewPost()
-				return cmd
-			case "comment":
-				_, cmd := m.openEditor(true, targetID)
-				return cmd
-			case "repost":
-				_, cmd := m.openEditorWithMode(tuicore.EditorModeRepost, targetID)
-				return cmd
-			}
-			return nil
-		},
 		StartFetch: func() tea.Cmd {
 			if m.isFetching {
 				return nil
@@ -926,11 +890,6 @@ func (m *Model) toggleFocus() {
 // Registry returns the keybinding registry.
 func (m Model) Registry() *tuicore.Registry {
 	return m.registry
-}
-
-// handleNewPost opens the editor for creating a new post.
-func (m Model) handleNewPost() (tea.Model, tea.Cmd) {
-	return m.openEditor(false, "")
 }
 
 // startFetchWithMode begins fetching with the specified all-branches mode.
@@ -1100,134 +1059,6 @@ func (m Model) fetchAddedRepo(repoRef string) tea.Cmd {
 		}
 		return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Posts: result.Data.Posts}
 	}
-}
-
-// openEditor opens the external editor for post or comment creation.
-func (m Model) openEditor(isComment bool, targetID string) (tea.Model, tea.Cmd) {
-	mode := tuicore.EditorModePost
-	if isComment {
-		mode = tuicore.EditorModeComment
-	}
-	return m.openEditorWithMode(mode, targetID)
-}
-
-// openEditorWithMode opens the editor with a specific mode.
-func (m Model) openEditorWithMode(mode tuicore.EditorMode, targetID string) (tea.Model, tea.Cmd) {
-	return m.openEditorWithContent(mode, targetID, "")
-}
-
-// openEditorWithContent opens the editor with initial content.
-func (m Model) openEditorWithContent(mode tuicore.EditorMode, targetID, initialContent string) (tea.Model, tea.Cmd) {
-	f, err := os.CreateTemp("", "gitmsg-*.md")
-	if err != nil {
-		return m, nil
-	}
-	tmpFile := f.Name()
-	f.Close()
-	if err := os.WriteFile(tmpFile, []byte(initialContent), 0600); err != nil {
-		return m, nil
-	}
-	editor := getEditor()
-	c := exec.Command(editor, tmpFile)
-	return m, tea.ExecProcess(c, func(err error) tea.Msg {
-		defer os.Remove(tmpFile)
-		if err != nil {
-			return tuicore.EditorErrorMsg{Err: err}
-		}
-		content, readErr := os.ReadFile(tmpFile)
-		if readErr != nil {
-			return tuicore.EditorErrorMsg{Err: readErr}
-		}
-		return tuicore.EditorDoneMsg{
-			Content:  strings.TrimSpace(string(content)),
-			Mode:     mode,
-			TargetID: targetID,
-		}
-	})
-}
-
-// handleEditorDone processes content returned from the external editor.
-func (m Model) handleEditorDone(msg tuicore.EditorDoneMsg) (tea.Model, tea.Cmd) {
-	targetID := msg.TargetID
-	switch msg.Mode {
-	case tuicore.EditorModeComment:
-		if msg.Content == "" {
-			return m, nil
-		}
-		result := social.CreateComment(m.workdir, targetID, msg.Content, nil)
-		if !result.Success {
-			return m, nil
-		}
-		return m, func() tea.Msg { return tuisocial.CommentCreatedMsg{Post: result.Data} }
-	case tuicore.EditorModeRepost:
-		if msg.Content == "" {
-			result := social.CreateRepost(m.workdir, targetID)
-			if !result.Success {
-				return m, nil
-			}
-			return m, func() tea.Msg { return tuisocial.RepostCreatedMsg{Post: result.Data} }
-		}
-		result := social.CreateQuote(m.workdir, targetID, msg.Content)
-		if !result.Success {
-			return m, nil
-		}
-		return m, func() tea.Msg { return tuisocial.RepostCreatedMsg{Post: result.Data} }
-	case tuicore.EditorModeEdit:
-		if msg.Content == "" {
-			return m, nil
-		}
-		m.host.SetSaving(true)
-		workdir := m.workdir
-		content := msg.Content
-		return m, func() tea.Msg {
-			result := social.EditPost(workdir, targetID, content)
-			if !result.Success {
-				return tuisocial.PostEditedMsg{Post: social.Post{}, Err: fmt.Errorf("%s", result.Error.Message)}
-			}
-			return tuisocial.PostEditedMsg{Post: result.Data}
-		}
-	case tuicore.EditorModeIssue:
-		if msg.Content == "" {
-			return m, nil
-		}
-		lines := strings.SplitN(msg.Content, "\n", 2)
-		subject := strings.TrimSpace(lines[0])
-		var body string
-		if len(lines) > 1 {
-			body = strings.TrimSpace(lines[1])
-		}
-		if subject == "" {
-			return m, nil
-		}
-		workdir := m.workdir
-		return m, func() tea.Msg {
-			result := pm.CreateIssue(workdir, subject, body, pm.CreateIssueOptions{})
-			if !result.Success {
-				return tuipm.IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
-			}
-			return tuipm.IssueCreatedMsg{Issue: result.Data}
-		}
-	default:
-		if msg.Content == "" {
-			return m, nil
-		}
-		result := social.CreatePost(m.workdir, msg.Content, nil)
-		if !result.Success {
-			return m, nil
-		}
-		return m, func() tea.Msg { return tuisocial.PostCreatedMsg{Post: result.Data} }
-	}
-}
-
-// getEditor returns the user's preferred editor from environment.
-func getEditor() string {
-	if e := os.Getenv("EDITOR"); e != "" {
-		return e
-	}
-	if e := os.Getenv("VISUAL"); e != "" {
-		return e
-	}
-	return "vim"
 }
 
 // View renders the TUI as a tea.View with alt screen and mouse mode.

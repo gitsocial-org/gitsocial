@@ -129,7 +129,7 @@ func (v *SearchHelpView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *SearchHelpView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
 	if len(v.lines) == 0 {
-		footer := RenderFooter(state.Registry, SearchHelp, wrapper.ContentWidth(), nil)
+		footer := RenderFooter(state.Registry, SearchHelp, nil)
 		return wrapper.Render(Dim.Render("Loading..."), footer)
 	}
 	height := wrapper.ContentHeight()
@@ -144,6 +144,6 @@ func (v *SearchHelpView) Render(state *State) string {
 		end = len(v.lines)
 	}
 	visible := strings.Join(v.lines[v.scroll:end], "\n")
-	footer := RenderFooter(state.Registry, SearchHelp, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, SearchHelp, nil)
 	return wrapper.Render(visible, footer)
 }

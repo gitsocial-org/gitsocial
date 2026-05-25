@@ -35,6 +35,6 @@
 │  ⛁  Cache  ········ XXXKB    ││                     │                    │                    │                      │
 │  ⌨  Settings                 ││                     │                    │                    │                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││   n:quick create  N:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh     │
-│.../tui-test-FIXTURE          ││   p:push  tab:focus  f:fetch  q:quit  ?:help                                         │
+│ ──────────────────────────── ││   n:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh  p:push  tab:focus  │
+│.../tui-test-FIXTURE          ││   f:fetch  q:quit  ?:help                                                            │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

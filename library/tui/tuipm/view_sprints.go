@@ -398,7 +398,7 @@ func (v *SprintsView) Render(state *tuicore.State) string {
 		v.searchInput.SetWidth(wrapper.ContentWidth() - 5)
 		footer = v.searchInput.View()
 	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.PMSprints, wrapper.ContentWidth(), nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.PMSprints, nil)
 	}
 	return wrapper.Render(content, footer)
 }

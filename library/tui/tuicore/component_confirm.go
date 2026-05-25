@@ -55,7 +55,9 @@ func (d *ConfirmDialog) HandleKey(key string) (bool, tea.Cmd) {
 	return true, nil
 }
 
-// Render returns the styled confirmation prompt for the footer.
+// Render returns the styled confirmation prompt as plain footer content.
+// ViewWrapper.Render applies the BgFooter bar around it; the bg is also set
+// on this span so lipgloss's reset doesn't leak default bg into the bar.
 func (d *ConfirmDialog) Render() string {
 	if !d.active {
 		return ""
@@ -64,6 +66,9 @@ func (d *ConfirmDialog) Render() string {
 	if d.destructive {
 		color = ConfirmDestructive
 	}
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Bold(true)
-	return style.Render(d.prompt + " [y/n]")
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color(color)).
+		Background(lipgloss.Color(BgFooter)).
+		Bold(true).
+		Render(d.prompt + " [y/n]")
 }

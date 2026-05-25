@@ -41,6 +41,8 @@ type SocialItem struct {
 	IsEdited    bool
 	IsVirtual   bool
 	IsStale     bool
+	// Labels parsed from the GitMsg `labels` header field.
+	Labels []string
 	// Derived from social_interactions
 	Comments int
 	Reposts  int
@@ -69,6 +71,7 @@ const baseSelectFromView = `
 	       v.stale_since,
 	       v.editor_name, v.editor_email,
 	       v.edit_repo_url, v.edit_hash, v.edit_branch,
+	       COALESCE(v.labels, ''),
 	       (sf.repo_url IS NOT NULL) as follows_workspace
 	FROM social_items_resolved v
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
@@ -98,6 +101,7 @@ const baseDirectSelect = `
 	       c.stale_since,
 	       c.resolved_editor_name, c.resolved_editor_email,
 	       c.resolved_edit_repo_url, c.resolved_edit_hash, c.resolved_edit_branch,
+	       COALESCE(c.labels, ''),
 	       (sf.repo_url IS NOT NULL)
 	FROM core_commits c
 	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
@@ -997,6 +1001,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
+	var labelsStr sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -1008,6 +1013,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 		&isVirtual, &isRetracted, &hasEdits, &staleSince,
 		&editorName, &editorEmail,
 		&editRepoURL, &editHash, &editBranch,
+		&labelsStr,
 		&followsWorkspace,
 	)
 	if err != nil {
@@ -1035,6 +1041,9 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
 	item.IsStale = staleSince.Valid
+	if labelsStr.Valid {
+		item.Labels = splitSocialLabels(labelsStr.String)
+	}
 	item.FollowsWorkspace = followsWorkspace == 1
 	return &item, nil
 }
@@ -1044,6 +1053,7 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
+	var labelsStr sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
@@ -1055,6 +1065,7 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 		&isVirtual, &isRetracted, &hasEdits, &staleSince,
 		&editorName, &editorEmail,
 		&editRepoURL, &editHash, &editBranch,
+		&labelsStr,
 		&followsWorkspace,
 	)
 	if err != nil {
@@ -1082,6 +1093,9 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
 	item.IsStale = staleSince.Valid
+	if labelsStr.Valid {
+		item.Labels = splitSocialLabels(labelsStr.String)
+	}
 	item.FollowsWorkspace = followsWorkspace == 1
 	return &item, nil
 }
@@ -1156,6 +1170,7 @@ func SocialItemToPost(item SocialItem) Post {
 		HeaderExt:         item.HeaderExt,
 		HeaderType:        item.HeaderType,
 		HeaderState:       item.HeaderState,
+		Labels:            item.Labels,
 		Origin:            item.Origin,
 		Interactions: Interactions{
 			Comments: item.Comments,

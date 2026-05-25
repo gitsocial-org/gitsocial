@@ -40,10 +40,9 @@ func (v *TimelineView) Bindings() []tuicore.Binding {
 			}},
 		{Key: "n", Label: "new post", Contexts: []tuicore.Context{tuicore.Timeline, tuicore.MyRepository},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
-				if ctx.OpenEditor == nil {
-					return false, nil
+				return true, func() tea.Msg {
+					return tuicore.NavigateMsg{Location: tuicore.LocSocialPostForm("new", ""), Action: tuicore.NavPush}
 				}
-				return true, ctx.OpenEditor("post", "")
 			}},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.Timeline, tuicore.MyRepository}, Handler: push},
 		{Key: "l", Label: "lists", Contexts: []tuicore.Context{tuicore.Timeline, tuicore.MyRepository},
@@ -273,9 +272,9 @@ func (v *TimelineView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.cardlist.View()
 
-	footer := tuicore.RenderFooter(state.Registry, tuicore.Timeline, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Timeline, nil)
 	if v.pag.Loading && len(v.cardlist.Items()) > 0 {
-		footer = tuicore.RenderLoadingFooter(wrapper.ContentWidth())
+		footer = tuicore.RenderLoadingFooter()
 	}
 
 	return wrapper.Render(content, footer)

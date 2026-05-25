@@ -299,6 +299,7 @@ type GetPostsOptions struct {
 // CreatePostOptions configures post creation.
 type CreatePostOptions struct {
 	Origin *protocol.Origin
+	Labels []string
 }
 
 // CreatePost creates a new post as a git commit in the workspace.
@@ -310,10 +311,20 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
+	var labelStr string
+	if opts != nil {
+		labelStr = joinSocialLabels(opts.Labels)
+	}
+
 	message := content
-	if opts != nil && opts.Origin != nil {
+	if (opts != nil && opts.Origin != nil) || labelStr != "" {
 		fields := map[string]string{"type": "post"}
-		protocol.ApplyOrigin(fields, opts.Origin)
+		if opts != nil {
+			protocol.ApplyOrigin(fields, opts.Origin)
+		}
+		if labelStr != "" {
+			fields["labels"] = labelStr
+		}
 		header := protocol.Header{Ext: "social", V: "0.1.0", Fields: fields, FieldOrder: socialFieldOrder}
 		message = protocol.FormatMessage(content, header, nil)
 	}

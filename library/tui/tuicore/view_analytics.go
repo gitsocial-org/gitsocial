@@ -151,7 +151,7 @@ func (v *AnalyticsView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
 	if v.data == nil {
 		content := Dim.Render("Loading analytics...")
-		footer := RenderFooter(state.Registry, Analytics, wrapper.ContentWidth(), nil)
+		footer := RenderFooter(state.Registry, Analytics, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -297,7 +297,7 @@ func (v *AnalyticsView) Render(state *State) string {
 	}
 	visible := strings.Join(lines[v.scroll:end], "\n")
 
-	footer := v.renderFooter(state, wrapper.ContentWidth())
+	footer := v.renderFooter(state)
 	return wrapper.Render(visible, footer)
 }
 
@@ -542,8 +542,8 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 }
 
 // renderFooter renders the analytics footer.
-func (v *AnalyticsView) renderFooter(state *State, width int) string {
-	return RenderFooter(state.Registry, Analytics, width, nil)
+func (v *AnalyticsView) renderFooter(state *State) string {
+	return RenderFooter(state.Registry, Analytics, nil)
 }
 
 // sectionDivider renders a labeled divider line: ───── Label ─────

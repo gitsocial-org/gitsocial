@@ -33,6 +33,8 @@ type TagField struct {
 	tagCursor       int                 // -1 = on input, >=0 = on a tag
 	maxTags         int                 // 0 = unlimited
 	labelFunc       func(string) string // optional display transform for tag chips
+	flushLeft       bool                // override Base.PaddingLeft to 0
+	marginTop       int                 // blank lines above the field
 	focused         bool
 	width           int
 	height          int
@@ -320,7 +322,7 @@ func (t *TagField) View() string {
 	removeSelectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Background(lipgloss.Color(BgSelected))
 
 	var sb strings.Builder
-	sb.WriteString(styles.Title.Render(PadLabel(t.title)))
+	sb.WriteString(styles.Title.Render(t.title))
 	sb.WriteString(pink.Render("> "))
 
 	// Render tags
@@ -359,7 +361,14 @@ func (t *TagField) View() string {
 		sb.WriteString(dim.Render(t.placeholder))
 	}
 
-	line := styles.Base.Width(t.width).Render(sb.String())
+	base := styles.Base
+	if t.flushLeft {
+		base = base.PaddingLeft(0)
+	}
+	if t.marginTop > 0 {
+		base = base.MarginTop(t.marginTop)
+	}
+	line := base.Width(t.width).Render(sb.String())
 
 	// Render dropdown
 	if t.focused && t.showSuggestions && len(t.filtered) > 0 {
@@ -375,8 +384,8 @@ func (t *TagField) renderDropdown(styles *huh.FieldStyles) string {
 	highlight := lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)).Bold(true)
 	bar := dim.Render("┃ ")
 
-	// Compute label offset to align with the input area
-	offset := strings.Repeat(" ", FormLabelWidth+2) // +2 for "> "
+	// Compute label offset to align with the input area (+2 for "> ").
+	offset := strings.Repeat(" ", AnsiWidth(t.title)+2)
 
 	maxShow := 5
 	showing := t.filtered

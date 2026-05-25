@@ -180,10 +180,11 @@ func (v *SprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "c":
 				if v.sprint != nil {
+					sprintID := v.sprint.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{
-							Mode:     "comment",
-							TargetID: v.sprint.ID,
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", sprintID),
+							Action:   tuicore.NavPush,
 						}
 					}
 				}
@@ -354,7 +355,7 @@ func (v *SprintDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMSprintDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMSprintDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }

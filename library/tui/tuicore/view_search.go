@@ -383,7 +383,7 @@ func (v *SearchView) Render(state *State) string {
 		b.WriteString(v.results.View())
 	}
 
-	footer := RenderFooter(state.Registry, Search, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, Search, nil)
 	return wrapper.Render(b.String(), footer)
 }
 

@@ -747,30 +747,25 @@ func convertSubscripts(content string) string {
 	})
 }
 
-// RenderSearchFooter renders a standard search mode footer with match count and navigation keys.
-func RenderSearchFooter(width, matchIndex, matchCount int, inputMode bool, hasQuery bool) string {
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(BorderFocused)).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(TextNormal))
-	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextSecondary)).
-		Background(lipgloss.Color(BgFooter)).
-		Padding(0, 1)
+// RenderSearchFooter renders the standard search-mode navigation hints
+// (match count + n/N/enter/esc bindings). The surrounding BgFooter bar is
+// applied by ViewWrapper.Render.
+func RenderSearchFooter(matchIndex, matchCount int, inputMode bool, hasQuery bool) string {
 	var parts []string
 	if matchCount > 0 {
-		pos := fmt.Sprintf("%d/%d", matchIndex, matchCount)
-		parts = append(parts, labelStyle.Render(pos))
+		parts = append(parts, labelStyle.Render(fmt.Sprintf("%d/%d", matchIndex, matchCount)))
 	} else if hasQuery {
-		parts = append(parts, Dim.Render("No matches"))
+		parts = append(parts, dimStyle.Render("No matches"))
 	}
 	if inputMode {
-		parts = append(parts, keyStyle.Render("enter")+":"+labelStyle.Render("done"))
+		parts = append(parts, kv("enter", "done", false))
 	} else {
-		parts = append(parts, keyStyle.Render("n")+":"+labelStyle.Render("next"))
-		parts = append(parts, keyStyle.Render("N")+":"+labelStyle.Render("prev"))
-		parts = append(parts, keyStyle.Render("/")+":"+labelStyle.Render("edit"))
+		parts = append(parts, kv("n", "next", false))
+		parts = append(parts, kv("N", "prev", false))
+		parts = append(parts, kv("/", "edit", false))
 	}
-	parts = append(parts, keyStyle.Render("esc")+":"+Dim.Render("close"))
-	return footerStyle.Width(width).Render(strings.Join(parts, "  "))
+	parts = append(parts, kv("esc", "close", true))
+	return joinFooter(parts)
 }
 
 // WrapRawLines wraps the text block to fit the given width, then prepends selection bars.

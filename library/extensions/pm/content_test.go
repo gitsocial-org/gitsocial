@@ -84,7 +84,7 @@ func TestBuildIssueContentWithEdits_noEdits(t *testing.T) {
 }
 
 func TestBuildMilestoneContent_titleOnly(t *testing.T) {
-	got := buildMilestoneContent("v1.0", "", StateOpen, nil, "", nil)
+	got := buildMilestoneContent("v1.0", "", StateOpen, nil, nil, "", nil)
 	if !strings.Contains(got, "v1.0") {
 		t.Error("should contain title")
 	}
@@ -101,7 +101,7 @@ func TestBuildMilestoneContent_titleOnly(t *testing.T) {
 
 func TestBuildMilestoneContent_withDueAndEdits(t *testing.T) {
 	due := time.Date(2025, 6, 30, 0, 0, 0, 0, time.UTC)
-	got := buildMilestoneContent("v2.0", "Major release", StateClosed, &due, "#commit:orig123@gitmsg/pm", nil)
+	got := buildMilestoneContent("v2.0", "Major release", StateClosed, &due, nil, "#commit:orig123@gitmsg/pm", nil)
 	if !strings.Contains(got, "Major release") {
 		t.Error("should contain body")
 	}
@@ -116,7 +116,7 @@ func TestBuildMilestoneContent_withDueAndEdits(t *testing.T) {
 func TestBuildSprintContent_basic(t *testing.T) {
 	start := time.Date(2025, 10, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2025, 10, 14, 0, 0, 0, 0, time.UTC)
-	got := buildSprintContent("Sprint 1", "", SprintStatePlanned, start, end, "", nil)
+	got := buildSprintContent("Sprint 1", "", SprintStatePlanned, start, end, nil, "", nil)
 	if !strings.Contains(got, "Sprint 1") {
 		t.Error("should contain title")
 	}
@@ -137,7 +137,7 @@ func TestBuildSprintContent_basic(t *testing.T) {
 func TestBuildSprintContent_withBodyAndEdits(t *testing.T) {
 	start := time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2025, 11, 14, 0, 0, 0, 0, time.UTC)
-	got := buildSprintContent("Sprint 2", "Sprint goals", SprintStateActive, start, end, "#commit:orig456@gitmsg/pm", nil)
+	got := buildSprintContent("Sprint 2", "Sprint goals", SprintStateActive, start, end, nil, "#commit:orig456@gitmsg/pm", nil)
 	if !strings.Contains(got, "Sprint goals") {
 		t.Error("should contain body")
 	}

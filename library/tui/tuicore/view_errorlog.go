@@ -77,7 +77,7 @@ func (v *ErrorLogView) Render(state *State) string {
 
 	if len(state.ErrorLog) == 0 {
 		content := Dim.Render("No errors or warnings in this session")
-		footer := RenderFooter(state.Registry, ErrorLog, width, nil)
+		footer := RenderFooter(state.Registry, ErrorLog, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -119,6 +119,6 @@ func (v *ErrorLogView) Render(state *State) string {
 	}
 	visible := strings.Join(lines[v.scroll:end], "\n")
 
-	footer := RenderFooter(state.Registry, ErrorLog, width, nil)
+	footer := RenderFooter(state.Registry, ErrorLog, nil)
 	return wrapper.Render(visible, footer)
 }

@@ -197,9 +197,9 @@ func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				if v.rel != nil {
 					releaseID := v.rel.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{
-							Mode:     "comment",
-							TargetID: releaseID,
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", releaseID),
+							Action:   tuicore.NavPush,
 						}
 					}
 				}
@@ -381,7 +381,7 @@ func (v *ReleaseDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReleaseDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReleaseDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }

@@ -14,24 +14,24 @@ import (
 
 // SprintFormData holds the form field values.
 type SprintFormData struct {
-	Title string
-	Body  string
-	State string
-	Start string
-	End   string
+	Title  string
+	Body   string
+	State  string
+	Start  string
+	End    string
+	Labels []string
 }
 
 // SprintForm wraps a Huh form for sprint creation/editing.
 type SprintForm struct {
-	workdir   string
-	sprintID  string // Non-empty for edit mode
-	form      *huh.Form
-	bodyField *huh.Text
-	data      SprintFormData
-	width     int
-	height    int
-	submitted bool
-	canceled  bool
+	tuicore.FormBase
+	workdir       string
+	sprintID      string // Non-empty for edit mode
+	bodyField     *huh.Text
+	bodyOtherRows int // count of non-body field rows, for body sizing
+	data          SprintFormData
+	width         int
+	height        int
 }
 
 // NewSprintForm creates a new sprint form.
@@ -56,6 +56,7 @@ func NewSprintEditForm(workdir string, sprint pm.Sprint) *SprintForm {
 	if !sprint.End.IsZero() {
 		f.data.End = sprint.End.Format("2006-01-02")
 	}
+	f.data.Labels = append([]string(nil), sprint.Labels...)
 	f.buildForm()
 	return f
 }
@@ -72,13 +73,13 @@ func (f *SprintForm) buildForm() {
 	fields = append(fields,
 		huh.NewInput().
 			Key("title").
-			Title(pad(tuicore.RequiredLabel("Title"))).
-			Placeholder("Sprint title...").
+			Title(pad(tuicore.RequiredLabel("Subject"))).
+			Placeholder("Sprint subject...").
 			Value(&f.data.Title).
 			Inline(true).
 			Validate(func(s string) error {
 				if s == "" {
-					return fmt.Errorf("title is required")
+					return fmt.Errorf("subject is required")
 				}
 				return nil
 			}),
@@ -113,66 +114,41 @@ func (f *SprintForm) buildForm() {
 		Value(&f.data.Body).
 		CharLimit(2000).
 		Lines(20)
-	fields = append(fields, f.bodyField, tuicore.NewSubmitField())
-	f.form = huh.NewForm(huh.NewGroup(fields...)).
+	fields = append(fields, f.bodyField, tuicore.NewLabelsField(&f.data.Labels, ""), tuicore.NewSubmitField())
+	f.bodyOtherRows = len(fields)
+	f.SetForm(huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(formKeyMap())
+		WithKeyMap(tuicore.FormKeyMap()))
 }
 
 // SetSize sets the form dimensions.
 func (f *SprintForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
-	if f.form != nil {
-		f.form.WithWidth(w).WithHeight(h - 2)
+	if form := f.FormPtr(); form != nil {
+		form.WithWidth(w).WithHeight(h + 1)
 		if f.bodyField != nil {
-			f.bodyField.WithHeight(max(5, h-7))
+			f.bodyField.WithHeight(tuicore.BodyHeight(h, f.bodyOtherRows))
 		}
 	}
 }
 
-// Init initializes the form.
-func (f *SprintForm) Init() tea.Cmd {
-	return f.form.Init()
+// Update delegates the standard form lifecycle to FormBase.
+func (f *SprintForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+
+// Body returns the current body text (for the $EDITOR escape-hatch).
+func (f *SprintForm) Body() string { return f.data.Body }
+
+// SetBody writes the body and rebuilds the form so huh.Text refreshes.
+func (f *SprintForm) SetBody(s string) {
+	f.data.Body = s
+	f.buildForm()
 }
 
-// Update handles form messages.
-func (f *SprintForm) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			f.canceled = true
-			return nil
-		}
-	}
-	form, cmd := f.form.Update(msg)
-	if m, ok := form.(*huh.Form); ok {
-		f.form = m
-	}
-	if f.form.State == huh.StateCompleted {
-		f.submitted = true
-	}
-	return cmd
-}
-
-// View renders the form.
-func (f *SprintForm) View() string {
-	return f.form.View()
-}
-
-// Errors returns the form's current validation errors.
-func (f *SprintForm) Errors() []error { return f.form.Errors() }
-
-// IsSubmitted returns true if form was submitted.
-func (f *SprintForm) IsSubmitted() bool {
-	return f.submitted
-}
-
-// IsCancelled returns true if form was canceled.
-func (f *SprintForm) IsCancelled() bool {
-	return f.canceled
-}
+// Reset rebuilds the form, clearing huh-internal state while preserving data.
+func (f *SprintForm) Reset() { f.buildForm() }
 
 // SprintCreatedMsg signals that a sprint was created.
 type SprintCreatedMsg struct {
@@ -186,7 +162,8 @@ func (f *SprintForm) CreateSprintFromForm() tea.Cmd {
 	workdir := f.workdir
 	return func() tea.Msg {
 		opts := pm.CreateSprintOptions{
-			State: pm.SprintState(data.State),
+			State:  pm.SprintState(data.State),
+			Labels: data.Labels,
 		}
 		if data.Start != "" {
 			if t, err := time.Parse("2006-01-02", data.Start); err == nil {
@@ -208,78 +185,46 @@ func (f *SprintForm) CreateSprintFromForm() tea.Cmd {
 
 // SprintFormView wraps the form for integration with the TUI host.
 type SprintFormView struct {
-	form       *SprintForm
-	width      int
-	height     int
-	submitting bool
+	tuicore.FormViewBase
 }
 
 // NewSprintFormView creates a new sprint form view.
 func NewSprintFormView(workdir string) *SprintFormView {
-	return &SprintFormView{
-		form: NewSprintForm(workdir),
-	}
-}
-
-// SetSize sets the view dimensions.
-func (v *SprintFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	v.form.SetSize(w, h)
+	v := &SprintFormView{}
+	v.AttachForm(NewSprintForm(workdir))
+	return v
 }
 
 // Activate initializes the form view.
 func (v *SprintFormView) Activate(state *tuicore.State) tea.Cmd {
-	v.form = NewSprintForm(state.Workdir)
-	return v.form.Init()
+	form := NewSprintForm(state.Workdir)
+	v.AttachForm(form)
+	return form.Init()
 }
 
 // Update handles messages.
 func (v *SprintFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	cmd := v.form.Update(msg)
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(SprintCreatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*SprintForm); ok {
+			return form.CreateSprintFromForm()
 		}
-	}
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return tea.Batch(
-			v.form.CreateSprintFromForm(),
-			func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} },
-		)
-	}
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the form view.
 func (v *SprintFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-	content := v.form.View()
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *SprintFormView) Title() string {
-	return "◷  New Sprint"
-}
-
-// Bindings returns keybindings for this view.
-func (v *SprintFormView) Bindings() []tuicore.Binding {
-	return nil
-}
+func (v *SprintFormView) Title() string { return "◷  New Sprint" }
 
 // ViewName returns the view identifier.
-func (v *SprintFormView) ViewName() string {
-	return "pm.sprint_form"
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *SprintFormView) IsInputActive() bool {
-	return true
-}
+func (v *SprintFormView) ViewName() string { return "pm.sprint_form" }
 
 // UpdateSprintFromForm updates an existing sprint from form data.
 func (f *SprintForm) UpdateSprintFromForm() tea.Cmd {
@@ -288,10 +233,12 @@ func (f *SprintForm) UpdateSprintFromForm() tea.Cmd {
 	sprintID := f.sprintID
 	return func() tea.Msg {
 		state := pm.SprintState(data.State)
+		labels := data.Labels
 		opts := pm.UpdateSprintOptions{
-			Title: &data.Title,
-			Body:  &data.Body,
-			State: &state,
+			Title:  &data.Title,
+			Body:   &data.Body,
+			State:  &state,
+			Labels: &labels,
 		}
 		if data.Start != "" {
 			if t, err := time.Parse("2006-01-02", data.Start); err == nil {
@@ -319,14 +266,11 @@ type SprintUpdatedMsg struct {
 
 // SprintEditFormView wraps the form for editing an existing sprint.
 type SprintEditFormView struct {
-	workdir    string
-	sprintID   string
-	form       *SprintForm
-	sprint     *pm.Sprint
-	loaded     bool
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir  string
+	sprintID string
+	sprint   *pm.Sprint
+	loaded   bool
 }
 
 // NewSprintEditFormView creates a new sprint edit form view.
@@ -336,20 +280,11 @@ func NewSprintEditFormView(workdir string) *SprintEditFormView {
 	}
 }
 
-// SetSize sets the view dimensions.
-func (v *SprintEditFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
-
 // Activate loads the sprint and initializes the form.
 func (v *SprintEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.sprintID = state.Router.Location().Param("sprintID")
 	v.loaded = false
-	v.form = nil
+	v.DetachForm()
 	return v.loadSprint()
 }
 
@@ -380,53 +315,35 @@ func (v *SprintEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 		}
 		v.sprint = msg.Sprint
-		v.form = NewSprintEditForm(v.workdir, *v.sprint)
-		v.form.SetSize(v.width, v.height)
+		form := NewSprintEditForm(v.workdir, *v.sprint)
+		v.AttachForm(form)
 		v.loaded = true
-		return v.form.Init()
+		return form.Init()
 	}
 
-	if !v.loaded || v.form == nil {
+	if !v.loaded {
 		return nil
 	}
 
-	cmd := v.form.Update(msg)
-
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(SprintUpdatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*SprintForm); ok {
+			return form.UpdateSprintFromForm()
 		}
-	}
-
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.UpdateSprintFromForm()
-	}
-
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the edit form view.
 func (v *SprintEditFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-
-	var content string
 	if !v.loaded {
-		content = "Loading sprint..."
-	} else if v.form == nil {
-		content = tuicore.Dim.Render("  Sprint not found")
-	} else {
-		v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-		content = v.form.View()
+		wrapper := tuicore.NewViewWrapper(state)
+		footer := tuicore.FormFooter(true, nil)
+		return wrapper.Render("Loading sprint...", footer)
 	}
-
-	var footer string
-	if v.form != nil {
-		footer = tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	} else {
-		footer = tuicore.Dim.Render("tab/shift+tab navigate · enter confirm · esc cancel")
-	}
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
@@ -437,17 +354,5 @@ func (v *SprintEditFormView) Title() string {
 	return "◷  Edit Sprint"
 }
 
-// Bindings returns keybindings for this view.
-func (v *SprintEditFormView) Bindings() []tuicore.Binding {
-	return nil
-}
-
 // ViewName returns the view identifier.
-func (v *SprintEditFormView) ViewName() string {
-	return "pm.sprint_edit_form"
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *SprintEditFormView) IsInputActive() bool {
-	return true
-}
+func (v *SprintEditFormView) ViewName() string { return "pm.sprint_edit_form" }

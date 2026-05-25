@@ -73,7 +73,6 @@ type HandlerContext struct {
 	// Callbacks requiring app.go state
 	ToggleFocus  func()
 	Navigate     func(Context) tea.Cmd
-	OpenEditor   func(mode, targetID string) tea.Cmd
 	StartFetch   func() tea.Cmd
 	StartPush    func() tea.Cmd
 	StartLFSPush func() tea.Cmd

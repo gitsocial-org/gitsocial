@@ -199,6 +199,6 @@ func (v *ConfigView) Render(state *tuicore.State) string {
 	if v.err != "" {
 		content += "\n" + tuicore.Dim.Render("Error: "+v.err)
 	}
-	footer := tuicore.RenderFooter(state.Registry, tuicore.PMConfig, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.PMConfig, nil)
 	return wrapper.Render(content, footer)
 }

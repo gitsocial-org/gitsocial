@@ -463,7 +463,7 @@ func (v *NotificationsView) Render(state *State) string {
 		content = v.cardlist.View()
 	}
 
-	footer := RenderFooter(state.Registry, Notifications, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, Notifications, nil)
 	return wrapper.Render(content, footer)
 }
 

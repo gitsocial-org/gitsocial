@@ -382,7 +382,7 @@ func (v *CacheView) Render(state *State) string {
 
 	if v.stats == nil {
 		content := Dim.Render("Loading cache stats...")
-		footer := RenderFooter(state.Registry, Cache, wrapper.ContentWidth(), nil)
+		footer := RenderFooter(state.Registry, Cache, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -408,9 +408,12 @@ func (v *CacheView) Render(state *State) string {
 	fmt.Fprintf(&b, "%s  %s", memLabel, rs.Value.Render(memorySize))
 	b.WriteString("\n\n")
 
-	// Cache header
+	// Cache header. The "C:clear all" hint uses local inline styles (no
+	// BgFooter background) because it renders inside content, not the footer.
 	cacheLabel := rs.Header.Width(80).Render("Cache")
-	fmt.Fprintf(&b, "%s  %s  %s", cacheLabel, rs.Value.Render(totalSize), keyStyle.Render("C")+":"+labelStyle.Render("clear all"))
+	keyHint := lipgloss.NewStyle().Foreground(lipgloss.Color(BorderFocused)).Bold(true).Render("C")
+	labelHint := lipgloss.NewStyle().Foreground(lipgloss.Color(TextNormal)).Render("clear all")
+	fmt.Fprintf(&b, "%s  %s  %s", cacheLabel, rs.Value.Render(totalSize), keyHint+":"+labelHint)
 	b.WriteString("\n")
 	b.WriteString(rs.Dim.Render(v.stats.Location))
 	b.WriteString("\n\n")
@@ -539,7 +542,7 @@ func (v *CacheView) Render(state *State) string {
 	}
 	visible := strings.Join(lines[v.scroll:end], "\n")
 
-	footer := RenderFooter(state.Registry, Cache, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, Cache, nil)
 
 	return wrapper.Render(visible, footer)
 }

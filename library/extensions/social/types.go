@@ -96,8 +96,10 @@ type Post struct {
 	HeaderExt   string
 	HeaderType  string
 	HeaderState string
-	Origin      *protocol.Origin
-	Raw         struct {
+	// Labels carries scoped tags parsed from the GitMsg `labels` header field.
+	Labels []string
+	Origin *protocol.Origin
+	Raw    struct {
 		Commit git.Commit
 		GitMsg *protocol.Message
 	}

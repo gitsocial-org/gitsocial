@@ -2,15 +2,23 @@
 package tuicore
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
+
+// configAddData holds the in-progress add-key form values.
+type configAddData struct {
+	Key   string
+	Value string
+}
 
 // ConfigView displays and edits extension config.
 type ConfigView struct {
@@ -20,7 +28,8 @@ type ConfigView struct {
 	lastClickIdx int
 	editMode     bool
 	addMode      bool
-	addKey       string
+	addForm      *huh.Form
+	addData      configAddData
 	input        textinput.Model
 	err          string
 	zonePrefix   string
@@ -86,7 +95,8 @@ func (v *ConfigView) Activate(state *State) tea.Cmd {
 	}
 	v.editMode = false
 	v.addMode = false
-	v.addKey = ""
+	v.addForm = nil
+	v.addData = configAddData{}
 	return v.loadConfig(state.Workdir)
 }
 
@@ -144,9 +154,19 @@ func (v *ConfigView) Update(msg tea.Msg, state *State) tea.Cmd {
 	case ConfigViewLoadedMsg:
 		v.HandleLoaded(msg)
 	default:
-		if v.editMode || v.addMode {
+		switch {
+		case v.editMode:
 			var cmd tea.Cmd
 			v.input, cmd = v.input.Update(msg)
+			return cmd
+		case v.addMode && v.addForm != nil:
+			form, cmd := v.addForm.Update(msg)
+			if f, ok := form.(*huh.Form); ok {
+				v.addForm = f
+			}
+			if v.addForm.State == huh.StateCompleted {
+				return v.submitAdd(state.Workdir)
+			}
 			return cmd
 		}
 	}
@@ -197,41 +217,73 @@ func (v *ConfigView) handleKey(msg tea.KeyPressMsg, workdir string) tea.Cmd {
 
 // handleAddModeKey handles input in add mode.
 func (v *ConfigView) handleAddModeKey(msg tea.KeyPressMsg, workdir string) tea.Cmd {
-	switch msg.String() {
-	case "esc":
+	if msg.String() == "esc" {
 		v.addMode = false
-		v.addKey = ""
-		v.input.Blur()
+		v.addForm = nil
 		v.err = ""
 		return nil
-	case "enter":
-		if v.addKey == "" {
-			keyName := v.input.Value()
-			if keyName == "" {
-				v.err = "Key name cannot be empty"
-				return nil
-			}
-			v.addKey = keyName
-			v.input.SetValue("")
-			v.input.Placeholder = "value"
-			v.err = ""
-		} else {
-			value := v.input.Value()
-			if err := gitmsg.SetExtConfigValue(workdir, v.extension, v.addKey, value); err != nil {
-				v.err = err.Error()
-				return nil
-			}
-			v.keys = gitmsg.ListExtConfig(workdir, v.extension)
-			v.addMode = false
-			v.addKey = ""
-			v.input.Blur()
-			v.err = ""
-		}
+	}
+	if v.addForm == nil {
 		return nil
 	}
-	var cmd tea.Cmd
-	v.input, cmd = v.input.Update(msg)
+	form, cmd := v.addForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		v.addForm = f
+	}
+	if v.addForm.State == huh.StateCompleted {
+		return v.submitAdd(workdir)
+	}
 	return cmd
+}
+
+// startAddForm opens the inline huh form for a new config key+value.
+func (v *ConfigView) startAddForm() tea.Cmd {
+	v.addMode = true
+	v.addData = configAddData{}
+	v.err = ""
+
+	keyField := huh.NewInput().
+		Key("key").
+		Title(PadLabel(RequiredLabel("Key"))).
+		Placeholder("e.g. mykey").
+		CharLimit(128).
+		Value(&v.addData.Key).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("key is required")
+			}
+			return nil
+		})
+	valueField := huh.NewInput().
+		Key("value").
+		Title(PadLabel("Value")).
+		Placeholder("value").
+		CharLimit(512).
+		Value(&v.addData.Value)
+	v.addForm = huh.NewForm(huh.NewGroup(keyField, valueField, NewSubmitField())).
+		WithTheme(FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(FormKeyMap())
+	return v.addForm.Init()
+}
+
+// submitAdd writes the new config entry and reloads.
+func (v *ConfigView) submitAdd(workdir string) tea.Cmd {
+	key := strings.TrimSpace(v.addData.Key)
+	value := v.addData.Value
+	v.addMode = false
+	v.addForm = nil
+	if key == "" {
+		return nil
+	}
+	if err := gitmsg.SetExtConfigValue(workdir, v.extension, key, value); err != nil {
+		v.err = err.Error()
+		return nil
+	}
+	v.keys = gitmsg.ListExtConfig(workdir, v.extension)
+	v.err = ""
+	return nil
 }
 
 // handleEditModeKey handles input in edit mode.
@@ -281,12 +333,7 @@ func (v *ConfigView) handleNormalKey(msg tea.KeyPressMsg) tea.Cmd {
 			return v.input.Focus()
 		}
 	case "a":
-		v.addMode = true
-		v.addKey = ""
-		v.input.SetValue("")
-		v.input.Placeholder = "key"
-		v.err = ""
-		return v.input.Focus()
+		return v.startAddForm()
 	case "home":
 		v.cursor = 0
 	case "end":
@@ -329,13 +376,9 @@ func (v *ConfigView) Render(state *State) string {
 		}
 	}
 
-	if v.addMode {
+	if v.addMode && v.addForm != nil {
 		b.WriteString("\n")
-		label := "New key:"
-		if v.addKey != "" {
-			label = v.addKey
-		}
-		b.WriteString(RenderEditRow(rs, label, v.input.View()))
+		b.WriteString(v.addForm.View())
 		b.WriteString("\n")
 	}
 
@@ -344,6 +387,11 @@ func (v *ConfigView) Render(state *State) string {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("Error: " + v.err))
 	}
 
-	footer := RenderFooter(state.Registry, Config, wrapper.ContentWidth(), nil)
+	var footer string
+	if v.addMode && v.addForm != nil {
+		footer = FormFooter(false, v.addForm.Errors())
+	} else {
+		footer = RenderFooter(state.Registry, Config, nil)
+	}
 	return wrapper.Render(b.String(), footer)
 }

@@ -235,7 +235,7 @@ func (v *IssueHistoryView) handleLoaded(msg IssueHistoryLoadedMsg) {
 func (v *IssueHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.PMIssueHistory, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.PMIssueHistory, nil)
 	return wrapper.Render(content, footer)
 }
 

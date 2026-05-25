@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
@@ -18,21 +18,25 @@ import (
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9-]+`)
 var validIDPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+// listCreateData holds the in-progress create-list form values.
+type listCreateData struct {
+	Name string
+	ID   string
+}
+
 // ListPickerView displays and manages user's lists.
 type ListPickerView struct {
-	lists          []social.List
-	cursor         int
-	lastClickIdx   int
-	loading        bool
-	inputMode      bool
-	input          textinput.Model
-	idInput        textinput.Model
-	idInputFocused bool
-	idError        string
-	followRepoURL  string
-	workdir        string
-	confirm        tuicore.ConfirmDialog
-	zonePrefix     string
+	lists         []social.List
+	cursor        int
+	lastClickIdx  int
+	loading       bool
+	createForm    *huh.Form
+	createData    listCreateData
+	createMode    bool
+	followRepoURL string
+	workdir       string
+	confirm       tuicore.ConfirmDialog
+	zonePrefix    string
 }
 
 // Bindings returns keybindings for the list picker view.
@@ -74,21 +78,7 @@ func (v *ListPickerView) Bindings() []tuicore.Binding {
 
 // NewListPickerView creates a new list picker view.
 func NewListPickerView(workdir string) *ListPickerView {
-	input := textinput.New()
-	input.Placeholder = "List name..."
-	input.CharLimit = 256
-	input.Prompt = "name: "
-	tuicore.StyleTextInput(&input, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
-
-	idInput := textinput.New()
-	idInput.Placeholder = ""
-	idInput.CharLimit = 256
-	idInput.Prompt = "  id: " // aligned with "name: "
-	tuicore.StyleTextInput(&idInput, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
-
 	return &ListPickerView{
-		input:        input,
-		idInput:      idInput,
 		workdir:      workdir,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
@@ -125,11 +115,10 @@ func (v *ListPickerView) SetSize(width, height int) {
 func (v *ListPickerView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading = true
 	v.cursor = 0
-	v.inputMode = false
-	v.idInputFocused = false
+	v.createMode = false
+	v.createForm = nil
+	v.createData = listCreateData{}
 	v.confirm.Reset()
-	v.input.SetValue("")
-	v.idInput.SetValue("")
 	loc := state.Router.Location()
 	v.followRepoURL = loc.Param("repoURL")
 	return v.loadLists()
@@ -151,7 +140,7 @@ func (v *ListPickerView) loadLists() tea.Cmd {
 func (v *ListPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
-		if v.inputMode || v.confirm.IsActive() || v.loading {
+		if v.createMode || v.confirm.IsActive() || v.loading {
 			return nil
 		}
 		return v.handleMouse(msg)
@@ -159,23 +148,25 @@ func (v *ListPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.handleKey(msg, state)
 	case ListsLoadedMsg:
 		v.handleLoaded(msg)
+		return nil
 	case ListCreatedMsg:
 		v.handleCreated(msg)
+		return nil
 	case ListDeletedMsg:
 		v.handleDeleted(msg)
+		return nil
 	case RepoAddedMsg:
 		return v.handleRepoAdded(msg, state)
-	default:
-		// Forward other messages (like blink) to focused input
-		if v.inputMode {
-			var cmd tea.Cmd
-			if v.idInputFocused {
-				v.idInput, cmd = v.idInput.Update(msg)
-			} else {
-				v.input, cmd = v.input.Update(msg)
-			}
-			return cmd
+	}
+	if v.createMode && v.createForm != nil {
+		form, cmd := v.createForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			v.createForm = f
 		}
+		if v.createForm.State == huh.StateCompleted {
+			return v.submitCreate()
+		}
+		return cmd
 	}
 	return nil
 }
@@ -186,63 +177,23 @@ func (v *ListPickerView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 	if handled, cmd := v.confirm.HandleKey(key); handled {
 		return cmd
 	}
-	if v.inputMode {
-		switch key {
-		case "enter":
-			name := v.input.Value()
-			customID := strings.TrimSpace(v.idInput.Value())
-			var id string
-			if customID != "" {
-				if !isValidID(customID) {
-					v.idError = "invalid id: use lowercase letters, numbers, hyphens"
-					return nil
-				}
-				id = customID
-			} else {
-				id = nameToID(name)
-			}
-			if name != "" && id != "" {
-				v.inputMode = false
-				v.idError = ""
-				v.input.Blur()
-				v.idInput.Blur()
-				return v.createList(id, name)
-			}
-		case "esc":
-			v.inputMode = false
-			v.idError = ""
-			v.input.Blur()
-			v.idInput.Blur()
-		case "tab":
-			v.idError = ""
-			if v.idInputFocused {
-				v.idInputFocused = false
-				v.idInput.Blur()
-				return v.input.Focus()
-			}
-			v.idInputFocused = true
-			v.input.Blur()
-			// Pre-fill with auto-generated ID if empty
-			if strings.TrimSpace(v.idInput.Value()) == "" {
-				if name := v.input.Value(); name != "" {
-					autoID := nameToID(name)
-					if autoID != "" {
-						v.idInput.SetValue(autoID)
-						v.idInput.SetCursor(len(autoID))
-					}
-				}
-			}
-			return v.idInput.Focus()
-		default:
-			var cmd tea.Cmd
-			if v.idInputFocused {
-				v.idInput, cmd = v.idInput.Update(msg)
-			} else {
-				v.input, cmd = v.input.Update(msg)
-			}
-			return cmd
+	if v.createMode {
+		if key == "esc" {
+			v.createMode = false
+			v.createForm = nil
+			return nil
 		}
-		return nil
+		if v.createForm == nil {
+			return nil
+		}
+		form, cmd := v.createForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			v.createForm = f
+		}
+		if v.createForm.State == huh.StateCompleted {
+			return v.submitCreate()
+		}
+		return cmd
 	}
 
 	switch key {
@@ -417,16 +368,8 @@ func (v *ListPickerView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var b strings.Builder
-	// Show input form at top
-	if v.inputMode {
-		b.WriteString(v.input.View())
-		b.WriteString("\n")
-		b.WriteString(v.idInput.View())
-		if v.idError != "" {
-			errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.StatusError))
-			b.WriteString("\n")
-			b.WriteString(errorStyle.Render("        " + v.idError))
-		}
+	if v.createMode && v.createForm != nil {
+		b.WriteString(v.createForm.View())
 	} else {
 		keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)).Bold(true)
 		b.WriteString(keyStyle.Render("n") + tuicore.Dim.Render(":new list"))
@@ -466,17 +409,20 @@ func (v *ListPickerView) Render(state *tuicore.State) string {
 	}
 
 	var footer string
-	if v.confirm.IsActive() {
+	switch {
+	case v.confirm.IsActive():
 		footer = v.confirm.Render()
-	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPicker, wrapper.ContentWidth(), nil)
+	case v.createMode && v.createForm != nil:
+		footer = tuicore.FormFooter(false, v.createForm.Errors())
+	default:
+		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPicker, nil)
 	}
 	return wrapper.Render(b.String(), footer)
 }
 
-// IsInputActive returns true when the input field or confirmation is active.
+// IsInputActive returns true when the create form or confirmation is active.
 func (v *ListPickerView) IsInputActive() bool {
-	return v.inputMode || v.confirm.IsActive()
+	return v.createMode || v.confirm.IsActive()
 }
 
 // GetSelectedList returns the currently selected list.
@@ -493,16 +439,66 @@ func (v *ListPickerView) GetSelectedList() *tuicore.SelectedList {
 
 // CreateList starts the list creation input mode.
 func (v *ListPickerView) CreateList() tea.Cmd {
-	v.inputMode = true
-	v.idInputFocused = false
-	v.idError = ""
-	v.input.Blur()
-	v.input.Reset()
-	v.input.Placeholder = ""
-	v.idInput.Blur()
-	v.idInput.Reset()
-	v.idInput.Placeholder = ""
-	return v.input.Focus()
+	v.createMode = true
+	v.createData = listCreateData{}
+
+	pad := tuicore.PadLabel
+	nameField := huh.NewInput().
+		Key("name").
+		Title(pad(tuicore.RequiredLabel("Name"))).
+		Placeholder("List name...").
+		CharLimit(256).
+		Value(&v.createData.Name).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("name is required")
+			}
+			return nil
+		})
+	idField := huh.NewInput().
+		Key("id").
+		Title(pad("ID")).
+		Placeholder("(auto from name)").
+		CharLimit(256).
+		Value(&v.createData.ID).
+		Validate(func(s string) error {
+			id := strings.TrimSpace(s)
+			if id == "" {
+				// Auto-derive from name when blank.
+				v.createData.ID = nameToID(v.createData.Name)
+				return nil
+			}
+			if !isValidID(id) {
+				return fmt.Errorf("invalid id: use lowercase letters, numbers, hyphens")
+			}
+			return nil
+		})
+
+	v.createForm = huh.NewForm(huh.NewGroup(
+		nameField,
+		idField,
+		tuicore.NewSubmitField(),
+	)).
+		WithTheme(tuicore.FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(tuicore.FormKeyMap())
+	return v.createForm.Init()
+}
+
+// submitCreate finalizes the inline create form and dispatches the create command.
+func (v *ListPickerView) submitCreate() tea.Cmd {
+	name := strings.TrimSpace(v.createData.Name)
+	id := strings.TrimSpace(v.createData.ID)
+	if id == "" {
+		id = nameToID(name)
+	}
+	v.createMode = false
+	v.createForm = nil
+	if name == "" || id == "" {
+		return nil
+	}
+	return v.createList(id, name)
 }
 
 // DeleteList shows confirmation before deleting the currently selected list.

@@ -68,6 +68,18 @@ func resolveItem(workdir, itemID string) *SocialItem {
 // CreateCommentOptions configures comment creation.
 type CreateCommentOptions struct {
 	Origin *protocol.Origin
+	Labels []string
+}
+
+// CreateQuoteOptions configures quote creation.
+type CreateQuoteOptions struct {
+	Origin *protocol.Origin
+	Labels []string
+}
+
+// CreateRepostOptions configures repost creation.
+type CreateRepostOptions struct {
+	Labels []string
 }
 
 // CreateComment creates a comment on an existing post.
@@ -76,27 +88,39 @@ func CreateComment(workdir, targetPostID, content string, opts *CreateCommentOpt
 		return Failure[Post]("EMPTY_CONTENT", "Comment content cannot be empty")
 	}
 	var origin *protocol.Origin
+	var labels []string
 	if opts != nil {
 		origin = opts.Origin
+		labels = opts.Labels
 	}
-	return createInteraction(workdir, PostTypeComment, targetPostID, content, origin)
+	return createInteraction(workdir, PostTypeComment, targetPostID, content, origin, labels)
 }
 
 // CreateRepost creates a repost of an existing post.
-func CreateRepost(workdir, targetPostID string) Result[Post] {
-	return createInteraction(workdir, PostTypeRepost, targetPostID, "", nil)
+func CreateRepost(workdir, targetPostID string, opts *CreateRepostOptions) Result[Post] {
+	var labels []string
+	if opts != nil {
+		labels = opts.Labels
+	}
+	return createInteraction(workdir, PostTypeRepost, targetPostID, "", nil, labels)
 }
 
 // CreateQuote creates a quote post with commentary on an existing post.
-func CreateQuote(workdir, targetPostID, content string) Result[Post] {
+func CreateQuote(workdir, targetPostID, content string, opts *CreateQuoteOptions) Result[Post] {
 	if strings.TrimSpace(content) == "" {
 		return Failure[Post]("EMPTY_CONTENT", "Quote content cannot be empty")
 	}
-	return createInteraction(workdir, PostTypeQuote, targetPostID, content, nil)
+	var origin *protocol.Origin
+	var labels []string
+	if opts != nil {
+		origin = opts.Origin
+		labels = opts.Labels
+	}
+	return createInteraction(workdir, PostTypeQuote, targetPostID, content, origin, labels)
 }
 
 // createInteraction creates a comment, repost, or quote interaction.
-func createInteraction(workdir string, interactionType PostType, targetPostID, content string, origin *protocol.Origin) Result[Post] {
+func createInteraction(workdir string, interactionType PostType, targetPostID, content string, origin *protocol.Origin, labels []string) Result[Post] {
 	targetItem := resolveItem(workdir, targetPostID)
 	if targetItem == nil {
 		return Failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
@@ -163,6 +187,10 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 
 	if interactionType == PostTypeRepost && content == "" {
 		content = generateRepostContentFromItem(targetItem)
+	}
+
+	if labelStr := joinSocialLabels(labels); labelStr != "" {
+		fields["labels"] = labelStr
 	}
 
 	// Strip workdir from refs for git commit, but preserve URLs for remote repositories
@@ -338,8 +366,15 @@ func generateRepostContentFromItem(item *SocialItem) string {
 	return "# " + author + " @ " + repoName + ": " + firstLine
 }
 
+// EditPostOptions configures post edits. When Labels is nil the canonical's
+// existing labels are preserved (no `labels` header is written). When Labels
+// is non-nil (even empty) it replaces the canonical's labels.
+type EditPostOptions struct {
+	Labels *[]string
+}
+
 // EditPost creates a new version of an existing post with updated content.
-func EditPost(workdir, targetPostID, newContent string) Result[Post] {
+func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) Result[Post] {
 	if strings.TrimSpace(newContent) == "" {
 		return Failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
 	}
@@ -376,6 +411,9 @@ func EditPost(workdir, targetPostID, newContent string) Result[Post] {
 	fields := map[string]string{
 		"type":  targetItem.Type,
 		"edits": editsRef,
+	}
+	if opts != nil && opts.Labels != nil {
+		fields["labels"] = joinSocialLabels(*opts.Labels)
 	}
 
 	header := protocol.Header{

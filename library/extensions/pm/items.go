@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 type PMItem struct {
@@ -814,6 +815,7 @@ func PMItemToMilestone(item PMItem) Milestone {
 		Body:        body,
 		State:       State(item.State),
 		Due:         due,
+		Labels:      text.SplitCSV(item.Labels.String),
 		IsEdited:    item.IsEdited,
 		IsRetracted: item.IsRetracted,
 		Origin:      item.Origin,
@@ -847,6 +849,7 @@ func PMItemToSprint(item PMItem) Sprint {
 		State:       SprintState(item.State),
 		Start:       start,
 		End:         end,
+		Labels:      text.SplitCSV(item.Labels.String),
 		IsEdited:    item.IsEdited,
 		IsRetracted: item.IsRetracted,
 		Origin:      item.Origin,

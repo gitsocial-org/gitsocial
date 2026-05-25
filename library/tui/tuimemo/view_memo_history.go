@@ -186,7 +186,7 @@ func (v *MemoHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 func (v *MemoHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.MemoHistory, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.MemoHistory, nil)
 	return wrapper.Render(content, footer)
 }
 

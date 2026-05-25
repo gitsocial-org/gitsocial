@@ -840,9 +840,9 @@ func (c *DiffViewCore) SharedBindings(ctx Context) []Binding {
 func (c *DiffViewCore) RenderFooter(state *State, ctx Context, contentWidth int) string {
 	if c.searchActive {
 		c.searchInput.SetWidth(contentWidth - 5)
-		return c.searchInput.View() + "\n" + RenderSearchFooter(contentWidth, c.matchIndex, len(c.matchPositions), c.searchInputMode, c.searchQuery != "")
+		return c.searchInput.View() + "\n" + RenderSearchFooter(c.matchIndex, len(c.matchPositions), c.searchInputMode, c.searchQuery != "")
 	}
-	return RenderFooter(state.Registry, ctx, contentWidth, nil)
+	return RenderFooter(state.Registry, ctx, nil)
 }
 
 func (c *DiffViewCore) updateSearch() {

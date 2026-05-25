@@ -346,7 +346,7 @@ func (v *HistoryDiffView) ensureVisible() {
 // Render draws the view.
 func (v *HistoryDiffView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
-	footer := RenderFooter(state.Registry, v.cfg.Context, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, v.cfg.Context, nil)
 	if !v.loaded {
 		return wrapper.Render(Dim.Render("  Loading diff..."), footer)
 	}

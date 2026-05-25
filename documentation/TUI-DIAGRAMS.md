@@ -173,22 +173,12 @@ CardList. MaxLines: 1, Separator. Quick-create and search modes.
 │  ─────────────────────────────────────────────────────────────         │
 │  ●  Add keyboard shortcuts · Alice · 3d ago · kind/task                │
 │                                                                        │
-│ n:quick  N:full  F:filter  m:mine  r:refresh  /:search                 │
+│ n:new  F:filter  m:mine  r:refresh  /:search                           │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
-Quick-create:
-
-```
-╭─ ○  Open Issues · (3) ──────────────────────────────────────────────────╮
-│                                                                         │
-│  [cardlist]                                                             │
-│                                                                         │
-│  New issue: Implement real-time notifications█                          │
-│                                                                         │
-│ enter:create  esc:cancel                                                │
-╰─────────────────────────────────────────────────────────────────────────╯
-```
+Pressing `n` opens the full IssueForm (a separate modal view) — there is
+no longer a separate inline quick-create input.
 
 ---
 

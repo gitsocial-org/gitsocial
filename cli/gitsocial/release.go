@@ -16,6 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 )
 
@@ -338,7 +339,7 @@ func newReleaseEditCmd() *cobra.Command {
 				opts.SBOM = &sbom
 			}
 			if cmd.Flags().Changed("artifacts") {
-				a := splitCSV(artifactsStr)
+				a := text.SplitCSV(artifactsStr)
 				opts.Artifacts = &a
 			}
 			if cmd.Flags().Changed("artifact-url") {

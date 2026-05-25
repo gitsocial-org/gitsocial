@@ -14,7 +14,7 @@ import (
 )
 
 // releaseFieldOrder declares the spec-defined field ordering for release headers (GITRELEASE.md 1.2).
-var releaseFieldOrder = []string{"artifact-url", "artifacts", "checksums", "prerelease", "sbom", "signed-by", "tag", "version"}
+var releaseFieldOrder = []string{"artifact-url", "artifacts", "checksums", "labels", "prerelease", "sbom", "signed-by", "tag", "version"}
 
 type CreateReleaseOptions struct {
 	Tag         string
@@ -25,6 +25,7 @@ type CreateReleaseOptions struct {
 	Checksums   string
 	SignedBy    string
 	SBOM        string
+	Labels      []string
 	// AllowDuplicate skips the tag-uniqueness check. Set when the
 	// caller has accepted that an existing release with the same tag
 	// is OK (e.g., re-creating after a retraction).
@@ -43,6 +44,7 @@ type EditReleaseOptions struct {
 	Checksums   *string
 	SignedBy    *string
 	SBOM        *string
+	Labels      *[]string
 }
 
 // CreateRelease creates a new release on the release branch. Refuses
@@ -95,6 +97,7 @@ func EditRelease(workdir, releaseRef string, opts EditReleaseOptions) Result[Rel
 		Checksums:   rel.Checksums,
 		SignedBy:    rel.SignedBy,
 		SBOM:        rel.SBOM,
+		Labels:      rel.Labels,
 	}
 	createOpts.Origin = existing.Origin
 
@@ -130,6 +133,9 @@ func EditRelease(workdir, releaseRef string, opts EditReleaseOptions) Result[Rel
 	}
 	if opts.SBOM != nil {
 		createOpts.SBOM = *opts.SBOM
+	}
+	if opts.Labels != nil {
+		createOpts.Labels = *opts.Labels
 	}
 
 	canonicalRef := protocol.LocalizeRef(
@@ -230,6 +236,9 @@ func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsR
 	}
 	if opts.Checksums != "" {
 		fields["checksums"] = opts.Checksums
+	}
+	if len(opts.Labels) > 0 {
+		fields["labels"] = strings.Join(opts.Labels, ",")
 	}
 	if opts.Prerelease {
 		fields["prerelease"] = "true"

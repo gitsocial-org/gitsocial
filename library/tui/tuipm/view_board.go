@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
@@ -19,37 +18,29 @@ import (
 
 // BoardView displays issues in a kanban board layout.
 type BoardView struct {
-	workdir         string
-	repoURL         string
-	userEmail       string
-	width           int
-	height          int
-	board           pm.BoardView // filtered view used for rendering
-	allBoard        pm.BoardView // unfiltered load result
-	prefs           pm.UserPrefs
-	loaded          bool
-	assigneeFilter  string // "" = all, "me" = my issues
-	selectedCol     int
-	selectedRow     int
-	scrollOffset    int
-	quickCreateMode bool
-	quickInput      textinput.Model
-	zonePrefix      string
-	lastClickCol    int
-	lastClickRow    int
+	workdir        string
+	repoURL        string
+	userEmail      string
+	width          int
+	height         int
+	board          pm.BoardView // filtered view used for rendering
+	allBoard       pm.BoardView // unfiltered load result
+	prefs          pm.UserPrefs
+	loaded         bool
+	assigneeFilter string // "" = all, "me" = my issues
+	selectedCol    int
+	selectedRow    int
+	scrollOffset   int
+	zonePrefix     string
+	lastClickCol   int
+	lastClickRow   int
 }
 
 // NewBoardView creates a new board view.
 func NewBoardView(workdir string) *BoardView {
-	input := textinput.New()
-	input.Placeholder = "Issue subject..."
-	input.CharLimit = 200
-	input.Prompt = "New issue: "
-	tuicore.StyleTextInput(&input, tuicore.Title, tuicore.Normal, tuicore.Dim)
 	return &BoardView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
-		quickInput:   input,
 		zonePrefix:   zone.NewPrefix(),
 		lastClickCol: -1,
 		lastClickRow: -1,
@@ -64,8 +55,6 @@ func (v *BoardView) SetSize(w, h int) {
 
 // Activate loads the board data.
 func (v *BoardView) Activate(state *tuicore.State) tea.Cmd {
-	v.quickCreateMode = false
-	v.quickInput.SetValue("")
 	return v.loadBoard()
 }
 
@@ -115,62 +104,21 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 
 	case IssueCreatedMsg:
-		v.quickCreateMode = false
-		v.quickInput.SetValue("")
 		if msg.Err == nil {
 			return v.loadBoard()
 		}
 		return nil
 
 	case tea.KeyPressMsg:
-		if v.quickCreateMode {
-			return v.handleQuickCreateKey(msg, state)
-		}
 		return v.handleKey(msg, state)
 	case tea.MouseMsg:
 		return v.handleMouse(msg)
 	}
-
-	// Update text input when in quick create mode
-	if v.quickCreateMode {
-		var cmd tea.Cmd
-		v.quickInput, cmd = v.quickInput.Update(msg)
-		return cmd
-	}
 	return nil
 }
 
-// IsInputActive returns true when text input is active.
-func (v *BoardView) IsInputActive() bool {
-	return v.quickCreateMode
-}
-
-func (v *BoardView) handleQuickCreateKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
-	switch msg.String() {
-	case "enter":
-		subject := strings.TrimSpace(v.quickInput.Value())
-		if subject == "" {
-			v.quickCreateMode = false
-			return nil
-		}
-		workdir := v.workdir
-		return func() tea.Msg {
-			result := pm.CreateIssue(workdir, subject, "", pm.CreateIssueOptions{})
-			if !result.Success {
-				return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
-			}
-			return IssueCreatedMsg{Issue: result.Data}
-		}
-	case "esc":
-		v.quickCreateMode = false
-		v.quickInput.SetValue("")
-		return nil
-	}
-	// Let textinput handle other keys
-	var cmd tea.Cmd
-	v.quickInput, cmd = v.quickInput.Update(msg)
-	return cmd
-}
+// IsInputActive returns false — board doesn't capture text input directly.
+func (v *BoardView) IsInputActive() bool { return false }
 
 func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	if !v.loaded || len(v.board.Columns) == 0 {
@@ -233,13 +181,7 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	case "r":
 		return v.loadBoard()
 	case "n":
-		// Quick create - inline input
-		v.quickCreateMode = true
-		v.quickInput.SetValue("")
-		v.quickInput.Focus()
-		return nil
-	case "N":
-		// Full create - form view
+		// Create - navigate to full IssueForm
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocPMNewIssue,
@@ -435,24 +377,10 @@ func (v *BoardView) Render(state *tuicore.State) string {
 	} else if len(v.board.Columns) == 0 {
 		content = "No columns configured"
 	} else {
-		// Reserve space for quick create input if active
-		boardHeight := wrapper.ContentHeight()
-		if v.quickCreateMode {
-			boardHeight -= 2 // Input line + spacing
-		}
-		content = v.renderBoard(wrapper.ContentWidth(), boardHeight)
-		if v.quickCreateMode {
-			v.quickInput.SetWidth(wrapper.ContentWidth() - 15)
-			content += "\n" + v.quickInput.View()
-		}
+		content = v.renderBoard(wrapper.ContentWidth(), wrapper.ContentHeight())
 	}
 
-	var footer string
-	if v.quickCreateMode {
-		footer = tuicore.Dim.Render("enter:create  esc:cancel")
-	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.PMBoard, wrapper.ContentWidth(), nil)
-	}
+	footer := tuicore.RenderFooter(state.Registry, tuicore.PMBoard, nil)
 	return wrapper.Render(content, footer)
 }
 
@@ -784,8 +712,7 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "x", Label: "collapse col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "s", Label: "swimlanes", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},

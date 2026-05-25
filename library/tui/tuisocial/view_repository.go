@@ -498,16 +498,16 @@ func (v *RepositoryView) Render(state *tuicore.State) string {
 	}
 	var footer string
 	if v.isFetching {
-		footer = tuicore.RenderMessageFooter(v.fetchingLabel, tuicore.MessageTypeNone, wrapper.ContentWidth())
+		footer = tuicore.RenderMessageFooter(v.fetchingLabel, tuicore.MessageTypeNone)
 	} else {
 		status := GetFollowStatus(v.url, v.allLists, v.followerSet)
 		isFollowed := v.isWorkspace || status == FollowStatusFollowed || status == FollowStatusMutual
 		include := map[string]bool{"%": !v.isWorkspace}
 		if isFollowed {
 			exclude := map[string]bool{"[": true, "]": true}
-			footer = tuicore.RenderFooterInclude(state.Registry, ctx, wrapper.ContentWidth(), exclude, include)
+			footer = tuicore.RenderFooterInclude(state.Registry, ctx, exclude, include)
 		} else {
-			footer = tuicore.RenderFooterInclude(state.Registry, ctx, wrapper.ContentWidth(), nil, include)
+			footer = tuicore.RenderFooterInclude(state.Registry, ctx, nil, include)
 		}
 	}
 	return wrapper.Render(content, footer)

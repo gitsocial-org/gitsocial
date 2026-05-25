@@ -218,7 +218,7 @@ func (v *RepoListsView) Render(state *tuicore.State) string {
 			b.WriteString("\n")
 		}
 	}
-	footer := tuicore.RenderFooter(state.Registry, tuicore.RepoLists, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.RepoLists, nil)
 	return wrapper.Render(b.String(), footer)
 }
 

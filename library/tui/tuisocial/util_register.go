@@ -38,6 +38,7 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/lists", Context: tuicore.RepoLists, Title: "Repository Lists", Icon: "☷"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history", Context: tuicore.History, Title: "History", Icon: "◉", Component: "VersionPicker"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history/diff", Context: tuicore.HistoryDiff, Title: "Post Diff", Icon: "◉"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/post-form", Context: tuicore.Detail, Title: "Post", Icon: "•"})
 
 	tuicore.RegisterMessageHandler(handleSocialMessages)
 	// Register nav targets for social types (wildcard covers post, comment, repost, quote)
@@ -174,12 +175,15 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/history", history)
 	host.AddView("/social/history/diff", historyDiff)
 	host.AddView("/social/repository/lists", repoLists)
+	host.AddView("/social/post-form", NewPostFormView(state.Workdir))
 }
 
 // Message handlers
 
 func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
+	case PostSubmittedMsg:
+		return handlePostSubmitted(msg, ctx)
 	case ListsLoadedMsg:
 		return handleListsLoaded(msg, ctx)
 	case tuicore.NotificationsLoadedMsg:
@@ -198,14 +202,8 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handlePushCompleted(msg, ctx)
 	case TimelineLoadedMsg:
 		return handleTimelineLoaded(msg, ctx)
-	case PostCreatedMsg:
-		return handlePostCreated(msg, ctx)
 	case CommentCreatedMsg:
 		return handleCommentCreated(msg, ctx)
-	case RepostCreatedMsg:
-		return handleRepostCreated(msg, ctx)
-	case PostEditedMsg:
-		return handlePostEdited(msg, ctx)
 	case RetractStartedMsg:
 		return handleRetractStarted(msg, ctx)
 	case PostRetractedMsg:
@@ -222,6 +220,42 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleInteractionCountsRefreshed(msg, ctx)
 	}
 	return false, nil
+}
+
+// handlePostSubmitted navigates back to the source on success; keeps the form
+// mounted on error so the user can fix input and resubmit. Comment mode pops
+// back to the source view (which may be a non-social detail view like a
+// release or issue) so the new comment appears in context without assuming
+// the target ID resolves as a social post.
+func handlePostSubmitted(msg PostSubmittedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	verb := "Posted"
+	switch msg.Mode {
+	case PostFormComment:
+		verb = "Commented"
+	case PostFormQuote:
+		verb = "Quoted"
+	case PostFormEdit:
+		verb = "Edited"
+	}
+	statusCmd := ctx.Host().SetMessageWithTimeout(verb, tuicore.MessageTypeSuccess, 5*time.Second)
+	if msg.Mode == PostFormComment {
+		return true, tea.Batch(statusCmd, func() tea.Msg {
+			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+		})
+	}
+	// For quote/edit land on the parent post; for new posts land on the
+	// freshly-created post.
+	target := msg.Post.ID
+	if msg.Mode != PostFormNew && msg.TargetID != "" {
+		target = msg.TargetID
+	}
+	return true, tea.Batch(statusCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{Location: tuicore.LocDetail(target), Action: tuicore.NavReplace}
+	})
 }
 
 func handleListsLoaded(msg ListsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
@@ -329,19 +363,6 @@ func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, 
 	return true, ctx.Host().Update(msg)
 }
 
-func handlePostCreated(msg PostCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if sh, ok := ctx.Host().(SocialHost); ok {
-		state := ctx.Host().State()
-		post := msg.Post
-		post.Display.UserEmail = state.UserEmail
-		post.Display.ShowEmail = state.ShowEmailOnCards
-		newItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
-		items := append([]tuicore.DisplayItem{newItem}, sh.DisplayItems()...)
-		sh.SetDisplayItems(items)
-	}
-	return true, nil
-}
-
 func handleCommentCreated(msg CommentCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if sh, ok := ctx.Host().(SocialHost); ok {
 		state := ctx.Host().State()
@@ -367,50 +388,6 @@ func handleCommentCreated(msg CommentCreatedMsg, ctx tuicore.AppContext) (bool, 
 		cmds = append(cmds, refreshInteractionCounts(ctx.Workdir(), msg.Post.ParentCommentID))
 	}
 	return true, tea.Batch(cmds...)
-}
-
-func handleRepostCreated(msg RepostCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if sh, ok := ctx.Host().(SocialHost); ok {
-		state := ctx.Host().State()
-		post := msg.Post
-		post.Display.UserEmail = state.UserEmail
-		post.Display.ShowEmail = state.ShowEmailOnCards
-		newItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
-		items := append([]tuicore.DisplayItem{newItem}, sh.DisplayItems()...)
-		sh.SetDisplayItems(items)
-	}
-	cmds := []tea.Cmd{
-		func() tea.Msg {
-			return tuicore.NavigateMsg{
-				Location: tuicore.LocDetail(msg.Post.ID),
-				Action:   tuicore.NavPush,
-			}
-		},
-	}
-	if msg.Post.OriginalPostID != "" {
-		cmds = append(cmds, refreshInteractionCounts(ctx.Workdir(), msg.Post.OriginalPostID))
-	}
-	return true, tea.Batch(cmds...)
-}
-
-func handlePostEdited(msg PostEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	ctx.Host().SetSaving(false)
-	if sh, ok := ctx.Host().(SocialHost); ok {
-		canonicalID := msg.Post.EditOf
-		if canonicalID == "" {
-			canonicalID = msg.Post.ID
-		}
-		result := social.GetPosts(ctx.Workdir(), "post:"+canonicalID, nil)
-		if result.Success && len(result.Data) > 0 {
-			state := ctx.Host().State()
-			post := result.Data[0]
-			post.Display.UserEmail = state.UserEmail
-			post.Display.ShowEmail = state.ShowEmailOnCards
-			updatedItem := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
-			sh.UpdateDisplayItem(updatedItem)
-		}
-	}
-	return true, ctx.Host().RefreshView()
 }
 
 func handleRetractStarted(_ RetractStartedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {

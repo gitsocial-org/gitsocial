@@ -3,6 +3,7 @@ package pm
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -17,6 +18,7 @@ type CreateSprintOptions struct {
 	State  SprintState
 	Start  time.Time
 	End    time.Time
+	Labels []string
 	Origin *protocol.Origin
 }
 
@@ -28,7 +30,7 @@ func CreateSprint(workdir, title, body string, opts CreateSprintOptions) Result[
 	if state == "" {
 		state = SprintStatePlanned
 	}
-	content := buildSprintContent(title, body, state, opts.Start, opts.End, "", opts.Origin)
+	content := buildSprintContent(title, body, state, opts.Start, opts.End, opts.Labels, "", opts.Origin)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Sprint]("COMMIT_FAILED", err.Error())
@@ -67,6 +69,7 @@ type UpdateSprintOptions struct {
 	End    *time.Time
 	Title  *string
 	Body   *string
+	Labels *[]string
 	Origin *protocol.Origin
 }
 
@@ -86,6 +89,7 @@ func UpdateSprint(workdir, sprintRef string, opts UpdateSprintOptions) Result[Sp
 	end := sprint.End
 	title := sprint.Title
 	body := sprint.Body
+	labels := sprint.Labels
 
 	if opts.State != nil {
 		state = *opts.State
@@ -102,6 +106,9 @@ func UpdateSprint(workdir, sprintRef string, opts UpdateSprintOptions) Result[Sp
 	if opts.Body != nil {
 		body = *opts.Body
 	}
+	if opts.Labels != nil {
+		labels = *opts.Labels
+	}
 
 	origin := existing.Origin
 	if opts.Origin != nil {
@@ -112,7 +119,7 @@ func UpdateSprint(workdir, sprintRef string, opts UpdateSprintOptions) Result[Sp
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildSprintContent(title, body, state, start, end, canonicalRef, origin)
+	content := buildSprintContent(title, body, state, start, end, labels, canonicalRef, origin)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Sprint]("COMMIT_FAILED", err.Error())
@@ -198,7 +205,7 @@ func GetSprintIssues(sprintID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
-func buildSprintContent(title, body string, state SprintState, start, end time.Time, editsRef string, origin *protocol.Origin) string {
+func buildSprintContent(title, body string, state SprintState, start, end time.Time, labels []string, editsRef string, origin *protocol.Origin) string {
 	content := title
 	if body != "" {
 		content += "\n\n" + body
@@ -212,6 +219,9 @@ func buildSprintContent(title, body string, state SprintState, start, end time.T
 	}
 	if editsRef != "" {
 		fields["edits"] = editsRef
+	}
+	if len(labels) > 0 {
+		fields["labels"] = strings.Join(labels, ",")
 	}
 	protocol.ApplyOrigin(fields, origin)
 
@@ -277,6 +287,7 @@ func cacheSprintFromCommit(workdir, repoURL, hash, branch string) error {
 		State:     state,
 		StartDate: cache.ToNullString(msg.Header.Fields["start"]),
 		EndDate:   cache.ToNullString(msg.Header.Fields["end"]),
+		Labels:    cache.ToNullString(msg.Header.Fields["labels"]),
 	}
 
 	if err := InsertPMItem(item); err != nil {

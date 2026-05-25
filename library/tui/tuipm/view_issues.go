@@ -28,8 +28,6 @@ type IssuesView struct {
 	showAll          bool
 	showEmail        bool
 	assigneeFilter   string // "" = all, "me" = assigned to me
-	quickCreateMode  bool
-	quickInput       textinput.Model
 	userEmail        string
 	allIssues        []pm.Issue // unfiltered issues for client-side filtering
 	contributorNames map[string]string
@@ -43,11 +41,6 @@ type IssuesView struct {
 
 // NewIssuesView creates a new issues view.
 func NewIssuesView(workdir string) *IssuesView {
-	input := textinput.New()
-	input.Placeholder = "Issue subject..."
-	input.CharLimit = 200
-	input.Prompt = "New issue: "
-	tuicore.StyleTextInput(&input, tuicore.Title, tuicore.Normal, tuicore.Dim)
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter issues..."
 	searchInput.CharLimit = 100
@@ -55,7 +48,6 @@ func NewIssuesView(workdir string) *IssuesView {
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
 	return &IssuesView{
 		workdir:      workdir,
-		quickInput:   input,
 		searchInput:  searchInput,
 		userEmail:    git.GetUserEmail(workdir),
 		cardList:     tuicore.NewCardList(nil),
@@ -73,8 +65,6 @@ func (v *IssuesView) SetSize(w, h int) {
 // Activate loads the issues.
 func (v *IssuesView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
-	v.quickCreateMode = false
-	v.quickInput.SetValue("")
 	v.searchActive = false
 	v.searchQuery = ""
 	v.searchInput.SetValue("")
@@ -209,8 +199,6 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 
 	case IssueCreatedMsg:
-		v.quickCreateMode = false
-		v.quickInput.SetValue("")
 		if msg.Err == nil {
 			v.pag.Reset()
 			return v.loadIssues()
@@ -219,13 +207,10 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 
 	case tea.KeyPressMsg, tea.MouseMsg:
 		if key, ok := msg.(tea.KeyPressMsg); ok {
-			if v.quickCreateMode {
-				return v.handleQuickCreateKey(key, state)
-			}
 			if v.searchActive {
 				return v.handleSearchKey(key)
 			}
-		} else if v.searchActive || v.quickCreateMode {
+		} else if v.searchActive {
 			return nil
 		}
 		consumed, activate, link := v.cardList.Update(msg)
@@ -250,45 +235,12 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.searchInput, cmd = v.searchInput.Update(msg)
 			return cmd
 		}
-		if v.quickCreateMode {
-			var cmd tea.Cmd
-			v.quickInput, cmd = v.quickInput.Update(msg)
-			return cmd
-		}
 	}
 	return nil
 }
 
 // IsInputActive returns true when text input is active.
-func (v *IssuesView) IsInputActive() bool {
-	return v.quickCreateMode || v.searchActive
-}
-
-func (v *IssuesView) handleQuickCreateKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
-	switch msg.String() {
-	case "enter":
-		subject := strings.TrimSpace(v.quickInput.Value())
-		if subject == "" {
-			v.quickCreateMode = false
-			return nil
-		}
-		workdir := v.workdir
-		return func() tea.Msg {
-			result := pm.CreateIssue(workdir, subject, "", pm.CreateIssueOptions{})
-			if !result.Success {
-				return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
-			}
-			return IssueCreatedMsg{Issue: result.Data}
-		}
-	case "esc":
-		v.quickCreateMode = false
-		v.quickInput.SetValue("")
-		return nil
-	}
-	var cmd tea.Cmd
-	v.quickInput, cmd = v.quickInput.Update(msg)
-	return cmd
-}
+func (v *IssuesView) IsInputActive() bool { return v.searchActive }
 
 // navigateToSelected navigates to the selected issue's detail view.
 func (v *IssuesView) navigateToSelected() tea.Cmd {
@@ -353,14 +305,6 @@ func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 		v.pag.ResetForRefresh(len(v.cardList.Items()))
 		return v.loadIssues()
 	case "n":
-		if v.isRemote {
-			return nil
-		}
-		v.quickCreateMode = true
-		v.quickInput.SetValue("")
-		v.quickInput.Focus()
-		return nil
-	case "N":
 		if v.isRemote {
 			return nil
 		}
@@ -449,26 +393,16 @@ func (v *IssuesView) Render(state *tuicore.State) string {
 			content = tuicore.Dim.Render("  No open issues")
 		}
 	} else {
-		listHeight := wrapper.ContentHeight()
-		if v.quickCreateMode {
-			listHeight -= 2
-		}
-		v.cardList.SetSize(wrapper.ContentWidth(), listHeight)
+		v.cardList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 		content = v.cardList.View()
-		if v.quickCreateMode {
-			v.quickInput.SetWidth(wrapper.ContentWidth() - 15)
-			content += "\n" + v.quickInput.View()
-		}
 	}
 
 	var footer string
 	if v.searchActive {
 		v.searchInput.SetWidth(wrapper.ContentWidth() - 5)
 		footer = v.searchInput.View()
-	} else if v.quickCreateMode {
-		footer = tuicore.Dim.Render("enter:create  esc:cancel")
 	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.PMIssues, wrapper.ContentWidth(), nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.PMIssues, nil)
 	}
 	return wrapper.Render(content, footer)
 }
@@ -512,8 +446,7 @@ func (v *IssuesView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
-		{Key: "n", Label: "quick create", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
-		{Key: "N", Label: "new", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
+		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "m", Label: "mine", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "K", Label: "forks", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},

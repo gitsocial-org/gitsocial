@@ -1,10 +1,48 @@
 // post_type.go - Social post type classification
 package social
 
-import "github.com/gitsocial-org/gitsocial/library/core/protocol"
+import (
+	"sort"
+	"strings"
+
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+)
 
 // socialFieldOrder declares the spec-defined field ordering for social headers (GITSOCIAL.md 1.2).
-var socialFieldOrder = []string{"reply-to", "original"}
+var socialFieldOrder = []string{"reply-to", "original", "labels"}
+
+// joinSocialLabels produces a deterministic comma-separated label string,
+// trimming whitespace, dropping empties, and deduplicating.
+func joinSocialLabels(labels []string) string {
+	cleaned := make([]string, 0, len(labels))
+	seen := make(map[string]bool, len(labels))
+	for _, l := range labels {
+		l = strings.TrimSpace(l)
+		if l == "" || seen[l] {
+			continue
+		}
+		seen[l] = true
+		cleaned = append(cleaned, l)
+	}
+	sort.Strings(cleaned)
+	return strings.Join(cleaned, ",")
+}
+
+// splitSocialLabels parses a comma-separated label string into a clean slice.
+func splitSocialLabels(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 type PostType string
 

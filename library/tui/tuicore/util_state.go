@@ -124,6 +124,14 @@ func (s *State) InnerWidth() int {
 	return s.Width - 2 - ContentPaddingLeft - ContentPaddingRight
 }
 
+// FrameInnerWidth returns the width between the two panel borders (i.e.
+// excluding the borders themselves but *including* the content padding columns
+// that would otherwise be reserved as left/right margin). Used by the footer
+// bar to extend all the way to the borders.
+func (s *State) FrameInnerWidth() int {
+	return s.Width - 2
+}
+
 // InnerHeight returns the content height inside the frame (borders + top padding).
 func (s *State) InnerHeight() int {
 	return s.Height - 2 - ContentPaddingTop
@@ -182,23 +190,34 @@ func NewViewWrapper(state *State) *ViewWrapper {
 
 // Render wraps content with vertical padding and appends the footer.
 // Status messages and choice prompts override the view-provided footer.
+// The footer (whether view-provided or transient) is wrapped in the standard
+// BgFooter bar at the wrapper's content width — every footer-rendering helper
+// returns plain styled content, the bar is applied exactly here.
 func (w *ViewWrapper) Render(content, footer string) string {
-	if w.state.ChoicePrompt != "" {
-		footer = RenderChoicePromptFooter(w.state.ChoicePrompt, w.ContentWidth())
-	} else if w.state.Syncing {
-		footer = RenderSyncingFooter(w.ContentWidth())
-	} else if w.state.Fetching {
-		footer = RenderFetchingFooter(w.state.FetchRepos, w.state.FetchLists, w.ContentWidth())
-	} else if w.state.Pushing {
-		footer = RenderPushingFooter(w.state.PushRemote, w.ContentWidth())
-	} else if w.state.Saving {
-		footer = RenderSavingFooter(w.ContentWidth())
-	} else if w.state.Retracting {
-		footer = RenderRetractingFooter(w.ContentWidth())
-	} else if w.state.Message != "" {
-		footer = RenderMessageFooter(w.state.Message, w.state.MessageType, w.ContentWidth())
-	} else if w.state.BackgroundSyncing {
-		footer = RenderBackgroundSyncFooter(w.ContentWidth())
+	switch {
+	case w.state.ChoicePrompt != "":
+		footer = w.state.ChoicePrompt
+	case w.state.Syncing:
+		footer = RenderSyncingFooter()
+	case w.state.Fetching:
+		footer = RenderFetchingFooter(w.state.FetchRepos, w.state.FetchLists)
+	case w.state.Pushing:
+		footer = RenderPushingFooter(w.state.PushRemote)
+	case w.state.Saving:
+		footer = RenderSavingFooter()
+	case w.state.Retracting:
+		footer = RenderRetractingFooter()
+	case w.state.Message != "":
+		footer = RenderMessageFooter(w.state.Message, w.state.MessageType)
+	case w.state.BackgroundSyncing:
+		footer = RenderBackgroundSyncFooter()
+	}
+	if footer != "" {
+		// Render the footer at the full frame inner width (between borders),
+		// not the narrower content area. renderFrame detects these wide
+		// lines and renders them without leftPad/rightPad so the bar touches
+		// the borders with no margin.
+		footer = footerStyle.Width(w.state.FrameInnerWidth()).Render(footer)
 	}
 	var b strings.Builder
 	b.WriteString(content)

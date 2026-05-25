@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
@@ -26,15 +25,13 @@ type FeedbackFormData struct {
 
 // FeedbackForm wraps a Huh form for feedback creation.
 type FeedbackForm struct {
+	tuicore.FormBase
 	workdir      string
 	prID         string
-	form         *huh.Form
 	commentField *huh.Text
 	data         FeedbackFormData
 	width        int
 	height       int
-	submitted    bool
-	canceled     bool
 }
 
 // NewFeedbackForm creates a new feedback form with optional pre-selected state.
@@ -53,9 +50,6 @@ func NewFeedbackForm(workdir, prID, initialState string, data FeedbackFormData) 
 
 // buildForm constructs the Huh form.
 func (f *FeedbackForm) buildForm() {
-	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
 	pad := tuicore.PadLabel
 	var fields []huh.Field
 	if f.data.File == "" {
@@ -89,65 +83,39 @@ func (f *FeedbackForm) buildForm() {
 	}
 	fields = append(fields, tuicore.NewSubmitField())
 
-	f.form = huh.NewForm(huh.NewGroup(fields...)).
+	f.SetForm(huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(km)
+		WithKeyMap(tuicore.FormKeyMap()))
 }
 
 // SetSize sets the form dimensions.
 func (f *FeedbackForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
-	if f.form != nil {
-		f.form.WithWidth(w).WithHeight(h - 2)
+	if form := f.FormPtr(); form != nil {
+		form.WithWidth(w).WithHeight(h - 2)
 		if f.commentField != nil {
-			f.commentField.WithHeight(max(5, h-8))
+			f.commentField.WithHeight(tuicore.BodyHeight(h, 6))
 		}
 	}
 }
 
-// Init initializes the form.
-func (f *FeedbackForm) Init() tea.Cmd {
-	return f.form.Init()
+// Update delegates the standard form lifecycle to FormBase.
+func (f *FeedbackForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+
+// Body returns the current comment text (for the $EDITOR escape-hatch).
+func (f *FeedbackForm) Body() string { return f.data.Comment }
+
+// SetBody writes the comment and rebuilds the form so huh.Text refreshes.
+func (f *FeedbackForm) SetBody(s string) {
+	f.data.Comment = s
+	f.buildForm()
 }
 
-// Update handles form messages.
-func (f *FeedbackForm) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			f.canceled = true
-			return nil
-		}
-	}
-	form, cmd := f.form.Update(msg)
-	if m, ok := form.(*huh.Form); ok {
-		f.form = m
-	}
-	if f.form.State == huh.StateCompleted {
-		f.submitted = true
-	}
-	return cmd
-}
-
-// View renders the form.
-func (f *FeedbackForm) View() string {
-	return f.form.View()
-}
-
-// Errors returns the form's current validation errors.
-func (f *FeedbackForm) Errors() []error { return f.form.Errors() }
-
-// IsSubmitted returns true if form was submitted.
-func (f *FeedbackForm) IsSubmitted() bool {
-	return f.submitted
-}
-
-// IsCancelled returns true if form was canceled.
-func (f *FeedbackForm) IsCancelled() bool {
-	return f.canceled
-}
+// Reset rebuilds the form, clearing huh-internal state while preserving data.
+func (f *FeedbackForm) Reset() { f.buildForm() }
 
 // CreateFeedbackFromForm creates feedback from form data.
 func (f *FeedbackForm) CreateFeedbackFromForm() tea.Cmd {
@@ -178,25 +146,13 @@ func (f *FeedbackForm) CreateFeedbackFromForm() tea.Cmd {
 
 // FeedbackFormView wraps the form for integration with the TUI host.
 type FeedbackFormView struct {
-	workdir    string
-	form       *FeedbackForm
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir string
 }
 
 // NewFeedbackFormView creates a new feedback form view.
 func NewFeedbackFormView(workdir string) *FeedbackFormView {
 	return &FeedbackFormView{workdir: workdir}
-}
-
-// SetSize sets the view dimensions.
-func (v *FeedbackFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
 }
 
 // Activate initializes the form view from route params.
@@ -219,67 +175,48 @@ func (v *FeedbackFormView) Activate(state *tuicore.State) tea.Cmd {
 		}
 		data.Commit = loc.Param("commit")
 	}
-	v.form = NewFeedbackForm(v.workdir, prID, initialState, data)
-	v.form.SetSize(v.width, v.height)
-	v.submitting = false
-	return v.form.Init()
+	form := NewFeedbackForm(v.workdir, prID, initialState, data)
+	v.AttachForm(form)
+	return form.Init()
 }
-
-// Deactivate is called when the view is hidden.
-func (v *FeedbackFormView) Deactivate() {}
 
 // Update handles messages.
 func (v *FeedbackFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if v.form == nil {
-		return nil
+	if m, ok := msg.(FeedbackCreatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
 	}
-	cmd := v.form.Update(msg)
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*FeedbackForm); ok {
+			return form.CreateFeedbackFromForm()
 		}
-	}
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.CreateFeedbackFromForm()
-	}
-	return cmd
+		return nil
+	})
 }
 
-// Render renders the form view.
+// Render renders the form view, prepending a file/line context header for
+// inline code feedback.
 func (v *FeedbackFormView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
-	if v.form == nil {
+	form, ok := v.CurrentForm().(*FeedbackForm)
+	if !ok || form == nil {
 		return wrapper.Render("Loading...", "")
 	}
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
+	form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 	var content string
-	// Show file/line context header when providing inline feedback
-	if v.form.data.File != "" {
-		location := v.form.data.File
-		if v.form.data.NewLine > 0 {
-			location += fmt.Sprintf(":%d", v.form.data.NewLine)
-		} else if v.form.data.OldLine > 0 {
-			location += fmt.Sprintf(":%d (old)", v.form.data.OldLine)
+	if form.data.File != "" {
+		location := form.data.File
+		switch {
+		case form.data.NewLine > 0:
+			location += fmt.Sprintf(":%d", form.data.NewLine)
+		case form.data.OldLine > 0:
+			location += fmt.Sprintf(":%d (old)", form.data.OldLine)
 		}
 		content = tuicore.Dim.Render("Commenting on: "+location) + "\n\n"
 	}
-	content += v.form.View()
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
+	content += form.View()
+	footer := tuicore.FormFooter(true, form.Errors())
 	return wrapper.Render(content, footer)
 }
 
 // Title returns the view title.
-func (v *FeedbackFormView) Title() string {
-	return "⑂  Review Feedback"
-}
-
-// Bindings returns keybindings for this view.
-func (v *FeedbackFormView) Bindings() []tuicore.Binding {
-	return nil
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *FeedbackFormView) IsInputActive() bool {
-	return true
-}
+func (v *FeedbackFormView) Title() string { return "⑂  Review Feedback" }

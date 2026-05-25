@@ -443,7 +443,7 @@ func (v *PostView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	}
 }
 
-// openComment opens the editor to create a comment on the selected post.
+// openComment navigates to the post form in comment mode for the selected post.
 func (v *PostView) openComment() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
@@ -453,14 +453,14 @@ func (v *PostView) openComment() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		return tuicore.OpenEditorMsg{
-			Mode:     "comment",
-			TargetID: selected.ID,
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocSocialPostForm("comment", selected.ID),
+			Action:   tuicore.NavPush,
 		}
 	}
 }
 
-// openRepost opens the editor to create a repost of the selected post.
+// openRepost navigates to the post form in quote mode (empty body → plain repost).
 func (v *PostView) openRepost() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
@@ -470,9 +470,9 @@ func (v *PostView) openRepost() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		return tuicore.OpenEditorMsg{
-			Mode:     "repost",
-			TargetID: selected.ID,
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocSocialPostForm("quote", selected.ID),
+			Action:   tuicore.NavPush,
 		}
 	}
 }
@@ -693,7 +693,7 @@ func (v *PostView) Render(state *tuicore.State) string {
 
 	var footer string
 	if v.searchActive {
-		footer = v.searchInput.View() + "\n" + v.renderSearchFooter(wrapper.ContentWidth())
+		footer = v.searchInput.View() + "\n" + v.renderSearchFooter()
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
@@ -715,14 +715,14 @@ func (v *PostView) Render(state *tuicore.State) string {
 		if v.post.Display.CommitHash == "" {
 			exclude["d"] = true
 		}
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.Detail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.Detail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }
 
 // renderSearchFooter renders the search mode footer.
-func (v *PostView) renderSearchFooter(width int) string {
-	return tuicore.RenderSearchFooter(width, v.matchIndex, v.matchCount, v.searchInputMode, v.searchQuery != "")
+func (v *PostView) renderSearchFooter() string {
+	return tuicore.RenderSearchFooter(v.matchIndex, v.matchCount, v.searchInputMode, v.searchQuery != "")
 }
 
 // renderContent renders the thread with cards.
@@ -1031,16 +1031,15 @@ func (v *PostView) DisplayItems() []tuicore.DisplayItem {
 // SetDisplayItems is a no-op for detail views.
 func (v *PostView) SetDisplayItems(_ []tuicore.DisplayItem) {}
 
-// EditPost opens the editor to edit the current post.
+// EditPost navigates to the post form in edit mode for the current post.
 func (v *PostView) EditPost() tea.Cmd {
 	if v.post.ID == "" {
 		return nil
 	}
 	return func() tea.Msg {
-		return tuicore.OpenEditorMsg{
-			Mode:           "edit",
-			TargetID:       v.post.ID,
-			InitialContent: v.post.Content,
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocSocialPostForm("edit", v.post.ID),
+			Action:   tuicore.NavPush,
 		}
 	}
 }

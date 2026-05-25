@@ -21,28 +21,6 @@ type ItemToCardFunc func(data any, resolver ItemResolver) Card
 // Extensions register these for their types.
 type DimmedCheckFunc func(data any) bool
 
-// Editor modes
-type EditorMode int
-
-const (
-	EditorModePost EditorMode = iota
-	EditorModeComment
-	EditorModeRepost
-	EditorModeEdit
-	EditorModeIssue
-)
-
-// Editor messages
-type EditorDoneMsg struct {
-	Content  string
-	Mode     EditorMode
-	TargetID string
-}
-
-type EditorErrorMsg struct {
-	Err error
-}
-
 // Navigation messages
 type NavigateMsg struct {
 	Location    Location
@@ -64,13 +42,6 @@ const (
 
 type FocusMsg struct {
 	Panel int
-}
-
-// Editor open message
-type OpenEditorMsg struct {
-	Mode           string
-	TargetID       string
-	InitialContent string
 }
 
 // Fetch trigger

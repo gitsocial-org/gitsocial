@@ -8,15 +8,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 )
 
-func TestBoolToYesNo(t *testing.T) {
-	if got := boolToYesNo(true); got != "yes" {
-		t.Errorf("boolToYesNo(true) = %q, want yes", got)
-	}
-	if got := boolToYesNo(false); got != "no" {
-		t.Errorf("boolToYesNo(false) = %q, want no", got)
-	}
-}
-
 func TestReleaseDimmedChecker(t *testing.T) {
 	active := release.Release{IsRetracted: false}
 	if releaseDimmedChecker(active) {

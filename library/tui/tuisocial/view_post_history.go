@@ -185,7 +185,7 @@ func (v *HistoryView) handleLoaded(msg HistoryLoadedMsg) {
 func (v *HistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.History, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.History, nil)
 	return wrapper.Render(content, footer)
 }
 

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
@@ -29,8 +29,9 @@ type ListReposView struct {
 	workdir           string
 	allLists          []social.List
 	followerSet       map[string]bool
-	inputMode         bool
-	input             textinput.Model
+	addForm           *huh.Form
+	addInput          string
+	addMode           bool
 	confirm           tuicore.ConfirmDialog
 	zonePrefix        string
 }
@@ -55,14 +56,8 @@ func (v *ListReposView) Bindings() []tuicore.Binding {
 
 // NewListReposView creates a new list repos view.
 func NewListReposView(workdir string) *ListReposView {
-	input := textinput.New()
-	input.Placeholder = ""
-	input.CharLimit = 512
-	input.Prompt = "+ "
-	tuicore.StyleTextInput(&input, tuicore.Title, lipgloss.NewStyle(), tuicore.Dim)
 	return &ListReposView{
 		workdir:      workdir,
-		input:        input,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
 	}
@@ -75,9 +70,10 @@ func (v *ListReposView) SetSize(width, height int) {
 
 // Activate loads list repos when the view becomes active.
 func (v *ListReposView) Activate(state *tuicore.State) tea.Cmd {
-	v.inputMode = false
+	v.addMode = false
+	v.addForm = nil
+	v.addInput = ""
 	v.confirm.Reset()
-	v.input.SetValue("")
 	loc := state.Router.Location()
 	listID := loc.Param("listID")
 	owner := loc.Param("owner")
@@ -137,7 +133,7 @@ func (v *ListReposView) Activate(state *tuicore.State) tea.Cmd {
 func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
-		if v.inputMode || v.confirm.IsActive() {
+		if v.addMode || v.confirm.IsActive() {
 			return nil
 		}
 		return v.handleMouse(msg)
@@ -189,12 +185,16 @@ func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			}
 		}
-	default:
-		if v.inputMode {
-			var cmd tea.Cmd
-			v.input, cmd = v.input.Update(msg)
-			return cmd
+	}
+	if v.addMode && v.addForm != nil {
+		form, cmd := v.addForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			v.addForm = f
 		}
+		if v.addForm.State == huh.StateCompleted {
+			return v.submitAdd()
+		}
+		return cmd
 	}
 	return nil
 }
@@ -247,25 +247,23 @@ func (v *ListReposView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd
 	if handled, cmd := v.confirm.HandleKey(key); handled {
 		return cmd
 	}
-	if v.inputMode {
-		switch key {
-		case "enter":
-			raw := strings.TrimSpace(v.input.Value())
-			if raw != "" {
-				v.inputMode = false
-				v.input.Blur()
-				repoURL, branch, allBranches := parseRepoInput(raw)
-				return v.addRepo(repoURL, branch, allBranches)
-			}
-		case "esc":
-			v.inputMode = false
-			v.input.Blur()
-		default:
-			var cmd tea.Cmd
-			v.input, cmd = v.input.Update(msg)
-			return cmd
+	if v.addMode {
+		if key == "esc" {
+			v.addMode = false
+			v.addForm = nil
+			return nil
 		}
-		return nil
+		if v.addForm == nil {
+			return nil
+		}
+		form, cmd := v.addForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			v.addForm = f
+		}
+		if v.addForm.State == huh.StateCompleted {
+			return v.submitAdd()
+		}
+		return cmd
 	}
 	switch key {
 	case "j", "down":
@@ -288,11 +286,7 @@ func (v *ListReposView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd
 		}
 	case "a":
 		if v.externalListOwner == "" {
-			v.inputMode = true
-			v.input.Blur()
-			v.input.Reset()
-			v.input.Placeholder = ""
-			return v.input.Focus()
+			return v.startAddForm()
 		}
 	case "x":
 		if v.externalListOwner == "" && len(v.repos) > 0 && v.cursor < len(v.repos) {
@@ -317,6 +311,42 @@ func (v *ListReposView) removeRepo(repoURL string) tea.Cmd {
 	}
 }
 
+// startAddForm builds and focuses the inline add-repo form.
+func (v *ListReposView) startAddForm() tea.Cmd {
+	v.addMode = true
+	v.addInput = ""
+	urlField := huh.NewInput().
+		Key("url").
+		Title(tuicore.PadLabel(tuicore.RequiredLabel("Repository"))).
+		Placeholder("url [branch | *]").
+		CharLimit(512).
+		Value(&v.addInput).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("repository URL is required")
+			}
+			return nil
+		})
+	v.addForm = huh.NewForm(huh.NewGroup(urlField, tuicore.NewSubmitField())).
+		WithTheme(tuicore.FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(tuicore.FormKeyMap())
+	return v.addForm.Init()
+}
+
+// submitAdd dispatches the add-repo command after the form completes.
+func (v *ListReposView) submitAdd() tea.Cmd {
+	raw := strings.TrimSpace(v.addInput)
+	v.addMode = false
+	v.addForm = nil
+	if raw == "" {
+		return nil
+	}
+	repoURL, branch, allBranches := parseRepoInput(raw)
+	return v.addRepo(repoURL, branch, allBranches)
+}
+
 // addRepo adds a repository to the list.
 func (v *ListReposView) addRepo(repoURL, branch string, allBranches bool) tea.Cmd {
 	workdir := v.workdir
@@ -336,12 +366,9 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var b strings.Builder
-	// Show input form at top for local lists
 	if v.externalListOwner == "" {
-		if v.inputMode {
-			b.WriteString(v.input.View())
-			b.WriteString("\n")
-			b.WriteString(tuicore.Dim.Render("  url [branch | *]"))
+		if v.addMode && v.addForm != nil {
+			b.WriteString(v.addForm.View())
 		} else {
 			keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)).Bold(true)
 			b.WriteString(keyStyle.Render("a") + tuicore.Dim.Render(":add repository"))
@@ -395,21 +422,24 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 	}
 
 	var footer string
-	if v.confirm.IsActive() {
+	switch {
+	case v.confirm.IsActive():
 		footer = v.confirm.Render()
-	} else {
+	case v.addMode && v.addForm != nil:
+		footer = tuicore.FormFooter(false, v.addForm.Errors())
+	default:
 		var exclude map[string]bool
 		if v.externalListOwner != "" {
 			exclude = map[string]bool{"a": true, "x": true, "p": true}
 		}
-		footer = tuicore.RenderFooter(state.Registry, tuicore.ListRepos, wrapper.ContentWidth(), exclude)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.ListRepos, exclude)
 	}
 	return wrapper.Render(b.String(), footer)
 }
 
 // IsInputActive returns true when input or confirmation is active.
 func (v *ListReposView) IsInputActive() bool {
-	return v.inputMode || v.confirm.IsActive()
+	return v.addMode || v.confirm.IsActive()
 }
 
 // IsExternalList returns true if viewing an external list.

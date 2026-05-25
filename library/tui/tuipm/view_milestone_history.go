@@ -235,7 +235,7 @@ func (v *MilestoneHistoryView) handleLoaded(msg MilestoneHistoryLoadedMsg) {
 func (v *MilestoneHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.PMMilestoneHistory, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.PMMilestoneHistory, nil)
 	return wrapper.Render(content, footer)
 }
 

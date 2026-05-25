@@ -341,7 +341,7 @@ func (v *SettingsView) Render(state *State) string {
 
 	if v.data == nil {
 		content := Dim.Render("Loading settings...")
-		footer := RenderFooter(state.Registry, Settings, wrapper.ContentWidth(), nil)
+		footer := RenderFooter(state.Registry, Settings, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -420,6 +420,6 @@ func (v *SettingsView) Render(state *State) string {
 		b.WriteString("\n")
 	}
 
-	footer := RenderFooter(state.Registry, Settings, wrapper.ContentWidth(), nil)
+	footer := RenderFooter(state.Registry, Settings, nil)
 	return wrapper.Render(b.String(), footer)
 }

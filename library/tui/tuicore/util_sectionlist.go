@@ -409,10 +409,11 @@ func (sl *SectionList) View() string {
 	return strings.Join(visibleLines, "\n")
 }
 
-// SearchFooter renders the search UI footer.
+// SearchFooter renders the search UI footer (input line above, nav hints
+// below). ViewWrapper.Render applies the BgFooter bar around both lines.
 func (sl *SectionList) SearchFooter(width int) string {
 	sl.searchInput.SetWidth(width - 5)
-	return sl.searchInput.View() + "\n" + RenderSearchFooter(width, sl.matchIndex, sl.matchCount, sl.searchInputMode, sl.searchQuery != "")
+	return sl.searchInput.View() + "\n" + RenderSearchFooter(sl.matchIndex, sl.matchCount, sl.searchInputMode, sl.searchQuery != "")
 }
 
 // UpdateSearchInput forwards a non-key message to the search input (e.g., blink).

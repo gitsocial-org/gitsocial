@@ -77,6 +77,16 @@ func LocDetail(postID string) Location {
 	return Location{Path: "/social/detail", Params: map[string]string{"postID": postID}}
 }
 
+// LocSocialPostForm creates a location for the social post form. mode is
+// "new"/"comment"/"quote"/"edit"; targetID is required for comment/quote/edit.
+func LocSocialPostForm(mode, targetID string) Location {
+	params := map[string]string{"mode": mode}
+	if targetID != "" {
+		params["targetID"] = targetID
+	}
+	return Location{Path: "/social/post-form", Params: params}
+}
+
 // LocRepository creates a location for a repository view.
 func LocRepository(url, branch string) Location {
 	params := map[string]string{"url": url}

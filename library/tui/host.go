@@ -414,7 +414,7 @@ func (h *Host) renderFrame(title, content string) string {
 		titleStyle = titleStyle.Bold(true)
 	}
 
-	innerWidth := h.state.Width - 2
+	innerWidth := h.state.FrameInnerWidth()
 	innerHeight := h.state.Height - 2
 
 	// Pre-render border segments once — avoids ~80 redundant style.Render() calls
@@ -448,6 +448,13 @@ func (h *Host) renderFrame(title, content string) string {
 	for i := 0; i < contentHeight && i < len(contentLines); i++ {
 		line := contentLines[i]
 		lineWidth := tuicore.AnsiWidth(line)
+		// Footer bar lines are rendered at the full inner width by
+		// ViewWrapper — detect them and skip the content padding so the
+		// bar extends border to border with no margins.
+		if lineWidth >= innerWidth {
+			lines = append(lines, borderV+line+borderV)
+			continue
+		}
 		rightPad := innerWidth - lineWidth - tuicore.ContentPaddingLeft - tuicore.ContentPaddingRight
 		if rightPad < 0 {
 			rightPad = 0

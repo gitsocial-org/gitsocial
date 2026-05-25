@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
@@ -19,25 +18,25 @@ type ReleaseFormData struct {
 	Body        string
 	Version     string
 	Tag         string
-	Prerelease  string
-	Artifacts   string
+	Prerelease  bool
+	Artifacts   []string
 	ArtifactURL string
 	Checksums   string
 	SignedBy    string
 	SBOM        string
+	Labels      []string
 }
 
 // ReleaseForm wraps a Huh form for release creation and editing.
 type ReleaseForm struct {
-	workdir   string
-	releaseID string
-	form      *huh.Form
-	bodyField *huh.Text
-	data      ReleaseFormData
-	width     int
-	height    int
-	submitted bool
-	canceled  bool
+	tuicore.FormBase
+	workdir       string
+	releaseID     string
+	bodyField     *huh.Text
+	bodyOtherRows int // count of non-body field rows, for body sizing
+	data          ReleaseFormData
+	width         int
+	height        int
 }
 
 // NewReleaseForm creates a new release creation form.
@@ -57,12 +56,13 @@ func NewReleaseEditForm(workdir string, rel release.Release) *ReleaseForm {
 			Body:        rel.Body,
 			Version:     rel.Version,
 			Tag:         rel.Tag,
-			Prerelease:  boolToYesNo(rel.Prerelease),
-			Artifacts:   strings.Join(rel.Artifacts, ", "),
+			Prerelease:  rel.Prerelease,
+			Artifacts:   append([]string(nil), rel.Artifacts...),
 			ArtifactURL: rel.ArtifactURL,
 			Checksums:   rel.Checksums,
 			SignedBy:    rel.SignedBy,
 			SBOM:        rel.SBOM,
+			Labels:      append([]string(nil), rel.Labels...),
 		},
 	}
 	f.buildForm()
@@ -103,20 +103,16 @@ func (f *ReleaseForm) buildForm() {
 			Placeholder("v1.0.0").
 			Value(&f.data.Tag).
 			Inline(true),
-		tuicore.NewCycleField().
+		huh.NewConfirm().
 			Key("prerelease").
 			Title(pad("Pre-release")).
-			Options(
-				tuicore.CycleOption{Label: "No", Value: "no"},
-				tuicore.CycleOption{Label: "Yes", Value: "yes"},
-			).
+			Inline(true).
 			Value(&f.data.Prerelease),
-		huh.NewInput().
+		tuicore.NewTagField().
 			Key("artifacts").
 			Title(pad("Artifacts")).
-			Placeholder("app.tar.gz, app.zip (comma-separated)").
-			Value(&f.data.Artifacts).
-			Inline(true),
+			Placeholder("app.tar.gz, app.zip...").
+			Value(&f.data.Artifacts),
 		huh.NewInput().
 			Key("artifact_url").
 			Title(pad("Artifact URL")).
@@ -149,98 +145,60 @@ func (f *ReleaseForm) buildForm() {
 		Value(&f.data.Body).
 		CharLimit(4000).
 		Lines(20)
-	fields = append(fields, f.bodyField, tuicore.NewSubmitField())
+	fields = append(fields, f.bodyField, tuicore.NewLabelsField(&f.data.Labels, ""), tuicore.NewSubmitField())
 
-	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
-	f.form = huh.NewForm(huh.NewGroup(fields...)).
+	f.bodyOtherRows = len(fields)
+	f.SetForm(huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(km)
+		WithKeyMap(tuicore.FormKeyMap()))
 }
 
 // SetSize sets the form dimensions.
 func (f *ReleaseForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
-	if f.form != nil {
-		f.form.WithWidth(w).WithHeight(h - 2)
+	if form := f.FormPtr(); form != nil {
+		form.WithWidth(w).WithHeight(h + 1)
 		if f.bodyField != nil {
-			f.bodyField.WithHeight(max(5, h-11))
+			f.bodyField.WithHeight(tuicore.BodyHeight(h, f.bodyOtherRows))
 		}
 	}
 }
 
-// Init initializes the form.
-func (f *ReleaseForm) Init() tea.Cmd {
-	return f.form.Init()
+// Update delegates the standard form lifecycle to FormBase.
+func (f *ReleaseForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+
+// Body returns the current body text (for the $EDITOR escape-hatch).
+func (f *ReleaseForm) Body() string { return f.data.Body }
+
+// SetBody writes the body and rebuilds the form so huh.Text refreshes.
+func (f *ReleaseForm) SetBody(s string) {
+	f.data.Body = s
+	f.buildForm()
 }
 
-// Update handles form messages.
-func (f *ReleaseForm) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			f.canceled = true
-			return nil
-		}
-	}
-
-	form, cmd := f.form.Update(msg)
-	if m, ok := form.(*huh.Form); ok {
-		f.form = m
-	}
-
-	if f.form.State == huh.StateCompleted {
-		f.submitted = true
-	}
-
-	return cmd
-}
-
-// View renders the form.
-func (f *ReleaseForm) View() string {
-	return f.form.View()
-}
-
-// Errors returns the form's current validation errors.
-func (f *ReleaseForm) Errors() []error { return f.form.Errors() }
-
-// IsSubmitted returns true if form was submitted.
-func (f *ReleaseForm) IsSubmitted() bool {
-	return f.submitted
-}
-
-// IsCancelled returns true if form was canceled.
-func (f *ReleaseForm) IsCancelled() bool {
-	return f.canceled
-}
+// Reset rebuilds the form, clearing huh-internal state while preserving data.
+func (f *ReleaseForm) Reset() { f.buildForm() }
 
 // CreateReleaseFromForm creates a release from form data.
 func (f *ReleaseForm) CreateReleaseFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	return func() tea.Msg {
-		prerelease := data.Prerelease == "yes"
 		opts := release.CreateReleaseOptions{
 			Tag:         strings.TrimSpace(data.Tag),
 			Version:     strings.TrimSpace(data.Version),
-			Prerelease:  prerelease,
+			Prerelease:  data.Prerelease,
 			ArtifactURL: strings.TrimSpace(data.ArtifactURL),
 			Checksums:   strings.TrimSpace(data.Checksums),
 			SignedBy:    strings.TrimSpace(data.SignedBy),
 			SBOM:        strings.TrimSpace(data.SBOM),
+			Labels:      data.Labels,
 		}
 
-		if data.Artifacts != "" {
-			for _, a := range strings.Split(data.Artifacts, ",") {
-				a = strings.TrimSpace(a)
-				if a != "" {
-					opts.Artifacts = append(opts.Artifacts, a)
-				}
-			}
-		}
+		opts.Artifacts = data.Artifacts
 
 		result := release.CreateRelease(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
 		if !result.Success {
@@ -265,17 +223,10 @@ func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
 		sbom := strings.TrimSpace(data.SBOM)
 		signedBy := strings.TrimSpace(data.SignedBy)
 
-		var artifacts []string
-		if data.Artifacts != "" {
-			for _, a := range strings.Split(data.Artifacts, ",") {
-				a = strings.TrimSpace(a)
-				if a != "" {
-					artifacts = append(artifacts, a)
-				}
-			}
-		}
+		artifacts := data.Artifacts
+		labels := data.Labels
 
-		prerelease := data.Prerelease == "yes"
+		prerelease := data.Prerelease
 		opts := release.EditReleaseOptions{
 			Subject:     &subject,
 			Body:        &body,
@@ -287,6 +238,7 @@ func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
 			Checksums:   &checksums,
 			SignedBy:    &signedBy,
 			SBOM:        &sbom,
+			Labels:      &labels,
 		}
 
 		result := release.EditRelease(workdir, releaseID, opts)
@@ -299,86 +251,49 @@ func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
 
 // ReleaseFormView wraps the form for integration with the TUI host.
 type ReleaseFormView struct {
-	form       *ReleaseForm
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
 }
 
 // NewReleaseFormView creates a new release form view.
-func NewReleaseFormView(workdir string) *ReleaseFormView {
-	return &ReleaseFormView{
-		form: NewReleaseForm(workdir),
-	}
+func NewReleaseFormView(_ string) *ReleaseFormView {
+	return &ReleaseFormView{}
 }
 
-// SetSize sets the view dimensions.
-func (v *ReleaseFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	v.form.SetSize(w, h)
-}
-
-// Activate initializes the form view.
+// Activate constructs a fresh form for every re-entry.
 func (v *ReleaseFormView) Activate(state *tuicore.State) tea.Cmd {
-	return v.form.Init()
+	form := NewReleaseForm(state.Workdir)
+	v.AttachForm(form)
+	return form.Init()
 }
-
-// Deactivate is called when the view is hidden.
-func (v *ReleaseFormView) Deactivate() {}
 
 // Update handles messages.
 func (v *ReleaseFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	cmd := v.form.Update(msg)
-
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(ReleaseCreatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*ReleaseForm); ok {
+			return form.CreateReleaseFromForm()
 		}
-	}
-
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.CreateReleaseFromForm()
-	}
-
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the form view.
 func (v *ReleaseFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-	content := v.form.View()
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *ReleaseFormView) Title() string {
-	return "⏏  New Release"
-}
-
-// Bindings returns keybindings for this view.
-func (v *ReleaseFormView) Bindings() []tuicore.Binding {
-	return nil
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *ReleaseFormView) IsInputActive() bool {
-	return true
-}
+func (v *ReleaseFormView) Title() string { return "⏏  New Release" }
 
 // ReleaseEditFormView wraps the form for editing an existing release.
 type ReleaseEditFormView struct {
-	workdir    string
-	releaseID  string
-	form       *ReleaseForm
-	rel        *release.Release
-	loaded     bool
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir   string
+	releaseID string
+	rel       *release.Release
+	loaded    bool
 }
 
 // NewReleaseEditFormView creates a new release edit form view.
@@ -386,20 +301,11 @@ func NewReleaseEditFormView(workdir string) *ReleaseEditFormView {
 	return &ReleaseEditFormView{workdir: workdir}
 }
 
-// SetSize sets the view dimensions.
-func (v *ReleaseEditFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
-
 // Activate loads the release and initializes the form.
 func (v *ReleaseEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.releaseID = state.Router.Location().Param("releaseID")
 	v.loaded = false
-	v.form = nil
+	v.DetachForm()
 	return v.loadRelease()
 }
 
@@ -421,9 +327,6 @@ type releaseEditFormLoadedMsg struct {
 	Err     error
 }
 
-// Deactivate is called when the view is hidden.
-func (v *ReleaseEditFormView) Deactivate() {}
-
 // Update handles messages.
 func (v *ReleaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
@@ -434,51 +337,35 @@ func (v *ReleaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 			}
 		}
 		v.rel = msg.Release
-		v.form = NewReleaseEditForm(v.workdir, *v.rel)
-		v.form.SetSize(v.width, v.height)
+		form := NewReleaseEditForm(v.workdir, *v.rel)
+		v.AttachForm(form)
 		v.loaded = true
-		return v.form.Init()
+		return form.Init()
 	}
 
-	if !v.loaded || v.form == nil {
+	if !v.loaded {
 		return nil
 	}
 
-	cmd := v.form.Update(msg)
-
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(ReleaseUpdatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*ReleaseForm); ok {
+			return form.UpdateReleaseFromForm()
 		}
-	}
-
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.UpdateReleaseFromForm()
-	}
-
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the edit form view.
 func (v *ReleaseEditFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	var content string
 	if !v.loaded {
-		content = "Loading release..."
-	} else if v.form == nil {
-		content = tuicore.Dim.Render("  Release not found")
-	} else {
-		v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-		content = v.form.View()
+		wrapper := tuicore.NewViewWrapper(state)
+		footer := tuicore.FormFooter(true, nil)
+		return wrapper.Render("Loading release...", footer)
 	}
-	var footer string
-	if v.form != nil {
-		footer = tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	} else {
-		footer = tuicore.Dim.Render("tab/shift+tab navigate · enter confirm · esc cancel")
-	}
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
@@ -487,21 +374,4 @@ func (v *ReleaseEditFormView) Title() string {
 		return fmt.Sprintf("⏏  Edit: %s", v.rel.Subject)
 	}
 	return "⏏  Edit Release"
-}
-
-// Bindings returns keybindings for this view.
-func (v *ReleaseEditFormView) Bindings() []tuicore.Binding {
-	return nil
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *ReleaseEditFormView) IsInputActive() bool {
-	return true
-}
-
-func boolToYesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 )
 
@@ -424,7 +425,7 @@ and the command runs interactively.`,
 			}
 			res := memo.CreateMemo(cfg.WorkDir, args[0], resolvedBody, memo.CreateMemoOptions{
 				Tier:   tier,
-				Labels: memoSplitCSV(labels),
+				Labels: text.SplitCSV(labels),
 			})
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
@@ -490,7 +491,7 @@ func newMemoEditCmd() *cobra.Command {
 				opts.Body = &body
 			}
 			if setLabels {
-				ls := memoSplitCSV(labels)
+				ls := text.SplitCSV(labels)
 				opts.Labels = &ls
 			}
 			res := memo.EditMemo(cfg.WorkDir, args[0], opts)
@@ -579,7 +580,7 @@ func newMemoListCmd() *cobra.Command {
 				IncludeExpired:  includeExpired,
 				OnlyExpired:     onlyExpired,
 				IncludeExternal: includeExternal,
-				Labels:          memoSplitCSV(labels),
+				Labels:          text.SplitCSV(labels),
 				Limit:           limit,
 			})
 			if !res.Success {
@@ -647,22 +648,6 @@ func newMemoShowCmd() *cobra.Command {
 			}
 		},
 	}
-}
-
-// memoSplitCSV splits a comma-separated string and returns the trimmed non-empty parts.
-func memoSplitCSV(s string) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // shortHash returns the first 12 hex chars of the commit hash in a protocol ref.

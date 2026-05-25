@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 // searchQuery holds the resolved search parameters for SQL building.
@@ -430,7 +432,7 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		args = append(args, q.Sprint)
 	}
 	if q.Labels != "" {
-		labelList := splitCSV(q.Labels)
+		labelList := text.SplitCSV(q.Labels)
 		labelClauses := make([]string, 0, len(labelList))
 		for _, label := range labelList {
 			// core_labels is the linking-table normalization of
@@ -457,19 +459,6 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	where = append(where, "(r.stale_since IS NULL OR r.is_virtual = 1)")
 
 	return " WHERE " + strings.Join(where, " AND "), args
-}
-
-// splitCSV splits a comma-separated string and trims whitespace from each element.
-func splitCSV(s string) []string {
-	parts := strings.Split(s, ",")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
 }
 
 // ftsAvailable checks whether the core_fts FTS5 table exists.

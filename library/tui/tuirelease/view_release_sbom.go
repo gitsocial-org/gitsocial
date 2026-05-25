@@ -106,7 +106,7 @@ func (v *ReleaseSBOMView) Render(state *tuicore.State) string {
 	if v.sectionList.IsSearchActive() {
 		footer = v.sectionList.SearchFooter(wrapper.ContentWidth())
 	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.ReleaseSBOM, wrapper.ContentWidth(), nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.ReleaseSBOM, nil)
 	}
 	return wrapper.Render(content, footer)
 }

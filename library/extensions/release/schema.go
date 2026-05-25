@@ -48,6 +48,7 @@ SELECT
     c.effective_timestamp AS timestamp,
     c.is_virtual,
     c.stale_since,
+    c.labels,
     p.tag,
     p.version,
     p.prerelease,

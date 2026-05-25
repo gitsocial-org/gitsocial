@@ -63,6 +63,7 @@ SELECT
     c.effective_timestamp AS timestamp,
     c.is_virtual,
     c.stale_since,
+    c.labels,
     COALESCE(s.type, 'post') as type,
     s.original_repo_url,
     s.original_hash,

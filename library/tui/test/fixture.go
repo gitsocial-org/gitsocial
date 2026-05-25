@@ -190,11 +190,11 @@ func (f *Fixture) seedSocialPanic(workdir string) {
 	social.CreatePost(workdir, "Git-native collaboration is the future", nil)
 	f.CommentContent = "Great idea!"
 	social.CreateComment(workdir, post.Data.ID, f.CommentContent, nil)
-	social.CreateRepost(workdir, post.Data.ID)
+	social.CreateRepost(workdir, post.Data.ID, nil)
 	f.QuoteContent = "Adding my thoughts on this..."
-	social.CreateQuote(workdir, post.Data.ID, f.QuoteContent)
+	social.CreateQuote(workdir, post.Data.ID, f.QuoteContent, nil)
 	f.EditedContent = "Hello world! (updated)"
-	social.EditPost(workdir, post.Data.ID, f.EditedContent)
+	social.EditPost(workdir, post.Data.ID, f.EditedContent, nil)
 }
 
 func (f *Fixture) seedPMPanic(workdir string) {

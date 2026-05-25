@@ -79,25 +79,9 @@ type HistoryLoadedMsg struct {
 	Err      error
 }
 
-// PostCreatedMsg is sent when a post is created
-type PostCreatedMsg struct {
-	Post social.Post
-}
-
 // CommentCreatedMsg is sent when a comment is created
 type CommentCreatedMsg struct {
 	Post social.Post
-}
-
-// RepostCreatedMsg is sent when a repost/quote is created
-type RepostCreatedMsg struct {
-	Post social.Post
-}
-
-// PostEditedMsg is sent when a post has been edited
-type PostEditedMsg struct {
-	Post social.Post
-	Err  error
 }
 
 // RetractStartedMsg is sent when retraction begins

@@ -169,7 +169,10 @@ func (v *MemoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				if v.memo != nil {
 					id := v.memo.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{Mode: "comment", TargetID: id}
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", id),
+							Action:   tuicore.NavPush,
+						}
 					}
 				}
 			case "e":
@@ -245,7 +248,7 @@ func (v *MemoDetailView) Render(state *tuicore.State) string {
 	} else if v.sectionList.IsSearchActive() {
 		footer = v.sectionList.SearchFooter(wrapper.ContentWidth())
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.MemoDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.MemoDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }

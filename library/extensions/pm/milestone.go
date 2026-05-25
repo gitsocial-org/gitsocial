@@ -3,6 +3,7 @@ package pm
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -14,8 +15,9 @@ import (
 )
 
 type CreateMilestoneOptions struct {
-	State State
-	Due   *time.Time
+	State  State
+	Due    *time.Time
+	Labels []string
 	// AllowDuplicate skips the title-uniqueness check. Set when the
 	// caller has accepted that an existing milestone with the same
 	// title is OK (e.g., re-creating after a retraction).
@@ -46,7 +48,7 @@ func CreateMilestone(workdir, title, body string, opts CreateMilestoneOptions) R
 	if state == "" {
 		state = StateOpen
 	}
-	content := buildMilestoneContent(title, body, state, opts.Due, "", opts.Origin)
+	content := buildMilestoneContent(title, body, state, opts.Due, opts.Labels, "", opts.Origin)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Milestone]("COMMIT_FAILED", err.Error())
@@ -83,6 +85,7 @@ type UpdateMilestoneOptions struct {
 	Due    *time.Time
 	Title  *string
 	Body   *string
+	Labels *[]string
 	Origin *protocol.Origin
 }
 
@@ -101,6 +104,7 @@ func UpdateMilestone(workdir, milestoneRef string, opts UpdateMilestoneOptions) 
 	due := milestone.Due
 	title := milestone.Title
 	body := milestone.Body
+	labels := milestone.Labels
 
 	if opts.State != nil {
 		state = *opts.State
@@ -114,6 +118,9 @@ func UpdateMilestone(workdir, milestoneRef string, opts UpdateMilestoneOptions) 
 	if opts.Body != nil {
 		body = *opts.Body
 	}
+	if opts.Labels != nil {
+		labels = *opts.Labels
+	}
 
 	var origin *protocol.Origin
 	if opts.Origin != nil {
@@ -125,7 +132,7 @@ func UpdateMilestone(workdir, milestoneRef string, opts UpdateMilestoneOptions) 
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildMilestoneContent(title, body, state, due, canonicalRef, origin)
+	content := buildMilestoneContent(title, body, state, due, labels, canonicalRef, origin)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Milestone]("COMMIT_FAILED", err.Error())
@@ -211,7 +218,7 @@ func GetMilestoneIssues(milestoneID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
-func buildMilestoneContent(title, body string, state State, due *time.Time, editsRef string, origin *protocol.Origin) string {
+func buildMilestoneContent(title, body string, state State, due *time.Time, labels []string, editsRef string, origin *protocol.Origin) string {
 	content := title
 	if body != "" {
 		content += "\n\n" + body
@@ -226,6 +233,9 @@ func buildMilestoneContent(title, body string, state State, due *time.Time, edit
 	}
 	if due != nil {
 		fields["due"] = due.Format("2006-01-02")
+	}
+	if len(labels) > 0 {
+		fields["labels"] = strings.Join(labels, ",")
 	}
 	protocol.ApplyOrigin(fields, origin)
 
@@ -290,6 +300,7 @@ func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {
 		Type:    itemType,
 		State:   state,
 		Due:     cache.ToNullString(msg.Header.Fields["due"]),
+		Labels:  cache.ToNullString(msg.Header.Fields["labels"]),
 	}
 
 	if err := InsertPMItem(item); err != nil {

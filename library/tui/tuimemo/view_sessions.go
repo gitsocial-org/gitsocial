@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
@@ -23,19 +23,15 @@ type SessionsView struct {
 	width     int
 	height    int
 	loaded    bool
-	input     textinput.Model
+	newForm   *huh.Form
+	newID     string
 	inputMode bool
 	confirm   tuicore.ConfirmDialog
 }
 
 // NewSessionsView creates a new sessions list/picker view.
 func NewSessionsView(workdir string) *SessionsView {
-	in := textinput.New()
-	in.Placeholder = "session-id"
-	in.Prompt = "+ "
-	in.CharLimit = 100
-	tuicore.StyleTextInput(&in, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &SessionsView{workdir: workdir, input: in}
+	return &SessionsView{workdir: workdir}
 }
 
 // Title returns the panel header.
@@ -71,8 +67,8 @@ func (v *SessionsView) Activate(state *tuicore.State) tea.Cmd {
 	}
 	v.loaded = true
 	v.inputMode = false
-	v.input.SetValue("")
-	v.input.Blur()
+	v.newForm = nil
+	v.newID = ""
 	return nil
 }
 
@@ -111,9 +107,7 @@ func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				return tuicore.NavigateMsg{Location: tuicore.LocMemoSessionItems(id), Action: tuicore.NavPush}
 			}
 		case "n":
-			v.inputMode = true
-			v.input.SetValue("")
-			return v.input.Focus()
+			return v.startNewSession()
 		case "d", "X":
 			if v.cursor < 0 || v.cursor >= len(v.sessions) {
 				return nil
@@ -138,29 +132,48 @@ func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	return nil
 }
 
+// startNewSession opens an inline huh form for the new session id.
+func (v *SessionsView) startNewSession() tea.Cmd {
+	v.inputMode = true
+	v.newID = ""
+	idField := huh.NewInput().
+		Key("id").
+		Title(tuicore.PadLabel("Session ID")).
+		Placeholder("session-id").
+		CharLimit(100).
+		Value(&v.newID)
+	v.newForm = huh.NewForm(huh.NewGroup(idField, tuicore.NewSubmitField())).
+		WithTheme(tuicore.FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(tuicore.FormKeyMap())
+	return v.newForm.Init()
+}
+
 func (v *SessionsView) updateInput(msg tea.Msg) tea.Cmd {
-	switch m := msg.(type) {
-	case tea.KeyPressMsg:
-		switch m.String() {
-		case "esc":
-			v.inputMode = false
-			v.input.SetValue("")
-			v.input.Blur()
-			return nil
-		case "enter":
-			id := strings.TrimSpace(v.input.Value())
-			v.inputMode = false
-			v.input.Blur()
-			if res := memo.InitSession(id, gitmsg.ResolveRepoURL(v.workdir)); res.Success {
-				return func() tea.Msg {
-					return tuicore.NavigateMsg{Location: tuicore.LocMemoSessionItems(res.Data), Action: tuicore.NavPush}
-				}
-			}
-			return nil
-		}
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+		v.inputMode = false
+		v.newForm = nil
+		return nil
 	}
-	var cmd tea.Cmd
-	v.input, cmd = v.input.Update(msg)
+	if v.newForm == nil {
+		return nil
+	}
+	form, cmd := v.newForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		v.newForm = f
+	}
+	if v.newForm.State == huh.StateCompleted {
+		id := strings.TrimSpace(v.newID)
+		v.inputMode = false
+		v.newForm = nil
+		if res := memo.InitSession(id, gitmsg.ResolveRepoURL(v.workdir)); res.Success {
+			return func() tea.Msg {
+				return tuicore.NavigateMsg{Location: tuicore.LocMemoSessionItems(res.Data), Action: tuicore.NavPush}
+			}
+		}
+		return nil
+	}
 	return cmd
 }
 
@@ -240,13 +253,15 @@ func (v *SessionsView) Render(state *tuicore.State) string {
 	body := strings.Join(lines, "\n")
 
 	var footer string
-	if v.confirm.IsActive() {
+	switch {
+	case v.confirm.IsActive():
 		footer = v.confirm.Render()
-	} else if v.inputMode {
-		v.input.SetWidth(wrapper.ContentWidth() - 4)
-		footer = v.input.View()
-	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.MemoSessions, wrapper.ContentWidth(), nil)
+	case v.inputMode && v.newForm != nil:
+		footer = tuicore.FormFooter(false, v.newForm.Errors())
+		// Show form above footer too — it's a single-input form so render inline at bottom.
+		body = body + "\n\n" + v.newForm.View()
+	default:
+		footer = tuicore.RenderFooter(state.Registry, tuicore.MemoSessions, nil)
 	}
 	return wrapper.Render(body, footer)
 }

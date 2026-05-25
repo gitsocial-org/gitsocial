@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -20,7 +20,8 @@ type InheritsView struct {
 	cursor    int
 	width     int
 	height    int
-	input     textinput.Model
+	addForm   *huh.Form
+	addURL    string
 	inputMode bool
 	confirm   tuicore.ConfirmDialog
 	loaded    bool
@@ -28,12 +29,7 @@ type InheritsView struct {
 
 // NewInheritsView creates a new inherits-management view.
 func NewInheritsView(workdir string) *InheritsView {
-	in := textinput.New()
-	in.Placeholder = "https://example.com/owner/repo"
-	in.Prompt = "+ "
-	in.CharLimit = 200
-	tuicore.StyleTextInput(&in, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &InheritsView{workdir: workdir, input: in}
+	return &InheritsView{workdir: workdir}
 }
 
 // Title returns the panel header for the view.
@@ -66,8 +62,8 @@ func (v *InheritsView) Activate(state *tuicore.State) tea.Cmd {
 	}
 	v.loaded = true
 	v.inputMode = false
-	v.input.SetValue("")
-	v.input.Blur()
+	v.addForm = nil
+	v.addURL = ""
 	return nil
 }
 
@@ -97,9 +93,7 @@ func (v *InheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		switch m.String() {
 		case "n":
-			v.inputMode = true
-			v.input.SetValue("")
-			return v.input.Focus()
+			return v.startAdd()
 		case "d", "X":
 			if v.cursor < 0 || v.cursor >= len(v.urls) {
 				return nil
@@ -124,27 +118,52 @@ func (v *InheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	return nil
 }
 
-func (v *InheritsView) updateInput(msg tea.Msg) tea.Cmd {
-	switch m := msg.(type) {
-	case tea.KeyPressMsg:
-		switch m.String() {
-		case "esc":
-			v.inputMode = false
-			v.input.SetValue("")
-			v.input.Blur()
-			return nil
-		case "enter":
-			url := strings.TrimSpace(v.input.Value())
-			v.inputMode = false
-			v.input.Blur()
-			if url == "" {
-				return nil
+// startAdd opens the inline huh form for the new inherit URL.
+func (v *InheritsView) startAdd() tea.Cmd {
+	v.inputMode = true
+	v.addURL = ""
+	urlField := huh.NewInput().
+		Key("url").
+		Title(tuicore.PadLabel(tuicore.RequiredLabel("URL"))).
+		Placeholder("https://example.com/owner/repo").
+		CharLimit(200).
+		Value(&v.addURL).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("URL is required")
 			}
-			return v.doAdd(url)
-		}
+			return nil
+		})
+	v.addForm = huh.NewForm(huh.NewGroup(urlField, tuicore.NewSubmitField())).
+		WithTheme(tuicore.FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(tuicore.FormKeyMap())
+	return v.addForm.Init()
+}
+
+func (v *InheritsView) updateInput(msg tea.Msg) tea.Cmd {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
+		v.inputMode = false
+		v.addForm = nil
+		return nil
 	}
-	var cmd tea.Cmd
-	v.input, cmd = v.input.Update(msg)
+	if v.addForm == nil {
+		return nil
+	}
+	form, cmd := v.addForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		v.addForm = f
+	}
+	if v.addForm.State == huh.StateCompleted {
+		url := strings.TrimSpace(v.addURL)
+		v.inputMode = false
+		v.addForm = nil
+		if url == "" {
+			return nil
+		}
+		return v.doAdd(url)
+	}
 	return cmd
 }
 
@@ -198,13 +217,14 @@ func (v *InheritsView) Render(state *tuicore.State) string {
 	body := strings.Join(lines, "\n")
 
 	var footer string
-	if v.confirm.IsActive() {
+	switch {
+	case v.confirm.IsActive():
 		footer = v.confirm.Render()
-	} else if v.inputMode {
-		v.input.SetWidth(wrapper.ContentWidth() - 4)
-		footer = v.input.View()
-	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.MemoInherits, wrapper.ContentWidth(), nil)
+	case v.inputMode && v.addForm != nil:
+		footer = tuicore.FormFooter(false, v.addForm.Errors())
+		body = body + "\n\n" + v.addForm.View()
+	default:
+		footer = tuicore.RenderFooter(state.Registry, tuicore.MemoInherits, nil)
 	}
 	return wrapper.Render(body, footer)
 }

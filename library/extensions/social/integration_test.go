@@ -136,7 +136,7 @@ func TestPostCRUD(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		result := EditPost(workdir, post.Data.ID, "Updated content")
+		result := EditPost(workdir, post.Data.ID, "Updated content", nil)
 		if !result.Success {
 			t.Fatalf("EditPost() failed: %s", result.Error.Message)
 		}
@@ -151,7 +151,7 @@ func TestPostCRUD(t *testing.T) {
 	t.Run("EditPost_emptyContent", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		result := EditPost(workdir, "fake-id", "")
+		result := EditPost(workdir, "fake-id", "", nil)
 		if result.Success {
 			t.Error("EditPost() should fail for empty content")
 		}
@@ -163,7 +163,7 @@ func TestPostCRUD(t *testing.T) {
 	t.Run("EditPost_notFound", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		result := EditPost(workdir, "nonexistent123456", "New content")
+		result := EditPost(workdir, "nonexistent123456", "New content", nil)
 		if result.Success {
 			t.Error("EditPost() should fail for non-existent target")
 		}
@@ -180,7 +180,7 @@ func TestPostCRUD(t *testing.T) {
 		if !postResult.Success {
 			t.Fatalf("CreatePost failed: %s", postResult.Error.Message)
 		}
-		editResult := EditPost(workdir, postResult.Data.ID, "Updated content")
+		editResult := EditPost(workdir, postResult.Data.ID, "Updated content", nil)
 		if !editResult.Success {
 			t.Fatalf("EditPost failed: %s: %v", editResult.Error.Code, editResult.Error.Details)
 		}
@@ -973,7 +973,7 @@ func TestRepostAndQuote(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		result := CreateRepost(workdir, post.Data.ID)
+		result := CreateRepost(workdir, post.Data.ID, nil)
 		if !result.Success {
 			t.Fatalf("CreateRepost() failed: %s", result.Error.Message)
 		}
@@ -991,14 +991,14 @@ func TestRepostAndQuote(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		repost := CreateRepost(workdir, post.Data.ID)
+		repost := CreateRepost(workdir, post.Data.ID, nil)
 		if !repost.Success {
 			t.Fatal(repost.Error.Message)
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
 		// Repost of repost should fail
-		result := CreateRepost(workdir, repost.Data.ID)
+		result := CreateRepost(workdir, repost.Data.ID, nil)
 		if result.Success {
 			t.Error("CreateRepost() should fail for repost chain")
 		}
@@ -1016,7 +1016,7 @@ func TestRepostAndQuote(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		result := CreateQuote(workdir, post.Data.ID, "My commentary")
+		result := CreateQuote(workdir, post.Data.ID, "My commentary", nil)
 		if !result.Success {
 			t.Fatalf("CreateQuote() failed: %s", result.Error.Message)
 		}
@@ -1031,7 +1031,7 @@ func TestRepostAndQuote(t *testing.T) {
 	t.Run("CreateQuote_emptyContent", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		result := CreateQuote(workdir, "fake-id", "")
+		result := CreateQuote(workdir, "fake-id", "", nil)
 		if result.Success {
 			t.Error("CreateQuote() should fail for empty content")
 		}
@@ -1049,13 +1049,13 @@ func TestRepostAndQuote(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		repost := CreateRepost(workdir, post.Data.ID)
+		repost := CreateRepost(workdir, post.Data.ID, nil)
 		if !repost.Success {
 			t.Fatal(repost.Error.Message)
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		result := CreateQuote(workdir, repost.Data.ID, "Quote of repost")
+		result := CreateQuote(workdir, repost.Data.ID, "Quote of repost", nil)
 		if result.Success {
 			t.Error("CreateQuote() should fail for repost target")
 		}
@@ -2210,7 +2210,7 @@ func TestVersionAndResolve(t *testing.T) {
 		_ = SyncWorkspaceToCache(workdir)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 
-		edit := EditPost(workdir, post.Data.ID, "Updated")
+		edit := EditPost(workdir, post.Data.ID, "Updated", nil)
 		if !edit.Success {
 			t.Fatalf("EditPost() failed: %s", edit.Error.Message)
 		}
@@ -2237,7 +2237,7 @@ func TestVersionAndResolve(t *testing.T) {
 		_ = SyncWorkspaceToCache(workdir)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
 
-		edit := EditPost(workdir, post.Data.ID, "Version 2")
+		edit := EditPost(workdir, post.Data.ID, "Version 2", nil)
 		if !edit.Success {
 			t.Fatal(edit.Error.Message)
 		}
@@ -2269,7 +2269,7 @@ func TestVersionAndResolve(t *testing.T) {
 		}
 		_ = SyncWorkspaceToCache(workdir)
 
-		edit := EditPost(workdir, post.Data.ID, "Version 2")
+		edit := EditPost(workdir, post.Data.ID, "Version 2", nil)
 		if !edit.Success {
 			t.Fatalf("EditPost() failed: %s", edit.Error.Message)
 		}

@@ -179,10 +179,11 @@ func (v *MilestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 				}
 			case "c":
 				if v.milestone != nil {
+					milestoneID := v.milestone.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{
-							Mode:     "comment",
-							TargetID: v.milestone.ID,
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", milestoneID),
+							Action:   tuicore.NavPush,
 						}
 					}
 				}
@@ -353,7 +354,7 @@ func (v *MilestoneDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMMilestoneDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMMilestoneDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }

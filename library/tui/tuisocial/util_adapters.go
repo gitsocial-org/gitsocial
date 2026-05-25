@@ -10,6 +10,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/search"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
@@ -387,7 +388,7 @@ func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuico
 		Subject:    subject,
 		Body:       body,
 		State:      pm.State(item.State),
-		Assignees:  splitNonEmpty(item.Assignees),
+		Assignees:  text.SplitCSV(item.Assignees),
 		Labels:     parseSearchLabels(item.Labels),
 		Comments:   item.Comments,
 		IsEdited:   item.IsEdited,
@@ -416,8 +417,8 @@ func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) t
 		IsDraft:    item.Draft,
 		Base:       item.Base,
 		Head:       item.Head,
-		Reviewers:  splitNonEmpty(item.Reviewers),
-		Labels:     splitNonEmpty(item.Labels),
+		Reviewers:  text.SplitCSV(item.Reviewers),
+		Labels:     text.SplitCSV(item.Labels),
 		Comments:   item.Comments,
 		IsEdited:   item.IsEdited,
 	}
@@ -457,7 +458,7 @@ func searchItemToMemoDisplayItem(item search.Item, id, subject, body, workspaceU
 		Timestamp:  item.Timestamp,
 		Subject:    subject,
 		Body:       body,
-		Labels:     splitNonEmpty(item.Labels),
+		Labels:     text.SplitCSV(item.Labels),
 		IsEdited:   item.IsEdited,
 		IsVirtual:  item.IsVirtual,
 		IsStale:    item.IsStale,
@@ -495,22 +496,6 @@ func searchItemToPost(item search.Item) social.Post {
 		post.HeaderState = item.State
 	}
 	return post
-}
-
-// splitNonEmpty splits a comma-separated string and returns non-empty trimmed parts.
-func splitNonEmpty(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	var result []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
 }
 
 // parseSearchLabels parses comma-separated scoped labels into pm.Label structs.

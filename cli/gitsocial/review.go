@@ -15,6 +15,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 )
 
@@ -212,13 +213,13 @@ func newReviewPRCreateCmd() *cobra.Command {
 				AllowUnpublishedHead: allowUnpublished,
 			}
 			if dependsOnStr != "" {
-				opts.DependsOn = splitCSV(dependsOnStr)
+				opts.DependsOn = text.SplitCSV(dependsOnStr)
 			}
 			if closesStr != "" {
-				opts.Closes = splitCSV(closesStr)
+				opts.Closes = text.SplitCSV(closesStr)
 			}
 			if reviewersStr != "" {
-				opts.Reviewers = splitCSV(reviewersStr)
+				opts.Reviewers = text.SplitCSV(reviewersStr)
 			}
 
 			result := review.CreatePR(cfg.WorkDir, subject, body, opts)
@@ -276,7 +277,7 @@ func newReviewPRListCmd() *cobra.Command {
 
 			var states []string
 			if state != "" {
-				states = splitCSV(state)
+				states = text.SplitCSV(state)
 			}
 			var result review.Result[[]review.PullRequest]
 			if repoURL == "" {
@@ -1233,17 +1234,6 @@ func readStdin() string {
 		lines = append(lines, scanner.Text())
 	}
 	return strings.Join(lines, "\n")
-}
-
-func splitCSV(s string) []string {
-	var result []string
-	for _, p := range strings.Split(s, ",") {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result
 }
 
 func shortenBranchRef(ref string) string {

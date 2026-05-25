@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
@@ -18,21 +17,20 @@ import (
 type MemoFormData struct {
 	Subject string
 	Body    string
-	Labels  string // comma-separated for input ergonomics
+	Labels  []string
 	Tier    string // "session" | "personal" | "project" (create mode only)
 }
 
 // MemoForm wraps a Huh form for memo create/edit. memoID is empty in create mode.
 type MemoForm struct {
-	workdir   string
-	memoID    string
-	form      *huh.Form
-	bodyField *huh.Text
-	data      MemoFormData
-	width     int
-	height    int
-	submitted bool
-	canceled  bool
+	tuicore.FormBase
+	workdir       string
+	memoID        string
+	bodyField     *huh.Text
+	bodyOtherRows int // count of non-body field rows, for body sizing
+	data          MemoFormData
+	width         int
+	height        int
 }
 
 // NewMemoForm builds an edit form prefilled from the given memo.
@@ -62,32 +60,31 @@ func NewMemoCreateForm(workdir, defaultTier string) *MemoForm {
 func (f *MemoForm) isCreateMode() bool { return f.memoID == "" }
 
 func (f *MemoForm) buildForm() {
-	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
 	pad := tuicore.PadLabel
 
 	subjectField := huh.NewInput().
 		Key("subject").
-		Title(pad("Subject")).
+		Title(pad(tuicore.RequiredLabel("Subject"))).
 		Placeholder("Memo subject...").
 		Value(&f.data.Subject).
-		CharLimit(200)
+		CharLimit(200).
+		Inline(true).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("subject is required")
+			}
+			return nil
+		})
 
 	f.bodyField = huh.NewText().
 		Key("body").
-		Title("Body").
-		Placeholder("Optional body (markdown)...").
+		Title("Description").
+		Placeholder("Optional description (markdown)...").
 		Value(&f.data.Body).
 		CharLimit(8000).
 		Lines(15)
 
-	labelsField := huh.NewInput().
-		Key("labels").
-		Title(pad("Labels")).
-		Placeholder("kind/policy,priority/high,topic/cache").
-		Value(&f.data.Labels).
-		CharLimit(500)
+	labelsField := tuicore.NewLabelsField(&f.data.Labels, "kind/policy, priority/high, expires/2025-12-31")
 
 	fields := []huh.Field{subjectField}
 	if f.isCreateMode() {
@@ -101,59 +98,42 @@ func (f *MemoForm) buildForm() {
 			).
 			Value(&f.data.Tier))
 	}
-	fields = append(fields, labelsField, f.bodyField, tuicore.NewSubmitField())
+	fields = append(fields, f.bodyField, labelsField, tuicore.NewSubmitField())
 
-	f.form = huh.NewForm(huh.NewGroup(fields...)).
+	f.bodyOtherRows = len(fields)
+	f.SetForm(huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(km)
+		WithKeyMap(tuicore.FormKeyMap()))
 }
 
 // SetSize updates the form dimensions.
 func (f *MemoForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
-	if f.form != nil {
-		f.form.WithWidth(w).WithHeight(h - 2)
+	if form := f.FormPtr(); form != nil {
+		form.WithWidth(w).WithHeight(h + 1)
 		if f.bodyField != nil {
-			f.bodyField.WithHeight(max(5, h-10))
+			f.bodyField.WithHeight(tuicore.BodyHeight(h, f.bodyOtherRows))
 		}
 	}
 }
 
-// Init kicks off the form lifecycle.
-func (f *MemoForm) Init() tea.Cmd { return f.form.Init() }
+// Update delegates the standard form lifecycle to FormBase.
+func (f *MemoForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
-// Update routes input events to the form.
-func (f *MemoForm) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			f.canceled = true
-			return nil
-		}
-	}
-	form, cmd := f.form.Update(msg)
-	if m, ok := form.(*huh.Form); ok {
-		f.form = m
-	}
-	if f.form.State == huh.StateCompleted {
-		f.submitted = true
-	}
-	return cmd
+// Body returns the current body text (for the $EDITOR escape-hatch).
+func (f *MemoForm) Body() string { return f.data.Body }
+
+// SetBody writes the body and rebuilds the form so huh.Text refreshes.
+func (f *MemoForm) SetBody(s string) {
+	f.data.Body = s
+	f.buildForm()
 }
 
-// View renders the form.
-func (f *MemoForm) View() string { return f.form.View() }
-
-// Errors returns the form's validation errors.
-func (f *MemoForm) Errors() []error { return f.form.Errors() }
-
-// IsSubmitted reports whether the form was submitted.
-func (f *MemoForm) IsSubmitted() bool { return f.submitted }
-
-// IsCancelled reports whether the form was canceled.
-func (f *MemoForm) IsCancelled() bool { return f.canceled }
+// Reset rebuilds the form, clearing huh-internal state while preserving data.
+func (f *MemoForm) Reset() { f.buildForm() }
 
 // SubmitEdit calls memo.EditMemo with the form's data.
 func (f *MemoForm) SubmitEdit() tea.Cmd {
@@ -166,7 +146,7 @@ func (f *MemoForm) SubmitEdit() tea.Cmd {
 			return MemoEditedMsg{Err: fmt.Errorf("subject cannot be empty")}
 		}
 		body := data.Body
-		labels := splitLabels(data.Labels)
+		labels := data.Labels
 		opts := memo.EditMemoOptions{
 			Subject: &subject,
 			Body:    &body,
@@ -195,7 +175,7 @@ func (f *MemoForm) SubmitCreate() tea.Cmd {
 		}
 		res := memo.CreateMemo(workdir, subject, data.Body, memo.CreateMemoOptions{
 			Tier:   tier,
-			Labels: splitLabels(data.Labels),
+			Labels: data.Labels,
 		})
 		if !res.Success {
 			return MemoCreatedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
@@ -206,24 +186,12 @@ func (f *MemoForm) SubmitCreate() tea.Cmd {
 
 // MemoFormView wraps the form as a host view.
 type MemoFormView struct {
-	workdir    string
-	form       *MemoForm
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir string
 }
 
 // NewMemoFormView creates a memo form view.
 func NewMemoFormView(workdir string) *MemoFormView { return &MemoFormView{workdir: workdir} }
-
-// SetSize sets the form view dimensions.
-func (v *MemoFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
 
 // Activate loads the memo and builds the form.
 func (v *MemoFormView) Activate(state *tuicore.State) tea.Cmd {
@@ -234,59 +202,40 @@ func (v *MemoFormView) Activate(state *tuicore.State) tea.Cmd {
 	workspaceURL := gitmsg.ResolveRepoURL(v.workdir)
 	res := memo.GetSingleMemo(memoID, workspaceURL, memo.ListInherits(v.workdir))
 	if !res.Success {
-		v.form = nil
+		v.DetachForm()
 		return nil
 	}
 	m := res.Data
 	prefill := MemoFormData{
 		Subject: m.Subject,
 		Body:    m.Body,
-		Labels:  strings.Join(m.Labels, ","),
+		Labels:  append([]string(nil), m.Labels...),
 	}
-	v.form = NewMemoForm(v.workdir, memoID, prefill)
-	v.form.SetSize(v.width, v.height)
-	v.submitting = false
-	return v.form.Init()
+	form := NewMemoForm(v.workdir, memoID, prefill)
+	v.AttachForm(form)
+	return form.Init()
 }
 
-// Deactivate is called when the view is hidden.
-func (v *MemoFormView) Deactivate() {}
-
-// Update handles form lifecycle.
+// Update dispatches to FormViewBase with the form-specific edit submit.
 func (v *MemoFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if v.form == nil {
+	if m, ok := msg.(MemoEditedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*MemoForm); ok {
+			return form.SubmitEdit()
+		}
 		return nil
-	}
-	cmd := v.form.Update(msg)
-	if v.form.IsCancelled() {
-		return func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} }
-	}
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.SubmitEdit()
-	}
-	return cmd
+	})
 }
 
 // Render renders the form panel.
 func (v *MemoFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	if v.form == nil {
-		return wrapper.Render(tuicore.Dim.Render("memo not found"), "")
-	}
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	return wrapper.Render(v.form.View(), footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the panel header.
 func (v *MemoFormView) Title() string { return "☞  Edit Memo" }
-
-// Bindings returns view bindings (none — form captures input).
-func (v *MemoFormView) Bindings() []tuicore.Binding { return nil }
-
-// IsInputActive always reports true so global keys defer to the form.
-func (v *MemoFormView) IsInputActive() bool { return true }
 
 // MemoEditedMsg is dispatched after submitting an edit.
 type MemoEditedMsg struct {
@@ -303,11 +252,8 @@ type MemoCreatedMsg struct {
 
 // MemoCreateFormView wraps a blank memo form as a host view.
 type MemoCreateFormView struct {
-	workdir    string
-	form       *MemoForm
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir string
 }
 
 // NewMemoCreateFormView creates a memo create form view.
@@ -315,75 +261,31 @@ func NewMemoCreateFormView(workdir string) *MemoCreateFormView {
 	return &MemoCreateFormView{workdir: workdir}
 }
 
-// SetSize sets the form view dimensions.
-func (v *MemoCreateFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
-
 // Activate builds a blank form using the optional tier param from the route.
 func (v *MemoCreateFormView) Activate(state *tuicore.State) tea.Cmd {
 	defaultTier := state.Router.Location().Params["tier"]
-	v.form = NewMemoCreateForm(v.workdir, defaultTier)
-	v.form.SetSize(v.width, v.height)
-	v.submitting = false
-	return v.form.Init()
+	form := NewMemoCreateForm(v.workdir, defaultTier)
+	v.AttachForm(form)
+	return form.Init()
 }
 
-// Deactivate is called when the view is hidden.
-func (v *MemoCreateFormView) Deactivate() {}
-
-// Update handles form lifecycle.
+// Update dispatches to FormViewBase with the form-specific create submit.
 func (v *MemoCreateFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if v.form == nil {
+	if m, ok := msg.(MemoCreatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*MemoForm); ok {
+			return form.SubmitCreate()
+		}
 		return nil
-	}
-	cmd := v.form.Update(msg)
-	if v.form.IsCancelled() {
-		return func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} }
-	}
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.SubmitCreate()
-	}
-	return cmd
+	})
 }
 
 // Render renders the form panel.
 func (v *MemoCreateFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	if v.form == nil {
-		return wrapper.Render("", "")
-	}
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	return wrapper.Render(v.form.View(), footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the panel header.
 func (v *MemoCreateFormView) Title() string { return "☞  New Memo" }
-
-// Bindings returns view bindings (none — form captures input).
-func (v *MemoCreateFormView) Bindings() []tuicore.Binding { return nil }
-
-// IsInputActive always reports true so global keys defer to the form.
-func (v *MemoCreateFormView) IsInputActive() bool { return true }
-
-// splitLabels parses a comma-separated label string into a clean slice.
-func splitLabels(s string) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}

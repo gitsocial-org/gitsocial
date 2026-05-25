@@ -339,8 +339,12 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "c":
 				if v.pr != nil {
+					prID := v.pr.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{Mode: "comment", TargetID: v.pr.ID}
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", prID),
+							Action:   tuicore.NavPush,
+						}
 					}
 				}
 			case "d":
@@ -960,7 +964,7 @@ func (v *PRDetailView) Render(state *tuicore.State) string {
 			exclude["h"] = true
 			exclude["i"] = true
 		}
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }

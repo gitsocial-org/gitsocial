@@ -225,7 +225,7 @@ func (v *ReleaseHistoryView) handleLoaded(msg ReleaseHistoryLoadedMsg) {
 func (v *ReleaseHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.ReleaseHistory, wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.ReleaseHistory, nil)
 	return wrapper.Render(content, footer)
 }
 

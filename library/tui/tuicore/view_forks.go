@@ -10,6 +10,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
@@ -40,9 +41,10 @@ type ForksView struct {
 	scroll       int
 	lastClickIdx int
 
-	// Input modes
+	// Add fork modal form
 	inputMode bool
-	input     textinput.Model
+	addForm   *huh.Form
+	addURL    string
 	confirm   ConfirmDialog
 	choice    ChoiceDialog
 
@@ -59,12 +61,6 @@ type ForksView struct {
 
 // NewForksView creates a new forks management view.
 func NewForksView(workdir string) *ForksView {
-	input := textinput.New()
-	input.Placeholder = "Fork repository URL..."
-	input.CharLimit = 512
-	input.Prompt = "+ "
-	StyleTextInput(&input, Title, lipgloss.NewStyle(), Dim)
-
 	searchInput := textinput.New()
 	searchInput.Placeholder = ""
 	searchInput.CharLimit = 100
@@ -73,7 +69,6 @@ func NewForksView(workdir string) *ForksView {
 
 	return &ForksView{
 		workdir:      workdir,
-		input:        input,
 		searchInput:  searchInput,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
@@ -86,12 +81,13 @@ func (v *ForksView) SetSize(width, height int) {}
 // Activate loads forks when the view becomes active.
 func (v *ForksView) Activate(state *State) tea.Cmd {
 	v.inputMode = false
+	v.addForm = nil
+	v.addURL = ""
 	v.searchActive = false
 	v.searchQuery = ""
 	v.searchInput.SetValue("")
 	v.confirm.Reset()
 	v.choice.Reset()
-	v.input.SetValue("")
 	v.cursor = 0
 	v.scroll = 0
 	v.forks = gitmsg.GetForks(v.workdir)
@@ -138,9 +134,14 @@ func (v *ForksView) Update(msg tea.Msg, state *State) tea.Cmd {
 			}
 		}
 	default:
-		if v.inputMode {
-			var cmd tea.Cmd
-			v.input, cmd = v.input.Update(msg)
+		if v.inputMode && v.addForm != nil {
+			form, cmd := v.addForm.Update(msg)
+			if f, ok := form.(*huh.Form); ok {
+				v.addForm = f
+			}
+			if v.addForm.State == huh.StateCompleted {
+				return v.submitAdd()
+			}
 			return cmd
 		}
 		if v.searchActive {
@@ -248,11 +249,7 @@ func (v *ForksView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 	case "enter":
 		return v.activateSelected()
 	case "a":
-		v.inputMode = true
-		v.input.Blur()
-		v.input.Reset()
-		v.input.Placeholder = ""
-		return v.input.Focus()
+		return v.startAddForm()
 	case "x":
 		indices := v.filteredIndices()
 		if len(indices) > 0 && v.cursor < len(indices) {
@@ -287,25 +284,59 @@ func (v *ForksView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 	return nil
 }
 
-// handleInputKey handles input in add-fork mode.
+// startAddForm builds and focuses the inline add-fork huh form.
+func (v *ForksView) startAddForm() tea.Cmd {
+	v.inputMode = true
+	v.addURL = ""
+	urlField := huh.NewInput().
+		Key("url").
+		Title(PadLabel(RequiredLabel("Fork URL"))).
+		Placeholder("https://example.com/owner/repo").
+		CharLimit(512).
+		Value(&v.addURL).
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return fmt.Errorf("URL is required")
+			}
+			return nil
+		})
+	v.addForm = huh.NewForm(huh.NewGroup(urlField, NewSubmitField())).
+		WithTheme(FormTheme()).
+		WithShowHelp(false).
+		WithShowErrors(false).
+		WithKeyMap(FormKeyMap())
+	return v.addForm.Init()
+}
+
+// handleInputKey processes esc/enter inside the add form.
 func (v *ForksView) handleInputKey(msg tea.KeyPressMsg) tea.Cmd {
-	switch msg.String() {
-	case "enter":
-		forkURL := strings.TrimSpace(v.input.Value())
-		if forkURL != "" {
-			v.inputMode = false
-			v.input.Blur()
-			return v.addFork(forkURL)
-		}
-	case "esc":
+	if msg.String() == "esc" {
 		v.inputMode = false
-		v.input.Blur()
-	default:
-		var cmd tea.Cmd
-		v.input, cmd = v.input.Update(msg)
-		return cmd
+		v.addForm = nil
+		return nil
 	}
-	return nil
+	if v.addForm == nil {
+		return nil
+	}
+	form, cmd := v.addForm.Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		v.addForm = f
+	}
+	if v.addForm.State == huh.StateCompleted {
+		return v.submitAdd()
+	}
+	return cmd
+}
+
+// submitAdd dispatches the add-fork command after the inline form completes.
+func (v *ForksView) submitAdd() tea.Cmd {
+	url := strings.TrimSpace(v.addURL)
+	v.inputMode = false
+	v.addForm = nil
+	if url == "" {
+		return nil
+	}
+	return v.addFork(url)
 }
 
 // handleSearchKey handles input in search mode.
@@ -412,8 +443,8 @@ func (v *ForksView) Render(state *State) string {
 	height := wrapper.ContentHeight()
 
 	var lines []string
-	if v.inputMode {
-		lines = append(lines, v.input.View(), "")
+	if v.inputMode && v.addForm != nil {
+		lines = append(lines, v.addForm.View(), "")
 	}
 	if v.searchActive {
 		lines = append(lines, v.searchInput.View(), "")
@@ -538,12 +569,15 @@ func (v *ForksView) Render(state *State) string {
 	}
 
 	var footer string
-	if v.confirm.IsActive() {
+	switch {
+	case v.confirm.IsActive():
 		footer = v.confirm.Render()
-	} else if v.choice.IsActive() {
+	case v.choice.IsActive():
 		footer = v.choice.Render()
-	} else {
-		footer = RenderFooter(state.Registry, CoreForks, wrapper.ContentWidth(), nil)
+	case v.inputMode && v.addForm != nil:
+		footer = FormFooter(false, v.addForm.Errors())
+	default:
+		footer = RenderFooter(state.Registry, CoreForks, nil)
 	}
 	return wrapper.Render(strings.Join(lines[:height], "\n"), footer)
 }

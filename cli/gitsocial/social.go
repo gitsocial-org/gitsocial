@@ -277,7 +277,7 @@ func newSocialEditCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
-			result := social.EditPost(cfg.WorkDir, postID, content)
+			result := social.EditPost(cfg.WorkDir, postID, content, nil)
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -391,7 +391,7 @@ func newSocialRepostCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			postID := args[0]
 
-			result := social.CreateRepost(cfg.WorkDir, postID)
+			result := social.CreateRepost(cfg.WorkDir, postID, nil)
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -439,7 +439,7 @@ func newSocialQuoteCmd() *cobra.Command {
 				content = strings.Join(lines, "\n")
 			}
 
-			result := social.CreateQuote(cfg.WorkDir, postID, content)
+			result := social.CreateQuote(cfg.WorkDir, postID, content, nil)
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)

@@ -178,7 +178,7 @@ func (v *MemosView) Render(state *tuicore.State) string {
 		v.cardList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 		content = v.cardList.View()
 	}
-	footer := tuicore.RenderFooter(state.Registry, v.bindingContext(), wrapper.ContentWidth(), nil)
+	footer := tuicore.RenderFooter(state.Registry, v.bindingContext(), nil)
 	return wrapper.Render(content, footer)
 }
 

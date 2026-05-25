@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 type ReleaseItem struct {
@@ -23,6 +24,7 @@ type ReleaseItem struct {
 	Checksums   sql.NullString
 	SignedBy    sql.NullString
 	SBOM        sql.NullString
+	Labels      sql.NullString
 	Origin      *protocol.Origin
 	Content     string
 	AuthorName  string
@@ -40,7 +42,7 @@ const baseSelectFromView = `
 	SELECT v.repo_url, v.hash, v.branch,
 	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
 	       v.tag, v.version, v.prerelease, v.artifacts, v.artifact_url,
-	       v.checksums, v.signed_by, v.sbom,
+	       v.checksums, v.signed_by, v.sbom, v.labels,
 	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
 	       v.comments
 	FROM release_items_resolved v
@@ -192,15 +194,8 @@ func ReleaseItemToRelease(item ReleaseItem) Release {
 	subject, body := protocol.SplitSubjectBody(item.Content)
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 
-	var artifacts []string
-	if item.Artifacts.Valid && item.Artifacts.String != "" {
-		for _, a := range strings.Split(item.Artifacts.String, ",") {
-			a = strings.TrimSpace(a)
-			if a != "" {
-				artifacts = append(artifacts, a)
-			}
-		}
-	}
+	artifacts := text.SplitCSV(item.Artifacts.String)
+	labels := text.SplitCSV(item.Labels.String)
 
 	return Release{
 		ID:          id,
@@ -218,6 +213,7 @@ func ReleaseItemToRelease(item ReleaseItem) Release {
 		Checksums:   item.Checksums.String,
 		SignedBy:    item.SignedBy.String,
 		SBOM:        item.SBOM.String,
+		Labels:      labels,
 		IsEdited:    item.IsEdited,
 		IsRetracted: item.IsRetracted,
 		Comments:    item.Comments,
@@ -278,7 +274,7 @@ func scanResolvedRow(row *sql.Row) (*ReleaseItem, error) {
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
-		&item.Checksums, &item.SignedBy, &item.SBOM,
+		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
 		&item.Comments,
 	)
@@ -311,7 +307,7 @@ func scanResolvedRows(rows *sql.Rows) (*ReleaseItem, error) {
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
-		&item.Checksums, &item.SignedBy, &item.SBOM,
+		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
 		&item.Comments,
 	)

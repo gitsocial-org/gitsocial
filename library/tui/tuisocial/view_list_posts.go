@@ -293,9 +293,9 @@ func (v *ListPostsView) Render(state *tuicore.State) string {
 	var footer string
 	if v.externalListOwner == "" {
 		// Local list - hide "m:more" key
-		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPosts, wrapper.ContentWidth(), map[string]bool{"m": true})
+		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPosts, map[string]bool{"m": true})
 	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPosts, wrapper.ContentWidth(), nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.ListPosts, nil)
 	}
 	return wrapper.Render(content, footer)
 }

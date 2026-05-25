@@ -394,7 +394,7 @@ func (v *MilestonesView) Render(state *tuicore.State) string {
 		v.searchInput.SetWidth(wrapper.ContentWidth() - 5)
 		footer = v.searchInput.View()
 	} else {
-		footer = tuicore.RenderFooter(state.Registry, tuicore.PMMilestones, wrapper.ContentWidth(), nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.PMMilestones, nil)
 	}
 	return wrapper.Render(content, footer)
 }

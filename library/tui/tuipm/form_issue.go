@@ -3,8 +3,8 @@ package tuipm
 
 import (
 	"fmt"
+	"strings"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
@@ -29,25 +29,27 @@ type IssueFormData struct {
 	Blocks    []string
 	BlockedBy []string
 	Related   []string
+	// Labels carries free-form labels (anything outside the framework-driven
+	// status / priority / kind scopes), serialized as `scope/value` strings.
+	Labels []string
 }
 
 // IssueForm wraps a Huh form for issue creation/editing.
 type IssueForm struct {
-	workdir      string
-	issueID      string // Non-empty for edit mode
-	form         *huh.Form
-	bodyField    *huh.Text
-	data         IssueFormData
-	framework    *pm.Framework
-	contributors []cache.Contributor
-	milestones   []pm.Milestone
-	sprints      []pm.Sprint
-	issues       []pm.Issue
-	repoURL      string
-	width        int
-	height       int
-	submitted    bool
-	canceled     bool
+	tuicore.FormBase
+	workdir       string
+	issueID       string // Non-empty for edit mode
+	bodyField     *huh.Text
+	bodyOtherRows int // count of non-body field rows, for body sizing
+	data          IssueFormData
+	framework     *pm.Framework
+	contributors  []cache.Contributor
+	milestones    []pm.Milestone
+	sprints       []pm.Sprint
+	issues        []pm.Issue
+	repoURL       string
+	width         int
+	height        int
 }
 
 // NewIssueForm creates a new issue form based on the current framework.
@@ -86,7 +88,7 @@ func NewIssueForm(workdir string) *IssueForm {
 		issues:       issues,
 		repoURL:      repoURL,
 	}
-	f.buildForm()
+	f.buildFormWithDefaults()
 	return f
 }
 
@@ -95,8 +97,10 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 	pmConfig := pm.GetPMConfig(workdir)
 	fw := pm.GetFramework(pmConfig.Framework)
 
-	// Extract label values from issue
+	// Split labels: structured scopes (status/priority/kind) feed dedicated
+	// cycle fields; everything else flows into the free-form Labels field.
 	var status, priority, kind string
+	var freeLabels []string
 	for _, label := range issue.Labels {
 		switch label.Scope {
 		case "status":
@@ -105,6 +109,8 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 			priority = label.Value
 		case "kind":
 			kind = label.Value
+		default:
+			freeLabels = append(freeLabels, issueLabelToString(label))
 		}
 	}
 
@@ -165,6 +171,7 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 			Blocks:    issueRefsToTags(issue.Blocks),
 			BlockedBy: issueRefsToTags(issue.BlockedBy),
 			Related:   issueRefsToTags(issue.Related),
+			Labels:    freeLabels,
 		},
 	}
 	f.buildFormWithDefaults()
@@ -174,11 +181,6 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 // IsEditMode returns true if this is an edit form.
 func (f *IssueForm) IsEditMode() bool {
 	return f.issueID != ""
-}
-
-// buildForm constructs the Huh form with dynamic fields based on framework.
-func (f *IssueForm) buildForm() {
-	f.buildFormWithDefaults()
 }
 
 // buildFormWithDefaults constructs the form, using data values as defaults.
@@ -286,13 +288,17 @@ func (f *IssueForm) buildFormWithDefaults() {
 		Lines(20)
 	fields = append(fields, f.bodyField)
 
+	// Free-form labels (other than the structured status/priority/kind cycles).
+	fields = append(fields, tuicore.NewLabelsField(&f.data.Labels, "topic/area, area/api, ..."))
+
 	fields = append(fields, tuicore.NewSubmitField())
 
-	f.form = huh.NewForm(huh.NewGroup(fields...)).
+	f.bodyOtherRows = len(fields)
+	f.SetForm(huh.NewForm(huh.NewGroup(fields...)).
 		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(formKeyMap())
+		WithKeyMap(tuicore.FormKeyMap()))
 }
 
 // buildCycleField creates a CycleField from framework label values.
@@ -331,68 +337,32 @@ func buildSprintOptions(sprints []pm.Sprint, repoURL string) []tuicore.TagOption
 	return opts
 }
 
-// formKeyMap returns shared key bindings for all forms.
-func formKeyMap() *huh.KeyMap {
-	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-	return km
-}
-
 // SetSize sets the form dimensions.
 func (f *IssueForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
-	if f.form != nil {
-		f.form.WithWidth(w).WithHeight(h - 2)
+	if form := f.FormPtr(); form != nil {
+		form.WithWidth(w).WithHeight(h + 1)
 		if f.bodyField != nil {
-			f.bodyField.WithHeight(max(5, h-10))
+			f.bodyField.WithHeight(tuicore.BodyHeight(h, f.bodyOtherRows))
 		}
 	}
 }
 
-// Init initializes the form.
-func (f *IssueForm) Init() tea.Cmd {
-	return f.form.Init()
+// Update delegates the standard form lifecycle to FormBase.
+func (f *IssueForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+
+// Body returns the current body text (for the $EDITOR escape-hatch).
+func (f *IssueForm) Body() string { return f.data.Body }
+
+// SetBody writes the body and rebuilds the form so huh.Text refreshes.
+func (f *IssueForm) SetBody(s string) {
+	f.data.Body = s
+	f.buildFormWithDefaults()
 }
 
-// Update handles form messages.
-func (f *IssueForm) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			f.canceled = true
-			return nil
-		}
-	}
-
-	form, cmd := f.form.Update(msg)
-	if m, ok := form.(*huh.Form); ok {
-		f.form = m
-	}
-
-	if f.form.State == huh.StateCompleted {
-		f.submitted = true
-	}
-
-	return cmd
-}
-
-// View renders the form.
-func (f *IssueForm) View() string {
-	return f.form.View()
-}
-
-// IsSubmitted returns true if form was submitted.
-func (f *IssueForm) IsSubmitted() bool {
-	return f.submitted
-}
-
-// IsCancelled returns true if form was canceled.
-func (f *IssueForm) IsCancelled() bool {
-	return f.canceled
-}
-
-// Errors returns the form's current validation errors.
-func (f *IssueForm) Errors() []error { return f.form.Errors() }
+// Reset rebuilds the form, clearing huh-internal state while preserving data.
+func (f *IssueForm) Reset() { f.buildFormWithDefaults() }
 
 // GetData returns the form data.
 func (f *IssueForm) GetData() IssueFormData {
@@ -415,16 +385,7 @@ func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
 	return func() tea.Msg {
 		opts := pm.CreateIssueOptions{}
 
-		// Build labels from form selections
-		if data.Status != "" {
-			opts.Labels = append(opts.Labels, pm.Label{Scope: "status", Value: data.Status})
-		}
-		if data.Priority != "" {
-			opts.Labels = append(opts.Labels, pm.Label{Scope: "priority", Value: data.Priority})
-		}
-		if data.Kind != "" {
-			opts.Labels = append(opts.Labels, pm.Label{Scope: "kind", Value: data.Kind})
-		}
+		opts.Labels = buildIssueLabelsFromForm(data)
 
 		opts.Assignees = data.Assignees
 		opts.Milestone = firstTagRef(data.Milestone, repoURL)
@@ -448,17 +409,7 @@ func (f *IssueForm) UpdateIssueFromForm() tea.Cmd {
 	issueID := f.issueID
 	repoURL := f.repoURL
 	return func() tea.Msg {
-		// Build labels from form selections
-		var labels []pm.Label
-		if data.Status != "" {
-			labels = append(labels, pm.Label{Scope: "status", Value: data.Status})
-		}
-		if data.Priority != "" {
-			labels = append(labels, pm.Label{Scope: "priority", Value: data.Priority})
-		}
-		if data.Kind != "" {
-			labels = append(labels, pm.Label{Scope: "kind", Value: data.Kind})
-		}
+		labels := buildIssueLabelsFromForm(data)
 
 		assignees := data.Assignees
 
@@ -558,10 +509,7 @@ func buildContributorOptions(contributors []cache.Contributor) []tuicore.TagOpti
 
 // IssueFormView wraps the form for integration with the TUI host.
 type IssueFormView struct {
-	form       *IssueForm
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
 }
 
 // NewIssueFormView creates a new issue form view. The form itself is
@@ -571,82 +519,44 @@ func NewIssueFormView(_ string) *IssueFormView {
 	return &IssueFormView{}
 }
 
-// SetSize sets the view dimensions.
-func (v *IssueFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
-
 // Activate creates a fresh form and initializes it.
 func (v *IssueFormView) Activate(state *tuicore.State) tea.Cmd {
-	v.form = NewIssueForm(state.Workdir)
-	v.form.SetSize(v.width, v.height)
-	return v.form.Init()
+	form := NewIssueForm(state.Workdir)
+	v.AttachForm(form)
+	return form.Init()
 }
 
 // Update handles messages.
 func (v *IssueFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	cmd := v.form.Update(msg)
-
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(IssueCreatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*IssueForm); ok {
+			return form.CreateIssueFromForm()
 		}
-	}
-
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return tea.Batch(
-			v.form.CreateIssueFromForm(),
-			func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} },
-		)
-	}
-
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the form view.
 func (v *IssueFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-	content := v.form.View()
-	footer := tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *IssueFormView) Title() string {
-	return "○  New Issue"
-}
-
-// Bindings returns keybindings for this view.
-func (v *IssueFormView) Bindings() []tuicore.Binding {
-	return nil
-}
+func (v *IssueFormView) Title() string { return "○  New Issue" }
 
 // ViewName returns the view identifier.
-func (v *IssueFormView) ViewName() string {
-	return "pm.issue_form"
-}
-
-// IsInputActive returns true (form always captures input).
-func (v *IssueFormView) IsInputActive() bool {
-	return true
-}
+func (v *IssueFormView) ViewName() string { return "pm.issue_form" }
 
 // IssueEditFormView wraps the form for editing an existing issue.
 type IssueEditFormView struct {
-	workdir    string
-	issueID    string
-	form       *IssueForm
-	issue      *pm.Issue
-	loaded     bool
-	submitting bool
-	width      int
-	height     int
+	tuicore.FormViewBase
+	workdir string
+	issueID string
+	issue   *pm.Issue
+	loaded  bool
 }
 
 // NewIssueEditFormView creates a new issue edit form view.
@@ -656,20 +566,11 @@ func NewIssueEditFormView(workdir string) *IssueEditFormView {
 	}
 }
 
-// SetSize sets the view dimensions.
-func (v *IssueEditFormView) SetSize(w, h int) {
-	v.width = w
-	v.height = h
-	if v.form != nil {
-		v.form.SetSize(w, h)
-	}
-}
-
 // Activate loads the issue and initializes the form.
 func (v *IssueEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.issueID = state.Router.Location().Param("issueID")
 	v.loaded = false
-	v.form = nil
+	v.DetachForm()
 	return v.loadIssue()
 }
 
@@ -700,53 +601,35 @@ func (v *IssueEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 		}
 		v.issue = msg.Issue
-		v.form = NewIssueEditForm(v.workdir, *v.issue)
-		v.form.SetSize(v.width, v.height)
+		form := NewIssueEditForm(v.workdir, *v.issue)
+		v.AttachForm(form)
 		v.loaded = true
-		return v.form.Init()
+		return form.Init()
 	}
 
-	if !v.loaded || v.form == nil {
+	if !v.loaded {
 		return nil
 	}
 
-	cmd := v.form.Update(msg)
-
-	if v.form.IsCancelled() {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	if m, ok := msg.(IssueUpdatedMsg); ok && m.Err != nil {
+		v.ClearSubmitting()
+	}
+	return v.UpdateForm(msg, func() tea.Cmd {
+		if form, ok := v.CurrentForm().(*IssueForm); ok {
+			return form.UpdateIssueFromForm()
 		}
-	}
-
-	if v.form.IsSubmitted() && !v.submitting {
-		v.submitting = true
-		return v.form.UpdateIssueFromForm()
-	}
-
-	return cmd
+		return nil
+	})
 }
 
 // Render renders the edit form view.
 func (v *IssueEditFormView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-
-	var content string
 	if !v.loaded {
-		content = "Loading issue..."
-	} else if v.form == nil {
-		content = tuicore.Dim.Render("  Issue not found")
-	} else {
-		v.form.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
-		content = v.form.View()
+		wrapper := tuicore.NewViewWrapper(state)
+		footer := tuicore.FormFooter(true, nil)
+		return wrapper.Render("Loading issue...", footer)
 	}
-
-	var footer string
-	if v.form != nil {
-		footer = tuicore.FormFooter("tab/shift+tab navigate · enter confirm · esc cancel", v.form.Errors())
-	} else {
-		footer = tuicore.Dim.Render("tab/shift+tab navigate · enter confirm · esc cancel")
-	}
-	return wrapper.Render(content, footer)
+	return v.RenderForm(state)
 }
 
 // Title returns the view title.
@@ -757,17 +640,46 @@ func (v *IssueEditFormView) Title() string {
 	return "○  Edit Issue"
 }
 
-// Bindings returns keybindings for this view.
-func (v *IssueEditFormView) Bindings() []tuicore.Binding {
-	return nil
-}
-
 // ViewName returns the view identifier.
-func (v *IssueEditFormView) ViewName() string {
-	return "pm.issue_edit_form"
+func (v *IssueEditFormView) ViewName() string { return "pm.issue_edit_form" }
+
+// buildIssueLabelsFromForm assembles the full label slice from the form data:
+// structured cycles (status/priority/kind) plus any free-form labels parsed
+// from the Labels TagField.
+func buildIssueLabelsFromForm(data IssueFormData) []pm.Label {
+	var labels []pm.Label
+	if data.Status != "" {
+		labels = append(labels, pm.Label{Scope: "status", Value: data.Status})
+	}
+	if data.Priority != "" {
+		labels = append(labels, pm.Label{Scope: "priority", Value: data.Priority})
+	}
+	if data.Kind != "" {
+		labels = append(labels, pm.Label{Scope: "kind", Value: data.Kind})
+	}
+	for _, raw := range data.Labels {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		labels = append(labels, parseIssueFormLabel(raw))
+	}
+	return labels
 }
 
-// IsInputActive returns true (form always captures input).
-func (v *IssueEditFormView) IsInputActive() bool {
-	return true
+// issueLabelToString serializes a pm.Label as its on-wire `scope/value` form.
+func issueLabelToString(l pm.Label) string {
+	if l.Scope != "" {
+		return l.Scope + "/" + l.Value
+	}
+	return l.Value
+}
+
+// parseIssueFormLabel parses a raw `scope/value` or bare `value` string from
+// the Labels TagField into a pm.Label.
+func parseIssueFormLabel(s string) pm.Label {
+	if idx := strings.Index(s, "/"); idx > 0 {
+		return pm.Label{Scope: s[:idx], Value: s[idx+1:]}
+	}
+	return pm.Label{Value: s}
 }

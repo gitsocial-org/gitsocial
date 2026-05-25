@@ -94,7 +94,7 @@ func socialEditPost(s *Server) HandlerFunc {
 		if p.Ref == "" || p.Content == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref and content are required"}
 		}
-		return fromResult(social.EditPost(s.session.Workdir, p.Ref, p.Content))
+		return fromResult(social.EditPost(s.session.Workdir, p.Ref, p.Content, nil))
 	}
 }
 
@@ -140,7 +140,7 @@ func socialCreateRepost(s *Server) HandlerFunc {
 		if p.Target == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "target is required"}
 		}
-		return fromResult(social.CreateRepost(s.session.Workdir, p.Target))
+		return fromResult(social.CreateRepost(s.session.Workdir, p.Target, nil))
 	}
 }
 
@@ -156,7 +156,7 @@ func socialCreateQuote(s *Server) HandlerFunc {
 		if p.Target == "" || p.Content == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "target and content are required"}
 		}
-		return fromResult(social.CreateQuote(s.session.Workdir, p.Target, p.Content))
+		return fromResult(social.CreateQuote(s.session.Workdir, p.Target, p.Content, nil))
 	}
 }
 

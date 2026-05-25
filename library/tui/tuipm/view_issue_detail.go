@@ -210,10 +210,11 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "c":
 				if v.issue != nil {
+					issueID := v.issue.ID
 					return func() tea.Msg {
-						return tuicore.OpenEditorMsg{
-							Mode:     "comment",
-							TargetID: v.issue.ID,
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocSocialPostForm("comment", issueID),
+							Action:   tuicore.NavPush,
 						}
 					}
 				}
@@ -391,7 +392,7 @@ func (v *IssueDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMIssueDetail, wrapper.ContentWidth(), v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMIssueDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
 	return wrapper.Render(content, footer)
 }
