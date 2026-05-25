@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
@@ -67,7 +68,13 @@ func newPersonalSyncCmd() *cobra.Command {
 	var pushOnly, fetchOnly bool
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Push/fetch the personal repo (refs/heads/* and refs/gitmsg/*)",
+		Short: "Push/fetch the personal repo (gitmsg/* branches auto-merge on divergence)",
+		Long: `Sync the personal bare repo with its remote.
+
+Per-branch handling: each refs/heads/gitmsg/* branch is fetched/pushed via the
+auto-merge helper — empty-tree append-only branches reconcile divergent
+histories without conflicts. State refs under refs/gitmsg/* (settings config,
+list metadata, etc.) sync as a single bulk refspec.`,
 		Run: func(cmd *cobra.Command, _ []string) {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {
@@ -84,21 +91,33 @@ func newPersonalSyncCmd() *cobra.Command {
 			}
 			doFetch := !pushOnly
 			doPush := !fetchOnly
-			refspecs := []string{
-				"refs/heads/*:refs/heads/*",
-				"refs/gitmsg/*:refs/gitmsg/*",
-			}
+			branches := gitmsg.GetExtBranches(path)
+
 			if doFetch {
-				args := append([]string{"fetch", "origin"}, refspecs...)
-				if _, err := git.ExecGit(path, args); err != nil {
-					PrintError(cmd, fmt.Sprintf("fetch: %s", err))
+				for _, branch := range branches {
+					if err := gitmsg.FetchAndMergeBranch(path, branch); err != nil {
+						PrintError(cmd, fmt.Sprintf("fetch %s: %s", branch, err))
+						os.Exit(ExitError)
+					}
+				}
+				if _, err := git.ExecGit(path, []string{
+					"fetch", "origin", "refs/gitmsg/*:refs/gitmsg/*",
+				}); err != nil {
+					PrintError(cmd, fmt.Sprintf("fetch gitmsg refs: %s", err))
 					os.Exit(ExitError)
 				}
 			}
 			if doPush {
-				args := append([]string{"push", "origin"}, refspecs...)
-				if _, err := git.ExecGit(path, args); err != nil {
-					PrintError(cmd, fmt.Sprintf("push: %s", err))
+				for _, branch := range branches {
+					if err := gitmsg.PushBranchWithMerge(path, branch); err != nil {
+						PrintError(cmd, fmt.Sprintf("push %s: %s", branch, err))
+						os.Exit(ExitError)
+					}
+				}
+				if _, err := git.ExecGit(path, []string{
+					"push", "origin", "refs/gitmsg/*:refs/gitmsg/*",
+				}); err != nil {
+					PrintError(cmd, fmt.Sprintf("push gitmsg refs: %s", err))
 					os.Exit(ExitError)
 				}
 			}

@@ -519,15 +519,16 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 }
 
 // ResetRepositoryData deletes all commits and extension items for a repo.
-// Used when switching between specific branch and * following mode.
+// Used when switching between specific branch and * following mode, and when
+// GC'ing a memo session bare repo whose `local:<path>` rows are now orphaned.
 func ResetRepositoryData(repoURL string) error {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return ExecLocked(func(db *sql.DB) error {
 		tables := []string{
 			"pm_assignees", "review_reviewers",
 			"social_items", "social_interactions",
-			"pm_items", "release_items", "review_items",
-			"core_commits_version", "core_mentions",
+			"pm_items", "release_items", "review_items", "memo_items",
+			"core_commits_version", "core_mentions", "core_trailer_refs",
 			"core_notification_reads", "core_labels", "core_commits",
 		}
 		// Delete FTS rows by rowid via subquery on core_commits — must run

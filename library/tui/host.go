@@ -917,9 +917,17 @@ func (h *Host) GetSourceDisplayItem(offset int) (tuicore.DisplayItem, int, bool)
 
 // UpdateSourceIndex updates the source context index.
 func (h *Host) UpdateSourceIndex(index, total int) {
-	if h.state.DetailSource != nil {
-		h.state.DetailSource.Index = index
-		h.state.DetailSource.Total = total
+	if h.state.DetailSource == nil {
+		return
+	}
+	h.state.DetailSource.Index = index
+	h.state.DetailSource.Total = total
+	// Forward the new cursor to the source view so a subsequent esc-back lands
+	// on the currently-displayed item rather than the originally-opened one.
+	if view, exists := h.views[h.state.DetailSource.Path]; exists {
+		if updater, ok := view.(tuicore.SourceCursorUpdater); ok {
+			updater.SetSourceCursor(index)
+		}
 	}
 }
 

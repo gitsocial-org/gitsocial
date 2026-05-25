@@ -13,7 +13,12 @@ import (
 const (
 	recordSep = "\x1E"
 	unitSep   = "\x1F"
-	emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	// EmptyTreeHash is the well-known git SHA1 of the empty tree object.
+	// Every gitmsg extension commit uses this tree (content lives in the
+	// commit message via the protocol header), and auto-merge commits on
+	// `gitmsg/*` branches reuse it for consistency.
+	EmptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	emptyTree     = EmptyTreeHash
 )
 
 // IsRepository checks if the given directory is a git repository.

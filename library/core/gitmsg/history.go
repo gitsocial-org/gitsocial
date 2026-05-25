@@ -24,6 +24,7 @@ type MessageVersion struct {
 	Content     string
 	EditOf      string
 	IsRetracted bool
+	Labels      []string // parsed from the GitMsg `labels` header field
 }
 
 // GetHistory retrieves all versions of a message by its ref.
@@ -87,6 +88,7 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 			ext := ""
 			msgType := ""
 			isRetracted := false
+			var labels []string
 			if msg := protocol.ParseMessage(c.Message); msg != nil {
 				ext = msg.Header.Ext
 				if t := msg.Header.Fields["type"]; t != "" {
@@ -94,6 +96,14 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 				}
 				if msg.Header.Fields["retracted"] == "true" {
 					isRetracted = true
+				}
+				if l := msg.Header.Fields["labels"]; l != "" {
+					for _, lbl := range strings.Split(l, ",") {
+						lbl = strings.TrimSpace(lbl)
+						if lbl != "" {
+							labels = append(labels, lbl)
+						}
+					}
 				}
 			}
 
@@ -115,6 +125,7 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 				Type:        msgType,
 				Content:     protocol.ExtractCleanContent(c.Message),
 				IsRetracted: isRetracted,
+				Labels:      labels,
 			}
 
 			if c.Edits.Valid && c.Edits.String != "" {

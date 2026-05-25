@@ -39,35 +39,18 @@ func PersonalRepoExists() bool {
 	if err != nil {
 		return false
 	}
-	return bareRepoExists(path)
+	return git.BareRepoExists(path)
 }
 
 // EnsurePersonalRepo creates the personal bare repo at the resolved path if
-// missing, configuring it with the global git user.name / user.email so
-// commits written by the backend are attributable. Returns the resolved path.
+// missing. Returns the resolved path.
 func EnsurePersonalRepo() (string, error) {
 	path, err := PersonalRepoPath()
 	if err != nil {
 		return "", err
 	}
-	if bareRepoExists(path) {
-		return path, nil
-	}
-	if err := os.MkdirAll(path, 0o700); err != nil {
-		return "", fmt.Errorf("create personal repo dir: %w", err)
-	}
-	if _, err := git.ExecGit(path, []string{"init", "--bare", path}); err != nil {
-		return "", fmt.Errorf("git init --bare %s: %w", path, err)
-	}
-	if name := globalGitConfig("user.name"); name != "" {
-		_, _ = git.ExecGit(path, []string{"config", "user.name", name})
-	} else {
-		_, _ = git.ExecGit(path, []string{"config", "user.name", "GitSocial Personal"})
-	}
-	if email := globalGitConfig("user.email"); email != "" {
-		_, _ = git.ExecGit(path, []string{"config", "user.email", email})
-	} else {
-		_, _ = git.ExecGit(path, []string{"config", "user.email", "personal@local"})
+	if err := git.EnsureBareRepo(path); err != nil {
+		return "", err
 	}
 	return path, nil
 }
@@ -89,7 +72,7 @@ func (b *personalConfigBackend) Scope() Scope { return ScopePersonalConfig }
 // must not break Resolve for ScopeLocal keys.
 func (b *personalConfigBackend) Get(key string) (string, bool) {
 	path, err := PersonalRepoPath()
-	if err != nil || !bareRepoExists(path) {
+	if err != nil || !git.BareRepoExists(path) {
 		return "", false
 	}
 	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
@@ -138,7 +121,7 @@ func GetWorkspaceMode(repoURL string) string {
 		return ""
 	}
 	path, err := PersonalRepoPath()
-	if err != nil || !bareRepoExists(path) {
+	if err != nil || !git.BareRepoExists(path) {
 		return ""
 	}
 	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
@@ -200,7 +183,7 @@ const workspaceModesKey = "fetch.workspace_modes"
 // populate Settings.Fetch.WorkspaceModes so legacy readers see synced values.
 func LoadWorkspaceModes() map[string]string {
 	path, err := PersonalRepoPath()
-	if err != nil || !bareRepoExists(path) {
+	if err != nil || !git.BareRepoExists(path) {
 		return nil
 	}
 	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
@@ -221,29 +204,6 @@ func LoadWorkspaceModes() map[string]string {
 }
 
 // --- helpers ---
-
-// bareRepoExists checks whether path contains a bare git repo (HEAD file at
-// the root, not a directory). Mirrors the heuristic memo/repos.go uses; when
-// memo rebases on top, the two definitions should be unified.
-func bareRepoExists(path string) bool {
-	if path == "" {
-		return false
-	}
-	st, err := os.Stat(filepath.Join(path, "HEAD"))
-	if err != nil {
-		return false
-	}
-	return !st.IsDir()
-}
-
-// globalGitConfig reads a key from the global git config; "" on failure.
-func globalGitConfig(key string) string {
-	out, err := git.ExecGit("", []string{"config", "--global", "--get", key})
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(out.Stdout)
-}
 
 // expandHome resolves a leading "~/" or bare "~" against $HOME.
 func expandHome(p string) string {

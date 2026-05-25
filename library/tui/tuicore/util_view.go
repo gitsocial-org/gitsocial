@@ -62,6 +62,14 @@ type DisplayItemProvider interface {
 	GetDisplayItemAt(index int) (DisplayItem, bool)
 }
 
+// SourceCursorUpdater is an optional interface for source-list views that can
+// update their cursor when the detail view navigates left/right. The host
+// calls this so esc-back lands on the currently-displayed item, not the one
+// that was originally opened.
+type SourceCursorUpdater interface {
+	SetSourceCursor(index int)
+}
+
 // ViewHost is the interface for registering views with a host.
 // Extensions use this to register their views during initialization.
 type ViewHost interface {

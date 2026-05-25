@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -79,5 +81,61 @@ func TestExitConstants(t *testing.T) {
 	}
 	if ExitInvalidArgs != 2 {
 		t.Errorf("ExitInvalidArgs = %d, want 2", ExitInvalidArgs)
+	}
+}
+
+// TestStripCommentLines locks the §3.8 editor convention: `#`-prefixed lines
+// in the editor's saved content are dropped before the body is sent to memo.
+func TestStripCommentLines(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"no comments", "hello\nworld", "hello\nworld"},
+		{"strip leading comments", "# top\nreal\nbody", "real\nbody"},
+		{"strip interleaved comments", "real\n# midway\nmore", "real\nmore"},
+		{"strip indented comments", "real\n  # indented\nmore", "real\nmore"},
+		{"only comments → empty", "# a\n# b\n", ""},
+		{"trim trailing newline", "real body\n\n\n", "real body"},
+		{"hash inside text preserved", "this # is not a comment\nokay", "this # is not a comment\nokay"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := stripCommentLines(c.in); got != c.want {
+				t.Errorf("stripCommentLines(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestOpenInEditor exercises the editor end-to-end via a mock editor that
+// rewrites the temp file's contents — verifies the saved content comes back
+// and comment-stripping fires on the round trip.
+func TestOpenInEditor(t *testing.T) {
+	dir := t.TempDir()
+	mockEditor := filepath.Join(dir, "mock-editor.sh")
+	mockBody := "# this line is a comment\nactual body content\n"
+	script := "#!/bin/sh\ncat <<'EOF' > \"$1\"\n" + mockBody + "EOF\n"
+	if err := os.WriteFile(mockEditor, []byte(script), 0o755); err != nil {
+		t.Fatalf("write mock editor: %v", err)
+	}
+
+	origEditor := os.Getenv("GITSOCIAL_EDITOR")
+	os.Setenv("GITSOCIAL_EDITOR", mockEditor)
+	t.Cleanup(func() {
+		if origEditor == "" {
+			os.Unsetenv("GITSOCIAL_EDITOR")
+		} else {
+			os.Setenv("GITSOCIAL_EDITOR", origEditor)
+		}
+	})
+
+	got, err := OpenInEditor("# template\n", ".md")
+	if err != nil {
+		t.Fatalf("OpenInEditor: %v", err)
+	}
+	if got != "actual body content" {
+		t.Errorf("got %q, want \"actual body content\" (comment stripped)", got)
 	}
 }

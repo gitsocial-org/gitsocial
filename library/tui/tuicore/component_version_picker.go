@@ -212,10 +212,12 @@ func (p *VersionPicker) handleListKey(key string) (bool, tea.Cmd) {
 func (p *VersionPicker) handleDetailKey(key string) (bool, tea.Cmd) {
 	switch key {
 	case "esc":
+		// Return ConsumedCmd so the app's global esc handler doesn't fire
+		// NavBack on top of the detail-mode exit.
 		p.detailMode = false
 		p.viewport.SetContent(p.renderList())
 		p.viewport.GotoTop()
-		return true, nil
+		return true, ConsumedCmd
 	case "left":
 		if p.cursor > 0 {
 			p.cursor--
