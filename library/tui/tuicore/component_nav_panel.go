@@ -39,10 +39,11 @@ type NavPanel struct {
 	cachedDomain     string
 	cachedRegVersion int
 	// View cache
-	cachedView     string
-	viewDirty      bool
-	cachedFocused  bool
-	cachedActiveID string
+	cachedView           string
+	viewDirty            bool
+	cachedFocused        bool
+	cachedActiveID       string
+	cachedViewRegVersion int
 }
 
 // NewNavPanel creates a new navigation panel.
@@ -303,6 +304,18 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocReleaseList
 	case "review", "review.prs":
 		return LocReviewPRs
+	case "memo":
+		return LocMemoProject
+	case "memo.list":
+		return LocMemoList
+	case "memo.project":
+		return LocMemoProject
+	case "memo.inherited":
+		return LocMemoInherited
+	case "memo.personal":
+		return LocMemoPersonal
+	case "memo.session":
+		return LocMemoSession
 	default:
 		if strings.HasPrefix(p.cursorID, "social.lists.") {
 			listID := strings.TrimPrefix(p.cursorID, "social.lists.")
@@ -396,7 +409,7 @@ func (p *NavPanel) View() string {
 	if !p.focused {
 		activeID = p.router.NavItemID()
 	}
-	if !p.viewDirty && p.cachedView != "" && p.cachedFocused == p.focused && p.cachedActiveID == activeID {
+	if !p.viewDirty && p.cachedView != "" && p.cachedFocused == p.focused && p.cachedActiveID == activeID && p.cachedViewRegVersion == p.registry.Version() {
 		return p.cachedView
 	}
 
@@ -674,6 +687,7 @@ func (p *NavPanel) View() string {
 	p.cachedView = strings.Join(lines, "\n")
 	p.cachedFocused = p.focused
 	p.cachedActiveID = activeID
+	p.cachedViewRegVersion = p.registry.Version()
 	p.viewDirty = false
 	return p.cachedView
 }

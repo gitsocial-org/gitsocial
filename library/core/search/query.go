@@ -54,6 +54,8 @@ func extFilterFromType(typ string) *ExtFilter {
 		return &ExtFilter{Table: "release_items"}
 	case "feedback", "review":
 		return &ExtFilter{Table: "review_items", Type: "feedback"}
+	case "memo":
+		return &ExtFilter{Table: "memo_items", Type: "memo"}
 	}
 	return nil
 }
@@ -71,6 +73,7 @@ var allExtensionTables = []extensionTable{
 	{alias: "pi", table: "pm_items", typeCol: "type", extName: "pm"},
 	{alias: "ri", table: "review_items", typeCol: "type", extName: "review"},
 	{alias: "rli", table: "release_items", typeCol: "tag", extName: "release"},
+	{alias: "mi", table: "memo_items", typeCol: "type", extName: "memo"},
 }
 
 // tableExists checks if a table exists in the database.
@@ -174,7 +177,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 
 	query := `SELECT r.repo_url, r.hash, r.branch,
 	       r.effective_author_name, r.effective_author_email, r.effective_message, r.effective_timestamp,
-	       r.is_virtual, r.stale_since,
+	       r.is_virtual, r.stale_since, r.has_edits,
 	       ` + socialTypeExpr + ` as social_type,
 	       ` + extCaseExpr + ` as extension,
 	       ` + itemTypeExpr + ` as item_type,

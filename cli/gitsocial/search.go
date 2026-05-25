@@ -2,12 +2,17 @@
 package main
 
 import (
+	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/search"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 )
 
 // newSearchCmd creates the command for searching posts with filters.
@@ -34,6 +39,7 @@ func newSearchCmd() *cobra.Command {
 	var groupByField string
 	var top int
 	var countOnly bool
+	var tier string
 
 	cmd := &cobra.Command{
 		Use:   "search [query]",
@@ -124,6 +130,25 @@ Examples:
 			if len(args) > 0 {
 				query = args[0]
 			}
+
+			// Tier scoping is memo-specific; resolve to a `repos:<csv>` scope
+			// so core/search stays generic. Only meaningful for --type memo.
+			if tier != "" {
+				if !strings.EqualFold(typeFilter, "memo") {
+					PrintError(cmd, "--tier is only valid with --type memo")
+					os.Exit(ExitInvalidArgs)
+				}
+				if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
+					slog.Debug("memo sync", "error", err)
+				}
+				urls := tierRepoURLs(memo.Tier(tier), cfg.WorkDir)
+				if len(urls) == 0 {
+					PrintError(cmd, "no repos for tier "+tier)
+					os.Exit(ExitError)
+				}
+				scope = "repos:" + strings.Join(urls, ",")
+			}
+
 			result, err := search.Search(cfg.WorkDir, search.Params{
 				Query:      query,
 				Author:     author,
@@ -165,7 +190,7 @@ Examples:
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of results")
 	cmd.Flags().StringVarP(&author, "author", "a", "", "Filter by author email")
 	cmd.Flags().StringVarP(&repo, "repo", "r", "", "Filter by repository URL")
-	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by type (post|comment|repost|quote|pr|issue|milestone|sprint|release)")
+	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by type (post|comment|repost|quote|pr|issue|milestone|sprint|release|memo)")
 	cmd.Flags().StringVar(&hash, "hash", "", "Filter by commit hash prefix")
 	cmd.Flags().StringVar(&after, "after", "", "Posts after date (YYYY-MM-DD)")
 	cmd.Flags().StringVar(&before, "before", "", "Posts before date (YYYY-MM-DD)")
@@ -184,6 +209,47 @@ Examples:
 	cmd.Flags().StringVar(&groupByField, "group-by", "", "Group results by field (state, author, type, extension, repo, label, assignee, reviewer, milestone, base)")
 	cmd.Flags().IntVar(&top, "top", 0, "Max items per group (default: unlimited)")
 	cmd.Flags().BoolVar(&countOnly, "count-only", false, "Show only group counts, no items")
+	cmd.Flags().StringVar(&tier, "tier", "", "Memo tier scope: session | personal | project | inherited | external (requires --type memo)")
 
 	return cmd
+}
+
+// tierRepoURLs resolves a memo tier to the list of repo URLs that hold that
+// tier's memos, used to express `--tier` via the core search `repos:` scope.
+func tierRepoURLs(t memo.Tier, workdir string) []string {
+	personalURL := ""
+	if path, err := settings.PersonalRepoPath(); err == nil {
+		personalURL = memo.LocalRepoURL(path)
+	}
+	switch t {
+	case memo.TierProject:
+		if u := memoWorkspaceURL(workdir); u != "" {
+			return []string{u}
+		}
+	case memo.TierPersonal:
+		if personalURL != "" {
+			return []string{personalURL}
+		}
+	case memo.TierSession:
+		ws := memoWorkspaceURL(workdir)
+		all := memo.AllTierRepoURLs(ws)
+		inherited := memo.ListInherits(workdir)
+		var out []string
+		for _, u := range all {
+			if memo.TierForRepoURL(u, ws, inherited) == memo.TierSession {
+				out = append(out, u)
+			}
+		}
+		return out
+	case memo.TierInherited:
+		return memo.ListInherits(workdir)
+	case memo.TierExternal:
+		// External tier not enumerable from search; the caller should rely on
+		// the default merged view minus the local tier URLs.
+	}
+	return nil
+}
+
+func memoWorkspaceURL(workdir string) string {
+	return gitmsg.ResolveRepoURL(workdir)
 }

@@ -95,7 +95,7 @@ func TestComponentKeys_nonEmpty(t *testing.T) {
 }
 
 func TestDomainOrder(t *testing.T) {
-	expected := []string{"social", "pm", "review", "release", "core"}
+	expected := []string{"social", "pm", "review", "release", "memo", "core"}
 	if len(domainOrder) != len(expected) {
 		t.Fatalf("domainOrder len = %d, want %d", len(domainOrder), len(expected))
 	}

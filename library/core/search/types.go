@@ -80,6 +80,7 @@ type Item struct {
 	Extension   string    `json:"extension"`
 	IsVirtual   bool      `json:"is_virtual,omitempty"`
 	IsStale     bool      `json:"is_stale,omitempty"`
+	IsEdited    bool      `json:"is_edited,omitempty"`
 
 	// Extension-specific fields (populated from LEFT JOIN)
 	State      string `json:"state,omitempty"`

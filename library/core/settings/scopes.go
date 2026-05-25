@@ -72,6 +72,8 @@ var Registry = []KeySpec{
 		Desc: "Show the Release extension in nav."},
 	{Key: "extensions.review", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
 		Desc: "Show the Review extension in nav."},
+	{Key: "extensions.memo", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
+		Desc: "Show the Memo extension in nav."},
 
 	{Key: "fetch.parallel", Scope: ScopePersonalConfig, Type: KeyInt, Default: "4",
 		Desc: "Concurrent fetch workers."},
@@ -86,6 +88,10 @@ var Registry = []KeySpec{
 		Desc: "Capture a profile for the current run."},
 	{Key: "GITSOCIAL_PERSONAL_REPO", Scope: ScopeEnv, Type: KeyString,
 		Desc: "Override the personal bare repo path (default: ~/.config/gitsocial/personal)."},
+	{Key: "MEMO_SESSION_ID", Scope: ScopeEnv, Type: KeyString,
+		Desc: "Pin the active memo session id (default: auto-generated per process)."},
+	{Key: "MEMO_SESSION_DIR", Scope: ScopeEnv, Type: KeyString,
+		Desc: "Override the memo session-repos parent directory (default: ~/.cache/gitsocial/memo/session)."},
 }
 
 // Lookup returns the KeySpec for a key, or (zero, false) if unregistered.

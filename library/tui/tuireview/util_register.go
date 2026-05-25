@@ -306,9 +306,11 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:     icon,
-			Title:    pr.Subject,
-			Subtitle: subtitleParts,
+			Icon:        icon,
+			Title:       pr.Subject,
+			Subtitle:    subtitleParts,
+			IsEdited:    pr.IsEdited,
+			IsRetracted: pr.IsRetracted,
 		},
 		Content:      tuicore.CardContent{Text: pr.Body},
 		ContentLinks: tuicore.ExtractContentLinks(pr.Body, pr.Repository, ""),

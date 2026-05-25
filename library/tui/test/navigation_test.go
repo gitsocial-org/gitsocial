@@ -18,6 +18,7 @@ func TestNavigation(t *testing.T) {
 			{"P", "/pm/board"},
 			{"R", "/review/prs"},
 			{"V", "/release/list"},
+			{"M", "/memo/project"},
 		}
 		for _, tt := range tests {
 			t.Run("key_"+tt.key, func(t *testing.T) {

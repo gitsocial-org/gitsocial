@@ -5,6 +5,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuimemo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuipm"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
@@ -68,6 +69,7 @@ func CollectAll() []DomainDoc {
 	tuipm.Register(host)
 	tuirelease.Register(host)
 	tuireview.Register(host)
+	tuimemo.Register(host)
 	// Register global keys last (same order as app.go)
 	tuicore.RegisterGlobalKeys(registry)
 	// Collect per-context bindings from ViewMeta registration order

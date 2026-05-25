@@ -130,6 +130,7 @@ library/extensions/* → library/core/* → stdlib only
 | `extensions/pm` | Project management | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
 | `extensions/release` | Release management | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
 | `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
+| `extensions/memo` | Tiered memos (knowledge as commits) | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
 | `import` | Platform import pipeline | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github` | GitHub adapter | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
 
@@ -148,6 +149,7 @@ library/extensions/* → library/core/* → stdlib only
 | `pm.Issue`, `Milestone`, `Sprint`, `PMNotification` | `library/extensions/pm/` |
 | `release.Release`, `ReleaseItem`, `ReleaseNotification` | `library/extensions/release/` |
 | `review.PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `library/extensions/review/` |
+| `memo.Memo`, `MemoItem`, `Tier`, `SessionInfo` | `library/extensions/memo/` |
 | `importpkg.SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `library/import/` |
 
 ### Terminology
@@ -391,10 +393,21 @@ gitsocial
 │   ├── sbom            # Show SBOM details for a release
 │   └── artifacts, versions, checksums
 │
-└── review              # Code review extension
-    ├── status/init/config
-    ├── pr              # Create, list, show, merge, close, retract PRs
-    └── feedback        # Approve, request-changes, inline comments
+├── review              # Code review extension
+│   ├── status/init/config
+│   ├── pr              # Create, list, show, merge, close, retract PRs
+│   └── feedback        # Approve, request-changes, inline comments
+│
+└── memo                # Memo extension (tiered knowledge)
+    ├── status/config
+    ├── project init   # Initialize project tier
+    ├── personal       # init / push / fetch (shared bare repo at ~/.config/gitsocial/personal)
+    ├── session        # init [<id>] / list / push / fetch / gc (bare repo per session)
+    ├── inherit        # add / list / remove binding memo sources (refs/gitmsg/memo/inherits)
+    ├── create         # Create a memo (defaults to session tier)
+    ├── edit/retract   # Edit or retract a memo via the core edit chain
+    ├── promote        # Copy a memo to a higher tier (no edit chain, source untouched)
+    └── list/show      # List or show memos with tier/label/expiry/inherit filters
 ```
 
 **Planned extensions**: cicd, ops, security, dm, portfolio
@@ -450,6 +463,10 @@ library/tui/
 │   ├── view_*.go             # Views (PR list, PR detail, files changed diff, interdiff, PR history)
 │   ├── form_*.go             # Modal forms (PR create/edit, feedback with inline support)
 │   └── util_*.go             # Utilities (register, card renderer, syntax highlighting)
+│
+├── tuimemo/                  # Memo extension views
+│   ├── view_*.go             # Views (memo list grouped by tier, memo detail)
+│   └── util_*.go             # Utilities (register)
 │
 └── test/                     # Headless TUI integration tests
     ├── harness.go            # Headless model driver (sends keys, drains commands)

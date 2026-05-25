@@ -2,7 +2,7 @@
 
 ## Shared Navigation
 
-### CardList (used by: Timeline, Notifications, Repository, My Repository, List Posts, Issues, Milestones, Sprints, Releases, Pull Requests)
+### CardList (used by: Timeline, Notifications, Repository, My Repository, List Posts, Memos, Issues, Milestones, Sprints, Releases, Pull Requests)
 
 | Key | Action |
 |-----|--------|
@@ -16,7 +16,7 @@
 | `;` | Next link |
 | `,` | Previous link |
 
-### SectionList (used by: Issue Detail, Milestone Detail, Sprint Detail, Release Detail, SBOM, PR Detail)
+### SectionList (used by: Memo Detail, Issue Detail, Milestone Detail, Sprint Detail, Release Detail, SBOM, PR Detail)
 
 | Key | Action |
 |-----|--------|
@@ -31,7 +31,7 @@
 | `,` | Previous link |
 | `/` | Start inline search |
 
-### VersionPicker (used by: History, Issue History, Milestone History, Sprint History, Release History, PR History)
+### VersionPicker (used by: History, Memo History, Issue History, Milestone History, Sprint History, Release History, PR History)
 
 | Key | Action |
 |-----|--------|
@@ -74,6 +74,7 @@
 | `P` | PM | Board | Active |
 | `R` | Review | Pull Requests | Active |
 | `V` | Release | Releases | Active |
+| `M` | Memo | Memos | Active |
 | `C` | CI/CD | Actions | Planned |
 | `I` | Infrastructure | Infrastructure | Planned |
 | `O` | Operations | Operations | Planned |
@@ -128,7 +129,6 @@
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
 | `m` | Read |
-| `M` | Read all |
 | `u` | Unread |
 | `U` | Unread all |
 | `r` | Refresh |
@@ -534,7 +534,6 @@
 | `d` | Diff |
 | `r` | Review |
 | `c` | Comment |
-| `M` | Merge |
 | `C` | Close |
 | `D` | Draft |
 | `e` | Edit |
@@ -671,6 +670,89 @@
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+---
+
+## Memo Extension
+
+### Memos
+
+| Key | Action |
+|-----|--------|
+| CardList navigation | (see Shared Navigation) |
+| `r` | Refresh |
+| `m` | Manage |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Sessions
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open |
+| `n` | New |
+| `d` | Gc |
+| `j` | Down |
+| `k` | Up |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Inherited Sources
+
+| Key | Action |
+|-----|--------|
+| `n` | Add |
+| `d` | Remove |
+| `j` | Down |
+| `k` | Up |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Memo Detail
+
+| Key | Action |
+|-----|--------|
+| SectionList navigation | (see Shared Navigation) |
+| `c` | Comment |
+| `e` | Edit |
+| `X` | Retract |
+| `h` | History |
+| `v` | Raw |
+| `/` | Search |
+| `left` | Prev |
+| `right` | Next |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Memo History
+
+| Key | Action |
+|-----|--------|
+| VersionPicker navigation | (see Shared Navigation) |
+| `d` | Version diff |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Memo Diff
+
+| Key | Action |
+|-----|--------|
+| `[/]` | Shift pair |
+| `,/.` | From anchor |
+| `</>` | To anchor |
+| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |

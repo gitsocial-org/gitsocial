@@ -11,7 +11,7 @@
 │  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
 │  ⑂  Review  ············  R  ││                                                                                      │
 │  ⏏  Release  ···········  V  ││  Log  · synced                                                                       │
-│                              ││    log.level             info  (debug · info · warn · error)                         │
+│  ☞  Memos  ·············  M  ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
 │                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
@@ -21,7 +21,7 @@
 │                              ││    extensions.pm         true  (true · false)                                        │
 │                              ││    extensions.review     true  (true · false)                                        │
 │                              ││    extensions.release    true  (true · false)                                        │
-│                              ││                                                                                      │
+│                              ││    extensions.memo       true  (true · false)                                        │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │

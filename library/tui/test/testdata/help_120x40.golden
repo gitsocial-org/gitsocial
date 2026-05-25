@@ -11,7 +11,7 @@
 │  ▢  PM  ················  P  ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
 │  ⑂  Review  ············  R  ││  with  git clone --mirror  — no API scraping, no data loss.                          │
 │  ⏏  Release  ···········  V  ││                                                                                      │
-│                              ││  ## Workflow                                                                         │
+│  ☞  Memos  ·············  M  ││  ## Workflow                                                                         │
 │                              ││                                                                                      │
 │                              ││  • Fetch — Pull updates from repositories you follow                                 │
 │                              ││  • Push — Publish your local changes to your remote                                  │

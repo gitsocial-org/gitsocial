@@ -212,6 +212,7 @@ var ExtensionKeys = []GlobalKey{
 	{Key: "P", Domain: DomainPM, Target: PMBoard, Label: "boards"},
 	{Key: "R", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
 	{Key: "V", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
+	{Key: "M", Domain: DomainMemo, Target: MemoList, Label: "memos"},
 	{Key: "C", Domain: DomainCICD, Target: Global, Label: "actions"},         // placeholder
 	{Key: "I", Domain: DomainInfra, Target: Global, Label: "infrastructure"}, // placeholder
 	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},       // placeholder
@@ -263,7 +264,7 @@ func RegisterGlobalKeys(r *Registry) {
 		})
 	}
 
-	// Register extension keys (S, P, R, V, C, I, O, Y, |, F - uppercase, highlighted in sidebar)
+	// Register extension keys (S, P, R, V, M, C, I, O, Y, |, F - uppercase, highlighted in sidebar)
 	for _, ek := range ExtensionKeys {
 		ek := ek // capture for closure
 		// Skip placeholders (Target == Global means not implemented)

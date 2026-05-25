@@ -1104,6 +1104,8 @@ func (v *PostView) Title() string {
 		}
 	case "release":
 		icon = "⏏"
+	case "memo":
+		icon = "☞"
 	}
 	if v.post.Display.IsUnpushed {
 		icon += "  ⇡"

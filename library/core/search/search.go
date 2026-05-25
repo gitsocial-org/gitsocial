@@ -291,7 +291,7 @@ func queryItems(q searchQuery) ([]Item, error) {
 func scanItem(rows *sql.Rows) (Item, error) {
 	var item Item
 	var ts, staleSince, message sql.NullString
-	var isVirtual int
+	var isVirtual, hasEdits int
 	var socialType, extension, itemType string
 	var state, labels, assignees, due sql.NullString
 	var base, head, reviewers sql.NullString
@@ -301,7 +301,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &ts,
-		&isVirtual, &staleSince,
+		&isVirtual, &staleSince, &hasEdits,
 		&socialType, &extension, &itemType,
 		&state, &labels, &assignees, &due,
 		&draft, &base, &head, &reviewers,
@@ -320,6 +320,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 
 	item.IsVirtual = isVirtual == 1
 	item.IsStale = staleSince.Valid
+	item.IsEdited = hasEdits == 1
 	item.Extension = extension
 
 	// Determine the item type: prefer social type for social items, otherwise use extension type

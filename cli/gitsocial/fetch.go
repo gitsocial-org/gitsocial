@@ -16,6 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
@@ -55,6 +56,7 @@ For extension-specific options, use the extension's fetch command directly:
 				repoURL := args[0]
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 				extraProcessors := append(pm.Processors(), review.Processors()...)
+				extraProcessors = append(extraProcessors, memo.Processors()...)
 				extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 				countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
 				if err != nil {
@@ -180,15 +182,20 @@ func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.
 	}
 	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput)
 	extraProcessors := append(pm.Processors(), review.Processors()...)
+	extraProcessors = append(extraProcessors, memo.Processors()...)
 	extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 	opts.ExtraProcessors = extraProcessors
 	opts.ExtraHooks = review.PostFetchHooks()
 	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 	forkProcessors := append(review.Processors(), pm.Processors()...)
+	forkProcessors = append(forkProcessors, memo.Processors()...)
 	forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 	forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
 	if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
 		slog.Debug("workspace sync", "error", err)
+	}
+	if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
+		slog.Debug("memo tier sync", "error", err)
 	}
 	return result, forkStats
 }

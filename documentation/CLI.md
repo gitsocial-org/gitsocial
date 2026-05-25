@@ -29,7 +29,7 @@ gitsocial [--json] <command> [subcommand] [args...] [flags]
 - `--cache-dir` - Cache directory (default: `~/.cache/gitsocial`)
 - `--help` - Show help
 
-**Extensions:** `social`, `pm`, `release`, `review`
+**Extensions:** `social`, `pm`, `release`, `review`, `memo`
 
 ---
 
@@ -43,6 +43,7 @@ Each extension owns its own command surface. Use `--help` for authoritative flag
 | PM | [PM.md](PM.md) | `pm init`, `status`, `config`, `issue`, `milestone`, `sprint`, `board` |
 | Review | [REVIEW.md](REVIEW.md) | `review init`, `status`, `config`, `pr`, `feedback`, `fork` |
 | Release | [RELEASE.md](RELEASE.md) | `release init`, `status`, `config`, `create`, `edit`, `retract`, `list`, `show`, `artifacts`, `sbom` |
+| Memo | [MEMO.md](MEMO.md) | `memo status`, `config`, `project`, `personal`, `session`, `inherit`, `create`, `edit`, `retract`, `promote`, `list`, `show` |
 
 ---
 

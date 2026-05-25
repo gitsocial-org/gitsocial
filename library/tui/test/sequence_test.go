@@ -20,6 +20,7 @@ func TestSequence(t *testing.T) {
 			{"P", "/pm/board"},
 			{"R", "/review/prs"},
 			{"V", "/release/list"},
+			{"M", "/memo/project"},
 			{"S", "/social/timeline"},
 		}
 		for _, step := range steps {

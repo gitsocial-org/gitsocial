@@ -112,6 +112,11 @@ func (v *SettingsView) HandleLoaded(msg SettingsViewLoadedMsg) {
 	v.data = msg.Settings
 	v.keys = msg.Keys
 	v.err = ""
+	// Notify after data is updated so callbacks see the freshly-loaded values.
+	// The notify calls in editOrCycleSetting/saveCurrentSetting fire before the
+	// async reload completes and would otherwise pass stale data.
+	v.notifyDisplayChange()
+	v.notifyExtensionChange()
 }
 
 // Update handles messages and returns commands.
@@ -308,6 +313,7 @@ func (v *SettingsView) notifyExtensionChange() {
 		v.onExtensionChange("pm", v.data.Extensions.PM)
 		v.onExtensionChange("review", v.data.Extensions.Review)
 		v.onExtensionChange("release", v.data.Extensions.Release)
+		v.onExtensionChange("memo", v.data.Extensions.Memo)
 	}
 }
 
@@ -348,7 +354,7 @@ func (v *SettingsView) Render(state *State) string {
 		{"Output", []string{"output.color"}},
 		{"Log", []string{"log.level"}},
 		{"Display", []string{"display.show_email"}},
-		{"Extensions", []string{"extensions.social", "extensions.pm", "extensions.review", "extensions.release"}},
+		{"Extensions", []string{"extensions.social", "extensions.pm", "extensions.review", "extensions.release", "extensions.memo"}},
 	}
 
 	rs := DefaultRowStyles()

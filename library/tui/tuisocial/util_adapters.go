@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/search"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
@@ -207,6 +209,9 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 	if post.HeaderExt == "release" {
 		card.Header.Icon = "⏏"
 	}
+	if post.HeaderExt == "memo" {
+		card.Header.Icon = "☞"
+	}
 
 	// Custom badge from Display (e.g., email for follow notifications)
 	if post.Display.Badge != "" && card.Header.Badge == "" {
@@ -325,9 +330,11 @@ func MakeSearchFunc(userEmail string, showEmailFn func() bool) tuicore.SearchFun
 			return tuicore.SearchResult{}, err
 		}
 		showEmail := showEmailFn()
+		workspaceURL := gitmsg.ResolveRepoURL(workdir)
+		memoInherits := memo.ListInherits(workdir)
 		items := make([]tuicore.DisplayItem, len(result.Results))
 		for i, si := range result.Results {
-			items[i] = searchItemToDisplayItem(si.Item, userEmail, showEmail)
+			items[i] = searchItemToDisplayItem(si.Item, userEmail, showEmail, workspaceURL, memoInherits)
 		}
 		return tuicore.SearchResult{
 			Items:         items,
@@ -339,7 +346,8 @@ func MakeSearchFunc(userEmail string, showEmailFn func() bool) tuicore.SearchFun
 }
 
 // searchItemToDisplayItem converts a search.Item to the appropriate extension-specific DisplayItem.
-func searchItemToDisplayItem(item search.Item, userEmail string, showEmail bool) tuicore.DisplayItem {
+// workspaceURL and memoInherits are used only by the memo case for tier resolution.
+func searchItemToDisplayItem(item search.Item, userEmail string, showEmail bool, workspaceURL string, memoInherits []string) tuicore.DisplayItem {
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 	subject, body := protocol.SplitSubjectBody(item.Content)
 
@@ -352,6 +360,8 @@ func searchItemToDisplayItem(item search.Item, userEmail string, showEmail bool)
 		}
 	case "release":
 		return searchItemToReleaseDisplayItem(item, id, subject, body)
+	case "memo":
+		return searchItemToMemoDisplayItem(item, id, subject, body, workspaceURL, memoInherits)
 	}
 
 	// Default: social post
@@ -377,9 +387,10 @@ func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuico
 		Subject:    subject,
 		Body:       body,
 		State:      pm.State(item.State),
-		Assignees:  splitNonEmpty(item.Assignees, ","),
+		Assignees:  splitNonEmpty(item.Assignees),
 		Labels:     parseSearchLabels(item.Labels),
 		Comments:   item.Comments,
+		IsEdited:   item.IsEdited,
 	}
 	if item.Due != "" {
 		if t, err := time.Parse(time.RFC3339, item.Due); err == nil {
@@ -405,9 +416,10 @@ func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) t
 		IsDraft:    item.Draft,
 		Base:       item.Base,
 		Head:       item.Head,
-		Reviewers:  splitNonEmpty(item.Reviewers, ","),
-		Labels:     splitNonEmpty(item.Labels, ","),
+		Reviewers:  splitNonEmpty(item.Reviewers),
+		Labels:     splitNonEmpty(item.Labels),
 		Comments:   item.Comments,
+		IsEdited:   item.IsEdited,
 	}
 	return tuicore.NewItem(id, "review", item.Type, item.Timestamp, pr)
 }
@@ -426,8 +438,31 @@ func searchItemToReleaseDisplayItem(item search.Item, id, subject, body string) 
 		Version:    item.Version,
 		Prerelease: item.Prerelease,
 		Comments:   item.Comments,
+		IsEdited:   item.IsEdited,
 	}
 	return tuicore.NewItem(id, "release", "release", item.Timestamp, rel)
+}
+
+// searchItemToMemoDisplayItem creates a memo DisplayItem from a search result so
+// memo cards in cross-extension search use the registered memo card renderer
+// (and therefore the ☞ icon, tier badge, etc.). workspaceURL and memoInherits
+// are required for accurate tier classification.
+func searchItemToMemoDisplayItem(item search.Item, id, subject, body, workspaceURL string, memoInherits []string) tuicore.DisplayItem {
+	m := memo.Memo{
+		ID:         id,
+		Repository: item.RepoURL,
+		Branch:     item.Branch,
+		Tier:       memo.TierForRepoURL(item.RepoURL, workspaceURL, memoInherits),
+		Author:     memo.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:  item.Timestamp,
+		Subject:    subject,
+		Body:       body,
+		Labels:     splitNonEmpty(item.Labels),
+		IsEdited:   item.IsEdited,
+		IsVirtual:  item.IsVirtual,
+		IsStale:    item.IsStale,
+	}
+	return tuicore.NewItem(id, "memo", "memo", item.Timestamp, m)
 }
 
 // searchItemToPost converts a search.Item to a social.Post for card rendering.
@@ -448,6 +483,7 @@ func searchItemToPost(item search.Item) social.Post {
 		Type:         postType,
 		IsVirtual:    item.IsVirtual,
 		IsStale:      item.IsStale,
+		IsEdited:     item.IsEdited,
 		Display: social.Display{
 			CommitHash: item.Hash,
 		},
@@ -461,12 +497,12 @@ func searchItemToPost(item search.Item) social.Post {
 	return post
 }
 
-// splitNonEmpty splits a string by sep and returns non-empty trimmed parts.
-func splitNonEmpty(s, sep string) []string {
+// splitNonEmpty splits a comma-separated string and returns non-empty trimmed parts.
+func splitNonEmpty(s string) []string {
 	if s == "" {
 		return nil
 	}
-	parts := strings.Split(s, sep)
+	parts := strings.Split(s, ",")
 	var result []string
 	for _, p := range parts {
 		p = strings.TrimSpace(p)

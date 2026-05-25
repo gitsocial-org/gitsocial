@@ -97,7 +97,7 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 	// Filter out keys that are global or hidden from per-view display
 	globalKeys := map[string]bool{
 		"q": true, "?": true,
-		"S": true, "P": true, "R": true, "V": true,
+		"S": true, "P": true, "R": true, "V": true, "M": true,
 		"@": true, "%": true,
 	}
 	for _, k := range ctx.Keys {
@@ -136,6 +136,7 @@ func domainToExtensionName(domain string) string {
 		"pm":        "PM",
 		"review":    "Review",
 		"release":   "Release",
+		"memo":      "Memo",
 		"cicd":      "CI/CD",
 		"infra":     "Infrastructure",
 		"ops":       "Operations",

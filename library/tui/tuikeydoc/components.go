@@ -45,7 +45,7 @@ var VersionPickerKeys = []KeyDoc{
 }
 
 // domainOrder defines the output order of domains.
-var domainOrder = []string{"social", "pm", "review", "release", "core"}
+var domainOrder = []string{"social", "pm", "review", "release", "memo", "core"}
 
 // domainTitles maps domain IDs to display titles.
 var domainTitles = map[string]string{
@@ -53,6 +53,7 @@ var domainTitles = map[string]string{
 	"pm":      "PM Extension",
 	"review":  "Review Extension",
 	"release": "Release Extension",
+	"memo":    "Memo Extension",
 	"core":    "Core Views",
 }
 

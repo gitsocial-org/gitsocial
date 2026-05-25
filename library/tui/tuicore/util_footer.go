@@ -27,9 +27,9 @@ var (
 	globalKeys     = map[string]bool{"tab": true, "f": true, "q": true, "?": true}
 
 	// Hidden keys - functional but not shown in footer
-	// "/" and "@" are shown in sidebar; extension keys (S, P, R, V, Y, ...) are highlighted in sidebar
+	// "/" and "@" are shown in sidebar; extension keys (S, P, R, V, M, Y, ...) are highlighted in sidebar
 	// Navigation aliases (j/k, ctrl+d/u, up/down, enter, home/end) are documented in ? help
-	hiddenKeys = map[string]bool{"esc": true, "/": true, "@": true, "%": true, "!": true, "S": true, "P": true, "R": true, "V": true, "Y": true, "A": true, "D": true, "O": true, "left": true, "right": true, "home": true, "end": true, "j": true, "k": true, "ctrl+d": true, "ctrl+u": true, "up": true, "down": true, "enter": true, "shift+tab": true}
+	hiddenKeys = map[string]bool{"esc": true, "/": true, "@": true, "%": true, "!": true, "S": true, "P": true, "R": true, "V": true, "M": true, "Y": true, "A": true, "D": true, "O": true, "left": true, "right": true, "home": true, "end": true, "j": true, "k": true, "ctrl+d": true, "ctrl+u": true, "up": true, "down": true, "enter": true, "shift+tab": true}
 )
 
 // RenderSyncingFooter renders the syncing progress footer

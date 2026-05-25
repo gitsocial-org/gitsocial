@@ -177,6 +177,17 @@ var (
 	CoreForks           = RegisterContext("core.forks")
 )
 
+// Memo extension contexts - registered via init()
+var (
+	MemoList          = RegisterContext("memo.list")
+	MemoInheritedList = RegisterContext("memo.inherited_list")
+	MemoDetail        = RegisterContext("memo.detail")
+	MemoHistory       = RegisterContext("memo.history")
+	MemoHistoryDiff   = RegisterContext("memo.history_diff")
+	MemoInherits      = RegisterContext("memo.inherits")
+	MemoSessions      = RegisterContext("memo.sessions")
+)
+
 // Domain IDs for top-level navigation domains
 const (
 	DomainSocial    = "social"
@@ -186,6 +197,7 @@ const (
 	DomainPM        = "pm"
 	DomainReview    = "review"
 	DomainRelease   = "release"
+	DomainMemo      = "memo"
 	DomainCICD      = "cicd"
 	DomainInfra     = "infra"
 	DomainOps       = "ops"

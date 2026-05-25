@@ -317,6 +317,59 @@ var LocReviewPRs = Location{Path: "/review/prs"}
 // LocForks creates a location for the forks management view.
 var LocForks = Location{Path: "/config/forks"}
 
+// LocMemoList creates a location for the merged memo list view.
+var LocMemoList = Location{Path: "/memo/list"}
+
+// LocMemoProject creates a location for the project-tier memo list view.
+var LocMemoProject = Location{Path: "/memo/project"}
+
+// LocMemoInherited creates a location for the inherited (binding) memo list view.
+var LocMemoInherited = Location{Path: "/memo/inherited"}
+
+// LocMemoPersonal creates a location for the personal-tier memo list view.
+var LocMemoPersonal = Location{Path: "/memo/personal"}
+
+// LocMemoSession creates a location for the session-picker view (list of sessions).
+var LocMemoSession = Location{Path: "/memo/session"}
+
+// LocMemoSessionItems creates a location for a specific session's memos.
+func LocMemoSessionItems(sessionID string) Location {
+	return Location{Path: "/memo/session/items", Params: map[string]string{"sessionID": sessionID}}
+}
+
+// LocMemoInherits creates a location for the inherits-management view (the
+// list of trusted memo source URLs, not their memos).
+var LocMemoInherits = Location{Path: "/memo/inherits"}
+
+// LocMemoDetail creates a location for a memo detail view.
+func LocMemoDetail(memoID string) Location {
+	return Location{Path: "/memo/detail", Params: map[string]string{"memoID": memoID}}
+}
+
+// LocMemoNew creates a location for the new memo form. An optional tier
+// ("session" | "personal" | "project") seeds the form's default tier.
+func LocMemoNew(tier string) Location {
+	params := map[string]string{}
+	if tier != "" {
+		params["tier"] = tier
+	}
+	return Location{Path: "/memo/new", Params: params}
+}
+
+// LocMemoHistory creates a location for a memo's edit-history view.
+func LocMemoHistory(memoID string) Location {
+	return Location{Path: "/memo/history", Params: map[string]string{"memoID": memoID}}
+}
+
+// LocMemoHistoryDiff creates a location for a memo-history version diff.
+func LocMemoHistoryDiff(memoID, fromID, toID string) Location {
+	return Location{Path: "/memo/history/diff", Params: map[string]string{
+		"memoID": memoID,
+		"from":   fromID,
+		"to":     toID,
+	}}
+}
+
 // LocIdentity creates a location for the identity management view.
 var LocIdentity = Location{Path: "/config/identity"}
 

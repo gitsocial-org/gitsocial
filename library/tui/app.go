@@ -24,11 +24,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuimemo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuipm"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
@@ -161,6 +163,7 @@ func NewModel(workdir, cacheDir string) Model {
 	pm.RegisterNavItems(navRegistry, workdir)
 	release.RegisterNavItems(navRegistry)
 	review.RegisterNavItems(navRegistry)
+	memo.RegisterNavItems(navRegistry)
 
 	// Initialize router with timeline as default
 	r := tuicore.NewRouter(tuicore.LocTimeline)
@@ -203,6 +206,9 @@ func NewModel(workdir, cacheDir string) Model {
 	}
 	if !userSettings.Extensions.Review {
 		navRegistry.SetHidden("review", true)
+	}
+	if !userSettings.Extensions.Memo {
+		navRegistry.SetHidden("memo", true)
 	}
 
 	// Apply display settings
@@ -254,6 +260,9 @@ func NewModel(workdir, cacheDir string) Model {
 
 	// Register Review views
 	tuireview.Register(host)
+
+	// Register Memo views
+	tuimemo.Register(host)
 
 	// Register global keys (must be last for footer ordering)
 	tuicore.RegisterGlobalKeys(registry)
@@ -777,6 +786,8 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 				m.router.Push(tuicore.LocReleaseList)
 			case tuicore.ReviewPRs:
 				m.router.Push(tuicore.LocReviewPRs)
+			case tuicore.MemoList:
+				m.router.Push(tuicore.LocMemoProject)
 			case tuicore.Analytics:
 				m.router.Push(tuicore.LocAnalytics)
 			case tuicore.Help:

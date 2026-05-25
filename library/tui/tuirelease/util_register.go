@@ -189,10 +189,12 @@ func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tu
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:     icon,
-			Title:    title,
-			Subtitle: subtitleParts,
-			Badge:    badge,
+			Icon:        icon,
+			Title:       title,
+			Subtitle:    subtitleParts,
+			Badge:       badge,
+			IsEdited:    rel.IsEdited,
+			IsRetracted: rel.IsRetracted,
 		},
 		Content:      tuicore.CardContent{Text: rel.Body},
 		ContentLinks: tuicore.ExtractContentLinks(rel.Body, rel.Repository, ""),

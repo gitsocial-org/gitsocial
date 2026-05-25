@@ -33,6 +33,7 @@ type ExtensionsSettings struct {
 	PM      bool
 	Release bool
 	Review  bool
+	Memo    bool
 }
 
 type FetchSettings struct {
@@ -74,6 +75,7 @@ func DefaultSettings() *Settings {
 			PM:      true,
 			Release: true,
 			Review:  true,
+			Memo:    true,
 		},
 		Identity: IdentitySettings{
 			DNSVerification: false,
@@ -139,6 +141,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.FormatBool(s.Extensions.Release), true
 	case "extensions.review":
 		return strconv.FormatBool(s.Extensions.Review), true
+	case "extensions.memo":
+		return strconv.FormatBool(s.Extensions.Memo), true
 	case "identity.dns_verification":
 		return strconv.FormatBool(s.Identity.DNSVerification), true
 	case "fetch.workspace_mode":
@@ -200,6 +204,11 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("extensions.review must be true or false")
 		}
 		s.Extensions.Review = value == "true"
+	case "extensions.memo":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("extensions.memo must be true or false")
+		}
+		s.Extensions.Memo = value == "true"
 	case "identity.dns_verification":
 		if value != "true" && value != "false" {
 			return fmt.Errorf("identity.dns_verification must be true or false")
@@ -226,6 +235,7 @@ func ListKeys() []string {
 		"extensions.pm",
 		"extensions.review",
 		"extensions.release",
+		"extensions.memo",
 		"identity.dns_verification",
 	}
 }
@@ -264,6 +274,7 @@ var EnumOptions = map[string][]string{
 	"extensions.pm":             {"true", "false"},
 	"extensions.release":        {"true", "false"},
 	"extensions.review":         {"true", "false"},
+	"extensions.memo":           {"true", "false"},
 	"identity.dns_verification": {"false", "true"},
 }
 

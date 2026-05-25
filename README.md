@@ -77,6 +77,7 @@ gitsocial tui            # explore in the terminal
 | [PM](documentation/PM.md) | Issues, milestones, sprints, labels, boards | [GitPM](specs/GITPM.md) |
 | [Review](documentation/REVIEW.md) | Pull requests, feedback, forks, version tracking, cross-forge scenarios | [GitReview](specs/GITREVIEW.md) |
 | [Release](documentation/RELEASE.md) | Releases, artifacts, checksums, signatures, SBOM | [GitRelease](specs/GITRELEASE.md) |
+| [Memo](documentation/MEMO.md) | Tiered memos for knowledge as commits | — |
 
 ### Clients
 
