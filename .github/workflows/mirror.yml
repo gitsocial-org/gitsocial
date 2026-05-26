@@ -12,6 +12,7 @@ jobs:
   gitlab:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,9 +23,10 @@ jobs:
   codeberg:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - run: scripts/mirror.sh codeberg "https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/gitsocial.git"
+      - run: scripts/mirror.sh codeberg "https://${{ secrets.CODEBERG_PAT }}@codeberg.org/GitSocial/GitSocial.git"
