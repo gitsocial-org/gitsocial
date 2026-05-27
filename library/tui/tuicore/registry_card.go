@@ -85,6 +85,14 @@ func init() {
 		ItemType{Extension: "core", Type: "mention"},
 		mentionIsDimmed,
 	)
+	RegisterCardRenderer(
+		ItemType{Extension: "core", Type: "edit"},
+		editNotificationToCard,
+	)
+	RegisterDimmedChecker(
+		ItemType{Extension: "core", Type: "edit"},
+		editIsDimmed,
+	)
 }
 
 // mentionNotificationToCard renders a core mention notification to a Card.
@@ -110,6 +118,40 @@ func mentionNotificationToCard(data any, _ ItemResolver) Card {
 
 // mentionIsDimmed checks if a mention notification should be dimmed.
 func mentionIsDimmed(data any) bool {
+	n, ok := data.(notifications.Notification)
+	if !ok {
+		return false
+	}
+	return n.IsRead
+}
+
+// editNotificationToCard renders a core edit notification to a Card.
+func editNotificationToCard(data any, _ ItemResolver) Card {
+	n, ok := data.(notifications.Notification)
+	if !ok {
+		return Card{Header: CardHeader{Title: "Invalid notification"}}
+	}
+	badge := "edited your item"
+	if en, ok := n.Item.(notifications.EditNotification); ok && en.IsRetracted {
+		badge = "retracted your item"
+	}
+	var subtitleParts []HeaderPart
+	subtitleParts = append(subtitleParts, HeaderPart{Text: FormatTime(n.Timestamp)})
+	if n.RepoURL != "" {
+		subtitleParts = append(subtitleParts, HeaderPart{Text: protocol.GetFullDisplayName(n.RepoURL)})
+	}
+	return Card{
+		Header: CardHeader{
+			Icon:     "*",
+			Title:    n.Actor.Name,
+			Subtitle: subtitleParts,
+			Badge:    badge,
+		},
+	}
+}
+
+// editIsDimmed checks if an edit notification should be dimmed.
+func editIsDimmed(data any) bool {
 	n, ok := data.(notifications.Notification)
 	if !ok {
 		return false

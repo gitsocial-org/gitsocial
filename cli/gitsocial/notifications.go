@@ -34,7 +34,7 @@ By default shows unread notifications only. Use --all to see all notifications.
 Use --type to filter by notification type (comma-separated).
 
 Valid types: mention, comment, repost, quote, follow, fork-pr, feedback,
-approved, changes-requested, issue-assigned, new-release`,
+approved, changes-requested, issue-assigned, new-release, edit`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -287,6 +287,16 @@ func formatNotification(n notifications.Notification) string {
 		lines = append(lines, fmt.Sprintf("  mentioned you in %s", n.ActorRepo))
 		id := n.RepoURL + "#commit:" + n.Hash
 		lines = append(lines, fmt.Sprintf("  %s", id))
+	case "edit":
+		if en, ok := n.Item.(notifications.EditNotification); ok {
+			verb := "edited your item"
+			if en.IsRetracted {
+				verb = "retracted your item"
+			}
+			lines = append(lines, fmt.Sprintf("  %s", verb))
+			canonicalID := en.CanonicalRepoURL + "#commit:" + en.CanonicalHash
+			lines = append(lines, fmt.Sprintf("  %s", canonicalID))
+		}
 	case "fork-pr":
 		if rn, ok := n.Item.(review.ReviewNotification); ok {
 			if rn.PRSubject != "" {

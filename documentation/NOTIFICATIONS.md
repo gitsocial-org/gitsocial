@@ -18,6 +18,7 @@ All types exclude self-authored actions.
 | Source | Type | Scope | Trigger |
 |--------|------|-------|---------|
 | Core | `mention` | Any | Your email is @-mentioned in a commit message |
+| Core | `edit` | Any | Someone other than you authored an edit (or retraction) of an item whose canonical was authored by you. Surfaces across all extensions — issues, PRs, posts, releases, memos. |
 | Social | `comment` | Workspace + Followed | Someone comments on your post or a thread you participated in |
 | Social | `repost` | Workspace + Followed | Someone reposts your post or a post in a thread you participated in |
 | Social | `quote` | Workspace + Followed | Someone quotes your post or a post in a thread you participated in |

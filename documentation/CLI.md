@@ -224,6 +224,23 @@ gitsocial related owner/repo         # Short form (assumes GitHub)
 gitsocial related owner/repo -l 10   # Limit results
 ```
 
+### gitsocial fork
+
+Register external repositories as forks of the current workspace. Issues and PRs filed in a registered fork surface in the workspace's PM/Review views; the workspace author can edit them (state, labels, comments) and the changes propagate to the fork's local cache on next fetch.
+
+```
+gitsocial fork add <url>             # Register a fork
+gitsocial fork remove <url>          # Unregister
+gitsocial fork list                  # Show registered forks
+```
+
+**Forks vs. lists — when to use which:**
+
+- **Use forks** when you want bidirectional collaboration on the same items: issues filed by Bob in his fork show up in your issue list; closing them locally tells Bob.
+- **Use lists** (`gitsocial social list ...`) when you want one-way follow-and-aggregate: you want to *see* upstream's activity but keep your own items separate. This is the right model for soft forks, packaging forks (e.g., maintaining a Flatpak package), and "hub" repos that aggregate many sources into a single feed.
+
+The two are independent — you can register the same repo as a fork *and* include it in a list; they serve different surfaces (PM/Review vs. timeline).
+
 ### gitsocial log
 
 Show activity log for the current repository or timeline.
