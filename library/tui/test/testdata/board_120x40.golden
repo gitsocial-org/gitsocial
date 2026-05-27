@@ -36,5 +36,5 @@
 │  ⌨  Settings                 ││                     │                    │                    │                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││   n:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh  p:push  tab:focus  │
-│.../tui-test-FIXTURE          ││   f:fetch  q:quit  ?:help                                                            │
+│.../tui-test-FIXTURE          ││   f:fetch  I:import  q:quit  ?:help                                                  │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

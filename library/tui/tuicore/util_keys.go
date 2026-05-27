@@ -76,6 +76,7 @@ type HandlerContext struct {
 	StartFetch   func() tea.Cmd
 	StartPush    func() tea.Cmd
 	StartLFSPush func() tea.Cmd
+	StartImport  func() tea.Cmd
 
 	// Panel for direct action calls
 	Panel PanelActions
@@ -212,12 +213,11 @@ var ExtensionKeys = []GlobalKey{
 	{Key: "R", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
 	{Key: "V", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
 	{Key: "M", Domain: DomainMemo, Target: MemoList, Label: "memos"},
-	{Key: "C", Domain: DomainCICD, Target: Global, Label: "actions"},         // placeholder
-	{Key: "I", Domain: DomainInfra, Target: Global, Label: "infrastructure"}, // placeholder
-	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},       // placeholder
-	{Key: "Y", Domain: DomainSecurity, Target: Global, Label: "security"},    // placeholder
-	{Key: "|", Domain: DomainDM, Target: Global, Label: "dm"},                // placeholder
-	{Key: "F", Domain: DomainPortfolio, Target: Global, Label: "overview"},   // placeholder
+	{Key: "C", Domain: DomainCICD, Target: Global, Label: "actions"},       // placeholder
+	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},     // placeholder
+	{Key: "Y", Domain: DomainSecurity, Target: Global, Label: "security"},  // placeholder
+	{Key: "|", Domain: DomainDM, Target: Global, Label: "dm"},              // placeholder
+	{Key: "F", Domain: DomainPortfolio, Target: Global, Label: "overview"}, // placeholder
 }
 
 // GetExtensionKey returns the GlobalKey for a domain, or nil if not found.
@@ -291,6 +291,21 @@ func RegisterGlobalKeys(r *Registry) {
 		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 			if ctx.StartFetch != nil {
 				return true, ctx.StartFetch()
+			}
+			return false, nil
+		},
+	})
+
+	// I:import - import issues/PRs/releases/discussions from the workspace's
+	// origin platform (GitHub, GitLab, ...). Surfaced only on the top-level
+	// extension list views where users would think "where are my issues?".
+	r.Register(Binding{
+		Key:      "I",
+		Label:    "import",
+		Contexts: []Context{Timeline, PMBoard, PMIssues, PMMilestones, PMSprints, ReviewPRs, ReleaseList, MemoList},
+		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+			if ctx.StartImport != nil {
+				return true, ctx.StartImport()
 			}
 			return false, nil
 		},

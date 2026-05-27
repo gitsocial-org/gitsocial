@@ -29,6 +29,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
+	importpkg "github.com/gitsocial-org/gitsocial/library/import"
+	ghimport "github.com/gitsocial-org/gitsocial/library/import/github"
+	glimport "github.com/gitsocial-org/gitsocial/library/import/gitlab"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuimemo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuipm"
@@ -64,11 +67,20 @@ type Model struct {
 	registry *tuicore.Registry
 
 	// Fetch/push state
-	isFetching bool
-	isPushing  bool
+	isFetching  bool
+	isPushing   bool
+	isImporting bool
 
 	// Workspace fetch mode choice dialog
 	fetchChoice tuicore.ChoiceDialog
+
+	// Import confirmation choice dialog
+	importChoice tuicore.ChoiceDialog
+
+	// bgImportCh streams ImportProgressMsg + ImportCompletedMsg from the
+	// background import goroutine. Created when an import starts, closed when
+	// it ends.
+	bgImportCh chan tea.Msg
 
 	// Nav panel hidden (fullscreen diff mode)
 	navHidden bool
@@ -597,6 +609,92 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
 		return m, nil
 
+	case importCountedMsg:
+		// Count phase finished — drop counting state, then either error,
+		// short-circuit on "nothing to import", or open the confirm dialog
+		// with concrete numbers.
+		m.isImporting = false
+		m.host.SetImporting(false)
+		m.bgImportCh = nil
+		if msg.Err != nil {
+			return m, m.host.SetMessageWithTimeout("Import: "+msg.Err.Error(), tuicore.MessageTypeError, 10*time.Second)
+		}
+		pending := pendingImportCounts(msg.Counts, msg.Mapped)
+		if pending == 0 {
+			return m, m.host.SetMessageWithTimeout("Already up to date — nothing new to import", tuicore.MessageTypeSuccess, 5*time.Second)
+		}
+		prompt := buildImportConfirmPrompt(msg.RepoURL, msg.Counts, msg.Mapped)
+		ad, url, counts, mapping := msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping
+		host := m.host
+		m.importChoice.Show(prompt, []tuicore.Choice{
+			{Key: "y", Label: "es"},
+			{Key: "n", Label: "o"},
+		}, func(key string) tea.Cmd {
+			host.State().ChoicePrompt = ""
+			if key != "y" {
+				return nil
+			}
+			return func() tea.Msg {
+				return startImportMsg{Adapter: ad, RepoURL: url, Counts: &counts, Mapping: mapping}
+			}
+		})
+		m.host.State().ChoicePrompt = m.importChoice.Render()
+		return m, nil
+
+	case startImportMsg:
+		if m.isImporting || m.isFetching {
+			return m, nil
+		}
+		return m, m.startImport(msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping)
+
+	case importTickMsg:
+		// Spinner tick — the glyph itself derives from time.Now() in
+		// RenderImportingFooter, so the tick exists only to trigger a
+		// re-render. Keep draining; once the goroutine closes the channel,
+		// drainBgImportCmd returns nil and the loop ends.
+		if !m.isImporting {
+			return m, nil
+		}
+		return m, drainBgImportCmd(m.bgImportCh)
+
+	case importProgressMsg:
+		phase, detail := formatImportProgress(msg.Event)
+		m.host.SetImportProgress(phase, detail)
+		return m, drainBgImportCmd(m.bgImportCh)
+
+	case importCompletedMsg:
+		m.isImporting = false
+		m.host.SetImporting(false)
+		m.bgImportCh = nil
+		if msg.Err != nil {
+			errMsg := fmt.Sprintf("Import failed: %s", msg.Err)
+			m.host.State().AddLogEntry(tuicore.LogSeverityError, errMsg, "import")
+			m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+			return m, m.host.SetMessageWithTimeout(errMsg, tuicore.MessageTypeError, 10*time.Second)
+		}
+		for _, e := range msg.Stats.Errors {
+			label := e.Type
+			if e.ExternalID != "" {
+				label += " " + e.ExternalID
+			}
+			m.host.State().AddLogEntry(tuicore.LogSeverityWarn, label+": "+e.Message, "import")
+		}
+		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+		// Refresh counts + views since import wrote new commits.
+		m.host.State().IdentityGeneration++
+		summary := formatImportSummary(msg.Stats)
+		msgType := tuicore.MessageTypeSuccess
+		if len(msg.Stats.Errors) > 0 {
+			summary += fmt.Sprintf(" (%d errors)", len(msg.Stats.Errors))
+			msgType = tuicore.MessageTypeWarning
+		}
+		return m, tea.Batch(
+			m.host.RefreshView(),
+			m.loadInitialUnreadCount(),
+			m.loadInitialUnpushedCount(),
+			m.host.SetMessageWithTimeout(summary, msgType, 10*time.Second),
+		)
+
 	case tuicore.ExportArtifactMsg:
 		return m, m.exportArtifact(msg)
 
@@ -664,6 +762,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.fetchChoice.IsActive() {
 		if handled, cmd := m.fetchChoice.HandleKey(key); handled {
 			if !m.fetchChoice.IsActive() {
+				m.host.State().ChoicePrompt = ""
+			}
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	// Handle import choice dialog
+	if m.importChoice.IsActive() {
+		if handled, cmd := m.importChoice.HandleKey(key); handled {
+			if !m.importChoice.IsActive() {
 				m.host.State().ChoicePrompt = ""
 			}
 			return m, cmd
@@ -798,6 +907,12 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			m.host.SetPushing(true)
 			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
 			return m.startLFSPush()
+		},
+		StartImport: func() tea.Cmd {
+			if m.isImporting || m.isFetching {
+				return nil
+			}
+			return m.beginImport()
 		},
 
 		// Direct panel access
@@ -1128,6 +1243,384 @@ func Run(workdir, cacheDir string) error {
 	)
 	_, err := p.Run()
 	return err
+}
+
+// importTickInterval drives the spinner glyph next to the import footer
+// header. 150ms is fast enough to look animated, slow enough to not waste
+// renders.
+const importTickInterval = 150 * time.Millisecond
+
+// importTickMsg fires periodically while an import is running so the footer
+// repaints its spinner glyph even when no progress events arrive (large
+// fetches only emit OnFetchProgress once they finish). Pumped by a dedicated
+// goroutine into the same channel as progress/completion messages — that way
+// the tick rides on the existing drain loop and stops automatically when the
+// channel closes.
+type importTickMsg struct{}
+
+// startImportMsg is dispatched from the import-confirm dialog's onChoice
+// callback. It carries everything Update needs to launch the import on the
+// CURRENT Model — the dialog's onChoice lambda captures a stale `m` from the
+// Update iteration that opened the dialog, so any state mutation it does
+// directly would land on a dead Model copy and never reach the runtime's
+// active model. Counts + Mapping are pre-computed during the count phase so
+// importpkg.Run can skip recounting and re-reading the mapping file.
+type startImportMsg struct {
+	Adapter importpkg.SourceAdapter
+	RepoURL string
+	Counts  *importpkg.ItemCounts
+	Mapping *importpkg.MappingFile
+}
+
+// importCountedMsg fires when the pre-import count goroutine finishes. Carries
+// what would be imported so Update can build a concrete confirm prompt and
+// pass the same counts/mapping into startImport without redoing the work.
+type importCountedMsg struct {
+	Adapter importpkg.SourceAdapter
+	RepoURL string
+	Counts  importpkg.ItemCounts
+	Mapped  importpkg.ItemCounts
+	Mapping *importpkg.MappingFile
+	Err     error
+}
+
+// importProgressMsg streams progress events from the background import goroutine.
+type importProgressMsg struct {
+	Event importpkg.ProgressEvent
+}
+
+// importCompletedMsg signals the background import goroutine has finished.
+type importCompletedMsg struct {
+	Stats   importpkg.Stats
+	RepoURL string
+	Err     error
+}
+
+// importExtensionLabels maps extension names to footer-friendly phase labels.
+var importExtensionLabels = map[string]string{
+	"pm":      "PM",
+	"release": "releases",
+	"review":  "PRs",
+	"social":  "discussions",
+}
+
+// beginImport resolves the origin remote, builds an adapter, and kicks off
+// the count phase so the user can see exactly how many items would be
+// imported before confirming. Counting runs in a goroutine and reports via
+// importCountedMsg; while it's running the same Importing footer + spinner
+// the actual import uses is shown with phase="counting".
+func (m *Model) beginImport() tea.Cmd {
+	rawURL := git.GetOriginURL(m.workdir)
+	if rawURL == "" {
+		return m.host.SetMessageWithTimeout("Import needs an origin remote — none found", tuicore.MessageTypeError, 5*time.Second)
+	}
+	if !strings.Contains(rawURL, "://") && !strings.HasPrefix(rawURL, "git@") {
+		rawURL = "https://" + rawURL
+	}
+	repoURL := protocol.NormalizeURL(rawURL)
+	repoInfo := protocol.ParseRepo(repoURL)
+	if repoInfo == nil {
+		return m.host.SetMessageWithTimeout("Import: could not parse owner/repo from "+rawURL, tuicore.MessageTypeError, 5*time.Second)
+	}
+	hostType, err := importpkg.ResolveHost(repoURL, "")
+	if err != nil {
+		return m.host.SetMessageWithTimeout("Import: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+	}
+	adapter, err := createImportAdapter(hostType, repoInfo.Owner, repoInfo.Repo)
+	if err != nil {
+		return m.host.SetMessageWithTimeout("Import: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+	}
+	m.isImporting = true
+	m.host.SetImporting(true)
+	m.host.SetImportingInfo(repoURL)
+	m.host.SetImportProgress("counting", "")
+	m.bgImportCh = make(chan tea.Msg, 64)
+	ch := m.bgImportCh
+	cacheDir := m.cacheDir
+	workdir := m.workdir
+	tickStopped := startImportTicker(ch)
+	go func() {
+		fetchOpts := importpkg.FetchOptions{
+			RepoURL: repoURL,
+			Owner:   repoInfo.Owner,
+			Repo:    repoInfo.Repo,
+		}
+		counts, countErr := adapter.CountItems(fetchOpts)
+		var mapping *importpkg.MappingFile
+		var mapped importpkg.ItemCounts
+		if countErr == nil {
+			mapping = importpkg.ReadMapping(cacheDir, repoURL, "")
+			if len(mapping.Items) == 0 {
+				importpkg.RebuildMapping(workdir, mapping)
+			}
+			mapped = importpkg.CountMapped(mapping, counts)
+		}
+		stopImportTicker(tickStopped)
+		ch <- importCountedMsg{
+			Adapter: adapter,
+			RepoURL: repoURL,
+			Counts:  counts,
+			Mapped:  mapped,
+			Mapping: mapping,
+			Err:     countErr,
+		}
+		close(ch)
+	}()
+	return drainBgImportCmd(ch)
+}
+
+// startImportTicker spawns the spinner-tick pump. Returns a (stop, stopped)
+// pair: close stop[0] to signal the ticker to exit, then receive from
+// stop[1] to wait for it to actually finish before closing the import
+// channel (so the ticker never sends on a closed channel). Encapsulated as
+// a helper because both the count phase and the import phase need it.
+func startImportTicker(ch chan tea.Msg) [2]chan struct{} {
+	tickDone := make(chan struct{})
+	tickStopped := make(chan struct{})
+	go func() {
+		defer close(tickStopped)
+		t := time.NewTicker(importTickInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-tickDone:
+				return
+			case <-t.C:
+				select {
+				case ch <- importTickMsg{}:
+				default:
+				}
+			}
+		}
+	}()
+	return [2]chan struct{}{tickDone, tickStopped}
+}
+
+// stopImportTicker signals the ticker goroutine to exit and waits for it.
+func stopImportTicker(pair [2]chan struct{}) {
+	close(pair[0])
+	<-pair[1]
+}
+
+// createImportAdapter builds a SourceAdapter for the resolved host. Mirrors
+// cli/gitsocial/import.go's createAdapter — kept local to avoid pulling the
+// CLI's main package into the TUI.
+func createImportAdapter(host protocol.HostingService, owner, repo string) (importpkg.SourceAdapter, error) {
+	switch host {
+	case protocol.HostGitHub:
+		if err := ghimport.CheckGH(); err != nil {
+			return nil, err
+		}
+		return ghimport.New(owner, repo), nil
+	case protocol.HostGitLab:
+		return glimport.New(owner, repo, glimport.AdapterOptions{}), nil
+	case protocol.HostGitea:
+		return nil, fmt.Errorf("gitea import not yet implemented")
+	case protocol.HostBitbucket:
+		return nil, fmt.Errorf("bitbucket import not yet supported")
+	default:
+		return nil, fmt.Errorf("unsupported platform")
+	}
+}
+
+// startImport spawns the background import goroutine. Progress + completion
+// stream back through m.bgImportCh; Update re-issues drainBgImportCmd after
+// each message until the channel closes. Counts + Mapping are reused from
+// the prior count phase so importpkg.Run skips redoing them.
+func (m *Model) startImport(adapter importpkg.SourceAdapter, repoURL string, counts *importpkg.ItemCounts, mapping *importpkg.MappingFile) tea.Cmd {
+	m.isImporting = true
+	m.host.SetImporting(true)
+	m.host.SetImportingInfo(repoURL)
+	m.host.SetImportProgress("starting", "")
+	m.bgImportCh = make(chan tea.Msg, 64)
+	ch := m.bgImportCh
+	workdir := m.workdir
+	cacheDir := m.cacheDir
+	repoInfo := protocol.ParseRepo(repoURL)
+	if repoInfo == nil {
+		// Should have been caught in beginImport, but guard anyway.
+		go func() {
+			ch <- importCompletedMsg{RepoURL: repoURL, Err: fmt.Errorf("could not parse owner/repo")}
+			close(ch)
+		}()
+		return drainBgImportCmd(ch)
+	}
+	ticker := startImportTicker(ch)
+	go func() {
+		fetchOpts := importpkg.FetchOptions{
+			RepoURL:  repoURL,
+			Owner:    repoInfo.Owner,
+			Repo:     repoInfo.Repo,
+			SkipBots: true,
+			State:    "all",
+		}
+		opts := importpkg.Options{
+			WorkDir:    workdir,
+			RepoURL:    repoURL,
+			CacheDir:   cacheDir,
+			Extensions: []string{"pm", "release", "review", "social"},
+			LabelMode:  "auto",
+			FetchOpts:  fetchOpts,
+			Counts:     counts,
+			Mapping:    mapping,
+			OnProgress: func(ev importpkg.ProgressEvent) {
+				select {
+				case ch <- importProgressMsg{Event: ev}:
+				default:
+					// Channel full — drop progress update. Completion message
+					// will still be delivered via the blocking send below.
+				}
+			},
+		}
+		stats, err := importpkg.Run(adapter, opts)
+		// Re-sync workspace extension branches so newly imported commits show
+		// up in the cache-backed views without waiting for a manual fetch.
+		if err == nil {
+			if syncErr := fetch.SyncWorkspace(workdir); syncErr != nil {
+				log.Debug("post-import workspace sync failed", "error", syncErr)
+			}
+		}
+		// Stop the spinner ticker and wait for it to exit before closing
+		// the channel — prevents the ticker from sending on a closed chan.
+		stopImportTicker(ticker)
+		ch <- importCompletedMsg{Stats: stats, RepoURL: repoURL, Err: err}
+		close(ch)
+	}()
+	return drainBgImportCmd(ch)
+}
+
+// drainBgImportCmd reads one message from the background import channel and
+// returns it. Re-dispatched by Update after each message until the channel
+// is closed.
+func drainBgImportCmd(ch chan tea.Msg) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
+	}
+}
+
+// pendingImportCounts returns the number of items that would actually be
+// written by an import — i.e. found minus already-imported, summed across
+// types. Negative (unknown) counts contribute zero rather than confusing the
+// total.
+func pendingImportCounts(found, mapped importpkg.ItemCounts) int {
+	diff := func(f, m int) int {
+		if f < 0 {
+			return 0
+		}
+		if m < 0 {
+			m = 0
+		}
+		if d := f - m; d > 0 {
+			return d
+		}
+		return 0
+	}
+	return diff(found.Issues, mapped.Issues) +
+		diff(found.PRs, mapped.PRs) +
+		diff(found.Releases, mapped.Releases) +
+		diff(found.Discussions, mapped.Discussions)
+}
+
+// buildImportConfirmPrompt builds the single-line confirmation prompt shown
+// in the footer, listing only the types that have pending items.
+func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts) string {
+	pending := func(f, m int) int {
+		if f < 0 {
+			return 0
+		}
+		if m < 0 {
+			m = 0
+		}
+		if d := f - m; d > 0 {
+			return d
+		}
+		return 0
+	}
+	var parts []string
+	if n := pending(found.Issues, mapped.Issues); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d issues", n))
+	}
+	if n := pending(found.PRs, mapped.PRs); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d PRs", n))
+	}
+	if n := pending(found.Releases, mapped.Releases); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d releases", n))
+	}
+	if n := pending(found.Discussions, mapped.Discussions); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d discussions", n))
+	}
+	if len(parts) == 0 {
+		return "Import from " + repoURL + "?"
+	}
+	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
+}
+
+// formatImportProgress turns a ProgressEvent into footer phase + detail.
+func formatImportProgress(ev importpkg.ProgressEvent) (phase, detail string) {
+	switch ev.Phase {
+	case importpkg.PhaseCount:
+		return "counting", ev.Detail
+	case importpkg.PhaseFetch:
+		label := importExtensionLabels[ev.Extension]
+		if label == "" {
+			label = ev.Extension
+		}
+		phase = "fetching " + label
+		if ev.ItemCount > 0 {
+			if ev.ItemTotal > 0 {
+				detail = fmt.Sprintf("%d/%d", ev.ItemCount, ev.ItemTotal)
+			} else {
+				detail = fmt.Sprintf("%d so far", ev.ItemCount)
+			}
+		}
+	case importpkg.PhaseCommit:
+		label := importExtensionLabels[ev.Extension]
+		if label == "" {
+			label = ev.Extension
+		}
+		phase = "writing " + label
+	case importpkg.PhaseDone:
+		label := importExtensionLabels[ev.Extension]
+		if label == "" {
+			label = ev.Extension
+		}
+		phase = label + " done"
+	}
+	return phase, detail
+}
+
+// formatImportSummary builds a single-line summary of what got imported.
+func formatImportSummary(s importpkg.Stats) string {
+	var parts []string
+	if s.Issues > 0 {
+		parts = append(parts, fmt.Sprintf("%d issues", s.Issues))
+	}
+	if s.Milestones > 0 {
+		parts = append(parts, fmt.Sprintf("%d milestones", s.Milestones))
+	}
+	if s.PRs > 0 {
+		parts = append(parts, fmt.Sprintf("%d PRs", s.PRs))
+	}
+	if s.Releases > 0 {
+		parts = append(parts, fmt.Sprintf("%d releases", s.Releases))
+	}
+	if s.Posts > 0 {
+		parts = append(parts, fmt.Sprintf("%d posts", s.Posts))
+	}
+	if s.Comments > 0 {
+		parts = append(parts, fmt.Sprintf("%d comments", s.Comments))
+	}
+	if len(parts) == 0 {
+		return "Nothing to import"
+	}
+	return "Imported " + strings.Join(parts, ", ")
 }
 
 // initTUILogging initializes logging for the TUI session.

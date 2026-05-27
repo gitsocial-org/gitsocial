@@ -61,6 +61,7 @@
 | `%` | Analytics | Everywhere except Analytics |
 | `!` | Errors | Everywhere except Error Log |
 | `f` | Fetch updates | Everywhere except Detail/Thread/History |
+| `I` | Import from origin (GitHub/GitLab) | Timeline, PM lists, Review PRs, Releases, Memos |
 | `/` | Search | Everywhere except Search |
 | `tab` | Toggle nav/content focus | Global |
 | `q` | Quit | Global |
@@ -76,7 +77,6 @@
 | `V` | Release | Releases | Active |
 | `M` | Memo | Memos | Active |
 | `C` | CI/CD | Actions | Planned |
-| `I` | Infrastructure | Infrastructure | Planned |
 | `O` | Operations | Operations | Planned |
 | `Y` | Security | Security | Planned |
 | `|` | DM | Dm | Planned |

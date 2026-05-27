@@ -843,6 +843,27 @@ func (h *Host) SetPushingInfo(remote string) {
 	h.state.PushRemote = remote
 }
 
+// SetImporting sets the importing state.
+func (h *Host) SetImporting(importing bool) {
+	h.state.Importing = importing
+	if !importing {
+		h.state.ImportRepoURL = ""
+		h.state.ImportPhase = ""
+		h.state.ImportDetail = ""
+	}
+}
+
+// SetImportingInfo sets the import target URL displayed in the footer.
+func (h *Host) SetImportingInfo(repoURL string) {
+	h.state.ImportRepoURL = repoURL
+}
+
+// SetImportProgress updates the current import phase + detail strings.
+func (h *Host) SetImportProgress(phase, detail string) {
+	h.state.ImportPhase = phase
+	h.state.ImportDetail = detail
+}
+
 // SetSaving sets the saving state.
 func (h *Host) SetSaving(saving bool) {
 	h.state.Saving = saving

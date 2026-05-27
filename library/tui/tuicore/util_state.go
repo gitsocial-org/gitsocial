@@ -65,6 +65,7 @@ type State struct {
 	Pushing    bool
 	Saving     bool
 	Retracting bool
+	Importing  bool
 
 	// BackgroundSyncing is true while the post-startup background goroutine
 	// is still running history continuation and/or identity backfill. Distinct
@@ -79,6 +80,12 @@ type State struct {
 
 	// Push info (for progress display)
 	PushRemote string
+
+	// Import info (for progress display). Spinner glyph derives from
+	// time.Now() in RenderImportingFooter, so no frame counter is stored here.
+	ImportRepoURL string
+	ImportPhase   string // e.g. "Counting", "PM", "Releases", "PRs", "Posts"
+	ImportDetail  string // e.g. "45/250" or "23 so far"
 
 	// Status info
 	LastFetchTime time.Time
@@ -203,6 +210,8 @@ func (w *ViewWrapper) Render(content, footer string) string {
 		footer = RenderFetchingFooter(w.state.FetchRepos, w.state.FetchLists)
 	case w.state.Pushing:
 		footer = RenderPushingFooter(w.state.PushRemote)
+	case w.state.Importing:
+		footer = RenderImportingFooter(w.state.ImportRepoURL, w.state.ImportPhase, w.state.ImportDetail)
 	case w.state.Saving:
 		footer = RenderSavingFooter()
 	case w.state.Retracting:

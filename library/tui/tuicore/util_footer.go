@@ -7,6 +7,7 @@ package tuicore
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 )
@@ -41,8 +42,10 @@ var (
 
 	// Global keys that appear dimmed in footer, in display order.
 	// "/" and "@" are shown in sidebar instead (Search [/], Notifications [@]).
-	globalKeyOrder = []string{"tab", "f", "q", "?"}
-	globalKeys     = map[string]bool{"tab": true, "f": true, "q": true, "?": true}
+	// "I" is registered only on top-level extension list contexts, so it
+	// surfaces dimmed there and is silently absent elsewhere.
+	globalKeyOrder = []string{"tab", "f", "I", "q", "?"}
+	globalKeys     = map[string]bool{"tab": true, "f": true, "I": true, "q": true, "?": true}
 
 	// Hidden keys - functional but not shown in footer.
 	// "/" and "@" are shown in sidebar; extension keys (S, P, R, V, M, Y, ...) are highlighted in sidebar.
@@ -88,6 +91,30 @@ func RenderLoadingFooter() string {
 func RenderFetchingFooter(repos, lists int) string {
 	return keyStyle.Render("Fetching...") + sepStyle.Render("  ") +
 		labelStyle.Render(fmt.Sprintf("%d repos from %d lists", repos, lists))
+}
+
+// importSpinnerFrames cycles for the animated glyph next to the import header.
+var importSpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// RenderImportingFooter renders the import progress message with an animated
+// spinner glyph. The glyph is derived from wall-clock time so it advances on
+// every render — callers still need to drive periodic re-renders (e.g. via a
+// ticker) for the animation to be visible.
+func RenderImportingFooter(repoURL, phase, detail string) string {
+	frame := int(time.Now().UnixMilli()/100) % len(importSpinnerFrames)
+	glyph := importSpinnerFrames[frame]
+	head := "Importing"
+	if repoURL != "" {
+		head = "Importing from " + repoURL
+	}
+	result := keyStyle.Render(glyph+" "+head) + sepStyle.Render("...")
+	if phase != "" {
+		result += sepStyle.Render("  ") + labelStyle.Render(phase)
+	}
+	if detail != "" {
+		result += sepStyle.Render(" ") + dimStyle.Render("("+detail+")")
+	}
+	return result
 }
 
 // RenderPushingFooter renders the pushing progress message.
