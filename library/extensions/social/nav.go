@@ -28,7 +28,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	r.Register(tuicore.NavItem{
 		ID:      "social.myrepo",
 		Label:   "My Repository",
-		Icon:    "♥",
+		Icon:    "⎇",
 		Parent:  "social",
 		Order:   1,
 		Enabled: true,
@@ -41,6 +41,26 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 		Icon:    "☷",
 		Parent:  "social",
 		Order:   2,
+		Enabled: true,
+	})
+
+	// My Followers sub-item (workspaces that follow us)
+	r.Register(tuicore.NavItem{
+		ID:      "social.followers",
+		Label:   "My Followers",
+		Icon:    "㋡",
+		Parent:  "social",
+		Order:   3,
+		Enabled: true,
+	})
+
+	// Explore sub-item (browse/discover repositories)
+	r.Register(tuicore.NavItem{
+		ID:      "social.explore",
+		Label:   "Explore",
+		Icon:    "➼",
+		Parent:  "social",
+		Order:   4,
 		Enabled: true,
 	})
 }

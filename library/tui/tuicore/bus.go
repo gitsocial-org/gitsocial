@@ -28,7 +28,6 @@ type AppContext interface {
 	LoadLists() tea.Cmd
 	LoadUnreadCount() tea.Cmd
 	LoadUnpushedCount() tea.Cmd
-	LoadUnpushedLFSCount() tea.Cmd
 	RefreshTimeline() tea.Cmd
 	RefreshCacheSize() tea.Cmd
 	FetchRepo(repoURL string) tea.Cmd

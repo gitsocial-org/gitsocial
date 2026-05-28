@@ -92,6 +92,8 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.allBoard = msg.Board
 			v.loaded = true
 			v.applyFilter()
+			v.clampRow()
+			v.adjustScroll()
 		}
 		return nil
 
@@ -100,6 +102,14 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return v.loadBoard()
 		}
 		return nil
+
+	case columnMoveResultMsg:
+		if msg.err != nil {
+			state.SetMessage("Move failed: "+msg.err.Error(), tuicore.MessageTypeError)
+			return nil
+		}
+		v.selectedCol = msg.destCol
+		return v.loadBoard()
 
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
@@ -130,6 +140,10 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 			v.clampRow()
 			v.adjustScroll()
 		}
+	case "<":
+		return v.moveIssue(v.selectedCol - 1)
+	case ">":
+		return v.moveIssue(v.selectedCol + 1)
 	case "down":
 		col := v.board.Columns[v.selectedCol]
 		if v.selectedRow < len(col.Issues)-1 {
@@ -208,6 +222,116 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 		return nil
 	}
 	return nil
+}
+
+// columnMoveResultMsg carries the outcome of a shift-arrow column move.
+type columnMoveResultMsg struct {
+	destCol int
+	err     error
+}
+
+// moveIssue translates a one-column shift of the selected issue into a state
+// or label edit, dispatched asynchronously. Returns nil silently when bounds
+// are invalid; emits a result message with err set for filter or API failures.
+func (v *BoardView) moveIssue(destCol int) tea.Cmd {
+	if destCol < 0 || destCol >= len(v.board.Columns) || destCol == v.selectedCol {
+		return nil
+	}
+	if v.selectedCol < 0 || v.selectedCol >= len(v.board.Columns) {
+		return nil
+	}
+	src := v.board.Columns[v.selectedCol]
+	if v.selectedRow < 0 || v.selectedRow >= len(src.Issues) {
+		return nil
+	}
+	issue := src.Issues[v.selectedRow]
+	dst := v.board.Columns[destCol]
+	opts, err := buildColumnMoveOpts(issue, src.Label, dst.Label)
+	if err != nil {
+		return func() tea.Msg { return columnMoveResultMsg{destCol: destCol, err: err} }
+	}
+	workdir := v.workdir
+	issueID := issue.ID
+	return func() tea.Msg {
+		res := pm.UpdateIssue(workdir, issueID, opts)
+		if !res.Success {
+			return columnMoveResultMsg{destCol: destCol, err: fmt.Errorf("%s", res.Error.Message)}
+		}
+		return columnMoveResultMsg{destCol: destCol}
+	}
+}
+
+// parseColumnFilter extracts (field, value) from a simple "field:value" filter.
+// Comma-OR or otherwise complex filters return ok=false — the move handler
+// surfaces an error for those instead of guessing an edit.
+func parseColumnFilter(filter string) (field, value string, ok bool) {
+	filter = strings.TrimSpace(filter)
+	if filter == "" || strings.Contains(filter, ",") {
+		return "", "", false
+	}
+	idx := strings.Index(filter, ":")
+	if idx < 0 {
+		return "", "", false
+	}
+	field = strings.TrimSpace(filter[:idx])
+	value = strings.TrimSpace(filter[idx+1:])
+	if field == "" || value == "" {
+		return "", "", false
+	}
+	return field, value, true
+}
+
+// buildColumnMoveOpts derives the UpdateIssueOptions needed to make `issue`
+// match destFilter and stop matching sourceFilter. State-filter columns set
+// State; label-filter columns add the label. The source's matching label is
+// removed when it was label-based, otherwise the issue stays put because
+// matchIssueToColumn prefers label matches over state matches.
+func buildColumnMoveOpts(issue pm.Issue, sourceFilter, destFilter string) (pm.UpdateIssueOptions, error) {
+	destField, destValue, ok := parseColumnFilter(destFilter)
+	if !ok {
+		return pm.UpdateIssueOptions{}, fmt.Errorf("destination column filter is not simple field:value")
+	}
+	sourceField, sourceValue, sourceOK := parseColumnFilter(sourceFilter)
+
+	var opts pm.UpdateIssueOptions
+	labelsTouched := false
+	newLabels := issue.Labels
+
+	if sourceOK && sourceField != "state" {
+		filtered := make([]pm.Label, 0, len(issue.Labels))
+		for _, l := range issue.Labels {
+			if l.Scope == sourceField && l.Value == sourceValue {
+				continue
+			}
+			filtered = append(filtered, l)
+		}
+		if len(filtered) != len(issue.Labels) {
+			newLabels = filtered
+			labelsTouched = true
+		}
+	}
+
+	if destField == "state" {
+		s := pm.State(destValue)
+		opts.State = &s
+	} else {
+		alreadyHas := false
+		for _, l := range newLabels {
+			if l.Scope == destField && l.Value == destValue {
+				alreadyHas = true
+				break
+			}
+		}
+		if !alreadyHas {
+			newLabels = append(newLabels, pm.Label{Scope: destField, Value: destValue})
+			labelsTouched = true
+		}
+	}
+
+	if labelsTouched {
+		opts.Labels = &newLabels
+	}
+	return opts, nil
 }
 
 // applyFilter rebuilds v.board from v.allBoard based on the active filters.
@@ -696,6 +820,7 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 		{Key: "down", Label: "down", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "left", Label: "prev col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "right", Label: "next col", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
+		{Key: "</>", Label: "move", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "home", Label: "first", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "end", Label: "last", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMBoard}, Handler: push},

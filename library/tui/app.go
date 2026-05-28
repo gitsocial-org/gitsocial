@@ -154,9 +154,6 @@ func (m *Model) LoadUnreadCount() tea.Cmd { return m.loadInitialUnreadCount() }
 // LoadUnpushedCount returns a command to reload unpushed count.
 func (m *Model) LoadUnpushedCount() tea.Cmd { return m.loadInitialUnpushedCount() }
 
-// LoadUnpushedLFSCount returns a command to reload unpushed LFS count.
-func (m *Model) LoadUnpushedLFSCount() tea.Cmd { return m.loadInitialUnpushedLFSCount() }
-
 // RefreshTimeline returns a command to refresh the timeline.
 func (m *Model) RefreshTimeline() tea.Cmd { return m.refreshTimeline() }
 
@@ -348,8 +345,10 @@ func (m Model) loadInitialUnpushedCount() tea.Cmd {
 	}
 }
 
-// loadInitialUnpushedLFSCount loads the unpushed LFS objects count at startup.
-func (m Model) loadInitialUnpushedLFSCount() tea.Cmd {
+// loadUnpushedLFSCount runs `git lfs push --dry-run` against origin (network)
+// and emits an UnpushedLFSCountMsg. Triggered after a successful LFS push to
+// refresh the nav badge — not at startup, because the dry-run hits the network.
+func (m Model) loadUnpushedLFSCount() tea.Cmd {
 	workdir := m.workdir
 	return func() tea.Msg {
 		count := git.GetUnpushedLFSCount(workdir)
@@ -502,7 +501,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			msgCmd = m.host.SetMessageWithTimeout(fmt.Sprintf("Pushed %d LFS objects", msg.Count), tuicore.MessageTypeSuccess, 5*time.Second)
 		}
-		return m, tea.Batch(msgCmd, m.loadInitialUnpushedLFSCount())
+		return m, tea.Batch(msgCmd, m.loadUnpushedLFSCount())
+
+	case lfsCheckCompletedMsg:
+		m.nav.SetUnpushedLFSCount(msg.count)
+		var toast string
+		if msg.count == 0 {
+			toast = "No unpushed LFS objects"
+		} else {
+			toast = fmt.Sprintf("%d LFS objects unpushed", msg.count)
+		}
+		return m, m.host.SetMessageWithTimeout(toast, tuicore.MessageTypeSuccess, 5*time.Second)
 
 	case tuicore.CacheSizeMsg:
 		m.nav.SetCacheSize(msg.Size)
@@ -544,7 +553,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.host.RefreshView(),
 			m.loadInitialStatus(),
 			m.loadInitialUnpushedCount(),
-			m.loadInitialUnpushedLFSCount(),
 			drainBgSyncCmd(m.bgSyncCh),
 		)
 
@@ -915,6 +923,9 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
 			return m.startLFSPush()
 		},
+		CheckLFS: func() tea.Cmd {
+			return m.checkLFSCount()
+		},
 		StartImport: func() tea.Cmd {
 			if m.isImporting || m.isFetching {
 				return nil
@@ -1063,6 +1074,18 @@ func (m Model) startLFSPush() tea.Cmd {
 		return tuicore.LFSPushCompletedMsg{Count: count, Err: err}
 	}
 }
+
+// checkLFSCount counts unpushed LFS objects against origin. Hits the network
+// (git lfs push --dry-run), so it's user-triggered, not run at startup.
+func (m Model) checkLFSCount() tea.Cmd {
+	workdir := m.workdir
+	return func() tea.Msg {
+		return lfsCheckCompletedMsg{count: git.GetUnpushedLFSCount(workdir)}
+	}
+}
+
+// lfsCheckCompletedMsg carries the result of a manual LFS unpushed-count check.
+type lfsCheckCompletedMsg struct{ count int }
 
 // checkWorkspaceMode checks if workspace mode is configured and either starts fetch or shows choice.
 func (m Model) checkWorkspaceMode() tea.Cmd {

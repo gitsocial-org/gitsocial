@@ -278,6 +278,10 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocMyRepo
 	case "social.lists":
 		return LocLists
+	case "social.explore":
+		return LocExplore
+	case "social.followers":
+		return LocFollowers
 	case "settings":
 		return LocSettings
 	case "config", "config.core":
@@ -288,6 +292,12 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocConfig("social")
 	case "config.pm":
 		return LocPMConfig
+	case "config.release":
+		return LocConfig("release")
+	case "config.review":
+		return LocConfig("review")
+	case "config.memo":
+		return LocConfig("memo")
 	case "identity":
 		return LocIdentity
 	case "cache":
@@ -511,11 +521,7 @@ func (p *NavPanel) View() string {
 			continue
 		}
 		isSelected := activeID == item.ID
-		label := "  "
-		if icon := SafeIcon(item.Icon); icon != "" {
-			label += icon + "  "
-		}
-		label += item.Label
+		label := "  " + iconWithSpacing(SafeIcon(item.Icon)) + item.Label
 		if item.ID == "release" && p.unpushedLFSCount > 0 {
 			label = fmt.Sprintf("%s (%d)", label, p.unpushedLFSCount)
 		}
@@ -537,11 +543,7 @@ func (p *NavPanel) View() string {
 	var dmContent strings.Builder
 	if dmItem != nil && dmItem.Enabled {
 		isSelected := activeID == dmItem.ID
-		label := "  "
-		if icon := SafeIcon(dmItem.Icon); icon != "" {
-			label += icon + "  "
-		}
-		label += dmItem.Label
+		label := "  " + iconWithSpacing(SafeIcon(dmItem.Icon)) + dmItem.Label
 		key := getDomainKey(dmItem.ID)
 
 		if isSelected {
@@ -566,11 +568,7 @@ func (p *NavPanel) View() string {
 			continue
 		}
 		isSelected := activeID == item.ID
-		label := "  "
-		if icon := SafeIcon(item.Icon); icon != "" {
-			label += icon + "  "
-		}
-		label += item.Label
+		label := "  " + iconWithSpacing(SafeIcon(item.Icon)) + item.Label
 
 		// Cache item has special right-aligned size display
 		if item.ID == "cache" && p.cacheSize != "" {
@@ -705,10 +703,7 @@ func (p *NavPanel) renderChildren(content *strings.Builder, parentID, activeID s
 			indent = "     "
 		}
 
-		icon := SafeIcon(child.Icon)
-		if icon != "" {
-			icon = icon + "  "
-		}
+		icon := iconWithSpacing(SafeIcon(child.Icon))
 
 		prefix := "  "
 		if strings.HasPrefix(child.ID, "social.lists.") {
@@ -760,6 +755,20 @@ func formatNavItem(label, key string, targetWidth int, labelStyle lipgloss.Style
 		return labelStyle.Render(label) + dimSelected.Render(fill+keyPart)
 	}
 	return labelStyle.Render(label) + Dim.Render(fill+keyPart)
+}
+
+// iconWithSpacing returns the icon padded with trailing spaces so icon+spacing
+// occupies 3 visual cells. This keeps labels aligned across rows whether the
+// icon is single- or double-wide (runewidth 1 → 2 spaces, runewidth 2 → 1 space).
+func iconWithSpacing(icon string) string {
+	if icon == "" {
+		return ""
+	}
+	spacing := 3 - AnsiWidth(icon)
+	if spacing < 1 {
+		spacing = 1
+	}
+	return icon + strings.Repeat(" ", spacing)
 }
 
 // getDomainKey returns the extension key for a domain, or empty string.

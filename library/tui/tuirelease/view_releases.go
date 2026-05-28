@@ -316,11 +316,18 @@ func (v *ReleasesView) Bindings() []tuicore.Binding {
 		}
 		return true, ctx.StartLFSPush()
 	}
+	checkLFS := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
+		if ctx.CheckLFS == nil {
+			return false, nil
+		}
+		return true, ctx.CheckLFS()
+	}
 	return []tuicore.Binding{
 		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: push},
+		{Key: "l", Label: "check lfs", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: checkLFS},
 		{Key: "L", Label: "push lfs", Contexts: []tuicore.Context{tuicore.ReleaseList}, Handler: lfsPush},
 	}
 }

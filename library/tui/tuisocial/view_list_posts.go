@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -310,8 +311,12 @@ func (v *ListPostsView) IsExternalList() bool {
 	return v.externalListOwner != ""
 }
 
-// Title returns the list name for the header.
+// Title returns the list name for the header, appending the owner when viewing
+// another repo's list.
 func (v *ListPostsView) Title() string {
+	if v.externalListOwner != "" {
+		return "☷  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
+	}
 	return "☷  " + v.list.Name
 }
 

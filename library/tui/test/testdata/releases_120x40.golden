@@ -6,14 +6,14 @@
 │ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⌘  Social  ············  S  ││                                                                                      │
 │     ⏱  Timeline              ││   ⏏  1.0.0 Release v1.0.0 · Alice · TIME     · v1.0.0                                │
-│     ♥  My Repository         ││      Pre-built binaries for Linux, macOS, and Windows.                               │
-│     ☷  My Lists             ││                                                                                      │
-│  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
+│     ⎇  My Repository         ││      Pre-built binaries for Linux, macOS, and Windows.                               │
+│     ☷ My Lists              ││                                                                                      │
+│     ㋡ My Followers          ││   ────────────────────────────────────────────────────────────────────────────────   │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││                                                                                      │
 │  ⑂  Review  ············  R  ││                                                                                      │
 │  ⏏  Release  ···········  V  ││                                                                                      │
 │  ☞  Memos  ·············  M  ││                                                                                      │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
@@ -35,6 +35,6 @@
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││                                                                                      │
-│.../tui-test-FIXTURE          ││   n:new  r:refresh  p:push  L:push lfs  tab:focus  f:fetch  I:import  q:quit  ?:help │
+│ ──────────────────────────── ││   n:new  r:refresh  p:push  l:check lfs  L:push lfs  tab:focus  f:fetch  I:import    │
+│.../tui-test-FIXTURE          ││   q:quit  ?:help                                                                     │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

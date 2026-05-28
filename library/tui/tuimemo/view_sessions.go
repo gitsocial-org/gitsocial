@@ -53,6 +53,16 @@ func (v *SessionsView) SetSize(w, h int) { v.width, v.height = w, h }
 // Activate (re)loads the session list. Cursor is preserved across navigation:
 // the previous cursor is clamped to the new list bounds.
 func (v *SessionsView) Activate(state *tuicore.State) tea.Cmd {
+	v.reload()
+	v.inputMode = false
+	v.newForm = nil
+	v.newID = ""
+	return nil
+}
+
+// reload re-lists sessions and clamps the cursor to the new bounds, preserving
+// the previous selection across data reloads (activation, push/fetch, gc).
+func (v *SessionsView) reload() {
 	prev := v.cursor
 	res := memo.ListSessions(gitmsg.ResolveRepoURL(v.workdir))
 	if res.Success {
@@ -66,10 +76,6 @@ func (v *SessionsView) Activate(state *tuicore.State) tea.Cmd {
 		v.cursor = 0
 	}
 	v.loaded = true
-	v.inputMode = false
-	v.newForm = nil
-	v.newID = ""
-	return nil
 }
 
 // IsInputActive reports whether the new-session prompt is taking text input.
@@ -81,6 +87,8 @@ func (v *SessionsView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "enter", Label: "open", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
 		{Key: "n", Label: "new", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
+		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
+		{Key: "f", Label: "fetch", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
 		{Key: "d", Label: "gc", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
@@ -93,6 +101,17 @@ func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.updateInput(msg)
 	}
 	switch m := msg.(type) {
+	case sessionSyncMsg:
+		if m.isErr {
+			state.SetMessage(m.summary, tuicore.MessageTypeError)
+		} else {
+			state.SetMessage(m.summary, tuicore.MessageTypeSuccess)
+		}
+		v.reload()
+		return nil
+	case sessionsReloadMsg:
+		v.reload()
+		return nil
 	case tea.KeyPressMsg:
 		if handled, cmd := v.confirm.HandleKey(m.String()); handled {
 			return cmd
@@ -108,6 +127,10 @@ func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 		case "n":
 			return v.startNewSession()
+		case "p":
+			return v.syncSelected(state, "push")
+		case "f":
+			return v.syncSelected(state, "fetch")
 		case "d", "X":
 			if v.cursor < 0 || v.cursor >= len(v.sessions) {
 				return nil
@@ -181,6 +204,34 @@ func (v *SessionsView) doGC(id string) tea.Cmd {
 	return func() tea.Msg {
 		_ = memo.GCSession(id)
 		return sessionsReloadMsg{}
+	}
+}
+
+// syncSelected pushes or fetches the selected session's gitmsg/memo branch to
+// its remote. Runs async (network) and reports via sessionSyncMsg; the missing
+// remote / not-found cases surface as the result error so no pre-check is needed.
+func (v *SessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd {
+	if v.cursor < 0 || v.cursor >= len(v.sessions) {
+		return nil
+	}
+	id := v.sessions[v.cursor].ID
+	if action == "push" {
+		state.SetMessage("Pushing session "+id+"…", tuicore.MessageTypeSuccess)
+		return func() tea.Msg {
+			res := memo.PushSession(id)
+			if !res.Success {
+				return sessionSyncMsg{summary: "Push failed: " + res.Error.Message, isErr: true}
+			}
+			return sessionSyncMsg{summary: "Pushed session " + id}
+		}
+	}
+	state.SetMessage("Fetching session "+id+"…", tuicore.MessageTypeSuccess)
+	return func() tea.Msg {
+		res := memo.FetchSession(id)
+		if !res.Success {
+			return sessionSyncMsg{summary: "Fetch failed: " + res.Error.Message, isErr: true}
+		}
+		return sessionSyncMsg{summary: "Fetched session " + id}
 	}
 }
 
@@ -267,6 +318,12 @@ func (v *SessionsView) Render(state *tuicore.State) string {
 }
 
 type sessionsReloadMsg struct{}
+
+// sessionSyncMsg carries the result of an async session push/fetch.
+type sessionSyncMsg struct {
+	summary string
+	isErr   bool
+}
 
 // truncateSubject shortens a subject to the given visible width, appending an
 // ellipsis when the original exceeds the budget. A non-positive max returns

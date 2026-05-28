@@ -277,6 +277,15 @@ func (h *Host) currentTitleFor(view tuicore.View) string {
 		case "pm":
 			icon = "▢"
 			extName = "PM"
+		case "release":
+			icon = "⏏"
+			extName = "Release"
+		case "review":
+			icon = "⑂"
+			extName = "Review"
+		case "memo":
+			icon = "☞"
+			extName = "Memo"
 		}
 		return tuicore.SafeIcon(icon) + "  " + extName + " Configuration"
 	}
@@ -874,19 +883,15 @@ func (h *Host) SetRetracting(retracting bool) {
 	h.state.Retracting = retracting
 }
 
-// SetMessage sets a status message with type.
-// Increments MessageID to cancel any pending auto-clear timers.
+// SetMessage sets a status message with type. Thin wrapper around
+// State.SetMessage so both paths cancel pending auto-clear timers identically.
 func (h *Host) SetMessage(msg string, msgType tuicore.MessageType) {
-	h.state.MessageID++
-	h.state.Message = msg
-	h.state.MessageType = msgType
+	h.state.SetMessage(msg, msgType)
 }
 
 // SetMessageWithTimeout sets a status message that auto-clears.
 func (h *Host) SetMessageWithTimeout(msg string, msgType tuicore.MessageType, d time.Duration) tea.Cmd {
-	h.state.MessageID++
-	h.state.Message = msg
-	h.state.MessageType = msgType
+	h.state.SetMessage(msg, msgType)
 	id := h.state.MessageID
 	return tea.Tick(d, func(t time.Time) tea.Msg {
 		return ClearMessageMsg{ID: id}

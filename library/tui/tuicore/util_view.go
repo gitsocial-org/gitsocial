@@ -137,6 +137,7 @@ var (
 	History       = RegisterContext("social.history")
 	HistoryDiff   = RegisterContext("social.history_diff")
 	RepoLists     = RegisterContext("social.repo_lists")
+	Explore       = RegisterContext("social.explore")
 )
 
 // PM extension contexts - registered via init()
@@ -180,6 +181,7 @@ var (
 // Memo extension contexts - registered via init()
 var (
 	MemoList          = RegisterContext("memo.list")
+	MemoPersonalList  = RegisterContext("memo.personal_list")
 	MemoInheritedList = RegisterContext("memo.inherited_list")
 	MemoDetail        = RegisterContext("memo.detail")
 	MemoHistory       = RegisterContext("memo.history")

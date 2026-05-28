@@ -6,14 +6,14 @@
 │ ──────────────────────────── ││    fetch.auto.enabled    false  (false · true)  pauses after 1h idle                 │
 │  ⌘  Social  ············  S  ││    fetch.auto.interval   300  s                                                      │
 │     ⏱  Timeline              ││    fetch.auto.backoff    true  (false · true)  doubles per empty cycle, max 30m      │
-│     ♥  My Repository         ││                                                                                      │
-│     ☷  My Lists             ││  Workspace                                                                           │
-│  ▢  PM  ················  P  ││    fetch.workspace_mode  (not set)  (default · *)                                    │
-│  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  Output  · synced                                                                    │
-│  ☞  Memos  ·············  M  ││    output.color          auto  (auto · always · never)                               │
-│                              ││                                                                                      │
-│                              ││  Log  · synced                                                                       │
+│     ⎇  My Repository         ││                                                                                      │
+│     ☷ My Lists              ││  Workspace                                                                           │
+│     ㋡ My Followers          ││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││  Output  · synced                                                                    │
+│  ⑂  Review  ············  R  ││    output.color          auto  (auto · always · never)                               │
+│  ⏏  Release  ···········  V  ││                                                                                      │
+│  ☞  Memos  ·············  M  ││  Log  · synced                                                                       │
 │                              ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
 │                              ││  Display  · synced                                                                   │

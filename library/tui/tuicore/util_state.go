@@ -161,8 +161,11 @@ func (s *State) ClearMessage() {
 	s.Err = nil
 }
 
-// SetMessage sets a status message with type.
+// SetMessage sets a status message with type. Bumps MessageID so any pending
+// auto-clear timer (from Host.SetMessageWithTimeout) is canceled — without it,
+// a fire-and-forget pre-toast can be wiped out by a stale ClearMessageMsg.
 func (s *State) SetMessage(msg string, msgType MessageType) {
+	s.MessageID++
 	s.Message = msg
 	s.MessageType = msgType
 	s.Err = nil

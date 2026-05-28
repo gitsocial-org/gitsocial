@@ -29,6 +29,7 @@ type MemoDetailView struct {
 	showEmail    bool
 	showRaw      bool
 	confirm      tuicore.ConfirmDialog
+	promote      tuicore.ChoiceDialog
 	sectionList  *tuicore.SectionList
 	sourceIndex  int
 	sourceTotal  int
@@ -151,6 +152,9 @@ func (v *MemoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} }
 	case tea.KeyPressMsg, tea.MouseMsg:
 		if key, ok := msg.(tea.KeyPressMsg); ok {
+			if handled, cmd := v.promote.HandleKey(key.String()); handled {
+				return cmd
+			}
 			if handled, cmd := v.confirm.HandleKey(key.String()); handled {
 				return cmd
 			}
@@ -188,6 +192,10 @@ func (v *MemoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 						}
 					}
 				}
+			case ">":
+				if v.memo != nil {
+					return v.startPromote(state)
+				}
 			case "X":
 				if v.memo != nil {
 					if v.memo.Tier == memo.TierExternal || v.memo.Tier == memo.TierInherited {
@@ -218,6 +226,7 @@ func (v *MemoDetailView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
+		{Key: ">", Label: "promote", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
 		{Key: "X", Label: "retract", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: tuicore.RawViewHandler},
@@ -243,7 +252,9 @@ func (v *MemoDetailView) Render(state *tuicore.State) string {
 
 	exclude := map[string]bool{}
 	var footer string
-	if v.confirm.IsActive() {
+	if v.promote.IsActive() {
+		footer = v.promote.Render()
+	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else if v.sectionList.IsSearchActive() {
 		footer = v.sectionList.SearchFooter(wrapper.ContentWidth())
@@ -368,6 +379,54 @@ func (v *MemoDetailView) navigateSource(offset int) tea.Cmd {
 	}
 }
 
+// startPromote opens a tier picker for copying the current memo to a more
+// durable tier. The source memo is left untouched — promotion writes a fresh
+// commit on the target tier (no edit chain), so the same memo can live at
+// multiple tiers. Valid moves: session→{personal,project}, personal→{project}.
+func (v *MemoDetailView) startPromote(state *tuicore.State) tea.Cmd {
+	choices, keyTier := promotableTargets(v.memo.Tier)
+	if len(choices) == 0 {
+		state.SetMessage(string(v.memo.Tier)+"-tier memos cannot be promoted", tuicore.MessageTypeWarning)
+		return nil
+	}
+	id := v.memo.ID
+	workdir := v.workdir
+	v.promote.Show("Promote to tier?", choices, func(key string) tea.Cmd {
+		target, ok := keyTier[key]
+		if !ok {
+			return nil
+		}
+		return func() tea.Msg {
+			res := memo.PromoteMemo(workdir, id, target)
+			if !res.Success {
+				return MemoPromotedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
+			}
+			return MemoPromotedMsg{Memo: res.Data, Tier: target}
+		}
+	})
+	return nil
+}
+
+// promotableTargets returns the valid promotion targets for a source tier as
+// choice-dialog options plus a key→tier lookup. Uses p/P keys so both options
+// read naturally ([p]ersonal / [P]roject).
+func promotableTargets(src memo.Tier) ([]tuicore.Choice, map[string]memo.Tier) {
+	keyTier := map[string]memo.Tier{}
+	var choices []tuicore.Choice
+	add := func(key, label string, tier memo.Tier) {
+		choices = append(choices, tuicore.Choice{Key: key, Label: label})
+		keyTier[key] = tier
+	}
+	switch src {
+	case memo.TierSession:
+		add("p", "ersonal", memo.TierPersonal)
+		add("P", "roject", memo.TierProject)
+	case memo.TierPersonal:
+		add("P", "roject", memo.TierProject)
+	}
+	return choices, keyTier
+}
+
 // doRetract calls memo.RetractMemo and emits a memoRetractedMsg.
 func (v *MemoDetailView) doRetract() tea.Cmd {
 	if v.memo == nil {
@@ -392,4 +451,12 @@ type memoDetailLoadedMsg struct {
 
 type memoRetractedMsg struct {
 	err error
+}
+
+// MemoPromotedMsg reports the result of a promote attempt. Exported so the
+// memo message handler can toast the result and navigate to the new copy.
+type MemoPromotedMsg struct {
+	Memo memo.Memo
+	Tier memo.Tier
+	Err  error
 }

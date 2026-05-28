@@ -41,7 +41,7 @@ func init() {
 	})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/personal",
-		Context:   tuicore.MemoList,
+		Context:   tuicore.MemoPersonalList,
 		Title:     "Personal Memos",
 		Icon:      "☞",
 		NavItemID: "memo.personal",
@@ -266,8 +266,31 @@ func handleMemoMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleMemoEdited(m, ctx)
 	case MemoCreatedMsg:
 		return handleMemoCreated(m, ctx)
+	case MemoPromotedMsg:
+		return handleMemoPromoted(m, ctx)
 	}
 	return false, nil
+}
+
+// handleMemoPromoted surfaces the promote result: on success, toast the target
+// tier and navigate to the promoted copy's detail (NavPush keeps the source
+// memo on the back stack).
+func handleMemoPromoted(msg MemoPromotedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	statusCmd := ctx.Host().SetMessageWithTimeout(
+		fmt.Sprintf("Promoted to %s: %s", msg.Tier, msg.Memo.Subject),
+		tuicore.MessageTypeSuccess,
+		5*time.Second,
+	)
+	return true, tea.Batch(statusCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocMemoDetail(msg.Memo.ID),
+			Action:   tuicore.NavPush,
+		}
+	})
 }
 
 // handleMemoEdited handles the result of a memo edit form submission.

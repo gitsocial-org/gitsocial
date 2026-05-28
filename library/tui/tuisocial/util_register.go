@@ -36,6 +36,8 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/list", Context: tuicore.ListPosts, Title: "List Posts", Icon: "☷", Component: "CardList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/list/repos", Context: tuicore.ListRepos, Title: "List Repos", Icon: "☷"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/lists", Context: tuicore.RepoLists, Title: "Repository Lists", Icon: "☷"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/explore", Context: tuicore.Explore, Title: "Explore", Icon: "➼", NavItemID: "social.explore"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/followers", Context: tuicore.Explore, Title: "My Followers", Icon: "㋡", NavItemID: "social.followers"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history", Context: tuicore.History, Title: "History", Icon: "◉", Component: "VersionPicker"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history/diff", Context: tuicore.HistoryDiff, Title: "Post Diff", Icon: "◉"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/post-form", Context: tuicore.Detail, Title: "Post", Icon: "•"})
@@ -176,6 +178,9 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/history/diff", historyDiff)
 	host.AddView("/social/repository/lists", repoLists)
 	host.AddView("/social/post-form", NewPostFormView(state.Workdir))
+	explore := NewExploreView(state.Workdir)
+	host.AddView("/social/explore", explore)
+	host.AddView("/social/followers", explore)
 }
 
 // Message handlers

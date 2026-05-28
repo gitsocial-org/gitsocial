@@ -6,14 +6,14 @@
 │ ──────────────────────────── ││                                                                                      │
 │  ⌘  Social  ············  S  ││  ## How It Works                                                                     │
 │     ⏱  Timeline              ││                                                                                      │
-│     ♥  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
-│     ☷  My Lists             ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
-│  ▢  PM  ················  P  ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
-│  ⑂  Review  ············  R  ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│     ⎇  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
+│     ☷ My Lists              ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
+│     ㋡ My Followers          ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
+│     ➼  Explore               ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│  ▢  PM  ················  P  ││                                                                                      │
+│  ⑂  Review  ············  R  ││  ## Workflow                                                                         │
 │  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││  ## Workflow                                                                         │
-│                              ││                                                                                      │
-│                              ││  • Fetch — Pull updates from repositories you follow                                 │
+│  ☞  Memos  ·············  M  ││  • Fetch — Pull updates from repositories you follow                                 │
 │                              ││  • Push — Publish your local changes to your remote                                  │
 │                              ││  • Lists — Group repositories into curated feeds                                     │
 │                              ││                                                                                      │

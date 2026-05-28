@@ -380,6 +380,22 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					})
 					return nil
 				}
+			case "T":
+				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() && len(v.stack) > 1 {
+					v.choice.Show("Stack operation?", []tuicore.Choice{
+						{Key: "r", Label: "ebase stack"},
+						{Key: "s", Label: "ync tips"},
+					}, func(key string) tea.Cmd {
+						switch key {
+						case "r":
+							return v.doRebaseStack()
+						case "s":
+							return v.doSyncStack()
+						}
+						return nil
+					})
+					return nil
+				}
 			case "X":
 				if v.pr != nil {
 					v.confirm.Show("Retract this pull request?", false, func() tea.Cmd { return v.doRetract() })
@@ -885,6 +901,32 @@ func (v *PRDetailView) doUpdateTips() tea.Cmd {
 	}
 }
 
+// doRebaseStack rebases every open dependent above this PR onto its base.
+func (v *PRDetailView) doRebaseStack() tea.Cmd {
+	prID := v.pr.ID
+	workdir := v.workdir
+	return func() tea.Msg {
+		result := review.RebaseStack(workdir, prID)
+		if !result.Success {
+			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Message)}
+		}
+		return PRStackUpdatedMsg{PRID: prID, Action: "Rebased", Count: len(result.Data)}
+	}
+}
+
+// doSyncStack refreshes the stored base-tip/head-tip for every open PR in the stack.
+func (v *PRDetailView) doSyncStack() tea.Cmd {
+	prID := v.pr.ID
+	workdir := v.workdir
+	return func() tea.Msg {
+		result := review.SyncStackTips(workdir, prID)
+		if !result.Success {
+			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Message)}
+		}
+		return PRStackUpdatedMsg{PRID: prID, Action: "Synced tips for", Count: len(result.Data)}
+	}
+}
+
 // tipStaleMarker returns a `⚠ ...` suffix when the cached observation for the
 // given side ("head" or "base") differs from the PR's stored tip, or when the
 // branch is gone on origin. Empty when in sync or no observation is available.
@@ -963,6 +1005,9 @@ func (v *PRDetailView) Render(state *tuicore.State) string {
 		if v.pr != nil && !v.pr.IsEdited {
 			exclude["h"] = true
 			exclude["i"] = true
+		}
+		if v.pr == nil || v.pr.State != review.PRStateOpen || !v.targetsWorkspace() || len(v.stack) <= 1 {
+			exclude["T"] = true
 		}
 		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude)
 	}
@@ -1455,6 +1500,7 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "S", Label: "sync", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "u", Label: "update tips", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "T", Label: "stack ops", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: tuicore.RawViewHandler},
 		{Key: "X", Label: "retract", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},

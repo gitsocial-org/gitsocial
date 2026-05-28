@@ -127,6 +127,18 @@ func LocExternalListRepos(ownerRepoURL, listID string) Location {
 	}}
 }
 
+// LocExplore is the repository discovery (browse all known repos) view.
+var LocExplore = Location{Path: "/social/explore"}
+
+// LocExploreRelated creates a location listing repositories related to url.
+// Served by the same /social/explore view; the `related` param switches modes.
+func LocExploreRelated(url string) Location {
+	return Location{Path: "/social/explore", Params: map[string]string{"related": url}}
+}
+
+// LocFollowers lists the workspaces that follow this workspace.
+var LocFollowers = Location{Path: "/social/followers"}
+
 // LocConfig creates a location for the configuration view.
 func LocConfig(extension string) Location {
 	return Location{Path: "/config", Params: map[string]string{"extension": extension}}
@@ -464,6 +476,12 @@ func (r *Router) NavItemID() string {
 			return "config.social"
 		case "pm":
 			return "config.pm"
+		case "release":
+			return "config.release"
+		case "review":
+			return "config.review"
+		case "memo":
+			return "config.memo"
 		}
 		return "config.core"
 	}
@@ -645,11 +663,16 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	r.Register(NavItem{ID: "config", Label: "Configuration", Icon: "⚙", Order: 10, Enabled: true})
 	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: false})
 	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
-	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: false})
+	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: true})
 	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
+	r.Register(NavItem{ID: "config.release", Label: "Release", Icon: "⏏", Parent: "config", Order: 4, Enabled: true})
+	r.Register(NavItem{ID: "config.review", Label: "Review", Icon: "⑂", Parent: "config", Order: 5, Enabled: true})
+	r.Register(NavItem{ID: "config.memo", Label: "Memo", Icon: "☞", Parent: "config", Order: 6, Enabled: true})
 
+	// Order 11 is intentionally reserved for the planned DM extension so its
+	// nav slot doesn't shuffle Identity/Cache/Settings when added.
 	// Top-level user concerns (Identity, Cache, Settings)
-	r.Register(NavItem{ID: "identity", Label: "Identity", Icon: "⚿", Order: 11, Enabled: true})
-	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 12, Enabled: true})
-	r.Register(NavItem{ID: "settings", Label: "Settings", Icon: "⌨", Order: 13, Enabled: true})
+	r.Register(NavItem{ID: "identity", Label: "Identity", Icon: "⚿", Order: 12, Enabled: true})
+	r.Register(NavItem{ID: "cache", Label: "Cache", Icon: "⛁", Order: 13, Enabled: true})
+	r.Register(NavItem{ID: "settings", Label: "Settings", Icon: "⌨", Order: 14, Enabled: true})
 }

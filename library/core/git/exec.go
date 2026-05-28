@@ -8,10 +8,25 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
+
+// testIsolationEnv neutralizes the host's global/system git config when running
+// under `go test`, so tests don't inherit per-machine state like signing keys,
+// aliases, or includeIf overrides. (Credential-helper dialog suppression is
+// handled separately by GCM_INTERACTIVE=Never on every invocation.)
+func testIsolationEnv() []string {
+	if !testing.Testing() {
+		return nil
+	}
+	return []string{
+		"GIT_CONFIG_GLOBAL=/dev/null",
+		"GIT_CONFIG_SYSTEM=/dev/null",
+	}
+}
 
 var gitTimeout = 30 * time.Second
 
@@ -44,7 +59,14 @@ func DefaultExec(ctx context.Context, workdir string, args []string) (*ExecResul
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		// Git Credential Manager: don't pop GUI dialogs for fresh auth — cached
+		// tokens still work, so private-repo fetches the user already
+		// authenticated to keep functioning. Prevents surprise sign-in dialogs
+		// when gitsocial fetches external repos the user has no creds for.
+		"GCM_INTERACTIVE=Never",
+	), testIsolationEnv()...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -108,6 +130,10 @@ func execGitWithStdin(workdir string, args []string, stdin string) (string, erro
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
+	cmd.Env = append(append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GCM_INTERACTIVE=Never",
+	), testIsolationEnv()...)
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

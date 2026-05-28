@@ -4,6 +4,7 @@ package tuicore
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -20,15 +21,24 @@ func init() {
 }
 
 // IdentityView shows the user's git signing config and the cached binding for
-// their (signing key, email) pair. Verification is controlled entirely by the
-// background verifier — this view is read-only.
+// their (signing key, email) pair. Verification of the user's own binding is
+// driven by the background verifier; this view adds an on-demand email lookup
+// (`r`) mirroring the `id resolve` CLI verb.
 type IdentityView struct {
-	workdir string
+	workdir    string
+	input      textinput.Model
+	resolving  bool
+	resolved   *identity.ResolvedIdentity
+	resolveErr string
 }
 
-// NewIdentityView creates the read-only identity status view.
+// NewIdentityView creates the identity status + lookup view.
 func NewIdentityView(workdir string) *IdentityView {
-	return &IdentityView{workdir: workdir}
+	input := textinput.New()
+	input.CharLimit = 254
+	input.Prompt = "> "
+	StyleTextInput(&input, Dim, lipgloss.NewStyle(), Dim)
+	return &IdentityView{workdir: workdir, input: input}
 }
 
 // SetSize is unused for this view.
@@ -40,23 +50,83 @@ func (v *IdentityView) Activate(state *State) tea.Cmd { return nil }
 // Deactivate is a no-op.
 func (v *IdentityView) Deactivate() {}
 
-// Update handles key presses for policy toggles.
+// Update handles policy toggles and the on-demand email lookup.
 func (v *IdentityView) Update(msg tea.Msg, state *State) tea.Cmd {
-	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "d" {
-		v.toggleDNSVerification()
+	switch msg := msg.(type) {
+	case identityResolvedMsg:
+		v.resolving = false
+		v.input.Blur()
+		if msg.err != nil {
+			v.resolveErr = msg.err.Error()
+			v.resolved = nil
+		} else {
+			v.resolveErr = ""
+			v.resolved = msg.resolved
+		}
+		return nil
+	case tea.KeyPressMsg:
+		if v.resolving {
+			switch msg.String() {
+			case "esc":
+				v.resolving = false
+				v.input.Blur()
+				return nil
+			case "enter":
+				email := strings.TrimSpace(v.input.Value())
+				if email == "" {
+					return nil
+				}
+				return doResolveIdentity(email)
+			}
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
+		switch msg.String() {
+		case "d":
+			v.toggleDNSVerification()
+		case "r":
+			v.resolving = true
+			v.resolveErr = ""
+			v.input.SetValue("")
+			return v.input.Focus()
+		}
+	default:
+		if v.resolving {
+			var cmd tea.Cmd
+			v.input, cmd = v.input.Update(msg)
+			return cmd
+		}
 	}
 	return nil
 }
 
-// IsInputActive returns false — the view never owns input.
-func (v *IdentityView) IsInputActive() bool { return false }
+// IsInputActive returns true only while the email-resolve prompt is open.
+func (v *IdentityView) IsInputActive() bool { return v.resolving }
 
-// Bindings returns the policy-toggle keys.
+// Bindings returns the policy-toggle and lookup keys.
 func (v *IdentityView) Bindings() []Binding {
 	noop := func(*HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []Binding{
 		{Key: "d", Label: "toggle DNS verification", Contexts: []Context{CoreIdentity}, Handler: noop},
+		{Key: "r", Label: "resolve email", Contexts: []Context{CoreIdentity}, Handler: noop},
 	}
+}
+
+// doResolveIdentity resolves an email to its declared identity via the DNS
+// well-known endpoint (mirrors `gitsocial id resolve`). Runs async; reports
+// through identityResolvedMsg.
+func doResolveIdentity(email string) tea.Cmd {
+	return func() tea.Msg {
+		resolved, err := identity.ResolveIdentity(email)
+		return identityResolvedMsg{resolved: resolved, err: err}
+	}
+}
+
+// identityResolvedMsg carries the result of an async email resolve.
+type identityResolvedMsg struct {
+	resolved *identity.ResolvedIdentity
+	err      error
 }
 
 // toggleDNSVerification flips identity.dns_verification through the settings
@@ -76,7 +146,7 @@ func (v *IdentityView) toggleDNSVerification() {
 // Render renders the view.
 func (v *IdentityView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
-	rs := RowStylesWithWidths(14, 0)
+	rs := RowStylesWithWidths(16, 0)
 	verified := lipgloss.NewStyle().Foreground(lipgloss.Color(IdentityMe))
 
 	var b strings.Builder
@@ -162,7 +232,43 @@ func (v *IdentityView) Render(state *State) string {
 	b.WriteString(RenderRow(rs, "DNS verification", dnsState+"  "+Dim.Render("(d to toggle)"), "", false))
 	b.WriteString("\n")
 
+	b.WriteString("\n")
+	b.WriteString(RenderHeader(rs, "Identity Lookup"))
+	b.WriteString("\n")
+	if v.resolving {
+		b.WriteString(RenderRow(rs, "Resolve email", v.input.View(), "", false))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(RenderRow(rs, "Resolve email", Dim.Render("(r to look up an email via DNS)"), "", false))
+		b.WriteString("\n")
+	}
+	if v.resolveErr != "" {
+		b.WriteString("  ")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("Error: " + v.resolveErr))
+		b.WriteString("\n")
+	} else if v.resolved != nil {
+		b.WriteString(RenderRow(rs, "  Email", v.resolved.Email, "", false))
+		b.WriteString("\n")
+		b.WriteString(RenderRow(rs, "  Key", truncateKeyDisplay(v.resolved.Key), "", false))
+		b.WriteString("\n")
+		b.WriteString(RenderRow(rs, "  Type", v.resolved.KeyType(), "", false))
+		b.WriteString("\n")
+		if v.resolved.Repo != "" {
+			b.WriteString(RenderRow(rs, "  Repo", v.resolved.Repo, "", false))
+			b.WriteString("\n")
+		}
+		src := "fetched"
+		if v.resolved.Cached {
+			src = "cached"
+		}
+		b.WriteString(RenderRow(rs, "  Source", src, "", false))
+		b.WriteString("\n")
+	}
+
 	footer := RenderFooter(state.Registry, CoreIdentity, nil)
+	if v.resolving {
+		footer = Dim.Render("type an email · enter to resolve · esc to cancel")
+	}
 	return wrapper.Render(b.String(), footer)
 }
 

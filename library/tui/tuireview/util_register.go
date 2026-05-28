@@ -436,6 +436,16 @@ type PRRetractedMsg struct {
 	Err error
 }
 
+// PRStackUpdatedMsg is sent when a stack maintenance op (rebase-stack /
+// sync-stack) finishes. Count is the number of PRs touched; PRID is the PR the
+// op was launched from, so the detail view can reload after the change.
+type PRStackUpdatedMsg struct {
+	Action string
+	Count  int
+	PRID   string
+	Err    error
+}
+
 // FeedbackCreatedMsg is sent when feedback is created on a pull request.
 type FeedbackCreatedMsg struct {
 	Feedback review.Feedback
@@ -451,6 +461,8 @@ func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handlePRUpdated(msg, ctx)
 	case PRRetractedMsg:
 		return handlePRRetracted(msg, ctx)
+	case PRStackUpdatedMsg:
+		return handlePRStackUpdated(msg, ctx)
 	case FeedbackCreatedMsg:
 		return handleFeedbackCreated(msg, ctx)
 	case SuggestionAppliedMsg:
@@ -522,6 +534,26 @@ func handlePRRetracted(msg PRRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	msgCmd := ctx.Host().SetMessageWithTimeout("Pull request retracted", tuicore.MessageTypeSuccess, 5*time.Second)
 	return true, tea.Batch(msgCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{Action: tuicore.NavBack}
+	})
+}
+
+func handlePRStackUpdated(msg PRStackUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "Stack: "+msg.Err.Error(), "review")
+		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
+		return true, nil
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(
+		fmt.Sprintf("%s %d PR(s) in stack", msg.Action, msg.Count),
+		tuicore.MessageTypeSuccess,
+		5*time.Second,
+	)
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocReviewPRDetail(msg.PRID),
+			Action:   tuicore.NavReplace,
+		}
 	})
 }
 

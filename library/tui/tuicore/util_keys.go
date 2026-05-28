@@ -76,6 +76,7 @@ type HandlerContext struct {
 	StartFetch   func() tea.Cmd
 	StartPush    func() tea.Cmd
 	StartLFSPush func() tea.Cmd
+	CheckLFS     func() tea.Cmd
 	StartImport  func() tea.Cmd
 
 	// Panel for direct action calls

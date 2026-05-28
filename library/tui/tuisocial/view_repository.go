@@ -543,9 +543,9 @@ func (v *RepositoryView) Title() string {
 	if v.isWorkspace {
 		pos, total := v.HeaderInfo()
 		if total != "" {
-			return tuicore.MeTitle.Render("♥  " + v.name + " · " + fmt.Sprintf("%d/%s", pos, total))
+			return tuicore.MeTitle.Render("⎇  " + v.name + " · " + fmt.Sprintf("%d/%s", pos, total))
 		}
-		return tuicore.MeTitle.Render("♥  " + v.name)
+		return tuicore.MeTitle.Render("⎇  " + v.name)
 	}
 	if v.name == "" {
 		return "Repository"

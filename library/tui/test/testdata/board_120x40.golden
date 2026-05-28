@@ -6,8 +6,10 @@
 │ ──────────────────────────── ││   ○ Add dark m…     │                    │                    │                      │
 │  ⌘  Social  ············  S  ││                     │                    │                    │                      │
 │     ⏱  Timeline              ││                     │                    │                    │                      │
-│     ♥  My Repository         ││                     │                    │                    │                      │
-│     ☷  My Lists             ││                     │                    │                    │                      │
+│     ⎇  My Repository         ││                     │                    │                    │                      │
+│     ☷ My Lists              ││                     │                    │                    │                      │
+│     ㋡ My Followers          ││                     │                    │                    │                      │
+│     ➼  Explore               ││                     │                    │                    │                      │
 │  ▢  PM  ················  P  ││                     │                    │                    │                      │
 │     ▦  Boards                ││                     │                    │                    │                      │
 │     ○  Issues                ││                     │                    │                    │                      │
@@ -27,14 +29,12 @@
 │                              ││                     │                    │                    │                      │
 │                              ││                     │                    │                    │                      │
 │                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
 │ ──────────────────────────── ││                     │                    │                    │                      │
 │  ⚙  Configuration            ││                     │                    │                    │                      │
 │  ⚿  Identity                 ││                     │                    │                    │                      │
 │  ⛁  Cache  ········ XXXKB    ││                     │                    │                    │                      │
 │  ⌨  Settings                 ││                     │                    │                    │                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
-│ ──────────────────────────── ││   n:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh  p:push  tab:focus  │
-│.../tui-test-FIXTURE          ││   f:fetch  I:import  q:quit  ?:help                                                  │
+│ ──────────────────────────── ││   n:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh  </>:move  p:push   │
+│.../tui-test-FIXTURE          ││   tab:focus  f:fetch  I:import  q:quit  ?:help                                       │
 ╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

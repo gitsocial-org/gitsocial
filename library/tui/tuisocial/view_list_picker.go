@@ -111,6 +111,11 @@ func (v *ListPickerView) SetSize(width, height int) {
 	// List picker uses text rendering, not CardList
 }
 
+// Title returns the view header. The picker always shows the workspace's own lists.
+func (v *ListPickerView) Title() string {
+	return "☷  My Lists"
+}
+
 // Activate loads lists when the view becomes active.
 func (v *ListPickerView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading = true

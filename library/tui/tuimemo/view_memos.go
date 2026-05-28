@@ -145,6 +145,13 @@ func (v *MemosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.restoreIndex = -1
 		}
 		return nil
+	case memoSyncMsg:
+		if m.isErr {
+			state.SetMessage(m.summary, tuicore.MessageTypeError)
+		} else {
+			state.SetMessage(m.summary, tuicore.MessageTypeSuccess)
+		}
+		return v.loadMemos()
 	case tea.KeyPressMsg, tea.MouseMsg:
 		consumed, activate, link := v.cardList.Update(msg)
 		if link != nil {
@@ -157,7 +164,7 @@ func (v *MemosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return tuicore.ConsumedCmd
 		}
 		if key, ok := msg.(tea.KeyPressMsg); ok {
-			return v.handleKey(key)
+			return v.handleKey(key, state)
 		}
 	}
 	return nil
@@ -183,11 +190,15 @@ func (v *MemosView) Render(state *tuicore.State) string {
 }
 
 // bindingContext returns the keybinding context this variant lives in. The
-// inherited list has its own context so its `m:manage` binding stays scoped
-// to that view and doesn't leak into the project/personal/session lists.
+// inherited and personal lists have their own contexts so their view-specific
+// bindings (`m:manage`, `p:push`) stay scoped and don't leak into the other
+// lists, which share the generic MemoList context.
 func (v *MemosView) bindingContext() tuicore.Context {
-	if v.variant == variantInherited {
+	switch v.variant {
+	case variantInherited:
 		return tuicore.MemoInheritedList
+	case variantPersonal:
+		return tuicore.MemoPersonalList
 	}
 	return tuicore.MemoList
 }
@@ -206,6 +217,12 @@ func (v *MemosView) Bindings() []tuicore.Binding {
 		bindings = append(bindings, tuicore.Binding{
 			Key: "m", Label: "manage", Contexts: []tuicore.Context{ctx}, Handler: noop,
 		})
+	}
+	if v.variant == variantPersonal {
+		bindings = append(bindings,
+			tuicore.Binding{Key: "p", Label: "push", Contexts: []tuicore.Context{ctx}, Handler: noop},
+			tuicore.Binding{Key: "f", Label: "fetch", Contexts: []tuicore.Context{ctx}, Handler: noop},
+		)
 	}
 	bindings = append(bindings, tuicore.Binding{
 		Key: "r", Label: "refresh", Contexts: []tuicore.Context{ctx}, Handler: noop,
@@ -326,7 +343,7 @@ func (v *MemosView) sourcePath() string {
 	return "/memo/list"
 }
 
-func (v *MemosView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *MemosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
 		return v.loadMemos()
@@ -344,8 +361,40 @@ func (v *MemosView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 				return tuicore.NavigateMsg{Location: tuicore.LocMemoInherits, Action: tuicore.NavPush}
 			}
 		}
+	case "p":
+		if v.variant == variantPersonal {
+			return v.syncTier(state, "push")
+		}
+	case "f":
+		if v.variant == variantPersonal {
+			return v.syncTier(state, "fetch")
+		}
 	}
 	return nil
+}
+
+// syncTier pushes or fetches the personal-tier bare repo to its remote. Runs
+// async (network) and reports via memoSyncMsg; a fetch reloads the list so
+// pulled memos appear. The missing-remote case surfaces as the result error.
+func (v *MemosView) syncTier(state *tuicore.State, action string) tea.Cmd {
+	if action == "push" {
+		state.SetMessage("Pushing personal memos…", tuicore.MessageTypeSuccess)
+		return func() tea.Msg {
+			res := memo.PushPersonal()
+			if !res.Success {
+				return memoSyncMsg{summary: "Push failed: " + res.Error.Message, isErr: true}
+			}
+			return memoSyncMsg{summary: "Pushed personal memos"}
+		}
+	}
+	state.SetMessage("Fetching personal memos…", tuicore.MessageTypeSuccess)
+	return func() tea.Msg {
+		res := memo.FetchPersonal()
+		if !res.Success {
+			return memoSyncMsg{summary: "Fetch failed: " + res.Error.Message, isErr: true}
+		}
+		return memoSyncMsg{summary: "Fetched personal memos"}
+	}
 }
 
 // defaultCreateTier maps the current list variant to the tier the new-memo
@@ -366,6 +415,12 @@ type memosLoadedMsg struct {
 	memos        []memo.Memo
 	workspaceURL string
 	err          error
+}
+
+// memoSyncMsg carries the result of an async personal-tier push/fetch.
+type memoSyncMsg struct {
+	summary string
+	isErr   bool
 }
 
 func (v *MemosView) loadMemos() tea.Cmd {

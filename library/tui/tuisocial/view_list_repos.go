@@ -447,8 +447,12 @@ func (v *ListReposView) IsExternalList() bool {
 	return v.externalListOwner != ""
 }
 
-// Title returns the list name for the header.
+// Title returns the list name for the header, appending the owner when viewing
+// another repo's list.
 func (v *ListReposView) Title() string {
+	if v.externalListOwner != "" {
+		return "☷  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
+	}
 	return "☷  " + v.list.Name
 }
 
