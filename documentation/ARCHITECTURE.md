@@ -1,99 +1,85 @@
 # GitSocial Architecture
 
-Single Go library with thin clients connecting via RPC/HTTP.
+Single Go library with thin clients: CLI/TUI (direct) and JSON-RPC (stdio).
 
-## Table of Contents
-
-- [Overview](#overview)
-- [Directory Structure](#directory-structure)
-- [Code Rules](#code-rules)
-- [Package Reference](#package-reference)
-- [Code Patterns](#code-patterns)
-- [Cache Architecture](#cache-architecture)
-- [CLI Commands](#cli-commands)
-- [TUI](#tui)
-- [Development](#development)
+[Development](#development) • [Directory Structure](#directory-structure) • [Package Reference](#package-reference) • [Cache Architecture](#cache-architecture) • [CLI Commands](#cli-commands) • [TUI](#tui)
 
 ---
 
-## Overview
+## Development
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Go Library (single source)                │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │  core/              # Shared infrastructure            │ │
-│  │  ├── git/           # Git operations                   │ │
-│  │  ├── protocol/      # GitMsg protocol parsing          │ │
-│  │  ├── gitmsg/        # Protocol-level storage           │ │
-│  │  ├── cache/         # SQLite (posts, counts, lists)    │ │
-│  │  ├── storage/       # Bare repo management             │ │
-│  │  └── fetch/         # Fetch orchestration + processing │ │
-│  ├────────────────────────────────────────────────────────┤ │
-│  │  extensions/        # Extension-specific               │ │
-│  │  └── social/        # Posts, lists, timeline           │ │
-│  └────────────────────────────────────────────────────────┘ │
-│          ┌─────────────────┼─────────────────┐              │
-│          ▼                 ▼                 ▼              │
-│    ┌──────────┐     ┌──────────┐     ┌──────────┐           │
-│    │   CLI    │     │ JSON-RPC │     │   HTTP   │           │
-│    │ (direct) │     │ (stdio)  │     │ (server) │           │
-│    └──────────┘     └──────────┘     └──────────┘           │
-└─────────────────────────────────────────────────────────────┘
-         │                  │                  │
-         ▼                  ▼                  ▼
-    Terminal/TUI      VSCode/Neovim       Web/Mobile
-```
+### Branching & Worktrees
 
----
+Trunk-based: `main` is the integration branch and stays clean in the primary checkout. Develop each feature on a `feature/<name>` branch in its own git worktree, so several run in parallel. Worktrees live in a sibling directory — standard location `../gitsocial-worktrees`, called `$WT` below.
 
-## Directory Structure
+```bash
+WT=../gitsocial-worktrees
 
-```
-gitmsg/
-├── cli/
-│   └── gitsocial/                  # CLI commands (main package — produces gitsocial binary)
-├── library/                        # Go library
-│   ├── core/
-│   │   ├── git/                    # Git operations
-│   │   ├── protocol/               # GitMsg protocol parsing
-│   │   ├── gitmsg/                 # Protocol-level storage
-│   │   ├── cache/                  # SQLite operations
-│   │   ├── storage/                # Bare repo management
-│   │   ├── fetch/                  # Fetch orchestration + processing
-│   │   ├── identity/               # Identity declarations + verification
-│   │   ├── search/                 # Cross-extension search
-│   │   └── result/                 # Result[T] type
-│   ├── extensions/
-│   │   ├── social/                 # Posts, lists, timeline
-│   │   ├── pm/                     # Issues, milestones, sprints
-│   │   ├── release/                # Releases, versions, artifacts
-│   │   └── review/                 # Pull requests, code reviews
-│   ├── import/                     # Platform import pipeline
-│   │   └── github/                # GitHub adapter (gh CLI)
-│   └── tui/                        # TUI views
-├── clients/
-│   └── vscode/                     # VSCode extension (planned)
-├── documentation/                  # Protocol docs
-└── specs/                          # Protocol specifications
+# 0. refresh main — primary checkout; before branching and after any merge
+git switch main && git pull --ff-only
+
+# 1. start a feature
+git worktree add -b feature/<name> "$WT/<name>" main
+
+# 2. build, test & run in "$WT/<name>" (distinct binary — won't clobber main's or a parallel build's)
+go build -o /tmp/gitsocial-<name> ./cli/gitsocial && go test ./...
+# schema-changing work: add --cache-dir /tmp/gs-<name>
+/tmp/gitsocial-<name> tui
+
+# 3. keep current while others are in flight (in "$WT/<name>")
+git fetch origin && git rebase main
+
+# 4. integrate — rebase then fast-forward = linear history
+git -C "$WT/<name>" rebase main
+# from primary; OK while the branch is in its worktree
+git merge --ff-only feature/<name>
+
+# 5. clean up — from primary, not inside the worktree
+git worktree remove "$WT/<name>" && git branch -d feature/<name>
 ```
 
-### Layer Dependencies
+- `gitmsg/*` and `gitsocial` are protocol/data branches — not for feature work.
+- Integrate and cleanup run from the primary checkout: a branch checked out in a worktree can't be deleted or checked out twice.
+- Run schema-changing branches with a separate `--cache-dir` (as above): the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it in place, after which older binaries (other worktrees, `main`) refuse it. Delete the cache to rebuild.
+
+### Build & Run
+
+```bash
+go build -o bin/gitsocial ./cli/gitsocial     # Build CLI
+bin/gitsocial social timeline                 # Run command
+bin/gitsocial tui                             # Launch TUI
+```
+
+### Test & Lint
+
+```bash
+go test ./...                    # All tests
+go test ./library/core/cache     # Specific package
+go test -v ./...                 # Verbose output
+go test -race ./...              # Race detector
+go test -cover ./...             # Coverage summary
+golangci-lint run --fix ./...    # Lint & fix code
+
+go test ./library/tui/test/...   # Headless TUI suite (smoke/display/golden/nav/sequence; see TUI-TESTS.md)
+```
+
+### Code Rules
+
+#### Layer Dependencies
 
 ```
 library/extensions/* → library/core/* → stdlib only
           ↓                 ↓
   cli/gitsocial/        (no circular refs)
   library/tui/
+  library/rpc/
   library/import/  → library/extensions/* + library/core/protocol
 ```
 
----
+#### Do
 
-## Code Rules
-
-### Do
-
+- Read relevant specs first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`
+- Optionally read relevant `documentation/` files
 - Add a brief comment at the top of each file (e.g., `// commits.go - Git commit operations`)
 - Add a one-liner comment above each function
 - Use functional patterns (no methods on structs unless implementing interfaces)
@@ -101,70 +87,16 @@ library/extensions/* → library/core/* → stdlib only
 - Use `cache.ExecLocked`/`QueryLocked` for all DB operations
 - Check existing types before creating new ones
 
-### Never
+#### Never
 
 - Access git directly from extensions (use `core/git`)
 - Create one-off types for single use
 - Use global mutable state
 - Skip error handling
 
----
+### Code Patterns
 
-## Package Reference
-
-| Package | Purpose | Key Exports |
-|---------|---------|-------------|
-| `core/git` | Git operations | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `CreateSignedCommitTree`, `VerifyCommitSignature`, `GetCommitSignerKey` |
-| `core/protocol` | Message parsing | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `IsClosingTrailer` |
-| `core/cache` | SQLite operations | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
-| `core/gitmsg` | Protocol-level storage | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
-| `core/storage` | Bare repo management | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/fetch` | Fetch orchestration | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
-| `core/settings` | User settings | `Get`, `Set`, `ListAll` |
-| `core/search` | Cross-extension search | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
-| `core/result` | Result type | `Result[T]`, `Success`, `Failure` |
-| `core/notifications` | Notification aggregation | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
-| `core/identity` | Identity verification | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
-| `core/identity/forge` | Forge adapters for identity verification | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
-| `extensions/social` | Social layer | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
-| `extensions/pm` | Project management | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
-| `extensions/release` | Release management | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
-| `extensions/review` | Code review | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
-| `extensions/memo` | Tiered memos (knowledge as commits) | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
-| `import` | Platform import pipeline | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
-| `import/github` | GitHub adapter | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
-
-### Type Locations
-
-| Type | Package |
-|------|---------|
-| `git.Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `library/core/git/` |
-| `protocol.Header`, `Message`, `Origin`, `Trailer` | `library/core/protocol/` |
-| `cache.Repository`, `Commit`, `TrailerRef` | `library/core/cache/` |
-| `result.Result[T]` | `library/core/result/` |
-| `notifications.Notification`, `Provider`, `Filter` | `library/core/notifications/` |
-| `identity.Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `library/core/identity/` |
-| `forge.Forge`, `GPGKey`, `CommitVerification` | `library/core/identity/forge/` |
-| `social.Post`, `SocialItem` | `library/extensions/social/` |
-| `pm.Issue`, `Milestone`, `Sprint`, `PMNotification` | `library/extensions/pm/` |
-| `release.Release`, `ReleaseItem`, `ReleaseNotification` | `library/extensions/release/` |
-| `review.PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `library/extensions/review/` |
-| `memo.Memo`, `MemoItem`, `Tier`, `SessionInfo` | `library/extensions/memo/` |
-| `importpkg.SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `library/import/` |
-
-### Terminology
-
-| Term | Context | Meaning |
-|------|---------|---------|
-| `original` | GITSOCIAL field | Post being commented/reposted/quoted |
-| `canonical` | Versioning | First version of a message (before edits) |
-| `edits` | GITMSG field | Reference to canonical version being edited |
-
----
-
-## Code Patterns
-
-### Error Handling by Layer
+#### Error Handling by Layer
 
 ```
 Core packages (cache, git, protocol)  → return error (idiomatic Go)
@@ -178,73 +110,107 @@ Internal helpers                      → return error
 3. For batch operations that continue on failure, log instead of returning
 4. Intentional suppressions must be commented
 
-### Cache Query
+#### Common patterns (see code for examples)
 
-```go
-items, err := cache.QueryLocked(func(db *sql.DB) ([]Item, error) {
-    rows, err := db.Query(`SELECT id, content FROM social_items WHERE type = ?`, typePost)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-    // scan rows...
-    return items, nil
-})
+- **Cache access** — wrap every DB op in `cache.QueryLocked` / `ExecLocked`; example: `library/extensions/social/`.
+- **Extension API** — public extension funcs return `Result[T]` (`Success`/`Failure`); example: `library/extensions/social/`.
+- **CLI command** — one `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
+- **TUI view** — implement the `View` interface (`Update`/`Render`); example: `library/tui/tuicore/`.
+
+---
+
+## Directory Structure
+
+```
+gitsocial/                     # module github.com/gitsocial-org/gitsocial
+├── cli/gitsocial/             # CLI thin client; builds the binary
+├── library/                   # Go library — single source of truth
+│   ├── core/                  # Shared infrastructure
+│   │   ├── git/               # Git operations
+│   │   ├── protocol/          # GitMsg protocol parsing
+│   │   ├── gitmsg/            # Protocol-level storage
+│   │   ├── cache/             # SQLite operations
+│   │   ├── storage/           # Bare repo management
+│   │   ├── fetch/             # Fetch orchestration + processing
+│   │   ├── identity/          # Identity declarations + verification
+│   │   │   └── forge/         # Forge adapters (GitHub, …)
+│   │   ├── notifications/     # Notification aggregation
+│   │   ├── search/            # Cross-extension search
+│   │   ├── settings/          # User settings + config paths
+│   │   ├── log/               # Structured logging
+│   │   ├── text/              # String helpers
+│   │   └── result/            # Result[T] type
+│   ├── extensions/
+│   │   ├── social/            # Posts, lists, timeline
+│   │   ├── pm/                # Issues, milestones, sprints
+│   │   ├── release/           # Releases, versions, artifacts
+│   │   ├── review/            # Pull requests, code reviews
+│   │   └── memo/              # Tiered memos (knowledge as commits)
+│   ├── import/                # Platform import pipeline
+│   │   ├── github/            # GitHub adapter (gh CLI)
+│   │   └── gitlab/            # GitLab adapter
+│   ├── rpc/                   # JSON-RPC server (stdio) — thin-client surface
+│   └── tui/                   # TUI views — thin client
+├── documentation/             # Protocol + architecture docs
+├── docs/                      # Project website (GitHub Pages)
+├── scripts/                   # Build/release scripts (mirror.sh, release.sh)
+└── specs/                     # Protocol specifications
 ```
 
-### Cache Write
+**Outside the repo tree:**
 
-```go
-err := cache.ExecLocked(func(db *sql.DB) error {
-    _, err := db.Exec(`INSERT INTO social_items (id, type) VALUES (?, ?)`, id, itemType)
-    return err
-})
 ```
+../gitsocial-worktrees/<name>/ # Sibling git worktrees for parallel feature work
 
-### Extension Result Pattern
+~/.config/gitsocial/           # User config; honors `XDG_CONFIG_HOME`
+├── settings.json              # Machine-specific settings
+└── personal/                  # Personal-tier bare repo (override: `GITSOCIAL_PERSONAL_REPO`)
 
-```go
-result := social.GetPosts(workdir, scope, opts)
-if !result.Ok {
-    return social.Failure[T](result.Error.Code, result.Error.Message)
-}
-posts := result.Data
-```
-
-### CLI Command
-
-```go
-var exampleCmd = &cobra.Command{
-    Use:   "example",
-    Short: "Example command",
-    RunE: func(cmd *cobra.Command, args []string) error {
-        return nil
-    },
-}
-
-func init() { rootCmd.AddCommand(exampleCmd) }
-```
-
-### TUI View
-
-```go
-type View interface {
-    Update(msg tea.Msg, state *State) tea.Cmd
-    Render(state *State) string
-}
+~/.cache/gitsocial/            # Cache dir, `--cache-dir` overrides
+├── cache.db                   # SQLite (commits + extension tables)
+├── repositories/              # Bare git clones (cleaned up periodically)
+├── forks/                     # Fork bare clones
+├── imports/                   # Import mapping files (per repo URL slug)
+└── memo/session/              # Per-session memo bare repos
 ```
 
 ---
 
-## Cache Architecture
+## Package Reference
 
-```
-~/.cache/gitsocial/
-├── cache.db          # SQLite (commits + extension tables)
-├── repositories/     # Bare git clones (cleaned up periodically)
-├── forks/            # Fork bare clones
-└── imports/          # Import mapping files (per repo URL slug)
-```
+| Package | Key Types | Key Exports |
+|---------|-------|---------|
+| `core/git`<br>Git operations | `Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `CreateSignedCommitTree`, `VerifyCommitSignature`, `GetCommitSignerKey` |
+| `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `IsClosingTrailer` |
+| `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
+| `core/gitmsg`<br>Protocol-level storage | — | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
+| `core/storage`<br>Bare repo management | — | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
+| `core/fetch`<br>Fetch orchestration | — | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
+| `core/settings`<br>User settings | — | `Get`, `Set`, `ListAll` |
+| `core/search`<br>Cross-extension search | — | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
+| `core/result`<br>Result type | `Result[T]` | `Result[T]`, `Success`, `Failure` |
+| `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
+| `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
+| `core/identity/forge`<br>Forge adapters for identity verification | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
+| `extensions/social`<br>Social layer | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
+| `extensions/pm`<br>Project management | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
+| `extensions/release`<br>Release management | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
+| `extensions/review`<br>Code review | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
+| `extensions/memo`<br>Tiered memos (knowledge as commits) | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
+| `import`<br>Platform import pipeline | `SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
+| `import/github`<br>GitHub adapter | — | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
+
+### Terminology
+
+| Term | Context | Meaning |
+|------|---------|---------|
+| `original` | GITSOCIAL field | Post being commented/reposted/quoted |
+| `canonical` | Versioning | First version of a message (before edits) |
+| `edits` | GITMSG field | Reference to canonical version being edited |
+
+---
+
+## Cache Architecture
 
 **Key principle**: Storage (repositories/) can be deleted anytime. Fetch strategy is determined by cache.db metadata, not storage state.
 
@@ -349,66 +315,11 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 ## CLI Commands
 
-```
-gitsocial
-├── status              # Show GitSocial status
-├── fetch               # Fetch updates from subscribed repos
-├── config              # Manage core protocol config
-├── settings            # Manage user settings
-├── log                 # Show activity log
-├── search              # Search across all extensions
-├── show                # Show item details (auto-detects extension)
-├── explore             # Browse repositories
-├── history             # View edit history
-├── notifications       # View/manage notifications
-├── fork                # Add, remove, list registered forks
-├── id                  # Identity management (init, show, list, verify, remove, resolve)
-├── tui                 # Launch TUI
-│
-├── import              # Import from external platforms
-│   ├── all             # Import everything (pm → release → review → social)
-│   ├── pm              # Import milestones + issues
-│   ├── release         # Import releases
-│   ├── review          # Import forks + pull requests
-│   └── social          # Import discussions/posts (GitHub only)
-│
-├── social              # Social extension
-│   ├── status/init/config
-│   ├── timeline        # View timeline
-│   ├── post/edit/retract
-│   ├── comment/repost/quote
-│   ├── fetch/followers
-│   └── list            # Manage lists (show, create, delete, add, remove)
-│
-├── pm                  # Project management extension
-│   ├── status/init/config
-│   ├── issue           # Create, list, show, close, reopen issues
-│   ├── milestone       # Create, list, show milestones
-│   └── sprint          # Create, list, show sprints
-│
-├── release             # Release management extension
-│   ├── status/init/config
-│   ├── create/edit/retract
-│   ├── list/show
-│   ├── sbom            # Show SBOM details for a release
-│   └── artifacts, versions, checksums
-│
-├── review              # Code review extension
-│   ├── status/init/config
-│   ├── pr              # Create, list, show, merge, close, retract PRs
-│   └── feedback        # Approve, request-changes, inline comments
-│
-└── memo                # Memo extension (tiered knowledge)
-    ├── status/config
-    ├── project init   # Initialize project tier
-    ├── personal       # init / push / fetch (shared bare repo at ~/.config/gitsocial/personal)
-    ├── session        # init [<id>] / list / push / fetch / gc (bare repo per session)
-    ├── inherit        # add / list / remove binding memo sources (refs/gitmsg/memo/inherits)
-    ├── create         # Create a memo (defaults to session tier)
-    ├── edit/retract   # Edit or retract a memo via the core edit chain
-    ├── promote        # Copy a memo to a higher tier (no edit chain, source untouched)
-    └── list/show      # List or show memos with tier/label/expiry/inherit filters
-```
+Cobra-generated — run `gitsocial --help` or `gitsocial <group> --help` for the authoritative, current list.
+
+- **Top-level:** `status`, `fetch`, `config`, `settings`, `log`, `search`, `show`, `explore`, `history`, `notifications`, `fork`, `id`, `tui`
+- **Import:** `import {all,pm,release,review,social}`
+- **Extensions:** `social`, `pm`, `release`, `review`, `memo` — each adds `status`/`config` + its own verbs (and `init`, except `memo`, which inits per-tier)
 
 **Planned extensions**: cicd, ops, security, dm, portfolio
 
@@ -424,7 +335,7 @@ Two-panel layout using Bubbletea: Nav (left) + Content (right). See `documentati
 │   Notifications (3)     ││  Timeline / Post / Repository / Search   │
 │ ─────────────────────── ││                                          │
 │ ▸ Social                ││  View content based on selection         │
-│   PM (planned)          ││                                          │
+│   PM                    ││                                          │
 │ ─────────────────────── ││                                          │
 │   Settings              ││                                          │
 ├─────────────────────────┤├──────────────────────────────────────────┤
@@ -436,49 +347,14 @@ Two-panel layout using Bubbletea: Nav (left) + Content (right). See `documentati
 
 ```
 library/tui/
-├── app.go                    # Main tea.Model
-├── host.go                   # View dispatch + shared state
-│
-├── tuicore/                  # Infrastructure + core views
-│   ├── view_*.go             # Routable views (cache, config, identity, notifications, search, settings)
-│   ├── component_*.go        # Reusable components (nav_panel, version_picker, confirm, choice)
-│   ├── registry_*.go         # Global registries (action, card, nav, view)
-│   ├── util_*.go             # Utilities (render, keys, router, types, syntax, diff, etc.)
-│   └── bus.go                # Event bus
-│
-├── tuisocial/                # Social extension views
-│   ├── view_*.go             # Views (timeline, post, repository, list_*)
-│   └── util_*.go             # Utilities (adapters, register, helpers)
-│
-├── tuipm/                    # PM extension views
-│   ├── view_*.go             # Views (board, issues, milestones, sprints, *_detail, *_history)
-│   ├── form_*.go             # Modal forms (issue, milestone, sprint)
-│   └── util_*.go             # Utilities (adapters, register)
-│
-├── tuirelease/               # Release extension views
-│   ├── view_*.go             # Views (releases list, release detail)
-│   └── util_*.go             # Utilities (register, card renderer)
-│
-├── tuireview/                # Review extension views
-│   ├── view_*.go             # Views (PR list, PR detail, files changed diff, interdiff, PR history)
-│   ├── form_*.go             # Modal forms (PR create/edit, feedback with inline support)
-│   └── util_*.go             # Utilities (register, card renderer, syntax highlighting)
-│
-├── tuimemo/                  # Memo extension views
-│   ├── view_*.go             # Views (memo list grouped by tier, memo detail)
-│   └── util_*.go             # Utilities (register)
-│
-└── test/                     # Headless TUI integration tests
-    ├── harness.go            # Headless model driver (sends keys, drains commands)
-    ├── fixture.go            # Test repo setup + data seeding
-    ├── assert.go             # Render assertion helpers (ANSI stripping)
-    ├── main_test.go          # Shared fixture via TestMain
-    ├── smoke_test.go         # All keys × all views (no-panic verification)
-    ├── display_test.go       # Content rendering verification
-    ├── golden_test.go        # Visual regression via golden files
-    ├── navigation_test.go    # View-to-view transitions
-    ├── sequence_test.go      # Multi-step user flows
-    └── testdata/             # Golden files (generated with -update flag)
+├── app.go / host.go     # main tea.Model + view dispatch / shared state
+├── tuicore/             # infrastructure + core views (view_/component_/registry_/util_/bus)
+├── tuisocial/           # social views
+├── tuipm/               # PM views
+├── tuirelease/          # release views
+├── tuireview/           # review views
+├── tuimemo/             # memo views
+└── test/                # headless integration tests (see TUI-TESTS.md)
 ```
 
 ### File Naming Convention
@@ -499,47 +375,3 @@ library/tui/
 4. Call from `app.go`
 
 If more ceremony needed, we over-engineered.
-
----
-
-## Development
-
-### Build & Run
-
-```bash
-go build -o bin/gitsocial ./cli/gitsocial    # Build CLI
-bin/gitsocial social timeline                 # Run command
-bin/gitsocial tui                             # Launch TUI
-```
-
-### Test & Lint
-
-```bash
-go test ./...                    # All tests
-go test ./library/core/cache    # Specific package
-go test -v ./...                 # Verbose output
-go test -race ./...              # Race detector
-go test -cover ./...             # Coverage summary
-golangci-lint run --fix ./...    # Lint & fix code
-
-# TUI tests (headless integration)
-go test ./library/tui/test/...                       # All TUI tests
-go test ./library/tui/test/ -run Smoke               # Smoke: all keys × all views
-go test ./library/tui/test/ -run Display             # Content rendering
-go test ./library/tui/test/ -run Golden              # Golden file comparison
-go test ./library/tui/test/ -run Golden -update      # Regenerate golden files
-go test ./library/tui/test/ -run Navigation          # View transitions
-go test ./library/tui/test/ -run Sequence            # Multi-step flows
-```
-
-See `documentation/TUI-TESTS.md` for the full TUI test suite documentation.
-
-### Specs
-
-| Spec | Status |
-|------|--------|
-| `specs/GITMSG.md` | Stable |
-| `specs/GITSOCIAL.md` | Stable |
-| `specs/GITPM.md` | Stable |
-| `specs/GITRELEASE.md` | Stable |
-| `specs/GITREVIEW.md` | Stable |
