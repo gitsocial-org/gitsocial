@@ -120,6 +120,8 @@ type ListPostsCountLoadedMsg struct {
 type FetchCompletedMsg struct {
 	Stats social.FetchStats
 	Err   error
+	// Auto is true when the periodic auto-fetch timer started this fetch.
+	Auto bool
 }
 
 // PushCompletedMsg is sent when push completes

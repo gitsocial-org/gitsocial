@@ -3,15 +3,18 @@
 │  ⌕  Search  ············  /  ││  Fetch  · synced                                                                     │
 │  ⚑  Notifications  ·····  @  ││  ▸ fetch.parallel        4                                                           │
 │  ◧  Analytics  ·········  %  ││    fetch.timeout         30                                                          │
-│ ──────────────────────────── ││                                                                                      │
-│  ⌘  Social  ············  S  ││  Workspace                                                                           │
-│     ⏱  Timeline              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│ ──────────────────────────── ││    fetch.auto.enabled    false  (false · true)  pauses after 1h idle                 │
+│  ⌘  Social  ············  S  ││    fetch.auto.interval   300  s                                                      │
+│     ⏱  Timeline              ││    fetch.auto.backoff    true  (false · true)  doubles per empty cycle, max 30m      │
 │     ♥  My Repository         ││                                                                                      │
-│     ☷  My Lists             ││  Output  · synced                                                                    │
-│  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
+│     ☷  My Lists             ││  Workspace                                                                           │
+│  ▢  PM  ················  P  ││    fetch.workspace_mode  (not set)  (default · *)                                    │
 │  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  Log  · synced                                                                       │
-│  ☞  Memos  ·············  M  ││    log.level             info  (debug · info · warn · error)                         │
+│  ⏏  Release  ···········  V  ││  Output  · synced                                                                    │
+│  ☞  Memos  ·············  M  ││    output.color          auto  (auto · always · never)                               │
+│                              ││                                                                                      │
+│                              ││  Log  · synced                                                                       │
+│                              ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
 │                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
@@ -22,9 +25,6 @@
 │                              ││    extensions.review     true  (true · false)                                        │
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││    extensions.memo       true  (true · false)                                        │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │                              ││                                                                                      │

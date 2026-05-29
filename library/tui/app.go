@@ -302,12 +302,14 @@ func (m Model) Init() tea.Cmd {
 			m.loadInitialLists(),
 		)
 	}
+	m.host.State().LastInputAt = time.Now()
 	return tea.Batch(
 		m.host.ActivateView(),
 		func() tea.Msg { return startSyncMsg{} },
 		m.loadInitialCacheSize(),
 		m.loadInitialUnreadCount(),
 		m.loadInitialLists(),
+		scheduleAutoFetch(autoFetchIdlePoll),
 	)
 }
 
@@ -450,6 +452,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		m.host.State().LastInputAt = time.Now()
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -462,6 +465,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
+		m.host.State().LastInputAt = time.Now()
 		return m.handleMouse(msg)
 
 	// Navigation messages
@@ -598,9 +602,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.host.SetFetchingInfo(repos, lists)
-			return m, m.startFetchWithMode(msg.allBranches)
+			return m, m.startFetchWithMode(msg.allBranches, msg.auto)
 		}
 		return m, nil
+
+	case autoFetchTickMsg:
+		return m, m.handleAutoFetchTick()
 
 	case tuicore.LogErrorMsg:
 		if msg.Message != "" {
@@ -1008,11 +1015,11 @@ func (m Model) Registry() *tuicore.Registry {
 }
 
 // startFetchWithMode begins fetching with the specified all-branches mode.
-func (m Model) startFetchWithMode(allBranches bool) tea.Cmd {
+func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 	return func() tea.Msg {
 		if err := cache.Open(m.cacheDir); err != nil {
 			log.Warn("failed to open cache before fetch", "error", err)
-			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("cache open: %w", err)}
+			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("cache open: %w", err), Auto: auto}
 		}
 		extraProcessors := append(pm.Processors(), review.Processors()...)
 		extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
@@ -1030,9 +1037,9 @@ func (m Model) startFetchWithMode(allBranches bool) tea.Cmd {
 			log.Debug("post-fetch workspace sync failed", "error", err)
 		}
 		if !result.Success {
-			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message), Auto: auto}
 		}
-		return tuisocial.FetchCompletedMsg{Stats: result.Data}
+		return tuisocial.FetchCompletedMsg{Stats: result.Data, Auto: auto}
 	}
 }
 
@@ -1118,8 +1125,11 @@ type fetchStatusMsg struct {
 type startSyncMsg struct{}
 
 // startFetchMsg is an internal message to trigger fetch with a resolved mode.
+// auto marks a fetch started by the periodic auto-fetch timer (vs. a manual
+// trigger) so completion handling can soften toasts and drive back-off.
 type startFetchMsg struct {
 	allBranches bool
+	auto        bool
 }
 
 // saveWorkspaceModeAndFetch saves the mode and starts fetching.
@@ -1134,6 +1144,94 @@ func (m Model) saveWorkspaceModeAndFetch(mode string) tea.Cmd {
 		}
 		return startFetchMsg{allBranches: mode == "*"}
 	}
+}
+
+// --- Periodic auto-fetch (opt-in via fetch.auto.* settings) ---
+
+// autoFetchTickMsg fires on the periodic auto-fetch heartbeat. Each tick re-arms
+// the next one, so the cadence is decided at fire time from current settings
+// rather than baked into a fixed ticker — the user can toggle it live.
+type autoFetchTickMsg struct{}
+
+const (
+	// autoFetchIdlePoll is the re-arm delay when auto-fetch is disabled or
+	// momentarily blocked: cheap to repeat, yet short enough that enabling the
+	// feature takes effect promptly.
+	autoFetchIdlePoll = 30 * time.Second
+	// autoFetchCeiling caps the exponential back-off interval.
+	autoFetchCeiling = 30 * time.Minute
+	// autoFetchIdleAfter pauses the heartbeat when there's been no keypress or
+	// mouse input for this long, so an unattended TUI stops polling. Resumes on
+	// the next input event.
+	autoFetchIdleAfter = 1 * time.Hour
+)
+
+// scheduleAutoFetch arms a single auto-fetch tick after d. The tick handler
+// re-arms it, making the timer a self-perpetuating heartbeat for the session.
+func scheduleAutoFetch(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return autoFetchTickMsg{} })
+}
+
+// backoffInterval returns the effective delay for an idle streak: the base
+// interval doubled per consecutive empty fetch, capped at autoFetchCeiling. A
+// loop (not a shift) keeps it overflow-safe for any streak.
+func backoffInterval(baseSeconds, streak int) time.Duration {
+	d := time.Duration(baseSeconds) * time.Second
+	if d <= 0 {
+		return autoFetchCeiling
+	}
+	for i := 0; i < streak && d < autoFetchCeiling; i++ {
+		d *= 2
+	}
+	if d > autoFetchCeiling {
+		d = autoFetchCeiling
+	}
+	return d
+}
+
+// autoFetchCmd starts a background fetch from the auto-fetch timer. Unlike the
+// manual path it never opens the workspace-mode dialog: an unset mode falls back
+// to default (current-branch) fetching, never all-branches.
+func (m Model) autoFetchCmd() tea.Cmd {
+	workdir := m.workdir
+	return func() tea.Msg {
+		allBranches := false
+		if originURL := protocol.NormalizeURL(git.GetOriginURL(workdir)); originURL != "" {
+			allBranches = settings.GetWorkspaceMode(originURL) == "*"
+		}
+		return startFetchMsg{allBranches: allBranches, auto: true}
+	}
+}
+
+// handleAutoFetchTick decides what the periodic heartbeat does this cycle and
+// always re-arms the next tick. Settings are read each fire so toggling the
+// feature or its interval takes effect without restarting the TUI.
+func (m Model) handleAutoFetchTick() tea.Cmd {
+	s, _ := settings.Load("")
+	if !s.Fetch.AutoEnabled {
+		return scheduleAutoFetch(autoFetchIdlePoll)
+	}
+	// Pause when the workstation looks unattended (no keypress/mouse for
+	// autoFetchIdleAfter). LastInputAt refreshes in Update's KeyPressMsg /
+	// MouseMsg cases, so the heartbeat resumes on the next input. A zero value
+	// is treated as active so a freshly opened session polls before any input.
+	if li := m.host.State().LastInputAt; !li.IsZero() && time.Since(li) > autoFetchIdleAfter {
+		return scheduleAutoFetch(autoFetchIdlePoll)
+	}
+	// Never start an auto-fetch on top of another operation, while the user is
+	// mid-input, or while a dialog is open — re-check shortly instead.
+	if m.isFetching || m.isPushing || m.isImporting ||
+		m.host.IsInputActive() || m.host.State().ChoicePrompt != "" {
+		return scheduleAutoFetch(autoFetchIdlePoll)
+	}
+	eff := time.Duration(s.Fetch.AutoInterval) * time.Second
+	if s.Fetch.AutoBackoff {
+		eff = backoffInterval(s.Fetch.AutoInterval, m.host.State().AutoFetchIdleStreak)
+	}
+	if remaining := eff - time.Since(m.host.State().LastFetchTime); remaining > 0 {
+		return scheduleAutoFetch(remaining)
+	}
+	return tea.Batch(m.autoFetchCmd(), scheduleAutoFetch(eff))
 }
 
 // refreshTimeline reloads timeline posts from the database. The total count

@@ -79,6 +79,12 @@ var Registry = []KeySpec{
 		Desc: "Concurrent fetch workers."},
 	{Key: "fetch.timeout", Scope: ScopePersonalConfig, Type: KeyInt, Default: "30",
 		Desc: "Per-repo fetch timeout in seconds."},
+	{Key: "fetch.auto.enabled", Scope: ScopePersonalConfig, Type: KeyBool, Default: "false",
+		Desc: "Periodically fetch in the TUI while it's open."},
+	{Key: "fetch.auto.interval", Scope: ScopePersonalConfig, Type: KeyInt, Default: "300",
+		Desc: "Auto-fetch interval in seconds (minimum 60)."},
+	{Key: "fetch.auto.backoff", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
+		Desc: "Slow auto-fetch when idle; reset to the base interval when new items arrive."},
 
 	// fetch.workspace_mode is a per-repo-URL map; handled outside the Registry
 	// via Get/WriteWorkspaceMode (the personal config also stores the map, but
@@ -120,6 +126,9 @@ func Validate(key, value string) error {
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 0 {
 			return fmt.Errorf("%s must be a non-negative integer", key)
+		}
+		if key == "fetch.auto.interval" && n < 60 {
+			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
 		}
 	case KeyEnum:
 		for _, opt := range spec.Enum {

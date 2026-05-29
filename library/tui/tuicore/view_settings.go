@@ -299,6 +299,15 @@ func categoryScopeLabel(keys []string) string {
 	return ""
 }
 
+// rowSuffix maps setting keys to a dim hint appended after the value (and any
+// enum options). Used to surface units (e.g. "s" for seconds) and brief inline
+// explainers for non-obvious settings.
+var rowSuffix = map[string]string{
+	"fetch.auto.enabled":  "pauses after 1h idle",
+	"fetch.auto.interval": "s",
+	"fetch.auto.backoff":  "doubles per empty cycle, max 30m",
+}
+
 // notifyDisplayChange notifies the callback of display setting changes.
 func (v *SettingsView) notifyDisplayChange() {
 	if v.onDisplayChange != nil && v.data != nil {
@@ -349,7 +358,7 @@ func (v *SettingsView) Render(state *State) string {
 		name string
 		keys []string
 	}{
-		{"Fetch", []string{"fetch.parallel", "fetch.timeout"}},
+		{"Fetch", []string{"fetch.parallel", "fetch.timeout", "fetch.auto.enabled", "fetch.auto.interval", "fetch.auto.backoff"}},
 		{"Workspace", []string{"fetch.workspace_mode"}},
 		{"Output", []string{"output.color"}},
 		{"Log", []string{"log.level"}},
@@ -394,6 +403,9 @@ func (v *SettingsView) Render(state *State) string {
 			if settings.IsEnum(key) {
 				opts := settings.EnumOptions[key]
 				displayValue = value + "  " + Dim.Render("("+strings.Join(opts, " · ")+")")
+			}
+			if suffix := rowSuffix[key]; suffix != "" {
+				displayValue += "  " + Dim.Render(suffix)
 			}
 
 			var line string

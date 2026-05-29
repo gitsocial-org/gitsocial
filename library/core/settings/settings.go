@@ -39,6 +39,9 @@ type ExtensionsSettings struct {
 type FetchSettings struct {
 	Parallel       int
 	Timeout        int
+	AutoEnabled    bool
+	AutoInterval   int
+	AutoBackoff    bool
 	WorkspaceModes map[string]string
 }
 
@@ -58,8 +61,11 @@ type DisplaySettings struct {
 func DefaultSettings() *Settings {
 	return &Settings{
 		Fetch: FetchSettings{
-			Parallel: 4,
-			Timeout:  30,
+			Parallel:     4,
+			Timeout:      30,
+			AutoEnabled:  false,
+			AutoInterval: 300,
+			AutoBackoff:  true,
 		},
 		Output: OutputSettings{
 			Color: "auto",
@@ -127,6 +133,12 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.Itoa(s.Fetch.Parallel), true
 	case "fetch.timeout":
 		return strconv.Itoa(s.Fetch.Timeout), true
+	case "fetch.auto.enabled":
+		return strconv.FormatBool(s.Fetch.AutoEnabled), true
+	case "fetch.auto.interval":
+		return strconv.Itoa(s.Fetch.AutoInterval), true
+	case "fetch.auto.backoff":
+		return strconv.FormatBool(s.Fetch.AutoBackoff), true
 	case "output.color":
 		return s.Output.Color, s.Output.Color != ""
 	case "log.level":
@@ -169,6 +181,22 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("fetch.timeout must be a positive integer")
 		}
 		s.Fetch.Timeout = n
+	case "fetch.auto.enabled":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("fetch.auto.enabled must be true or false")
+		}
+		s.Fetch.AutoEnabled = value == "true"
+	case "fetch.auto.interval":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 60 {
+			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
+		}
+		s.Fetch.AutoInterval = n
+	case "fetch.auto.backoff":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("fetch.auto.backoff must be true or false")
+		}
+		s.Fetch.AutoBackoff = value == "true"
 	case "output.color":
 		if value != "auto" && value != "always" && value != "never" {
 			return fmt.Errorf("output.color must be auto, always, or never")
@@ -227,6 +255,9 @@ func ListKeys() []string {
 	return []string{
 		"fetch.parallel",
 		"fetch.timeout",
+		"fetch.auto.enabled",
+		"fetch.auto.interval",
+		"fetch.auto.backoff",
 		"fetch.workspace_mode",
 		"output.color",
 		"log.level",
@@ -269,6 +300,8 @@ var EnumOptions = map[string][]string{
 	"log.level":                 {"debug", "info", "warn", "error"},
 	"output.color":              {"auto", "always", "never"},
 	"display.show_email":        {"false", "true"},
+	"fetch.auto.enabled":        {"false", "true"},
+	"fetch.auto.backoff":        {"false", "true"},
 	"fetch.workspace_mode":      {"default", "*"},
 	"extensions.social":         {"true", "false"},
 	"extensions.pm":             {"true", "false"},

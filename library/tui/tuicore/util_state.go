@@ -91,6 +91,16 @@ type State struct {
 	LastFetchTime time.Time
 	NewItemCount  int
 
+	// AutoFetchIdleStreak counts consecutive auto-fetches that found nothing new.
+	// Drives the exponential back-off interval; reset to 0 when an auto-fetch
+	// brings new items.
+	AutoFetchIdleStreak int
+
+	// LastInputAt is the time of the most recent KeyPressMsg or MouseMsg, set
+	// in Update. Used by the auto-fetch heartbeat to pause polling when the
+	// workstation has been left unattended.
+	LastInputAt time.Time
+
 	// Messages
 	Message     string
 	MessageType MessageType
