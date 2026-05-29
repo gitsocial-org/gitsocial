@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
@@ -65,12 +64,16 @@ func DefaultBoardConfig() BoardConfig {
 
 // GetPMConfig reads the full PM configuration from refs/gitmsg/pm/config.
 func GetPMConfig(workdir string) PMConfig {
-	msg, err := git.GetCommitMessage(workdir, "refs/gitmsg/pm/config")
-	if err != nil || msg == "" {
+	raw, err := gitmsg.ReadExtConfig(workdir, "pm")
+	if err != nil || raw == nil {
+		return DefaultPMConfig()
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
 		return DefaultPMConfig()
 	}
 	var config PMConfig
-	if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &config); err != nil {
+	if err := json.Unmarshal(data, &config); err != nil {
 		return DefaultPMConfig()
 	}
 	if config.Version == "" {
@@ -232,20 +235,15 @@ func SavePMConfig(workdir string, config PMConfig) error {
 	if config.Version == "" {
 		config.Version = "0.1.0"
 	}
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
-	ref := "refs/gitmsg/pm/config"
-	var parent string
-	if existing, err := git.ReadRef(workdir, ref); err == nil {
-		parent = existing
-	}
-	hash, err := git.CreateCommitTree(workdir, string(data), parent)
-	if err != nil {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	return git.WriteRef(workdir, ref, hash)
+	return gitmsg.WriteExtConfig(workdir, "pm", raw)
 }
 
 // SetBoardConfig saves or updates a board configuration.

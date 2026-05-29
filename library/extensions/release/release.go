@@ -343,16 +343,11 @@ func SaveReleaseConfig(workdir string, config ReleaseConfig) error {
 	if err != nil {
 		return err
 	}
-	ref := "refs/gitmsg/release/config"
-	var parent string
-	if existing, err := git.ReadRef(workdir, ref); err == nil {
-		parent = existing
-	}
-	hash, err := git.CreateCommitTree(workdir, string(data), parent)
-	if err != nil {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	return git.WriteRef(workdir, ref, hash)
+	return gitmsg.WriteExtConfig(workdir, "release", raw)
 }
 
 // GetReleaseConfig reads the release extension configuration.

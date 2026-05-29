@@ -627,20 +627,11 @@ func SaveReviewConfig(workdir string, config ReviewConfig) error {
 	if err != nil {
 		return err
 	}
-	ref := "refs/gitmsg/review/config"
-	var parent string
-	if existing, err := git.ReadRef(workdir, ref); err == nil {
-		parent = existing
-	}
-	hash, err := git.CreateCommitTree(workdir, string(data), parent)
-	if err != nil {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	if err := git.WriteRef(workdir, ref, hash); err != nil {
-		return err
-	}
-	gitmsg.InvalidateExtConfig(workdir, "review")
-	return nil
+	return gitmsg.WriteExtConfig(workdir, "review", raw)
 }
 
 // GetReviewConfig reads the review extension configuration.

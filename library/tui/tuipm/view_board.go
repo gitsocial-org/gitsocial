@@ -19,7 +19,6 @@ import (
 // BoardView displays issues in a kanban board layout.
 type BoardView struct {
 	workdir        string
-	repoURL        string
 	userEmail      string
 	width          int
 	height         int
@@ -75,19 +74,14 @@ func (v *BoardView) loadBoard() tea.Cmd {
 				}
 			}
 		}
-		// Get repo URL for prefs
-		repoURL := workdir
-		prefs := pm.GetUserPrefs(repoURL)
-		return BoardLoadedMsg{Board: result.Data, RepoURL: repoURL, Prefs: prefs}
+		return BoardLoadedMsg{Board: result.Data}
 	}
 }
 
 // BoardLoadedMsg signals that the board has been loaded.
 type BoardLoadedMsg struct {
-	Board   pm.BoardView
-	RepoURL string
-	Prefs   pm.UserPrefs
-	Err     error
+	Board pm.BoardView
+	Err   error
 }
 
 // Update handles messages.
@@ -96,8 +90,6 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case BoardLoadedMsg:
 		if msg.Err == nil {
 			v.allBoard = msg.Board
-			v.repoURL = msg.RepoURL
-			v.prefs = msg.Prefs
 			v.loaded = true
 			v.applyFilter()
 		}
@@ -193,9 +185,6 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 		if v.selectedCol >= 0 && v.selectedCol < len(v.board.Columns) {
 			colName := v.board.Columns[v.selectedCol].Name
 			v.prefs.ToggleColumnCollapsed(colName)
-			repoURL := v.repoURL
-			prefs := v.prefs
-			go func() { _ = pm.SaveUserPrefs(repoURL, prefs) }()
 		}
 		return nil
 	case "K":
@@ -208,9 +197,6 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	case "s":
 		// Cycle swimlane grouping
 		v.prefs.CycleSwimlaneField()
-		repoURL := v.repoURL
-		prefs := v.prefs
-		go func() { _ = pm.SaveUserPrefs(repoURL, prefs) }()
 		return nil
 	case "m":
 		if v.assigneeFilter == "" {
@@ -414,10 +400,7 @@ func (v *BoardView) renderBoard(width, height int) string {
 	for i, col := range v.board.Columns {
 		count := len(col.Issues)
 		isCollapsed := v.prefs.IsColumnCollapsed(col.Name)
-		wip := v.prefs.GetWIPOverride(col.Name)
-		if wip == nil {
-			wip = col.WIP
-		}
+		wip := col.WIP
 		var header string
 		collapseIndicator := ""
 		if isCollapsed {
@@ -528,24 +511,15 @@ func (v *BoardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth in
 			continue
 		}
 
-		isCollapsed := v.prefs.IsSwimlaneCollapsed(lane)
 		laneLabel := lane
 		if laneLabel == "" {
 			laneLabel = "(none)"
 		}
 
-		collapseIcon := "▾"
-		if isCollapsed {
-			collapseIcon = "▸"
-		}
-		header := fmt.Sprintf("─ %s %s ", collapseIcon, laneLabel)
+		header := fmt.Sprintf("─ ▾ %s ", laneLabel)
 		header += strings.Repeat("─", totalWidth-len(header))
 		lines = append(lines, tuicore.Dim.Render(header))
 		rowCount++
-
-		if isCollapsed {
-			continue
-		}
 
 		maxInLane := 0
 		for _, col := range v.board.Columns {
