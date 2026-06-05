@@ -24,9 +24,10 @@ type searchQuery struct {
 	SQLLimit     int // pushed to SQL LIMIT; 0 = no limit
 
 	// Text search filters (pushed to SQL for performance)
-	TextSearch   string // text to search in message and author fields
-	AuthorFilter string // author name/email substring
-	HashPrefix   string // hash prefix match
+	TextSearch   string   // text to search in message and author fields
+	AuthorFilter string   // author name/email substring
+	HashPrefix   string   // hash prefix match (from commit:/hash: filter syntax — precise self-lookup)
+	HashTerms    []string // bare hash terms; each matches as self-hash OR mention in message
 
 	// Extension-specific SQL filters
 	State      string // pm_items.state or review_items.state
@@ -366,6 +367,24 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 	if q.HashPrefix != "" {
 		where = append(where, "r.hash LIKE ? || '%'")
 		args = append(args, q.HashPrefix)
+	}
+	// Bare hash terms match either the commit at that hash (self) or any commit
+	// whose message mentions the hash (cherry-pick / revert / trailer / prose).
+	// Each term contributes a (self OR mention) pair; pairs across terms are OR'd.
+	if len(q.HashTerms) > 0 {
+		var orClauses []string
+		for _, h := range q.HashTerms {
+			orClauses = append(orClauses, "r.hash LIKE ? || '%'")
+			args = append(args, h)
+			if ftsAvailable(db) {
+				orClauses = append(orClauses, "r.rowid IN (SELECT rowid FROM core_fts WHERE core_fts MATCH ?)")
+				args = append(args, ftsQuery(h))
+			} else {
+				orClauses = append(orClauses, "r.effective_message LIKE '%' || ? || '%' COLLATE NOCASE")
+				args = append(args, h)
+			}
+		}
+		where = append(where, "("+strings.Join(orClauses, " OR ")+")")
 	}
 
 	// Social-level type filter (post, comment, repost, quote)

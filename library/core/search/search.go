@@ -113,15 +113,19 @@ func Search(workdir string, params Params) (Result, error) {
 		q.Until = params.Before
 	}
 
-	// Push text search into SQL for performance
+	// Push text search into SQL for performance. Hash-shaped tokens are routed
+	// to HashTerms (which builds a self-OR-mention WHERE group); non-hash tokens
+	// stay in TextSearch. This survives SQL LIMIT, which the in-Go path didn't.
 	searchTerms := strings.ToLower(parsed.Terms)
 	for _, term := range strings.Fields(searchTerms) {
-		if !hashPattern.MatchString(term) {
-			if q.TextSearch != "" {
-				q.TextSearch += " "
-			}
-			q.TextSearch += term
+		if hashPattern.MatchString(term) {
+			q.HashTerms = append(q.HashTerms, term)
+			continue
 		}
+		if q.TextSearch != "" {
+			q.TextSearch += " "
+		}
+		q.TextSearch += term
 	}
 	q.AuthorFilter = params.Author
 	q.HashPrefix = strings.ToLower(params.Hash)
@@ -351,7 +355,8 @@ func scanItem(rows *sql.Rows) (Item, error) {
 func scoreAndFilter(items []Item, params Params, parsed parsedQuery) []ScoredItem {
 	searchTerms := strings.ToLower(parsed.Terms)
 
-	// Auto-detect hash-like terms (7+ hex chars)
+	// Mirror Search()'s split: hash-shaped tokens score as self/mention; the
+	// rest contribute text-match scoring. SQL has already filtered by both.
 	var hashTerms []string
 	var textTerms []string
 	for _, term := range strings.Fields(searchTerms) {
@@ -377,37 +382,33 @@ func scoreAndFilter(items []Item, params Params, parsed parsedQuery) []ScoredIte
 			continue
 		}
 
-		// Filter by auto-detected hash terms
-		hashMatch := len(hashTerms) == 0
-		for _, ht := range hashTerms {
-			if strings.HasPrefix(strings.ToLower(item.Hash), ht) {
-				hashMatch = true
-				break
-			}
-		}
-		if !hashMatch {
-			continue
-		}
-
 		score := 0.0
 		if textSearch != "" {
 			contentLower := strings.ToLower(item.Content)
 			authorLower := strings.ToLower(item.AuthorName + " " + item.AuthorEmail)
-
 			if strings.Contains(contentLower, textSearch) {
 				score += 10.0
 			}
 			if strings.Contains(authorLower, textSearch) {
 				score += 5.0
 			}
-
-			if score == 0 {
-				score = 1.0 // SQL already filtered via FTS/LIKE; keep for ranking
+		}
+		// Self-hash match floats to the top; mention-only items get a floor
+		// below self but above pure text-only matches.
+		selfHashMatch := false
+		for _, ht := range hashTerms {
+			if strings.HasPrefix(strings.ToLower(item.Hash), ht) {
+				selfHashMatch = true
+				break
 			}
-		} else if len(hashTerms) > 0 {
-			score = 20.0
-		} else {
-			score = 1.0
+		}
+		if selfHashMatch {
+			score += 20.0
+		} else if len(hashTerms) > 0 && score == 0 {
+			score = 10.0 // SQL accepted us via mention branch; keep for ranking
+		}
+		if score == 0 {
+			score = 1.0 // SQL accepted us via FTS/LIKE; keep for ranking
 		}
 
 		results = append(results, ScoredItem{
