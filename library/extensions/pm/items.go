@@ -743,17 +743,46 @@ func PMItemToIssue(item PMItem) Issue {
 		}
 	}
 
-	// Load links from pm_links table
+	// Load links from pm_links table. Blocks is forward-only (issues I declared
+	// I block). BlockedBy and Related include reverse-edge contributions so the
+	// JSON shape matches GetBlockedBy / GetRelated union semantics — otherwise
+	// consumers (e.g., agentskill ready checks) miss blockers other issues
+	// declared via "I block this".
 	var blocks, blockedBy, related []IssueRef
+	seenBlockedBy := map[string]bool{}
+	seenRelated := map[string]bool{}
+	refKey := func(r IssueRef) string { return r.RepoURL + "\x00" + r.Hash + "\x00" + r.Branch }
 	if links, err := GetLinks(item.RepoURL, item.Hash, item.Branch); err == nil {
 		for _, l := range links {
 			switch l.Type {
 			case LinkTypeBlocks:
 				blocks = append(blocks, l.To)
 			case LinkTypeBlockedBy:
-				blockedBy = append(blockedBy, l.To)
+				if k := refKey(l.To); !seenBlockedBy[k] {
+					seenBlockedBy[k] = true
+					blockedBy = append(blockedBy, l.To)
+				}
 			case LinkTypeRelated:
-				related = append(related, l.To)
+				if k := refKey(l.To); !seenRelated[k] {
+					seenRelated[k] = true
+					related = append(related, l.To)
+				}
+			}
+		}
+	}
+	if reverse, err := GetLinksTo(item.RepoURL, item.Hash, item.Branch); err == nil {
+		for _, l := range reverse {
+			switch l.Type {
+			case LinkTypeBlocks:
+				if k := refKey(l.From); !seenBlockedBy[k] {
+					seenBlockedBy[k] = true
+					blockedBy = append(blockedBy, l.From)
+				}
+			case LinkTypeRelated:
+				if k := refKey(l.From); !seenRelated[k] {
+					seenRelated[k] = true
+					related = append(related, l.From)
+				}
 			}
 		}
 	}
