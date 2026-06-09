@@ -3,23 +3,34 @@ version: 2
 project_name: gitsocial
 
 builds:
-  - main: ./cli/gitsocial
+  - id: darwin
+    main: ./cli/gitsocial
     binary: gitsocial
     ldflags:
       - -s -w -X main.version={{.Version}}
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    hooks:
+      post:
+        - 'rcodesign sign --p12-file=/tmp/cert.p12 --p12-password={{ .Env.APPLE_CERT_PASSWORD }} --code-signature-flags=runtime {{ .Path }}'
+  - id: other
+    main: ./cli/gitsocial
+    binary: gitsocial
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos: [linux, windows]
+    goarch: [amd64, arm64]
     ignore:
       - goos: windows
         goarch: arm64
 
 archives:
-  - formats: [tar.gz]
+  - id: darwin
+    ids: [darwin]
+    formats: [zip]
+  - id: other
+    ids: [other]
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -31,6 +42,9 @@ sboms:
   - artifacts: archive
 
 release:
+  github:
+    owner: gitsocial-org
+    name: gitsocial
   prerelease: auto
 
 homebrew_casks:

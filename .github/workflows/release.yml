@@ -22,6 +22,25 @@ jobs:
 
       - uses: anchore/sbom-action/download-syft@v0
 
+      - name: Install rcodesign
+        run: |
+          V=0.29.0
+          curl -fsSL "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${V}/apple-codesign-${V}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz --strip-components=1 -C /tmp
+          sudo install /tmp/rcodesign /usr/local/bin/
+
+      - name: Decode Apple credentials
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          printf '%s' "$APPLE_CERT_P12" | base64 -d > /tmp/cert.p12
+          printf '%s' "$APPLE_API_KEY_P8" > /tmp/api-key.p8
+          rcodesign encode-app-store-connect-api-key -o /tmp/api-key.json \
+            "$APPLE_API_ISSUER_ID" "$APPLE_API_KEY_ID" /tmp/api-key.p8
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -30,6 +49,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_HOMEBREW_CASK_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           GORELEASER_SCOOP_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+
+      - name: Notarize macOS archives
+        run: |
+          for zip in dist/*_darwin_*.zip; do
+            rcodesign notary-submit --api-key-path=/tmp/api-key.json --wait "$zip"
+          done
 
       - name: Publish gitsocial release
         run: scripts/release.sh "$GITHUB_REF_NAME"
