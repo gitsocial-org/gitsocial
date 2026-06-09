@@ -27,14 +27,11 @@ All collaboration data (posts, issues, PRs, etc.) is stored in your git reposito
 
 **macOS / Linux**:
 ```bash
+brew tap gitsocial-org/tap
+brew trust gitsocial-org/tap   # one-time; required by Homebrew 5.0+ for third-party taps
 brew install gitsocial-org/tap/gitsocial
 # or
 curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/install.sh | sh
-```
-
-If macOS blocks the binary ("cannot verify developer"), run:
-```bash
-xattr -d com.apple.quarantine $(which gitsocial)
 ```
 
 **Windows**:
