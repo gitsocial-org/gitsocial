@@ -77,6 +77,9 @@ type Model struct {
 	// Import confirmation choice dialog
 	importChoice tuicore.ChoiceDialog
 
+	// Push confirmation choice dialog
+	pushChoice tuicore.ChoiceDialog
+
 	// bgImportCh streams ImportProgressMsg + ImportCompletedMsg from the
 	// background import goroutine. Created when an import starts, closed when
 	// it ends.
@@ -795,6 +798,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle push choice dialog
+	if m.pushChoice.IsActive() {
+		if handled, cmd := m.pushChoice.HandleKey(key); handled {
+			if !m.pushChoice.IsActive() {
+				m.host.State().ChoicePrompt = ""
+			}
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	// Content panel handles its own input when active
 	if m.host.IsInputActive() {
 		cmd := m.host.Update(msg)
@@ -906,13 +920,31 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			return m.checkWorkspaceMode()
 		},
 		StartPush: func() tea.Cmd {
-			if m.isPushing || m.isFetching {
+			if m.isPushing || m.isFetching || m.pushChoice.IsActive() {
 				return nil
 			}
-			m.isPushing = true
-			m.host.SetPushing(true)
-			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
-			return m.startPush()
+			preview, err := gitmsg.GetPushPreview(m.workdir)
+			if err != nil {
+				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+			}
+			if preview.IsEmpty() {
+				return m.host.SetMessageWithTimeout("Nothing to push", tuicore.MessageTypeSuccess, 5*time.Second)
+			}
+			m.pushChoice.Show(buildPushConfirmPrompt(preview), []tuicore.Choice{
+				{Key: "y", Label: "es"},
+				{Key: "n", Label: "o"},
+			}, func(key string) tea.Cmd {
+				m.host.State().ChoicePrompt = ""
+				if key != "y" {
+					return nil
+				}
+				m.isPushing = true
+				m.host.SetPushing(true)
+				m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
+				return m.startPush()
+			})
+			m.host.State().ChoicePrompt = m.pushChoice.Render()
+			return nil
 		},
 		StartLFSPush: func() tea.Cmd {
 			if m.isPushing || m.isFetching {
@@ -1681,6 +1713,23 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 		return "Import from " + repoURL + "?"
 	}
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
+}
+
+// buildPushConfirmPrompt builds the single-line confirmation prompt for push,
+// breaking commits down per extension branch and adding a refs total if any.
+func buildPushConfirmPrompt(p *gitmsg.PushPreview) string {
+	var parts []string
+	for _, b := range p.Branches {
+		name := strings.TrimPrefix(b.Branch, "gitmsg/")
+		parts = append(parts, fmt.Sprintf("%d %s", b.Commits, name))
+	}
+	if p.Refs > 0 {
+		parts = append(parts, fmt.Sprintf("%d refs", p.Refs))
+	}
+	if len(parts) == 0 {
+		return "Push?"
+	}
+	return "Push " + strings.Join(parts, ", ") + "?"
 }
 
 // formatImportProgress turns a ProgressEvent into footer phase + detail.

@@ -14,38 +14,51 @@ type PushResult struct {
 	Refs    int `json:"refs"`
 }
 
-// Push pushes all extension branches and gitmsg refs to remote. Extension
-// branches go through PushBranchWithMerge so divergent histories auto-resolve
-// (empty-tree append-only branches → conflict-free merge) instead of failing
-// non-fast-forward and dropping the user into raw git.
-func Push(workdir string, dryRun bool) (*PushResult, error) {
-	branches := GetExtBranches(workdir)
-	result := &PushResult{}
+type PushPreview struct {
+	Branches []BranchPushCount `json:"branches"`
+	Refs     int               `json:"refs"`
+}
 
-	for _, branch := range branches {
+type BranchPushCount struct {
+	Branch  string `json:"branch"`
+	Commits int    `json:"commits"`
+}
+
+// TotalCommits returns the total number of unpushed commits across all branches.
+func (p *PushPreview) TotalCommits() int {
+	n := 0
+	for _, b := range p.Branches {
+		n += b.Commits
+	}
+	return n
+}
+
+// IsEmpty reports whether the preview has nothing to push.
+func (p *PushPreview) IsEmpty() bool {
+	return p.Refs == 0 && p.TotalCommits() == 0
+}
+
+// GetPushPreview enumerates branches and refs that would be pushed without
+// touching the remote. Mirrors Push's validation/counting logic so the
+// breakdown matches what Push would actually do.
+func GetPushPreview(workdir string) (*PushPreview, error) {
+	preview := &PushPreview{}
+
+	for _, branch := range GetExtBranches(workdir) {
 		err := git.ValidatePushPreconditions(workdir, "origin", branch)
 		if err != nil {
 			if errors.Is(err, git.ErrDetachedHead) || errors.Is(err, git.ErrGitRemote) {
 				return nil, err
 			}
-			// Divergence is no longer a block — PushBranchWithMerge handles it.
-			// Other recoverable errors (e.g., missing remote-tracking ref) still skip.
 			if !errors.Is(err, git.ErrDiverged) {
 				continue
 			}
 		}
 		counts, err := GetUnpushedCounts(workdir, branch)
-		if err != nil {
+		if err != nil || counts.Posts == 0 {
 			continue
 		}
-		if counts.Posts > 0 {
-			result.Commits += counts.Posts
-			if !dryRun {
-				if err := PushBranchWithMerge(workdir, branch); err != nil {
-					return nil, fmt.Errorf("push %s: %w", branch, err)
-				}
-			}
-		}
+		preview.Branches = append(preview.Branches, BranchPushCount{Branch: branch, Commits: counts.Posts})
 	}
 
 	localRefs, err := getLocalGitMsgRefs(workdir)
@@ -56,15 +69,39 @@ func Push(workdir string, dryRun bool) (*PushResult, error) {
 		}
 		for ref, localHash := range localRefs {
 			if remoteHash, exists := remoteRefs[ref]; !exists || localHash != remoteHash {
-				result.Refs++
+				preview.Refs++
 			}
 		}
-		if result.Refs > 0 && !dryRun {
-			if _, err := git.ExecGit(workdir, []string{
-				"push", "origin", "refs/gitmsg/*:refs/gitmsg/*",
-			}); err != nil {
-				return nil, wrapStateRefPushError(err)
+	}
+
+	return preview, nil
+}
+
+// Push pushes all extension branches and gitmsg refs to remote. Extension
+// branches go through PushBranchWithMerge so divergent histories auto-resolve
+// (empty-tree append-only branches → conflict-free merge) instead of failing
+// non-fast-forward and dropping the user into raw git.
+func Push(workdir string, dryRun bool) (*PushResult, error) {
+	preview, err := GetPushPreview(workdir)
+	if err != nil {
+		return nil, err
+	}
+	result := &PushResult{Refs: preview.Refs}
+
+	for _, bp := range preview.Branches {
+		result.Commits += bp.Commits
+		if !dryRun {
+			if err := PushBranchWithMerge(workdir, bp.Branch); err != nil {
+				return nil, fmt.Errorf("push %s: %w", bp.Branch, err)
 			}
+		}
+	}
+
+	if preview.Refs > 0 && !dryRun {
+		if _, err := git.ExecGit(workdir, []string{
+			"push", "origin", "refs/gitmsg/*:refs/gitmsg/*",
+		}); err != nil {
+			return nil, wrapStateRefPushError(err)
 		}
 	}
 
