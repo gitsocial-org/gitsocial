@@ -267,12 +267,6 @@ func InsertSocialItem(item SocialItem) error {
 			return err
 		}
 
-		// Check if item already exists in social_items (for interaction count updates)
-		var existsInSocialItems int
-		_ = db.QueryRow(`SELECT 1 FROM social_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			item.RepoURL, item.Hash, item.Branch).Scan(&existsInSocialItems)
-		isNew := existsInSocialItems != 1
-
 		// If upgrading from virtual, update core_commits
 		var wasVirtual int
 		if err := db.QueryRow(`SELECT is_virtual FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
@@ -313,8 +307,7 @@ func InsertSocialItem(item SocialItem) error {
 			return err
 		}
 
-		// Only update counts for new items (first insert into social_items)
-		// Edit commits should not update counts (they belong to canonical)
+		// Edit commits belong to their canonical, so they must not bump counts.
 		isEdit := false
 		if item.Hash != "" && item.RepoURL != "" && item.Branch != "" {
 			var count int
@@ -323,8 +316,16 @@ func InsertSocialItem(item SocialItem) error {
 				isEdit = count > 0
 			}
 		}
-		if isNew && !isEdit {
-			updateInteractionCounts(db, item)
+		// Gate counter increments on source hash, not on the composite PK: fork
+		// mirrors of a workspace commit have a distinct repo_url but the same
+		// hash, and only one of them should bump the target counter.
+		if !isEdit && item.Hash != "" {
+			res, err := db.Exec(`INSERT OR IGNORE INTO social_counted_sources (hash) VALUES (?)`, item.Hash)
+			if err == nil {
+				if n, _ := res.RowsAffected(); n == 1 {
+					updateInteractionCounts(db, item)
+				}
+			}
 		}
 		return nil
 	})

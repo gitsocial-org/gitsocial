@@ -81,6 +81,12 @@ func DeleteRepository(repoURL string) error {
 				return fmt.Errorf("delete %q: %w", q, err)
 			}
 		}
+		// Free counted-source slots for hashes no longer in social_items so
+		// re-fetch can rebuild interaction counts. Hashes still present in
+		// another repo stay marked — their counters remain valid.
+		if _, err := tx.Exec(`DELETE FROM social_counted_sources WHERE hash NOT IN (SELECT hash FROM social_items)`); err != nil {
+			return fmt.Errorf("prune social_counted_sources: %w", err)
+		}
 		return tx.Commit()
 	})
 }

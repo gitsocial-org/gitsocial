@@ -85,7 +85,7 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
 		OnProgress:       opts.OnProgress,
 	}
 
-	processors := socialProcessors()
+	processors := Processors()
 	if len(opts.ExtraProcessors) > 0 {
 		processors = append(processors, opts.ExtraProcessors...)
 	}
@@ -99,13 +99,13 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
 
 // FetchRepositoryRange fetches a repository with explicit date range (for "load more" pagination).
 func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL string) Result[FetchStats] {
-	coreResult := fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, socialProcessors(), socialHooks())
+	coreResult := fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, Processors(), socialHooks())
 	return convertResult(coreResult)
 }
 
 // FetchRepository fetches complete history for a repository.
 func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, extraProcessors ...fetch.CommitProcessor) Result[FetchStats] {
-	processors := socialProcessors()
+	processors := Processors()
 	if len(extraProcessors) > 0 {
 		processors = append(processors, extraProcessors...)
 	}
@@ -122,8 +122,8 @@ func CacheExternalRepoLists(cacheDir, repoURL, branch string) {
 	cacheExternalRepoLists(storageDir, repoURL, "", "")
 }
 
-// socialProcessors returns the commit processors for the social extension.
-func socialProcessors() []fetch.CommitProcessor {
+// Processors returns the commit processors for the social extension.
+func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processSocialCommit}
 }
 

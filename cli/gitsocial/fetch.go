@@ -189,6 +189,7 @@ func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.
 	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 	forkProcessors := append(review.Processors(), pm.Processors()...)
 	forkProcessors = append(forkProcessors, memo.Processors()...)
+	forkProcessors = append(forkProcessors, social.Processors()...)
 	forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 	forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
 	if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {

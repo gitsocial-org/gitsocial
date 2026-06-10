@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS social_interactions (
     PRIMARY KEY (repo_url, hash, branch)
 );
 
+-- Tracks source commits whose interaction effect on the target counter has
+-- already been applied. Fork mirrors of a workspace commit share the same hash;
+-- gating the increment on INSERT OR IGNORE here makes counter updates
+-- order-independent across workspace/fork fetch.
+CREATE TABLE IF NOT EXISTS social_counted_sources (
+    hash TEXT PRIMARY KEY
+);
+
 -- Extension: Social resolved view (unified read interface).
 -- Projects core_commits' generated effective_* columns under the legacy
 -- output names (resolved_message, author_name, etc.) so consumers don't change.

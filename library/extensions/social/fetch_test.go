@@ -71,12 +71,12 @@ func TestConvertResult_noErrors(t *testing.T) {
 }
 
 func TestSocialProcessors_returnsSlice(t *testing.T) {
-	procs := socialProcessors()
+	procs := Processors()
 	if len(procs) != 1 {
-		t.Errorf("socialProcessors() returned %d, want 1", len(procs))
+		t.Errorf("Processors() returned %d, want 1", len(procs))
 	}
 	if procs[0] == nil {
-		t.Error("socialProcessors()[0] should not be nil")
+		t.Error("Processors()[0] should not be nil")
 	}
 }
 
