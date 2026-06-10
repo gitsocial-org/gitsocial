@@ -3,44 +3,46 @@
   <img src="documentation/images/gitsocial-icon.png" width="120" height="120">
   <h1>GitSocial</h1>
 
-  *Git-native cross-forge collaboration platform*
+  *Cross-forge collaboration platform*
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
   [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
 
-[Why GitSocial](#why-gitsocial) • [How It Works](#how-it-works) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
+[About](#about) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
 ![GitSocial TUI](documentation/demo/demo.gif)
 
 </div>
 
-## Why GitSocial
+## About
 
-Git solved distributed collaboration for code. GitSocial extends it beyond code, making your data portable and independent.
+GitSocial stores your collaboration data (issues, pull requests, etc) as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md), so your data is tied to your repo, not the hosting platform.
 
-## How It Works
-
-All collaboration data (posts, issues, PRs, etc.) is stored in your git repository as [git commits with structured trailers](specs/GITMSG.md) on `gitmsg/*` branches, syncing via `git fetch` and `git push`. Activity from other repositories appears in your timeline when you add them to your [lists](specs/GITMSG.md#2-lists).
+GitSocial fetches into timeline activity from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
 
 ## Installation
 
-**macOS / Linux**:
+#### macOS / Linux with Homebrew
+
 ```bash
-brew tap gitsocial-org/tap
-brew trust gitsocial-org/tap   # one-time; required by Homebrew 5.0+ for third-party taps
+brew trust gitsocial-org/tap
 brew install gitsocial-org/tap/gitsocial
-# or
-curl -fsSL https://raw.githubusercontent.com/gitsocial-org/gitsocial/main/install.sh | sh
 ```
 
-**Windows**:
+Or using installation script
+
+```bash
+curl -fsSL https://gitsocial.org/install.sh | sh
+```
+
+#### Windows
 ```bash
 scoop bucket add gitsocial https://github.com/gitsocial-org/scoop-bucket.git
 scoop install gitsocial
 ```
 
-**Go**:
+#### Go
 ```bash
 go install github.com/gitsocial-org/gitsocial/cli/gitsocial@latest
 ```
@@ -49,7 +51,7 @@ Or download a binary from [Releases](https://github.com/gitsocial-org/gitsocial/
 
 ## Quick Start
 
-Clone your project from GitHub, GitLab, or any host, then from your project directory:
+Clone your project from GitHub or any host, then from your project directory:
 
 ```bash
 gitsocial import         # imports issues, PRs, releases, discussions
