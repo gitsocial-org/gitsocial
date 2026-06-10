@@ -7,6 +7,8 @@
   <title>GitSocial - Cross-forge collaboration platform</title>
   <meta name="description"
     content="GitSocial stores your collaboration data (issues, pull requests, etc) as commits on gitmsg/* branches with structured trailers, so your data is tied to your repo, not the hosting platform.">
+  <meta name="keywords"
+    content="git, go, social, cli, decentralized, tui, rpc, kanban, scrum, sbom, cross-forge">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -45,7 +47,7 @@
           <g id="moon-icon">
             <mask id="moon-mask">
               <rect width="20" height="20" fill="white" />
-              <circle cx="13" cy="4" r="10" fill="black" />
+              <circle cx="16" cy="7" r="10" fill="black" />
             </mask>
             <circle cx="10" cy="10" r="10" fill="currentColor" mask="url(#moon-mask)" />
           </g>
@@ -283,6 +285,38 @@ gitsocial push</code></pre>
       const currentTheme = getCurrentTheme();
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       setTheme(newTheme);
+    });
+
+    const copyIcon = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    const checkIcon = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+    document.querySelectorAll('.readme pre').forEach(pre => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-btn';
+      btn.setAttribute('aria-label', 'Copy code');
+      btn.innerHTML = copyIcon;
+      btn.addEventListener('click', async () => {
+        const text = (pre.querySelector('code') || pre).innerText;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_) {
+          const range = document.createRange();
+          range.selectNodeContents(pre.querySelector('code') || pre);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          try { document.execCommand('copy'); } catch (_) {}
+          sel.removeAllRanges();
+        }
+        btn.innerHTML = checkIcon;
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerHTML = copyIcon;
+          btn.classList.remove('copied');
+        }, 1500);
+      });
+      pre.appendChild(btn);
     });
   </script>
 </body>
