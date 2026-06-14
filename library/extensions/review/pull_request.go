@@ -53,12 +53,12 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 
 	// Auto-resolve branch tips if not already set
 	if opts.BaseTip == "" {
-		if tip, err := resolveTipForWrite(workdir, repoURL, protocol.ParseRef(opts.Base)); err == nil && len(tip) >= 12 {
+		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Base)); err == nil && len(tip) >= 12 {
 			opts.BaseTip = tip[:12]
 		}
 	}
 	if opts.HeadTip == "" {
-		if tip, err := resolveTipForWrite(workdir, repoURL, protocol.ParseRef(opts.Head)); err == nil && len(tip) >= 12 {
+		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Head)); err == nil && len(tip) >= 12 {
 			opts.HeadTip = tip[:12]
 		}
 	}

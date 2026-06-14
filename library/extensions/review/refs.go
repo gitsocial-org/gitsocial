@@ -8,7 +8,9 @@
 // consulted, so observation paths can rely on this returning an error
 // when a branch has been deleted on the remote (no local-fallback masking).
 // `resolveTipForWrite` adds the local-ref fallback for write paths that
-// want to capture unpushed work.
+// want to capture unpushed work when the remote is unreachable.
+// `resolveTipForAuthor` flips the preference so CreatePR records the
+// author's working tip even when refs/remotes/origin/* is behind.
 package review
 
 import (
@@ -65,9 +67,9 @@ func ResolveBranchTip(workdir, repoURL, branch string) (string, error) {
 
 // resolveTipForWrite returns the tip preferring remote (via
 // ResolveBranchTip), falling back to refs/heads/<branch> when repoURL
-// names the workspace and the remote couldn't be consulted at all. This is
-// the resolver used by CreatePR / UpdatePRTips so a user can record an
-// unpushed local branch — observation paths intentionally do NOT use this.
+// names the workspace and the remote couldn't be consulted at all. Used by
+// UpdatePRTips to track the world-visible state on registered repos.
+// Observation paths intentionally do NOT use this.
 func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
@@ -82,6 +84,26 @@ func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef)
 		return "", err
 	}
 	return git.ReadRef(workdir, parsed.Value)
+}
+
+// resolveTipForAuthor returns the tip preferring local refs/heads/<branch>
+// when repoURL names the workspace, otherwise delegating to ResolveBranchTip.
+// CreatePR uses this so an unpushed local tip is captured as the author's
+// proposed state instead of silently downgrading to refs/remotes/origin/*.
+func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
+	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
+		return "", fmt.Errorf("not a branch ref")
+	}
+	repoURL := parsed.Repository
+	if repoURL == "" {
+		repoURL = workspaceURL
+	}
+	if isWorkspaceURL(workdir, protocol.NormalizeURL(repoURL)) {
+		if tip, err := git.ReadRef(workdir, parsed.Value); err == nil && tip != "" {
+			return tip, nil
+		}
+	}
+	return ResolveBranchTip(workdir, repoURL, parsed.Value)
 }
 
 // resolveTipForObservation returns the strict remote tip for a parsed PR
