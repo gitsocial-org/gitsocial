@@ -17,3 +17,9 @@ func FetchRepository(cacheDir, repoURL, branch string) fetch.Result {
 func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processReleaseCommit}
 }
+
+// BackfillSpec describes how the post-fetch backfill detects release commits
+// whose release_items row is missing.
+func BackfillSpec() fetch.ExtBackfillSpec {
+	return fetch.ExtBackfillSpec{Extension: "release", ItemsTable: "release_items"}
+}

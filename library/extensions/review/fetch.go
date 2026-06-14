@@ -19,6 +19,12 @@ func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processReviewCommit}
 }
 
+// BackfillSpec describes how the post-fetch backfill detects review commits
+// whose review_items row is missing.
+func BackfillSpec() fetch.ExtBackfillSpec {
+	return fetch.ExtBackfillSpec{Extension: "review", ItemsTable: "review_items"}
+}
+
 // PostFetchHooks returns post-fetch hooks for the review extension.
 // RefreshOpenPRBranches walks PRs across the workspace and registered
 // forks together; the hook fires once per fetched repo but the refresh

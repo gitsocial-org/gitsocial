@@ -18,6 +18,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
+	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -198,7 +199,31 @@ func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.
 	if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 		slog.Debug("memo tier sync", "error", err)
 	}
+	fetch.BackfillExtensionItems(backfillRepos(cfg.WorkDir), backfillSpecs(), forkProcessors)
 	return result, forkStats
+}
+
+// backfillRepos returns the workspace URL plus all registered fork URLs —
+// the set whose cached commits may predate a later processor wiring.
+func backfillRepos(workdir string) []string {
+	repos := make([]string, 0, 8)
+	if ws := gitmsg.ResolveRepoURL(workdir); ws != "" {
+		repos = append(repos, ws)
+	}
+	repos = append(repos, gitmsg.GetForks(workdir)...)
+	return repos
+}
+
+// backfillSpecs enumerates the extensions whose items tables the backfill
+// scans for missing rows.
+func backfillSpecs() []fetch.ExtBackfillSpec {
+	return []fetch.ExtBackfillSpec{
+		social.BackfillSpec(),
+		pm.BackfillSpec(),
+		release.BackfillSpec(),
+		review.BackfillSpec(),
+		memo.BackfillSpec(),
+	}
 }
 
 // printNotificationDelta prints new notification count if it increased after fetch.

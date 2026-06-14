@@ -127,6 +127,12 @@ func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processSocialCommit}
 }
 
+// BackfillSpec describes how the post-fetch backfill detects social commits
+// whose social_items row is missing.
+func BackfillSpec() fetch.ExtBackfillSpec {
+	return fetch.ExtBackfillSpec{Extension: "social", ItemsTable: "social_items"}
+}
+
 // socialHooks returns the post-fetch hooks for the social extension.
 func socialHooks() []fetch.PostFetchHook {
 	return []fetch.PostFetchHook{fetchSocialListRefs, checkIfRepoFollowsWorkspace, cacheExternalRepoLists}

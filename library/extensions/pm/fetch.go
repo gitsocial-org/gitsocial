@@ -17,3 +17,9 @@ func FetchRepository(cacheDir, repoURL, branch string) fetch.Result {
 func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processPMCommit}
 }
+
+// BackfillSpec describes how the post-fetch backfill detects PM commits
+// whose pm_items row is missing.
+func BackfillSpec() fetch.ExtBackfillSpec {
+	return fetch.ExtBackfillSpec{Extension: "pm", ItemsTable: "pm_items"}
+}

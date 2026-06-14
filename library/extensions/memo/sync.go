@@ -28,6 +28,12 @@ func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processMemoCommit}
 }
 
+// BackfillSpec describes how the post-fetch backfill detects memo commits
+// whose memo_items row is missing.
+func BackfillSpec() fetch.ExtBackfillSpec {
+	return fetch.ExtBackfillSpec{Extension: "memo", ItemsTable: "memo_items"}
+}
+
 // SyncWorkspaceToCache replays memo commits from the workspace's gitmsg/memo
 // branch into the cache. Skips work when the tip hasn't moved since last sync.
 func SyncWorkspaceToCache(workdir string) error {
