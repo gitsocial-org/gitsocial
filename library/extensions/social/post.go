@@ -591,6 +591,20 @@ func getSinglePost(postID string, workspaceURL string) Result[[]Post] {
 }
 
 // getThreadPosts retrieves a post and all its replies as a thread.
+// isInFamily reports whether url is the workspace itself or one of its
+// registered forks — the set whose threads share an aggregated view.
+func isInFamily(url, workspaceURL string, forks []string) bool {
+	if url == workspaceURL {
+		return true
+	}
+	for _, f := range forks {
+		if url == f {
+			return true
+		}
+	}
+	return false
+}
+
 func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] {
 	canonicalPostID := cache.ResolveRefToCanonical(postID)
 	parsed := protocol.ParseRef(canonicalPostID)
@@ -607,7 +621,15 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	// the thread (PR comments, issue comments) get the badge.
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
-	items, err := GetThread(parsed.Repository, parsed.Value, branch, workspaceURL)
+	// Apply fork-union when the root is in the workspace family (workspace +
+	// registered forks). Same-hash threads on those repos belong to one
+	// conversation; un-related followed repos don't get the union.
+	forks := gitmsg.GetForks(workdir)
+	var forkURLs []string
+	if isInFamily(parsed.Repository, workspaceURL, forks) {
+		forkURLs = append([]string{workspaceURL}, forks...)
+	}
+	items, err := GetThread(parsed.Repository, parsed.Value, branch, workspaceURL, forkURLs)
 	if err != nil {
 		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get thread", err)
 	}

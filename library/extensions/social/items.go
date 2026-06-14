@@ -869,9 +869,29 @@ func GetAllItems(q SocialQuery) ([]SocialItem, error) {
 	})
 }
 
+// uniqueURLs returns root plus each non-empty extra URL exactly once.
+func uniqueURLs(root string, extras []string) []string {
+	seen := map[string]bool{root: true}
+	out := []string{root}
+	for _, u := range extras {
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		out = append(out, u)
+	}
+	return out
+}
+
 // GetThread retrieves all replies in a comment thread from a root post.
-func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string) ([]SocialItem, error) {
+// forkURLs broadens the original_* match to also include comments that
+// target the same (hash, branch) but are authored on a registered fork —
+// fork comments resolve original_repo_url to the fork URL, so without this
+// the workspace's thread misses them entirely.
+func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, forkURLs []string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
+		matchURLs := uniqueURLs(rootRepoURL, forkURLs)
+		matchPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(matchURLs)), ",")
 		// Collect descendants (reply_to chain) and quotes/reposts (original_*=root)
 		// into a single matches CTE so the outer query can drive by PK lookup.
 		// Why: a previous OR between (c.PK IN descendants) and (s.original_*=?)
@@ -886,14 +906,21 @@ func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string) ([
 				SELECT repo_url, hash, branch FROM descendants
 				UNION
 				SELECT repo_url, hash, branch FROM social_items
-				WHERE original_repo_url = ? AND original_hash = ? AND original_branch = ?
+				WHERE original_hash = ? AND original_branch = ?
+				  AND original_repo_url IN (` + matchPlaceholders + `)
 			)` + baseDirectSelect + `
 			WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM matches)
 			   AND c.is_edit_commit = 0
 			   AND c.is_retracted = 0
 			ORDER BY COALESCE(c.origin_time, c.timestamp)`
 
-		rows, err := db.Query(query, rootRepoURL, rootHash, rootBranch, rootRepoURL, rootHash, rootBranch, workspaceURL)
+		args := make([]interface{}, 0, 5+len(matchURLs)+1)
+		args = append(args, rootRepoURL, rootHash, rootBranch, rootHash, rootBranch)
+		for _, u := range matchURLs {
+			args = append(args, u)
+		}
+		args = append(args, workspaceURL)
+		rows, err := db.Query(query, args...)
 		if err != nil {
 			return nil, err
 		}

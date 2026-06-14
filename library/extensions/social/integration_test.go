@@ -3780,7 +3780,7 @@ func TestGetThread_withReplies(t *testing.T) {
 		ReplyToHash:     cache.ToNullString(rootHash),
 		ReplyToBranch:   cache.ToNullString(branch),
 	})
-	items, err := GetThread(repoURL, rootHash, branch, "")
+	items, err := GetThread(repoURL, rootHash, branch, "", nil)
 	if err != nil {
 		t.Fatalf("GetThread error: %v", err)
 	}

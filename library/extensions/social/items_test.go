@@ -665,7 +665,7 @@ func TestGetThread(t *testing.T) {
 		ReplyToBranch:   cache.ToNullString(itemsTestBranch),
 	})
 
-	items, err := GetThread(itemsTestRepoURL, "thrd_root123", itemsTestBranch, "")
+	items, err := GetThread(itemsTestRepoURL, "thrd_root123", itemsTestBranch, "", nil)
 	if err != nil {
 		t.Fatalf("GetThread() error = %v", err)
 	}
@@ -1417,7 +1417,7 @@ func TestGetThread_withWorkspaceURL(t *testing.T) {
 		ReplyToRepoURL: cache.ToNullString(itemsTestRepoURL), ReplyToHash: cache.ToNullString("tw_root12345"), ReplyToBranch: cache.ToNullString(itemsTestBranch),
 	})
 
-	items, err := GetThread(itemsTestRepoURL, "tw_root12345", itemsTestBranch, wsURL)
+	items, err := GetThread(itemsTestRepoURL, "tw_root12345", itemsTestBranch, wsURL, nil)
 	if err != nil {
 		t.Fatalf("GetThread() error = %v", err)
 	}
