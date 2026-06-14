@@ -277,6 +277,14 @@ func NewModel(workdir, cacheDir string) Model {
 	// Register Memo views
 	tuimemo.Register(host)
 
+	// core/edit notifications point at the edit commit; route the user to
+	// the canonical's extension detail view instead so clicking "edited
+	// your issue" lands on the issue itself, not the edit's empty thread.
+	tuicore.RegisterNavTarget(
+		tuicore.ItemType{Extension: "core", Type: "edit"},
+		editNavTarget,
+	)
+
 	// Register global keys (must be last for footer ordering)
 	tuicore.RegisterGlobalKeys(registry)
 
@@ -1811,6 +1819,34 @@ func formatImportSummary(s importpkg.Stats) string {
 		return "Nothing to import"
 	}
 	return "Imported " + strings.Join(parts, ", ")
+}
+
+// editNavTarget resolves an edit commit's nav target to its canonical's
+// extension detail view. Falls back to the raw detail route when the
+// canonical, its message, or its extension's registered target are missing.
+func editNavTarget(editID string) tuicore.Location {
+	parsed := protocol.ParseRef(editID)
+	if parsed.Value == "" {
+		return tuicore.LocDetail(editID)
+	}
+	canonRepo, canonHash, canonBranch, err := cache.ResolveToCanonical(parsed.Repository, parsed.Value, parsed.Branch)
+	if err != nil {
+		return tuicore.LocDetail(editID)
+	}
+	canonRef := protocol.CreateRef(protocol.RefTypeCommit, canonHash, canonRepo, canonBranch)
+	commit, err := cache.GetCommit(canonRepo, canonHash, canonBranch)
+	if err != nil {
+		return tuicore.LocDetail(canonRef)
+	}
+	msg := protocol.ParseMessage(commit.Message)
+	if msg == nil || msg.Header.Ext == "" {
+		return tuicore.LocDetail(canonRef)
+	}
+	target, ok := tuicore.LookupNavTarget(tuicore.ItemType{Extension: msg.Header.Ext, Type: msg.Header.Fields["type"]})
+	if !ok {
+		return tuicore.LocDetail(canonRef)
+	}
+	return target(canonRef)
 }
 
 // initTUILogging initializes logging for the TUI session.

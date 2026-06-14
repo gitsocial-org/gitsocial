@@ -224,6 +224,12 @@ func buildPMItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) (
 
 // processPMCommit handles a single commit for PM extension processing.
 // Matches fetch.CommitProcessor signature for use as a core fetch callback.
+// Runs SyncEditExtensionFields after InsertPMItem so the canonical's
+// pm_items columns (state, assignees, …) catch up — buildPMItem already
+// inserted the version row via ProcessVersionFromHeader, but the
+// applyEditToCanonical inside InsertVersion fires BEFORE the edit's
+// pm_items row exists and silently skips the column propagation. Memo's
+// processor follows the same pattern.
 func processPMCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
 	if msg == nil || msg.Header.Ext != "pm" {
 		return
@@ -241,4 +247,5 @@ func processPMCommit(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 			log.Debug("insert pm links failed", "hash", gc.Hash, "error", err)
 		}
 	}
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: gc.Hash, Branch: branch}})
 }

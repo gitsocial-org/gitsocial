@@ -622,8 +622,10 @@ func MakeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore
 					IsRead:    n.IsRead,
 				})
 			default:
-				// Core mentions and other providers
-				id := n.RepoURL + "#commit:" + n.Hash
+				// Core mentions and other providers — include branch so the
+				// nav target (e.g., editNavTarget's ResolveToCanonical lookup)
+				// can find the right core_commits_version row.
+				id := protocol.CreateRef(protocol.RefTypeCommit, n.Hash, n.RepoURL, n.Branch)
 				item := tuicore.NewItem(id, n.Source, n.Type, n.Timestamp, n)
 				items = append(items, item)
 				meta = append(meta, tuicore.NotificationMeta{

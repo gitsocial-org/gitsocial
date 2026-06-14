@@ -22,6 +22,23 @@ func RegisterNavTarget(itemType ItemType, target NavTarget) {
 	globalNavTargets.targets[itemType] = target
 }
 
+// LookupNavTarget returns the NavTarget registered for itemType, plus an
+// extension wildcard fallback. The returned NavTarget is nil when no entry
+// matches; callers must check the bool. Used by cross-extension dispatchers
+// (e.g., core/edit) that resolve an item to its canonical's extension and
+// then route via the canonical's registered target.
+func LookupNavTarget(itemType ItemType) (NavTarget, bool) {
+	globalNavTargets.mu.RLock()
+	defer globalNavTargets.mu.RUnlock()
+	if target, ok := globalNavTargets.targets[itemType]; ok {
+		return target, true
+	}
+	if target, ok := globalNavTargets.targets[ItemType{Extension: itemType.Extension, Type: "*"}]; ok {
+		return target, true
+	}
+	return nil, false
+}
+
 // GetNavTarget returns the navigation location for an item.
 // Lookup order: exact match, extension wildcard, fallback to social detail.
 // For cross-extension comments, the comment's ID is preserved as a "focusID"
