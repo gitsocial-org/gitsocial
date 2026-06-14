@@ -90,6 +90,7 @@ func socialItemToCard(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	return PostToCardWithOptions(post, postResolver, PostToCardOptions{
 		UserEmail: post.Display.UserEmail,
 		ShowEmail: post.Display.ShowEmail,
+		Workdir:   post.Display.Workdir,
 	})
 }
 
@@ -374,7 +375,7 @@ func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, 
 	if msg.Err == nil && !msg.Append {
 		if sh, ok := ctx.Host().(SocialHost); ok {
 			state := ctx.Host().State()
-			items := PostsToItems(msg.Posts, state.UserEmail, state.ShowEmailOnCards)
+			items := PostsToItems(msg.Posts, state.UserEmail, state.ShowEmailOnCards, state.Workdir)
 			sh.SetDisplayItems(items)
 		}
 	}

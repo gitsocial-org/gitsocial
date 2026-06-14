@@ -28,6 +28,7 @@ type PostToCardOptions struct {
 	SkipNested bool   // Don't include nested cards (for nested cards themselves)
 	ShowEmail  bool   // Show <email> after name in header
 	UserEmail  string // Current user's email for own post detection
+	Workdir    string // for cross-extension PR unpushed-head lookup; empty skips
 }
 
 // PostToCard converts a social.Post to a Card with optional nested post resolution.
@@ -203,6 +204,15 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		switch post.HeaderType {
 		case "pull-request":
 			card.Header.Icon = "⑂"
+			if cardOpts.Workdir != "" {
+				if prRes := review.GetPR(post.ID); prRes.Success && review.IsHeadUnpushed(cardOpts.Workdir, prRes.Data) {
+					if card.Header.Badge != "" {
+						card.Header.Badge += " · ⚠ unpushed head"
+					} else {
+						card.Header.Badge = "⚠ unpushed head"
+					}
+				}
+			}
 		case "feedback":
 			card.Header.Icon = "↩"
 		}
@@ -282,12 +292,13 @@ func RenderCommentCard(comment social.Post, width int, selected bool, searchQuer
 }
 
 // PostsToItems converts []social.Post to []tuicore.DisplayItem using universal Item
-func PostsToItems(posts []social.Post, userEmail string, showEmail bool) []tuicore.DisplayItem {
+func PostsToItems(posts []social.Post, userEmail string, showEmail bool, workdir string) []tuicore.DisplayItem {
 	items := make([]tuicore.DisplayItem, len(posts))
 	for i, p := range posts {
 		// Store rendering options in the post's Display field
 		p.Display.UserEmail = userEmail
 		p.Display.ShowEmail = showEmail
+		p.Display.Workdir = workdir
 		item := tuicore.NewItem(p.ID, "social", string(p.Type), p.Timestamp, p)
 		// Handle cross-extension routing (comments on PM items, etc.)
 		// OriginalExt/OriginalType affect navigation routing via ItemType()

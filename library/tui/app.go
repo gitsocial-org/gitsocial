@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -927,10 +928,11 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			if err != nil {
 				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 			}
-			if preview.IsEmpty() {
+			codeBranches, _ := review.UnpushedHeadBranches(m.workdir)
+			if preview.IsEmpty() && len(codeBranches) == 0 {
 				return m.host.SetMessageWithTimeout("Nothing to push", tuicore.MessageTypeSuccess, 5*time.Second)
 			}
-			m.pushChoice.Show(buildPushConfirmPrompt(preview), []tuicore.Choice{
+			m.pushChoice.Show(buildPushConfirmPrompt(preview, codeBranches), []tuicore.Choice{
 				{Key: "y", Label: "es"},
 				{Key: "n", Label: "o"},
 			}, func(key string) tea.Cmd {
@@ -941,7 +943,7 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 				m.isPushing = true
 				m.host.SetPushing(true)
 				m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
-				return m.startPush()
+				return m.startPush(codeBranches)
 			})
 			m.host.State().ChoicePrompt = m.pushChoice.Render()
 			return nil
@@ -1086,10 +1088,17 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 	}
 }
 
-// startPush runs gitmsg.Push, which auto-merges divergent gitmsg/* branches
-// (empty-tree append-only → conflict-free) instead of failing non-fast-forward.
-func (m Model) startPush() tea.Cmd {
+// startPush pushes any user-confirmed code branches first (so the gitmsg/review
+// push records PRs whose head is reachable on origin), then runs gitmsg.Push,
+// which auto-merges divergent gitmsg/* branches (empty-tree append-only →
+// conflict-free) instead of failing non-fast-forward.
+func (m Model) startPush(codeBranches map[string]int) tea.Cmd {
 	return func() tea.Msg {
+		for branch := range codeBranches {
+			if _, err := git.ExecGit(m.workdir, []string{"push", "origin", branch}); err != nil {
+				return tuisocial.PushCompletedMsg{Err: fmt.Errorf("push %s: %w", branch, err)}
+			}
+		}
 		result, err := gitmsg.Push(m.workdir, false)
 		if err != nil {
 			return tuisocial.PushCompletedMsg{Err: err}
@@ -1717,7 +1726,10 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 
 // buildPushConfirmPrompt builds the single-line confirmation prompt for push,
 // breaking commits down per extension branch and adding a refs total if any.
-func buildPushConfirmPrompt(p *gitmsg.PushPreview) string {
+// Code branches (workspace-local refs referenced by open PRs that still have
+// unpushed commits) are appended so reviewers can fetch the PR's head once
+// the push completes.
+func buildPushConfirmPrompt(p *gitmsg.PushPreview, codeBranches map[string]int) string {
 	var parts []string
 	for _, b := range p.Branches {
 		name := strings.TrimPrefix(b.Branch, "gitmsg/")
@@ -1725,6 +1737,14 @@ func buildPushConfirmPrompt(p *gitmsg.PushPreview) string {
 	}
 	if p.Refs > 0 {
 		parts = append(parts, fmt.Sprintf("%d refs", p.Refs))
+	}
+	branchNames := make([]string, 0, len(codeBranches))
+	for b := range codeBranches {
+		branchNames = append(branchNames, b)
+	}
+	sort.Strings(branchNames)
+	for _, b := range branchNames {
+		parts = append(parts, fmt.Sprintf("%d %s", codeBranches[b], b))
 	}
 	if len(parts) == 0 {
 		return "Push?"

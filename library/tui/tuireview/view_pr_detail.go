@@ -953,6 +953,17 @@ func (v *PRDetailView) tipStaleMarker(side, storedTip string) string {
 	if observedTip == "" || observedTip == storedTip {
 		return ""
 	}
+	if side == "head" && review.IsHeadUnpushed(v.workdir, *v.pr) {
+		headParsed := protocol.ParseRef(v.pr.Head)
+		repoURL := headParsed.Repository
+		if repoURL == "" {
+			repoURL = v.workspaceURL
+		}
+		if repoURL == v.workspaceURL {
+			return "  " + tuicore.Warning.Render("⚠ tip not on remote — push " + headParsed.Value)
+		}
+		return "  " + tuicore.Warning.Render("⚠ author hasn't pushed head")
+	}
 	return "  " + tuicore.Warning.Render("⚠ updated to #"+observedTip+" (press u)")
 }
 

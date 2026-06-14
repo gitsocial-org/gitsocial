@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
@@ -245,4 +246,81 @@ func GetBranchObservation(repoURL, branch string) (*BranchObservation, error) {
 // the stored value is NULL (matches "branch missing" semantics).
 func nullableTip(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: strings.TrimSpace(s) != ""}
+}
+
+// IsHeadUnpushed reports whether the PR's recorded head_tip is missing from
+// the head ref's remote — typically because the author hasn't pushed the
+// referenced code branch. False when the observation is in sync, missing,
+// or signals a deleted branch (which has its own dedicated marker). For
+// workspace-local heads the answer is confirmed via GetUnpushedCommits; for
+// cross-fork heads any observation/recorded mismatch is treated as unpushed
+// since the workspace can't cheaply prove ancestry against the fork's
+// remote without a network round-trip.
+func IsHeadUnpushed(workdir string, pr PullRequest) bool {
+	if pr.State != PRStateOpen || pr.HeadTip == "" {
+		return false
+	}
+	parsed := protocol.ParseRef(pr.Head)
+	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
+		return false
+	}
+	repoURL := parsed.Repository
+	wsURL := gitmsg.ResolveRepoURL(workdir)
+	if repoURL == "" {
+		repoURL = wsURL
+	}
+	obs, err := GetBranchObservation(repoURL, parsed.Value)
+	if err != nil || obs == nil || !obs.Exists {
+		return false
+	}
+	if obs.Tip == "" || obs.Tip == pr.HeadTip {
+		return false
+	}
+	if repoURL == wsURL {
+		unpushed, err := git.GetUnpushedCommits(workdir, parsed.Value)
+		if err != nil {
+			return false
+		}
+		_, ahead := unpushed[pr.HeadTip]
+		return ahead
+	}
+	return true
+}
+
+// UnpushedHeadBranches returns workspace-local branch names referenced by
+// open workspace PRs that still have unpushed commits in the workspace.
+// The map value is the number of unpushed commits on each branch — used by
+// the push confirmation prompt to offer pushing referenced code together
+// with gitmsg/review.
+func UnpushedHeadBranches(workdir string) (map[string]int, error) {
+	wsURL := gitmsg.ResolveRepoURL(workdir)
+	if wsURL == "" {
+		return nil, nil
+	}
+	branch := gitmsg.GetExtBranch(workdir, "review")
+	res := GetPullRequests(wsURL, branch, []string{"open"}, "", 0)
+	if !res.Success {
+		return nil, errors.New(res.Error.Message)
+	}
+	out := make(map[string]int)
+	seen := make(map[string]bool)
+	for _, pr := range res.Data {
+		parsed := protocol.ParseRef(pr.Head)
+		if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
+			continue
+		}
+		if parsed.Repository != "" && parsed.Repository != wsURL {
+			continue
+		}
+		if seen[parsed.Value] {
+			continue
+		}
+		seen[parsed.Value] = true
+		unpushed, err := git.GetUnpushedCommits(workdir, parsed.Value)
+		if err != nil || len(unpushed) == 0 {
+			continue
+		}
+		out[parsed.Value] = len(unpushed)
+	}
+	return out, nil
 }

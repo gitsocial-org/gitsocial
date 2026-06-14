@@ -85,6 +85,7 @@ func (v *TimelineView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 		post := result.Data[0]
 		post.Display.UserEmail = v.userEmail
 		post.Display.ShowEmail = v.showEmail
+		post.Display.Workdir = v.workdir
 		return tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post), true
 	}
 	return nil, false
@@ -128,7 +129,7 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 			Limit: 10, GitRoot: v.gitRoot, SkipUnpushed: true,
 		})
 		if result.Success && len(result.Data) > 0 {
-			v.cardlist.SetItems(PostsToItems(result.Data, v.userEmail, v.showEmail))
+			v.cardlist.SetItems(PostsToItems(result.Data, v.userEmail, v.showEmail, v.workdir))
 		}
 	}
 	return v.loadPosts()
@@ -255,7 +256,7 @@ func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail)
+	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {

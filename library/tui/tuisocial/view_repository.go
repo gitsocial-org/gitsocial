@@ -109,6 +109,7 @@ func (v *RepositoryView) resolveItem(itemID string) (tuicore.DisplayItem, bool) 
 	if result.Success && len(result.Data) > 0 {
 		post := result.Data[0]
 		post.Display.UserEmail = v.userEmail
+		post.Display.Workdir = v.workdir
 		return tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post), true
 	}
 	return nil, false
@@ -463,7 +464,7 @@ func (v *RepositoryView) handleLoaded(msg RepositoryLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail)
+	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {

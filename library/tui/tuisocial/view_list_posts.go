@@ -69,6 +69,7 @@ func (v *ListPostsView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 		post := result.Data[0]
 		post.Display.UserEmail = v.userEmail
 		post.Display.ShowEmail = v.showEmail
+		post.Display.Workdir = v.workdir
 		return tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post), true
 	}
 	return nil, false
@@ -266,7 +267,7 @@ func (v *ListPostsView) handleLoaded(msg ListPostsLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail)
+	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {

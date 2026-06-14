@@ -130,6 +130,7 @@ func (v *PRsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					ShowEmail:    v.showEmail,
 					UserEmail:    v.userEmail,
 					WorkspaceURL: v.workspaceURL,
+					Workdir:      v.workdir,
 				})
 			}
 			v.cardList.AppendItems(newItems)
@@ -282,6 +283,7 @@ func (v *PRsView) applyFilter() {
 			ShowEmail:    v.showEmail,
 			UserEmail:    v.userEmail,
 			WorkspaceURL: v.workspaceURL,
+			Workdir:      v.workdir,
 		})
 	}
 	v.cardList.SetItems(items)

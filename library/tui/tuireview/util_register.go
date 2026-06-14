@@ -86,13 +86,14 @@ type prItemData struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
+	Workdir      string
 }
 
 // prCardRenderer renders a pull request to a Card.
 func prCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case prItemData:
-		return PRToCardWithOptions(d.PR, PRToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL})
+		return PRToCardWithOptions(d.PR, PRToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL, Workdir: d.Workdir})
 	case review.PullRequest:
 		return PRToCard(d)
 	}
@@ -202,6 +203,7 @@ type PRToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
+	Workdir      string // for IsHeadUnpushed lookup; empty skips the glyph
 }
 
 // PRToCard converts a PullRequest to a Card for display.
@@ -263,6 +265,9 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 			headPart.Link = &loc
 		}
 		subtitleParts = append(subtitleParts, headPart)
+	}
+	if opts.Workdir != "" && review.IsHeadUnpushed(opts.Workdir, pr) {
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: "⚠ unpushed head"})
 	}
 
 	if pr.Comments > 0 {
