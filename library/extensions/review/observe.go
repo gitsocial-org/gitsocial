@@ -15,6 +15,7 @@ package review
 import (
 	"database/sql"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -246,6 +247,60 @@ func GetBranchObservation(repoURL, branch string) (*BranchObservation, error) {
 // the stored value is NULL (matches "branch missing" semantics).
 func nullableTip(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: strings.TrimSpace(s) != ""}
+}
+
+// LocalKnownBranches returns branches we've seen referenced for a given repo
+// URL — either as the live remote tip in review_branch_observations or as a
+// base/head ref on any open PR. Used as the offline fallback for the PR
+// form's branch dropdown when ls-remote against the fork URL fails. The
+// review_items pass keeps the dropdown populated even before the first
+// successful fetch hook refreshes observations.
+func LocalKnownBranches(repoURL string) []string {
+	if repoURL == "" {
+		return nil
+	}
+	branches, _ := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		set := make(map[string]struct{})
+		obsRows, err := db.Query(`
+            SELECT branch FROM review_branch_observations
+            WHERE repo_url = ? AND branch_exists = 1`, repoURL)
+		if err == nil {
+			for obsRows.Next() {
+				var b string
+				if obsRows.Scan(&b) == nil && b != "" {
+					set[b] = struct{}{}
+				}
+			}
+			obsRows.Close()
+		}
+		refRows, err := db.Query(`
+            SELECT base FROM review_items WHERE state = 'open'
+            UNION
+            SELECT head FROM review_items WHERE state = 'open'`)
+		if err == nil {
+			for refRows.Next() {
+				var ref string
+				if refRows.Scan(&ref) != nil || ref == "" {
+					continue
+				}
+				parsed := protocol.ParseRef(ref)
+				if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
+					continue
+				}
+				if parsed.Repository == repoURL {
+					set[parsed.Value] = struct{}{}
+				}
+			}
+			refRows.Close()
+		}
+		out := make([]string, 0, len(set))
+		for b := range set {
+			out = append(out, b)
+		}
+		sort.Strings(out)
+		return out, nil
+	})
+	return branches
 }
 
 // IsHeadUnpushed reports whether the PR's recorded head_tip is missing from

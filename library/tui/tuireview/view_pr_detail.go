@@ -960,7 +960,7 @@ func (v *PRDetailView) tipStaleMarker(side, storedTip string) string {
 			repoURL = v.workspaceURL
 		}
 		if repoURL == v.workspaceURL {
-			return "  " + tuicore.Warning.Render("⚠ tip not on remote — push " + headParsed.Value)
+			return "  " + tuicore.Warning.Render("⚠ tip not on remote — push "+headParsed.Value)
 		}
 		return "  " + tuicore.Warning.Render("⚠ author hasn't pushed head")
 	}

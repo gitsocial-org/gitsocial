@@ -102,12 +102,19 @@ func loadPRFormData(workdir string) tea.Cmd {
 	}
 }
 
-// loadForkBranches loads fork branches asynchronously via network (ls-remote).
+// loadForkBranches loads fork branches asynchronously. Tries ls-remote first
+// (fresh, authoritative when online); on network failure falls back to the
+// review_branch_observations cache so the dropdown still has the branches
+// referenced by open PRs.
 func loadForkBranches(workdir string) tea.Cmd {
 	return func() tea.Msg {
 		forkBranches := make(map[string][]string)
 		for _, forkURL := range review.GetForks(workdir) {
-			if fb, err := git.ListRemoteBranches(workdir, forkURL); err == nil {
+			if fb, err := git.ListRemoteBranches(workdir, forkURL); err == nil && len(fb) > 0 {
+				forkBranches[forkURL] = fb
+				continue
+			}
+			if fb := review.LocalKnownBranches(forkURL); len(fb) > 0 {
 				forkBranches[forkURL] = fb
 			}
 		}
