@@ -22,6 +22,7 @@ import (
 func ExtraProcessors() []fetch.CommitProcessor {
 	procs := append(pm.Processors(), review.Processors()...)
 	procs = append(procs, memo.Processors()...)
+	procs = append(procs, release.Processors()...)
 	return append(procs, notifications.MentionProcessor(), notifications.TrailerProcessor())
 }
 

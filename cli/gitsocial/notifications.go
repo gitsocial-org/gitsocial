@@ -28,7 +28,9 @@ func newNotificationsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "notifications",
 		Short: "View and manage notifications",
-		Long: `View interactions (comments, reposts, quotes) on your posts from other users.
+		Long: `View notifications about activity on your work: comments, reposts, and
+quotes on your posts, mentions, edits to your items, follows, and PR, issue,
+and release activity from other users.
 
 By default shows unread notifications only. Use --all to see all notifications.
 Use --type to filter by notification type (comma-separated).

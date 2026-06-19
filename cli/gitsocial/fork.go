@@ -28,7 +28,17 @@ func newForkAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <url>",
 		Short: "Register a fork for PR and issue discovery",
-		Args:  cobra.ExactArgs(1),
+		Long: `Register a fork so its PRs, issues, and comments surface alongside yours.
+
+Use a fork when another repo is a true fork of yours (or yours of theirs) and
+you want to collaborate on shared items: PRs against your code, comments on
+your issues, and cross-repo edits.
+
+Forks vs. lists: for a soft fork or packaging fork (you keep your own issues
+and just follow an upstream for awareness), use a list instead:
+  gitsocial social list add <list> <upstream-url>
+A list follows a repo without entangling its items with your own.`,
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)

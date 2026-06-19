@@ -422,9 +422,10 @@ func (v *ForksView) sortForks() {
 func (v *ForksView) addFork(forkURL string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
+		isFirst := len(gitmsg.GetForks(workdir)) == 0
 		normalized := protocol.NormalizeURL(forkURL)
 		err := gitmsg.AddFork(workdir, forkURL)
-		return ForkAddedMsg{ForkURL: normalized, Err: err}
+		return ForkAddedMsg{ForkURL: normalized, Err: err, IsFirst: isFirst}
 	}
 }
 
@@ -624,10 +625,12 @@ func (v *ForksView) Bindings() []Binding {
 	}
 }
 
-// ForkAddedMsg is sent when a fork is added.
+// ForkAddedMsg is sent when a fork is added. IsFirst is set when this was the
+// first registered fork, so the handler can nudge soft-fork users toward lists.
 type ForkAddedMsg struct {
 	ForkURL string
 	Err     error
+	IsFirst bool
 }
 
 // ForkRemovedMsg is sent when a fork is removed.
@@ -697,11 +700,13 @@ func handleForkAdded(msg ForkAddedMsg, ctx AppContext) (bool, tea.Cmd) {
 		ctx.Host().SetMessage(msg.Err.Error(), MessageTypeError)
 		return true, ctx.Host().Update(msg)
 	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(
-		fmt.Sprintf("Fork added: %s", protocol.GetDisplayName(msg.ForkURL)),
-		MessageTypeSuccess,
-		5*time.Second,
-	)
+	text := fmt.Sprintf("Fork added: %s", protocol.GetDisplayName(msg.ForkURL))
+	timeout := 5 * time.Second
+	if msg.IsFirst {
+		text += ". For a soft/packaging fork, a list may fit better (Timeline → My Lists)"
+		timeout = 9 * time.Second
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, MessageTypeSuccess, timeout)
 	viewCmd := ctx.Host().Update(msg)
 	return true, tea.Batch(msgCmd, viewCmd)
 }
