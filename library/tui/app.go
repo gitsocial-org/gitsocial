@@ -15,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/clientfetch"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -1074,17 +1075,13 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 			log.Warn("failed to open cache before fetch", "error", err)
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("cache open: %w", err), Auto: auto}
 		}
-		extraProcessors := append(pm.Processors(), review.Processors()...)
-		extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
 		opts := &social.FetchOptions{
 			FetchAllBranches: allBranches,
-			ExtraProcessors:  extraProcessors,
+			ExtraProcessors:  clientfetch.ExtraProcessors(),
 		}
 		result := social.Fetch(m.workdir, m.cacheDir, opts)
-		// Fetch all gitmsg data from registered forks
-		forkProcessors := append(review.Processors(), pm.Processors()...)
-		forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
-		fetch.FetchForks(m.workdir, m.cacheDir, forkProcessors)
+		// Fetch all gitmsg data from registered forks (full processor set + backfill)
+		clientfetch.FetchForks(m.workdir, m.cacheDir)
 		// Re-sync all workspace extension branches to cache
 		if err := fetch.SyncWorkspace(m.workdir); err != nil {
 			log.Debug("post-fetch workspace sync failed", "error", err)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/clientfetch"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
@@ -17,8 +18,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
-	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -56,9 +55,7 @@ For extension-specific options, use the extension's fetch command directly:
 			if len(args) == 1 {
 				repoURL := args[0]
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-				extraProcessors := append(pm.Processors(), review.Processors()...)
-				extraProcessors = append(extraProcessors, memo.Processors()...)
-				extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
+				extraProcessors := clientfetch.ExtraProcessors()
 				countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
 				if err != nil {
 					slog.Debug("get unread count", "error", err)
@@ -182,48 +179,17 @@ func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.
 		opts = &social.FetchOptions{}
 	}
 	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput)
-	extraProcessors := append(pm.Processors(), review.Processors()...)
-	extraProcessors = append(extraProcessors, memo.Processors()...)
-	extraProcessors = append(extraProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
-	opts.ExtraProcessors = extraProcessors
+	opts.ExtraProcessors = clientfetch.ExtraProcessors()
 	opts.ExtraHooks = review.PostFetchHooks()
 	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
-	forkProcessors := append(review.Processors(), pm.Processors()...)
-	forkProcessors = append(forkProcessors, memo.Processors()...)
-	forkProcessors = append(forkProcessors, social.Processors()...)
-	forkProcessors = append(forkProcessors, notifications.MentionProcessor(), notifications.TrailerProcessor())
-	forkStats := fetch.FetchForks(cfg.WorkDir, cfg.CacheDir, forkProcessors)
+	forkStats := clientfetch.FetchForks(cfg.WorkDir, cfg.CacheDir)
 	if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
 		slog.Debug("workspace sync", "error", err)
 	}
 	if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 		slog.Debug("memo tier sync", "error", err)
 	}
-	fetch.BackfillExtensionItems(backfillRepos(cfg.WorkDir), backfillSpecs(), forkProcessors)
 	return result, forkStats
-}
-
-// backfillRepos returns the workspace URL plus all registered fork URLs —
-// the set whose cached commits may predate a later processor wiring.
-func backfillRepos(workdir string) []string {
-	repos := make([]string, 0, 8)
-	if ws := gitmsg.ResolveRepoURL(workdir); ws != "" {
-		repos = append(repos, ws)
-	}
-	repos = append(repos, gitmsg.GetForks(workdir)...)
-	return repos
-}
-
-// backfillSpecs enumerates the extensions whose items tables the backfill
-// scans for missing rows.
-func backfillSpecs() []fetch.ExtBackfillSpec {
-	return []fetch.ExtBackfillSpec{
-		social.BackfillSpec(),
-		pm.BackfillSpec(),
-		release.BackfillSpec(),
-		review.BackfillSpec(),
-		memo.BackfillSpec(),
-	}
 }
 
 // printNotificationDelta prints new notification count if it increased after fetch.

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/gitsocial-org/gitsocial/library/clientfetch"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -375,6 +376,7 @@ func coreFetch(s *Server) HandlerFunc {
 				Before:           p.Before,
 				Parallel:         p.Parallel,
 				FetchAllBranches: fetchAllBranches,
+				ExtraProcessors:  clientfetch.ExtraProcessors(),
 				OnProgress: func(repoURL string, processed, total int) {
 					s.Emit("fetch", "fetch.progress", map[string]any{
 						"fetchId":   fetchID,
@@ -388,7 +390,7 @@ func coreFetch(s *Server) HandlerFunc {
 			if err := fetch.SyncWorkspace(workdir); err != nil {
 				log.Printf("sync workspace: %s", err)
 			}
-			fetch.FetchForks(workdir, cacheDir, nil)
+			clientfetch.FetchForks(workdir, cacheDir)
 			if result.Success {
 				errCount := len(result.Data.Errors)
 				s.Emit("fetch", "fetch.complete", map[string]any{

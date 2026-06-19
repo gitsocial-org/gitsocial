@@ -385,6 +385,7 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 	if err := InsertSocialItem(SocialItem{
 		RepoURL: repoURL,
 		Hash:    hash,
+		Branch:  branch,
 		Type:    "post",
 	}); err != nil {
 		log.Warn("insert social item after post creation failed", "hash", hash, "error", err)
