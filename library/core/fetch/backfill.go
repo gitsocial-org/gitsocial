@@ -66,7 +66,9 @@ type orphanCommit struct {
 
 // findOrphanCommits returns rows in core_commits whose message carries the
 // spec's GitMsg ext marker but whose items row is absent. Scoped to repoURLs
-// to bound the scan after a fetch.
+// to bound the scan after a fetch. Edit commits (edits column set) are skipped:
+// they mutate their canonical via core_commits_version and never get their own
+// items row, so they'd otherwise be re-flagged as orphans on every fetch.
 func findOrphanCommits(repoURLs []string, spec ExtBackfillSpec) ([]orphanCommit, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]orphanCommit, error) {
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(repoURLs)), ",")
@@ -79,6 +81,7 @@ func findOrphanCommits(repoURLs []string, spec ExtBackfillSpec) ([]orphanCommit,
 			WHERE c.repo_url IN (%s)
 			  AND c.message LIKE ?
 			  AND e.repo_url IS NULL
+			  AND (c.edits IS NULL OR c.edits = '')
 		`, spec.ItemsTable, placeholders)
 		args := make([]interface{}, 0, len(repoURLs)+1)
 		for _, r := range repoURLs {
