@@ -114,7 +114,18 @@ GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0"
 GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0"
 ```
 
-Implementations MUST resolve references by locating the original commit, finding all edits, and returning the latest (or retracted state).
+Implementations MUST resolve references by locating the original commit, finding all same-repository edits (those whose repository equals the original's), and returning the latest (or retracted state).
+
+A cross-repository edit (whose repository differs from the original's) is a "proposal" and MUST NOT change resolved state. The original's owner:
+
+- MAY accept a proposal by authoring a same-repository edit carrying `accepts="<proposal-ref>"`; the mirror resolves normally and SHOULD carry a matching `GitMsg-Ref:` snapshot preserving the proposer's identity and content
+- MAY decline a proposal by publishing a marker at `refs/gitmsg/core/declines/<hash>` whose subject is the proposal ref
+
+A proposal with neither is pending. An accepting mirror MUST take precedence over a decline marker for the same proposal.
+
+```
+GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; accepts="https://github.com/alice/fork#commit:def456789abc@gitmsg/pm"; v="0.1.0"
+```
 
 ### 1.6. Mentions
 
