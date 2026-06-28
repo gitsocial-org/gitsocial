@@ -11,13 +11,15 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/proposals"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // PRVersionItem wraps review.PRVersion to implement tuicore.VersionItem.
 type PRVersionItem struct {
-	Version   review.PRVersion
-	ShowEmail bool
+	Version     review.PRVersion
+	ShowEmail   bool
+	ProposalTag string
 }
 
 // GetID returns the version's commit hash as unique identifier.
@@ -70,6 +72,7 @@ func (v PRVersionItem) RenderListEntry(index, total int, label string, selected 
 	} else {
 		b.WriteString("  " + header)
 	}
+	b.WriteString(renderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -117,6 +120,7 @@ type PRHistoryView struct {
 	workdir      string
 	workspaceURL string
 	showEmail    bool
+	owned        bool
 }
 
 // NewPRHistoryView creates a new PR history view.
@@ -140,6 +144,7 @@ func (v *PRHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if prID == "" {
 		return nil
 	}
+	v.owned = ownsCanonical(prID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	workspaceURL := v.workspaceURL
 	return func() tea.Msg {
@@ -173,6 +178,10 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return v.openDescriptionDiff(state)
 		case "i":
 			return v.openInterdiff(state)
+		case "A":
+			return v.acceptSelected()
+		case "X":
+			return v.declineSelected()
 		}
 		handled, cmd := v.picker.HandleKey(msg.String())
 		if handled {
@@ -185,7 +194,8 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		items := make([]tuicore.VersionItem, len(msg.Versions))
 		for i, version := range msg.Versions {
-			items[i] = PRVersionItem{Version: version, ShowEmail: v.showEmail}
+			items[i] = PRVersionItem{Version: version, ShowEmail: v.showEmail,
+				ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 		}
 		v.picker.SetItems(items)
 	}
@@ -196,7 +206,7 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 func (v *PRHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.ReviewPRHistory, nil)
+	footer := tuicore.RenderFooterInclude(state.Registry, tuicore.ReviewPRHistory, nil, v.acceptInclude())
 	return wrapper.Render(content, footer)
 }
 
@@ -237,6 +247,66 @@ func (v *PRHistoryView) openDescriptionDiff(state *tuicore.State) tea.Cmd {
 		func(_ tuicore.VersionItem, idx int) string { return fmt.Sprintf("v%d", idx) })
 }
 
+// acceptInclude force-shows "A accept" in the footer only when this workspace
+// owns the PR (so the proposer's "awaiting the owner" view doesn't advertise it)
+// and the picker holds a cross-repo proposal to accept.
+func (v *PRHistoryView) acceptInclude() map[string]bool {
+	for _, it := range v.picker.Items() {
+		if iv, ok := it.(PRVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+			return map[string]bool{"A": true, "X": true}
+		}
+	}
+	return nil
+}
+
+// acceptSelected accepts the selected version when it is a cross-repo proposed
+// edit on a PR this workspace owns, authoring an authoritative same-repo mirror.
+func (v *PRHistoryView) acceptSelected() tea.Cmd {
+	sel := v.picker.SelectedItem()
+	pv, ok := sel.(PRVersionItem)
+	if !ok {
+		return nil
+	}
+	if pv.Version.RepoURL == v.workspaceURL {
+		return func() tea.Msg {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+		}
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, pv.Version.CommitHash, pv.Version.RepoURL, pv.Version.Branch)
+	workdir := v.workdir
+	return func() tea.Msg {
+		out := proposals.Accept(workdir, ref)
+		if !out.Success {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+		}
+		return ProposalAcceptedMsg{CanonicalRef: out.Data.CanonicalRef}
+	}
+}
+
+// declineSelected publishes a durable decline for the selected cross-repo proposed
+// edit on a PR this workspace owns, so the proposer learns and it stops nagging.
+func (v *PRHistoryView) declineSelected() tea.Cmd {
+	sel := v.picker.SelectedItem()
+	pv, ok := sel.(PRVersionItem)
+	if !ok {
+		return nil
+	}
+	if pv.Version.RepoURL == v.workspaceURL {
+		return func() tea.Msg {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+		}
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, pv.Version.CommitHash, pv.Version.RepoURL, pv.Version.Branch)
+	workdir := v.workdir
+	return func() tea.Msg {
+		out := proposals.Decline(workdir, ref)
+		if !out.Success {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+		}
+		return ProposalAcceptedMsg{Declined: true, CanonicalRef: out.Data.CanonicalRef}
+	}
+}
+
 // openInterdiff navigates to the existing PR range-diff (interdiff) view.
 func (v *PRHistoryView) openInterdiff(state *tuicore.State) tea.Cmd {
 	prID := state.Router.Location().Param("prID")
@@ -254,5 +324,7 @@ func (v *PRHistoryView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
 		{Key: "i", Label: "interdiff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
+		{Key: "A", Label: "accept", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
+		{Key: "X", Label: "decline", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
 	}
 }

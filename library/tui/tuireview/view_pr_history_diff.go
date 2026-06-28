@@ -44,10 +44,20 @@ func loadPRHistoryVersions(workdir string, params map[string]string) ([]tuicore.
 		case ver.Body != "":
 			content = strings.TrimRight(ver.Body, "\n")
 		}
+		fields := map[string]string{}
+		if ver.State != "" {
+			fields["state"] = string(ver.State)
+		}
+		if ver.BaseTip != "" {
+			fields["base-tip"] = ver.BaseTip
+		}
+		if ver.HeadTip != "" {
+			fields["head-tip"] = ver.HeadTip
+		}
 		out = append(out, tuicore.DiffVersion{
 			ID:        fmt.Sprintf("v%d", ver.Number),
 			Label:     ver.Label,
-			Content:   content,
+			Content:   tuicore.DiffContentWithMetadata(fields, ver.IsRetracted, content),
 			Author:    ver.AuthorName,
 			Email:     ver.AuthorEmail,
 			Timestamp: ver.Timestamp,

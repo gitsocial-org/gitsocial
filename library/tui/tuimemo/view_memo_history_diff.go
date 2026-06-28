@@ -45,7 +45,7 @@ func loadMemoHistoryVersions(workdir string, params map[string]string) ([]tuicor
 		out = append(out, tuicore.DiffVersion{
 			ID:        ver.ID,
 			Label:     memoVersionLabel(i, total, ver.EditOf != ""),
-			Content:   ver.Content,
+			Content:   tuicore.DiffContentWithMetadata(ver.Fields, ver.IsRetracted, ver.Content),
 			Author:    ver.AuthorName,
 			Email:     ver.AuthorEmail,
 			Timestamp: ver.Timestamp,

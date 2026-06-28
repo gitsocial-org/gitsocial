@@ -14,7 +14,7 @@ import (
 )
 
 func TestBuildReleaseContent_minimal(t *testing.T) {
-	content := buildReleaseContent("Release v1.0", "", CreateReleaseOptions{}, "")
+	content := buildReleaseContent("Release v1.0", "", CreateReleaseOptions{}, "", nil)
 	if !strings.Contains(content, "Release v1.0") {
 		t.Error("content should contain subject")
 	}
@@ -40,7 +40,7 @@ func TestBuildReleaseContent_allFields(t *testing.T) {
 		Checksums:   "sha256:abc123",
 		SignedBy:    "release@example.com",
 	}
-	content := buildReleaseContent("Release v1.0.0", "Changelog here", opts, "")
+	content := buildReleaseContent("Release v1.0.0", "Changelog here", opts, "", nil)
 	if !strings.Contains(content, "Changelog here") {
 		t.Error("content should contain body")
 	}
@@ -72,7 +72,7 @@ func TestBuildReleaseContent_allFields(t *testing.T) {
 }
 
 func TestBuildReleaseContent_withEdits(t *testing.T) {
-	content := buildReleaseContent("Updated release", "", CreateReleaseOptions{Tag: "v1.0.0"}, "#commit:abc123456789")
+	content := buildReleaseContent("Updated release", "", CreateReleaseOptions{Tag: "v1.0.0"}, "#commit:abc123456789", nil)
 	msg := protocol.ParseMessage(content)
 	if msg == nil {
 		t.Fatal("ParseMessage returned nil")
@@ -83,7 +83,7 @@ func TestBuildReleaseContent_withEdits(t *testing.T) {
 }
 
 func TestBuildReleaseContent_withBody(t *testing.T) {
-	content := buildReleaseContent("Title", "Body text", CreateReleaseOptions{}, "")
+	content := buildReleaseContent("Title", "Body text", CreateReleaseOptions{}, "", nil)
 	if !strings.Contains(content, "Title") || !strings.Contains(content, "Body text") {
 		t.Error("content should contain subject and body")
 	}

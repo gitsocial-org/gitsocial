@@ -169,7 +169,7 @@ func (v *SprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					}
 				}
 			case "h":
-				if v.sprint != nil && v.sprint.IsEdited {
+				if v.sprint != nil && (v.sprint.IsEdited || v.sprint.HasProposedEdits) {
 					sprintID := v.sprint.ID
 					return func() tea.Msg {
 						return tuicore.NavigateMsg{
@@ -190,11 +190,22 @@ func (v *SprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "D":
 				if v.sprint != nil && v.sprint.State == pm.SprintStateActive {
-					return v.completeSprint()
+					proposed := v.sprint.Repository != v.workspaceURL
+					prompt := "Mark this sprint complete?"
+					if proposed {
+						prompt = "Propose completing this sprint on " + protocol.GetDisplayName(v.sprint.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.completeSprint(proposed) })
+					return nil
 				}
 			case "X":
 				if v.sprint != nil {
-					v.confirm.Show("Retract this sprint?", false, func() tea.Cmd { return v.doRetract() })
+					proposed := v.sprint.Repository != v.workspaceURL
+					prompt := "Retract this sprint?"
+					if proposed {
+						prompt = "Propose retracting this sprint on " + protocol.GetDisplayName(v.sprint.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doRetract(proposed) })
 					return nil
 				}
 			}
@@ -228,7 +239,18 @@ func (v *SprintDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				return v.renderSprintCard(sp, width, selected, searchQuery, anchors)
+				lines := v.renderSprintCard(sp, width, selected, searchQuery, anchors)
+				if sp.HasProposedEdits {
+					banner := "✎  Proposed edits from another repo (press h to review)"
+					if sp.Repository != v.workspaceURL {
+						banner = "✎  Proposed edits not yet accepted by the owner (press h to view)"
+					}
+					lines = append([]string{
+						" " + tuicore.Warning.Render(banner),
+						"",
+					}, lines...)
+				}
+				return lines
 			},
 			SearchText: func() string { return sp.Title + " " + sp.Body },
 			Links: func() []tuicore.CardLink {
@@ -305,27 +327,34 @@ func (v *SprintDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *SprintDetailView) completeSprint() tea.Cmd {
+func (v *SprintDetailView) completeSprint(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
-	return func() tea.Msg {
-		result := pm.CompleteSprint("", sprintID)
-		if !result.Success {
-			return SprintDetailLoadedMsg{Err: fmt.Errorf("complete failed: %s", result.Error.Message)}
-		}
-		return SprintDetailLoadedMsg{Sprint: result.Data, Issues: nil, Comments: nil}
-	}
+	return tea.Sequence(
+		func() tea.Msg {
+			result := pm.CompleteSprint("", sprintID)
+			if !result.Success {
+				return SprintCompletedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+			}
+			return SprintCompletedMsg{ID: sprintID, Proposed: proposed}
+		},
+		v.loadSprint(),
+	)
 }
 
-func (v *SprintDetailView) doRetract() tea.Cmd {
+func (v *SprintDetailView) doRetract(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
 	workdir := v.workdir
-	return func() tea.Msg {
+	retract := func() tea.Msg {
 		result := pm.RetractSprint(workdir, sprintID)
 		if !result.Success {
-			return SprintRetractedMsg{ID: sprintID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintRetractedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return SprintRetractedMsg{ID: sprintID}
+		return SprintRetractedMsg{ID: sprintID, Proposed: proposed}
 	}
+	if proposed {
+		return tea.Sequence(retract, v.loadSprint())
+	}
+	return retract
 }
 
 // Render renders the sprint detail view.
@@ -343,7 +372,7 @@ func (v *SprintDetailView) Render(state *tuicore.State) string {
 		content = v.sectionList.View()
 	}
 	exclude := map[string]bool{}
-	if v.sprint == nil || !v.sprint.IsEdited {
+	if v.sprint == nil || (!v.sprint.IsEdited && !v.sprint.HasProposedEdits) {
 		exclude["h"] = true
 	}
 	if v.sprint == nil || v.sprint.State != pm.SprintStateActive {

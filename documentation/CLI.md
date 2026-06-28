@@ -226,7 +226,7 @@ gitsocial related owner/repo -l 10   # Limit results
 
 ### gitsocial fork
 
-Register external repositories as forks of the current workspace. Issues and PRs filed in a registered fork surface in the workspace's PM/Review views; the workspace author can edit them (state, labels, comments) and the changes propagate to the fork's local cache on next fetch.
+Register external repositories as forks of the current workspace. Issues and PRs filed in a registered fork surface in the workspace's PM/Review views; the workspace author can edit them (state, labels, comments), but a cross-repo edit is an inert *proposal* until the owning repo accepts it, rather than auto-applying.
 
 ```
 gitsocial fork add <url>             # Register a fork

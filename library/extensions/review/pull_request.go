@@ -34,6 +34,11 @@ type CreatePROptions struct {
 	// that don't exercise branch resolution). Production callers should leave
 	// this false so unpushed branches are caught early.
 	AllowUnpublishedHead bool
+	// Accepts names the cross-repo proposal a mirror edit accepts; Adopts names the
+	// fork PR a homed copy adopts. Each emits its matching header field
+	// (GITMSG.md §1.5 / GITREVIEW.md §1.5).
+	Accepts string
+	Adopts  string
 }
 
 // CreatePR creates a new pull request on the review branch.
@@ -128,6 +133,9 @@ type UpdatePROptions struct {
 	MergeBase *string
 	MergeHead *string
 	Origin    *protocol.Origin
+	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
+	// recording "accepted from <fork> by <author>"). Not set by normal edits.
+	Attribution *protocol.Ref
 }
 
 // UpdatePR edits an existing pull request using core versioning.
@@ -239,7 +247,12 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildPRContentWithState(subject, body, createOpts, canonicalRef, state, existing.References)
+	refs := existing.References
+	if opts.Attribution != nil {
+		refs = append(append([]protocol.Ref{}, existing.References...), *opts.Attribution)
+		createOpts.Accepts = opts.Attribution.Ref
+	}
+	content := buildPRContentWithState(subject, body, createOpts, canonicalRef, state, refs)
 
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
@@ -258,6 +271,52 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 }
 
 // MergePR merges the head branch into the base branch, then updates PR state to merged.
+// homeForkPR adopts a fork-authored PR onto the workspace review branch so a
+// base-owner landing edit (merge or close) lands as a self-contained, same-repo
+// record rather than an inert cross-repo edit (proposals only resolve same-repo
+// under the acceptance gating). The copy carries a GitMsg-Ref back to the fork
+// original, preserving author identity and surviving fork deletion (GITREVIEW
+// §1.5). Returns the workspace-homed PR ref, or prRef unchanged when the PR
+// already lives in this workspace.
+func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullRequest) (string, error) {
+	if existing.RepoURL == repoURL {
+		return prRef, nil
+	}
+	branch := gitmsg.GetExtBranch(workdir, "review")
+	copyOpts := CreatePROptions{
+		Base:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
+		Head:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
+		DependsOn: pr.DependsOn,
+		Closes:    pr.Closes,
+		Reviewers: pr.Reviewers,
+		Origin:    existing.Origin,
+	}
+	for i, ref := range copyOpts.Closes {
+		copyOpts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
+	}
+	forkRef := protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch)
+	copyOpts.Adopts = forkRef
+	refs := []protocol.Ref{{
+		Ext:      "review",
+		Author:   pr.Author.Name,
+		Email:    pr.Author.Email,
+		Time:     pr.Timestamp.Format(time.RFC3339),
+		Ref:      forkRef,
+		V:        "0.1.0",
+		Fields:   map[string]string{"type": string(ItemTypePullRequest)},
+		Metadata: protocol.QuoteContent(joinSubjectBody(pr.Subject, pr.Body)),
+	}}
+	content := buildPRContentWithState(pr.Subject, pr.Body, copyOpts, "", PRStateOpen, refs)
+	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
+	if err != nil {
+		return "", fmt.Errorf("copy fork PR: %w", err)
+	}
+	if err := cacheReviewFromCommit(workdir, repoURL, hash, branch); err != nil {
+		return "", fmt.Errorf("cache copied PR: %w", err)
+	}
+	return hash, nil
+}
+
 func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
@@ -290,41 +349,13 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		}
 	}
 
-	// Copy fork PR to upstream review branch so the merge record is self-contained
-	if existing.RepoURL != repoURL {
-		branch := gitmsg.GetExtBranch(workdir, "review")
-		copyOpts := CreatePROptions{
-			Base:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
-			Head:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
-			DependsOn: pr.DependsOn,
-			Closes:    pr.Closes,
-			Reviewers: pr.Reviewers,
-		}
-		copyOpts.Origin = existing.Origin
-		for i, ref := range copyOpts.Closes {
-			copyOpts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
-		}
-		forkRef := protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch)
-		refs := []protocol.Ref{{
-			Ext:      "review",
-			Author:   pr.Author.Name,
-			Email:    pr.Author.Email,
-			Time:     pr.Timestamp.Format(time.RFC3339),
-			Ref:      forkRef,
-			V:        "0.1.0",
-			Fields:   map[string]string{"type": string(ItemTypePullRequest)},
-			Metadata: protocol.QuoteContent(joinSubjectBody(pr.Subject, pr.Body)),
-		}}
-		content := buildPRContentWithState(pr.Subject, pr.Body, copyOpts, "", PRStateOpen, refs)
-		hash, err := git.CreateCommitOnBranch(workdir, branch, content)
-		if err != nil {
-			return result.Err[PullRequest]("COMMIT_FAILED", "copy fork PR: "+err.Error())
-		}
-		if err := cacheReviewFromCommit(workdir, repoURL, hash, branch); err != nil {
-			return result.Err[PullRequest]("CACHE_FAILED", "cache copied PR: "+err.Error())
-		}
-		prRef = hash
+	// Adopt a fork PR onto our own review branch so the merge record is
+	// self-contained and same-repo (see homeForkPR).
+	homedRef, err := homeForkPR(workdir, repoURL, prRef, existing, pr)
+	if err != nil {
+		return result.Err[PullRequest]("COMMIT_FAILED", err.Error())
 	}
+	prRef = homedRef
 
 	// Snapshot merge-base and head hash before the merge (lost after FF merge)
 	baseName := protocol.ParseRef(pr.Base).Value
@@ -459,7 +490,10 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	return res
 }
 
-// ClosePR sets a pull request's state to closed.
+// ClosePR sets a pull request's state to closed. Closing is a base-owner landing
+// decision: a fork PR targeting this workspace is adopted onto our own review
+// branch first (so the closed record is a self-contained same-repo edit), the
+// same way MergePR records a merge.
 func ClosePR(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
@@ -470,9 +504,17 @@ func ClosePR(workdir, prRef string) Result[PullRequest] {
 	if pr.State != PRStateOpen {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot close: pull request is %s", pr.State))
 	}
-
+	// Lifecycle authority belongs to the base owner: refuse to close a PR whose
+	// base explicitly targets a different repository.
+	if baseRepo := protocol.ParseRef(pr.Base).Repository; baseRepo != "" && baseRepo != repoURL {
+		return result.Err[PullRequest]("INVALID_TARGET", "cannot close: pull request targets a different repository")
+	}
+	homedRef, err := homeForkPR(workdir, repoURL, prRef, existing, pr)
+	if err != nil {
+		return result.Err[PullRequest]("COMMIT_FAILED", err.Error())
+	}
 	closed := PRStateClosed
-	return UpdatePR(workdir, prRef, UpdatePROptions{State: &closed})
+	return UpdatePR(workdir, homedRef, UpdatePROptions{State: &closed})
 }
 
 // MarkReady removes the draft flag from a pull request.
@@ -481,6 +523,9 @@ func MarkReady(workdir, prRef string) Result[PullRequest] {
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
 		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+	}
+	if existing.RepoURL != repoURL {
+		return result.Err[PullRequest]("NOT_AUTHOR", "cannot mark ready: a pull request's draft state is the author's to set")
 	}
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
@@ -499,6 +544,9 @@ func ConvertToDraft(workdir, prRef string) Result[PullRequest] {
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
 		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+	}
+	if existing.RepoURL != repoURL {
+		return result.Err[PullRequest]("NOT_AUTHOR", "cannot convert to draft: a pull request's draft state is the author's to set")
 	}
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
@@ -594,6 +642,9 @@ func RetractPR(workdir, prRef string) Result[bool] {
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
 		return result.Err[bool]("NOT_FOUND", "pull request not found")
+	}
+	if existing.RepoURL != repoURL {
+		return result.Err[bool]("NOT_AUTHOR", "cannot retract: only the author can retract their pull request")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "review")
@@ -745,6 +796,12 @@ func buildPRContentWithState(subject, body string, opts CreatePROptions, editsRe
 	}
 	if editsRef != "" {
 		fields["edits"] = editsRef
+	}
+	if opts.Accepts != "" {
+		fields["accepts"] = opts.Accepts
+	}
+	if opts.Adopts != "" {
+		fields["adopts"] = opts.Adopts
 	}
 	if opts.Base != "" {
 		fields["base"] = opts.Base

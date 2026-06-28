@@ -106,13 +106,14 @@ func IssueToCardWithOptions(issue pm.Issue, opts IssueToCardOptions) tuicore.Car
 	}
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Title:       issue.Subject,
-			Subtitle:    subtitleParts,
-			Badge:       badge,
-			Icon:        icon,
-			IsAssigned:  isAssigned,
-			IsEdited:    issue.IsEdited,
-			IsRetracted: issue.IsRetracted,
+			Title:            issue.Subject,
+			Subtitle:         subtitleParts,
+			Badge:            badge,
+			Icon:             icon,
+			IsAssigned:       isAssigned,
+			IsEdited:         issue.IsEdited,
+			HasProposedEdits: issue.HasProposedEdits,
+			IsRetracted:      issue.IsRetracted,
 		},
 		Stats: stats,
 	}
@@ -225,13 +226,14 @@ func MilestoneToCardWithOptions(milestone pm.Milestone, opts MilestoneToCardOpti
 	}
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Title:       name,
-			TitleLink:   titleLink,
-			Subtitle:    subtitleParts,
-			Badge:       badge,
-			Icon:        "◇",
-			IsEdited:    milestone.IsEdited,
-			IsRetracted: milestone.IsRetracted,
+			Title:            name,
+			TitleLink:        titleLink,
+			Subtitle:         subtitleParts,
+			Badge:            badge,
+			Icon:             "◇",
+			IsEdited:         milestone.IsEdited,
+			HasProposedEdits: milestone.HasProposedEdits,
+			IsRetracted:      milestone.IsRetracted,
 		},
 		Content: tuicore.CardContent{
 			Text: milestone.Title,
@@ -362,13 +364,14 @@ func SprintToCardWithOptions(sprint pm.Sprint, opts SprintToCardOptions) tuicore
 	}
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Title:       name,
-			TitleLink:   titleLink,
-			Subtitle:    subtitleParts,
-			Badge:       badge,
-			Icon:        "◷",
-			IsEdited:    sprint.IsEdited,
-			IsRetracted: sprint.IsRetracted,
+			Title:            name,
+			TitleLink:        titleLink,
+			Subtitle:         subtitleParts,
+			Badge:            badge,
+			Icon:             "◷",
+			IsEdited:         sprint.IsEdited,
+			HasProposedEdits: sprint.HasProposedEdits,
+			IsRetracted:      sprint.IsRetracted,
 		},
 		Content: tuicore.CardContent{
 			Text: sprint.Title,

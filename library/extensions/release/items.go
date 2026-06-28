@@ -13,27 +13,28 @@ import (
 )
 
 type ReleaseItem struct {
-	RepoURL     string
-	Hash        string
-	Branch      string
-	Tag         sql.NullString
-	Version     sql.NullString
-	Prerelease  bool
-	Artifacts   sql.NullString
-	ArtifactURL sql.NullString
-	Checksums   sql.NullString
-	SignedBy    sql.NullString
-	SBOM        sql.NullString
-	Labels      sql.NullString
-	Origin      *protocol.Origin
-	Content     string
-	AuthorName  string
-	AuthorEmail string
-	Timestamp   time.Time
-	EditOf      sql.NullString
-	IsRetracted bool
-	IsEdited    bool
-	IsVirtual   bool
+	RepoURL          string
+	Hash             string
+	Branch           string
+	Tag              sql.NullString
+	Version          sql.NullString
+	Prerelease       bool
+	Artifacts        sql.NullString
+	ArtifactURL      sql.NullString
+	Checksums        sql.NullString
+	SignedBy         sql.NullString
+	SBOM             sql.NullString
+	Labels           sql.NullString
+	Origin           *protocol.Origin
+	Content          string
+	AuthorName       string
+	AuthorEmail      string
+	Timestamp        time.Time
+	EditOf           sql.NullString
+	IsRetracted      bool
+	IsEdited         bool
+	HasProposedEdits bool
+	IsVirtual        bool
 	// Derived from social_interactions
 	Comments int
 }
@@ -44,7 +45,12 @@ const baseSelectFromView = `
 	       v.tag, v.version, v.prerelease, v.artifacts, v.artifact_url,
 	       v.checksums, v.signed_by, v.sbom, v.labels,
 	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments
+	       v.comments,
+	       EXISTS(SELECT 1 FROM core_commits_version cve
+	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
+	                AND cve.canonical_branch = v.branch
+	                AND cve.edit_repo_url != cve.canonical_repo_url
+	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
 	FROM release_items_resolved v
 `
 
@@ -198,26 +204,27 @@ func ReleaseItemToRelease(item ReleaseItem) Release {
 	labels := text.SplitCSV(item.Labels.String)
 
 	return Release{
-		ID:          id,
-		Repository:  item.RepoURL,
-		Branch:      item.Branch,
-		Author:      Author{Name: item.AuthorName, Email: item.AuthorEmail},
-		Timestamp:   item.Timestamp,
-		Subject:     subject,
-		Body:        body,
-		Version:     item.Version.String,
-		Tag:         item.Tag.String,
-		Prerelease:  item.Prerelease,
-		Artifacts:   artifacts,
-		ArtifactURL: item.ArtifactURL.String,
-		Checksums:   item.Checksums.String,
-		SignedBy:    item.SignedBy.String,
-		SBOM:        item.SBOM.String,
-		Labels:      labels,
-		IsEdited:    item.IsEdited,
-		IsRetracted: item.IsRetracted,
-		Comments:    item.Comments,
-		Origin:      item.Origin,
+		ID:               id,
+		Repository:       item.RepoURL,
+		Branch:           item.Branch,
+		Author:           Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		Version:          item.Version.String,
+		Tag:              item.Tag.String,
+		Prerelease:       item.Prerelease,
+		Artifacts:        artifacts,
+		ArtifactURL:      item.ArtifactURL.String,
+		Checksums:        item.Checksums.String,
+		SignedBy:         item.SignedBy.String,
+		SBOM:             item.SBOM.String,
+		Labels:           labels,
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
+		IsRetracted:      item.IsRetracted,
+		Comments:         item.Comments,
+		Origin:           item.Origin,
 	}
 }
 
@@ -269,14 +276,14 @@ func GetReleaseItemByFullRef(refPrefix string) (*ReleaseItem, error) {
 func scanResolvedRow(row *sql.Row) (*ReleaseItem, error) {
 	var item ReleaseItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, prerelease int
+	var isVirtual, isRetracted, hasEdits, prerelease, hasProposed int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
 		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
+		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -296,20 +303,21 @@ func scanResolvedRow(row *sql.Row) (*ReleaseItem, error) {
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
 func scanResolvedRows(rows *sql.Rows) (*ReleaseItem, error) {
 	var item ReleaseItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, prerelease int
+	var isVirtual, isRetracted, hasEdits, prerelease, hasProposed int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
 		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
+		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -329,5 +337,6 @@ func scanResolvedRows(rows *sql.Rows) (*ReleaseItem, error) {
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }

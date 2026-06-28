@@ -17,6 +17,7 @@ type searchQuery struct {
 	ListID       string
 	ListIDs      []string
 	WorkspaceURL string
+	ForkURLs     []string
 	Types        []string   // social types (post, comment, etc.)
 	ExtFilter    *ExtFilter // extension table filter
 	Since        *time.Time
@@ -195,7 +196,8 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	       ` + tagExpr + ` as item_tag,
 	       ` + versionExpr + ` as item_version,
 	       ` + prereleaseExpr + ` as item_prerelease,
-	       ` + commentsExpr + ` as item_comments
+	       ` + commentsExpr + ` as item_comments,
+	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.canonical_branch = r.branch AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
 	FROM core_commits r
 	` + strings.Join(joins, "\n\t")
 
@@ -238,6 +240,7 @@ func buildResolvedStateExpr(has map[string]bool) string {
 		" FROM core_commits_version v " + strings.Join(editJoins, " ") +
 		" WHERE v.canonical_repo_url = r.repo_url AND v.canonical_hash = r.hash AND v.canonical_branch = r.branch" +
 		" AND v.is_retracted = 0" +
+		" AND v.edit_repo_url = v.canonical_repo_url" +
 		" ORDER BY v.rowid DESC LIMIT 1)"
 
 	parts := make([]string, 0, 1+len(rawFallbacks))
@@ -252,7 +255,7 @@ func stateExistsClause(table, state string, args *[]interface{}) string {
 	*args = append(*args, state, state)
 	return `(EXISTS (SELECT 1 FROM ` + table + ` _sr WHERE _sr.repo_url = r.repo_url AND _sr.hash = r.hash AND _sr.branch = r.branch AND _sr.state = ?)` +
 		` OR EXISTS (SELECT 1 FROM core_commits_version _sv JOIN ` + table + ` _se ON _sv.edit_repo_url = _se.repo_url AND _sv.edit_hash = _se.hash AND _sv.edit_branch = _se.branch` +
-		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.canonical_branch = r.branch AND _sv.is_retracted = 0 AND _se.state = ?))`
+		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.canonical_branch = r.branch AND _sv.is_retracted = 0 AND _sv.edit_repo_url = _sv.canonical_repo_url AND _se.state = ?))`
 }
 
 // coalesceStr builds a COALESCE expression for text columns from available aliases.
@@ -315,7 +318,7 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		args = append(args, q.ListID)
 	}
 
-	if len(q.ListIDs) > 0 || q.WorkspaceURL != "" {
+	if len(q.ListIDs) > 0 || q.WorkspaceURL != "" || len(q.ForkURLs) > 0 {
 		var orClauses []string
 		if len(q.ListIDs) > 0 {
 			ph := strings.Repeat("?,", len(q.ListIDs))
@@ -328,6 +331,14 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		if q.WorkspaceURL != "" {
 			orClauses = append(orClauses, "r.repo_url = ?")
 			args = append(args, q.WorkspaceURL)
+		}
+		if len(q.ForkURLs) > 0 {
+			ph := strings.Repeat("?,", len(q.ForkURLs))
+			ph = ph[:len(ph)-1]
+			orClauses = append(orClauses, "r.repo_url IN ("+ph+")")
+			for _, url := range q.ForkURLs {
+				args = append(args, url)
+			}
 		}
 		where = append(where, "("+strings.Join(orClauses, " OR ")+")")
 	}

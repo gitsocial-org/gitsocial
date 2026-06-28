@@ -219,7 +219,7 @@ func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					return nil
 				}
 			case "h":
-				if v.rel != nil && v.rel.IsEdited {
+				if v.rel != nil && (v.rel.IsEdited || v.rel.HasProposedEdits) {
 					releaseID := v.rel.ID
 					return func() tea.Msg {
 						return tuicore.NavigateMsg{
@@ -262,7 +262,18 @@ func (v *ReleaseDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				return v.renderReleaseCard(rel, width, selected, searchQuery, anchors)
+				lines := v.renderReleaseCard(rel, width, selected, searchQuery, anchors)
+				if rel.HasProposedEdits {
+					banner := "✎  Proposed edits from another repo (press h to review)"
+					if rel.Repository != v.workspaceURL {
+						banner = "✎  Proposed edits not yet accepted by the owner (press h to view)"
+					}
+					lines = append([]string{
+						tuicore.Warning.Render(banner),
+						"",
+					}, lines...)
+				}
+				return lines
 			},
 			SearchText: func() string { return rel.Subject + " " + rel.Body },
 			Links: func() []tuicore.CardLink {

@@ -32,15 +32,16 @@ type SocialItem struct {
 	// Latest edit commit's ref (always set when edited; same-author or distinct editor).
 	// Used to verify the edit commit's signature against editorEmail (distinct) or
 	// authorEmail (same author) — see annotateVerified.
-	EditRepoURL string
-	EditHash    string
-	EditBranch  string
-	Timestamp   time.Time
-	EditOf      sql.NullString
-	IsRetracted bool
-	IsEdited    bool
-	IsVirtual   bool
-	IsStale     bool
+	EditRepoURL      string
+	EditHash         string
+	EditBranch       string
+	Timestamp        time.Time
+	EditOf           sql.NullString
+	IsRetracted      bool
+	IsEdited         bool
+	HasProposedEdits bool
+	IsVirtual        bool
+	IsStale          bool
 	// Labels parsed from the GitMsg `labels` header field.
 	Labels []string
 	// Derived from social_interactions
@@ -72,7 +73,12 @@ const baseSelectFromView = `
 	       v.editor_name, v.editor_email,
 	       v.edit_repo_url, v.edit_hash, v.edit_branch,
 	       COALESCE(v.labels, ''),
-	       (sf.repo_url IS NOT NULL) as follows_workspace
+	       (sf.repo_url IS NOT NULL) as follows_workspace,
+	       EXISTS(SELECT 1 FROM core_commits_version cve
+	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
+	                AND cve.canonical_branch = v.branch
+	                AND cve.edit_repo_url != cve.canonical_repo_url
+	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
 	FROM social_items_resolved v
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
@@ -102,7 +108,12 @@ const baseDirectSelect = `
 	       c.resolved_editor_name, c.resolved_editor_email,
 	       c.resolved_edit_repo_url, c.resolved_edit_hash, c.resolved_edit_branch,
 	       COALESCE(c.labels, ''),
-	       (sf.repo_url IS NOT NULL)
+	       (sf.repo_url IS NOT NULL),
+	       EXISTS(SELECT 1 FROM core_commits_version cve
+	              WHERE cve.canonical_repo_url = c.repo_url AND cve.canonical_hash = c.hash
+	                AND cve.canonical_branch = c.branch
+	                AND cve.edit_repo_url != cve.canonical_repo_url
+	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
 	FROM core_commits c
 	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
 	LEFT JOIN social_interactions i ON c.repo_url = i.repo_url AND c.hash = i.hash AND c.branch = i.branch
@@ -1030,7 +1041,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
 	var labelsStr sql.NullString
-	var isVirtual, isRetracted, hasEdits, followsWorkspace int
+	var isVirtual, isRetracted, hasEdits, followsWorkspace, hasProposed int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -1042,7 +1053,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 		&editorName, &editorEmail,
 		&editRepoURL, &editHash, &editBranch,
 		&labelsStr,
-		&followsWorkspace,
+		&followsWorkspace, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -1073,6 +1084,7 @@ func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
 		item.Labels = splitSocialLabels(labelsStr.String)
 	}
 	item.FollowsWorkspace = followsWorkspace == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
@@ -1082,7 +1094,7 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
 	var labelsStr sql.NullString
-	var isVirtual, isRetracted, hasEdits, followsWorkspace int
+	var isVirtual, isRetracted, hasEdits, followsWorkspace, hasProposed int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -1094,7 +1106,7 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 		&editorName, &editorEmail,
 		&editRepoURL, &editHash, &editBranch,
 		&labelsStr,
-		&followsWorkspace,
+		&followsWorkspace, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -1125,6 +1137,7 @@ func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
 		item.Labels = splitSocialLabels(labelsStr.String)
 	}
 	item.FollowsWorkspace = followsWorkspace == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
@@ -1191,6 +1204,7 @@ func SocialItemToPost(item SocialItem) Post {
 		EditBranch:        item.EditBranch,
 		IsRetracted:       item.IsRetracted,
 		IsEdited:          item.IsEdited,
+		HasProposedEdits:  item.HasProposedEdits,
 		IsVirtual:         item.IsVirtual,
 		IsStale:           item.IsStale,
 		OriginalExtension: item.OriginalExtension,

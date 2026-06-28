@@ -200,7 +200,7 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					}
 				}
 			case "h":
-				if v.issue != nil && v.issue.IsEdited {
+				if v.issue != nil && (v.issue.IsEdited || v.issue.HasProposedEdits) {
 					return func() tea.Msg {
 						return tuicore.NavigateMsg{
 							Location: tuicore.LocPMIssueHistory(v.issue.ID),
@@ -220,7 +220,13 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "C":
 				if v.issue != nil && v.issue.State == pm.StateOpen {
-					return v.closeIssue()
+					proposed := v.issue.Repository != v.workspaceURL
+					prompt := "Close this issue?"
+					if proposed {
+						prompt = "Propose closing this issue on " + protocol.GetDisplayName(v.issue.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.closeIssue(proposed) })
+					return nil
 				}
 			case "left":
 				return v.navigateSource(state, -1)
@@ -228,7 +234,12 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				return v.navigateSource(state, 1)
 			case "X":
 				if v.issue != nil {
-					v.confirm.Show("Retract this issue?", false, func() tea.Cmd { return v.doRetract() })
+					proposed := v.issue.Repository != v.workspaceURL
+					prompt := "Retract this issue?"
+					if proposed {
+						prompt = "Propose retracting this issue on " + protocol.GetDisplayName(v.issue.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doRetract(proposed) })
 					return nil
 				}
 			}
@@ -250,7 +261,18 @@ func (v *IssueDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				return v.renderIssueCard(issue, milestone, sprint, contributorNames, width, selected, searchQuery, anchors)
+				lines := v.renderIssueCard(issue, milestone, sprint, contributorNames, width, selected, searchQuery, anchors)
+				if issue.HasProposedEdits {
+					banner := "✎  Proposed edits from another repo (press h to review)"
+					if issue.Repository != v.workspaceURL {
+						banner = "✎  Proposed edits not yet accepted by the owner (press h to view)"
+					}
+					lines = append([]string{
+						tuicore.Warning.Render(banner),
+						"",
+					}, lines...)
+				}
+				return lines
 			},
 			SearchText: func() string { return issue.Subject + " " + issue.Body },
 			Links: func() []tuicore.CardLink {
@@ -321,30 +343,34 @@ func (v *IssueDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *IssueDetailView) closeIssue() tea.Cmd {
+func (v *IssueDetailView) closeIssue(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	return tea.Sequence(
 		func() tea.Msg {
 			result := pm.CloseIssue("", issueID)
 			if !result.Success {
-				return IssueDetailLoadedMsg{Err: fmt.Errorf("close failed: %s", result.Error.Message)}
+				return IssueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
 			}
-			return nil
+			return IssueClosedMsg{ID: issueID, Proposed: proposed}
 		},
 		v.loadIssue(),
 	)
 }
 
-func (v *IssueDetailView) doRetract() tea.Cmd {
+func (v *IssueDetailView) doRetract(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	workdir := v.workdir
-	return func() tea.Msg {
+	retract := func() tea.Msg {
 		result := pm.RetractIssue(workdir, issueID)
 		if !result.Success {
-			return IssueRetractedMsg{ID: issueID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssueRetractedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return IssueRetractedMsg{ID: issueID}
+		return IssueRetractedMsg{ID: issueID, Proposed: proposed}
 	}
+	if proposed {
+		return tea.Sequence(retract, v.loadIssue())
+	}
+	return retract
 }
 
 // navigateSource navigates to adjacent items in the source list.
@@ -377,7 +403,7 @@ func (v *IssueDetailView) Render(state *tuicore.State) string {
 		content = v.sectionList.View()
 	}
 	exclude := map[string]bool{}
-	if v.issue == nil || !v.issue.IsEdited {
+	if v.issue == nil || (!v.issue.IsEdited && !v.issue.HasProposedEdits) {
 		exclude["h"] = true
 	}
 	if v.milestone == nil {

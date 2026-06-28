@@ -214,12 +214,14 @@ func TestReviewItemToPullRequest_withOriginalAuthor(t *testing.T) {
 		AuthorName:  "Forker",
 		AuthorEmail: "forker@example.com",
 		Timestamp:   time.Date(2025, 10, 15, 12, 0, 0, 0, time.UTC),
+		Adopts:      "https://github.com/fork/repo#commit:fork00112233@gitmsg/review",
 		References: []protocol.Ref{
 			{
 				Ext:    "review",
 				Author: "Original Author",
 				Email:  "original@example.com",
 				Time:   "2025-10-14T10:00:00Z",
+				Ref:    "https://github.com/fork/repo#commit:fork00112233@gitmsg/review",
 				Fields: map[string]string{"type": "pull-request"},
 			},
 		},
@@ -247,12 +249,14 @@ func TestReviewItemToPullRequest_refWithBadTime(t *testing.T) {
 		Content:     "PR",
 		AuthorName:  "A",
 		AuthorEmail: "a@test.com",
+		Adopts:      "https://github.com/fork/repo#commit:fork44556677@gitmsg/review",
 		References: []protocol.Ref{
 			{
 				Ext:    "review",
 				Author: "B",
 				Email:  "b@test.com",
 				Time:   "not-a-date",
+				Ref:    "https://github.com/fork/repo#commit:fork44556677@gitmsg/review",
 				Fields: map[string]string{"type": "pull-request"},
 			},
 		},
@@ -281,6 +285,34 @@ func TestReviewItemToPullRequest_nonReviewRef(t *testing.T) {
 	pr := ReviewItemToPullRequest(item)
 	if pr.OriginalAuthor != nil {
 		t.Error("OriginalAuthor should be nil for non-review refs")
+	}
+}
+
+// TestReviewItemToPullRequest_acceptSnapshotRefNotOriginalAuthor guards the adopts=
+// fix: an accept mirror's snapshot ref is review + pull-request, but the canonical
+// has no adopts=, so it MUST NOT be read as a fork-PR homing pointer (which would
+// mislabel OriginalAuthor as the proposer).
+func TestReviewItemToPullRequest_acceptSnapshotRefNotOriginalAuthor(t *testing.T) {
+	item := ReviewItem{
+		RepoURL: "https://github.com/bob/repo",
+		Hash:    "abc123def456",
+		Branch:  "gitmsg/review",
+		Content: "PR",
+		// No Adopts: this is an accept mirror, not a fork-PR homing copy.
+		References: []protocol.Ref{
+			{
+				Ext:    "review",
+				Author: "Proposer",
+				Email:  "proposer@example.com",
+				Time:   "2025-10-14T10:00:00Z",
+				Ref:    "https://github.com/alice/fork#commit:prop00112233@gitmsg/review",
+				Fields: map[string]string{"type": "pull-request"},
+			},
+		},
+	}
+	pr := ReviewItemToPullRequest(item)
+	if pr.OriginalAuthor != nil {
+		t.Errorf("a pull-request ref without adopts= must not set OriginalAuthor, got %+v", pr.OriginalAuthor)
 	}
 }
 

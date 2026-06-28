@@ -119,14 +119,15 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Title:       name,
-			TitleLink:   titleLink,
-			Subtitle:    subtitleParts,
-			Icon:        "•",
-			IsEdited:    post.IsEdited,
-			EditedBy:    post.EditorName,
-			IsRetracted: post.IsRetracted,
-			IsStale:     post.IsStale,
+			Title:            name,
+			TitleLink:        titleLink,
+			Subtitle:         subtitleParts,
+			Icon:             "•",
+			IsEdited:         post.IsEdited,
+			HasProposedEdits: post.HasProposedEdits,
+			EditedBy:         post.EditorName,
+			IsRetracted:      post.IsRetracted,
+			IsStale:          post.IsStale,
 		},
 		Content: tuicore.CardContent{
 			Text: content,
@@ -391,18 +392,19 @@ func searchItemToDisplayItem(item search.Item, userEmail string, showEmail bool,
 // searchItemToPMDisplayItem creates a PM issue DisplayItem from a search result.
 func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
 	issue := pm.Issue{
-		ID:         id,
-		Repository: item.RepoURL,
-		Branch:     item.Branch,
-		Author:     pm.Author{Name: item.AuthorName, Email: item.AuthorEmail},
-		Timestamp:  item.Timestamp,
-		Subject:    subject,
-		Body:       body,
-		State:      pm.State(item.State),
-		Assignees:  text.SplitCSV(item.Assignees),
-		Labels:     parseSearchLabels(item.Labels),
-		Comments:   item.Comments,
-		IsEdited:   item.IsEdited,
+		ID:               id,
+		Repository:       item.RepoURL,
+		Branch:           item.Branch,
+		Author:           pm.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		State:            pm.State(item.State),
+		Assignees:        text.SplitCSV(item.Assignees),
+		Labels:           parseSearchLabels(item.Labels),
+		Comments:         item.Comments,
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
 	}
 	if item.Due != "" {
 		if t, err := time.Parse(time.RFC3339, item.Due); err == nil {
@@ -417,21 +419,22 @@ func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuico
 // searchItemToReviewDisplayItem creates a review PR DisplayItem from a search result.
 func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
 	pr := review.PullRequest{
-		ID:         id,
-		Repository: item.RepoURL,
-		Branch:     item.Branch,
-		Author:     review.Author{Name: item.AuthorName, Email: item.AuthorEmail},
-		Timestamp:  item.Timestamp,
-		Subject:    subject,
-		Body:       body,
-		State:      review.PRState(item.State),
-		IsDraft:    item.Draft,
-		Base:       item.Base,
-		Head:       item.Head,
-		Reviewers:  text.SplitCSV(item.Reviewers),
-		Labels:     text.SplitCSV(item.Labels),
-		Comments:   item.Comments,
-		IsEdited:   item.IsEdited,
+		ID:               id,
+		Repository:       item.RepoURL,
+		Branch:           item.Branch,
+		Author:           review.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		State:            review.PRState(item.State),
+		IsDraft:          item.Draft,
+		Base:             item.Base,
+		Head:             item.Head,
+		Reviewers:        text.SplitCSV(item.Reviewers),
+		Labels:           text.SplitCSV(item.Labels),
+		Comments:         item.Comments,
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
 	}
 	return tuicore.NewItem(id, "review", item.Type, item.Timestamp, pr)
 }
@@ -439,18 +442,19 @@ func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) t
 // searchItemToReleaseDisplayItem creates a release DisplayItem from a search result.
 func searchItemToReleaseDisplayItem(item search.Item, id, subject, body string) tuicore.DisplayItem {
 	rel := release.Release{
-		ID:         id,
-		Repository: item.RepoURL,
-		Branch:     item.Branch,
-		Author:     release.Author{Name: item.AuthorName, Email: item.AuthorEmail},
-		Timestamp:  item.Timestamp,
-		Subject:    subject,
-		Body:       body,
-		Tag:        item.Tag,
-		Version:    item.Version,
-		Prerelease: item.Prerelease,
-		Comments:   item.Comments,
-		IsEdited:   item.IsEdited,
+		ID:               id,
+		Repository:       item.RepoURL,
+		Branch:           item.Branch,
+		Author:           release.Author{Name: item.AuthorName, Email: item.AuthorEmail},
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		Tag:              item.Tag,
+		Version:          item.Version,
+		Prerelease:       item.Prerelease,
+		Comments:         item.Comments,
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
 	}
 	return tuicore.NewItem(id, "release", "release", item.Timestamp, rel)
 }

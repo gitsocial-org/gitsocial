@@ -3,6 +3,7 @@ package tuisocial
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -42,10 +43,14 @@ func loadPostHistoryVersions(workdir string, params map[string]string) ([]tuicor
 	out := make([]tuicore.DiffVersion, 0, len(posts))
 	total := len(posts)
 	for i, p := range posts {
+		fields := map[string]string{}
+		if len(p.Labels) > 0 {
+			fields["labels"] = strings.Join(p.Labels, ", ")
+		}
 		out = append(out, tuicore.DiffVersion{
 			ID:        p.ID,
 			Label:     postVersionLabel(i, total, p.EditOf != ""),
-			Content:   p.Content,
+			Content:   tuicore.DiffContentWithMetadata(fields, p.IsRetracted, p.Content),
 			Author:    p.Author.Name,
 			Email:     p.Author.Email,
 			Timestamp: p.Timestamp,

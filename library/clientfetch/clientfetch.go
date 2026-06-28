@@ -6,6 +6,7 @@
 package clientfetch
 
 import (
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
@@ -41,6 +42,8 @@ func FetchForks(workdir, cacheDir string) fetch.FetchForkStats {
 	procs := ForkProcessors()
 	stats := fetch.FetchForks(workdir, cacheDir, procs)
 	fetch.BackfillExtensionItems(backfillRepos(workdir), backfillSpecs(), procs)
+	// Link any just-fetched fork edits to their canonicals so proposals attach.
+	_, _ = cache.ReconcileVersions()
 	return stats
 }
 

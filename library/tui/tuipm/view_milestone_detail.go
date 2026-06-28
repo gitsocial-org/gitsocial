@@ -168,7 +168,7 @@ func (v *MilestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 					}
 				}
 			case "h":
-				if v.milestone != nil && v.milestone.IsEdited {
+				if v.milestone != nil && (v.milestone.IsEdited || v.milestone.HasProposedEdits) {
 					milestoneID := v.milestone.ID
 					return func() tea.Msg {
 						return tuicore.NavigateMsg{
@@ -189,11 +189,22 @@ func (v *MilestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 				}
 			case "C":
 				if v.milestone != nil && v.milestone.State == pm.StateOpen {
-					return v.closeMilestone()
+					proposed := v.milestone.Repository != v.workspaceURL
+					prompt := "Close this milestone?"
+					if proposed {
+						prompt = "Propose closing this milestone on " + protocol.GetDisplayName(v.milestone.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.closeMilestone(proposed) })
+					return nil
 				}
 			case "X":
 				if v.milestone != nil {
-					v.confirm.Show("Retract this milestone?", false, func() tea.Cmd { return v.doRetract() })
+					proposed := v.milestone.Repository != v.workspaceURL
+					prompt := "Retract this milestone?"
+					if proposed {
+						prompt = "Propose retracting this milestone on " + protocol.GetDisplayName(v.milestone.Repository) + "?"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doRetract(proposed) })
 					return nil
 				}
 			}
@@ -227,7 +238,18 @@ func (v *MilestoneDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				return v.renderMilestoneCard(ms, width, selected, searchQuery, anchors)
+				lines := v.renderMilestoneCard(ms, width, selected, searchQuery, anchors)
+				if ms.HasProposedEdits {
+					banner := "✎  Proposed edits from another repo (press h to review)"
+					if ms.Repository != v.workspaceURL {
+						banner = "✎  Proposed edits not yet accepted by the owner (press h to view)"
+					}
+					lines = append([]string{
+						" " + tuicore.Warning.Render(banner),
+						"",
+					}, lines...)
+				}
+				return lines
 			},
 			SearchText: func() string { return ms.Title + " " + ms.Body },
 			Links: func() []tuicore.CardLink {
@@ -304,27 +326,34 @@ func (v *MilestoneDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *MilestoneDetailView) closeMilestone() tea.Cmd {
+func (v *MilestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
-	return func() tea.Msg {
-		result := pm.CloseMilestone("", milestoneID)
-		if !result.Success {
-			return MilestoneDetailLoadedMsg{Err: fmt.Errorf("close failed: %s", result.Error.Message)}
-		}
-		return MilestoneDetailLoadedMsg{Milestone: result.Data, Issues: nil, Comments: nil}
-	}
+	return tea.Sequence(
+		func() tea.Msg {
+			result := pm.CloseMilestone("", milestoneID)
+			if !result.Success {
+				return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+			}
+			return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed}
+		},
+		v.loadMilestone(),
+	)
 }
 
-func (v *MilestoneDetailView) doRetract() tea.Cmd {
+func (v *MilestoneDetailView) doRetract(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
 	workdir := v.workdir
-	return func() tea.Msg {
+	retract := func() tea.Msg {
 		result := pm.RetractMilestone(workdir, milestoneID)
 		if !result.Success {
-			return MilestoneRetractedMsg{ID: milestoneID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return MilestoneRetractedMsg{ID: milestoneID}
+		return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed}
 	}
+	if proposed {
+		return tea.Sequence(retract, v.loadMilestone())
+	}
+	return retract
 }
 
 // Render renders the milestone detail view.
@@ -342,7 +371,7 @@ func (v *MilestoneDetailView) Render(state *tuicore.State) string {
 		content = v.sectionList.View()
 	}
 	exclude := map[string]bool{}
-	if v.milestone == nil || !v.milestone.IsEdited {
+	if v.milestone == nil || (!v.milestone.IsEdited && !v.milestone.HasProposedEdits) {
 		exclude["h"] = true
 	}
 	if v.milestone == nil || v.milestone.State != pm.StateOpen {

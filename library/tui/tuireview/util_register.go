@@ -311,11 +311,12 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:        icon,
-			Title:       pr.Subject,
-			Subtitle:    subtitleParts,
-			IsEdited:    pr.IsEdited,
-			IsRetracted: pr.IsRetracted,
+			Icon:             icon,
+			Title:            pr.Subject,
+			Subtitle:         subtitleParts,
+			IsEdited:         pr.IsEdited,
+			HasProposedEdits: pr.HasProposedEdits,
+			IsRetracted:      pr.IsRetracted,
 		},
 		Content:      tuicore.CardContent{Text: pr.Body},
 		ContentLinks: tuicore.ExtractContentLinks(pr.Body, pr.Repository, ""),
@@ -441,6 +442,14 @@ type PRRetractedMsg struct {
 	Err error
 }
 
+// ProposalAcceptedMsg is sent when a cross-repo proposed edit is accepted from
+// the history view. CanonicalRef is the owner's canonical the mirror now applies to.
+type ProposalAcceptedMsg struct {
+	CanonicalRef string
+	Declined     bool
+	Err          error
+}
+
 // PRStackUpdatedMsg is sent when a stack maintenance op (rebase-stack /
 // sync-stack) finishes. Count is the number of PRs touched; PRID is the PR the
 // op was launched from, so the detail view can reload after the change.
@@ -466,6 +475,8 @@ func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handlePRUpdated(msg, ctx)
 	case PRRetractedMsg:
 		return handlePRRetracted(msg, ctx)
+	case ProposalAcceptedMsg:
+		return handleProposalAccepted(msg, ctx)
 	case PRStackUpdatedMsg:
 		return handlePRStackUpdated(msg, ctx)
 	case FeedbackCreatedMsg:
@@ -518,14 +529,41 @@ func handlePRUpdated(msg PRUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
 		return true, nil
 	}
+	verb := "Updated"
+	switch msg.PR.State {
+	case review.PRStateMerged:
+		verb = "Merged"
+	case review.PRStateClosed:
+		verb = "Closed"
+	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
-		fmt.Sprintf("Updated: %s", msg.PR.Subject),
+		fmt.Sprintf("%s: %s", verb, msg.PR.Subject),
 		tuicore.MessageTypeSuccess,
 		5*time.Second,
 	)
 	return true, tea.Batch(msgCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{
 			Location: tuicore.LocReviewPRDetail(msg.PR.ID),
+			Action:   tuicore.NavReplace,
+		}
+	})
+}
+
+// handleProposalAccepted reports the accept outcome and reloads the PR detail so
+// the now-applied edit is visible.
+func handleProposalAccepted(msg ProposalAcceptedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	text := "Proposal accepted"
+	if msg.Declined {
+		text = "Proposal declined"
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, 5*time.Second)
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocReviewPRDetail(msg.CanonicalRef),
 			Action:   tuicore.NavReplace,
 		}
 	})

@@ -10,13 +10,15 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/proposals"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // MilestoneVersionItem wraps gitmsg.MessageVersion to implement tuicore.VersionItem.
 type MilestoneVersionItem struct {
-	Version   gitmsg.MessageVersion
-	ShowEmail bool
+	Version     gitmsg.MessageVersion
+	ShowEmail   bool
+	ProposalTag string
 }
 
 // GetID returns the version's unique identifier.
@@ -77,6 +79,7 @@ func (v MilestoneVersionItem) RenderListEntry(index, total int, label string, se
 	} else {
 		b.WriteString("  " + header)
 	}
+	b.WriteString(renderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -140,6 +143,7 @@ type MilestoneHistoryView struct {
 	workdir      string
 	workspaceURL string
 	showEmail    bool
+	owned        bool
 }
 
 // NewMilestoneHistoryView creates a new milestone history view.
@@ -164,6 +168,7 @@ func (v *MilestoneHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if milestoneID == "" {
 		return nil
 	}
+	v.owned = ownsCanonical(milestoneID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	return v.loadHistory(milestoneID)
 }
@@ -208,6 +213,12 @@ func (v *MilestoneHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd
 		if msg.String() == "d" {
 			return tuicore.OpenHistoryDiff(v.picker, state, "milestoneID", tuicore.LocPMMilestoneHistoryDiff, 1, nil)
 		}
+		if msg.String() == "A" {
+			return v.acceptSelected()
+		}
+		if msg.String() == "X" {
+			return v.declineSelected()
+		}
 		handled, cmd := v.picker.HandleKey(msg.String())
 		if handled {
 			return cmd
@@ -226,16 +237,76 @@ func (v *MilestoneHistoryView) handleLoaded(msg MilestoneHistoryLoadedMsg) {
 	}
 	items := make([]tuicore.VersionItem, len(msg.Versions))
 	for i, version := range msg.Versions {
-		items[i] = MilestoneVersionItem{Version: version, ShowEmail: v.showEmail}
+		items[i] = MilestoneVersionItem{Version: version, ShowEmail: v.showEmail,
+			ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 	}
 	v.picker.SetItems(items)
+}
+
+// acceptInclude force-shows "A accept" only when this workspace owns the
+// milestone and a cross-repo proposal is present.
+func (v *MilestoneHistoryView) acceptInclude() map[string]bool {
+	for _, it := range v.picker.Items() {
+		if iv, ok := it.(MilestoneVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+			return map[string]bool{"A": true, "X": true}
+		}
+	}
+	return nil
+}
+
+// acceptSelected accepts the selected version when it is a cross-repo proposed
+// edit on a milestone this workspace owns, authoring an authoritative mirror.
+func (v *MilestoneHistoryView) acceptSelected() tea.Cmd {
+	sel := v.picker.SelectedItem()
+	mv, ok := sel.(MilestoneVersionItem)
+	if !ok {
+		return nil
+	}
+	if mv.Version.RepoURL == v.workspaceURL {
+		return func() tea.Msg {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+		}
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, mv.Version.CommitHash, mv.Version.RepoURL, mv.Version.Branch)
+	workdir := v.workdir
+	return func() tea.Msg {
+		out := proposals.Accept(workdir, ref)
+		if !out.Success {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+		}
+		return ProposalAcceptedMsg{Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
+	}
+}
+
+// declineSelected publishes a durable decline for the selected cross-repo proposed
+// edit on a milestone this workspace owns, so the proposer learns and it stops nagging.
+func (v *MilestoneHistoryView) declineSelected() tea.Cmd {
+	sel := v.picker.SelectedItem()
+	mv, ok := sel.(MilestoneVersionItem)
+	if !ok {
+		return nil
+	}
+	if mv.Version.RepoURL == v.workspaceURL {
+		return func() tea.Msg {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+		}
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, mv.Version.CommitHash, mv.Version.RepoURL, mv.Version.Branch)
+	workdir := v.workdir
+	return func() tea.Msg {
+		out := proposals.Decline(workdir, ref)
+		if !out.Success {
+			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+		}
+		return ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
+	}
 }
 
 // Render renders the history view to a string.
 func (v *MilestoneHistoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.PMMilestoneHistory, nil)
+	footer := tuicore.RenderFooterInclude(state.Registry, tuicore.PMMilestoneHistory, nil, v.acceptInclude())
 	return wrapper.Render(content, footer)
 }
 
@@ -272,5 +343,7 @@ func (v *MilestoneHistoryView) Bindings() []tuicore.Binding {
 	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.PMMilestoneHistory}, Handler: noop},
+		{Key: "A", Label: "accept", Contexts: []tuicore.Context{tuicore.PMMilestoneHistory}, Handler: noop},
+		{Key: "X", Label: "decline", Contexts: []tuicore.Context{tuicore.PMMilestoneHistory}, Handler: noop},
 	}
 }

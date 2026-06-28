@@ -76,18 +76,19 @@ type Post struct {
 	// Latest edit commit's ref (always set when edited). Used by annotateVerified
 	// to run the edit-commit verification pass against editorEmail (distinct) or
 	// authorEmail (same author).
-	EditRepoURL     string
-	EditHash        string
-	EditBranch      string
-	IsRetracted     bool
-	IsEdited        bool
-	Depth           int
-	Interactions    Interactions
-	Remote          string
-	IsVirtual       bool
-	IsStale         bool
-	IsWorkspacePost bool
-	Display         Display
+	EditRepoURL      string
+	EditHash         string
+	EditBranch       string
+	IsRetracted      bool
+	IsEdited         bool
+	HasProposedEdits bool
+	Depth            int
+	Interactions     Interactions
+	Remote           string
+	IsVirtual        bool
+	IsStale          bool
+	IsWorkspacePost  bool
+	Display          Display
 	// OriginalExtension and OriginalType are populated for comments from the GitMsg-Ref header.
 	// Used for cross-extension navigation (e.g., social comment on PM issue).
 	OriginalExtension string

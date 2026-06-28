@@ -242,6 +242,27 @@ CREATE TABLE IF NOT EXISTS core_notification_reads (
     PRIMARY KEY (repo_url, hash, branch)
 );
 
+-- Core: acceptances (a cross-repo proposal was accepted). Derived index keyed on
+-- the proposing edit, populated from the mirror edit's accepts= header on every
+-- fetch path; read only as a NOT EXISTS marker (clears the proposed-edit ✎) and
+-- for accept idempotency. Not pushed — the mirror edit carries the shared outcome.
+CREATE TABLE IF NOT EXISTS core_edit_acceptances (
+    edit_repo_url TEXT NOT NULL,
+    edit_hash TEXT NOT NULL,
+    edit_branch TEXT NOT NULL,
+    PRIMARY KEY (edit_repo_url, edit_hash, edit_branch)
+);
+
+-- Core: declines (the owner declined a cross-repo proposal). Durable and published
+-- at refs/gitmsg/core/declines/* so the proposer learns and the choice survives a
+-- re-clone; keyed on the proposing edit. Accept takes precedence (GITMSG.md §1.5).
+CREATE TABLE IF NOT EXISTS core_edit_declines (
+    edit_repo_url TEXT NOT NULL,
+    edit_hash TEXT NOT NULL,
+    edit_branch TEXT NOT NULL,
+    PRIMARY KEY (edit_repo_url, edit_hash, edit_branch)
+);
+
 -- Core: Mentions extracted from commit messages
 CREATE TABLE IF NOT EXISTS core_mentions (
     repo_url TEXT NOT NULL,

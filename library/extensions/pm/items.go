@@ -36,15 +36,16 @@ type PMItem struct {
 	RootBranch       sql.NullString
 	Labels           sql.NullString
 	// Derived from core_commits via JOIN
-	Origin      *protocol.Origin
-	Content     string
-	AuthorName  string
-	AuthorEmail string
-	Timestamp   time.Time
-	EditOf      sql.NullString
-	IsRetracted bool
-	IsEdited    bool
-	IsVirtual   bool
+	Origin           *protocol.Origin
+	Content          string
+	AuthorName       string
+	AuthorEmail      string
+	Timestamp        time.Time
+	EditOf           sql.NullString
+	IsRetracted      bool
+	IsEdited         bool
+	HasProposedEdits bool
+	IsVirtual        bool
 	// Derived from social_interactions
 	Comments int
 }
@@ -60,7 +61,12 @@ const baseSelectFromView = `
 	       v.root_repo_url, v.root_hash, v.root_branch,
 	       v.labels,
 	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments
+	       v.comments,
+	       EXISTS(SELECT 1 FROM core_commits_version cv
+	              WHERE cv.canonical_repo_url = v.repo_url AND cv.canonical_hash = v.hash
+	                AND cv.canonical_branch = v.branch
+	                AND cv.edit_repo_url != cv.canonical_repo_url
+	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) AS has_proposed
 	FROM pm_items_resolved v
 `
 
@@ -590,7 +596,7 @@ func GetSprints(repoURL, branch string, states []string, cursor string, limit in
 func scanResolvedRow(row *sql.Row) (*PMItem, error) {
 	var item PMItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits int
+	var isVirtual, isRetracted, hasEdits, hasProposed int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -603,6 +609,7 @@ func scanResolvedRow(row *sql.Row) (*PMItem, error) {
 		&item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
 		&item.Comments,
+		&hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -621,13 +628,14 @@ func scanResolvedRow(row *sql.Row) (*PMItem, error) {
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
 func scanResolvedRows(rows *sql.Rows) (*PMItem, error) {
 	var item PMItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits int
+	var isVirtual, isRetracted, hasEdits, hasProposed int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -640,6 +648,7 @@ func scanResolvedRows(rows *sql.Rows) (*PMItem, error) {
 		&item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
 		&item.Comments,
+		&hasProposed,
 	)
 	if err != nil {
 		return nil, err
@@ -658,8 +667,12 @@ func scanResolvedRows(rows *sql.Rows) (*PMItem, error) {
 	item.IsVirtual = isVirtual == 1
 	item.IsRetracted = isRetracted == 1
 	item.IsEdited = hasEdits == 1
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
+
+// ParseLabels parses a comma-separated scoped-label string into Label structs.
+func ParseLabels(labelsStr string) []Label { return parseLabels(labelsStr) }
 
 // parseLabels parses comma-separated scoped labels into Label structs.
 func parseLabels(labelsStr string) []Label {
@@ -798,24 +811,25 @@ func PMItemToIssue(item PMItem) Issue {
 			Name:  item.AuthorName,
 			Email: item.AuthorEmail,
 		},
-		Timestamp:   item.Timestamp,
-		Subject:     subject,
-		Body:        body,
-		State:       State(item.State),
-		Assignees:   parseAssignees(item.Assignees.String),
-		Due:         due,
-		Milestone:   milestone,
-		Sprint:      sprint,
-		Parent:      parent,
-		Root:        root,
-		Blocks:      blocks,
-		BlockedBy:   blockedBy,
-		Related:     related,
-		Labels:      parseLabels(item.Labels.String),
-		IsEdited:    item.IsEdited,
-		IsRetracted: item.IsRetracted,
-		Comments:    item.Comments,
-		Origin:      item.Origin,
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		State:            State(item.State),
+		Assignees:        parseAssignees(item.Assignees.String),
+		Due:              due,
+		Milestone:        milestone,
+		Sprint:           sprint,
+		Parent:           parent,
+		Root:             root,
+		Blocks:           blocks,
+		BlockedBy:        blockedBy,
+		Related:          related,
+		Labels:           parseLabels(item.Labels.String),
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
+		IsRetracted:      item.IsRetracted,
+		Comments:         item.Comments,
+		Origin:           item.Origin,
 	}
 }
 
@@ -839,15 +853,16 @@ func PMItemToMilestone(item PMItem) Milestone {
 			Name:  item.AuthorName,
 			Email: item.AuthorEmail,
 		},
-		Timestamp:   item.Timestamp,
-		Title:       title,
-		Body:        body,
-		State:       State(item.State),
-		Due:         due,
-		Labels:      text.SplitCSV(item.Labels.String),
-		IsEdited:    item.IsEdited,
-		IsRetracted: item.IsRetracted,
-		Origin:      item.Origin,
+		Timestamp:        item.Timestamp,
+		Title:            title,
+		Body:             body,
+		State:            State(item.State),
+		Due:              due,
+		Labels:           text.SplitCSV(item.Labels.String),
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
+		IsRetracted:      item.IsRetracted,
+		Origin:           item.Origin,
 	}
 }
 
@@ -872,16 +887,17 @@ func PMItemToSprint(item PMItem) Sprint {
 			Name:  item.AuthorName,
 			Email: item.AuthorEmail,
 		},
-		Timestamp:   item.Timestamp,
-		Title:       title,
-		Body:        body,
-		State:       SprintState(item.State),
-		Start:       start,
-		End:         end,
-		Labels:      text.SplitCSV(item.Labels.String),
-		IsEdited:    item.IsEdited,
-		IsRetracted: item.IsRetracted,
-		Origin:      item.Origin,
+		Timestamp:        item.Timestamp,
+		Title:            title,
+		Body:             body,
+		State:            SprintState(item.State),
+		Start:            start,
+		End:              end,
+		Labels:           text.SplitCSV(item.Labels.String),
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
+		IsRetracted:      item.IsRetracted,
+		Origin:           item.Origin,
 	}
 }
 

@@ -32,7 +32,8 @@ func newForkAddCmd() *cobra.Command {
 
 Use a fork when another repo is a true fork of yours (or yours of theirs) and
 you want to collaborate on shared items: PRs against your code, comments on
-your issues, and cross-repo edits.
+your issues, and cross-repo edits. A fork's edits to your items are proposals
+you accept (or not) from the item's history view.
 
 Forks vs. lists: for a soft fork or packaging fork (you keep your own issues
 and just follow an upstream for awareness), use a list instead:
@@ -49,7 +50,7 @@ A list follows a repo without entangling its items with your own.`,
 				os.Exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"added": args[0]})
+				PrintJSON(map[string]interface{}{"added": args[0]})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Fork added: %s", args[0]))
 			}
@@ -92,7 +93,11 @@ func newForkListCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			forks := gitmsg.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {
-				PrintJSON(forks)
+				out := make([]map[string]interface{}, 0, len(forks))
+				for _, f := range forks {
+					out = append(out, map[string]interface{}{"url": f})
+				}
+				PrintJSON(out)
 			} else {
 				if len(forks) == 0 {
 					fmt.Println("No forks registered")

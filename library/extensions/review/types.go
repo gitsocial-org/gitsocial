@@ -57,37 +57,38 @@ type Ref struct {
 }
 
 type PullRequest struct {
-	ID             string
-	Repository     string
-	Branch         string
-	Author         Author
-	Timestamp      time.Time
-	Subject        string
-	Body           string
-	State          PRState
-	IsDraft        bool
-	Base           string
-	BaseTip        string
-	Head           string
-	HeadTip        string
-	DependsOn      []string
-	Closes         []string
-	Reviewers      []string
-	Labels         []string
-	IsEdited       bool
-	IsRetracted    bool
-	IsUnpushed     bool
-	Comments       int
-	ReviewSummary  ReviewSummary
-	MergeBase      string
-	MergeHead      string
-	MergedBy       *Author
-	MergedAt       time.Time
-	ClosedBy       *Author
-	ClosedAt       time.Time
-	OriginalAuthor *Author
-	OriginalTime   time.Time
-	Origin         *protocol.Origin
+	ID               string
+	Repository       string
+	Branch           string
+	Author           Author
+	Timestamp        time.Time
+	Subject          string
+	Body             string
+	State            PRState
+	IsDraft          bool
+	Base             string
+	BaseTip          string
+	Head             string
+	HeadTip          string
+	DependsOn        []string
+	Closes           []string
+	Reviewers        []string
+	Labels           []string
+	IsEdited         bool
+	HasProposedEdits bool
+	IsRetracted      bool
+	IsUnpushed       bool
+	Comments         int
+	ReviewSummary    ReviewSummary
+	MergeBase        string
+	MergeHead        string
+	MergedBy         *Author
+	MergedAt         time.Time
+	ClosedBy         *Author
+	ClosedAt         time.Time
+	OriginalAuthor   *Author
+	OriginalTime     time.Time
+	Origin           *protocol.Origin
 }
 
 type Feedback struct {

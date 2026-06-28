@@ -67,6 +67,8 @@ var editableExtensionTables = []struct {
 //     (canonical's row, copied from the edit's row in a single UPDATE per table)
 //   - core_fts (canonical's row, replaced with the edit's content)
 //
+// Only same-repo edits (edit_repo_url == canonical_repo_url) are authoritative;
+// cross-repo edits (proposals from forks) are excluded from resolution.
 // No-op when the canonical has no edits in core_commits_version yet.
 // Idempotent: repeated calls converge to the same state. All write paths
 // (insertCommitsTxn, InsertVersion, ReconcileVersions, SyncEditExtensionFields)
@@ -89,6 +91,7 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		WHERE v.canonical_repo_url = ?
 		  AND v.canonical_hash = ?
 		  AND v.canonical_branch = ?
+		  AND v.edit_repo_url = v.canonical_repo_url
 		ORDER BY c.timestamp DESC, v.edit_hash DESC
 		LIMIT 1`,
 		canonicalRepoURL, canonicalHash, canonicalBranch,
@@ -277,6 +280,16 @@ func ProcessVersionFromHeader(msg *protocol.Message, commitHash, repoURL, branch
 		return
 	}
 	_ = InsertVersion(repoURL, commitHash, branch, canonical.RepoURL, canonical.Hash, canonical.Branch, isRetracted)
+
+	// A same-repo mirror edit that accepts a cross-repo proposal derives the
+	// acceptance (proposal coords -> this mirror) into core_edit_acceptances on
+	// every fetch path (GITMSG.md §1.5). This clears the proposer's pending marker
+	// without a separate published marker and gives accept idempotency.
+	if acceptsRef := msg.Header.Fields["accepts"]; acceptsRef != "" {
+		if p := protocol.ParseRef(acceptsRef); p.Value != "" {
+			_ = RecordAcceptance(protocol.NormalizeURL(p.Repository), p.Value, p.Branch)
+		}
+	}
 }
 
 // InsertVersion stores an edit relationship between commits and applies the
@@ -358,6 +371,7 @@ func GetLatestVersion(canonicalRepoURL, canonicalHash, canonicalBranch string) (
 			FROM core_commits_version v
 			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
 			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			  AND v.edit_repo_url = v.canonical_repo_url
 			ORDER BY c.timestamp DESC, v.edit_hash DESC
 			LIMIT 1`,
 			canonicalRepoURL, canonicalHash, canonicalBranch,
@@ -519,6 +533,7 @@ func GetLatestContent(repoURL, hash, branch string) (string, bool, error) {
 			FROM core_commits_version v
 			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
 			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			  AND v.edit_repo_url = v.canonical_repo_url
 			ORDER BY c.timestamp DESC, v.edit_hash DESC
 			LIMIT 1`,
 			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&latestMessage)

@@ -69,18 +69,19 @@ type GroupedItem struct {
 
 // Item is an extension-agnostic search result from the database.
 type Item struct {
-	RepoURL     string    `json:"repo_url"`
-	Hash        string    `json:"hash"`
-	Branch      string    `json:"branch"`
-	AuthorName  string    `json:"author_name"`
-	AuthorEmail string    `json:"author_email"`
-	Content     string    `json:"content"`
-	Timestamp   time.Time `json:"timestamp"`
-	Type        string    `json:"type"`
-	Extension   string    `json:"extension"`
-	IsVirtual   bool      `json:"is_virtual,omitempty"`
-	IsStale     bool      `json:"is_stale,omitempty"`
-	IsEdited    bool      `json:"is_edited,omitempty"`
+	RepoURL          string    `json:"repo_url"`
+	Hash             string    `json:"hash"`
+	Branch           string    `json:"branch"`
+	AuthorName       string    `json:"author_name"`
+	AuthorEmail      string    `json:"author_email"`
+	Content          string    `json:"content"`
+	Timestamp        time.Time `json:"timestamp"`
+	Type             string    `json:"type"`
+	Extension        string    `json:"extension"`
+	IsVirtual        bool      `json:"is_virtual,omitempty"`
+	IsStale          bool      `json:"is_stale,omitempty"`
+	IsEdited         bool      `json:"is_edited,omitempty"`
+	HasProposedEdits bool      `json:"has_proposed_edits,omitempty"`
 
 	// Extension-specific fields (populated from LEFT JOIN)
 	State      string `json:"state,omitempty"`

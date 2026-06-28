@@ -46,7 +46,7 @@ func loadReleaseHistoryVersions(workdir string, params map[string]string) ([]tui
 		out = append(out, tuicore.DiffVersion{
 			ID:        ver.ID,
 			Label:     releaseVersionLabel(i, total, ver.EditOf != ""),
-			Content:   ver.Content,
+			Content:   tuicore.DiffContentWithMetadata(ver.Fields, ver.IsRetracted, ver.Content),
 			Author:    ver.AuthorName,
 			Email:     ver.AuthorEmail,
 			Timestamp: ver.Timestamp,

@@ -30,7 +30,7 @@ func CreateSprint(workdir, title, body string, opts CreateSprintOptions) Result[
 	if state == "" {
 		state = SprintStatePlanned
 	}
-	content := buildSprintContent(title, body, state, opts.Start, opts.End, opts.Labels, "", opts.Origin)
+	content := buildSprintContent(title, body, state, opts.Start, opts.End, opts.Labels, "", "", opts.Origin, nil)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Sprint]("COMMIT_FAILED", err.Error())
@@ -71,6 +71,9 @@ type UpdateSprintOptions struct {
 	Body   *string
 	Labels *[]string
 	Origin *protocol.Origin
+	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
+	// recording "accepted from <fork> by <author>"). Not set by normal edits.
+	Attribution *protocol.Ref
 }
 
 // UpdateSprint edits an existing sprint using core versioning.
@@ -119,7 +122,13 @@ func UpdateSprint(workdir, sprintRef string, opts UpdateSprintOptions) Result[Sp
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildSprintContent(title, body, state, start, end, labels, canonicalRef, origin)
+	var refs []protocol.Ref
+	accepts := ""
+	if opts.Attribution != nil {
+		refs = []protocol.Ref{*opts.Attribution}
+		accepts = opts.Attribution.Ref
+	}
+	content := buildSprintContent(title, body, state, start, end, labels, canonicalRef, accepts, origin, refs)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Sprint]("COMMIT_FAILED", err.Error())
@@ -205,7 +214,7 @@ func GetSprintIssues(sprintID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
-func buildSprintContent(title, body string, state SprintState, start, end time.Time, labels []string, editsRef string, origin *protocol.Origin) string {
+func buildSprintContent(title, body string, state SprintState, start, end time.Time, labels []string, editsRef, accepts string, origin *protocol.Origin, refs []protocol.Ref) string {
 	content := title
 	if body != "" {
 		content += "\n\n" + body
@@ -220,6 +229,9 @@ func buildSprintContent(title, body string, state SprintState, start, end time.T
 	if editsRef != "" {
 		fields["edits"] = editsRef
 	}
+	if accepts != "" {
+		fields["accepts"] = accepts
+	}
 	if len(labels) > 0 {
 		fields["labels"] = strings.Join(labels, ",")
 	}
@@ -231,7 +243,7 @@ func buildSprintContent(title, body string, state SprintState, start, end time.T
 		Fields:     fields,
 		FieldOrder: sprintFieldOrder,
 	}
-	return protocol.FormatMessage(content, header, nil)
+	return protocol.FormatMessage(content, header, refs)
 }
 
 func cacheSprintFromCommit(workdir, repoURL, hash, branch string) error {

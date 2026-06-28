@@ -248,24 +248,57 @@ func Register(host tuicore.ViewHost) {
 
 // Message handlers
 
+// ProposalAcceptedMsg is sent when a cross-repo proposed edit is accepted from a
+// pm history view. Location is the item detail to reload.
+type ProposalAcceptedMsg struct {
+	Location tuicore.Location
+	Declined bool
+	Err      error
+}
+
+// handleProposalAccepted reports the accept outcome and reloads the item detail
+// so the now-applied edit is visible.
+func handleProposalAccepted(msg ProposalAcceptedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	text := "Proposal accepted"
+	if msg.Declined {
+		text = "Proposal declined"
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, 5*time.Second)
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{Location: msg.Location, Action: tuicore.NavReplace}
+	})
+}
+
 func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case IssueCreatedMsg:
 		return handleIssueCreated(msg, ctx)
 	case IssueUpdatedMsg:
 		return handleIssueUpdated(msg, ctx)
+	case IssueClosedMsg:
+		return handleStateChange(msg.Err, "Issue closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
+	case MilestoneClosedMsg:
+		return handleStateChange(msg.Err, "Milestone closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
+	case SprintCompletedMsg:
+		return handleStateChange(msg.Err, "Sprint completed", "Completion proposed (awaiting acceptance)", msg.Proposed, ctx)
 	case MilestoneUpdatedMsg:
 		return handleMilestoneUpdated(msg, ctx)
 	case SprintUpdatedMsg:
 		return handleSprintUpdated(msg, ctx)
+	case ProposalAcceptedMsg:
+		return handleProposalAccepted(msg, ctx)
 	case PMConfigSavedMsg:
 		return handlePMConfigSaved(msg, ctx)
 	case IssueRetractedMsg:
-		return handleRetracted(msg.Err, "Issue retracted", ctx)
+		return handleRetract(msg.Err, msg.Proposed, "Issue retracted", "Retraction proposed (awaiting acceptance)", ctx)
 	case MilestoneRetractedMsg:
-		return handleRetracted(msg.Err, "Milestone retracted", ctx)
+		return handleRetract(msg.Err, msg.Proposed, "Milestone retracted", "Retraction proposed (awaiting acceptance)", ctx)
 	case SprintRetractedMsg:
-		return handleRetracted(msg.Err, "Sprint retracted", ctx)
+		return handleRetract(msg.Err, msg.Proposed, "Sprint retracted", "Retraction proposed (awaiting acceptance)", ctx)
 	}
 	return false, nil
 }
@@ -357,12 +390,33 @@ func handleSprintUpdated(msg SprintUpdatedMsg, ctx tuicore.AppContext) (bool, te
 	})
 }
 
-func handleRetracted(err error, successMsg string, ctx tuicore.AppContext) (bool, tea.Cmd) {
+// handleStateChange shows a footer message for a close/complete action:
+// appliedText when applied (own item), proposedText when it was a cross-repo
+// proposal (fork item, inert until accepted).
+func handleStateChange(err error, appliedText, proposedText string, proposed bool, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if err != nil {
 		ctx.Host().SetMessage(err.Error(), tuicore.MessageTypeError)
 		return true, nil
 	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(successMsg, tuicore.MessageTypeSuccess, 5*time.Second)
+	text := appliedText
+	if proposed {
+		text = proposedText
+	}
+	return true, ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, 5*time.Second)
+}
+
+// handleRetract shows footer feedback for a retract. An applied retract (own
+// item) removes it, so we navigate back; a proposed retract (fork item) leaves
+// the item in place and the view reloads itself, so we only show the message.
+func handleRetract(err error, proposed bool, appliedText, proposedText string, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if err != nil {
+		ctx.Host().SetMessage(err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	if proposed {
+		return true, ctx.Host().SetMessageWithTimeout(proposedText, tuicore.MessageTypeSuccess, 5*time.Second)
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(appliedText, tuicore.MessageTypeSuccess, 5*time.Second)
 	return true, tea.Batch(msgCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{Action: tuicore.NavBack}
 	})

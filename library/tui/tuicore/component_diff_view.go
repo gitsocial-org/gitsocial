@@ -468,6 +468,84 @@ func (v *HistoryDiffView) Bindings() []Binding {
 	}
 }
 
+// diffMetadataOrder lists header fields shown in a history-diff metadata block,
+// in display order with friendly labels. Fields not listed are appended
+// alphabetically by raw key, so new fields still surface.
+var diffMetadataOrder = []struct{ key, label string }{
+	{"state", "State"},
+	{"draft", "Draft"},
+	{"labels", "Labels"},
+	{"assignees", "Assignees"},
+	{"reviewers", "Reviewers"},
+	{"due", "Due"},
+	{"start", "Start"},
+	{"end", "End"},
+	{"milestone", "Milestone"},
+	{"sprint", "Sprint"},
+	{"parent", "Parent"},
+	{"blocks", "Blocks"},
+	{"blocked-by", "Blocked by"},
+	{"related", "Related"},
+	{"depends-on", "Depends on"},
+	{"closes", "Closes"},
+	{"base", "Base"},
+	{"head", "Head"},
+	{"base-tip", "Base tip"},
+	{"head-tip", "Head tip"},
+	{"tag", "Tag"},
+	{"version", "Version"},
+	{"prerelease", "Prerelease"},
+	{"artifacts", "Artifacts"},
+	{"artifact-url", "Artifact URL"},
+	{"checksums", "Checksums"},
+	{"signed-by", "Signed by"},
+	{"sbom", "SBOM"},
+	{"original", "Original"},
+	{"reply-to", "Reply to"},
+}
+
+// diffMetadataExclude are structural header fields never shown in the block.
+var diffMetadataExclude = map[string]bool{
+	"ext": true, "v": true, "edits": true, "type": true, "retracted": true,
+	"origin-author": true, "origin-email": true, "origin-time": true, "origin-url": true,
+}
+
+// DiffContentWithMetadata prepends a readable metadata block (header fields such
+// as state/labels/tag, plus a retraction marker) to the body, so history diffs
+// surface metadata changes (e.g. closing an issue), not just body edits.
+func DiffContentWithMetadata(fields map[string]string, retracted bool, body string) string {
+	var b strings.Builder
+	if retracted {
+		b.WriteString("Retracted: true\n")
+	}
+	shown := make(map[string]bool, len(diffMetadataOrder))
+	for _, o := range diffMetadataOrder {
+		if val := fields[o.key]; val != "" {
+			b.WriteString(o.label + ": " + val + "\n")
+			shown[o.key] = true
+		}
+	}
+	var extra []string
+	for k, val := range fields {
+		if val != "" && !shown[k] && !diffMetadataExclude[k] {
+			extra = append(extra, k)
+		}
+	}
+	sort.Strings(extra)
+	for _, k := range extra {
+		b.WriteString(k + ": " + fields[k] + "\n")
+	}
+	meta := b.String()
+	switch {
+	case meta == "":
+		return body
+	case body == "":
+		return meta
+	default:
+		return meta + "\n" + body
+	}
+}
+
 // cloneParams returns a defensive copy of a route params map.
 func cloneParams(p map[string]string) map[string]string {
 	out := make(map[string]string, len(p))

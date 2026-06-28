@@ -3,12 +3,14 @@ package fetch
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
 )
 
@@ -70,9 +72,14 @@ func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, erro
 		log.Debug("add fork remote (may already exist)", "remote", remoteName, "error", err)
 	}
 	refspec := fmt.Sprintf("+refs/heads/gitmsg/*:refs/forks/%s/gitmsg/*", hash)
-	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, "--no-tags"}); err != nil {
+	// Also mirror the fork's published decline markers so we can learn which of our
+	// cross-repo proposals the fork (as owner) has declined. Acceptance needs no
+	// marker: it rides the fork's mirror edit on the gitmsg/* branches above.
+	declineRefspec := fmt.Sprintf("+%s*:refs/forks/%s/declines/*", gitmsg.DeclinesRefPrefix, hash)
+	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, declineRefspec, "--no-tags"}); err != nil {
 		return 0, fmt.Errorf("fetch fork: %w", err)
 	}
+	syncForkDeclines(forkDir, hash)
 	// List all fetched gitmsg branches for this fork
 	prefix := fmt.Sprintf("refs/forks/%s/gitmsg/", hash)
 	refList, err := git.ExecGit(forkDir, []string{"for-each-ref", "--format=%(refname)", prefix})
@@ -112,6 +119,26 @@ func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, erro
 		log.Debug("update last fetch failed", "url", forkURL, "error", err)
 	}
 	return totalCount, nil
+}
+
+// syncForkDeclines records the fork's published decline markers (fetched into
+// refs/forks/<hash>/declines/*) into the local decline table, so a proposal this
+// workspace made that the fork declined stops showing as pending.
+func syncForkDeclines(forkDir, hash string) {
+	out, err := git.ExecGit(forkDir, []string{
+		"for-each-ref", "--format=%(contents:subject)",
+		fmt.Sprintf("refs/forks/%s/declines/", hash),
+	})
+	if err != nil || out.Stdout == "" {
+		return
+	}
+	for _, line := range splitNonEmpty(out.Stdout) {
+		p := protocol.ParseRef(strings.TrimSpace(line))
+		if p.Value == "" {
+			continue
+		}
+		_ = cache.RecordDecline(protocol.NormalizeURL(p.Repository), p.Value, p.Branch)
+	}
 }
 
 // URLHash returns a short hash for differentiating fork remote names.

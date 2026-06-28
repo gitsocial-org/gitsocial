@@ -274,20 +274,21 @@ func (c Card) AllLinks() []CardLink {
 
 // CardHeader contains the title line information
 type CardHeader struct {
-	Title          string       // "Author Name" or "Issue #123"
-	TitleLink      *Location    // Navigation target when title is clicked
-	Subtitle       []HeaderPart // Structured subtitle parts joined with " · "
-	Badge          string       // Optional: "reposted", "replied", "closed", etc.
-	Icon           string       // Type indicator: "○" issue, "◇" milestone, "◷" sprint, "⏏" release, "↩" comment, "↻" repost
-	IsMe           bool         // True if authored by current user (cyan title)
-	IsMutualFollow bool         // True if mutual follow (gold title)
-	IsOwnRepo      bool         // True if item is from the workspace repository (cyan title)
-	IsAssigned     bool         // True if assigned to current user (purple title)
-	IsEdited       bool         // True if post has been edited
-	EditedBy       string       // Display name of last editor when distinct from the author
-	IsRetracted    bool         // True if post has been deleted
-	IsStale        bool         // True if commit no longer exists in live branch
-	IsVerified     bool         // True if commit's signing key is bound to the author email by an attestation source
+	Title            string       // "Author Name" or "Issue #123"
+	TitleLink        *Location    // Navigation target when title is clicked
+	Subtitle         []HeaderPart // Structured subtitle parts joined with " · "
+	Badge            string       // Optional: "reposted", "replied", "closed", etc.
+	Icon             string       // Type indicator: "○" issue, "◇" milestone, "◷" sprint, "⏏" release, "↩" comment, "↻" repost
+	IsMe             bool         // True if authored by current user (cyan title)
+	IsMutualFollow   bool         // True if mutual follow (gold title)
+	IsOwnRepo        bool         // True if item is from the workspace repository (cyan title)
+	IsAssigned       bool         // True if assigned to current user (purple title)
+	IsEdited         bool         // True if post has been edited
+	EditedBy         string       // Display name of last editor when distinct from the author
+	HasProposedEdits bool         // True if a cross-repo edit proposes changes awaiting the owner's review
+	IsRetracted      bool         // True if post has been deleted
+	IsStale          bool         // True if commit no longer exists in live branch
+	IsVerified       bool         // True if commit's signing key is bound to the author email by an attestation source
 	// IsEditorVerified is set when the latest edit commit's signing key is bound to the editor's
 	// email by an attestation source. Only used for distinct-editor edits — for same-author
 	// edits the edit verification is folded into IsVerified (AND). Renders as a ⚿ next to EditedBy.

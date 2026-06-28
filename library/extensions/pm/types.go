@@ -57,68 +57,71 @@ type IssueRef struct {
 }
 
 type Issue struct {
-	ID          string
-	Repository  string
-	Branch      string
-	Author      Author
-	Timestamp   time.Time
-	Subject     string
-	Body        string
-	State       State
-	Assignees   []string
-	Due         *time.Time
-	Milestone   *IssueRef
-	Sprint      *IssueRef
-	Parent      *IssueRef
-	Root        *IssueRef
-	Blocks      []IssueRef
-	BlockedBy   []IssueRef
-	Related     []IssueRef
-	Labels      []Label
-	IsEdited    bool
-	IsRetracted bool
-	IsUnpushed  bool
-	Comments    int
-	Origin      *protocol.Origin
+	ID               string
+	Repository       string
+	Branch           string
+	Author           Author
+	Timestamp        time.Time
+	Subject          string
+	Body             string
+	State            State
+	Assignees        []string
+	Due              *time.Time
+	Milestone        *IssueRef
+	Sprint           *IssueRef
+	Parent           *IssueRef
+	Root             *IssueRef
+	Blocks           []IssueRef
+	BlockedBy        []IssueRef
+	Related          []IssueRef
+	Labels           []Label
+	IsEdited         bool
+	HasProposedEdits bool
+	IsRetracted      bool
+	IsUnpushed       bool
+	Comments         int
+	Origin           *protocol.Origin
 }
 
 type Milestone struct {
-	ID          string
-	Repository  string
-	Branch      string
-	Author      Author
-	Timestamp   time.Time
-	Title       string
-	Body        string
-	State       State
-	Due         *time.Time
-	Labels      []string
-	IsEdited    bool
-	IsRetracted bool
-	IsUnpushed  bool
-	IssueCount  int
-	ClosedCount int
-	Origin      *protocol.Origin
+	ID               string
+	Repository       string
+	Branch           string
+	Author           Author
+	Timestamp        time.Time
+	Title            string
+	Body             string
+	State            State
+	Due              *time.Time
+	Labels           []string
+	IsEdited         bool
+	HasProposedEdits bool
+	IsRetracted      bool
+	IsUnpushed       bool
+	IssueCount       int
+	ClosedCount      int
+	Origin           *protocol.Origin
 }
 
 type Sprint struct {
-	ID          string
-	Repository  string
-	Branch      string
-	Author      Author
-	Timestamp   time.Time
-	Title       string
-	Body        string
-	State       SprintState
-	Start       time.Time
-	End         time.Time
-	Labels      []string
-	IsEdited    bool
-	IsRetracted bool
-	IsUnpushed  bool
-	IssueCount  int
-	ClosedCount int
-	Origin      *protocol.Origin
+	ID               string
+	Repository       string
+	Branch           string
+	Author           Author
+	Timestamp        time.Time
+	Title            string
+	Body             string
+	State            SprintState
+	Start            time.Time
+	End              time.Time
+	Labels           []string
+	IsEdited         bool
+	HasProposedEdits bool
+	IsRetracted      bool
+	IsUnpushed       bool
+	IssueCount       int
+	ClosedCount      int
+	Origin           *protocol.Origin
 }
 
 type BoardColumn struct {

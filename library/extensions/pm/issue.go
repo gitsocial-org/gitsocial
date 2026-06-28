@@ -27,6 +27,9 @@ type CreateIssueOptions struct {
 	Related   []string
 	Labels    []Label
 	Origin    *protocol.Origin
+	// Accepts names the cross-repo proposal this same-repo mirror edit accepts;
+	// emitted as the accepts= header field (GITMSG.md §1.5).
+	Accepts string
 }
 
 // CreateIssue creates a new issue on the PM branch.
@@ -94,6 +97,9 @@ type UpdateIssueOptions struct {
 	Subject   *string
 	Body      *string
 	Origin    *protocol.Origin
+	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
+	// recording "accepted from <fork> by <author>"). Not set by normal edits.
+	Attribution *protocol.Ref
 }
 
 // UpdateIssue edits an existing issue using core versioning.
@@ -187,7 +193,12 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildIssueContentWithEdits(subject, body, createOpts, canonicalRef)
+	var refs []protocol.Ref
+	if opts.Attribution != nil {
+		refs = []protocol.Ref{*opts.Attribution}
+		createOpts.Accepts = opts.Attribution.Ref
+	}
+	content := buildIssueContentWithEdits(subject, body, createOpts, canonicalRef, refs)
 
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
@@ -254,10 +265,10 @@ func RetractIssue(workdir, issueRef string) Result[bool] {
 }
 
 func buildIssueContent(subject, body string, opts CreateIssueOptions) string {
-	return buildIssueContentWithEdits(subject, body, opts, "")
+	return buildIssueContentWithEdits(subject, body, opts, "", nil)
 }
 
-func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, editsRef string) string {
+func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, editsRef string, refs []protocol.Ref) string {
 	content := subject
 	if body != "" {
 		content += "\n\n" + body
@@ -274,6 +285,9 @@ func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, e
 	}
 	if editsRef != "" {
 		fields["edits"] = editsRef
+	}
+	if opts.Accepts != "" {
+		fields["accepts"] = opts.Accepts
 	}
 	if len(opts.Assignees) > 0 {
 		fields["assignees"] = strings.Join(opts.Assignees, ",")
@@ -321,7 +335,7 @@ func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, e
 		Fields:     fields,
 		FieldOrder: issueFieldOrder,
 	}
-	return protocol.FormatMessage(content, header, nil)
+	return protocol.FormatMessage(content, header, refs)
 }
 
 func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {

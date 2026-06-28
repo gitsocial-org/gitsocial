@@ -189,12 +189,13 @@ func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tu
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:        icon,
-			Title:       title,
-			Subtitle:    subtitleParts,
-			Badge:       badge,
-			IsEdited:    rel.IsEdited,
-			IsRetracted: rel.IsRetracted,
+			Icon:             icon,
+			Title:            title,
+			Subtitle:         subtitleParts,
+			Badge:            badge,
+			IsEdited:         rel.IsEdited,
+			HasProposedEdits: rel.HasProposedEdits,
+			IsRetracted:      rel.IsRetracted,
 		},
 		Content:      tuicore.CardContent{Text: rel.Body},
 		ContentLinks: tuicore.ExtractContentLinks(rel.Body, rel.Repository, ""),
@@ -253,8 +254,34 @@ func handleReleaseMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) 
 		return handleReleaseUpdated(msg, ctx)
 	case ReleaseRetractedMsg:
 		return handleReleaseRetracted(msg, ctx)
+	case ProposalAcceptedMsg:
+		return handleProposalAccepted(msg, ctx)
 	}
 	return false, nil
+}
+
+// ProposalAcceptedMsg is sent when a cross-repo proposed edit is accepted from
+// the release history view.
+type ProposalAcceptedMsg struct {
+	CanonicalRef string
+	Declined     bool
+	Err          error
+}
+
+// handleProposalAccepted reports the accept outcome and reloads the release detail.
+func handleProposalAccepted(msg ProposalAcceptedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return true, nil
+	}
+	text := "Proposal accepted"
+	if msg.Declined {
+		text = "Proposal declined"
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, 5*time.Second)
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{Location: tuicore.LocReleaseDetail(msg.CanonicalRef), Action: tuicore.NavReplace}
+	})
 }
 
 func handleReleaseCreated(msg ReleaseCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {

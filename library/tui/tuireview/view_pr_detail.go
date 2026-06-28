@@ -304,18 +304,23 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "C":
 				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
-					v.confirm.Show("Close this pull request?", false, func() tea.Cmd { return v.doClose() })
+					prompt := "Close this pull request?"
+					if v.pr.Repository != v.workspaceURL {
+						prompt = "Close this fork pull request? (recorded on your repo)"
+					}
+					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doClose() })
 					return nil
 				}
 			case "D":
-				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
+				// Readiness (draft/mark-ready) is the author's to set: own PRs only.
+				if v.pr != nil && v.pr.State == review.PRStateOpen && v.pr.Repository == v.workspaceURL {
 					if v.pr.IsDraft {
 						return v.doMarkReady()
 					}
 					return v.doConvertToDraft()
 				}
 			case "h":
-				if v.pr != nil && v.pr.IsEdited {
+				if v.pr != nil && (v.pr.IsEdited || v.pr.HasProposedEdits) {
 					prID := v.pr.ID
 					return func() tea.Msg {
 						return tuicore.NavigateMsg{
@@ -397,7 +402,9 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					return nil
 				}
 			case "X":
-				if v.pr != nil {
+				// Retract withdraws your own proposal: own PRs only. A base owner
+				// declines a fork PR with Close, not Retract.
+				if v.pr != nil && v.pr.Repository == v.workspaceURL {
 					v.confirm.Show("Retract this pull request?", false, func() tea.Cmd { return v.doRetract() })
 					return nil
 				}
@@ -614,7 +621,18 @@ func (v *PRDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				return v.renderPRCard(width, selected, searchQuery, anchors)
+				lines := v.renderPRCard(width, selected, searchQuery, anchors)
+				if pr.HasProposedEdits {
+					banner := "✎  Proposed edits from another repo (press h to review)"
+					if pr.Repository != v.workspaceURL {
+						banner = "✎  Proposed edits not yet accepted by the owner (press h to view)"
+					}
+					lines = append([]string{
+						tuicore.Warning.Render(banner),
+						"",
+					}, lines...)
+				}
+				return lines
 			},
 			SearchText: func() string { return pr.Subject + " " + pr.Body },
 			Links: func() []tuicore.CardLink {
@@ -1007,13 +1025,18 @@ func (v *PRDetailView) Render(state *tuicore.State) string {
 			exclude["M"] = true
 			exclude["C"] = true
 			exclude["S"] = true
+			exclude["D"] = true
 		}
 		if v.pr != nil && !v.targetsWorkspace() {
 			exclude["M"] = true
 			exclude["C"] = true
 			exclude["S"] = true
 		}
-		if v.pr != nil && !v.pr.IsEdited {
+		if v.pr != nil && v.pr.Repository != v.workspaceURL {
+			exclude["D"] = true
+			exclude["X"] = true
+		}
+		if v.pr != nil && !v.pr.IsEdited && !v.pr.HasProposedEdits {
 			exclude["h"] = true
 			exclude["i"] = true
 		}

@@ -469,6 +469,12 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 	if rest != "" {
 		str.WriteString(Dim.Render(rest))
 	}
+	// Proposed (cross-repo) edits awaiting review: an orange pencil, distinct
+	// from the dim applied-edit pencil above.
+	if header.HasProposedEdits {
+		str.WriteString(" ")
+		str.WriteString(Warning.Render("✎"))
+	}
 
 	// Render structured subtitle parts, truncating to fit within width
 	usedWidth := AnsiWidth(str.String())

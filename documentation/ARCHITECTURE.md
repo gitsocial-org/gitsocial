@@ -146,9 +146,11 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   │   ├── release/           # Releases, versions, artifacts
 │   │   ├── review/            # Pull requests, code reviews
 │   │   └── memo/              # Tiered memos (knowledge as commits)
+│   ├── proposals/             # Cross-repo proposals (gate; accept + decline engine)
 │   ├── import/                # Platform import pipeline
 │   │   ├── github/            # GitHub adapter (gh CLI)
 │   │   └── gitlab/            # GitLab adapter
+│   ├── clientfetch/           # Thin-client fetch orchestration (CLI/TUI)
 │   ├── rpc/                   # JSON-RPC server (stdio) — thin-client surface
 │   └── tui/                   # TUI views — thin client
 ├── documentation/             # Protocol + architecture docs
@@ -197,6 +199,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `extensions/release`<br>Release management | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
 | `extensions/review`<br>Code review | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
 | `extensions/memo`<br>Tiered memos (knowledge as commits) | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
+| `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
 | `import`<br>Platform import pipeline | `SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github`<br>GitHub adapter | — | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
 
@@ -232,6 +235,8 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 - `core_trailer_refs(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key, trailer_value)` - PK: `(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key)`
 - `core_identity_dns(email, key, repo, resolved_at)` - PK: `email` — caches DNS well-known lookups (24h TTL).
 - `core_verified_bindings(key_fingerprint, email, source, forge_host, forge_account, verified, resolved_at)` - PK: `(key_fingerprint, email, source, forge_host)` — caches per-source attestations. See [Identity Verification](IDENTITY.md) for the trust model and source list.
+- `core_edit_acceptances(edit_repo_url, edit_hash, edit_branch)` - PK: `(edit_repo_url, edit_hash, edit_branch)` — derived index that a cross-repo proposal was accepted, populated from the mirror edit's `accepts=` header on every fetch path. Read only as a NOT EXISTS marker (clears the proposed-edit ✎) and for accept idempotency.
+- `core_edit_declines(edit_repo_url, edit_hash, edit_branch)` - PK: `(edit_repo_url, edit_hash, edit_branch)` — the owner declined a cross-repo proposal. Durable and published at `refs/gitmsg/core/declines/*` so the proposer learns and the choice survives a re-clone; clears the proposed-edit marker (accept takes precedence).
 
 **Social extension:**
 - `social_items(repo_url, hash, branch, type, original_*, reply_to_*)` - PK: `(repo_url, hash, branch)`
@@ -246,6 +251,8 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 - `review_branch_observations(repo_url, branch, tip, branch_exists, observed_at)` - PK: `(repo_url, branch)` — transient cache of the live remote tip for every branch any open PR's head or base points at, across the workspace and registered forks. Refreshed by `RefreshOpenPRBranches` after fetch; consumed by the `head-advanced` / `head-deleted` / `base-advanced` / `base-deleted` notifications.
 
 **Versioning:** `core_commits.edits` stores raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical()` / `cache.GetLatestVersion()`.
+
+**Cross-repo proposals:** edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit (e.g. a fork editing your issue) is an inert *proposal* until the owner acts. `proposals.Accept` applies it as the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and, on processing, derives `core_edit_acceptances`; the proposer learns via that mirror on the gitmsg data branch, so acceptance needs no published marker. `proposals.Decline` publishes a durable marker at `refs/gitmsg/core/declines/*` so the proposer learns and the owner's choice survives a re-clone. Both clear the proposer's ✎ marker; accept takes precedence over decline.
 
 ### Resolved Views
 
@@ -281,9 +288,10 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 **Virtual commits**: Referenced in `GitMsg-Ref` but not yet fetched. Stored with `is_virtual = 1` and full metadata. When fetched, `is_virtual` flips to `0`.
 
-**Workspace refs (`refs/gitmsg/*`)**: extension data branches (`gitmsg/<ext>`) and three classes of state refs:
+**Workspace refs (`refs/gitmsg/*`)**: extension data branches (`gitmsg/<ext>`) and these classes of state refs:
 - `refs/gitmsg/<ext>/config` — per-extension JSON config (single ref)
 - `refs/gitmsg/core/forks/<urlHash>` — one ref per registered fork (per-element layout, no shared write target — concurrent fork adds across clones don't collide)
+- `refs/gitmsg/core/declines/<hash>` — one ref per declined cross-repo proposal (subject = the proposal ref); published so the proposer's ✎ marker clears on their next fetch and the owner's decline survives a re-clone (acceptance needs no marker: it rides the owner's mirror edit)
 - `refs/gitmsg/<ext>/lists/<name>/_meta` + `.../items/<refHash>` — list metadata at `_meta`, members as per-element refs (same rationale; metadata lives under `_meta` because git refuses to create child refs while a same-named parent ref exists)
 
 ### Fetch Rules

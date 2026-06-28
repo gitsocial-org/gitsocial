@@ -648,3 +648,121 @@ func TestReconcileVersions_noPending(t *testing.T) {
 		t.Errorf("ReconcileVersions() created = %d, want 0", created)
 	}
 }
+
+// --- Gating: only same-repo edits are authoritative ---
+
+// readResolved returns a canonical's denormalized resolved state.
+func readResolved(t *testing.T, repoURL, hash, branch string) (hasEdits, isRetracted int, resolved sql.NullString) {
+	t.Helper()
+	type row struct {
+		he, ir int
+		msg    sql.NullString
+	}
+	out, err := QueryLocked(func(db *sql.DB) (row, error) {
+		var x row
+		e := db.QueryRow(`SELECT has_edits, is_retracted, resolved_message FROM core_commits
+			WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch).Scan(&x.he, &x.ir, &x.msg)
+		return x, e
+	})
+	if err != nil {
+		t.Fatalf("readResolved: %v", err)
+	}
+	return out.he, out.ir, out.msg
+}
+
+func TestGetLatestVersion_crossRepoEditExcluded(t *testing.T) {
+	setupTestDB(t)
+	repoA := "https://github.com/alice/repo"
+	repoB := "https://github.com/bob/repo"
+	InsertCommits([]Commit{
+		{Hash: "canon00000001", RepoURL: repoA, Branch: "main", Message: "Original", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+		{Hash: "editb0000001", RepoURL: repoB, Branch: "main", Message: "Fork edit", Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
+	})
+	// Cross-repo proposal: authored on repoB, targets repoA's canonical.
+	if err := InsertVersion(repoB, "editb0000001", "main", repoA, "canon00000001", "main", false); err != nil {
+		t.Fatalf("InsertVersion() error = %v", err)
+	}
+	result, err := GetLatestVersion(repoA, "canon00000001", "main")
+	if err != nil {
+		t.Fatalf("GetLatestVersion() error = %v", err)
+	}
+	if result.HasEdits {
+		t.Error("cross-repo edit must not be selected as the latest version (gating)")
+	}
+	if result.Hash != "canon00000001" {
+		t.Errorf("Hash = %q, want canonical (cross-repo edit excluded)", result.Hash)
+	}
+}
+
+func TestGetLatestVersion_sameRepoWinsOverNewerCrossRepo(t *testing.T) {
+	setupTestDB(t)
+	repoA := "https://github.com/alice/repo"
+	repoB := "https://github.com/bob/repo"
+	InsertCommits([]Commit{
+		{Hash: "canon00000001", RepoURL: repoA, Branch: "main", Message: "Original", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+		{Hash: "edita0000001", RepoURL: repoA, Branch: "main", Message: "Owner edit", Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
+		{Hash: "editb0000001", RepoURL: repoB, Branch: "main", Message: "Fork edit", Timestamp: time.Date(2025, 10, 21, 14, 0, 0, 0, time.UTC)},
+	})
+	InsertVersion(repoA, "edita0000001", "main", repoA, "canon00000001", "main", false)
+	// Newer cross-repo proposal must not win over the owner's same-repo edit.
+	InsertVersion(repoB, "editb0000001", "main", repoA, "canon00000001", "main", false)
+
+	result, err := GetLatestVersion(repoA, "canon00000001", "main")
+	if err != nil {
+		t.Fatalf("GetLatestVersion() error = %v", err)
+	}
+	if !result.HasEdits {
+		t.Fatal("same-repo edit should be selected")
+	}
+	if result.Hash != "edita0000001" {
+		t.Errorf("Hash = %q, want edita0000001 (same-repo wins over newer cross-repo)", result.Hash)
+	}
+}
+
+func TestGetLatestContent_crossRepoEditExcluded(t *testing.T) {
+	setupTestDB(t)
+	repoA := "https://github.com/alice/repo"
+	repoB := "https://github.com/bob/repo"
+	InsertCommits([]Commit{
+		{Hash: "canon00000001", RepoURL: repoA, Branch: "main", Message: "Original content", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+		{Hash: "editb0000001", RepoURL: repoB, Branch: "main", Message: "Fork edited content", Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
+	})
+	InsertVersion(repoB, "editb0000001", "main", repoA, "canon00000001", "main", false)
+
+	msg, hasEdits, err := GetLatestContent(repoA, "canon00000001", "main")
+	if err != nil {
+		t.Fatalf("GetLatestContent() error = %v", err)
+	}
+	if hasEdits {
+		t.Error("cross-repo edit must not count as an edit (gating)")
+	}
+	if msg != "Original content" {
+		t.Errorf("msg = %q, want %q (canonical content, cross-repo edit excluded)", msg, "Original content")
+	}
+}
+
+func TestApplyEditToCanonical_gatingResolvedState(t *testing.T) {
+	setupTestDB(t)
+	repoA := "https://github.com/alice/repo"
+	repoB := "https://github.com/bob/repo"
+	InsertCommits([]Commit{
+		{Hash: "canon00000001", RepoURL: repoA, Branch: "main", Message: "Original", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)},
+		{Hash: "editb0000001", RepoURL: repoB, Branch: "main", Message: "Fork retraction", Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)},
+	})
+	// Cross-repo retraction proposal must not touch the canonical's resolved state.
+	InsertVersion(repoB, "editb0000001", "main", repoA, "canon00000001", "main", true)
+	hasEdits, retracted, resolved := readResolved(t, repoA, "canon00000001", "main")
+	if hasEdits != 0 || retracted != 0 || resolved.Valid {
+		t.Errorf("cross-repo edit changed resolved state: has_edits=%d is_retracted=%d resolved=%v", hasEdits, retracted, resolved)
+	}
+
+	// A same-repo edit on the same canonical does apply.
+	InsertCommits([]Commit{
+		{Hash: "edita0000001", RepoURL: repoA, Branch: "main", Message: "Owner edit", Timestamp: time.Date(2025, 10, 21, 14, 0, 0, 0, time.UTC)},
+	})
+	InsertVersion(repoA, "edita0000001", "main", repoA, "canon00000001", "main", false)
+	hasEdits, _, resolved = readResolved(t, repoA, "canon00000001", "main")
+	if hasEdits != 1 || !resolved.Valid || resolved.String != "Owner edit" {
+		t.Errorf("same-repo edit did not apply: has_edits=%d resolved=%v", hasEdits, resolved)
+	}
+}

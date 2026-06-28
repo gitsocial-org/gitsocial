@@ -48,7 +48,7 @@ func CreateMilestone(workdir, title, body string, opts CreateMilestoneOptions) R
 	if state == "" {
 		state = StateOpen
 	}
-	content := buildMilestoneContent(title, body, state, opts.Due, opts.Labels, "", opts.Origin)
+	content := buildMilestoneContent(title, body, state, opts.Due, opts.Labels, "", "", opts.Origin, nil)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Milestone]("COMMIT_FAILED", err.Error())
@@ -87,6 +87,9 @@ type UpdateMilestoneOptions struct {
 	Body   *string
 	Labels *[]string
 	Origin *protocol.Origin
+	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
+	// recording "accepted from <fork> by <author>"). Not set by normal edits.
+	Attribution *protocol.Ref
 }
 
 // UpdateMilestone edits an existing milestone using core versioning.
@@ -132,7 +135,13 @@ func UpdateMilestone(workdir, milestoneRef string, opts UpdateMilestoneOptions) 
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildMilestoneContent(title, body, state, due, labels, canonicalRef, origin)
+	var refs []protocol.Ref
+	accepts := ""
+	if opts.Attribution != nil {
+		refs = []protocol.Ref{*opts.Attribution}
+		accepts = opts.Attribution.Ref
+	}
+	content := buildMilestoneContent(title, body, state, due, labels, canonicalRef, accepts, origin, refs)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Milestone]("COMMIT_FAILED", err.Error())
@@ -218,7 +227,7 @@ func GetMilestoneIssues(milestoneID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
-func buildMilestoneContent(title, body string, state State, due *time.Time, labels []string, editsRef string, origin *protocol.Origin) string {
+func buildMilestoneContent(title, body string, state State, due *time.Time, labels []string, editsRef, accepts string, origin *protocol.Origin, refs []protocol.Ref) string {
 	content := title
 	if body != "" {
 		content += "\n\n" + body
@@ -230,6 +239,9 @@ func buildMilestoneContent(title, body string, state State, due *time.Time, labe
 	}
 	if editsRef != "" {
 		fields["edits"] = editsRef
+	}
+	if accepts != "" {
+		fields["accepts"] = accepts
 	}
 	if due != nil {
 		fields["due"] = due.Format("2006-01-02")
@@ -245,7 +257,7 @@ func buildMilestoneContent(title, body string, state State, due *time.Time, labe
 		Fields:     fields,
 		FieldOrder: milestoneFieldOrder,
 	}
-	return protocol.FormatMessage(content, header, nil)
+	return protocol.FormatMessage(content, header, refs)
 }
 
 func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {

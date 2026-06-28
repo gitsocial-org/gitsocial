@@ -38,19 +38,23 @@ type ReviewItem struct {
 	Suggestion         int
 	Labels             sql.NullString
 	// Derived from core_commits via JOIN
-	Origin      *protocol.Origin
-	Content     string
-	AuthorName  string
-	AuthorEmail string
-	Timestamp   time.Time
-	EditOf      sql.NullString
-	IsRetracted bool
-	IsEdited    bool
-	IsVirtual   bool
+	Origin           *protocol.Origin
+	Content          string
+	AuthorName       string
+	AuthorEmail      string
+	Timestamp        time.Time
+	EditOf           sql.NullString
+	IsRetracted      bool
+	IsEdited         bool
+	HasProposedEdits bool
+	IsVirtual        bool
 	// Derived from social_interactions
 	Comments int
 	// Parsed from commit message GitMsg-Ref sections
 	References []protocol.Ref
+	// Adopts is the fork-PR ref this copy homes (adopts= header on the canonical),
+	// identifying fork-PR homing copies for list collapse and original-author.
+	Adopts string
 }
 
 const baseSelectFromView = `
@@ -62,7 +66,12 @@ const baseSelectFromView = `
 	       v.review_state, v.suggestion,
 	       v.labels,
 	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments
+	       v.comments,
+	       EXISTS(SELECT 1 FROM core_commits_version cve
+	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
+	                AND cve.canonical_branch = v.branch
+	                AND cve.edit_repo_url != cve.canonical_repo_url
+	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
 	FROM review_items_resolved v
 `
 
@@ -422,6 +431,18 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 	if err != nil {
 		return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 	}
+	// A fork PR homed onto our review branch (merged or closed by us) carries an
+	// adopts= header naming the fork original; that copy holds the authoritative
+	// terminal state, so collapse the original into it rather than list both.
+	adopted := make(map[string]bool)
+	for _, item := range items {
+		if item.RepoURL != workspaceURL || item.Adopts == "" {
+			continue
+		}
+		if parsed := protocol.ParseRef(item.Adopts); parsed.Type == protocol.RefTypeCommit && parsed.Value != "" {
+			adopted[parsed.Repository+"#"+parsed.Value] = true
+		}
+	}
 	// Post-filter and deduplicate by hash: workspace items take priority
 	// (duplicates can happen when forks are created via git clone --mirror)
 	seen := make(map[string]bool, len(items))
@@ -431,6 +452,9 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 			continue
 		}
 		if item.RepoURL != workspaceURL && !forkPRTargetsWorkspace(item, workspaceURL) {
+			continue
+		}
+		if item.RepoURL != workspaceURL && adopted[item.RepoURL+"#"+item.Hash] {
 			continue
 		}
 		seen[item.Hash] = true
@@ -524,7 +548,7 @@ func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChan
 func scanResolvedRow(row *sql.Row) (*ReviewItem, error) {
 	var item ReviewItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits int
+	var isVirtual, isRetracted, hasEdits, hasProposed int
 	err := row.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -534,19 +558,20 @@ func scanResolvedRow(row *sql.Row) (*ReviewItem, error) {
 		&item.ReviewStateField, &item.Suggestion,
 		&item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
+		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
 	}
 	populateFromMessages(&item, message, originalMessage, ts, isVirtual, isRetracted, hasEdits)
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
 func scanResolvedRows(rows *sql.Rows) (*ReviewItem, error) {
 	var item ReviewItem
 	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits int
+	var isVirtual, isRetracted, hasEdits, hasProposed int
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
@@ -556,12 +581,13 @@ func scanResolvedRows(rows *sql.Rows) (*ReviewItem, error) {
 		&item.ReviewStateField, &item.Suggestion,
 		&item.Labels,
 		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
+		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
 	}
 	populateFromMessages(&item, message, originalMessage, ts, isVirtual, isRetracted, hasEdits)
+	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
 }
 
@@ -577,6 +603,7 @@ func populateFromMessages(item *ReviewItem, message, originalMessage, ts sql.Nul
 	if originalMessage.Valid {
 		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
 			item.Origin = protocol.ExtractOrigin(&msg.Header)
+			item.Adopts = msg.Header.Fields["adopts"]
 		}
 	}
 	if ts.Valid {
@@ -599,31 +626,34 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 			Name:  item.AuthorName,
 			Email: item.AuthorEmail,
 		},
-		Timestamp:   item.Timestamp,
-		Subject:     subject,
-		Body:        body,
-		State:       PRState(nullStr(item.State)),
-		IsDraft:     item.Draft == 1,
-		Base:        nullStr(item.Base),
-		BaseTip:     nullStr(item.BaseTip),
-		Head:        nullStr(item.Head),
-		HeadTip:     nullStr(item.HeadTip),
-		DependsOn:   parseCSV(nullStr(item.DependsOn)),
-		Closes:      parseCSV(nullStr(item.Closes)),
-		Reviewers:   parseCSV(nullStr(item.Reviewers)),
-		Labels:      parseCSV(nullStr(item.Labels)),
-		IsEdited:    item.IsEdited,
-		IsRetracted: item.IsRetracted,
-		Comments:    item.Comments,
+		Timestamp:        item.Timestamp,
+		Subject:          subject,
+		Body:             body,
+		State:            PRState(nullStr(item.State)),
+		IsDraft:          item.Draft == 1,
+		Base:             nullStr(item.Base),
+		BaseTip:          nullStr(item.BaseTip),
+		Head:             nullStr(item.Head),
+		HeadTip:          nullStr(item.HeadTip),
+		DependsOn:        parseCSV(nullStr(item.DependsOn)),
+		Closes:           parseCSV(nullStr(item.Closes)),
+		Reviewers:        parseCSV(nullStr(item.Reviewers)),
+		Labels:           parseCSV(nullStr(item.Labels)),
+		IsEdited:         item.IsEdited,
+		HasProposedEdits: item.HasProposedEdits,
+		IsRetracted:      item.IsRetracted,
+		Comments:         item.Comments,
 	}
 	pr.Origin = item.Origin
-	for _, ref := range item.References {
-		if ref.Ext == "review" && ref.Fields["type"] == string(ItemTypePullRequest) {
-			pr.OriginalAuthor = &Author{Name: ref.Author, Email: ref.Email}
-			if t, err := time.Parse(time.RFC3339, ref.Time); err == nil {
-				pr.OriginalTime = t
+	if item.Adopts != "" {
+		for _, ref := range item.References {
+			if ref.Ext == "review" && ref.Ref == item.Adopts {
+				pr.OriginalAuthor = &Author{Name: ref.Author, Email: ref.Email}
+				if t, err := time.Parse(time.RFC3339, ref.Time); err == nil {
+					pr.OriginalTime = t
+				}
+				break
 			}
-			break
 		}
 	}
 	return pr

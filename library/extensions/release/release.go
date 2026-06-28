@@ -31,6 +31,8 @@ type CreateReleaseOptions struct {
 	// is OK (e.g., re-creating after a retraction).
 	AllowDuplicate bool
 	Origin         *protocol.Origin
+	// Accepts names the cross-repo proposal this mirror accepts (accepts= header).
+	Accepts string
 }
 
 type EditReleaseOptions struct {
@@ -45,6 +47,9 @@ type EditReleaseOptions struct {
 	SignedBy    *string
 	SBOM        *string
 	Labels      *[]string
+	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
+	// recording "accepted from <fork> by <author>"). Not set by normal edits.
+	Attribution *protocol.Ref
 }
 
 // CreateRelease creates a new release on the release branch. Refuses
@@ -59,7 +64,7 @@ func CreateRelease(workdir, subject, body string, opts CreateReleaseOptions) Res
 		}
 	}
 	branch := gitmsg.GetExtBranch(workdir, "release")
-	content := buildReleaseContent(subject, body, opts, "")
+	content := buildReleaseContent(subject, body, opts, "", nil)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Release]("COMMIT_FAILED", err.Error())
@@ -142,7 +147,12 @@ func EditRelease(workdir, releaseRef string, opts EditReleaseOptions) Result[Rel
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
 		repoURL,
 	)
-	content := buildReleaseContent(subject, body, createOpts, canonicalRef)
+	var refs []protocol.Ref
+	if opts.Attribution != nil {
+		refs = []protocol.Ref{*opts.Attribution}
+		createOpts.Accepts = opts.Attribution.Ref
+	}
+	content := buildReleaseContent(subject, body, createOpts, canonicalRef, refs)
 
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
@@ -216,7 +226,7 @@ func GetSingleRelease(releaseRef string) Result[Release] {
 	return result.Err[Release]("NOT_FOUND", "release not found: "+releaseRef)
 }
 
-func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsRef string) string {
+func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsRef string, refs []protocol.Ref) string {
 	content := subject
 	if body != "" {
 		content += "\n\n" + body
@@ -227,6 +237,9 @@ func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsR
 	}
 	if editsRef != "" {
 		fields["edits"] = editsRef
+	}
+	if opts.Accepts != "" {
+		fields["accepts"] = opts.Accepts
 	}
 	if opts.ArtifactURL != "" {
 		fields["artifact-url"] = opts.ArtifactURL
@@ -263,7 +276,7 @@ func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsR
 		Fields:     fields,
 		FieldOrder: releaseFieldOrder,
 	}
-	return protocol.FormatMessage(content, header, nil)
+	return protocol.FormatMessage(content, header, refs)
 }
 
 func cacheReleaseFromCommit(workdir, repoURL, hash, branch string) error {
@@ -323,7 +336,15 @@ func cacheReleaseFromCommit(workdir, repoURL, hash, branch string) error {
 		SBOM:        cache.ToNullString(msg.Header.Fields["sbom"]),
 	}
 
-	return InsertReleaseItem(item)
+	if err := InsertReleaseItem(item); err != nil {
+		return err
+	}
+	// Propagate this edit's resolved extension fields onto its canonical. The
+	// commit's core row is inserted before its release_items row exists, so the
+	// applyEditToCanonical pass triggered by InsertCommits/InsertVersion can't
+	// see the extension columns yet; re-run it now (matches pm's edit path).
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: hash, Branch: branch}})
+	return nil
 }
 
 // ReleaseConfig holds release extension configuration.

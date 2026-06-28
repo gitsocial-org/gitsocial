@@ -52,6 +52,7 @@ func Search(workdir string, params Params) (Result, error) {
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
 	workspaceURL := gitmsg.ResolveRepoURL(gitRoot)
+	forkURLs := gitmsg.GetForks(gitRoot)
 
 	q := searchQuery{
 		WorkspaceURL: workspaceURL,
@@ -61,6 +62,7 @@ func Search(workdir string, params Params) (Result, error) {
 	switch {
 	case params.Scope == "" || params.Scope == "timeline":
 		q.ListIDs = listIDs
+		q.ForkURLs = forkURLs
 	case strings.HasPrefix(params.Scope, "list:"):
 		q.ListID = strings.TrimPrefix(params.Scope, "list:")
 		q.WorkspaceURL = ""
@@ -295,7 +297,7 @@ func queryItems(q searchQuery) ([]Item, error) {
 func scanItem(rows *sql.Rows) (Item, error) {
 	var item Item
 	var ts, staleSince, message sql.NullString
-	var isVirtual, hasEdits int
+	var isVirtual, hasEdits, hasProposed int
 	var socialType, extension, itemType string
 	var state, labels, assignees, due sql.NullString
 	var base, head, reviewers sql.NullString
@@ -310,6 +312,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 		&state, &labels, &assignees, &due,
 		&draft, &base, &head, &reviewers,
 		&tag, &version, &prerelease, &comments,
+		&hasProposed,
 	)
 	if err != nil {
 		return Item{}, err
@@ -325,6 +328,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	item.IsVirtual = isVirtual == 1
 	item.IsStale = staleSince.Valid
 	item.IsEdited = hasEdits == 1
+	item.HasProposedEdits = hasProposed == 1
 	item.Extension = extension
 
 	// Determine the item type: prefer social type for social items, otherwise use extension type

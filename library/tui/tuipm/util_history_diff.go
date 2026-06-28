@@ -37,7 +37,7 @@ func loadPMHistoryVersionsKey(paramKey string) tuicore.LoadDiffVersionsFunc {
 			out = append(out, tuicore.DiffVersion{
 				ID:        ver.ID,
 				Label:     pmVersionLabel(i, total, ver.EditOf != ""),
-				Content:   ver.Content,
+				Content:   tuicore.DiffContentWithMetadata(ver.Fields, ver.IsRetracted, ver.Content),
 				Author:    ver.AuthorName,
 				Email:     ver.AuthorEmail,
 				Timestamp: ver.Timestamp,
