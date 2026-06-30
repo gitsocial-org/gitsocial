@@ -19,18 +19,18 @@ import (
 
 // RepositoryView displays posts from a specific repository.
 type RepositoryView struct {
-	name         string
-	url          string
-	branch       string
-	isWorkspace  bool
-	originURL    string
-	lastFetch    time.Time
-	cardlist     *tuicore.CardList
-	workdir      string
-	userEmail    string
-	showEmail    bool
-	cacheDir     string
-	restoreIndex int // cursor position to restore after refresh (-1 = none)
+	name        string
+	url         string
+	branch      string
+	isWorkspace bool
+	originURL   string
+	lastFetch   time.Time
+	cardlist    *tuicore.CardList
+	workdir     string
+	userEmail   string
+	showEmail   bool
+	cacheDir    string
+	restoreID   string // item ID to reselect after reload ("" = none)
 
 	// Unfollowed repo fetch state
 	isFetching    bool
@@ -95,8 +95,7 @@ func (v *RepositoryView) Bindings() []tuicore.Binding {
 // NewRepositoryView creates a new repository view.
 func NewRepositoryView(workdir string) *RepositoryView {
 	v := &RepositoryView{
-		workdir:      workdir,
-		restoreIndex: -1,
+		workdir: workdir,
 	}
 	v.cardlist = tuicore.NewCardList(nil)
 	v.cardlist.SetItemResolver(v.resolveItem)
@@ -134,11 +133,13 @@ func (v *RepositoryView) Activate(state *tuicore.State) tea.Cmd {
 	v.cacheDir = state.CacheDir
 	v.workdir = state.Workdir
 
-	// Restore cursor position when returning from detail view
+	// Restore cursor position when returning from detail view (by ID, so it
+	// survives reordering and newly-fetched posts).
+	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/social/repository" {
-		v.restoreIndex = state.DetailSource.Index
-	} else {
-		v.restoreIndex = -1
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
 	}
 
 	// Check if URL matches workspace origin
@@ -433,11 +434,22 @@ func (v *RepositoryView) navigateToSelected() tea.Cmd {
 	}
 }
 
+// Refresh reloads posts in place, preserving the focused row by ID.
+func (v *RepositoryView) Refresh(_ *tuicore.State) tea.Cmd {
+	if id, ok := v.cardlist.SelectedID(); ok {
+		v.restoreID = id
+	}
+	v.pag.ResetForRefresh(len(v.cardlist.Items()))
+	return v.loadPosts()
+}
+
 // handleKey processes view-specific keyboard input.
 func (v *RepositoryView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
-		v.restoreIndex = v.cardlist.Selected()
+		if id, ok := v.cardlist.SelectedID(); ok {
+			v.restoreID = id
+		}
 		v.pag.ResetForRefresh(len(v.cardlist.Items()))
 		return v.loadPosts()
 	case "[":
@@ -469,9 +481,9 @@ func (v *RepositoryView) handleLoaded(msg RepositoryLoadedMsg) {
 		v.cardlist.AppendItems(items)
 	} else {
 		v.cardlist.SetItems(items)
-		if v.restoreIndex >= 0 {
-			v.cardlist.SetSelected(v.restoreIndex)
-			v.restoreIndex = -1
+		if v.restoreID != "" {
+			v.cardlist.SelectByID(v.restoreID)
+			v.restoreID = ""
 		}
 	}
 }
@@ -641,9 +653,9 @@ func (v *RepositoryView) DisplayItems() []tuicore.DisplayItem {
 // SetDisplayItems replaces all repository items.
 func (v *RepositoryView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.cardlist.SetItems(items)
-	if v.restoreIndex >= 0 {
-		v.cardlist.SetSelected(v.restoreIndex)
-		v.restoreIndex = -1
+	if v.restoreID != "" {
+		v.cardlist.SelectByID(v.restoreID)
+		v.restoreID = ""
 	}
 }
 

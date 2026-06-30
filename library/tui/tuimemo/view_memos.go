@@ -28,7 +28,7 @@ type MemosView struct {
 	cardList     *tuicore.CardList
 	variant      memosVariant
 	sessionID    string // populated from route params for variantSessionItems
-	restoreIndex int    // cursor position to restore after Activate's data load (-1 = none)
+	restoreID    string // item ID to reselect after Activate's data load ("" = none)
 }
 
 type memosVariant int
@@ -67,11 +67,10 @@ func NewSessionItemsView(workdir string) *MemosView {
 
 func newMemosViewVariant(workdir string, v memosVariant) *MemosView {
 	return &MemosView{
-		workdir:      workdir,
-		userEmail:    git.GetUserEmail(workdir),
-		cardList:     tuicore.NewCardList(nil),
-		variant:      v,
-		restoreIndex: -1,
+		workdir:   workdir,
+		userEmail: git.GetUserEmail(workdir),
+		cardList:  tuicore.NewCardList(nil),
+		variant:   v,
 	}
 }
 
@@ -83,8 +82,9 @@ func (v *MemosView) SetSize(w, h int) {
 }
 
 // Activate loads memos when the view becomes active. The current cursor is
-// captured into restoreIndex so the load handler can put it back after the
-// items are replaced (preserves selection across detail-back navigation).
+// captured into restoreID so the load handler can put it back after the items
+// are replaced (preserves selection across detail-back navigation, by ID so it
+// survives reordering and newly-fetched memos).
 // For variantSessionItems we additionally detect when the session id has
 // changed since the last visit; in that case the previous cursor belongs to
 // a different session and is discarded so the new session starts at row 0.
@@ -104,18 +104,20 @@ func (v *MemosView) Activate(state *tuicore.State) tea.Cmd {
 		}
 		v.sessionID = newID
 	}
+	v.restoreID = ""
 	if preserve {
-		if cur := v.cardList.Selected(); cur > 0 {
-			v.restoreIndex = cur
+		if id, ok := v.cardList.SelectedID(); ok {
+			v.restoreID = id
 		}
-	} else {
-		v.restoreIndex = -1
 	}
 	return v.loadMemos()
 }
 
-// Refresh reloads in place, preserving cursor.
-func (v *MemosView) Refresh(state *tuicore.State) tea.Cmd {
+// Refresh reloads in place, preserving the focused row by ID.
+func (v *MemosView) Refresh(_ *tuicore.State) tea.Cmd {
+	if id, ok := v.cardList.SelectedID(); ok {
+		v.restoreID = id
+	}
 	return v.loadMemos()
 }
 
@@ -138,11 +140,9 @@ func (v *MemosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			})
 		}
 		v.cardList.SetItems(items)
-		if v.restoreIndex >= 0 {
-			if v.restoreIndex < len(items) {
-				v.cardList.SetSelected(v.restoreIndex)
-			}
-			v.restoreIndex = -1
+		if v.restoreID != "" {
+			v.cardList.SelectByID(v.restoreID)
+			v.restoreID = ""
 		}
 		return nil
 	case memoSyncMsg:
@@ -346,6 +346,9 @@ func (v *MemosView) sourcePath() string {
 func (v *MemosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
+		if id, ok := v.cardList.SelectedID(); ok {
+			v.restoreID = id
+		}
 		return v.loadMemos()
 	case "n":
 		if v.variant == variantInherited {

@@ -51,7 +51,7 @@ type NotificationsView struct {
 	markAllReadFn   MarkAllReadFunc
 	markAllUnreadFn MarkAllUnreadFunc
 	resolveFunc     ResolveItemFunc
-	restoreIndex    int       // cursor position to restore after refresh (-1 = none)
+	restoreID       string    // item ID to reselect after reload ("" = none)
 	loadedFetchTime time.Time // LastFetchTime when data was loaded; reload when it changes
 }
 
@@ -119,7 +119,6 @@ func NewNotificationsView(workdir string, getFn GetNotificationsFunc, markReadFn
 		markReadFn:   markReadFn,
 		markUnreadFn: markUnreadFn,
 		resolveFunc:  resolveFn,
-		restoreIndex: -1,
 	}
 	for _, opt := range opts {
 		opt(v)
@@ -140,17 +139,18 @@ func (v *NotificationsView) SetSize(width, height int) {
 
 // Activate loads notifications.
 func (v *NotificationsView) Activate(state *State) tea.Cmd {
+	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/notifications" {
-		v.restoreIndex = state.DetailSource.Index
-	} else {
-		v.restoreIndex = -1
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
 	}
 	// Use cached data if we have it and no fetch has occurred since last load.
 	// Data only changes on fetch (new items) or mark read/unread (applied locally).
 	if len(v.meta) > 0 && v.loadedFetchTime.Equal(state.LastFetchTime) {
-		if v.restoreIndex >= 0 {
-			v.cardlist.SetSelected(v.restoreIndex)
-			v.restoreIndex = -1
+		if v.restoreID != "" {
+			v.cardlist.SelectByID(v.restoreID)
+			v.restoreID = ""
 		}
 		return nil
 	}
@@ -248,10 +248,21 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 	}
 }
 
+// Refresh reloads notifications in place, preserving the focused row by ID.
+func (v *NotificationsView) Refresh(_ *State) tea.Cmd {
+	if id, ok := v.cardlist.SelectedID(); ok {
+		v.restoreID = id
+	}
+	return v.loadNotifications()
+}
+
 // handleKey processes view-specific keyboard input.
 func (v *NotificationsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "r":
+		if id, ok := v.cardlist.SelectedID(); ok {
+			v.restoreID = id
+		}
 		return v.loadNotifications()
 	}
 	return nil
@@ -266,9 +277,9 @@ func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg, state *Stat
 	v.meta = msg.Result.Meta
 	v.cardlist.SetItems(msg.Result.Items)
 	v.loadedFetchTime = state.LastFetchTime
-	if v.restoreIndex >= 0 {
-		v.cardlist.SetSelected(v.restoreIndex)
-		v.restoreIndex = -1
+	if v.restoreID != "" {
+		v.cardlist.SelectByID(v.restoreID)
+		v.restoreID = ""
 	}
 }
 

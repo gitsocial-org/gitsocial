@@ -36,7 +36,7 @@ type MilestonesView struct {
 	searchInput    textinput.Model
 	searchQuery    string
 	pag            tuicore.Pagination
-	restoreIndex   int // cursor position to restore after refresh (-1 = none)
+	restoreID      string // item ID to reselect after reload ("" = none)
 }
 
 // NewMilestonesView creates a new milestones view.
@@ -47,11 +47,10 @@ func NewMilestonesView(workdir string) *MilestonesView {
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
 	return &MilestonesView{
-		workdir:      workdir,
-		userEmail:    git.GetUserEmail(workdir),
-		cardList:     tuicore.NewCardList(nil),
-		searchInput:  searchInput,
-		restoreIndex: -1,
+		workdir:     workdir,
+		userEmail:   git.GetUserEmail(workdir),
+		cardList:    tuicore.NewCardList(nil),
+		searchInput: searchInput,
 	}
 }
 
@@ -86,7 +85,25 @@ func (v *MilestonesView) Activate(state *tuicore.State) tea.Cmd {
 		ShowStats: true,
 		Separator: true,
 	})
+	// Returning from this list's detail view: reselect the focused row by ID
+	// after the reload. DetailSource.Index tracks left/right paging and indexes
+	// the still-loaded list, so read the focused id there.
+	v.restoreID = ""
+	if state.DetailSource != nil && state.DetailSource.Path == "/pm/milestones" {
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
+	}
 	v.pag.Reset()
+	return v.loadMilestones()
+}
+
+// Refresh reloads milestones in place, preserving the focused row by ID.
+func (v *MilestonesView) Refresh(_ *tuicore.State) tea.Cmd {
+	if id, ok := v.cardList.SelectedID(); ok {
+		v.restoreID = id
+	}
+	v.pag.ResetForRefresh(len(v.cardList.Items()))
 	return v.loadMilestones()
 }
 
@@ -186,9 +203,9 @@ func (v *MilestonesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			} else {
 				v.allMilestones = msg.Milestones
 				v.applyFilter()
-				if v.restoreIndex >= 0 {
-					v.cardList.SetSelected(v.restoreIndex)
-					v.restoreIndex = -1
+				if v.restoreID != "" {
+					v.cardList.SelectByID(v.restoreID)
+					v.restoreID = ""
 				}
 			}
 			if len(msg.Milestones) > 0 {
@@ -296,7 +313,9 @@ func (v *MilestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 		v.applyFilter()
 		return nil
 	case "r":
-		v.restoreIndex = v.cardList.Selected()
+		if id, ok := v.cardList.SelectedID(); ok {
+			v.restoreID = id
+		}
 		v.pag.ResetForRefresh(len(v.cardList.Items()))
 		return v.loadMilestones()
 	case "n":

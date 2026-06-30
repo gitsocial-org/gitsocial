@@ -20,7 +20,7 @@ type ListPostsView struct {
 	workdir           string
 	userEmail         string
 	showEmail         bool
-	restoreIndex      int // cursor position to restore after refresh (-1 = none)
+	restoreID         string // item ID to reselect after reload ("" = none)
 	pag               tuicore.Pagination
 }
 
@@ -54,8 +54,7 @@ func (v *ListPostsView) Bindings() []tuicore.Binding {
 // NewListPostsView creates a new list posts view.
 func NewListPostsView(workdir string) *ListPostsView {
 	v := &ListPostsView{
-		workdir:      workdir,
-		restoreIndex: -1,
+		workdir: workdir,
 	}
 	v.cardlist = tuicore.NewCardList(nil)
 	v.cardlist.SetItemResolver(v.resolveItem)
@@ -96,11 +95,13 @@ func (v *ListPostsView) Activate(state *tuicore.State) tea.Cmd {
 	listID := loc.Param("listID")
 	owner := loc.Param("owner")
 
-	// Restore cursor position when returning from detail view
+	// Restore cursor position when returning from detail view (by ID). Read the
+	// id before SetItems(nil) below clears the list.
+	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/social/list" {
-		v.restoreIndex = state.DetailSource.Index
-	} else {
-		v.restoreIndex = -1
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
 	}
 
 	v.externalListOwner = owner
@@ -222,6 +223,17 @@ func (v *ListPostsView) navigateToSelected() tea.Cmd {
 	}
 }
 
+// Refresh reloads the list's posts in place, preserving the focused row by ID.
+func (v *ListPostsView) Refresh(_ *tuicore.State) tea.Cmd {
+	if id, ok := v.cardlist.SelectedID(); ok {
+		v.restoreID = id
+	}
+	if v.externalListOwner != "" {
+		return v.loadExternalListPosts(v.externalListOwner, v.list.ID)
+	}
+	return v.loadListPosts(v.list.ID)
+}
+
 // handleKey processes view-specific keyboard input.
 func (v *ListPostsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
@@ -272,9 +284,9 @@ func (v *ListPostsView) handleLoaded(msg ListPostsLoadedMsg) {
 		v.cardlist.AppendItems(items)
 	} else {
 		v.cardlist.SetItems(items)
-		if v.restoreIndex >= 0 {
-			v.cardlist.SetSelected(v.restoreIndex)
-			v.restoreIndex = -1
+		if v.restoreID != "" {
+			v.cardlist.SelectByID(v.restoreID)
+			v.restoreID = ""
 		}
 	}
 }
@@ -379,9 +391,9 @@ func (v *ListPostsView) DisplayItems() []tuicore.DisplayItem {
 // SetDisplayItems replaces all list items.
 func (v *ListPostsView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.cardlist.SetItems(items)
-	if v.restoreIndex >= 0 {
-		v.cardlist.SetSelected(v.restoreIndex)
-		v.restoreIndex = -1
+	if v.restoreID != "" {
+		v.cardlist.SelectByID(v.restoreID)
+		v.restoreID = ""
 	}
 }
 

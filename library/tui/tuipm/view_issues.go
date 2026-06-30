@@ -36,7 +36,7 @@ type IssuesView struct {
 	searchInput      textinput.Model
 	searchQuery      string
 	pag              tuicore.Pagination
-	restoreIndex     int // cursor position to restore after refresh (-1 = none)
+	restoreID        string // item ID to reselect after reload ("" = none)
 }
 
 // NewIssuesView creates a new issues view.
@@ -47,11 +47,10 @@ func NewIssuesView(workdir string) *IssuesView {
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
 	return &IssuesView{
-		workdir:      workdir,
-		searchInput:  searchInput,
-		userEmail:    git.GetUserEmail(workdir),
-		cardList:     tuicore.NewCardList(nil),
-		restoreIndex: -1,
+		workdir:     workdir,
+		searchInput: searchInput,
+		userEmail:   git.GetUserEmail(workdir),
+		cardList:    tuicore.NewCardList(nil),
 	}
 }
 
@@ -85,7 +84,25 @@ func (v *IssuesView) Activate(state *tuicore.State) tea.Cmd {
 		ShowStats: true,
 		Separator: true,
 	})
+	// Returning from this list's detail view: reselect the focused row by ID
+	// after the reload. DetailSource.Index tracks left/right paging and indexes
+	// the still-loaded list, so read the focused id there.
+	v.restoreID = ""
+	if state.DetailSource != nil && state.DetailSource.Path == "/pm/issues" {
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
+	}
 	v.pag.Reset()
+	return v.loadIssues()
+}
+
+// Refresh reloads issues in place, preserving the focused row by ID.
+func (v *IssuesView) Refresh(_ *tuicore.State) tea.Cmd {
+	if id, ok := v.cardList.SelectedID(); ok {
+		v.restoreID = id
+	}
+	v.pag.ResetForRefresh(len(v.cardList.Items()))
 	return v.loadIssues()
 }
 
@@ -186,9 +203,9 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					v.contributorNames = msg.ContributorNames
 				}
 				v.applyFilter()
-				if v.restoreIndex >= 0 {
-					v.cardList.SetSelected(v.restoreIndex)
-					v.restoreIndex = -1
+				if v.restoreID != "" {
+					v.cardList.SelectByID(v.restoreID)
+					v.restoreID = ""
 				}
 			}
 			if len(msg.Issues) > 0 {
@@ -301,7 +318,9 @@ func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 		v.applyFilter()
 		return nil
 	case "r":
-		v.restoreIndex = v.cardList.Selected()
+		if id, ok := v.cardList.SelectedID(); ok {
+			v.restoreID = id
+		}
 		v.pag.ResetForRefresh(len(v.cardList.Items()))
 		return v.loadIssues()
 	case "n":

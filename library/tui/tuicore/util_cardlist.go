@@ -109,6 +109,29 @@ func (l *CardList) SetItems(items []DisplayItem) {
 	l.buildItemIndex()
 }
 
+// ReloadItems replaces items while keeping the cursor anchored to the currently
+// selected item by ID (falling back to the top when it is gone). Unlike SetItems
+// it preserves selection, and unlike a one-shot restore it is idempotent — safe
+// to apply repeatedly for the same reload (e.g. a load message handled by both a
+// SetDisplayItems hook and the view's own Update).
+func (l *CardList) ReloadItems(items []DisplayItem) {
+	prevID := ""
+	if l.selected >= 0 && l.selected < len(l.items) {
+		prevID = l.items[l.selected].ItemID()
+	}
+	l.items = items
+	l.selected = 0
+	l.scrollOffset = 0
+	l.invalidateHeightCache()
+	l.buildItemIndex()
+	if prevID != "" {
+		if idx, ok := l.itemIndex[prevID]; ok && idx < len(items) {
+			l.selected = idx
+			l.adjustScroll()
+		}
+	}
+}
+
 // UpdateItems updates items while preserving selection.
 func (l *CardList) UpdateItems(items []DisplayItem) {
 	l.items = items
@@ -187,6 +210,24 @@ func (l *CardList) SelectedItem() (DisplayItem, bool) {
 		return l.items[l.selected], true
 	}
 	return nil, false
+}
+
+// SelectedID returns the ID of the selected item.
+func (l *CardList) SelectedID() (string, bool) {
+	if l.selected >= 0 && l.selected < len(l.items) {
+		return l.items[l.selected].ItemID(), true
+	}
+	return "", false
+}
+
+// SelectByID selects the item with the given ID, preserving cursor across a
+// reload even when items were reordered or inserted. Returns false if absent.
+func (l *CardList) SelectByID(id string) bool {
+	if idx, ok := l.itemIndex[id]; ok && idx < len(l.items) {
+		l.SetSelected(idx)
+		return true
+	}
+	return false
 }
 
 // FocusedLink returns the index of the currently focused link (-1 = none).

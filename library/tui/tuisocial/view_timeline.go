@@ -13,14 +13,13 @@ import (
 
 // TimelineView displays the social timeline.
 type TimelineView struct {
-	cardlist     *tuicore.CardList
-	workdir      string
-	gitRoot      string
-	userEmail    string
-	showEmail    bool
-	restoreIndex int // cursor position to restore after refresh (-1 = none)
-	pag          tuicore.Pagination
-	identityGen  int // tracks State.IdentityGeneration to detect verified badge staleness
+	cardlist    *tuicore.CardList
+	workdir     string
+	gitRoot     string
+	userEmail   string
+	showEmail   bool
+	pag         tuicore.Pagination
+	identityGen int // tracks State.IdentityGeneration to detect verified badge staleness
 }
 
 // Bindings returns keybindings for the timeline view.
@@ -68,10 +67,9 @@ func (v *TimelineView) Bindings() []tuicore.Binding {
 // NewTimelineView creates a new timeline view.
 func NewTimelineView(workdir string, userEmail string, showEmail bool) *TimelineView {
 	v := &TimelineView{
-		workdir:      workdir,
-		userEmail:    userEmail,
-		showEmail:    showEmail,
-		restoreIndex: -1,
+		workdir:   workdir,
+		userEmail: userEmail,
+		showEmail: showEmail,
 	}
 	v.cardlist = tuicore.NewCardList(nil)
 	v.cardlist.SetItemResolver(v.resolveItem)
@@ -103,24 +101,26 @@ func (v *TimelineView) SetSize(width, height int) {
 
 // Activate loads timeline posts when the view becomes active.
 func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
-	if state.DetailSource != nil && state.DetailSource.Path == "/social/timeline" {
-		v.restoreIndex = state.DetailSource.Index
-	} else {
-		v.restoreIndex = -1
+	// Returning from a detail view: pre-select the focused row by ID so that any
+	// reload below (and ReloadItems) keeps the cursor on it. DetailSource.Index
+	// tracks left/right paging and indexes the still-loaded list.
+	backFromDetail := false
+	if state.DetailSource != nil && state.DetailSource.Path == "/social/timeline" && len(v.cardlist.Items()) > 0 {
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.cardlist.SelectByID(id)
+			backFromDetail = true
+		}
 	}
 	if v.gitRoot == "" {
 		v.gitRoot = state.GitRoot
 	}
-	// Identity changed: force full reload so verified badges update
+	// Identity changed: reload so verified badges update (ReloadItems keeps cursor)
 	if v.identityGen != state.IdentityGeneration {
 		v.identityGen = state.IdentityGeneration
-		v.cardlist.SetItems(nil)
 		return v.loadPosts()
 	}
-	// Navigating back with data already loaded: restore cursor, skip reload
-	if v.restoreIndex >= 0 && len(v.cardlist.Items()) > 0 {
-		v.cardlist.SetSelected(v.restoreIndex)
-		v.restoreIndex = -1
+	// Navigating back with data already loaded: cursor set above, skip reload
+	if backFromDetail {
 		return nil
 	}
 	// Instant display: synchronous preload from cache when empty
@@ -135,9 +135,8 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadPosts()
 }
 
-// Refresh reloads timeline data while preserving cursor position.
+// Refresh reloads timeline data; ReloadItems preserves the cursor by ID.
 func (v *TimelineView) Refresh(state *tuicore.State) tea.Cmd {
-	v.restoreIndex = v.cardlist.Selected()
 	return v.loadPosts()
 }
 
@@ -237,7 +236,6 @@ func (v *TimelineView) navigateToSelected() tea.Cmd {
 func (v *TimelineView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "r":
-		v.restoreIndex = v.cardlist.Selected()
 		v.pag.ResetForRefresh(len(v.cardlist.Items()))
 		return v.loadPosts()
 	}
@@ -260,11 +258,7 @@ func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {
-		v.cardlist.SetItems(items)
-		if v.restoreIndex >= 0 {
-			v.cardlist.SetSelected(v.restoreIndex)
-			v.restoreIndex = -1
-		}
+		v.cardlist.ReloadItems(items)
 	}
 }
 
@@ -316,11 +310,7 @@ func (v *TimelineView) DisplayItems() []tuicore.DisplayItem {
 
 // SetDisplayItems replaces all timeline items (extension-agnostic).
 func (v *TimelineView) SetDisplayItems(items []tuicore.DisplayItem) {
-	v.cardlist.SetItems(items)
-	if v.restoreIndex >= 0 {
-		v.cardlist.SetSelected(v.restoreIndex)
-		v.restoreIndex = -1
-	}
+	v.cardlist.ReloadItems(items)
 }
 
 // SelectedDisplayItem returns the currently selected item (extension-agnostic).

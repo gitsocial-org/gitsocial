@@ -30,7 +30,7 @@ type SearchView struct {
 	workdir      string
 	searchFunc   SearchFunc
 	resolveFunc  ResolveItemFunc
-	restoreIndex int // cursor position to restore after refresh (-1 = none)
+	restoreID    string // item ID to reselect after reload ("" = none)
 	pag          Pagination
 	searchOffset int // current offset for pagination
 }
@@ -44,12 +44,11 @@ func NewSearchView(workdir string, searchFn SearchFunc, resolveFn ResolveItemFun
 	StyleTextInput(&input, Title, Title, Dim)
 
 	v := &SearchView{
-		input:        input,
-		inputMode:    true,
-		workdir:      workdir,
-		searchFunc:   searchFn,
-		resolveFunc:  resolveFn,
-		restoreIndex: -1,
+		input:       input,
+		inputMode:   true,
+		workdir:     workdir,
+		searchFunc:  searchFn,
+		resolveFunc: resolveFn,
 	}
 	v.results = NewCardList(nil)
 	if resolveFn != nil {
@@ -68,11 +67,12 @@ func (v *SearchView) SetSize(width, height int) {
 
 // Activate initializes the search view.
 func (v *SearchView) Activate(state *State) tea.Cmd {
-	// Restore cursor position when returning from detail view
+	// Restore cursor position when returning from detail view (by ID)
+	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/search" {
-		v.restoreIndex = state.DetailSource.Index
-	} else {
-		v.restoreIndex = -1
+		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
+			v.restoreID = id
+		}
 	}
 
 	loc := state.Router.Location()
@@ -346,9 +346,9 @@ func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
 	} else {
 		v.results.SetItems(items)
 		v.searchOffset = len(items)
-		if v.restoreIndex >= 0 {
-			v.results.SetSelected(v.restoreIndex)
-			v.restoreIndex = -1
+		if v.restoreID != "" {
+			v.results.SelectByID(v.restoreID)
+			v.restoreID = ""
 		}
 	}
 
