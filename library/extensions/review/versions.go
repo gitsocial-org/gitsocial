@@ -144,7 +144,7 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 }
 
 // ComparePRVersions returns a git range-diff between two PR versions.
-func ComparePRVersions(workdir, prRef string, fromVersion, toVersion int) Result[string] {
+func ComparePRVersions(workdir, cacheDir, prRef string, fromVersion, toVersion int) Result[string] {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	res := GetPRVersions(prRef, workspaceURL)
 	if !res.Success {
@@ -165,11 +165,36 @@ func ComparePRVersions(workdir, prRef string, fromVersion, toVersion int) Result
 	if to.BaseTip == "" || to.HeadTip == "" {
 		return result.Err[string]("MISSING_TIPS", fmt.Sprintf("version %d has no base-tip/head-tip", toVersion))
 	}
-	output, err := git.RangeDiff(workdir, from.BaseTip, from.HeadTip, to.BaseTip, to.HeadTip)
+	// Identical tips mean the edit between these versions changed only metadata
+	// or the description, not code — no range-diff to show.
+	if from.BaseTip == to.BaseTip && from.HeadTip == to.HeadTip {
+		return result.Ok("")
+	}
+	// The tips are raw commit hashes. For a fork PR the head commits live in the
+	// fork, not the workspace, so fetch both sides into a fork repo (the same
+	// resolution the files-changed diff uses) when they aren't all local.
+	rd := workdir
+	if !tipsPresent(workdir, from, to) {
+		if pr := GetPR(prRef); pr.Success {
+			if ctx := ResolveDiffContext(workdir, cacheDir, pr.Data.Base, pr.Data.Head); ctx.Workdir != "" {
+				rd = ctx.Workdir
+			}
+		}
+	}
+	if !tipsPresent(rd, from, to) {
+		return result.Err[string]("TIPS_UNAVAILABLE", "could not resolve version tips locally (fork PR commits may be unavailable); use the files-changed view (d) to see the current diff")
+	}
+	output, err := git.RangeDiff(rd, from.BaseTip, from.HeadTip, to.BaseTip, to.HeadTip)
 	if err != nil {
 		return result.Err[string]("RANGE_DIFF_FAILED", err.Error())
 	}
 	return result.Ok(output)
+}
+
+// tipsPresent reports whether all four version tips resolve as commits in repo.
+func tipsPresent(repo string, from, to PRVersion) bool {
+	return git.CommitExists(repo, from.BaseTip) && git.CommitExists(repo, from.HeadTip) &&
+		git.CommitExists(repo, to.BaseTip) && git.CommitExists(repo, to.HeadTip)
 }
 
 type VersionAwareReview struct {

@@ -739,6 +739,15 @@ func BranchExists(workdir, branch string) bool {
 	return err == nil
 }
 
+// CommitExists reports whether a commit object is present in the repository.
+func CommitExists(workdir, rev string) bool {
+	if rev == "" {
+		return false
+	}
+	_, err := ExecGit(workdir, []string{"cat-file", "-e", rev + "^{commit}"})
+	return err == nil
+}
+
 // GetDefaultBranch returns the repository's default branch name.
 func GetDefaultBranch(workdir string) (string, error) {
 	// Try HEAD first

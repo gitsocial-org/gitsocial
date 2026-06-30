@@ -16,6 +16,7 @@ import (
 // InterdiffView displays range-diff output between two PR versions.
 type InterdiffView struct {
 	workdir       string
+	cacheDir      string
 	workspaceURL  string
 	prID          string
 	width         int
@@ -63,7 +64,9 @@ func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
 	v.errMsg = ""
 	v.cursor = 0
 	v.scroll = 0
+	v.cacheDir = state.CacheDir
 	workdir := v.workdir
+	cacheDir := v.cacheDir
 	workspaceURL := v.workspaceURL
 	return func() tea.Msg {
 		vRes := review.GetPRVersions(prID, workspaceURL)
@@ -76,7 +79,7 @@ func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
 		}
 		from := len(versions) - 2
 		to := len(versions) - 1
-		dRes := review.ComparePRVersions(workdir, prID, versions[from].Number, versions[to].Number)
+		dRes := review.ComparePRVersions(workdir, cacheDir, prID, versions[from].Number, versions[to].Number)
 		if !dRes.Success {
 			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Message}
 		}
@@ -145,10 +148,11 @@ func (v *InterdiffView) cycleVersions(dir int) tea.Cmd {
 	v.errMsg = ""
 	from, to := newFrom, newTo
 	workdir := v.workdir
+	cacheDir := v.cacheDir
 	versions := v.versions
 	prID := v.prID
 	return func() tea.Msg {
-		dRes := review.ComparePRVersions(workdir, prID, versions[from].Number, versions[to].Number)
+		dRes := review.ComparePRVersions(workdir, cacheDir, prID, versions[from].Number, versions[to].Number)
 		if !dRes.Success {
 			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Message}
 		}
@@ -171,6 +175,9 @@ func (v *InterdiffView) ensureVisible() {
 // buildRenderedLines parses range-diff output and colorizes it.
 func (v *InterdiffView) buildRenderedLines(raw string) {
 	v.renderedLines = nil
+	if strings.TrimSpace(raw) == "" {
+		return
+	}
 	lines := strings.Split(raw, "\n")
 	equalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.TextSecondary))
 	modifiedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.StatusWarning))

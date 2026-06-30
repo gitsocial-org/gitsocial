@@ -565,7 +565,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 				}
 			}
 
-			result := review.ComparePRVersions(cfg.WorkDir, args[0], from, to)
+			result := review.ComparePRVersions(cfg.WorkDir, cfg.CacheDir, args[0], from, to)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
 				os.Exit(ExitError)
