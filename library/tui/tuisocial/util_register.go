@@ -3,6 +3,7 @@ package tuisocial
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -344,13 +345,39 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 			ctx.Host().State().AddLogEntry(tuicore.LogSeverityWarn, fetchErr.Repository+": "+fetchErr.Error, "fetch")
 		}
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
-	} else if msg.Stats.Posts > 0 {
-		msgCmd = ctx.Host().SetMessageWithTimeout(fmt.Sprintf("Fetched %d new posts", msg.Stats.Posts), tuicore.MessageTypeSuccess, 5*time.Second)
+	} else if summary := formatFetchSummary(msg.Breakdown); summary != "" {
+		msgCmd = ctx.Host().SetMessageWithTimeout(summary, tuicore.MessageTypeSuccess, 5*time.Second)
 	} else if !msg.Auto {
 		// Auto-fetch stays silent when there's nothing new — no toast spam.
 		msgCmd = ctx.Host().SetMessageWithTimeout("Already up to date", tuicore.MessageTypeSuccess, 5*time.Second)
 	}
 	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd)
+}
+
+// fetchExtLabels maps extension keys to friendly plural labels for the fetch
+// summary, in display order.
+var fetchExtLabels = []struct{ key, label string }{
+	{"social", "discussions"},
+	{"review", "PRs"},
+	{"pm", "PM"},
+	{"release", "releases"},
+	{"memo", "memos"},
+	{"code", "commits"},
+}
+
+// formatFetchSummary turns a per-extension breakdown into a toast like
+// "Fetched 3 discussions, 2 PRs". Returns "" when nothing was fetched.
+func formatFetchSummary(breakdown map[string]int) string {
+	var parts []string
+	for _, e := range fetchExtLabels {
+		if n := breakdown[e.key]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, e.label))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Fetched " + strings.Join(parts, ", ")
 }
 
 func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {

@@ -1086,9 +1086,13 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 			FetchAllBranches: allBranches,
 			ExtraProcessors:  clientfetch.ExtraProcessors(),
 		}
+		// Snapshot per-branch commit counts so the summary can break down what
+		// this fetch brought in across all sources (followed repos, forks, and
+		// the workspace re-sync) rather than just the social total.
+		before, _ := cache.CountCommitsByBranch()
 		result := social.Fetch(m.workdir, m.cacheDir, opts)
 		// Fetch all gitmsg data from registered forks (full processor set + backfill)
-		clientfetch.FetchForks(m.workdir, m.cacheDir)
+		forkStats := clientfetch.FetchForks(m.workdir, m.cacheDir)
 		// Re-sync all workspace extension branches to cache
 		if err := fetch.SyncWorkspace(m.workdir); err != nil {
 			log.Debug("post-fetch workspace sync failed", "error", err)
@@ -1096,8 +1100,50 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		if !result.Success {
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message), Auto: auto}
 		}
-		return tuisocial.FetchCompletedMsg{Stats: result.Data, Auto: auto}
+		after, _ := cache.CountCommitsByBranch()
+		breakdown := fetchBreakdown(before, after)
+		stats := result.Data
+		stats.Posts = breakdownTotal(breakdown)
+		for _, e := range forkStats.Errors {
+			stats.Errors = append(stats.Errors, social.FetchError{Repository: e.ForkURL, Error: e.Error})
+		}
+		return tuisocial.FetchCompletedMsg{Stats: stats, Breakdown: breakdown, Auto: auto}
 	}
+}
+
+// fetchBreakdown computes the per-extension count of newly cached commits from
+// before/after per-branch snapshots. Keys are extension names (social, pm,
+// review, release, memo) or "code" for non-gitmsg branches.
+func fetchBreakdown(before, after map[string]int) map[string]int {
+	out := map[string]int{}
+	for branch, n := range after {
+		if delta := n - before[branch]; delta > 0 {
+			out[branchExtension(branch)] += delta
+		}
+	}
+	return out
+}
+
+// branchExtension maps a git refname to its extension key: "gitmsg/<ext>" → ext,
+// anything else → "code".
+func branchExtension(branch string) string {
+	ext, ok := strings.CutPrefix(branch, "gitmsg/")
+	if !ok {
+		return "code"
+	}
+	if i := strings.IndexByte(ext, '/'); i >= 0 {
+		ext = ext[:i]
+	}
+	return ext
+}
+
+// breakdownTotal sums a fetch breakdown map.
+func breakdownTotal(breakdown map[string]int) int {
+	total := 0
+	for _, n := range breakdown {
+		total += n
+	}
+	return total
 }
 
 // startPush pushes any user-confirmed code branches first (so the gitmsg/review

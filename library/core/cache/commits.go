@@ -300,6 +300,29 @@ func insertCommitsTxn(commits []Commit) error {
 	return nil
 }
 
+// CountCommitsByBranch returns the number of non-virtual cached commits per
+// branch, keyed by git refname (e.g. "gitmsg/social", "main"). A before/after
+// snapshot across a fetch yields the per-extension count of what was fetched.
+func CountCommitsByBranch() (map[string]int, error) {
+	return QueryLocked(func(db *sql.DB) (map[string]int, error) {
+		rows, err := db.Query(`SELECT branch, COUNT(*) FROM core_commits WHERE is_virtual = 0 GROUP BY branch`)
+		if err != nil {
+			return nil, fmt.Errorf("count commits by branch: %w", err)
+		}
+		defer rows.Close()
+		out := make(map[string]int)
+		for rows.Next() {
+			var branch string
+			var n int
+			if err := rows.Scan(&branch, &n); err != nil {
+				return nil, fmt.Errorf("scan branch count: %w", err)
+			}
+			out[branch] = n
+		}
+		return out, rows.Err()
+	})
+}
+
 // MarkCommitsStale marks cached commits as stale if they no longer exist in the live branch.
 // Commits present in liveHashes but marked stale are un-staled (e.g., undo of rebase).
 // Returns the count of newly stale commits.

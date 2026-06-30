@@ -120,6 +120,9 @@ type ListPostsCountLoadedMsg struct {
 type FetchCompletedMsg struct {
 	Stats social.FetchStats
 	Err   error
+	// Breakdown is the per-extension count of newly cached items this fetch
+	// (keys: social, pm, review, release, memo, code), used for the summary toast.
+	Breakdown map[string]int
 	// Auto is true when the periodic auto-fetch timer started this fetch.
 	Auto bool
 }
