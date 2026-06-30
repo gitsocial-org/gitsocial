@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
-	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
@@ -53,9 +52,6 @@ func (v *DiffView) Activate(state *tuicore.State) tea.Cmd {
 	commit := state.Router.Location().Param("commit")
 	cacheDir := state.CacheDir
 	return func() tea.Msg {
-		if err := review.SyncWorkspaceToCache(workdir); err != nil {
-			log.Debug("review sync before diff load failed", "error", err)
-		}
 		res := review.GetPR(prID)
 		if !res.Success {
 			return diffLoadedMsg{}

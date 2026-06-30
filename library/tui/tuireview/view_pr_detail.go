@@ -102,9 +102,6 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 	workdir := v.workdir
 	v.cacheDir = state.CacheDir
 	return func() tea.Msg {
-		if err := review.SyncWorkspaceToCache(workdir); err != nil {
-			log.Debug("review sync before PR detail load failed", "error", err)
-		}
 		branch := gitmsg.GetExtBranch(workdir, "review")
 		// Start GetUnpushedCommits in parallel with GetPR (only needs branch)
 		var unpushed map[string]struct{}

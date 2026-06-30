@@ -9,7 +9,6 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
@@ -82,9 +81,6 @@ func (v *ReleaseDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.focusID = state.Router.Location().Param("focusID")
 	workdir := v.workdir
 	return func() tea.Msg {
-		if err := release.SyncWorkspaceToCache(workdir); err != nil {
-			log.Debug("release sync before detail load failed", "error", err)
-		}
 		res := release.GetSingleRelease(releaseID)
 		if !res.Success {
 			return releaseDetailLoadedMsg{}

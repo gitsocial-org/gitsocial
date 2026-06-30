@@ -93,6 +93,14 @@ func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 	}); err == nil {
 		tipParts = append(tipParts, strings.TrimSpace(result.Stdout))
 	}
+	// Also fold in every local branch tip so a commit on a feature branch that
+	// was never pushed still invalidates the sync cache and gets ingested — the
+	// timeline shows commits from all branches, so the gate must watch them all.
+	if result, err := git.ExecGit(workdir, []string{
+		"for-each-ref", "--format=%(objectname)", "refs/heads/",
+	}); err == nil {
+		tipParts = append(tipParts, strings.TrimSpace(result.Stdout))
+	}
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
 
@@ -177,6 +185,21 @@ func SyncWorkspace(workdir string) error {
 	}
 	BackfillWorkspaceIdentity(workdir)
 	return nil
+}
+
+// SyncWorkspaceLocal runs the workspace sync (quick pass + continuation) without
+// the network identity backfill, returning whether it ingested anything. It is
+// tip-gated — a cheap no-op when no branch tip (local or remote) has moved since
+// the last sync — so it is safe to run on UI interactions (e.g. view activation)
+// to surface commits made outside the TUI without a manual fetch.
+func SyncWorkspaceLocal(workdir string) (bool, error) {
+	if resolveWorkspaceSyncContext(workdir) == nil {
+		return false, nil
+	}
+	if err := SyncWorkspaceQuick(workdir); err != nil {
+		return true, err
+	}
+	return true, SyncWorkspaceContinue(workdir, nil)
 }
 
 // BackfillWorkspaceIdentity runs the slow identity work for the workspace —

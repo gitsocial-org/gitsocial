@@ -99,6 +99,38 @@ type Model struct {
 	// bgSyncCh streams progress + completion messages from the background
 	// workspace history sync started by initWorkspace. Drained by drainBgSyncCmd.
 	bgSyncCh chan tea.Msg
+
+	// lastLocalSync throttles the on-navigation local workspace sync so rapid
+	// view switching doesn't spawn a sync goroutine per keystroke.
+	lastLocalSync time.Time
+}
+
+// localSyncThrottle is the minimum gap between on-navigation local syncs.
+const localSyncThrottle = 2 * time.Second
+
+// localSyncDoneMsg reports the result of an on-navigation local workspace sync.
+type localSyncDoneMsg struct{ changed bool }
+
+// maybeLocalSync returns a throttled command that runs a local (no-network)
+// workspace sync to pick up commits made outside the TUI, or nil when throttled
+// or busy. Tip-gated, so it's a cheap no-op when nothing has moved.
+func (m *Model) maybeLocalSync() tea.Cmd {
+	if m.isFetching || m.isImporting {
+		return nil
+	}
+	now := time.Now()
+	if !m.headless && !m.lastLocalSync.IsZero() && now.Sub(m.lastLocalSync) < localSyncThrottle {
+		return nil
+	}
+	m.lastLocalSync = now
+	workdir := m.workdir
+	return func() tea.Msg {
+		changed, err := fetch.SyncWorkspaceLocal(workdir)
+		if err != nil {
+			log.Debug("local workspace sync failed", "error", err)
+		}
+		return localSyncDoneMsg{changed: changed}
+	}
 }
 
 // viewCache stores the last composed output to skip JoinHorizontal + zone.Scan
@@ -630,6 +662,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case autoFetchTickMsg:
 		return m, m.handleAutoFetchTick()
 
+	case localSyncDoneMsg:
+		// Only act when the sync actually ingested commits. Bump IdentityGeneration
+		// (as a fetch does) so cached views like the timeline reload on their next
+		// activation instead of restoring a stale cursor, and refresh the active
+		// view now.
+		if msg.changed {
+			m.host.State().IdentityGeneration++
+			return m, m.host.RefreshView()
+		}
+		return m, nil
+
 	case tuicore.LogErrorMsg:
 		if msg.Message != "" {
 			m.host.State().AddLogEntry(msg.Severity, msg.Message, msg.Context)
@@ -1051,7 +1094,7 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 	if !msg.KeepFocus {
 		m.setFocus(FocusContent)
 	}
-	return m, m.host.ActivateView()
+	return m, tea.Batch(m.host.ActivateView(), m.maybeLocalSync())
 }
 
 // setFocus sets the focused panel and updates panel states.
