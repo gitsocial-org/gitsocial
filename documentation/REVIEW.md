@@ -60,7 +60,7 @@ gitsocial review fork remove <fork-url>
 
 PRs from registered forks appear in `pr list` and trigger `fork-pr` notifications. See [Fork PR Discovery](#3-fork-pr-discovery) for the full flow.
 
-The TUI's review section (`P` from any screen — Pull Requests) provides the PR list, detail, files-changed, interdiff, history, and feedback flows.
+The TUI's review section (`R` from any screen — Pull Requests) provides the PR list, detail, files-changed, interdiff, history, and feedback flows.
 
 ---
 
@@ -431,9 +431,9 @@ Full state machine for a pull request:
        └────────┘
 ```
 
-- `open` → `merged`: Author edits the original pull request commit with `state="merged"`
-- `open` → `closed`: Author or maintainer edits with `state="closed"`
-- Retract: Separate from closing. Uses `retracted="true"` to hide from all views
+- `open` → `merged`: The base owner (whoever owns the target/base repo) edits the original pull request commit with `state="merged"`
+- `open` → `closed`: The base owner edits with `state="closed"` to decline the pull request
+- Retract: The author's counterpart to close — withdraws their own proposal via `retracted="true"`, hiding it from all views. Distinct from `state="closed"`, which is the base owner's decline
 - Reopen: Not a state transition. Create a new pull request referencing the same branches
 
 ---

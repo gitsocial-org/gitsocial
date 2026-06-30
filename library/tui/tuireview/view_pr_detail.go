@@ -311,14 +311,6 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doClose() })
 					return nil
 				}
-			case "D":
-				// Readiness (draft/mark-ready) is the author's to set: own PRs only.
-				if v.pr != nil && v.pr.State == review.PRStateOpen && v.pr.Repository == v.workspaceURL {
-					if v.pr.IsDraft {
-						return v.doMarkReady()
-					}
-					return v.doConvertToDraft()
-				}
 			case "h":
 				if v.pr != nil && (v.pr.IsEdited || v.pr.HasProposedEdits) {
 					prID := v.pr.ID
@@ -362,52 +354,15 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 						}
 					}
 				}
-			case "u":
-				// UpdatePRTips short-circuits to a no-op when nothing has
-				// moved, so this binding stays available for any open
-				// workspace PR without a divergence-detection gate.
-				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
-					return v.doUpdateTips()
-				}
-			case "S":
-				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() {
-					prompt := "Sync branch?"
-					if v.behindCount > 0 {
-						baseName := shortenBranchRef(v.pr.Base)
-						prompt = fmt.Sprintf("%d commits behind %s. Sync?", v.behindCount, baseName)
-					}
-					v.choice.Show(prompt, []tuicore.Choice{
-						{Key: "r", Label: "ebase"},
-						{Key: "m", Label: "erge"},
-					}, func(key string) tea.Cmd {
-						strategies := map[string]string{"r": "rebase", "m": "merge"}
-						return v.doSync(strategies[key])
-					})
+			case "a":
+				// Less-frequent PR actions (draft, sync, update tips, stack ops,
+				// retract) live behind one menu to keep the footer uncluttered.
+				choices := v.buildActionChoices()
+				if len(choices) == 0 {
 					return nil
 				}
-			case "T":
-				if v.pr != nil && v.pr.State == review.PRStateOpen && v.targetsWorkspace() && len(v.stack) > 1 {
-					v.choice.Show("Stack operation?", []tuicore.Choice{
-						{Key: "r", Label: "ebase stack"},
-						{Key: "s", Label: "ync tips"},
-					}, func(key string) tea.Cmd {
-						switch key {
-						case "r":
-							return v.doRebaseStack()
-						case "s":
-							return v.doSyncStack()
-						}
-						return nil
-					})
-					return nil
-				}
-			case "X":
-				// Retract withdraws your own proposal: own PRs only. A base owner
-				// declines a fork PR with Close, not Retract.
-				if v.pr != nil && v.pr.Repository == v.workspaceURL {
-					v.confirm.Show("Retract this pull request?", false, func() tea.Cmd { return v.doRetract() })
-					return nil
-				}
+				v.choice.Show("Action?", choices, v.runAction)
+				return func() tea.Msg { return nil }
 			case "A":
 				return v.applySuggestion()
 			}
@@ -997,6 +952,96 @@ func (v *PRDetailView) doRetract() tea.Cmd {
 	}
 }
 
+// buildActionChoices lists the less-frequent PR actions available for the
+// current PR, used to populate the "a" actions menu and to gate its footer hint.
+func (v *PRDetailView) buildActionChoices() []tuicore.Choice {
+	if v.pr == nil {
+		return nil
+	}
+	open := v.pr.State == review.PRStateOpen
+	// Author-side maintenance acts on the PR's head branch, which lives in the
+	// PR's own repo — so these are gated on ownPR (the PR is mine), not on
+	// targetsWorkspace (the base is mine). A base owner reviewing a fork PR only
+	// merges/closes it; the fork author syncs and retracts from their workspace.
+	ownPR := v.pr.Repository == v.workspaceURL
+	var choices []tuicore.Choice
+	if open && ownPR {
+		// Readiness (draft/mark-ready) is the author's to set.
+		if v.pr.IsDraft {
+			choices = append(choices, tuicore.Choice{Key: "d", Label: "mark ready"})
+		} else {
+			choices = append(choices, tuicore.Choice{Key: "d", Label: "convert to draft"})
+		}
+		choices = append(choices, tuicore.Choice{Key: "s", Label: "sync branch"})
+		choices = append(choices, tuicore.Choice{Key: "u", Label: "update tips"})
+		if len(v.stack) > 1 {
+			choices = append(choices, tuicore.Choice{Key: "t", Label: "stack ops"})
+		}
+	}
+	if ownPR {
+		// Retract withdraws your own proposal. A base owner declines a fork PR
+		// with Close, not Retract.
+		choices = append(choices, tuicore.Choice{Key: "x", Label: "retract"})
+	}
+	return choices
+}
+
+// runAction dispatches a selection from the actions menu, opening a strategy
+// sub-menu or confirmation where the action needs one.
+func (v *PRDetailView) runAction(key string) tea.Cmd {
+	switch key {
+	case "d":
+		if v.pr.IsDraft {
+			return v.doMarkReady()
+		}
+		return v.doConvertToDraft()
+	case "s":
+		return v.showSyncChoice()
+	case "u":
+		return v.doUpdateTips()
+	case "t":
+		return v.showStackChoice()
+	case "x":
+		v.confirm.Show("Retract this pull request?", false, func() tea.Cmd { return v.doRetract() })
+		return nil
+	}
+	return nil
+}
+
+// showSyncChoice opens the rebase/merge strategy picker for syncing the head.
+func (v *PRDetailView) showSyncChoice() tea.Cmd {
+	prompt := "Sync branch?"
+	if v.behindCount > 0 {
+		baseName := shortenBranchRef(v.pr.Base)
+		prompt = fmt.Sprintf("%d commits behind %s. Sync?", v.behindCount, baseName)
+	}
+	v.choice.Show(prompt, []tuicore.Choice{
+		{Key: "r", Label: "ebase"},
+		{Key: "m", Label: "erge"},
+	}, func(key string) tea.Cmd {
+		strategies := map[string]string{"r": "rebase", "m": "merge"}
+		return v.doSync(strategies[key])
+	})
+	return nil
+}
+
+// showStackChoice opens the stack-operation picker.
+func (v *PRDetailView) showStackChoice() tea.Cmd {
+	v.choice.Show("Stack operation?", []tuicore.Choice{
+		{Key: "r", Label: "ebase stack"},
+		{Key: "s", Label: "ync tips"},
+	}, func(key string) tea.Cmd {
+		switch key {
+		case "r":
+			return v.doRebaseStack()
+		case "s":
+			return v.doSyncStack()
+		}
+		return nil
+	})
+	return nil
+}
+
 // Render renders the view.
 func (v *PRDetailView) Render(state *tuicore.State) string {
 	if v.pr != nil && v.pr.IsRetracted {
@@ -1024,26 +1069,24 @@ func (v *PRDetailView) Render(state *tuicore.State) string {
 			exclude["r"] = true
 			exclude["M"] = true
 			exclude["C"] = true
-			exclude["S"] = true
-			exclude["D"] = true
 		}
 		if v.pr != nil && !v.targetsWorkspace() {
 			exclude["M"] = true
 			exclude["C"] = true
-			exclude["S"] = true
 		}
-		if v.pr != nil && v.pr.Repository != v.workspaceURL {
-			exclude["D"] = true
-			exclude["X"] = true
+		if v.pr != nil && v.pr.IsDraft {
+			exclude["M"] = true
 		}
 		if v.pr != nil && !v.pr.IsEdited && !v.pr.HasProposedEdits {
 			exclude["h"] = true
-			exclude["i"] = true
 		}
-		if v.pr == nil || v.pr.State != review.PRStateOpen || !v.targetsWorkspace() || len(v.stack) <= 1 {
-			exclude["T"] = true
+		if len(v.buildActionChoices()) == 0 {
+			exclude["a"] = true
 		}
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude)
+		// M (merge) is bound to a letter reserved for a global sidebar shortcut,
+		// so force-show it here when available — it is otherwise invisible despite
+		// being the primary action for accepting a PR.
+		footer = tuicore.RenderFooterWithPositionInclude(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude, map[string]bool{"M": true})
 	}
 	return wrapper.Render(content, footer)
 }
@@ -1530,14 +1573,10 @@ func (v *PRDetailView) Bindings() []tuicore.Binding {
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "M", Label: "merge", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "C", Label: "close", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "D", Label: "draft", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "S", Label: "sync", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "u", Label: "update tips", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
-		{Key: "T", Label: "stack ops", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "a", Label: "actions", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: tuicore.RawViewHandler},
-		{Key: "X", Label: "retract", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "A", Label: "apply suggestion", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},

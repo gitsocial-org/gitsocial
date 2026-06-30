@@ -210,10 +210,23 @@ func renderFooterInner(registry *Registry, ctx Context, exclude, include map[str
 // the global `q` (quit) hint is suppressed here. Users learn `q` once from
 // list views; `?` (help) stays visible as the help signpost.
 func RenderFooterWithPosition(registry *Registry, ctx Context, current, total int, exclude map[string]bool) string {
+	return RenderFooterWithPositionInclude(registry, ctx, current, total, exclude, nil)
+}
+
+// RenderFooterWithPositionInclude is like RenderFooterWithPosition but force-shows
+// keys in `include` that would normally be suppressed by hiddenKeys (e.g. view
+// actions bound to letters reserved for global sidebar shortcuts, like M:merge).
+func RenderFooterWithPositionInclude(registry *Registry, ctx Context, current, total int, exclude, include map[string]bool) string {
 	bindings := registry.ForContext(ctx)
 	bindingMap := make(map[string]Binding)
 	for _, b := range bindings {
 		bindingMap[b.Key] = b
+	}
+	isHidden := func(key string) bool {
+		if include != nil && include[key] {
+			return false
+		}
+		return hiddenKeys[key]
 	}
 	var parts []string
 	if total > 0 {
@@ -221,7 +234,7 @@ func RenderFooterWithPosition(registry *Registry, ctx Context, current, total in
 	}
 	// First: local bindings (non-global, non-hidden).
 	for _, b := range bindings {
-		if hiddenKeys[b.Key] || globalKeys[b.Key] {
+		if isHidden(b.Key) || globalKeys[b.Key] {
 			continue
 		}
 		if exclude != nil && exclude[b.Key] {

@@ -836,6 +836,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if cmd != nil {
 		return m, cmd
 	}
+	// A content view that opened a modal (confirm/choice) in response to this
+	// key has consumed it, even though its handler returns no command. Without
+	// this the key falls through to a global shortcut bound to the same letter
+	// (e.g. M:merge vs the Memo nav shortcut), navigating away from the dialog.
+	if m.focus == FocusContent && m.host.IsInputActive() {
+		return m, nil
+	}
 
 	// Fall back to registry handlers. Resolve returns all matching bindings
 	// (e.g. a view's label-only entry plus a global handler); try each until
