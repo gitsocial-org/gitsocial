@@ -321,10 +321,17 @@ func (v *PRHistoryView) openInterdiff(state *tuicore.State) tea.Cmd {
 // Bindings returns view-specific key bindings.
 func (v *PRHistoryView) Bindings() []tuicore.Binding {
 	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
+		if ctx.StartPush == nil {
+			return false, nil
+		}
+		return true, ctx.StartPush()
+	}
 	return []tuicore.Binding{
 		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
 		{Key: "i", Label: "interdiff", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
 		{Key: "A", Label: "accept", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
 		{Key: "X", Label: "decline", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: noop},
+		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.ReviewPRHistory}, Handler: push},
 	}
 }

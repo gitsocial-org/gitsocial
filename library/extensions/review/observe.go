@@ -343,8 +343,9 @@ func IsHeadUnpushed(workdir string, pr PullRequest) bool {
 }
 
 // UnpushedHeadBranches returns workspace-local branch names referenced by
-// open workspace PRs that still have unpushed commits in the workspace.
-// The map value is the number of unpushed commits on each branch — used by
+// open workspace PRs that still have commits origin lacks — including a head
+// branch that has never been pushed at all, so a reviewer can fetch the PR's
+// code. The map value is the number of such commits on each branch, used by
 // the push confirmation prompt to offer pushing referenced code together
 // with gitmsg/review.
 func UnpushedHeadBranches(workdir string) (map[string]int, error) {
@@ -371,7 +372,7 @@ func UnpushedHeadBranches(workdir string) (map[string]int, error) {
 			continue
 		}
 		seen[parsed.Value] = true
-		unpushed, err := git.GetUnpushedCommits(workdir, parsed.Value)
+		unpushed, err := git.UnpushedOnBranch(workdir, parsed.Value)
 		if err != nil || len(unpushed) == 0 {
 			continue
 		}

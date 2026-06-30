@@ -29,10 +29,11 @@ type LoadDiffVersionsFunc func(workdir string, routeParams map[string]string) ([
 
 // HistoryDiffConfig parameterises a HistoryDiffView for one extension.
 type HistoryDiffConfig struct {
-	Context   Context              // keybinding/footer context
-	TitleIcon string               // icon prefix in the title bar
-	Title     string               // base title (e.g., "Post Diff")
-	Load      LoadDiffVersionsFunc // version loader
+	Context    Context              // keybinding/footer context
+	TitleIcon  string               // icon prefix in the title bar
+	Title      string               // base title (e.g., "Post Diff")
+	Load       LoadDiffVersionsFunc // version loader
+	EnablePush bool                 // when true, adds p:push (workspace push)
 }
 
 // HistoryDiffView is a shared, parameterised diff view for "version N vs version M"
@@ -460,12 +461,21 @@ func (v *HistoryDiffView) IsInputActive() bool { return false }
 func (v *HistoryDiffView) Bindings() []Binding {
 	noop := func(*HandlerContext) (bool, tea.Cmd) { return false, nil }
 	ctx := []Context{v.cfg.Context}
-	return []Binding{
+	bindings := []Binding{
 		{Key: "e/E", Label: "expand", Contexts: ctx, Handler: noop},
 		{Key: "[/]", Label: "shift pair", Contexts: ctx, Handler: noop},
 		{Key: ",/.", Label: "from anchor", Contexts: ctx, Handler: noop},
 		{Key: "</>", Label: "to anchor", Contexts: ctx, Handler: noop},
 	}
+	if v.cfg.EnablePush {
+		bindings = append(bindings, Binding{Key: "p", Label: "push", Contexts: ctx, Handler: func(hc *HandlerContext) (bool, tea.Cmd) {
+			if hc.StartPush == nil {
+				return false, nil
+			}
+			return true, hc.StartPush()
+		}})
+	}
+	return bindings
 }
 
 // diffMetadataOrder lists header fields shown in a history-diff metadata block,

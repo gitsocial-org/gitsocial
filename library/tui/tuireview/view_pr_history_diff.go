@@ -13,10 +13,11 @@ import (
 // NewPRHistoryDiffView creates a HistoryDiffView wired to PR description history.
 func NewPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
-		Context:   tuicore.ReviewPRHistoryDiff,
-		TitleIcon: "⑂",
-		Title:     "PR Diff",
-		Load:      loadPRHistoryVersions,
+		Context:    tuicore.ReviewPRHistoryDiff,
+		TitleIcon:  "⑂",
+		Title:      "PR Diff",
+		Load:       loadPRHistoryVersions,
+		EnablePush: true,
 	})
 }
 

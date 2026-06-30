@@ -421,6 +421,27 @@ func GetUnpushedCommits(workdir, branch string) (map[string]struct{}, error) {
 	return hashes, nil
 }
 
+// UnpushedOnBranch returns hashes of commits reachable from the local branch
+// that are not present on any origin remote branch. Unlike GetUnpushedCommits,
+// it also counts a never-pushed branch (one with no origin/<branch> tracking
+// ref) so a PR head that has never reached the remote is still detected. A
+// branch that doesn't exist locally yields an empty set (rev-list errors).
+func UnpushedOnBranch(workdir, branch string) (map[string]struct{}, error) {
+	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", branch, "--not", "--remotes=origin/*"})
+	if err != nil {
+		slog.Debug("rev-list unpushed-on-branch", "error", err, "branch", branch)
+		return map[string]struct{}{}, nil
+	}
+	hashes := make(map[string]struct{})
+	for _, h := range strings.Split(result.Stdout, "\n") {
+		h = strings.TrimSpace(h)
+		if h != "" {
+			hashes[h] = struct{}{}
+		}
+	}
+	return hashes, nil
+}
+
 // GetAllUnpushedCommits returns hashes of every local commit that origin doesn't have,
 // across all local branches and tags. Used by views that aggregate items spanning
 // multiple branches (e.g. timeline mixing gitmsg/* items with feature-branch commits).
