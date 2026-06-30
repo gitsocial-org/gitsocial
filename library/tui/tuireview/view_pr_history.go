@@ -22,9 +22,10 @@ type PRVersionItem struct {
 	ProposalTag string
 }
 
-// GetID returns the version's commit hash as unique identifier.
+// GetID returns the version's commit ref, matching the IDs the history-diff
+// loader emits via gitmsg.GetHistory so the diff route resolves the pair.
 func (v PRVersionItem) GetID() string {
-	return v.Version.CommitHash
+	return protocol.CreateRef(protocol.RefTypeCommit, v.Version.CommitHash, v.Version.RepoURL, v.Version.Branch)
 }
 
 // GetTimestamp returns the version's creation time.
@@ -192,9 +193,12 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.picker.SetLoading(false)
 			return nil
 		}
+		// GetPRVersions returns ASC (oldest first), but the picker's labels and
+		// diff navigation assume DESC (newest first) like every other history
+		// view, so place the newest version at index 0.
 		items := make([]tuicore.VersionItem, len(msg.Versions))
 		for i, version := range msg.Versions {
-			items[i] = PRVersionItem{Version: version, ShowEmail: v.showEmail,
+			items[len(msg.Versions)-1-i] = PRVersionItem{Version: version, ShowEmail: v.showEmail,
 				ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 		}
 		v.picker.SetItems(items)
@@ -239,12 +243,11 @@ func (v *PRHistoryView) Title() string {
 }
 
 // openDescriptionDiff navigates to the PR description-text diff for the cursor pair.
-// PR versions are ASC (oldest first), so the older neighbor is at offset -1. Picker
-// items carry commit hashes but the diff loader emits synthetic "v<idx>" IDs, so
-// pass an itemID mapper.
+// Picker items are DESC (newest first), so the older neighbor is at offset +1.
+// Item GetID() and the diff loader both produce commit refs, so the default
+// itemID mapper resolves the pair.
 func (v *PRHistoryView) openDescriptionDiff(state *tuicore.State) tea.Cmd {
-	return tuicore.OpenHistoryDiff(v.picker, state, "prID", tuicore.LocReviewPRHistoryDiff, -1,
-		func(_ tuicore.VersionItem, idx int) string { return fmt.Sprintf("v%d", idx) })
+	return tuicore.OpenHistoryDiff(v.picker, state, "prID", tuicore.LocReviewPRHistoryDiff, 1, nil)
 }
 
 // acceptInclude force-shows "A accept" in the footer only when this workspace

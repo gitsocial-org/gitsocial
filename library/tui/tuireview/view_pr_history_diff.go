@@ -3,10 +3,9 @@ package tuireview
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -21,48 +20,56 @@ func NewPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	})
 }
 
-// loadPRHistoryVersions loads all PR versions and projects them to DiffVersions.
-// PR Content is "subject\n\nbody" (the description text), so the diff shows how
-// the PR description was edited across versions; for code-level diff use `i:interdiff`.
+// loadPRHistoryVersions reads "prID" from route params, loads message history,
+// and projects each version to a DiffVersion. Uses the same gitmsg.GetHistory
+// path as every other history-diff loader (issue, release, memo) so the diff
+// renders the full metadata block (base, head, tips, state, reviewers, ...)
+// from ver.Fields rather than a hand-picked subset.
 func loadPRHistoryVersions(workdir string, params map[string]string) ([]tuicore.DiffVersion, error) {
 	prID := params["prID"]
 	if prID == "" {
 		return nil, fmt.Errorf("missing prID")
 	}
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	res := review.GetPRVersions(prID, workspaceURL)
-	if !res.Success {
-		return nil, fmt.Errorf("%s", res.Error.Message)
+	parsed := protocol.ParseRef(prID)
+	if parsed.Value == "" {
+		return nil, fmt.Errorf("invalid ref: %s", prID)
 	}
-	out := make([]tuicore.DiffVersion, 0, len(res.Data))
-	for _, ver := range res.Data {
-		var content string
-		switch {
-		case ver.Subject != "" && ver.Body != "":
-			content = ver.Subject + "\n\n" + strings.TrimRight(ver.Body, "\n")
-		case ver.Subject != "":
-			content = ver.Subject
-		case ver.Body != "":
-			content = strings.TrimRight(ver.Body, "\n")
-		}
-		fields := map[string]string{}
-		if ver.State != "" {
-			fields["state"] = string(ver.State)
-		}
-		if ver.BaseTip != "" {
-			fields["base-tip"] = ver.BaseTip
-		}
-		if ver.HeadTip != "" {
-			fields["head-tip"] = ver.HeadTip
-		}
+	branch := parsed.Branch
+	if branch == "" {
+		branch = gitmsg.GetExtBranch(workdir, "review")
+	}
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	ref := protocol.CreateRef(protocol.RefTypeCommit, parsed.Value, parsed.Repository, branch)
+	versions, err := gitmsg.GetHistory(ref, workspaceURL)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tuicore.DiffVersion, 0, len(versions))
+	total := len(versions)
+	for i, ver := range versions {
 		out = append(out, tuicore.DiffVersion{
-			ID:        fmt.Sprintf("v%d", ver.Number),
-			Label:     ver.Label,
-			Content:   tuicore.DiffContentWithMetadata(fields, ver.IsRetracted, content),
+			ID:        ver.ID,
+			Label:     prVersionLabel(i, total, ver.EditOf != ""),
+			Content:   tuicore.DiffContentWithMetadata(ver.Fields, ver.IsRetracted, ver.Content),
 			Author:    ver.AuthorName,
 			Email:     ver.AuthorEmail,
 			Timestamp: ver.Timestamp,
 		})
 	}
+	// gitmsg.GetHistory returns DESC; reverse to ASC.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
 	return out, nil
+}
+
+// prVersionLabel mirrors tuicore.VersionLabel for DESC-ordered version slices.
+func prVersionLabel(descIdx, total int, hasEditOf bool) string {
+	if descIdx == 0 {
+		return "latest"
+	}
+	if descIdx == total-1 && !hasEditOf {
+		return "original"
+	}
+	return fmt.Sprintf("v%d", total-descIdx)
 }
