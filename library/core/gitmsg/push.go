@@ -103,9 +103,30 @@ func Push(workdir string, dryRun bool) (*PushResult, error) {
 		}); err != nil {
 			return nil, wrapStateRefPushError(err)
 		}
+		// The just-pushed state refs now match the remote; mirror them into the
+		// remote-tracking namespace so the next offline push preview doesn't
+		// re-report them as unpushed before the following fetch.
+		mirrorGitMsgRefsToTracking(workdir)
 	}
 
 	return result, nil
+}
+
+// mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's remote-tracking
+// counterpart (refs/remotes/origin/gitmsg/*) at the local hash. Called after a
+// push so the push preview reflects the new remote state without a fetch.
+func mirrorGitMsgRefsToTracking(workdir string) {
+	localRefs, err := getLocalGitMsgRefs(workdir)
+	if err != nil {
+		return
+	}
+	for ref, hash := range localRefs {
+		tracking := "refs/remotes/origin/" + strings.TrimPrefix(ref, "refs/")
+		if err := git.WriteRef(workdir, tracking, hash); err != nil {
+			// Best-effort: a stale preview is harmless, so don't fail the push.
+			continue
+		}
+	}
 }
 
 // wrapStateRefPushError contextualizes a non-fast-forward rejection on the
