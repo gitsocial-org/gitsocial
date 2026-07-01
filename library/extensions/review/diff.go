@@ -198,18 +198,25 @@ func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) Dif
 	return ctx
 }
 
-// applyPinPolicy pins diff refs to the PR's stored tips when reachable. For
-// cross-fork PRs only the head tip is pinned (the base ref resolves via the
-// upstream fetch into the fork bare repo and a subsequent merge-base
-// collapse). For workspace PRs both tips are pinned together when both
-// resolve in the same directory; if only the head resolves, pin head only —
-// matches the old "pin-both with fallback to pin-head" behavior.
+// applyPinPolicy pins diff refs to the PR's stored tips when reachable. Both
+// tips are pinned together whenever they resolve in the same directory, so the
+// diff is exactly base-tip..head-tip (collapsed to their merge-base by the
+// caller) and stays identical across workspaces (base repo and fork) rather
+// than re-diffing against each workspace's live branch heads. Cross-fork PRs
+// resolve their tips in the fork bare repo; workspace PRs may also resolve in
+// the workspace checkout. If the base tip is missing but the head tip resolves,
+// pin the head only and let the base fall back to the fetched branch.
 func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR bool) {
 	if pr.HeadTip == "" {
 		return
 	}
-	dirs := []string{ctx.Workdir, workdir}
-	if !isForkPR && pr.BaseTip != "" {
+	// Fork PRs live only in the fork bare repo; workspace PRs may also resolve
+	// in the workspace checkout.
+	dirs := []string{ctx.Workdir}
+	if !isForkPR {
+		dirs = append(dirs, workdir)
+	}
+	if pr.BaseTip != "" {
 		for _, dir := range dirs {
 			if _, err := git.ReadRef(dir, pr.BaseTip); err != nil {
 				continue
@@ -222,10 +229,6 @@ func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR 
 			ctx.Workdir = dir
 			return
 		}
-	}
-	dirs = []string{ctx.Workdir}
-	if !isForkPR {
-		dirs = append(dirs, workdir)
 	}
 	for _, dir := range dirs {
 		if _, err := git.ReadRef(dir, pr.HeadTip); err == nil {

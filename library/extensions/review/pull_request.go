@@ -284,8 +284,15 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 	}
 	branch := gitmsg.GetExtBranch(workdir, "review")
 	copyOpts := CreatePROptions{
-		Base:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
-		Head:      protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
+		Base: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
+		Head: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
+		// Carry the source PR's recorded tips so the homed copy pins its diff to
+		// the same commits. Without them the copy has empty tips and cross-repo
+		// diff resolution falls back to each workspace's live branch heads, which
+		// can diverge (e.g. a stale local head branch) and yield inconsistent or
+		// empty "files changed".
+		BaseTip:   pr.BaseTip,
+		HeadTip:   pr.HeadTip,
 		DependsOn: pr.DependsOn,
 		Closes:    pr.Closes,
 		Reviewers: pr.Reviewers,

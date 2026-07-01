@@ -145,7 +145,7 @@ Alice and Bob work on the same repo. Alice proposes a change, Bob reviews it.
 ```
 Add dark mode support
 
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm"; head="#branch:dark-mode"; reviewers="bob@example.com"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; closes="#commit:abc123456789@gitmsg/pm"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0"
 ```
 
 **Bob posts inline review:**
@@ -170,7 +170,7 @@ GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@exam
 ```
 Add dark mode support
 
-GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; head="#branch:dark-mode"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; head="#branch:dark-mode"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
 ---
@@ -205,7 +205,7 @@ Alice works on GitLab, Bob maintains the upstream repo on GitHub. Alice forks, p
 ```
 Add dark mode support
 
-GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
 **Bob reviews (on his GitHub repo's gitmsg/review branch):**
@@ -223,7 +223,7 @@ Step 1 — Copy fork PR to upstream (preserves original author via GitMsg-Ref):
 ```
 Add dark mode support
 
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0"
  > Add dark mode support
 ```
@@ -359,7 +359,7 @@ Add dark mode support
 
 Implements theme switching with system preference detection.
 
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; closes="#commit:abc123456789@gitmsg/pm,#commit:def456789012@gitmsg/pm"; head="#branch:dark-mode"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; closes="#commit:abc123456789@gitmsg/pm,#commit:def456789012@gitmsg/pm"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
  > Add dark mode support
 GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-07T09:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
