@@ -370,7 +370,7 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 		if v.addMode && v.addForm != nil {
 			b.WriteString(v.addForm.View())
 		} else {
-			keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)).Bold(true)
+			keyStyle := lipgloss.NewStyle().Foreground(tuicore.BorderFocused).Bold(true)
 			b.WriteString(keyStyle.Render("a") + tuicore.Dim.Render(":add repository"))
 		}
 		b.WriteString("\n\n")

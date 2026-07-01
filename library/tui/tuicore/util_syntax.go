@@ -5,14 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"os"
-
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
-
-	"charm.land/lipgloss/v2"
 )
 
 var (
@@ -28,27 +24,65 @@ var (
 
 func init() {
 	chromaFormatter = formatters.TTY256
-	if lipgloss.HasDarkBackground(os.Stdin, os.Stdout) {
+	// Build theme-dependent state for the default (dark) background. The TUI
+	// detects the real terminal background and applies display.theme in Run();
+	// doing it there rather than here keeps package init from issuing a blocking
+	// terminal query, which hangs headless test binaries that import tuicore.
+	refreshThemeState()
+}
+
+// refreshThemeState rebuilds every piece of theme-dependent render state from
+// the current DarkBackground. Called after detection and on SetDarkBackground.
+func refreshThemeState() {
+	selectChromaStyle()
+	buildChromaDimStyle()
+	buildMarkdownRenderers()
+	FocusedLinkMarker = focusedLinkMarker()
+}
+
+// selectChromaStyle picks the syntax highlighting theme matching DarkBackground.
+func selectChromaStyle() {
+	if DarkBackground {
 		chromaStyle = styles.Get("monokai")
 	} else {
 		chromaStyle = styles.Get("github")
 	}
-	// Dimmed style: map everything to gray
+}
+
+// buildChromaDimStyle builds the dimmed syntax style for stale/retracted code:
+// grays that read as low-contrast against the current background (darker on
+// dark, lighter on light), preserving the relative dimming hierarchy.
+func buildChromaDimStyle() {
+	dim := pickThemeColor(grayDimDark, grayDimLight)
 	builder := chroma.NewStyleBuilder("dimmed")
-	builder.Add(chroma.Background, "#777777")
-	builder.Add(chroma.Text, "#777777")
-	builder.Add(chroma.Keyword, "#888888")
-	builder.Add(chroma.KeywordType, "#888888")
-	builder.Add(chroma.NameFunction, "#999999")
-	builder.Add(chroma.LiteralString, "#777777")
-	builder.Add(chroma.LiteralNumber, "#777777")
-	builder.Add(chroma.Comment, "#666666")
-	builder.Add(chroma.Operator, "#888888")
-	builder.Add(chroma.Punctuation, "#777777")
+	builder.Add(chroma.Background, dim)
+	builder.Add(chroma.Text, dim)
+	builder.Add(chroma.Keyword, dim)
+	builder.Add(chroma.KeywordType, dim)
+	builder.Add(chroma.NameFunction, dim)
+	builder.Add(chroma.LiteralString, dim)
+	builder.Add(chroma.LiteralNumber, dim)
+	builder.Add(chroma.Comment, dim)
+	builder.Add(chroma.Operator, dim)
+	builder.Add(chroma.Punctuation, dim)
 	chromaDimStyle, _ = builder.Build()
 	if chromaDimStyle == nil {
 		chromaDimStyle = chromaStyle
 	}
+}
+
+// SetDarkBackground overrides the theme background (from the display.theme
+// setting) and refreshes theme-dependent syntax state. Call before the first
+// render; a no-op when the value is unchanged.
+func SetDarkBackground(dark bool) {
+	if dark == DarkBackground {
+		return
+	}
+	DarkBackground = dark
+	refreshThemeState()
+	clear(highlightLineCache)
+	clear(highlightCodeCache)
+	clear(glamourCache.entries)
 }
 
 // HighlightCode highlights a full code block with syntax coloring.

@@ -1423,7 +1423,7 @@ func (v *PRDetailView) renderSuggestionPreview(r review.Feedback, width int, sel
 			code = string(runes[:codeWidth])
 		}
 		highlighted := tuicore.HighlightLine(code, lang, false)
-		removedLine := fmt.Sprintf("  %s %s", lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.DiffRemoved)).Render("-"), highlighted)
+		removedLine := fmt.Sprintf("  %s %s", lipgloss.NewStyle().Foreground(tuicore.DiffRemoved).Render("-"), highlighted)
 		lines = append(lines, selectionBar+iconPad+removedLine)
 	}
 	for _, sl := range suggestedLines {
@@ -1432,7 +1432,7 @@ func (v *PRDetailView) renderSuggestionPreview(r review.Feedback, width int, sel
 			code = string(runes[:codeWidth])
 		}
 		highlighted := tuicore.HighlightLine(code, lang, false)
-		addedLine := fmt.Sprintf("  %s %s", lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.DiffAdded)).Render("+"), highlighted)
+		addedLine := fmt.Sprintf("  %s %s", lipgloss.NewStyle().Foreground(tuicore.DiffAdded).Render("+"), highlighted)
 		lines = append(lines, selectionBar+iconPad+addedLine)
 	}
 	lines = append(lines, selectionBar+iconPad+tuicore.Dim.Render("  [A]pply suggestion"))

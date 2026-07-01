@@ -661,7 +661,7 @@ func (c *DiffViewCore) RenderContent() string {
 	if contentCols < 10 {
 		contentCols = 10
 	}
-	indicator := lipgloss.NewStyle().Foreground(lipgloss.Color(IdentityFollowing)).Render("▌")
+	indicator := lipgloss.NewStyle().Foreground(IdentityFollowing).Render("▌")
 	visualBudget := vh
 	var visible []string
 	for i := c.scroll; i < len(c.plan.Rows) && visualBudget > 0; i++ {
@@ -720,7 +720,7 @@ func (c *DiffViewCore) renderSingleRow(row diff.Row, cols int) []string {
 func (c *DiffViewCore) renderSplitRow(dr diff.DisplayRow, cols int) []string {
 	leftWidth := (cols - 1) / 2
 	rightWidth := cols - 1 - leftWidth
-	sep := lipgloss.NewStyle().Foreground(lipgloss.Color(DiffLineNum)).Render("│")
+	sep := lipgloss.NewStyle().Foreground(DiffLineNum).Render("│")
 	leftLines := c.renderSplitHalf(dr.Left, leftWidth)
 	rightLines := c.renderSplitHalf(dr.Right, rightWidth)
 	rows := len(leftLines)

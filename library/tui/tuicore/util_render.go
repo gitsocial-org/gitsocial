@@ -38,93 +38,93 @@ const (
 var (
 	Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color(IdentityFollowing))
+		Foreground(IdentityFollowing)
 
 	TitleSelected = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityFollowing)).
-			Background(lipgloss.Color(BgSelected))
+			Foreground(IdentityFollowing).
+			Background(BgSelected)
 
 	Selected = lipgloss.NewStyle().
-			Background(lipgloss.Color(BgSelected)).
-			Foreground(lipgloss.Color(TextPrimary))
+			Background(BgSelected).
+			Foreground(TextPrimary)
 
 	Normal = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextNormal))
+		Foreground(TextNormal)
 
 	NormalSelected = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextNormal)).
-			Background(lipgloss.Color(BgSelected))
+			Foreground(TextNormal).
+			Background(BgSelected)
 
 	Dim = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextSecondary))
+		Foreground(TextSecondary)
 
 	DimSelected = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextSecondary)).
-			Background(lipgloss.Color(BgSelected))
+			Foreground(TextSecondary).
+			Background(BgSelected)
 
 	Warning = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(StatusWarning))
+		Foreground(StatusWarning)
 
 	Bold = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color(TextPrimary))
+		Foreground(TextPrimary)
 
 	MeTitle = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color(IdentityMe))
+		Foreground(IdentityMe)
 
 	MutedMeTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityMeMuted))
+			Foreground(IdentityMeMuted)
 
 	MutedTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityMuted))
+			Foreground(IdentityMuted)
 
 	MutualTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityMutual))
+			Foreground(IdentityMutual)
 
 	MutedMutualTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color(IdentityMutualMuted))
+				Foreground(IdentityMutualMuted)
 
 	OwnRepoTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityOwnRepo))
+			Foreground(IdentityOwnRepo)
 
 	MutedOwnRepoTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color(IdentityOwnRepoMuted))
+				Foreground(IdentityOwnRepoMuted)
 
 	AssignedTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(IdentityAssigned))
+			Foreground(IdentityAssigned)
 
 	MutedAssignedTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color(IdentityAssignedMuted))
+				Foreground(IdentityAssignedMuted)
 
 	Error = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(StatusError))
+		Foreground(StatusError)
 
 	Highlight = lipgloss.NewStyle().
-			Background(lipgloss.Color(AccentHighlight)).
+			Background(AccentHighlight).
 			Foreground(lipgloss.Color("0"))
 
 	Retracted = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextSecondary))
+			Foreground(TextSecondary)
 
 	RetractedBadge = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(BorderWarning))
+			Foreground(BorderWarning)
 
 	ListIndicator = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(IdentityMeMuted))
+			Foreground(IdentityMeMuted)
 
 	ListIndicatorSelected = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(IdentityMeMuted)).
-				Background(lipgloss.Color(BgSelected))
+				Foreground(IdentityMeMuted).
+				Background(BgSelected)
 
 	Doc = lipgloss.NewStyle().Margin(1, 2)
 )
@@ -179,12 +179,12 @@ type RowStyles struct {
 // DefaultRowStyles returns standard styles for key-value layouts.
 func DefaultRowStyles() RowStyles {
 	return RowStyles{
-		Label:    lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary)).Width(20),
-		Value:    lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)),
-		Action:   lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary)),
-		Selected: lipgloss.NewStyle().Background(lipgloss.Color(BgSelected)).Foreground(lipgloss.Color(TextPrimary)),
-		Header:   lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)).Bold(true),
-		Dim:      lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary)),
+		Label:    lipgloss.NewStyle().Foreground(TextSecondary).Width(20),
+		Value:    lipgloss.NewStyle().Foreground(TextPrimary),
+		Action:   lipgloss.NewStyle().Foreground(TextSecondary),
+		Selected: lipgloss.NewStyle().Background(BgSelected).Foreground(TextPrimary),
+		Header:   lipgloss.NewStyle().Foreground(TextPrimary).Bold(true),
+		Dim:      lipgloss.NewStyle().Foreground(TextSecondary),
 	}
 }
 

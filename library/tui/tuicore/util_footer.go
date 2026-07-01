@@ -6,6 +6,7 @@ package tuicore
 
 import (
 	"fmt"
+	colorlib "image/color"
 	"strings"
 	"time"
 
@@ -19,26 +20,26 @@ var (
 	// span. To keep the bar continuous, each inner span (and the plain
 	// separator strings between them) re-establishes bg explicitly.
 	footerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextSecondary)).
-			Background(lipgloss.Color(BgFooter)).
+			Foreground(TextSecondary).
+			Background(BgFooter).
 			Padding(0, 1, 0, 3)
 
 	keyStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(BorderFocused)).
-			Background(lipgloss.Color(BgFooter)).
+			Foreground(BorderFocused).
+			Background(BgFooter).
 			Bold(true)
 
 	labelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextNormal)).
-			Background(lipgloss.Color(BgFooter))
+			Foreground(TextNormal).
+			Background(BgFooter)
 
 	dimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextSecondary)).
-			Background(lipgloss.Color(BgFooter))
+			Foreground(TextSecondary).
+			Background(BgFooter)
 
 	// sepStyle wraps plain separator strings (":" between key/label, "  "
 	// between bindings) so they paint bg too.
-	sepStyle = lipgloss.NewStyle().Background(lipgloss.Color(BgFooter))
+	sepStyle = lipgloss.NewStyle().Background(BgFooter)
 
 	// Global keys that appear dimmed in footer, in display order.
 	// "/" and "@" are shown in sidebar instead (Search [/], Notifications [@]).
@@ -138,7 +139,7 @@ func RenderRetractingFooter() string {
 
 // RenderMessageFooter renders a status message with appropriate color.
 func RenderMessageFooter(message string, msgType MessageType) string {
-	var color string
+	var color colorlib.Color
 	switch msgType {
 	case MessageTypeSuccess:
 		color = StatusSuccess
@@ -150,8 +151,8 @@ func RenderMessageFooter(message string, msgType MessageType) string {
 		color = TextNormal
 	}
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(color)).
-		Background(lipgloss.Color(BgFooter)).
+		Foreground(color).
+		Background(BgFooter).
 		Render(message)
 }
 

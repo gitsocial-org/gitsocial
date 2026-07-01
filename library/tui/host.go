@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	colorlib "image/color"
 	"sort"
 	"strings"
 	"time"
@@ -390,17 +391,17 @@ func (h *Host) resolveView() tuicore.View {
 
 // Pre-computed border and title styles — avoids lipgloss.NewStyle() per frame.
 var (
-	frameBorderStyles = map[string]lipgloss.Style{
-		tuicore.BorderFocused:   lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)),
-		tuicore.BorderUnfocused: lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderUnfocused)),
-		tuicore.BorderError:     lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderError)),
-		tuicore.BorderWarning:   lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderWarning)),
+	frameBorderStyles = map[colorlib.Color]lipgloss.Style{
+		tuicore.BorderFocused:   lipgloss.NewStyle().Foreground(tuicore.BorderFocused),
+		tuicore.BorderUnfocused: lipgloss.NewStyle().Foreground(tuicore.BorderUnfocused),
+		tuicore.BorderError:     lipgloss.NewStyle().Foreground(tuicore.BorderError),
+		tuicore.BorderWarning:   lipgloss.NewStyle().Foreground(tuicore.BorderWarning),
 	}
-	frameTitleStyles = map[string]lipgloss.Style{
-		tuicore.BorderFocused:   lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)).Bold(true),
-		tuicore.BorderUnfocused: lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderUnfocused)),
-		tuicore.BorderError:     lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderError)),
-		tuicore.BorderWarning:   lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderWarning)),
+	frameTitleStyles = map[colorlib.Color]lipgloss.Style{
+		tuicore.BorderFocused:   lipgloss.NewStyle().Foreground(tuicore.BorderFocused).Bold(true),
+		tuicore.BorderUnfocused: lipgloss.NewStyle().Foreground(tuicore.BorderUnfocused),
+		tuicore.BorderError:     lipgloss.NewStyle().Foreground(tuicore.BorderError),
+		tuicore.BorderWarning:   lipgloss.NewStyle().Foreground(tuicore.BorderWarning),
 	}
 )
 

@@ -55,6 +55,7 @@ type LogSettings struct {
 
 type DisplaySettings struct {
 	ShowEmail bool
+	Theme     string
 }
 
 // DefaultSettings returns settings with default values matching the Registry.
@@ -75,6 +76,7 @@ func DefaultSettings() *Settings {
 		},
 		Display: DisplaySettings{
 			ShowEmail: false,
+			Theme:     "auto",
 		},
 		Extensions: ExtensionsSettings{
 			Social:  true,
@@ -145,6 +147,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return s.Log.Level, s.Log.Level != ""
 	case "display.show_email":
 		return strconv.FormatBool(s.Display.ShowEmail), true
+	case "display.theme":
+		return s.Display.Theme, s.Display.Theme != ""
 	case "extensions.social":
 		return strconv.FormatBool(s.Extensions.Social), true
 	case "extensions.pm":
@@ -212,6 +216,11 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("display.show_email must be true or false")
 		}
 		s.Display.ShowEmail = value == "true"
+	case "display.theme":
+		if value != "auto" && value != "light" && value != "dark" {
+			return fmt.Errorf("display.theme must be auto, light, or dark")
+		}
+		s.Display.Theme = value
 	case "extensions.social":
 		if value != "true" && value != "false" {
 			return fmt.Errorf("extensions.social must be true or false")
@@ -262,6 +271,7 @@ func ListKeys() []string {
 		"output.color",
 		"log.level",
 		"display.show_email",
+		"display.theme",
 		"extensions.social",
 		"extensions.pm",
 		"extensions.review",
@@ -300,6 +310,7 @@ var EnumOptions = map[string][]string{
 	"log.level":                 {"debug", "info", "warn", "error"},
 	"output.color":              {"auto", "always", "never"},
 	"display.show_email":        {"false", "true"},
+	"display.theme":             {"auto", "light", "dark"},
 	"fetch.auto.enabled":        {"false", "true"},
 	"fetch.auto.backoff":        {"false", "true"},
 	"fetch.workspace_mode":      {"default", "*"},

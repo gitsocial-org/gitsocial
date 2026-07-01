@@ -26,7 +26,7 @@ func PadLabel(s string) string {
 
 // RequiredLabel appends a red asterisk to a label for required fields.
 func RequiredLabel(s string) string {
-	return s + " " + lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("*")
+	return s + " " + lipgloss.NewStyle().Foreground(StatusError).Render("*")
 }
 
 // FormFooter renders form keybinding hints in the same key:label style as
@@ -49,8 +49,8 @@ func FormFooter(withEditor bool, errs []error) string {
 		parts = append(parts, kv(b.Key, b.Label, false))
 	}
 	errStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(StatusError)).
-		Background(lipgloss.Color(BgFooter))
+		Foreground(StatusError).
+		Background(BgFooter)
 	for _, e := range errs {
 		if e != nil {
 			parts = append(parts, errStyle.Render(e.Error()))
@@ -110,7 +110,7 @@ func BodyHeight(totalHeight, otherRowsTotal int) int {
 func FormTheme() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		t := huh.ThemeCharm(isDark)
-		dim := lipgloss.Color(TextSecondary)
+		dim := TextSecondary
 
 		t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(dim)
 		t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(dim)
@@ -245,12 +245,12 @@ func (c *CycleField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 // View renders the field.
 func (c *CycleField) View() string {
 	styles := c.activeStyles()
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary))
+	dim := lipgloss.NewStyle().Foreground(TextSecondary)
 
 	var sb strings.Builder
 	sb.WriteString(styles.Title.Render(PadLabel(c.title)))
 
-	pink := lipgloss.NewStyle().Foreground(lipgloss.Color(AccentPink))
+	pink := lipgloss.NewStyle().Foreground(AccentPink)
 	sb.WriteString(pink.Render("> "))
 
 	selectedLabel := ""
@@ -422,8 +422,8 @@ func (s *SubmitField) View() string {
 		return base.Width(s.width).Render(btn.Render(s.label))
 	}
 	btn := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("250")).
-		Background(lipgloss.Color("237")).
+		Foreground(TextNormal).
+		Background(BgSelected).
 		Padding(0, 2)
 	return base.Width(s.width).Render(btn.Render(s.label))
 }

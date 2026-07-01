@@ -47,7 +47,7 @@ func TestRenderRow_noPadWhenColsZero(t *testing.T) {
 // the row's LineBG.
 func TestRenderRow_lineBGAppliesToEmptyBG(t *testing.T) {
 	row := Row{
-		LineBG: "#3b1a1e", // DiffRemovedBg
+		LineBG: "#3b1a1e", // removed-line background
 		Cells:  []Cell{{Text: "removed"}},
 	}
 	out := RenderRow(row, 0)

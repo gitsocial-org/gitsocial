@@ -398,7 +398,7 @@ func (v *CacheView) Render(state *State) string {
 		totalRepoCommits += repo.Commits
 	}
 
-	rowBg := lipgloss.NewStyle().Background(lipgloss.Color(BgSelected)).Width(wrapper.ContentWidth())
+	rowBg := lipgloss.NewStyle().Background(BgSelected).Width(wrapper.ContentWidth())
 	cursorIndex := 0
 
 	var b strings.Builder
@@ -411,8 +411,8 @@ func (v *CacheView) Render(state *State) string {
 	// Cache header. The "C:clear all" hint uses local inline styles (no
 	// BgFooter background) because it renders inside content, not the footer.
 	cacheLabel := rs.Header.Width(80).Render("Cache")
-	keyHint := lipgloss.NewStyle().Foreground(lipgloss.Color(BorderFocused)).Bold(true).Render("C")
-	labelHint := lipgloss.NewStyle().Foreground(lipgloss.Color(TextNormal)).Render("clear all")
+	keyHint := lipgloss.NewStyle().Foreground(BorderFocused).Bold(true).Render("C")
+	labelHint := lipgloss.NewStyle().Foreground(TextNormal).Render("clear all")
 	fmt.Fprintf(&b, "%s  %s  %s", cacheLabel, rs.Value.Render(totalSize), keyHint+":"+labelHint)
 	b.WriteString("\n")
 	b.WriteString(rs.Dim.Render(v.stats.Location))
@@ -496,7 +496,7 @@ func (v *CacheView) Render(state *State) string {
 
 	if v.confirm != "" {
 		b.WriteString("\n")
-		confirmStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(ConfirmAction)).Bold(true)
+		confirmStyle := lipgloss.NewStyle().Foreground(ConfirmAction).Bold(true)
 		var what string
 		switch v.confirm {
 		case "db":
@@ -513,13 +513,13 @@ func (v *CacheView) Render(state *State) string {
 
 	if v.repopulatePrompt {
 		b.WriteString("\n")
-		promptStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusInfo)).Bold(true)
+		promptStyle := lipgloss.NewStyle().Foreground(StatusInfo).Bold(true)
 		b.WriteString(promptStyle.Render("Repopulate cache? ") + keyStyle.Render("y") + labelStyle.Render("/") + keyStyle.Render("n"))
 	}
 
 	if v.err != "" {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
 	}
 
 	// Apply scroll offset, auto-scroll to keep cursor visible

@@ -544,7 +544,7 @@ func (v *BoardView) renderBoard(width, height int) string {
 		}
 		style := lipgloss.NewStyle().Width(thisColWidth).Bold(i == v.selectedCol)
 		if wip != nil && count > *wip {
-			style = style.Foreground(lipgloss.Color("196"))
+			style = style.Foreground(tuicore.StatusError)
 		}
 		zid := fmt.Sprintf("%sh%d", v.zonePrefix, i)
 		headers = append(headers, zone.Mark(zid, style.Render(header)))

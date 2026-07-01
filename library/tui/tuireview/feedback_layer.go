@@ -103,7 +103,7 @@ func feedbackRows(fb review.Feedback, userEmail string, showEmail bool, anchor d
 			{Text: " "},
 			{Text: name, FG: authorFG, Bold: authorBold},
 			{Text: "  "},
-			{Text: tuicore.FormatTime(fb.Timestamp), FG: tuicore.TextSecondary},
+			{Text: tuicore.FormatTime(fb.Timestamp), FG: tuicore.ThemeString(tuicore.TextSecondary)},
 		},
 		Anchor: anchor,
 	}}
@@ -125,7 +125,7 @@ func feedbackRows(fb review.Feedback, userEmail string, showEmail bool, anchor d
 // tuicore.AuthorStyle's MeTitle-vs-Dim choice.
 func authorAttrs(authorEmail, userEmail string) (fg string, bold bool) {
 	if userEmail != "" && authorEmail != "" && strings.EqualFold(authorEmail, userEmail) {
-		return tuicore.IdentityMe, true
+		return tuicore.ThemeString(tuicore.IdentityMe), true
 	}
-	return tuicore.TextSecondary, false
+	return tuicore.ThemeString(tuicore.TextSecondary), false
 }

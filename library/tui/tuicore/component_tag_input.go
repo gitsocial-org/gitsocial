@@ -314,12 +314,12 @@ func (t *TagField) updateInputMode(km tea.KeyPressMsg) (huh.Model, tea.Cmd) {
 // View renders the field.
 func (t *TagField) View() string {
 	styles := t.activeStyles()
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary))
-	pink := lipgloss.NewStyle().Foreground(lipgloss.Color(AccentPink))
+	dim := lipgloss.NewStyle().Foreground(TextSecondary)
+	pink := lipgloss.NewStyle().Foreground(AccentPink)
 	tagStyle := lipgloss.NewStyle().Foreground(FormGreen)
-	tagSelectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)).Background(lipgloss.Color(BgSelected))
-	removeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary))
-	removeSelectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Background(lipgloss.Color(BgSelected))
+	tagSelectedStyle := lipgloss.NewStyle().Foreground(TextPrimary).Background(BgSelected)
+	removeStyle := lipgloss.NewStyle().Foreground(TextSecondary)
+	removeSelectedStyle := lipgloss.NewStyle().Foreground(StatusError).Background(BgSelected)
 
 	var sb strings.Builder
 	sb.WriteString(styles.Title.Render(t.title))
@@ -380,8 +380,8 @@ func (t *TagField) View() string {
 
 // renderDropdown renders the suggestion dropdown below the input line.
 func (t *TagField) renderDropdown(styles *huh.FieldStyles) string {
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary))
-	highlight := lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)).Bold(true)
+	dim := lipgloss.NewStyle().Foreground(TextSecondary)
+	highlight := lipgloss.NewStyle().Foreground(TextPrimary).Bold(true)
 	bar := dim.Render("┃ ")
 
 	// Compute label offset to align with the input area (+2 for "> ").

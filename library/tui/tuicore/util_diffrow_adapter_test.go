@@ -53,10 +53,10 @@ func TestDefaultHighlight_unknownPathFallsBack(t *testing.T) {
 // tuicore constants.
 func TestDefaultDiffPalette_populated(t *testing.T) {
 	p := DefaultDiffPalette()
-	if p.AddedFG != DiffAdded {
-		t.Errorf("AddedFG = %q, want %q", p.AddedFG, DiffAdded)
+	if want := pickThemeColor(diffAddedDark, diffAddedLight); p.AddedFG != want {
+		t.Errorf("AddedFG = %q, want %q", p.AddedFG, want)
 	}
-	if p.AddedBG != DiffAddedBg {
-		t.Errorf("AddedBG = %q, want %q", p.AddedBG, DiffAddedBg)
+	if want := pickThemeColor(diffAddedBgDark, diffAddedBgLight); p.AddedBG != want {
+		t.Errorf("AddedBG = %q, want %q", p.AddedBG, want)
 	}
 }

@@ -15,7 +15,7 @@ import (
 
 var (
 	sparkChars   = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
-	analyticsBar = lipgloss.NewStyle().Foreground(lipgloss.Color(IdentityFollowing)).Faint(true)
+	analyticsBar = lipgloss.NewStyle().Foreground(IdentityFollowing).Faint(true)
 )
 
 // AnalyticsView displays commit activity, repository rankings, and extension stats.
@@ -270,7 +270,7 @@ func (v *AnalyticsView) Render(state *State) string {
 		// --- Network section (nav panel only) ---
 		if v.showNetwork && v.network != nil {
 			b.WriteString("\n\n\n")
-			netBold := lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary)).Bold(true)
+			netBold := lipgloss.NewStyle().Foreground(TextPrimary).Bold(true)
 			netLine := netBold.Render(strings.Repeat("═", contentWidth))
 			b.WriteString(netLine)
 			b.WriteString("\n")
@@ -630,7 +630,7 @@ func trend(current, previous int) string {
 // trendColor applies color to a trend string.
 func trendColor(t string) string {
 	if strings.HasPrefix(t, "↑") {
-		return lipgloss.NewStyle().Foreground(lipgloss.Color(StatusSuccess)).Render(t)
+		return lipgloss.NewStyle().Foreground(StatusSuccess).Render(t)
 	}
 	if strings.HasPrefix(t, "↓") {
 		return Dim.Render(t)

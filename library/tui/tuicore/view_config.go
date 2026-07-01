@@ -384,7 +384,7 @@ func (v *ConfigView) Render(state *State) string {
 
 	if v.err != "" {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
 	}
 
 	var footer string

@@ -376,7 +376,7 @@ func (v *ListPickerView) Render(state *tuicore.State) string {
 	if v.createMode && v.createForm != nil {
 		b.WriteString(v.createForm.View())
 	} else {
-		keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.BorderFocused)).Bold(true)
+		keyStyle := lipgloss.NewStyle().Foreground(tuicore.BorderFocused).Bold(true)
 		b.WriteString(keyStyle.Render("n") + tuicore.Dim.Render(":new list"))
 	}
 	b.WriteString("\n\n")

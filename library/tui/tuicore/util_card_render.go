@@ -35,7 +35,7 @@ var (
 	htmlImgSrcRe = regexp.MustCompile(`src=["']([^"']+)["']`)
 	htmlImgAltRe = regexp.MustCompile(`alt=["']([^"']+)["']`)
 	// Email styling
-	emailStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(AccentEmail))
+	emailStyle = lipgloss.NewStyle().Foreground(AccentEmail)
 	// Known image file extensions
 	imageExtensions = map[string]bool{
 		".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
@@ -174,7 +174,7 @@ func RestoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 		if img.alt != "" {
 			label = "IMAGE: " + img.alt
 		}
-		replacement := "\x1b[38;5;" + AccentImage + "m[" + label + "]\x1b[39m"
+		replacement := "\x1b[38;5;" + pickThemeColor(accentImageDark, accentImageLight) + "m[" + label + "]\x1b[39m"
 		replacement = fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", img.url, replacement)
 		if anchors != nil {
 			loc := Location{Path: img.url}
@@ -328,25 +328,51 @@ func (r cardRenderer) CardHeight(card Card, opts CardOptions) int {
 }
 
 func init() {
+	buildMarkdownRenderers()
+	// Register as the default card renderer
+	DefaultCardRenderer = cardRenderer{}
+}
+
+// buildMarkdownRenderers constructs the glamour renderers for the current
+// theme. Glamour's own light/dark detection is independent of ours and freezes
+// at init, so we drive its standard style from DarkBackground and rebuild these
+// whenever the theme flips (see SetDarkBackground). Called again after
+// background detection because init ordering builds these before it runs.
+func buildMarkdownRenderers() {
+	style := glamourStyle()
+	// WithStandardStyle themes headings/links/code per light/dark; we pin the
+	// body text color explicitly so dark stays its original 252 (glamour's
+	// "dark" paragraph is dimmer) and light is near-black instead of too light.
+	body := pickThemeColor(grayPrimaryDark, grayPrimaryLight)
+	bodyJSON := fmt.Sprintf(`{"document":{"margin":0,"color":%q},"paragraph":{"color":%q}}`, body, body)
 	markdownRenderer, _ = glamour.NewTermRenderer(
 		glamour.WithPreservedNewLines(),
-		glamour.WithEnvironmentConfig(),
+		glamour.WithStandardStyle(style),
 		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(`{"document":{"margin":0}}`)),
+		glamour.WithStylesFromJSONBytes([]byte(bodyJSON)),
 	)
+	muted := pickThemeColor(graySecondaryDark, graySecondaryLight)
+	mutedJSON := fmt.Sprintf(`{"document":{"margin":0,"color":%q},"paragraph":{"color":%q},"code_block":{"color":%q},"link":{"color":%q},"link_text":{"color":%q}}`, muted, muted, muted, muted, muted)
 	mutedMarkdownRenderer, _ = glamour.NewTermRenderer(
 		glamour.WithPreservedNewLines(),
+		glamour.WithStandardStyle(style),
 		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(`{"document":{"margin":0,"color":"245"},"paragraph":{"color":"245"},"code_block":{"color":"245"},"link":{"color":"245"},"link_text":{"color":"245"}}`)),
+		glamour.WithStylesFromJSONBytes([]byte(mutedJSON)),
 	)
 	boldMarkdownRenderer, _ = glamour.NewTermRenderer(
 		glamour.WithPreservedNewLines(),
-		glamour.WithEnvironmentConfig(),
+		glamour.WithStandardStyle(style),
 		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(`{"document":{"margin":0}}`)),
+		glamour.WithStylesFromJSONBytes([]byte(bodyJSON)),
 	)
-	// Register as the default card renderer
-	DefaultCardRenderer = cardRenderer{}
+}
+
+// glamourStyle returns the glamour standard style name for the current theme.
+func glamourStyle() string {
+	if DarkBackground {
+		return "dark"
+	}
+	return "light"
 }
 
 // RenderCard renders a Card with the given options using a unified compositional approach.
@@ -1014,13 +1040,13 @@ func Hyperlink(linkURL, text string) string {
 		return text
 	}
 	h := fmt.Sprintf("\x1b]8;;%s\x07%s\x1b]8;;\x07", linkURL, text)
-	h = "\x1b[38;5;" + AccentHyperlink + ";4m" + h + "\x1b[39;24m"
+	h = "\x1b[38;5;" + pickThemeColor(accentHyperlinkDark, accentHyperlinkLight) + ";4m" + h + "\x1b[39;24m"
 	return h
 }
 
 // LinkStyle applies link color and underline without an OSC 8 hyperlink.
 func LinkStyle(text string) string {
-	return "\x1b[38;5;" + AccentHyperlink + ";4m" + text + "\x1b[39;24m"
+	return "\x1b[38;5;" + pickThemeColor(accentHyperlinkDark, accentHyperlinkLight) + ";4m" + text + "\x1b[39;24m"
 }
 
 // stripVerifiedIcon removes the verified icon from user-controlled text to prevent spoofing.

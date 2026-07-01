@@ -2,6 +2,7 @@
 package tuicore
 
 import (
+	colorlib "image/color"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -301,7 +302,7 @@ type CardHeader struct {
 // Default (no relationship) maps to the IdentityFollowing palette, matching
 // the title's default color.
 func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
-	var c string
+	var c colorlib.Color
 	switch {
 	case h.IsMe:
 		c = IdentityMe
@@ -329,7 +330,7 @@ func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
 			c = IdentityMuted
 		}
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+	return lipgloss.NewStyle().Foreground(c)
 }
 
 func (h CardHeader) TitleStyle(dimmed bool) lipgloss.Style {

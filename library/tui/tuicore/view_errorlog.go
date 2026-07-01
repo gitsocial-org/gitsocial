@@ -81,8 +81,8 @@ func (v *ErrorLogView) Render(state *State) string {
 		return wrapper.Render(content, footer)
 	}
 
-	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError))
-	warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(StatusWarning))
+	errorStyle := lipgloss.NewStyle().Foreground(StatusError)
+	warnStyle := lipgloss.NewStyle().Foreground(StatusWarning)
 
 	var lines []string
 	// Show entries newest-first

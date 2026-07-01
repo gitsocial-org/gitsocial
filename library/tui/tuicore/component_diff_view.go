@@ -381,7 +381,7 @@ func (v *HistoryDiffView) renderHeader() string {
 	if to.Author != "" {
 		right += " · " + to.Author
 	}
-	arrow := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary)).Render(" → ")
+	arrow := lipgloss.NewStyle().Foreground(TextSecondary).Render(" → ")
 	return Bold.Render(left) + arrow + Bold.Render(right)
 }
 
@@ -398,10 +398,10 @@ func (v *HistoryDiffView) renderBody() string {
 		v.scroll = 0
 	}
 	visible := v.rows[v.scroll:end]
-	addedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DiffAdded))
-	removedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DiffRemoved))
-	hunkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(DiffHunkHeader))
-	collapsedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(TextSecondary))
+	addedStyle := lipgloss.NewStyle().Foreground(DiffAdded)
+	removedStyle := lipgloss.NewStyle().Foreground(DiffRemoved)
+	hunkStyle := lipgloss.NewStyle().Foreground(DiffHunkHeader)
+	collapsedStyle := lipgloss.NewStyle().Foreground(TextSecondary)
 	var lines []string
 	for i, row := range visible {
 		var rendered string

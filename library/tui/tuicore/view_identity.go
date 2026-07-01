@@ -147,7 +147,7 @@ func (v *IdentityView) toggleDNSVerification() {
 func (v *IdentityView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
 	rs := RowStylesWithWidths(16, 0)
-	verified := lipgloss.NewStyle().Foreground(lipgloss.Color(IdentityMe))
+	verified := lipgloss.NewStyle().Foreground(IdentityMe)
 
 	var b strings.Builder
 
@@ -244,7 +244,7 @@ func (v *IdentityView) Render(state *State) string {
 	}
 	if v.resolveErr != "" {
 		b.WriteString("  ")
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(StatusError)).Render("Error: " + v.resolveErr))
+		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.resolveErr))
 		b.WriteString("\n")
 	} else if v.resolved != nil {
 		b.WriteString(RenderRow(rs, "  Email", v.resolved.Email, "", false))

@@ -428,18 +428,18 @@ func (p *NavPanel) View() string {
 		borderColor = BorderFocused
 	}
 
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
-	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(borderColor))
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+	titleStyle := lipgloss.NewStyle().Foreground(borderColor)
 	if p.focused {
 		titleStyle = titleStyle.Bold(true)
 	}
 
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextPrimary)).
-		Background(lipgloss.Color(BgSelected)).
+		Foreground(TextPrimary).
+		Background(BgSelected).
 		Bold(true)
 	normalStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextNormal))
+		Foreground(TextNormal)
 
 	innerWidth := p.width - 2
 	padToWidth := func(s string) string {
@@ -579,8 +579,8 @@ func (p *NavPanel) View() string {
 				var rendered string
 				if isSelected {
 					dimSelected := lipgloss.NewStyle().
-						Foreground(lipgloss.Color(TextSecondary)).
-						Background(lipgloss.Color(BgSelected))
+						Foreground(TextSecondary).
+						Background(BgSelected)
 					rendered = selectedStyle.Render(label) + dimSelected.Render(dots+suffix)
 				} else {
 					rendered = normalStyle.Render(label) + Dim.Render(dots+suffix)
@@ -650,8 +650,8 @@ func (p *NavPanel) View() string {
 
 	// Directory path with background (similar to footer)
 	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(TextSecondary)).
-		Background(lipgloss.Color(BgFooter))
+		Foreground(TextSecondary).
+		Background(BgFooter)
 	dirPath := p.truncatePath(innerWidth)
 	dirLine := footerStyle.Width(innerWidth).Render(dirPath)
 	contentLines = append(contentLines, dirLine)
@@ -750,8 +750,8 @@ func formatNavItem(label, key string, targetWidth int, labelStyle lipgloss.Style
 	if selected {
 		// Apply selected background to entire line, but keep fill/key dimmed
 		dimSelected := lipgloss.NewStyle().
-			Foreground(lipgloss.Color(TextSecondary)).
-			Background(lipgloss.Color(BgSelected))
+			Foreground(TextSecondary).
+			Background(BgSelected)
 		return labelStyle.Render(label) + dimSelected.Render(fill+keyPart)
 	}
 	return labelStyle.Render(label) + Dim.Render(fill+keyPart)

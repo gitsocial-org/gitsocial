@@ -36,9 +36,9 @@ type RowKind int
 const (
 	// RowContext is an unchanged context line.
 	RowContext RowKind = iota
-	// RowAdded is an added line; LineBG should be DiffAddedBg.
+	// RowAdded is an added line; LineBG should be the added-line background.
 	RowAdded
-	// RowRemoved is a removed line; LineBG should be DiffRemovedBg.
+	// RowRemoved is a removed line; LineBG should be the removed-line background.
 	RowRemoved
 	// RowHunkHeader is a "@@ … @@" hunk header.
 	RowHunkHeader

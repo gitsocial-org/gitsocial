@@ -1500,6 +1500,21 @@ func Run(workdir, cacheDir string) error {
 	// wrapping that breaks the two-panel layout.
 	tuicore.NeedsWidthMargin = os.Getenv("TERM_PROGRAM") == "Apple_Terminal"
 
+	// Apply the color theme before the first render. Detect the terminal
+	// background for "auto"; "light"/"dark" force it. Detection lives here (not
+	// at tuicore package init) so it never issues a blocking terminal query in
+	// headless test binaries that import tuicore.
+	dark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	if s, err := settings.Load(""); err == nil {
+		switch s.Display.Theme {
+		case "light":
+			dark = false
+		case "dark":
+			dark = true
+		}
+	}
+	tuicore.SetDarkBackground(dark)
+
 	p := tea.NewProgram(
 		NewModel(workdir, cacheDir),
 		tea.WithFPS(120),

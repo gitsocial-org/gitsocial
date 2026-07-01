@@ -62,6 +62,8 @@ var Registry = []KeySpec{
 		Desc: "Terminal color policy."},
 	{Key: "display.show_email", Scope: ScopePersonalConfig, Type: KeyBool, Default: "false",
 		Desc: "Show author email alongside name on cards."},
+	{Key: "display.theme", Scope: ScopePersonalConfig, Type: KeyEnum, Enum: []string{"auto", "light", "dark"}, Default: "auto",
+		Desc: "TUI color theme: auto detects terminal background, or force light/dark."},
 	{Key: "log.level", Scope: ScopePersonalConfig, Type: KeyEnum, Enum: []string{"debug", "info", "warn", "error"}, Default: "info",
 		Desc: "Logging verbosity."},
 	{Key: "extensions.social", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",

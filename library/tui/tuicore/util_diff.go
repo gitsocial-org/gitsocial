@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	diffAddedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(DiffAdded))
-	diffRemovedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(DiffRemoved))
+	diffAddedStyle   = lipgloss.NewStyle().Foreground(DiffAdded)
+	diffRemovedStyle = lipgloss.NewStyle().Foreground(DiffRemoved)
 )
 
 // RenderDiffHeader renders a file diff header with status icon and path.
@@ -55,7 +55,7 @@ func RenderDiffHeader(diff git.FileDiff) string {
 	case git.DiffStatusDeleted:
 		iconStyle = diffRemovedStyle
 	default:
-		iconStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(TextPrimary))
+		iconStyle = lipgloss.NewStyle().Foreground(TextPrimary)
 	}
 	header := fmt.Sprintf("▾ %s %s", iconStyle.Render(icon), path)
 	if diff.Status == git.DiffStatusRenamed && diff.OldPath != diff.NewPath {

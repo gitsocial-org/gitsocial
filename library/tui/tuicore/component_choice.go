@@ -74,7 +74,7 @@ func (d *ChoiceDialog) Render() string {
 	if !d.active {
 		return ""
 	}
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color(ConfirmAction)).Bold(true)
+	style := lipgloss.NewStyle().Foreground(ConfirmAction).Bold(true)
 	var parts []string
 	parts = append(parts, d.prompt)
 	for _, c := range d.choices {

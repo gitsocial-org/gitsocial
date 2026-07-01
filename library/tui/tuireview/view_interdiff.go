@@ -179,11 +179,11 @@ func (v *InterdiffView) buildRenderedLines(raw string) {
 		return
 	}
 	lines := strings.Split(raw, "\n")
-	equalStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.TextSecondary))
-	modifiedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.StatusWarning))
-	addedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.DiffAdded))
-	removedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.DiffRemoved))
-	hunkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tuicore.DiffHunkHeader))
+	equalStyle := lipgloss.NewStyle().Foreground(tuicore.TextSecondary)
+	modifiedStyle := lipgloss.NewStyle().Foreground(tuicore.StatusWarning)
+	addedStyle := lipgloss.NewStyle().Foreground(tuicore.DiffAdded)
+	removedStyle := lipgloss.NewStyle().Foreground(tuicore.DiffRemoved)
+	hunkStyle := lipgloss.NewStyle().Foreground(tuicore.DiffHunkHeader)
 	for _, line := range lines {
 		if line == "" {
 			v.renderedLines = append(v.renderedLines, "")

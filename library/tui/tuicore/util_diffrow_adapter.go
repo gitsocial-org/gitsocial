@@ -15,30 +15,31 @@ import (
 )
 
 // init configures the diff renderer for the host terminal's color profile.
-// On ≤ANSI profiles (4-bit / 16 colors and below) the muted DiffAddedBg /
-// DiffRemovedBg / DiffFileHeaderBg hex values all collapse to indistinct
-// "dark gray" via lipgloss's nearest-color downgrade. Suppress LineBG in
-// those cases so the diff stays legible via FG + sign alone.
+// On ≤ANSI profiles (4-bit / 16 colors and below) the muted diff line-background
+// hex values all collapse to indistinct "dark gray" via lipgloss's nearest-color
+// downgrade. Suppress LineBG in those cases so the diff stays legible via FG +
+// sign alone.
 func init() {
 	if colorprofile.Detect(os.Stdout, os.Environ()) <= colorprofile.ANSI {
 		diff.SetSuppressLineBG(true)
 	}
 }
 
-// DefaultDiffPalette returns a diff.Palette populated from the tuicore
-// color constants.
+// DefaultDiffPalette returns a diff.Palette populated from the tuicore color
+// constants. The diff renderer's Cell pipeline is string-based, so colors are
+// resolved to the current theme's variant here rather than via adaptiveColor.
 func DefaultDiffPalette() diff.Palette {
 	return diff.Palette{
-		AddedFG:            DiffAdded,
-		RemovedFG:          DiffRemoved,
-		AddedBG:            DiffAddedBg,
-		RemovedBG:          DiffRemovedBg,
-		IntraLineAddedBG:   DiffIntraLineAddedBg,
-		IntraLineRemovedBG: DiffIntraLineRemovedBg,
-		FileHeaderBG:       DiffFileHeaderBg,
-		HunkHeaderFG:       DiffHunkHeader,
-		LineNumFG:          DiffLineNum,
-		TextSecondary:      TextSecondary,
+		AddedFG:            pickThemeColor(diffAddedDark, diffAddedLight),
+		RemovedFG:          pickThemeColor(diffRemovedDark, diffRemovedLight),
+		AddedBG:            pickThemeColor(diffAddedBgDark, diffAddedBgLight),
+		RemovedBG:          pickThemeColor(diffRemovedBgDark, diffRemovedBgLight),
+		IntraLineAddedBG:   pickThemeColor(diffIntraAddedBgDark, diffIntraAddedBgLight),
+		IntraLineRemovedBG: pickThemeColor(diffIntraRemovedBgDark, diffIntraRemovedBgLight),
+		FileHeaderBG:       pickThemeColor(diffFileHeaderBgDark, diffFileHeaderBgLight),
+		HunkHeaderFG:       pickThemeColor(diffHunkHeaderDark, diffHunkHeaderLight),
+		LineNumFG:          pickThemeColor(graySecondaryDark, graySecondaryLight),
+		TextSecondary:      pickThemeColor(graySecondaryDark, graySecondaryLight),
 	}
 }
 
@@ -87,7 +88,7 @@ func DefaultHighlight() diff.Highlight {
 			// Removed}Bg rows. Override comment cells with a lighter muted
 			// gray so comment text stays readable on diff backgrounds.
 			if tok.Type.InCategory(chroma.Comment) {
-				cell.FG = DiffCommentFG
+				cell.FG = pickThemeColor(diffCommentDark, diffCommentLight)
 			}
 			if entry.Bold == chroma.Yes {
 				cell.Bold = true

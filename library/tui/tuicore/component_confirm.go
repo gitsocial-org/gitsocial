@@ -67,8 +67,8 @@ func (d *ConfirmDialog) Render() string {
 		color = ConfirmDestructive
 	}
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color(color)).
-		Background(lipgloss.Color(BgFooter)).
+		Foreground(color).
+		Background(BgFooter).
 		Bold(true).
 		Render(d.prompt + " [y/n]")
 }
