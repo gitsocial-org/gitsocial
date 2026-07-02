@@ -4,6 +4,8 @@ package protocol
 import (
 	"regexp"
 	"strings"
+
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 var (
@@ -148,9 +150,11 @@ func ParseMessage(message string) *Message {
 	trailerBlock := message[headerIdx:]
 	lines := strings.Split(trailerBlock, "\n")
 
-	// First line is the GitMsg header
+	// First line is the GitMsg header. Dropping a malformed header is correct
+	// (the commit is treated as plain content) but hard to debug — log it.
 	header := ParseHeader(lines[0])
 	if header == nil {
+		log.Debug("dropping malformed GitMsg header", "line", lines[0])
 		return nil
 	}
 
@@ -158,28 +162,26 @@ func ParseMessage(message string) *Message {
 	var references []Ref
 	var currentRefLines []string
 
+	flushRef := func() {
+		if len(currentRefLines) == 0 {
+			return
+		}
+		if ref := ParseRefSection(strings.Join(currentRefLines, "\n")); ref != nil {
+			references = append(references, *ref)
+		} else {
+			log.Debug("dropping malformed GitMsg-Ref section", "line", currentRefLines[0])
+		}
+	}
 	for _, line := range lines[1:] {
 		if strings.HasPrefix(line, "GitMsg-Ref: ") {
-			// Flush previous ref if any
-			if len(currentRefLines) > 0 {
-				ref := ParseRefSection(strings.Join(currentRefLines, "\n"))
-				if ref != nil {
-					references = append(references, *ref)
-				}
-			}
+			flushRef()
 			currentRefLines = []string{line}
 		} else if strings.HasPrefix(line, " ") && len(currentRefLines) > 0 {
 			// Continuation line for current ref
 			currentRefLines = append(currentRefLines, line)
 		}
 	}
-	// Flush last ref
-	if len(currentRefLines) > 0 {
-		ref := ParseRefSection(strings.Join(currentRefLines, "\n"))
-		if ref != nil {
-			references = append(references, *ref)
-		}
-	}
+	flushRef()
 
 	return &Message{
 		Content:    content,

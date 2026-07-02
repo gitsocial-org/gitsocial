@@ -10,12 +10,28 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 // TagOption is a label-value pair for a TagField suggestion.
 type TagOption struct {
 	Label string
 	Value string
+}
+
+// ContributorOptions converts cached contributors to TagField suggestions
+// (label "Name <email>", value email).
+func ContributorOptions(contributors []cache.Contributor) []TagOption {
+	opts := make([]TagOption, 0, len(contributors))
+	for _, c := range contributors {
+		label := c.Email
+		if c.Name != "" {
+			label = c.Name + " <" + c.Email + ">"
+		}
+		opts = append(opts, TagOption{Label: label, Value: c.Email})
+	}
+	return opts
 }
 
 // TagField is an inline tag input with filtered dropdown that implements huh.Field.

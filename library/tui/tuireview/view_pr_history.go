@@ -73,7 +73,7 @@ func (v PRVersionItem) RenderListEntry(index, total int, label string, selected 
 	} else {
 		b.WriteString("  " + header)
 	}
-	b.WriteString(renderProposalTag(v.ProposalTag))
+	b.WriteString(tuicore.RenderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -145,7 +145,7 @@ func (v *PRHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if prID == "" {
 		return nil
 	}
-	v.owned = ownsCanonical(prID, v.workspaceURL)
+	v.owned = tuicore.OwnsCanonical(prID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	workspaceURL := v.workspaceURL
 	return func() tea.Msg {
@@ -199,7 +199,7 @@ func (v *PRHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		items := make([]tuicore.VersionItem, len(msg.Versions))
 		for i, version := range msg.Versions {
 			items[len(msg.Versions)-1-i] = PRVersionItem{Version: version, ShowEmail: v.showEmail,
-				ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
+				ProposalTag: tuicore.ProposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 		}
 		v.picker.SetItems(items)
 	}
@@ -255,7 +255,7 @@ func (v *PRHistoryView) openDescriptionDiff(state *tuicore.State) tea.Cmd {
 // and the picker holds a cross-repo proposal to accept.
 func (v *PRHistoryView) acceptInclude() map[string]bool {
 	for _, it := range v.picker.Items() {
-		if iv, ok := it.(PRVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+		if iv, ok := it.(PRVersionItem); ok && tuicore.IsOpenProposalTag(iv.ProposalTag) {
 			return map[string]bool{"A": true, "X": true}
 		}
 	}
@@ -272,7 +272,7 @@ func (v *PRHistoryView) acceptSelected() tea.Cmd {
 	}
 	if pv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, pv.Version.CommitHash, pv.Version.RepoURL, pv.Version.Branch)
@@ -280,9 +280,9 @@ func (v *PRHistoryView) acceptSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Accept(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{CanonicalRef: out.Data.CanonicalRef}
+		return tuicore.ProposalAcceptedMsg{Location: tuicore.LocReviewPRDetail(out.Data.CanonicalRef)}
 	}
 }
 
@@ -296,7 +296,7 @@ func (v *PRHistoryView) declineSelected() tea.Cmd {
 	}
 	if pv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, pv.Version.CommitHash, pv.Version.RepoURL, pv.Version.Branch)
@@ -304,9 +304,9 @@ func (v *PRHistoryView) declineSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Decline(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Declined: true, CanonicalRef: out.Data.CanonicalRef}
+		return tuicore.ProposalAcceptedMsg{Declined: true, Location: tuicore.LocReviewPRDetail(out.Data.CanonicalRef)}
 	}
 }
 

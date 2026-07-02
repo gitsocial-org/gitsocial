@@ -129,14 +129,14 @@ func IsVerified(signerKey, email string) bool {
 	dnsFilter, dnsArgs := dnsSourceFilter()
 	found, err := cache.QueryLocked(func(db *sql.DB) (bool, error) {
 		var verified int
-		args := []interface{}{email, signerKey, signerKey, signerKey}
+		args := []interface{}{email, signerKey, signerKey, signerKey, signerKey}
 		args = append(args, dnsArgs...)
 		err := db.QueryRow(`
 			SELECT verified FROM core_verified_bindings
 			WHERE email = ? AND verified = 1
 			  AND (key_fingerprint = ?
-			       OR ? LIKE '%' || key_fingerprint
-			       OR key_fingerprint LIKE '%' || ?)`+dnsFilter+`
+			       OR (length(key_fingerprint) >= 16 AND ? LIKE '%' || key_fingerprint)
+			       OR (length(?) >= 16 AND key_fingerprint LIKE '%' || ?))`+dnsFilter+`
 			LIMIT 1`, args...).Scan(&verified)
 		if err != nil {
 			return false, err
@@ -199,8 +199,8 @@ func IsVerifiedCommit(repoURL, hash, email string) bool {
 			  ON b.email = ?
 			 AND b.verified = 1
 			 AND (c.signer_key = b.key_fingerprint
-			      OR c.signer_key LIKE '%' || b.key_fingerprint
-			      OR b.key_fingerprint LIKE '%' || c.signer_key)` + dnsFilter + `
+			      OR (length(b.key_fingerprint) >= 16 AND c.signer_key LIKE '%' || b.key_fingerprint)
+			      OR (length(c.signer_key) >= 16 AND b.key_fingerprint LIKE '%' || c.signer_key))` + dnsFilter + `
 			WHERE c.repo_url = ? AND c.hash = ? AND c.signer_key IS NOT NULL
 			LIMIT 1`
 		// dnsArgs slot in between b.email and c.repo_url
@@ -247,8 +247,8 @@ func IsVerifiedCommitBatch(repoURL string, hashes []string, email string) map[st
 		  ON b.email = ?
 		 AND b.verified = 1
 		 AND (c.signer_key = b.key_fingerprint
-		      OR c.signer_key LIKE '%' || b.key_fingerprint
-		      OR b.key_fingerprint LIKE '%' || c.signer_key)` + dnsFilter + `
+		      OR (length(b.key_fingerprint) >= 16 AND c.signer_key LIKE '%' || b.key_fingerprint)
+		      OR (length(c.signer_key) >= 16 AND b.key_fingerprint LIKE '%' || c.signer_key))` + dnsFilter + `
 		WHERE c.repo_url = ? AND c.signer_key IS NOT NULL
 		  AND c.hash IN (` + strings.Join(placeholders, ",") + `)`
 
@@ -329,8 +329,8 @@ func lookupPerSource(signerKey, email string, src Source, host string) *Binding 
 // DNS-source rows are excluded when DNS verification is disabled.
 func loadFreshBindings(email, signerKey string) []Binding {
 	dnsFilter, dnsArgs := dnsSourceFilter()
-	args := make([]interface{}, 0, 4+len(dnsArgs))
-	args = append(args, email, signerKey, signerKey, signerKey)
+	args := make([]interface{}, 0, 5+len(dnsArgs))
+	args = append(args, email, signerKey, signerKey, signerKey, signerKey)
 	args = append(args, dnsArgs...)
 	rows, err := cache.QueryLocked(func(db *sql.DB) ([]Binding, error) {
 		r, err := db.Query(`
@@ -338,8 +338,8 @@ func loadFreshBindings(email, signerKey string) []Binding {
 			FROM core_verified_bindings
 			WHERE email = ?
 			  AND (key_fingerprint = ?
-			       OR ? LIKE '%' || key_fingerprint
-			       OR key_fingerprint LIKE '%' || ?)`+dnsFilter,
+			       OR (length(key_fingerprint) >= 16 AND ? LIKE '%' || key_fingerprint)
+			       OR (length(?) >= 16 AND key_fingerprint LIKE '%' || ?))`+dnsFilter,
 			args...)
 		if err != nil {
 			return nil, err
@@ -576,6 +576,13 @@ func keyMatchesFingerprint(signerKeyUpper string, k forge.GPGKey) bool {
 	return false
 }
 
+// minFingerprintSuffix is the shortest key-identifier suffix accepted as a
+// match (a GPG long key ID, 16 hex chars / 64 bits). Anything shorter is too
+// collision-prone to attest identity.
+const minFingerprintSuffix = 16
+
+// matchesFingerprint reports whether two key identifiers name the same key:
+// exact match, or one is a long-key-ID-or-longer suffix of the other.
 func matchesFingerprint(a, b string) bool {
 	if a == "" || b == "" {
 		return false
@@ -583,7 +590,10 @@ func matchesFingerprint(a, b string) bool {
 	if a == b {
 		return true
 	}
-	if strings.HasSuffix(a, b) || strings.HasSuffix(b, a) {
+	if len(b) >= minFingerprintSuffix && strings.HasSuffix(a, b) {
+		return true
+	}
+	if len(a) >= minFingerprintSuffix && strings.HasSuffix(b, a) {
 		return true
 	}
 	return false

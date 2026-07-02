@@ -79,7 +79,7 @@ func (v IssueVersionItem) RenderListEntry(index, total int, label string, select
 	} else {
 		b.WriteString("  " + header)
 	}
-	b.WriteString(renderProposalTag(v.ProposalTag))
+	b.WriteString(tuicore.RenderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -168,7 +168,7 @@ func (v *IssueHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if issueID == "" {
 		return nil
 	}
-	v.owned = ownsCanonical(issueID, v.workspaceURL)
+	v.owned = tuicore.OwnsCanonical(issueID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	return v.loadHistory(issueID)
 }
@@ -238,7 +238,7 @@ func (v *IssueHistoryView) handleLoaded(msg IssueHistoryLoadedMsg) {
 	items := make([]tuicore.VersionItem, len(msg.Versions))
 	for i, version := range msg.Versions {
 		items[i] = IssueVersionItem{Version: version, ShowEmail: v.showEmail,
-			ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
+			ProposalTag: tuicore.ProposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 	}
 	v.picker.SetItems(items)
 }
@@ -247,7 +247,7 @@ func (v *IssueHistoryView) handleLoaded(msg IssueHistoryLoadedMsg) {
 // and a cross-repo proposal is present (not the proposer's "awaiting owner" view).
 func (v *IssueHistoryView) acceptInclude() map[string]bool {
 	for _, it := range v.picker.Items() {
-		if iv, ok := it.(IssueVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+		if iv, ok := it.(IssueVersionItem); ok && tuicore.IsOpenProposalTag(iv.ProposalTag) {
 			return map[string]bool{"A": true, "X": true}
 		}
 	}
@@ -264,7 +264,7 @@ func (v *IssueHistoryView) acceptSelected() tea.Cmd {
 	}
 	if iv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, iv.Version.CommitHash, iv.Version.RepoURL, iv.Version.Branch)
@@ -272,9 +272,9 @@ func (v *IssueHistoryView) acceptSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Accept(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Location: tuicore.LocPMIssueDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Location: tuicore.LocPMIssueDetail(out.Data.CanonicalRef)}
 	}
 }
 
@@ -288,7 +288,7 @@ func (v *IssueHistoryView) declineSelected() tea.Cmd {
 	}
 	if iv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, iv.Version.CommitHash, iv.Version.RepoURL, iv.Version.Branch)
@@ -296,9 +296,9 @@ func (v *IssueHistoryView) declineSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Decline(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMIssueDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMIssueDetail(out.Data.CanonicalRef)}
 	}
 }
 

@@ -115,8 +115,34 @@ func newImportSubCmd(name, short string, extensions []string, defaultLimit int) 
 	return cmd
 }
 
+// validateImportFlags rejects invalid enum flag values up front, before any
+// repo or network work — a typo must not silently fall back to a default.
+func validateImportFlags(f *importFlags) error {
+	oneOf := func(v string, allowed ...string) bool {
+		for _, a := range allowed {
+			if v == a {
+				return true
+			}
+		}
+		return false
+	}
+	if !oneOf(f.labels, "auto", "raw", "skip") {
+		return fmt.Errorf("invalid --labels %q (valid: auto, raw, skip)", f.labels)
+	}
+	if f.state != "" && !oneOf(f.state, "open", "closed", "merged", "all") {
+		return fmt.Errorf("invalid --state %q (valid: open, closed, merged, all)", f.state)
+	}
+	if f.host != "" && !oneOf(f.host, "github", "gitlab", "gitea", "bitbucket") {
+		return fmt.Errorf("invalid --host %q (valid: github, gitlab, gitea, bitbucket)", f.host)
+	}
+	return nil
+}
+
 // runImport is the shared import logic for both the parent command and subcommands.
 func runImport(cmd *cobra.Command, args []string, label string, extensions []string, f *importFlags) error {
+	if err := validateImportFlags(f); err != nil {
+		return err
+	}
 	if !EnsureGitRepo(cmd) {
 		os.Exit(ExitNotRepo)
 	}

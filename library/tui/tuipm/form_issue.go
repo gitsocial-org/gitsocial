@@ -229,7 +229,7 @@ func (f *IssueForm) buildFormWithDefaults() {
 		}
 	}
 
-	assigneeOpts := buildContributorOptions(f.contributors)
+	assigneeOpts := tuicore.ContributorOptions(f.contributors)
 	fields = append(fields, tuicore.NewTagField().
 		Key("assignees").
 		Title(pad("Assignees")).
@@ -492,19 +492,6 @@ func stripLocalRefs(refs []string, repoURL string) []string {
 		result[i] = stripLocalRef(r, repoURL)
 	}
 	return result
-}
-
-// buildContributorOptions converts cache contributors to TagField options.
-func buildContributorOptions(contributors []cache.Contributor) []tuicore.TagOption {
-	opts := make([]tuicore.TagOption, 0, len(contributors))
-	for _, c := range contributors {
-		label := c.Email
-		if c.Name != "" {
-			label = c.Name + " <" + c.Email + ">"
-		}
-		opts = append(opts, tuicore.TagOption{Label: label, Value: c.Email})
-	}
-	return opts
 }
 
 // IssueFormView wraps the form for integration with the TUI host.

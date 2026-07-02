@@ -79,7 +79,7 @@ func (v MilestoneVersionItem) RenderListEntry(index, total int, label string, se
 	} else {
 		b.WriteString("  " + header)
 	}
-	b.WriteString(renderProposalTag(v.ProposalTag))
+	b.WriteString(tuicore.RenderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -168,7 +168,7 @@ func (v *MilestoneHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if milestoneID == "" {
 		return nil
 	}
-	v.owned = ownsCanonical(milestoneID, v.workspaceURL)
+	v.owned = tuicore.OwnsCanonical(milestoneID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	return v.loadHistory(milestoneID)
 }
@@ -238,7 +238,7 @@ func (v *MilestoneHistoryView) handleLoaded(msg MilestoneHistoryLoadedMsg) {
 	items := make([]tuicore.VersionItem, len(msg.Versions))
 	for i, version := range msg.Versions {
 		items[i] = MilestoneVersionItem{Version: version, ShowEmail: v.showEmail,
-			ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
+			ProposalTag: tuicore.ProposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 	}
 	v.picker.SetItems(items)
 }
@@ -247,7 +247,7 @@ func (v *MilestoneHistoryView) handleLoaded(msg MilestoneHistoryLoadedMsg) {
 // milestone and a cross-repo proposal is present.
 func (v *MilestoneHistoryView) acceptInclude() map[string]bool {
 	for _, it := range v.picker.Items() {
-		if iv, ok := it.(MilestoneVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+		if iv, ok := it.(MilestoneVersionItem); ok && tuicore.IsOpenProposalTag(iv.ProposalTag) {
 			return map[string]bool{"A": true, "X": true}
 		}
 	}
@@ -264,7 +264,7 @@ func (v *MilestoneHistoryView) acceptSelected() tea.Cmd {
 	}
 	if mv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, mv.Version.CommitHash, mv.Version.RepoURL, mv.Version.Branch)
@@ -272,9 +272,9 @@ func (v *MilestoneHistoryView) acceptSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Accept(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
 	}
 }
 
@@ -288,7 +288,7 @@ func (v *MilestoneHistoryView) declineSelected() tea.Cmd {
 	}
 	if mv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, mv.Version.CommitHash, mv.Version.RepoURL, mv.Version.Branch)
@@ -296,9 +296,9 @@ func (v *MilestoneHistoryView) declineSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Decline(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMMilestoneDetail(out.Data.CanonicalRef)}
 	}
 }
 

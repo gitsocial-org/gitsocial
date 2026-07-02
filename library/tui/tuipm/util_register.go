@@ -248,31 +248,6 @@ func Register(host tuicore.ViewHost) {
 
 // Message handlers
 
-// ProposalAcceptedMsg is sent when a cross-repo proposed edit is accepted from a
-// pm history view. Location is the item detail to reload.
-type ProposalAcceptedMsg struct {
-	Location tuicore.Location
-	Declined bool
-	Err      error
-}
-
-// handleProposalAccepted reports the accept outcome and reloads the item detail
-// so the now-applied edit is visible.
-func handleProposalAccepted(msg ProposalAcceptedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if msg.Err != nil {
-		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
-	}
-	text := "Proposal accepted"
-	if msg.Declined {
-		text = "Proposal declined"
-	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, 5*time.Second)
-	return true, tea.Batch(msgCmd, func() tea.Msg {
-		return tuicore.NavigateMsg{Location: msg.Location, Action: tuicore.NavReplace}
-	})
-}
-
 func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case IssueCreatedMsg:
@@ -289,8 +264,6 @@ func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleMilestoneUpdated(msg, ctx)
 	case SprintUpdatedMsg:
 		return handleSprintUpdated(msg, ctx)
-	case ProposalAcceptedMsg:
-		return handleProposalAccepted(msg, ctx)
 	case PMConfigSavedMsg:
 		return handlePMConfigSaved(msg, ctx)
 	case IssueRetractedMsg:

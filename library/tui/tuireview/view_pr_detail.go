@@ -103,17 +103,17 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.cacheDir = state.CacheDir
 	return func() tea.Msg {
 		branch := gitmsg.GetExtBranch(workdir, "review")
-		// Start GetUnpushedCommits in parallel with GetPR (only needs branch)
-		var unpushed map[string]struct{}
-		var wgPre sync.WaitGroup
-		wgPre.Add(1)
+		// Start GetUnpushedCommits in parallel with GetPR (only needs branch).
+		// Result arrives on a channel so the wait below can time out: the
+		// marker is cosmetic and must not stall the whole detail load behind a
+		// slow git invocation (lock contention, slow FS).
+		unpushedCh := make(chan map[string]struct{}, 1)
 		go func() {
-			defer wgPre.Done()
-			var err error
-			unpushed, err = git.GetUnpushedCommits(workdir, branch)
+			unpushed, err := git.GetUnpushedCommits(workdir, branch)
 			if err != nil {
 				log.Debug("failed to get unpushed commits", "error", err)
 			}
+			unpushedCh <- unpushed
 		}()
 		res := review.GetPR(prID)
 		if !res.Success {
@@ -175,7 +175,12 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 			}
 		}()
 		wgComments.Wait()
-		wgPre.Wait()
+		var unpushed map[string]struct{}
+		select {
+		case unpushed = <-unpushedCh:
+		case <-time.After(5 * time.Second):
+			log.Debug("unpushed-commits lookup timed out; rendering without unpushed marker")
+		}
 		if _, ok := unpushed[hash]; ok {
 			pr.IsUnpushed = true
 		}

@@ -79,7 +79,7 @@ func (v SprintVersionItem) RenderListEntry(index, total int, label string, selec
 	} else {
 		b.WriteString("  " + header)
 	}
-	b.WriteString(renderProposalTag(v.ProposalTag))
+	b.WriteString(tuicore.RenderProposalTag(v.ProposalTag))
 	b.WriteString("\n")
 	if v.Version.IsRetracted {
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
@@ -168,7 +168,7 @@ func (v *SprintHistoryView) Activate(state *tuicore.State) tea.Cmd {
 	if sprintID == "" {
 		return nil
 	}
-	v.owned = ownsCanonical(sprintID, v.workspaceURL)
+	v.owned = tuicore.OwnsCanonical(sprintID, v.workspaceURL)
 	v.picker.SetLoading(true)
 	return v.loadHistory(sprintID)
 }
@@ -238,7 +238,7 @@ func (v *SprintHistoryView) handleLoaded(msg SprintHistoryLoadedMsg) {
 	items := make([]tuicore.VersionItem, len(msg.Versions))
 	for i, version := range msg.Versions {
 		items[i] = SprintVersionItem{Version: version, ShowEmail: v.showEmail,
-			ProposalTag: proposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
+			ProposalTag: tuicore.ProposalTag(v.owned, v.workspaceURL, version.RepoURL, version.CommitHash, version.Branch)}
 	}
 	v.picker.SetItems(items)
 }
@@ -247,7 +247,7 @@ func (v *SprintHistoryView) handleLoaded(msg SprintHistoryLoadedMsg) {
 // and a cross-repo proposal is present.
 func (v *SprintHistoryView) acceptInclude() map[string]bool {
 	for _, it := range v.picker.Items() {
-		if iv, ok := it.(SprintVersionItem); ok && isOpenProposalTag(iv.ProposalTag) {
+		if iv, ok := it.(SprintVersionItem); ok && tuicore.IsOpenProposalTag(iv.ProposalTag) {
 			return map[string]bool{"A": true, "X": true}
 		}
 	}
@@ -264,7 +264,7 @@ func (v *SprintHistoryView) acceptSelected() tea.Cmd {
 	}
 	if sv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to accept")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, sv.Version.CommitHash, sv.Version.RepoURL, sv.Version.Branch)
@@ -272,9 +272,9 @@ func (v *SprintHistoryView) acceptSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Accept(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Location: tuicore.LocPMSprintDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Location: tuicore.LocPMSprintDetail(out.Data.CanonicalRef)}
 	}
 }
 
@@ -288,7 +288,7 @@ func (v *SprintHistoryView) declineSelected() tea.Cmd {
 	}
 	if sv.Version.RepoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to decline")}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, sv.Version.CommitHash, sv.Version.RepoURL, sv.Version.Branch)
@@ -296,9 +296,9 @@ func (v *SprintHistoryView) declineSelected() tea.Cmd {
 	return func() tea.Msg {
 		out := proposals.Decline(workdir, ref)
 		if !out.Success {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
+			return tuicore.ProposalAcceptedMsg{Err: fmt.Errorf("%s", out.Error.Message)}
 		}
-		return ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMSprintDetail(out.Data.CanonicalRef)}
+		return tuicore.ProposalAcceptedMsg{Declined: true, Location: tuicore.LocPMSprintDetail(out.Data.CanonicalRef)}
 	}
 }
 

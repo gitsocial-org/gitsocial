@@ -8,6 +8,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestShortenBranchRef(t *testing.T) {
@@ -401,7 +402,7 @@ func TestBuildContributorOptions(t *testing.T) {
 		{Name: "Alice", Email: "alice@test.com"},
 		{Name: "", Email: "anon@test.com"},
 	}
-	opts := buildContributorOptions(contributors)
+	opts := tuicore.ContributorOptions(contributors)
 	if len(opts) != 2 {
 		t.Fatalf("len = %d, want 2", len(opts))
 	}

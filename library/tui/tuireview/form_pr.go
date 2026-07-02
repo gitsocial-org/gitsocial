@@ -235,7 +235,7 @@ func (f *PRForm) buildForm() {
 		Value(&f.data.Head)
 	fields = append(fields, f.baseField, f.headField)
 
-	reviewerOpts := buildContributorOptions(f.contributors)
+	reviewerOpts := tuicore.ContributorOptions(f.contributors)
 	fields = append(fields, tuicore.NewTagField().
 		Key("reviewers").
 		Title(pad("Reviewers")).
@@ -591,17 +591,4 @@ func formatBranchLabel(ref string) string {
 		return parsed.Value
 	}
 	return ref
-}
-
-// buildContributorOptions converts cache contributors to TagField options.
-func buildContributorOptions(contributors []cache.Contributor) []tuicore.TagOption {
-	opts := make([]tuicore.TagOption, 0, len(contributors))
-	for _, c := range contributors {
-		label := c.Email
-		if c.Name != "" {
-			label = c.Name + " <" + c.Email + ">"
-		}
-		opts = append(opts, tuicore.TagOption{Label: label, Value: c.Email})
-	}
-	return opts
 }

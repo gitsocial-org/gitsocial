@@ -40,8 +40,12 @@ func TestMatchesFingerprint(t *testing.T) {
 		want bool
 	}{
 		{"ABCDEF1234567890", "ABCDEF1234567890", true},
-		{"1234567890", "ABCDEF1234567890", true},
-		{"ABCDEF1234567890", "1234567890", true},
+		// A 16-char long key ID matches the full 40-char fingerprint it ends.
+		{"AAAABBBBCCCCDDDDEEEEFFFF0000111122223333", "EEEEFFFF0000111122223333", true},
+		{"EEEEFFFF0000111122223333", "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333", true},
+		// Suffixes shorter than a long key ID (16) are too weak to attest.
+		{"1234567890", "ABCDEF1234567890", false},
+		{"ABCDEF1234567890", "1234567890", false},
 		{"DEADBEEF", "ABCDEF1234567890", false},
 		{"", "ABCDEF", false},
 		{"ABCDEF", "", false},
@@ -66,7 +70,9 @@ func TestKeyMatchesFingerprint(t *testing.T) {
 		{"AAAAFFFFFINGERPRINTPRIMARY", true},
 		{"FINGERPRINTPRIMARY", true},
 		{"BBBBFFFFFINGERPRINTSUB1", true},
-		{"FINGERPRINTSUB2", true},
+		{"FFFFFINGERPRINTSUB2", true},
+		// Below the 16-char long-key-ID minimum: too weak to attest.
+		{"FINGERPRINTSUB2", false},
 		{"DEADBEEF", false},
 		{"", false},
 	}
@@ -100,8 +106,11 @@ func TestSshKeyMatches(t *testing.T) {
 		}
 	})
 	t.Run("GPG declared key suffix match", func(t *testing.T) {
-		if !sshKeyMatches("gpg:1234567890ABCDEF", "ABCDEF") {
-			t.Error("expected suffix match against gpg:<fingerprint>")
+		if !sshKeyMatches("gpg:AAAABBBBCCCCDDDDEEEEFFFF0000111122223333", "EEEEFFFF0000111122223333") {
+			t.Error("expected long-key-ID suffix match against gpg:<fingerprint>")
+		}
+		if sshKeyMatches("gpg:1234567890ABCDEF", "ABCDEF") {
+			t.Error("suffix shorter than a long key ID must not match")
 		}
 	})
 	t.Run("malformed declared key", func(t *testing.T) {
@@ -214,8 +223,19 @@ func TestIsVerified(t *testing.T) {
 	if !IsVerified("ABCDEF1234567890", "alice@example.com") {
 		t.Error("expected verified for full fingerprint match")
 	}
-	if !IsVerified("1234567890", "alice@example.com") {
-		t.Error("expected verified for short suffix match (16-char vs full)")
+	if IsVerified("1234567890", "alice@example.com") {
+		t.Error("suffix shorter than a long key ID must not verify")
+	}
+	insertTestBinding(t, &Binding{
+		KeyFingerprint: "AAAABBBBCCCCDDDDEEEEFFFF0000111122223333",
+		Email:          "carol@example.com",
+		Source:         SourceForgeGPG,
+		ForgeHost:      "github.com",
+		ResolvedAt:     time.Now(),
+		Verified:       true,
+	})
+	if !IsVerified("EEEEFFFF0000111122223333", "carol@example.com") {
+		t.Error("expected verified for long-key-ID suffix of the bound fingerprint")
 	}
 	if !IsVerified("ABCDEF1234567890", "ALICE@EXAMPLE.COM") {
 		t.Error("expected case-insensitive email match")
