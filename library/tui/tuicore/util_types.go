@@ -53,7 +53,11 @@ type WorkspaceFetchModeMsg struct {
 	Branches []string
 }
 
-type WorkspaceInitializedMsg struct{}
+// WorkspaceInitializedMsg signals the startup quick sync finished; Err is set
+// when the sync failed and cache-backed views may render stale data.
+type WorkspaceInitializedMsg struct {
+	Err error
+}
 
 // DisplayItem is the interface for any item that can be displayed in a CardList.
 // Extensions implement this to provide items for display.

@@ -85,7 +85,10 @@ func TestURLToSlug_Truncation(t *testing.T) {
 func TestReadWriteMapping(t *testing.T) {
 	dir := t.TempDir()
 	repoURL := "https://github.com/test/repo"
-	m := ReadMapping(dir, repoURL, "")
+	m, err := ReadMapping(dir, repoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping: %v", err)
+	}
 	if m == nil || m.Items == nil {
 		t.Fatal("ReadMapping returned nil or nil Items for nonexistent file")
 	}
@@ -95,12 +98,18 @@ func TestReadWriteMapping(t *testing.T) {
 	if err := WriteMapping(dir, repoURL, "", m); err != nil {
 		t.Fatalf("WriteMapping: %v", err)
 	}
-	loaded := ReadMapping(dir, repoURL, "")
+	loaded, err := ReadMapping(dir, repoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping after write: %v", err)
+	}
 	if !loaded.IsMapped("github:issue:1") {
 		t.Error("written mapping not found after reload")
 	}
 	if loaded.Source != "github" || loaded.RepoURL != repoURL {
 		t.Errorf("metadata mismatch: source=%q, repo=%q", loaded.Source, loaded.RepoURL)
+	}
+	if loaded.Version != mappingSchemaVersion {
+		t.Errorf("Version = %d, want %d", loaded.Version, mappingSchemaVersion)
 	}
 }
 
@@ -109,10 +118,37 @@ func TestReadMapping_InvalidJSON(t *testing.T) {
 	path := filepath.Join(dir, "imports", "test.json")
 	os.MkdirAll(filepath.Dir(path), 0755)
 	os.WriteFile(path, []byte("not json"), 0644)
-	m := ReadMapping(dir, "", path)
-	if m == nil || m.Items == nil {
-		t.Fatal("ReadMapping should return empty MappingFile for invalid JSON")
+	if _, err := ReadMapping(dir, "", path); err == nil {
+		t.Fatal("ReadMapping should fail loudly for invalid JSON (silent empty would re-import everything)")
 	}
+}
+
+func TestReadMapping_NewerSchema(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "imports", "test.json")
+	os.MkdirAll(filepath.Dir(path), 0755)
+	os.WriteFile(path, []byte(`{"version": 999, "items": {}}`), 0644)
+	if _, err := ReadMapping(dir, "", path); err == nil {
+		t.Fatal("ReadMapping should reject a mapping written by a newer schema")
+	}
+}
+
+func TestLockMapping(t *testing.T) {
+	dir := t.TempDir()
+	repoURL := "https://github.com/test/repo"
+	unlock, err := LockMapping(dir, repoURL, "")
+	if err != nil {
+		t.Fatalf("LockMapping: %v", err)
+	}
+	if _, err := LockMapping(dir, repoURL, ""); err == nil {
+		t.Fatal("second LockMapping should fail while lock is held")
+	}
+	unlock()
+	unlock2, err := LockMapping(dir, repoURL, "")
+	if err != nil {
+		t.Fatalf("LockMapping after unlock: %v", err)
+	}
+	unlock2()
 }
 
 func TestResolveMappingPath_AbsoluteMapFile(t *testing.T) {

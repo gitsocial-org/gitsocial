@@ -149,6 +149,71 @@ func TestGetStorageDir_uniqueForDifferentURLs(t *testing.T) {
 	}
 }
 
+func TestMigrateLegacyStorageDir(t *testing.T) {
+	t.Parallel()
+	baseDir := t.TempDir()
+	repoURL := "https://github.com/test/legacy-repo"
+
+	// Create a repo at the legacy 2-byte-hash path, as an old binary would have.
+	legacy := legacyStorageDir(baseDir, repoURL)
+	if err := os.MkdirAll(legacy, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git.ExecGit(legacy, []string{"init", "--bare"}); err != nil {
+		t.Fatalf("init legacy repo: %v", err)
+	}
+	if _, err := git.ExecGit(legacy, []string{"remote", "add", "upstream", repoURL}); err != nil {
+		t.Fatalf("add remote: %v", err)
+	}
+
+	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	if err != nil {
+		t.Fatalf("EnsureRepository() error = %v", err)
+	}
+	if storageDir == legacy {
+		t.Fatalf("storage dir still at legacy path %q", legacy)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Error("legacy dir should have been renamed away")
+	}
+	// The migrated dir must keep the original remote (migration, not re-clone).
+	result, err := git.ExecGit(storageDir, []string{"remote", "get-url", "upstream"})
+	if err != nil || strings.TrimSpace(result.Stdout) != repoURL {
+		t.Errorf("migrated dir upstream = %q (err %v), want %q", strings.TrimSpace(result.Stdout), err, repoURL)
+	}
+}
+
+func TestMigrateLegacyStorageDir_collisionNotMoved(t *testing.T) {
+	t.Parallel()
+	baseDir := t.TempDir()
+	repoURL := "https://github.com/test/colliding-repo"
+	otherURL := "https://github.com/other/unrelated"
+
+	// Legacy dir exists but belongs to a different URL (2-byte-hash collision).
+	legacy := legacyStorageDir(baseDir, repoURL)
+	if err := os.MkdirAll(legacy, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := git.ExecGit(legacy, []string{"init", "--bare"}); err != nil {
+		t.Fatalf("init legacy repo: %v", err)
+	}
+	if _, err := git.ExecGit(legacy, []string{"remote", "add", "upstream", otherURL}); err != nil {
+		t.Fatalf("add remote: %v", err)
+	}
+
+	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	if err != nil {
+		t.Fatalf("EnsureRepository() error = %v", err)
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Error("colliding legacy dir must not be moved")
+	}
+	result, err := git.ExecGit(storageDir, []string{"remote", "get-url", "upstream"})
+	if err != nil || strings.TrimSpace(result.Stdout) != repoURL {
+		t.Errorf("new dir upstream = %q (err %v), want %q", strings.TrimSpace(result.Stdout), err, repoURL)
+	}
+}
+
 // --- EnsureRepository tests ---
 
 func TestEnsureRepository_createsBareRepo(t *testing.T) {

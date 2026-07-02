@@ -17,9 +17,37 @@ import (
 // GetStorageDir returns the storage directory path for a repository.
 func GetStorageDir(baseDir, repoURL string) string {
 	h := sha256.Sum256([]byte(repoURL))
-	hash := hex.EncodeToString(h[:2])
+	hash := hex.EncodeToString(h[:8])
 	name := urlToDirectoryName(repoURL)
 	return filepath.Join(baseDir, "repositories", name+"-"+hash)
+}
+
+// legacyStorageDir returns the old storage path that used a 2-byte hash
+// (collision-prone past a few hundred repos).
+func legacyStorageDir(baseDir, repoURL string) string {
+	h := sha256.Sum256([]byte(repoURL))
+	name := urlToDirectoryName(repoURL)
+	return filepath.Join(baseDir, "repositories", name+"-"+hex.EncodeToString(h[:2]))
+}
+
+// migrateLegacyStorageDir renames a legacy 2-byte-hash dir to the current path.
+// The legacy dir may belong to a colliding URL, so it only moves when its
+// upstream remote matches. Best effort: on any failure the repo re-clones.
+func migrateLegacyStorageDir(baseDir, repoURL, storageDir string) {
+	legacy := legacyStorageDir(baseDir, repoURL)
+	if _, err := os.Stat(storageDir); err == nil {
+		return
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return
+	}
+	upstream, err := git.ExecGit(legacy, []string{"config", "--get", "remote.upstream.url"})
+	if err != nil || strings.TrimSpace(upstream.Stdout) != repoURL {
+		return
+	}
+	if err := os.Rename(legacy, storageDir); err != nil {
+		slog.Debug("legacy storage dir migration failed", "from", legacy, "error", err)
+	}
 }
 
 // urlToDirectoryName converts a URL to a safe directory name.
@@ -47,6 +75,7 @@ func EnsureRepository(baseDir, repoURL, branch string, opts *EnsureOptions) (str
 	}
 
 	storageDir := GetStorageDir(baseDir, repoURL)
+	migrateLegacyStorageDir(baseDir, repoURL, storageDir)
 
 	if _, err := os.Stat(storageDir); err == nil && !opts.Force {
 		return storageDir, nil

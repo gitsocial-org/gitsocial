@@ -430,8 +430,11 @@ type bgSyncProgressMsg struct {
 	Total     int
 }
 
-// bgSyncCompletedMsg signals the background history sync has finished.
-type bgSyncCompletedMsg struct{}
+// bgSyncCompletedMsg signals the background history sync has finished; Err is
+// set when the sync failed and older history may be missing from the cache.
+type bgSyncCompletedMsg struct {
+	Err error
+}
 
 // initWorkspace syncs the workspace to cache at startup. The quick pass
 // (most-recent quickPassLimit commits + extension refs) runs synchronously so
@@ -443,9 +446,7 @@ func (m Model) initWorkspace() tea.Cmd {
 	workdir := m.workdir
 	ch := m.bgSyncCh
 	return func() tea.Msg {
-		if err := fetch.SyncWorkspaceQuick(workdir); err != nil {
-			log.Debug("workspace quick sync failed", "error", err)
-		}
+		quickErr := fetch.SyncWorkspaceQuick(workdir)
 		go func() {
 			defer close(ch)
 			err := fetch.SyncWorkspaceContinue(workdir, func(p fetch.SyncProgress) {
@@ -455,14 +456,20 @@ func (m Model) initWorkspace() tea.Cmd {
 					// Channel full — drop progress update; final completion still arrives.
 				}
 			})
-			if err != nil {
-				log.Debug("workspace background sync failed", "error", err)
-			}
 			fetch.BackfillWorkspaceIdentity(workdir)
-			ch <- bgSyncCompletedMsg{}
+			ch <- bgSyncCompletedMsg{Err: err}
 		}()
-		return tuicore.WorkspaceInitializedMsg{}
+		return tuicore.WorkspaceInitializedMsg{Err: quickErr}
 	}
+}
+
+// reportSyncError records a failed sync in the error log and returns a command
+// that surfaces it in the message area.
+func (m Model) reportSyncError(prefix string, err error) tea.Cmd {
+	errMsg := prefix + ": " + err.Error()
+	m.host.State().AddLogEntry(tuicore.LogSeverityError, errMsg, "sync")
+	m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+	return m.host.SetMessageWithTimeout(errMsg, tuicore.MessageTypeError, 10*time.Second)
 }
 
 // drainBgSyncCmd reads one message from the background sync channel and
@@ -594,12 +601,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// continues with older history + identity verification — flag that so
 		// the footer shows a subtle indicator instead of going silent.
 		m.host.State().BackgroundSyncing = true
-		return m, tea.Batch(
+		cmds := []tea.Cmd{
 			m.host.RefreshView(),
 			m.loadInitialStatus(),
 			m.loadInitialUnpushedCount(),
 			drainBgSyncCmd(m.bgSyncCh),
-		)
+		}
+		if msg.Err != nil {
+			cmds = append(cmds, m.reportSyncError("Workspace sync failed", msg.Err))
+		}
+		return m, tea.Batch(cmds...)
 
 	case bgSyncProgressMsg:
 		// Each progress message means a chunk of older commits just landed.
@@ -613,6 +624,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// verification badges populate; clear the BackgroundSyncing footer flag.
 		m.host.State().IdentityGeneration++
 		m.host.State().BackgroundSyncing = false
+		if msg.Err != nil {
+			return m, tea.Batch(m.host.RefreshView(), m.reportSyncError("History sync failed", msg.Err))
+		}
 		return m, m.host.RefreshView()
 
 	case tuicore.TriggerFetchMsg:
@@ -757,6 +771,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		msgType := tuicore.MessageTypeSuccess
 		if len(msg.Stats.Errors) > 0 {
 			summary += fmt.Sprintf(" (%d errors)", len(msg.Stats.Errors))
+			msgType = tuicore.MessageTypeWarning
+		}
+		if msg.SyncErr != nil {
+			m.host.State().AddLogEntry(tuicore.LogSeverityError, "Post-import workspace sync failed: "+msg.SyncErr.Error(), "import")
+			m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+			summary += " — sync failed, run fetch to refresh views"
 			msgType = tuicore.MessageTypeWarning
 		}
 		return m, tea.Batch(
@@ -1568,10 +1588,13 @@ type importProgressMsg struct {
 }
 
 // importCompletedMsg signals the background import goroutine has finished.
+// SyncErr reports a failed post-import workspace sync: the import itself
+// succeeded but the cache may not show the new commits yet.
 type importCompletedMsg struct {
 	Stats   importpkg.Stats
 	RepoURL string
 	Err     error
+	SyncErr error
 }
 
 // importExtensionLabels maps extension names to footer-friendly phase labels.
@@ -1627,11 +1650,16 @@ func (m *Model) beginImport() tea.Cmd {
 		var mapping *importpkg.MappingFile
 		var mapped importpkg.ItemCounts
 		if countErr == nil {
-			mapping = importpkg.ReadMapping(cacheDir, repoURL, "")
-			if len(mapping.Items) == 0 {
-				importpkg.RebuildMapping(workdir, mapping)
+			var mapErr error
+			mapping, mapErr = importpkg.ReadMapping(cacheDir, repoURL, "")
+			if mapErr != nil {
+				countErr = mapErr
+			} else {
+				if len(mapping.Items) == 0 {
+					importpkg.RebuildMapping(workdir, mapping)
+				}
+				mapped = importpkg.CountMapped(mapping, counts)
 			}
-			mapped = importpkg.CountMapped(mapping, counts)
 		}
 		stopImportTicker(tickStopped)
 		ch <- importCountedMsg{
@@ -1753,15 +1781,14 @@ func (m *Model) startImport(adapter importpkg.SourceAdapter, repoURL string, cou
 		stats, err := importpkg.Run(adapter, opts)
 		// Re-sync workspace extension branches so newly imported commits show
 		// up in the cache-backed views without waiting for a manual fetch.
+		var syncErr error
 		if err == nil {
-			if syncErr := fetch.SyncWorkspace(workdir); syncErr != nil {
-				log.Debug("post-import workspace sync failed", "error", syncErr)
-			}
+			syncErr = fetch.SyncWorkspace(workdir)
 		}
 		// Stop the spinner ticker and wait for it to exit before closing
 		// the channel — prevents the ticker from sending on a closed chan.
 		stopImportTicker(ticker)
-		ch <- importCompletedMsg{Stats: stats, RepoURL: repoURL, Err: err}
+		ch <- importCompletedMsg{Stats: stats, RepoURL: repoURL, Err: err, SyncErr: syncErr}
 		close(ch)
 	}()
 	return drainBgImportCmd(ch)

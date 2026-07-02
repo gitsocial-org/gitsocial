@@ -14,8 +14,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
+// mappingSchemaVersion is written to every mapping file; readers reject files
+// written by a newer schema instead of misparsing them.
+const mappingSchemaVersion = 1
+
 // MappingFile tracks external IDs to GitSocial commit hashes.
 type MappingFile struct {
+	Version    int                   `json:"version"`
 	Source     string                `json:"source"`
 	RepoURL    string                `json:"repo_url"`
 	ImportedAt time.Time             `json:"imported_at"`
@@ -35,25 +40,36 @@ func MappingKey(platform, itemType, externalID string) string {
 	return fmt.Sprintf("%s:%s:%s", platform, itemType, externalID)
 }
 
-// ReadMapping loads an existing mapping file or returns an empty one.
-func ReadMapping(cacheDir, repoURL, mapFile string) *MappingFile {
+// ReadMapping loads an existing mapping file, returning an empty one when the
+// file doesn't exist. A file that exists but can't be parsed (or was written by
+// a newer schema) is an error: silently treating it as empty would re-import
+// everything and create duplicates.
+func ReadMapping(cacheDir, repoURL, mapFile string) (*MappingFile, error) {
 	path := resolveMappingPath(cacheDir, repoURL, mapFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return &MappingFile{Items: make(map[string]MappedItem)}
+		if os.IsNotExist(err) {
+			return &MappingFile{Items: make(map[string]MappedItem)}, nil
+		}
+		return nil, fmt.Errorf("read mapping file %s: %w", path, err)
 	}
 	var m MappingFile
 	if err := json.Unmarshal(data, &m); err != nil {
-		return &MappingFile{Items: make(map[string]MappedItem)}
+		return nil, fmt.Errorf("mapping file %s is corrupt (fix or remove it): %w", path, err)
+	}
+	if m.Version > mappingSchemaVersion {
+		return nil, fmt.Errorf("mapping file %s was written by a newer gitsocial (schema v%d, this binary supports v%d)", path, m.Version, mappingSchemaVersion)
 	}
 	if m.Items == nil {
 		m.Items = make(map[string]MappedItem)
 	}
-	return &m
+	return &m, nil
 }
 
-// WriteMapping saves the mapping file to disk.
+// WriteMapping saves the mapping file to disk atomically (temp file + rename)
+// so a crash or concurrent reader never sees a torn file.
 func WriteMapping(cacheDir, repoURL, mapFile string, m *MappingFile) error {
+	m.Version = mappingSchemaVersion
 	m.ImportedAt = time.Now()
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -64,7 +80,48 @@ func WriteMapping(cacheDir, repoURL, mapFile string, m *MappingFile) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create import dir: %w", err)
 	}
-	return os.WriteFile(path, append(data, '\n'), 0600)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp*")
+	if err != nil {
+		return fmt.Errorf("create temp mapping: %w", err)
+	}
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return fmt.Errorf("write temp mapping: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return fmt.Errorf("close temp mapping: %w", err)
+	}
+	if err := os.Chmod(tmp.Name(), 0600); err != nil {
+		os.Remove(tmp.Name())
+		return fmt.Errorf("chmod temp mapping: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		os.Remove(tmp.Name())
+		return fmt.Errorf("rename mapping: %w", err)
+	}
+	return nil
+}
+
+// LockMapping takes an exclusive lock on the mapping file via an O_EXCL sidecar
+// lock file, serializing concurrent imports of the same repo. Returns an unlock
+// function. Fails immediately (no waiting) when another import holds the lock.
+func LockMapping(cacheDir, repoURL, mapFile string) (func(), error) {
+	path := resolveMappingPath(cacheDir, repoURL, mapFile) + ".lock"
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return nil, fmt.Errorf("create import dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("another import appears to be running for this repo (lock file %s exists — remove it if that import crashed)", path)
+		}
+		return nil, fmt.Errorf("create mapping lock: %w", err)
+	}
+	fmt.Fprintf(f, "%d\n", os.Getpid())
+	f.Close()
+	return func() { os.Remove(path) }, nil
 }
 
 // ResolveMappingPath returns the resolved path for the mapping file (for display).

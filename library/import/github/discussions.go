@@ -140,6 +140,14 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 			d.Comments.PageInfo = more.PageInfo
 		}
 	}
+	var logins []string
+	for _, d := range allDiscussions {
+		logins = append(logins, d.Author.Login)
+		for _, c := range d.Comments.Nodes {
+			logins = append(logins, c.Author.Login)
+		}
+	}
+	a.prefetchUsers(logins)
 	var posts []importpkg.ImportPost
 	var comments []importpkg.ImportComment
 	var filtered int

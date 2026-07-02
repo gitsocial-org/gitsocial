@@ -45,6 +45,11 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 	if opts.OnFetchProgress != nil {
 		opts.OnFetchProgress(len(raw))
 	}
+	logins := make([]string, 0, len(raw))
+	for _, r := range raw {
+		logins = append(logins, r.Author.Login)
+	}
+	a.prefetchUsers(logins)
 	releases := make([]importpkg.ImportRelease, 0, len(raw))
 	var filtered int
 	for _, r := range raw {

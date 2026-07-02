@@ -121,6 +121,14 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	if opts.OnFetchProgress != nil {
 		opts.OnFetchProgress(len(raw))
 	}
+	var logins []string
+	for _, issue := range raw {
+		logins = append(logins, issue.Author.Login)
+		for _, u := range issue.Assignees {
+			logins = append(logins, u.Login)
+		}
+	}
+	a.prefetchUsers(logins)
 	out := make([]importpkg.ImportIssue, 0, len(raw))
 	var closedNumbers []int
 	var filtered int
@@ -170,6 +178,11 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	// Batch fetch closed_by via GraphQL instead of N+1 REST calls
 	if len(closedNumbers) > 0 {
 		closedByMap := a.batchClosedBy(closedNumbers)
+		closedLogins := make([]string, 0, len(closedByMap))
+		for _, login := range closedByMap {
+			closedLogins = append(closedLogins, login)
+		}
+		a.prefetchUsers(closedLogins)
 		for i := range out {
 			if out[i].State == "closed" {
 				if login, ok := closedByMap[out[i].Number]; ok && login != "" {

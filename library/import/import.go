@@ -42,7 +42,7 @@ type Options struct {
 	Verbose    bool
 	FetchOpts  FetchOptions
 	Counts     *ItemCounts         // pre-fetched counts (skip counting if set)
-	Mapping    *MappingFile        // pre-loaded mapping (skip ReadMapping if set)
+	Mapping    *MappingFile        // pre-loaded mapping; used only when the on-disk file is empty (e.g. carries RebuildMapping results)
 	OnProgress func(ProgressEvent) // optional progress callback
 }
 
@@ -81,12 +81,24 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 		}
 		progress("", PhaseCount, Stats{}, 0, 0, detail)
 	}
-	var mapping *MappingFile
-	if opts.Mapping != nil {
-		mapping = opts.Mapping
-	} else {
-		mapping = ReadMapping(opts.CacheDir, opts.RepoURL, opts.MapFile)
-		if len(mapping.Items) == 0 {
+	// Serialize concurrent imports of the same repo, then (re-)read the mapping
+	// under the lock: a mapping pre-loaded before the lock (e.g. while a confirm
+	// dialog was open) may miss entries a concurrent import just wrote.
+	if !opts.DryRun {
+		unlock, err := LockMapping(opts.CacheDir, opts.RepoURL, opts.MapFile)
+		if err != nil {
+			return Stats{}, err
+		}
+		defer unlock()
+	}
+	mapping, err := ReadMapping(opts.CacheDir, opts.RepoURL, opts.MapFile)
+	if err != nil {
+		return Stats{}, err
+	}
+	if len(mapping.Items) == 0 {
+		if opts.Mapping != nil && len(opts.Mapping.Items) > 0 {
+			mapping = opts.Mapping
+		} else {
 			RebuildMapping(opts.WorkDir, mapping)
 		}
 	}

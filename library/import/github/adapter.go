@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
@@ -21,6 +22,7 @@ type userProfile struct {
 type Adapter struct {
 	owner          string
 	repo           string
+	profileMu      sync.Mutex             // guards userProfiles (prefetchUsers resolves concurrently)
 	userProfiles   map[string]userProfile // login -> resolved profile cache
 	emailOverrides map[string]string      // login -> email override
 }
@@ -106,18 +108,27 @@ func (a *Adapter) SetUserEmails(emails map[string]string) {
 	a.emailOverrides = emails
 }
 
-// resolveUser looks up a GitHub user's profile via the API, returning both name and email.
-// Makes one API call per unique login and caches the result. Falls back to @login / noreply email.
-func (a *Adapter) resolveUser(login string) userProfile {
-	if login == "" {
-		return userProfile{}
-	}
+// cachedProfile returns the cached profile for a login, if resolved already.
+func (a *Adapter) cachedProfile(login string) (userProfile, bool) {
+	a.profileMu.Lock()
+	defer a.profileMu.Unlock()
+	p, ok := a.userProfiles[login]
+	return p, ok
+}
+
+// storeProfile records a resolved profile in the cache.
+func (a *Adapter) storeProfile(login string, p userProfile) {
+	a.profileMu.Lock()
+	defer a.profileMu.Unlock()
 	if a.userProfiles == nil {
 		a.userProfiles = map[string]userProfile{}
 	}
-	if p, ok := a.userProfiles[login]; ok {
-		return p
-	}
+	a.userProfiles[login] = p
+}
+
+// lookupUser fetches a user's profile via the API (one call), falling back to
+// @login / noreply email. Does not touch the cache.
+func (a *Adapter) lookupUser(login string) userProfile {
 	var user struct {
 		Name  string `json:"name"`
 		Email string `json:"email"`
@@ -134,8 +145,46 @@ func (a *Adapter) resolveUser(login string) userProfile {
 	if override, ok := a.emailOverrides[login]; ok {
 		p.email = override
 	}
-	a.userProfiles[login] = p
 	return p
+}
+
+// resolveUser looks up a GitHub user's profile, caching the result.
+func (a *Adapter) resolveUser(login string) userProfile {
+	if login == "" {
+		return userProfile{}
+	}
+	if p, ok := a.cachedProfile(login); ok {
+		return p
+	}
+	p := a.lookupUser(login)
+	a.storeProfile(login, p)
+	return p
+}
+
+// prefetchUsers resolves uncached logins with bounded concurrency so plan
+// building isn't one sequential API call per unique committer.
+func (a *Adapter) prefetchUsers(logins []string) {
+	const maxConcurrent = 8
+	sem := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
+	seen := map[string]bool{}
+	for _, login := range logins {
+		if login == "" || seen[login] {
+			continue
+		}
+		seen[login] = true
+		if _, ok := a.cachedProfile(login); ok {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(l string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			a.storeProfile(l, a.lookupUser(l))
+		}(login)
+	}
+	wg.Wait()
 }
 
 // resolveUserEmail returns the resolved email for a GitHub login.

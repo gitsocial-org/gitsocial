@@ -73,6 +73,17 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	if opts.OnFetchProgress != nil {
 		opts.OnFetchProgress(len(raw))
 	}
+	var logins []string
+	for _, pr := range raw {
+		logins = append(logins, pr.Author.Login)
+		for _, r := range pr.ReviewRequests {
+			logins = append(logins, r.Login)
+		}
+		if pr.MergedBy != nil {
+			logins = append(logins, pr.MergedBy.Login)
+		}
+	}
+	a.prefetchUsers(logins)
 	forkSet := map[string]bool{}
 	prs := make([]importpkg.ImportPR, 0, len(raw))
 	var closedNotMergedNumbers []int
@@ -146,6 +157,11 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	// Batch fetch closed_by for closed-not-merged PRs via GraphQL
 	if len(closedNotMergedNumbers) > 0 {
 		closedByMap := a.batchPRClosedBy(closedNotMergedNumbers)
+		closedLogins := make([]string, 0, len(closedByMap))
+		for _, login := range closedByMap {
+			closedLogins = append(closedLogins, login)
+		}
+		a.prefetchUsers(closedLogins)
 		for i := range prs {
 			if prs[i].State == "closed" && prs[i].MergedByName == "" {
 				if login, ok := closedByMap[prs[i].Number]; ok && login != "" {

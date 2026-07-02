@@ -201,7 +201,10 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		fmt.Printf("Counting items...\n")
 	}
 	counts, _ := adapter.CountItems(fetchOpts)
-	mapping := importpkg.ReadMapping(cfg.CacheDir, repoURL, f.mapFile)
+	mapping, err := importpkg.ReadMapping(cfg.CacheDir, repoURL, f.mapFile)
+	if err != nil {
+		return err
+	}
 	if len(mapping.Items) == 0 {
 		importpkg.RebuildMapping(cfg.WorkDir, mapping)
 	}
@@ -271,7 +274,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		PrintJSON(stats)
 	} else {
 		for _, e := range stats.Errors {
-			fmt.Printf("  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
+			fmt.Fprintf(os.Stderr, "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
 		}
 		imported := importpkg.ItemCounts{
 			Issues:      addImported(mapped.Issues, stats.Issues),
@@ -284,6 +287,13 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		if !f.dryRun {
 			fmt.Printf("Map file: %s\n", mapPath)
 		}
+	}
+	// Partial failure must not read as success: report loudly and exit non-zero.
+	if len(stats.Errors) > 0 {
+		if !cfg.JSONOutput {
+			fmt.Fprintf(os.Stderr, "\nImport completed with %d error(s) — the affected items were not imported; fix the cause and re-run (already-imported items are skipped).\n", len(stats.Errors))
+		}
+		os.Exit(ExitError)
 	}
 	return nil
 }
