@@ -60,10 +60,12 @@ type SocialItem struct {
 }
 
 // baseSelectFromView is the standard SELECT for querying social_items_resolved.
-// All social queries use this as the base, with additional WHERE/ORDER/LIMIT clauses.
-const baseSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
+// All social queries use this as the base, with additional WHERE/ORDER/LIMIT
+// clauses. Social doesn't fit cache.ResolvedSelect (interaction counts, stale
+// tracking, editor identity, followers join), so it composes the shared
+// snippets directly.
+var baseSelectFromView = `
+	SELECT ` + cache.ResolvedCommonColumns + `,
 	       v.type,
 	       v.original_repo_url, v.original_hash, v.original_branch,
 	       v.reply_to_repo_url, v.reply_to_hash, v.reply_to_branch,
@@ -74,11 +76,7 @@ const baseSelectFromView = `
 	       v.edit_repo_url, v.edit_hash, v.edit_branch,
 	       COALESCE(v.labels, ''),
 	       (sf.repo_url IS NOT NULL) as follows_workspace,
-	       EXISTS(SELECT 1 FROM core_commits_version cve
-	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
-	                AND cve.canonical_branch = v.branch
-	                AND cve.edit_repo_url != cve.canonical_repo_url
-	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
+	       ` + cache.HasProposedColumn("v") + `
 	FROM social_items_resolved v
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
@@ -87,9 +85,9 @@ const baseSelectFromView = `
 // core_commits directly. Resolved-state fields (resolved_message,
 // is_retracted, has_edits) are read from inline columns on core_commits, kept
 // in sync by applyEditToCanonical on every edit insert + reconcile pass.
-// Column order matches scanResolvedRows/scanResolvedRow.
+// Column order matches scanResolvedRow.
 // Caller binds: workspace_url (for sf join), then WHERE params.
-const baseDirectSelect = `
+var baseDirectSelect = `
 	SELECT c.repo_url, c.hash, c.branch,
 	       COALESCE(c.origin_author_name, c.author_name),
 	       COALESCE(c.origin_author_email, c.author_email),
@@ -109,11 +107,7 @@ const baseDirectSelect = `
 	       c.resolved_edit_repo_url, c.resolved_edit_hash, c.resolved_edit_branch,
 	       COALESCE(c.labels, ''),
 	       (sf.repo_url IS NOT NULL),
-	       EXISTS(SELECT 1 FROM core_commits_version cve
-	              WHERE cve.canonical_repo_url = c.repo_url AND cve.canonical_hash = c.hash
-	                AND cve.canonical_branch = c.branch
-	                AND cve.edit_repo_url != cve.canonical_repo_url
-	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
+	       ` + cache.HasProposedColumn("c") + `
 	FROM core_commits c
 	LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
 	LEFT JOIN social_interactions i ON c.repo_url = i.repo_url AND c.hash = i.hash AND c.branch = i.branch
@@ -610,7 +604,7 @@ func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
 
 		var items []SocialItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -690,7 +684,7 @@ func GetTimeline(listIDs []string, workspaceURL string, forkURLs []string, limit
 
 		var items []SocialItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -870,7 +864,7 @@ func GetAllItems(q SocialQuery) ([]SocialItem, error) {
 
 		var items []SocialItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -939,7 +933,7 @@ func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 
 		var items []SocialItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -1036,66 +1030,15 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 
 // scanResolvedRow scans a single row from baseSelectFromView queries.
 // Column order matches baseSelectFromView constant.
-func scanResolvedRow(row *sql.Row) (*SocialItem, error) {
+// scanResolvedRow scans a baseSelectFromView/baseDirectSelect row (single- or
+// multi-row query).
+func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
 	var labelsStr sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace, hasProposed int
-	err := row.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type,
-		&item.OriginalRepoURL, &item.OriginalHash, &item.OriginalBranch,
-		&item.ReplyToRepoURL, &item.ReplyToHash, &item.ReplyToBranch,
-		&item.EditOf, &item.Comments, &item.Reposts, &item.Quotes,
-		&isVirtual, &isRetracted, &hasEdits, &staleSince,
-		&editorName, &editorEmail,
-		&editRepoURL, &editHash, &editBranch,
-		&labelsStr,
-		&followsWorkspace, &hasProposed,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-		item.OriginalExtension, item.OriginalType = extractOriginalExtType(message.String)
-		item.HeaderExt, item.HeaderType, item.HeaderState = extractHeaderFields(message.String)
-	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
-		}
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.EditorName = editorName.String
-	item.EditorEmail = editorEmail.String
-	item.EditRepoURL = editRepoURL.String
-	item.EditHash = editHash.String
-	item.EditBranch = editBranch.String
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.IsStale = staleSince.Valid
-	if labelsStr.Valid {
-		item.Labels = splitSocialLabels(labelsStr.String)
-	}
-	item.FollowsWorkspace = followsWorkspace == 1
-	item.HasProposedEdits = hasProposed == 1
-	return &item, nil
-}
-
-// scanResolvedRows scans multiple rows from baseSelectFromView queries.
-func scanResolvedRows(rows *sql.Rows) (*SocialItem, error) {
-	var item SocialItem
-	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
-	var editRepoURL, editHash, editBranch sql.NullString
-	var labelsStr sql.NullString
-	var isVirtual, isRetracted, hasEdits, followsWorkspace, hasProposed int
-	err := rows.Scan(
+	err := s.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Type,
@@ -1255,7 +1198,7 @@ func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]Social
 
 		var items []SocialItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}

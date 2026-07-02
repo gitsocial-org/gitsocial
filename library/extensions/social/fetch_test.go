@@ -7,68 +7,9 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
-	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
-
-func TestConvertResult_success(t *testing.T) {
-	r := fetch.Result{
-		Success: true,
-		Data: fetch.Stats{
-			Repositories: 3,
-			Items:        42,
-			Errors: []fetch.Error{
-				{Repository: "https://github.com/a/b", Error: "timeout"},
-			},
-		},
-	}
-	got := convertResult(r)
-	if !got.Success {
-		t.Fatal("convertResult(success) should succeed")
-	}
-	if got.Data.Repositories != 3 {
-		t.Errorf("Repositories = %d, want 3", got.Data.Repositories)
-	}
-	if got.Data.Posts != 42 {
-		t.Errorf("Posts = %d, want 42", got.Data.Posts)
-	}
-	if len(got.Data.Errors) != 1 {
-		t.Fatalf("Errors len = %d, want 1", len(got.Data.Errors))
-	}
-	if got.Data.Errors[0].Repository != "https://github.com/a/b" {
-		t.Errorf("Error repo = %q", got.Data.Errors[0].Repository)
-	}
-	if got.Data.Errors[0].Error != "timeout" {
-		t.Errorf("Error msg = %q", got.Data.Errors[0].Error)
-	}
-}
-
-func TestConvertResult_failure(t *testing.T) {
-	r := fetch.Result{
-		Success: false,
-		Error:   &result.Error{Code: "FETCH_FAILED", Message: "network error"},
-	}
-	got := convertResult(r)
-	if got.Success {
-		t.Fatal("convertResult(failure) should fail")
-	}
-	if got.Error.Code != "FETCH_FAILED" {
-		t.Errorf("Error.Code = %q", got.Error.Code)
-	}
-}
-
-func TestConvertResult_noErrors(t *testing.T) {
-	r := fetch.Result{
-		Success: true,
-		Data:    fetch.Stats{Repositories: 1, Items: 5},
-	}
-	got := convertResult(r)
-	if len(got.Data.Errors) != 0 {
-		t.Errorf("Errors len = %d, want 0", len(got.Data.Errors))
-	}
-}
 
 func TestSocialProcessors_returnsSlice(t *testing.T) {
 	procs := Processors()

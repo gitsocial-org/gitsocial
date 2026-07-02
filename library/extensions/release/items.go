@@ -39,20 +39,8 @@ type ReleaseItem struct {
 	Comments int
 }
 
-const baseSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-	       v.tag, v.version, v.prerelease, v.artifacts, v.artifact_url,
-	       v.checksums, v.signed_by, v.sbom, v.labels,
-	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments,
-	       EXISTS(SELECT 1 FROM core_commits_version cve
-	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
-	                AND cve.canonical_branch = v.branch
-	                AND cve.edit_repo_url != cve.canonical_repo_url
-	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
-	FROM release_items_resolved v
-`
+var baseSelectFromView = cache.ResolvedSelect("release_items_resolved", `v.tag, v.version, v.prerelease, v.artifacts, v.artifact_url,
+       v.checksums, v.signed_by, v.sbom, v.labels`)
 
 // InsertReleaseItem inserts or updates a release item in the cache database.
 func InsertReleaseItem(item ReleaseItem) error {
@@ -147,7 +135,7 @@ func GetReleaseItems(repoURL, branch, cursor string, limit int) ([]ReleaseItem, 
 
 		var items []ReleaseItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -273,70 +261,23 @@ func GetReleaseItemByFullRef(refPrefix string) (*ReleaseItem, error) {
 	})
 }
 
-func scanResolvedRow(row *sql.Row) (*ReleaseItem, error) {
+// scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
+func scanResolvedRow(s cache.RowScanner) (*ReleaseItem, error) {
 	var item ReleaseItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, prerelease, hasProposed int
-	err := row.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
+	var prerelease int
+	meta, err := cache.ScanResolved(s,
 		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
 		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
-		}
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
+	item.RepoURL, item.Hash, item.Branch = meta.RepoURL, meta.Hash, meta.Branch
+	item.AuthorName, item.AuthorEmail = meta.AuthorName, meta.AuthorEmail
+	item.Content, item.Origin, item.Timestamp = meta.Content, meta.Origin, meta.Timestamp
+	item.EditOf, item.Comments = meta.EditOf, meta.Comments
 	item.Prerelease = prerelease == 1
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.HasProposedEdits = hasProposed == 1
-	return &item, nil
-}
-
-func scanResolvedRows(rows *sql.Rows) (*ReleaseItem, error) {
-	var item ReleaseItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, prerelease, hasProposed int
-	err := rows.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Tag, &item.Version, &prerelease, &item.Artifacts, &item.ArtifactURL,
-		&item.Checksums, &item.SignedBy, &item.SBOM, &item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments, &hasProposed,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
-		}
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.Prerelease = prerelease == 1
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.HasProposedEdits = hasProposed == 1
+	item.IsVirtual, item.IsRetracted = meta.IsVirtual, meta.IsRetracted
+	item.IsEdited, item.HasProposedEdits = meta.IsEdited, meta.HasProposed
 	return &item, nil
 }

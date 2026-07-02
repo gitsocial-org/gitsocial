@@ -14,19 +14,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
 )
 
-// FetchStats contains social fetch operation statistics.
-type FetchStats struct {
-	Repositories int
-	Posts        int
-	Errors       []FetchError
-}
-
-// FetchError records a per-repository social fetch failure.
-type FetchError struct {
-	Repository string
-	Error      string
-}
-
 // FetchOptions controls social fetch behavior.
 type FetchOptions struct {
 	ListID           string
@@ -40,7 +27,7 @@ type FetchOptions struct {
 }
 
 // Fetch retrieves updates from all subscribed repositories and syncs to cache.
-func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
+func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 	if opts == nil {
 		opts = &FetchOptions{}
 	}
@@ -52,7 +39,7 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
 
 	result := GetLists(workdir)
 	if !result.Success {
-		return Failure[FetchStats](result.Error.Code, result.Error.Message)
+		return Failure[fetch.Stats](result.Error.Code, result.Error.Message)
 	}
 
 	var repos []fetch.RepoInfo
@@ -93,24 +80,21 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) Result[FetchStats] {
 	if len(opts.ExtraHooks) > 0 {
 		hooks = append(hooks, opts.ExtraHooks...)
 	}
-	coreResult := fetch.FetchAll(workdir, cacheDir, coreOpts, repos, processors, hooks)
-	return convertResult(coreResult)
+	return fetch.FetchAll(workdir, cacheDir, coreOpts, repos, processors, hooks)
 }
 
 // FetchRepositoryRange fetches a repository with explicit date range (for "load more" pagination).
-func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL string) Result[FetchStats] {
-	coreResult := fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, Processors(), socialHooks())
-	return convertResult(coreResult)
+func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL string) fetch.Result {
+	return fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, Processors(), socialHooks())
 }
 
 // FetchRepository fetches complete history for a repository.
-func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, extraProcessors ...fetch.CommitProcessor) Result[FetchStats] {
+func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, extraProcessors ...fetch.CommitProcessor) fetch.Result {
 	processors := Processors()
 	if len(extraProcessors) > 0 {
 		processors = append(processors, extraProcessors...)
 	}
-	coreResult := fetch.FetchRepository(cacheDir, repoURL, branch, workspaceURL, processors, socialHooks())
-	return convertResult(coreResult)
+	return fetch.FetchRepository(cacheDir, repoURL, branch, workspaceURL, processors, socialHooks())
 }
 
 // CacheExternalRepoLists fetches and caches lists defined by an external repository.
@@ -136,22 +120,6 @@ func BackfillSpec() fetch.ExtBackfillSpec {
 // socialHooks returns the post-fetch hooks for the social extension.
 func socialHooks() []fetch.PostFetchHook {
 	return []fetch.PostFetchHook{fetchSocialListRefs, checkIfRepoFollowsWorkspace, cacheExternalRepoLists}
-}
-
-// convertResult maps core fetch.Stats to social FetchStats.
-func convertResult(r fetch.Result) Result[FetchStats] {
-	if !r.Success {
-		return Failure[FetchStats](r.Error.Code, r.Error.Message)
-	}
-	errors := make([]FetchError, 0, len(r.Data.Errors))
-	for _, e := range r.Data.Errors {
-		errors = append(errors, FetchError{Repository: e.Repository, Error: e.Error})
-	}
-	return Success(FetchStats{
-		Repositories: r.Data.Repositories,
-		Posts:        r.Data.Items,
-		Errors:       errors,
-	})
 }
 
 // processSocialCommit handles social-specific commit processing.

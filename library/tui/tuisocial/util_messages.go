@@ -3,6 +3,7 @@ package tuisocial
 
 import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -118,7 +119,7 @@ type ListPostsCountLoadedMsg struct {
 
 // FetchCompletedMsg is sent when fetch completes
 type FetchCompletedMsg struct {
-	Stats social.FetchStats
+	Stats fetch.Stats
 	Err   error
 	// Breakdown is the per-extension count of newly cached items this fetch
 	// (keys: social, pm, review, release, memo, code), used for the summary toast.

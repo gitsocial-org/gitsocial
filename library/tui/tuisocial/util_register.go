@@ -318,14 +318,14 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
 		return true, nil
 	}
-	ctx.Host().SetFetchStatus(time.Now(), msg.Stats.Posts)
+	ctx.Host().SetFetchStatus(time.Now(), msg.Stats.Items)
 	if msg.Auto {
 		// Drive auto-fetch back-off: reset when this cycle brought something,
 		// otherwise lengthen the idle streak (capped — beyond this the interval
 		// is already pinned at its ceiling).
 		st := ctx.Host().State()
 		switch {
-		case msg.Stats.Posts > 0:
+		case msg.Stats.Items > 0:
 			st.AutoFetchIdleStreak = 0
 		case st.AutoFetchIdleStreak < 20:
 			st.AutoFetchIdleStreak++

@@ -743,7 +743,7 @@ Examples:
 				if cfg.JSONOutput {
 					PrintJSON(result.Data)
 				} else {
-					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Posts)
+					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
 				}
 				return
 			}
@@ -778,7 +778,7 @@ Examples:
 				}
 
 				if stats.Repositories > 0 || len(stats.Errors) == 0 {
-					fmt.Printf("\nFetched %d posts from %d repositories\n", stats.Posts, stats.Repositories)
+					fmt.Printf("\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
 				}
 
 				if len(stats.Errors) > 0 {

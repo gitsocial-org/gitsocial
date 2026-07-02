@@ -69,7 +69,7 @@ For extension-specific options, use the extension's fetch command directly:
 				if cfg.JSONOutput {
 					PrintJSON(result.Data)
 				} else {
-					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Posts)
+					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
 					printNotificationDelta(cfg.WorkDir, countBefore)
 				}
 				return
@@ -111,7 +111,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 
 				if stats.Repositories > 0 || len(stats.Errors) == 0 {
-					fmt.Printf("\nFetched %d posts from %d repositories\n", stats.Posts, stats.Repositories)
+					fmt.Printf("\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
 				}
 
 				if len(stats.Errors) > 0 {
@@ -174,7 +174,7 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 // runFullFetch performs a full workspace fetch: subscribed repos, forks, and workspace sync.
 // If opts is nil, defaults are used. The caller can pre-populate opts with CLI-specific fields
 // (ListID, Since, Before, Parallel); this function fills in processors and branch mode.
-func runFullFetch(cfg *Config, opts *social.FetchOptions) (social.Result[social.FetchStats], fetch.FetchForkStats) {
+func runFullFetch(cfg *Config, opts *social.FetchOptions) (fetch.Result, fetch.FetchForkStats) {
 	if opts == nil {
 		opts = &social.FetchOptions{}
 	}

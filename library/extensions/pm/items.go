@@ -50,25 +50,13 @@ type PMItem struct {
 	Comments int
 }
 
-const baseSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-	       v.type, v.state,
-	       v.assignees, v.due, v.start_date, v.end_date,
-	       v.milestone_repo_url, v.milestone_hash, v.milestone_branch,
-	       v.sprint_repo_url, v.sprint_hash, v.sprint_branch,
-	       v.parent_repo_url, v.parent_hash, v.parent_branch,
-	       v.root_repo_url, v.root_hash, v.root_branch,
-	       v.labels,
-	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments,
-	       EXISTS(SELECT 1 FROM core_commits_version cv
-	              WHERE cv.canonical_repo_url = v.repo_url AND cv.canonical_hash = v.hash
-	                AND cv.canonical_branch = v.branch
-	                AND cv.edit_repo_url != cv.canonical_repo_url
-	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) AS has_proposed
-	FROM pm_items_resolved v
-`
+var baseSelectFromView = cache.ResolvedSelect("pm_items_resolved", `v.type, v.state,
+       v.assignees, v.due, v.start_date, v.end_date,
+       v.milestone_repo_url, v.milestone_hash, v.milestone_branch,
+       v.sprint_repo_url, v.sprint_hash, v.sprint_branch,
+       v.parent_repo_url, v.parent_hash, v.parent_branch,
+       v.root_repo_url, v.root_hash, v.root_branch,
+       v.labels`)
 
 // InsertPMItem inserts or updates a PM item in the cache database.
 // Wrapped in a single transaction with the pm_assignees rebuild so search
@@ -369,7 +357,7 @@ func GetPMItems(q PMQuery) ([]PMItem, error) {
 
 		var items []PMItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -511,7 +499,7 @@ func GetIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states [
 		defer rows.Close()
 		var result []PMItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -593,13 +581,10 @@ func GetSprints(repoURL, branch string, states []string, cursor string, limit in
 	return result.Ok(sprints)
 }
 
-func scanResolvedRow(row *sql.Row) (*PMItem, error) {
+// scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
+func scanResolvedRow(s cache.RowScanner) (*PMItem, error) {
 	var item PMItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, hasProposed int
-	err := row.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
+	meta, err := cache.ScanResolved(s,
 		&item.Type, &item.State,
 		&item.Assignees, &item.Due, &item.StartDate, &item.EndDate,
 		&item.MilestoneRepoURL, &item.MilestoneHash, &item.MilestoneBranch,
@@ -607,67 +592,16 @@ func scanResolvedRow(row *sql.Row) (*PMItem, error) {
 		&item.ParentRepoURL, &item.ParentHash, &item.ParentBranch,
 		&item.RootRepoURL, &item.RootHash, &item.RootBranch,
 		&item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
-		&hasProposed,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
-		}
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.HasProposedEdits = hasProposed == 1
-	return &item, nil
-}
-
-func scanResolvedRows(rows *sql.Rows) (*PMItem, error) {
-	var item PMItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, hasProposed int
-	err := rows.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type, &item.State,
-		&item.Assignees, &item.Due, &item.StartDate, &item.EndDate,
-		&item.MilestoneRepoURL, &item.MilestoneHash, &item.MilestoneBranch,
-		&item.SprintRepoURL, &item.SprintHash, &item.SprintBranch,
-		&item.ParentRepoURL, &item.ParentHash, &item.ParentBranch,
-		&item.RootRepoURL, &item.RootHash, &item.RootBranch,
-		&item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
-		&hasProposed,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
-		}
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.HasProposedEdits = hasProposed == 1
+	item.RepoURL, item.Hash, item.Branch = meta.RepoURL, meta.Hash, meta.Branch
+	item.AuthorName, item.AuthorEmail = meta.AuthorName, meta.AuthorEmail
+	item.Content, item.Origin, item.Timestamp = meta.Content, meta.Origin, meta.Timestamp
+	item.EditOf, item.Comments = meta.EditOf, meta.Comments
+	item.IsVirtual, item.IsRetracted = meta.IsVirtual, meta.IsRetracted
+	item.IsEdited, item.HasProposedEdits = meta.IsEdited, meta.HasProposed
 	return &item, nil
 }
 

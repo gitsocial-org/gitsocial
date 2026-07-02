@@ -1166,9 +1166,9 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		after, _ := cache.CountCommitsByBranch()
 		breakdown := fetchBreakdown(before, after)
 		stats := result.Data
-		stats.Posts = breakdownTotal(breakdown)
+		stats.Items = breakdownTotal(breakdown)
 		for _, e := range forkStats.Errors {
-			stats.Errors = append(stats.Errors, social.FetchError{Repository: e.ForkURL, Error: e.Error})
+			stats.Errors = append(stats.Errors, fetch.Error{Repository: e.ForkURL, Error: e.Error})
 		}
 		return tuisocial.FetchCompletedMsg{Stats: stats, Breakdown: breakdown, Auto: auto}
 	}
@@ -1455,7 +1455,7 @@ func (m Model) fetchAddedRepo(repoRef string) tea.Cmd {
 		if !result.Success {
 			return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Posts: result.Data.Posts}
+		return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Posts: result.Data.Items}
 	}
 }
 

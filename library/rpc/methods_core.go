@@ -396,7 +396,7 @@ func coreFetch(s *Server) HandlerFunc {
 				s.Emit("fetch", "fetch.complete", map[string]any{
 					"fetchId":      fetchID,
 					"repositories": result.Data.Repositories,
-					"newCommits":   result.Data.Posts,
+					"newCommits":   result.Data.Items,
 					"errors":       errCount,
 				})
 			} else {

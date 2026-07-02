@@ -31,11 +31,12 @@ type MemoItem struct {
 	IsStale     bool
 }
 
+// Memo doesn't fit cache.ResolvedSelect: it tracks stale_since and has no
+// comments/has_proposed columns, so it composes the shared snippets directly.
 const baseSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
+	SELECT ` + cache.ResolvedCommonColumns + `,
 	       v.type, v.labels,
-	       v.edits, v.is_virtual, v.is_retracted, v.has_edits, v.stale_since
+	       ` + cache.ResolvedFlagColumns + `, v.stale_since
 	FROM memo_items_resolved v
 `
 
@@ -248,7 +249,7 @@ func GetMemoItems(q MemoQuery) ([]MemoItem, error) {
 
 		var items []MemoItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -350,32 +351,12 @@ func MemoItemToMemo(item MemoItem, workspaceURL string, inheritedURLs []string) 
 	}
 }
 
-func scanResolvedRow(row *sql.Row) (*MemoItem, error) {
+// scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
+func scanResolvedRow(s cache.RowScanner) (*MemoItem, error) {
 	var item MemoItem
 	var ts, message, originalMessage, staleSince sql.NullString
 	var isVirtual, isRetracted, hasEdits int
-	err := row.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type, &item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits, &staleSince,
-	)
-	if err != nil {
-		return nil, err
-	}
-	populateFromMessage(&item, message, originalMessage, ts)
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	item.IsStale = staleSince.Valid
-	return &item, nil
-}
-
-func scanResolvedRows(rows *sql.Rows) (*MemoItem, error) {
-	var item MemoItem
-	var ts, message, originalMessage, staleSince sql.NullString
-	var isVirtual, isRetracted, hasEdits int
-	err := rows.Scan(
+	err := s.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Type, &item.Labels,

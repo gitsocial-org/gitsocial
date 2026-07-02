@@ -57,23 +57,11 @@ type ReviewItem struct {
 	Adopts string
 }
 
-const baseSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp,
-	       v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
-	       v.pull_request_repo_url, v.pull_request_hash, v.pull_request_branch,
-	       v.commit_ref, v.file, v.old_line, v.new_line, v.old_line_end, v.new_line_end,
-	       v.review_state, v.suggestion,
-	       v.labels,
-	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments,
-	       EXISTS(SELECT 1 FROM core_commits_version cve
-	              WHERE cve.canonical_repo_url = v.repo_url AND cve.canonical_hash = v.hash
-	                AND cve.canonical_branch = v.branch
-	                AND cve.edit_repo_url != cve.canonical_repo_url
-	                AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed
-	FROM review_items_resolved v
-`
+var baseSelectFromView = cache.ResolvedSelect("review_items_resolved", `v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
+       v.pull_request_repo_url, v.pull_request_hash, v.pull_request_branch,
+       v.commit_ref, v.file, v.old_line, v.new_line, v.old_line_end, v.new_line_end,
+       v.review_state, v.suggestion,
+       v.labels`)
 
 // InsertReviewItem inserts or updates a review item in the cache database.
 // Wrapped in a single transaction with the review_reviewers rebuild so search
@@ -312,7 +300,7 @@ func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
 
 		var items []ReviewItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -420,7 +408,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 		defer rows.Close()
 		var result []ReviewItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -545,73 +533,41 @@ func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChan
 	})
 }
 
-func scanResolvedRow(row *sql.Row) (*ReviewItem, error) {
+// scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
+// Review re-parses the raw messages itself: it needs References and adopts= in
+// addition to the standard content/origin interpretation.
+func scanResolvedRow(s cache.RowScanner) (*ReviewItem, error) {
 	var item ReviewItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, hasProposed int
-	err := row.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
+	meta, err := cache.ScanResolved(s,
 		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
 		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
 		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
 		&item.ReviewStateField, &item.Suggestion,
 		&item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments, &hasProposed,
 	)
 	if err != nil {
 		return nil, err
 	}
-	populateFromMessages(&item, message, originalMessage, ts, isVirtual, isRetracted, hasEdits)
-	item.HasProposedEdits = hasProposed == 1
-	return &item, nil
-}
-
-func scanResolvedRows(rows *sql.Rows) (*ReviewItem, error) {
-	var item ReviewItem
-	var ts, message, originalMessage sql.NullString
-	var isVirtual, isRetracted, hasEdits, hasProposed int
-	err := rows.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
-		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
-		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
-		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
-		&item.ReviewStateField, &item.Suggestion,
-		&item.Labels,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments, &hasProposed,
-	)
-	if err != nil {
-		return nil, err
-	}
-	populateFromMessages(&item, message, originalMessage, ts, isVirtual, isRetracted, hasEdits)
-	item.HasProposedEdits = hasProposed == 1
-	return &item, nil
-}
-
-func populateFromMessages(item *ReviewItem, message, originalMessage, ts sql.NullString, isVirtual, isRetracted, hasEdits int) {
-	if message.Valid {
-		if msg := protocol.ParseMessage(message.String); msg != nil {
+	item.RepoURL, item.Hash, item.Branch = meta.RepoURL, meta.Hash, meta.Branch
+	item.AuthorName, item.AuthorEmail = meta.AuthorName, meta.AuthorEmail
+	item.Origin, item.Timestamp = meta.Origin, meta.Timestamp
+	item.EditOf, item.Comments = meta.EditOf, meta.Comments
+	item.IsVirtual, item.IsRetracted = meta.IsVirtual, meta.IsRetracted
+	item.IsEdited, item.HasProposedEdits = meta.IsEdited, meta.HasProposed
+	if meta.Message.Valid {
+		if msg := protocol.ParseMessage(meta.Message.String); msg != nil {
 			item.Content = msg.Content
 			item.References = msg.References
 		} else {
-			item.Content = protocol.ExtractCleanContent(message.String)
+			item.Content = meta.Content
 		}
 	}
-	if originalMessage.Valid {
-		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
-			item.Origin = protocol.ExtractOrigin(&msg.Header)
+	if meta.OriginalMessage.Valid {
+		if msg := protocol.ParseMessage(meta.OriginalMessage.String); msg != nil {
 			item.Adopts = msg.Header.Fields["adopts"]
 		}
 	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
+	return &item, nil
 }
 
 // ReviewItemToPullRequest converts a ReviewItem to a PullRequest.

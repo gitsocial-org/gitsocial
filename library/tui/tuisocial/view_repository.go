@@ -275,7 +275,7 @@ func (v *RepositoryView) fetchInitialMonths(state *tuicore.State) tea.Cmd {
 		for _, m := range months {
 			result := social.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 			if result.Success {
-				totalPosts += result.Data.Posts
+				totalPosts += result.Data.Items
 				fetchedMonths = append(fetchedMonths, social.YearMonthFromRange(m))
 			}
 		}
@@ -304,7 +304,7 @@ func (v *RepositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
 		if !result.Success {
 			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return RepositoryFetchedMsg{Posts: result.Data.Posts, Months: []string{social.YearMonthFromRange(m)}}
+		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{social.YearMonthFromRange(m)}}
 	}
 }
 
@@ -341,7 +341,7 @@ func (v *RepositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
 		if !result.Success {
 			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
-		return RepositoryFetchedMsg{Posts: result.Data.Posts, Months: []string{ym}}
+		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{ym}}
 	}
 }
 

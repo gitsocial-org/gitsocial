@@ -92,7 +92,7 @@ func FindPRByHead(headRef string) []PullRequest {
 		defer rows.Close()
 		var result []ReviewItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}
@@ -213,7 +213,7 @@ func GetDependents(repoURL, branch, hash string) []PullRequest {
 		defer rows.Close()
 		var result []ReviewItem
 		for rows.Next() {
-			item, err := scanResolvedRows(rows)
+			item, err := scanResolvedRow(rows)
 			if err != nil {
 				return nil, err
 			}

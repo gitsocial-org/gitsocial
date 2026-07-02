@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
@@ -275,6 +276,11 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 		if headChanged && rv.BaseTip != "" && rv.HeadTip != "" && versions[currentVersion].BaseTip != "" && latestHeadTip != "" {
 			if equal, err := git.PatchesEqual(workdir, rv.BaseTip, rv.HeadTip, versions[currentVersion].BaseTip, latestHeadTip); err == nil {
 				codeChanged = !equal
+			} else {
+				// Degraded staleness: without the patch comparison (commits not
+				// local, etc.) a pure rebase reads as a code change.
+				log.Debug("PatchesEqual failed; treating head move as code change",
+					"reviewedHead", rv.HeadTip, "latestHead", latestHeadTip, "error", err)
 			}
 		}
 		stale := codeChanged && reviewedVersion < currentVersion
