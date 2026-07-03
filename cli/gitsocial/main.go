@@ -91,8 +91,10 @@ func main() {
 	// Core commands
 	rootCmd.AddCommand(
 		newStatusCmd(),
+		newCloneCmd(),
 		newFetchCmd(),
 		newPushCmd(),
+		newRemoteCmd(),
 		NewExtConfigCmd(coreExt),
 		newSettingsCmd(),
 		newLogCmd(),
@@ -109,6 +111,7 @@ func main() {
 		newForkCmd(),
 		newIDCmd(),
 		newPersonalCmd(),
+		newGitRemoteS3Cmd(),
 	)
 
 	// Extension commands (auto-registered via init())

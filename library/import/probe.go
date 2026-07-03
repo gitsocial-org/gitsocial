@@ -4,6 +4,7 @@ package importpkg
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -50,6 +51,9 @@ func ResolveHost(repoURL, hostOverride string) (protocol.HostingService, error) 
 		default:
 			return protocol.HostUnknown, fmt.Errorf("unknown host type: %s", hostOverride)
 		}
+	}
+	if strings.HasPrefix(repoURL, "s3://") {
+		return protocol.HostUnknown, fmt.Errorf("imports are not supported for s3:// remotes (no forge to import from)")
 	}
 	host := protocol.DetectHost(repoURL)
 	if host != protocol.HostUnknown {

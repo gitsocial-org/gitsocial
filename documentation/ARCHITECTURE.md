@@ -2,7 +2,7 @@
 
 Single Go library with thin clients: CLI/TUI (direct) and JSON-RPC (stdio).
 
-[Development](#development) • [Directory Structure](#directory-structure) • [Package Reference](#package-reference) • [Cache Architecture](#cache-architecture) • [CLI Commands](#cli-commands) • [TUI](#tui)
+[Development](#development) • [Directory Structure](#directory-structure) • [Package Reference](#package-reference) • [Cache Architecture](#cache-architecture) • [S3 Remote Backend](#s3-remote-backend) • [CLI Commands](#cli-commands) • [TUI](#tui)
 
 ---
 
@@ -133,6 +133,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   │   ├── gitmsg/            # Protocol-level storage
 │   │   ├── cache/             # SQLite operations
 │   │   ├── storage/           # Bare repo management
+│   │   ├── objstore/          # S3 remote backend (stdlib client + git remote helper)
 │   │   ├── fetch/             # Fetch orchestration + processing
 │   │   ├── identity/          # Identity declarations + verification
 │   │   │   └── forge/         # Forge adapters (GitHub, …)
@@ -189,6 +190,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | — | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | — | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
+| `core/objstore`<br>S3 remote backend (see [S3 Remote Backend](#s3-remote-backend)) | `Client`, `Config`, `Provider`, `Capability`, `HelperEnv` | `NewClient`, `ResolveProvider`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS` |
 | `core/fetch`<br>Fetch orchestration | — | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | — | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | — | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
@@ -320,6 +322,34 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 1. `storage.GetStorageDir()` hashes URL only; same URL with different branches shares storage
 2. Check `meta.HasCommits` before using timestamps (zero-value edge case)
+
+---
+
+## S3 Remote Backend
+
+Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote. Use `gitsocial clone s3://<endpoint>/<bucket>/<prefix>` to clone from a bucket, or `gitsocial remote add <url>` to register one (both accept a pasted AWS S3 console URL and normalize it), or add an `s3://` URL as a git remote by hand and push/pull normally.
+
+No extra git configuration is needed when going through `gitsocial`, the helper is injected automatically. For bare `git clone s3://…` without gitsocial in the loop, run `git config --global alias.remote-s3 '!gitsocial __git-remote-s3'` once.
+
+Git remote helper for `s3://` URLs (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)) is implemented in `core/objstore`.
+
+**URLs.** `s3://<endpoint-host>/<bucket>/<prefix>` is the only stored URL shape — identity and access in one string (cache, lists, and published data all carry it verbatim). A known provider's virtual-host spelling (`s3://bucket.nyc3.digitaloceanspaces.com/repo`) folds into it; bucket-only authorities and query params are errors. `clone`/`remote add` additionally accept, as a boundary convenience only (`protocol.ResolveS3URL`, normalized before anything is stored): an `https://` endpoint or virtual-host URL for a recognized provider (e.g. the `https://<account>.r2.cloudflarestorage.com` endpoint from the R2 dashboard — region/account ride in the host, so nothing is inferred), and a pasted AWS S3 web-console URL (`https://<region>.console.aws.amazon.com/s3/buckets/<bucket>`, whose region lives in a console subdomain rather than an endpoint host). Recognition is gated on the known host set, so a self-hosted endpoint still needs the explicit `s3://` scheme and an ordinary website URL passes through as a plain git remote.
+
+**Bucket layout.** Loose objects (`objects/<xx>/<38-hex>`), one key per ref, a `HEAD` symref key, gitsocial state under `.gitsocial/`.
+
+**Ref updates.** Two modes, pinned per bucket by the `.gitsocial/ref-mode` marker (first writer decides from the endpoint host's provider capability; unknown hosts are probed): `etag` (plain keys with `If-Match` CAS; aws, r2) and `generation` (create-only chains `<ref>/.gen/<counter>` via `If-None-Match: *`, highest generation wins, GC keeps the newest two; do). Readers resolve both shapes from one listing without the marker. Fast-forward is enforced client-side; buckets without conditional-write support are rejected before any ref is written.
+
+**Helper discovery.** Git spawns remote helpers as the subcommand `git remote-s3`, which resolves git aliases, so `alias.remote-s3 = !gitsocial __git-remote-s3` is injected into gitsocial's own git invocations via environment config, and written to the local config of s3-origin workspaces and cloned repos so plain git works there. For bare `git clone s3://…` anywhere: `git config --global alias.remote-s3 '!gitsocial __git-remote-s3'`.
+
+**Environment.**
+
+| Variable | Meaning |
+|----------|---------|
+| `GITSOCIAL_S3_ACCESS_KEY` / `GITSOCIAL_S3_SECRET_KEY` | Credentials (take precedence) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credential fallback (S3-ecosystem convention) |
+| `GITSOCIAL_S3_ENDPOINT` / `GITSOCIAL_S3_PATH_STYLE` | Dev/self-hosted overrides: endpoint scheme (http) and path-style addressing |
+| `GITSOCIAL_S3_REGION` | SigV4 region for endpoint hosts no preset recognizes |
+| `GITSOCIAL_S3_DEBUG=1` | Dump every request/response to stderr |
 
 ---
 

@@ -31,12 +31,16 @@ type RepoInfo struct {
 
 var sshPattern = regexp.MustCompile(`^git@([^:]+):([^/]+)/(.+)`)
 
-// NormalizeURL normalizes repository URLs to HTTPS format.
+// NormalizeURL normalizes repository URLs to HTTPS format. s3 URLs normalize
+// to their canonical identity (host form, config params stripped — see s3.go).
 func NormalizeURL(rawURL string) string {
 	if rawURL == "" {
 		return rawURL
 	}
 	normalized := strings.TrimSpace(rawURL)
+	if strings.HasPrefix(strings.ToLower(normalized), "s3://") {
+		return canonicalS3URL(normalized)
+	}
 
 	if strings.HasPrefix(normalized, "git@") {
 		normalized = sshPattern.ReplaceAllString(normalized, "https://$1/$2/$3")
@@ -98,7 +102,9 @@ func DetectHost(rawURL string) HostingService {
 	}
 }
 
-// ParseRepo extracts owner and repo name from a URL.
+// ParseRepo extracts owner and repo name from a URL. For s3:// remotes the
+// bucket stands in for the owner and the last prefix segment for the repo
+// (config query params are not part of the name).
 func ParseRepo(rawURL string) *RepoInfo {
 	normalized := NormalizeURL(rawURL)
 	if normalized == "" {
@@ -107,6 +113,14 @@ func ParseRepo(rawURL string) *RepoInfo {
 	parsed, err := url.Parse(normalized)
 	if err != nil {
 		return nil
+	}
+	if parsed.Scheme == "s3" {
+		// Canonical host form: the bucket is the first path segment.
+		segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		if segments[0] == "" {
+			return nil
+		}
+		return &RepoInfo{Owner: segments[0], Repo: segments[len(segments)-1]}
 	}
 	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
 	if len(parts) < 2 {

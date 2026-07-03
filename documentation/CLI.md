@@ -349,6 +349,35 @@ Requires git signing configured (`user.signingkey` and `gpg.format`). Supports S
 
 DNS-based verification (`/.well-known/gitmsg-id.json`) is **off by default** — see [IDENTITY.md](IDENTITY.md#why-dns-is-opt-in) for the rationale. Enable with `gitsocial settings set identity.dns_verification true` or via the TUI Settings view.
 
+### gitsocial clone
+
+Clone a repository. Identical to `git clone` but with zero-setup `s3://` remote support: injects the S3 helper alias and writes it to the cloned repo's local config so plain git commands work there too. Pasted provider URLs are normalized to the canonical `s3://` form (see [remote add](#gitsocial-remote-add) for the accepted shapes).
+
+```
+gitsocial clone <url> [directory]
+gitsocial clone s3://nyc3.digitaloceanspaces.com/mybucket/repo
+gitsocial clone https://<account>.r2.cloudflarestorage.com/mybucket
+gitsocial clone https://github.com/org/repo
+```
+
+### gitsocial remote add
+
+Add a git remote. When the URL points at an S3 bucket it is normalized to the canonical `s3://<endpoint-host>/<bucket>/<prefix>` form and the S3 helper alias is recorded in the repo's local config, so both gitsocial and plain git work with no further setup. Name defaults to `origin`. Accepted URL shapes (region/account are carried verbatim in the endpoint host):
+
+- Canonical `s3://<endpoint-host>/<bucket>/<prefix>` and a known provider's virtual-host `s3://<bucket>.<endpoint-host>/...`
+- An `https://` endpoint or virtual-host URL for a recognized provider (AWS, Cloudflare R2, DigitalOcean) — e.g. the `https://<account>.r2.cloudflarestorage.com` endpoint copied from the R2 dashboard
+- A pasted AWS S3 web-console URL (`https://<region>.console.aws.amazon.com/s3/buckets/<bucket>`)
+
+A self-hosted S3 endpoint (host no preset recognizes) must use the `s3://` scheme explicitly; any other URL is added as an ordinary git remote unchanged.
+
+```
+gitsocial remote add [name] <url>
+gitsocial remote add s3://s3.us-east-1.amazonaws.com/mybucket/repo
+gitsocial remote add https://<account>.r2.cloudflarestorage.com/mybucket
+gitsocial remote add https://us-east-1.console.aws.amazon.com/s3/buckets/mybucket
+gitsocial remote add upstream s3://s3.us-east-1.amazonaws.com/mybucket/repo
+```
+
 ### gitsocial tui
 
 Launch interactive terminal UI.
@@ -416,6 +445,12 @@ Short form: when unambiguous, use just the hash prefix (e.g., `abc123`).
 | `GITSOCIAL_PAGER` | Pager for output (falls back to `$PAGER`) |
 | `GITSOCIAL_NO_COLOR` | Disable colors |
 | `GITSOCIAL_PPROF` | Capture a profile for the current run: `cpu` → `/tmp/gitsocial-cpu.pprof`, `mem` → `/tmp/gitsocial-mem.pprof`, `trace` → `/tmp/gitsocial.trace`. Output written on clean exit; analyze with `go tool pprof` / `go tool trace`. |
+| `GITSOCIAL_S3_ACCESS_KEY` / `GITSOCIAL_S3_SECRET_KEY` | S3 credentials (take precedence over AWS vars) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 credential fallback (S3-ecosystem convention) |
+| `GITSOCIAL_S3_ENDPOINT` | Override S3 endpoint scheme (e.g. `http` for local dev/self-hosted) |
+| `GITSOCIAL_S3_PATH_STYLE` | Force path-style S3 addressing |
+| `GITSOCIAL_S3_REGION` | SigV4 region for endpoint hosts no preset recognizes |
+| `GITSOCIAL_S3_DEBUG` | Set to `1` to dump every S3 request/response to stderr |
 
 ---
 

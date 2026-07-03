@@ -17,7 +17,7 @@
 
 ## About
 
-GitSocial stores your collaboration data (issues, pull requests, etc) as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md), so your data is tied to your repo, not the hosting platform.
+GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md), and any S3-compatible bucket can be a git remote via the built-in [`s3://` backend](documentation/ARCHITECTURE.md#s3-remote-backend).
 
 GitSocial fetches into timeline activity from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
 
@@ -58,6 +58,13 @@ gitsocial import         # imports issues, PRs, releases, discussions
 gitsocial tui            # explore in the terminal
 ```
 
+Works for S3-compatible buckets too:
+
+```bash
+gitsocial clone s3://s3.example.com/mybucket/myrepo
+gitsocial remote add s3://s3.example.com/mybucket/myrepo
+```
+
 ## Documentation
 
 ### Concepts
@@ -67,6 +74,7 @@ gitsocial tui            # explore in the terminal
 | [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
 | [Identity Verification](documentation/IDENTITY.md) | Decentralized trust model, attestation sources, caching |
 | [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
+| [S3 Remote](documentation/ARCHITECTURE.md#s3-remote-backend) | Buckets as git remotes, canonical URLs, atomic ref updates |
 
 ### Extensions
 

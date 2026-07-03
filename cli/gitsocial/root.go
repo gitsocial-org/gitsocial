@@ -48,6 +48,11 @@ func newRootCmd() *cobra.Command {
 
 			initLogging(jsonOutput)
 			applyGitTimeout()
+			// The remote-helper command is itself spawned by git; skip the
+			// workspace alias check there to keep helper invocations lean.
+			if cmd.Name() != "__git-remote-s3" {
+				ensureWorkspaceS3Alias(workdir)
+			}
 
 			cfg := &Config{
 				WorkDir:    workdir,

@@ -48,6 +48,8 @@ References use `<type>:<value>@<branch>` format. The branch suffix is REQUIRED a
 - Remote: `<repository-url>#<type>:<value>@<branch>` (e.g., `https://github.com/user/repo#commit:abc123456789@main`)
 - Local: `#<type>:<value>@<branch>` (e.g., `#commit:abc123456789@main`)
 
+Repository URLs MAY use the `s3` scheme and MUST use the form `s3://<endpoint-host>/<bucket>/<prefix>` (e.g., `s3://s3.example.com/bucket/repo`).
+
 Implementations MUST support the following core reference types:
 - `commit:<hash>@<branch>` - Git commit in branch context (hash MUST be exactly 12 characters)
 - `branch:<name>` - Git branch (no branch suffix)

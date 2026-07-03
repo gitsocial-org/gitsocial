@@ -4,8 +4,10 @@ package git
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +28,47 @@ func testIsolationEnv() []string {
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_SYSTEM=/dev/null",
 	}
+}
+
+// s3HelperAlias returns the git alias that resolves s3:// remotes by running
+// this binary as the remote helper: git spawns helpers as the subcommand
+// `git remote-s3`, which goes through alias resolution, so no git-remote-s3
+// file is ever needed. Empty when the executable path can't be determined.
+var s3HelperAlias = sync.OnceValue(func() string {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Debug("s3 helper alias disabled: cannot locate executable", "error", err)
+		return ""
+	}
+	return `!"` + exe + `" __git-remote-s3`
+})
+
+// envWithS3HelperAlias adds alias.remote-s3 to the environment via git's
+// GIT_CONFIG_* mechanism, honoring any config entries already present.
+func envWithS3HelperAlias(env []string) []string {
+	alias := s3HelperAlias()
+	if alias == "" {
+		return env
+	}
+	count, countIdx := 0, -1
+	for i, entry := range env {
+		if value, ok := strings.CutPrefix(entry, "GIT_CONFIG_COUNT="); ok {
+			countIdx = i
+			if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+				count = parsed
+			}
+		}
+	}
+	env = append(env,
+		fmt.Sprintf("GIT_CONFIG_KEY_%d=alias.remote-s3", count),
+		fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", count, alias),
+	)
+	countEntry := fmt.Sprintf("GIT_CONFIG_COUNT=%d", count+1)
+	if countIdx >= 0 {
+		env[countIdx] = countEntry
+		return env
+	}
+	return append(env, countEntry)
 }
 
 var gitTimeout = 30 * time.Second
@@ -59,14 +102,14 @@ func DefaultExec(ctx context.Context, workdir string, args []string) (*ExecResul
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = append(append(os.Environ(),
+	cmd.Env = envWithS3HelperAlias(append(append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
 		// Git Credential Manager: don't pop GUI dialogs for fresh auth — cached
 		// tokens still work, so private-repo fetches the user already
 		// authenticated to keep functioning. Prevents surprise sign-in dialogs
 		// when gitsocial fetches external repos the user has no creds for.
 		"GCM_INTERACTIVE=Never",
-	), testIsolationEnv()...)
+	), testIsolationEnv()...))
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -130,10 +173,10 @@ func execGitWithStdin(workdir string, args []string, stdin string) (string, erro
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = append(append(os.Environ(),
+	cmd.Env = envWithS3HelperAlias(append(append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
 		"GCM_INTERACTIVE=Never",
-	), testIsolationEnv()...)
+	), testIsolationEnv()...))
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

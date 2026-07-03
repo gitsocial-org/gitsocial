@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GitSocial - Cross-forge collaboration platform</title>
   <meta name="description"
-    content="GitSocial stores your collaboration data (issues, pull requests, etc) as commits on gitmsg/* branches with structured trailers, so your data is tied to your repo, not the hosting platform.">
+    content="GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on gitmsg/* branches with structured trailers, and any S3-compatible bucket can be a git remote.">
   <meta name="keywords"
-    content="git, go, social, cli, decentralized, tui, rpc, kanban, scrum, sbom, cross-forge">
+    content="git, go, social, cli, decentralized, tui, rpc, kanban, scrum, sbom, cross-forge, s3, object storage, serverless">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -65,10 +65,12 @@
   <main class="repo-layout">
     <article class="readme">
       <h2 id="about">Cross-forge collaboration platform</h2>
-      <p>GitSocial stores your collaboration data (issues, pull requests, etc) as commits on
+      <p>GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on
         <code>gitmsg/*</code> branches with <a
-          href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md">structured trailers</a>, so your
-        data is tied to your repo, not the hosting platform.</p>
+          href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md">structured trailers</a>,
+        and any S3-compatible bucket can be a git remote via the built-in <a
+          href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/ARCHITECTURE.md#s3-remote-backend"><code>s3://</code>
+          backend</a>.</p>
       <br />
       <p>GitSocial fetches into timeline activity from repositories added to <a
           href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md#2-lists">lists</a> or registered as
@@ -100,6 +102,10 @@ scoop install gitsocial</code></pre>
       <pre><code>gitsocial import         # imports issues, PRs, releases, discussions
 gitsocial tui            # explore in the terminal</code></pre>
 
+      <p>Works for S3-compatible buckets too:</p>
+      <pre><code>gitsocial clone s3://s3.example.com/mybucket/myrepo
+gitsocial remote add s3://s3.example.com/mybucket/myrepo</code></pre>
+
       <h2 id="documentation">Documentation</h2>
       <h3>Concepts</h3>
       <table>
@@ -124,6 +130,11 @@ gitsocial tui            # explore in the terminal</code></pre>
                 href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/NOTIFICATIONS.md">Notifications</a>
             </td>
             <td>Notification types, scopes, and triggers</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/ARCHITECTURE.md#s3-remote-backend">S3
+                Remote</a></td>
+            <td>Buckets as git remotes, canonical URLs, atomic ref updates</td>
           </tr>
         </tbody>
       </table>

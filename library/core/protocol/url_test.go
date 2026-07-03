@@ -194,6 +194,22 @@ func TestParseRepo(t *testing.T) {
 			input:   "https://github.com/user",
 			wantNil: true,
 		},
+		{
+			name:    "s3 bucket-only authority is invalid",
+			input:   "s3://mybucket/team/repo",
+			wantNil: true,
+		},
+		{
+			name:      "s3 canonical host form",
+			input:     "s3://nyc3.digitaloceanspaces.com/mybucket/team/repo",
+			wantOwner: "mybucket",
+			wantRepo:  "repo",
+		},
+		{
+			name:    "s3 host form without bucket",
+			input:   "s3://nyc3.digitaloceanspaces.com",
+			wantNil: true,
+		},
 	}
 
 	for _, tt := range tests {
