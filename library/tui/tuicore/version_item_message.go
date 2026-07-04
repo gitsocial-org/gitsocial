@@ -1,4 +1,4 @@
-// version_item_message.go - Default card-style VersionItem for gitmsg message versions.
+// version_item_message.go - Shared base and helpers for gitmsg version items.
 package tuicore
 
 import (
@@ -10,41 +10,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// MessageHistoryLoader returns a history loader that fetches a gitmsg edit
-// history and wraps each version as a MessageVersionItem. extBranch is the
-// default data branch used when the requested ref omits one. Shared by the PM
-// and release history views, which differ only in that branch.
-func MessageHistoryLoader(extBranch string) func(HistoryLoadContext) ([]VersionItem, error) {
-	return func(ctx HistoryLoadContext) ([]VersionItem, error) {
-		parsed := protocol.ParseRef(ctx.Ref)
-		if parsed.Value == "" {
-			return nil, fmt.Errorf("invalid ref: %s", ctx.Ref)
-		}
-		branch := parsed.Branch
-		if branch == "" {
-			branch = gitmsg.GetExtBranch(ctx.Workdir, extBranch)
-		}
-		ref := protocol.CreateRef(protocol.RefTypeCommit, parsed.Value, parsed.Repository, branch)
-		versions, err := gitmsg.GetHistory(ref, ctx.WorkspaceURL)
-		if err != nil {
-			return nil, err
-		}
-		items := make([]VersionItem, len(versions))
-		for i, version := range versions {
-			items[i] = MessageVersionItem{
-				Version:     version,
-				ShowEmail:   ctx.ShowEmail,
-				ProposalTag: ProposalTag(ctx.Owned, ctx.WorkspaceURL, version.RepoURL, version.CommitHash, version.Branch),
-			}
-		}
-		return items, nil
-	}
-}
-
-// MessageVersionItem is the default VersionItem for plain message-versioned
-// items (PM issues/milestones/sprints, releases): it renders a gitmsg version
-// as a subject/body card. Items with bespoke layouts implement VersionItem
-// directly instead of using this type.
+// MessageVersionItem is the shared base for gitmsg version items: it provides
+// the VersionItem plumbing and the generic list entry. The extension version
+// items embed it, adding a RenderDetail that reconstructs their real hero card.
 type MessageVersionItem struct {
 	Version     gitmsg.MessageVersion
 	ShowEmail   bool
@@ -92,15 +60,6 @@ func (v MessageVersionItem) subject() string {
 	return ""
 }
 
-// body extracts the body (after first line) from the content.
-func (v MessageVersionItem) body() string {
-	lines := strings.SplitN(v.Version.Content, "\n", 2)
-	if len(lines) > 1 {
-		return strings.TrimSpace(lines[1])
-	}
-	return ""
-}
-
 // RenderListEntry renders a compact list entry for this version.
 func (v MessageVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
 	hash := v.Version.CommitHash
@@ -129,36 +88,44 @@ func (v MessageVersionItem) RenderListEntry(index, total int, label string, sele
 	return b.String()
 }
 
-// RenderDetail renders the full detail view for this version.
-func (v MessageVersionItem) RenderDetail(width int) string {
-	var content string
-	if v.Version.IsRetracted {
-		content = "[deleted]"
-	} else {
-		subject := v.subject()
-		body := v.body()
-		if subject != "" && body != "" {
-			content = subject + "\n\n" + body
-		} else if subject != "" {
-			content = subject
-		} else if body != "" {
-			content = body
-		}
+// RenderVersionBanner renders the version-mode banner lines shared by the hero
+// cards: a dim "edited by <author> · <time>" ("[deleted] · " prefix when
+// retracted) followed by a spacer line.
+func RenderVersionBanner(selectionBar, author string, t time.Time, retracted bool) []string {
+	if author == "" {
+		author = "Anonymous"
 	}
-	card := Card{
-		Header: CardHeader{
-			Title:       v.AuthorDisplay(v.ShowEmail),
-			Subtitle:    []HeaderPart{{Text: FormatFullTime(v.Version.Timestamp)}},
-			IsRetracted: v.Version.IsRetracted,
-		},
-		Content: CardContent{Text: content},
+	banner := "edited by " + author + " · " + FormatFullTime(t)
+	if retracted {
+		banner = "[deleted] · " + banner
 	}
-	opts := CardOptions{
-		MaxLines:  -1,
-		ShowStats: false,
-		Width:     width,
-		WrapWidth: width - 5,
-		Markdown:  true,
+	return []string{selectionBar + Dim.Render(banner), selectionBar}
+}
+
+// LoadMessageHistory fetches the gitmsg edit history for ctx.Ref, defaulting the
+// branch to extBranch's data branch, and wraps each version via wrap. Shared by
+// the PM and release history loaders, which differ only in that wrapping.
+func LoadMessageHistory(ctx HistoryLoadContext, extBranch string, wrap func(MessageVersionItem) VersionItem) ([]VersionItem, error) {
+	parsed := protocol.ParseRef(ctx.Ref)
+	if parsed.Value == "" {
+		return nil, fmt.Errorf("invalid ref: %s", ctx.Ref)
 	}
-	return RenderCard(card, opts)
+	branch := parsed.Branch
+	if branch == "" {
+		branch = gitmsg.GetExtBranch(ctx.Workdir, extBranch)
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, parsed.Value, parsed.Repository, branch)
+	versions, err := gitmsg.GetHistory(ref, ctx.WorkspaceURL)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]VersionItem, len(versions))
+	for i, version := range versions {
+		items[i] = wrap(MessageVersionItem{
+			Version:     version,
+			ShowEmail:   ctx.ShowEmail,
+			ProposalTag: ProposalTag(ctx.Owned, ctx.WorkspaceURL, version.RepoURL, version.CommitHash, version.Branch),
+		})
+	}
+	return items, nil
 }

@@ -320,21 +320,7 @@ func cacheReleaseFromCommit(workdir, repoURL, hash, branch string) error {
 		}
 	}
 
-	prerelease := msg.Header.Fields["prerelease"] == "true"
-
-	item := ReleaseItem{
-		RepoURL:     repoURL,
-		Hash:        hash,
-		Branch:      branch,
-		Tag:         cache.ToNullString(msg.Header.Fields["tag"]),
-		Version:     cache.ToNullString(msg.Header.Fields["version"]),
-		Prerelease:  prerelease,
-		Artifacts:   cache.ToNullString(msg.Header.Fields["artifacts"]),
-		ArtifactURL: cache.ToNullString(msg.Header.Fields["artifact-url"]),
-		Checksums:   cache.ToNullString(msg.Header.Fields["checksums"]),
-		SignedBy:    cache.ToNullString(msg.Header.Fields["signed-by"]),
-		SBOM:        cache.ToNullString(msg.Header.Fields["sbom"]),
-	}
+	item := MessageToReleaseItem(msg, repoURL, hash, branch)
 
 	if err := InsertReleaseItem(item); err != nil {
 		return err

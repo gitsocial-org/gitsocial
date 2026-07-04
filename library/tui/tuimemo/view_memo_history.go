@@ -4,51 +4,18 @@ package tuimemo
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MemoVersionItem wraps gitmsg.MessageVersion to implement tuicore.VersionItem.
+// MemoVersionItem reuses the generic VersionItem plumbing of MessageVersionItem
+// with memo-specific list and detail layouts. Memos have no cross-repo proposal
+// flow, so the embedded ProposalTag stays empty.
 type MemoVersionItem struct {
-	Version   gitmsg.MessageVersion
-	ShowEmail bool
+	tuicore.MessageVersionItem
 }
-
-// GetID returns the version's unique ref.
-func (m MemoVersionItem) GetID() string { return m.Version.ID }
-
-// GetTimestamp returns the version's commit time.
-func (m MemoVersionItem) GetTimestamp() time.Time { return m.Version.Timestamp }
-
-// GetEditOf returns the ID of the version this one edits, or "" for canonical.
-func (m MemoVersionItem) GetEditOf() string { return m.Version.EditOf }
-
-// IsRetracted reports whether this version is a retract commit.
-func (m MemoVersionItem) IsRetracted() bool { return m.Version.IsRetracted }
-
-// AuthorDisplay returns the author name, optionally with email.
-func (m MemoVersionItem) AuthorDisplay(showEmail bool) string {
-	name := m.Version.AuthorName
-	if name == "" {
-		name = "Anonymous"
-	}
-	if showEmail && m.Version.AuthorEmail != "" {
-		name += " <" + m.Version.AuthorEmail + ">"
-	}
-	return name
-}
-
-// Ref returns the version's repo URL, commit hash, and branch.
-func (m MemoVersionItem) Ref() (string, string, string) {
-	return m.Version.RepoURL, protocol.ParseRef(m.Version.ID).Value, m.Version.Branch
-}
-
-// IsOpenProposal reports whether this version is an open cross-repo proposal.
-// Memos have no cross-repo proposal flow, so this is always false.
-func (m MemoVersionItem) IsOpenProposal() bool { return false }
 
 // RenderListEntry renders a compact summary line for the picker: header on
 // line 1 (version, label, hash, author, time), body excerpt on line 2, and
@@ -127,7 +94,7 @@ func loadMemoHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, err
 	}
 	items := make([]tuicore.VersionItem, len(versions))
 	for i, ver := range versions {
-		items[i] = MemoVersionItem{Version: ver, ShowEmail: ctx.ShowEmail}
+		items[i] = MemoVersionItem{MessageVersionItem: tuicore.MessageVersionItem{Version: ver, ShowEmail: ctx.ShowEmail}}
 	}
 	return items, nil
 }

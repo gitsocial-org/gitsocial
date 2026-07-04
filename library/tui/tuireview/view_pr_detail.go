@@ -578,7 +578,30 @@ func (v *PRDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				lines := v.renderPRCard(width, selected, searchQuery, anchors)
+				lines := renderPRCard(pr, width, selected, searchQuery, anchors, prCardOptions{
+					showRaw:        v.showRaw,
+					showEmail:      v.showEmail,
+					userEmail:      v.userEmail,
+					workspaceURL:   v.workspaceURL,
+					behindCount:    v.behindCount,
+					tipStaleMarker: v.tipStaleMarker,
+					filesRow: func() string {
+						styles := tuicore.RowStylesWithWidths(14, 0)
+						switch {
+						case !v.diffLoaded && !v.isLocalPR():
+							return tuicore.Dim.Render("Press [d] to view diff")
+						case !v.diffLoaded:
+							return tuicore.Dim.Render("Loading...")
+						case v.diffCtx.Error != "":
+							return tuicore.Dim.Render(v.diffCtx.Error)
+						case v.diffStats.Files > 0:
+							return styles.Value.Render(fmt.Sprintf("%d changed  %s  [d]", v.diffStats.Files, tuicore.RenderDiffStatsBadge(v.diffStats.Added, v.diffStats.Removed)))
+						case v.diffCtx.Base != "" && v.diffCtx.Head != "":
+							return tuicore.Dim.Render("0 files changed")
+						}
+						return ""
+					},
+				})
 				if pr.HasProposedEdits {
 					banner := "✎  Proposed edits from another repo (press h to review)"
 					if pr.Repository != v.workspaceURL {
@@ -1093,12 +1116,34 @@ func (v *PRDetailView) Render(state *tuicore.State) string {
 	return wrapper.Render(content, footer)
 }
 
-func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-	pr := v.pr
+// prCardOptions carries view state (show-raw/show-email, user/workspace context,
+// live behind/tip-stale/files inputs) plus version-mode settings into the shared
+// PR hero-card renderer. In version mode tipStaleMarker and filesRow are nil and
+// behindCount is zero, so those live rows are suppressed.
+type prCardOptions struct {
+	showRaw        bool
+	showEmail      bool
+	userEmail      string
+	workspaceURL   string
+	behindCount    int
+	tipStaleMarker func(side, storedTip string) string
+	filesRow       func() string
+	version        bool      // render as a historical version (banner + version rules)
+	versionAuthor  string    // version banner author display
+	versionTime    time.Time // version banner timestamp
+}
+
+// renderPRCard renders the PR hero card shared by the detail view and the version
+// picker. In version mode it shows an edit banner and suppresses current-canonical
+// chrome (origin rows, tip-stale markers, Behind/Files rows, "Referenced by").
+func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, opts prCardOptions) []string {
 	var lines []string
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
+	}
+	if opts.version {
+		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, pr.IsRetracted)...)
 	}
 	title := pr.Subject
 	if searchQuery != "" {
@@ -1121,7 +1166,9 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		stateStr = tuicore.Dim.Render("closed")
 	}
 	lines = append(lines, selectionBar+styles.Label.Render("State")+stateStr)
-	lines = append(lines, tuicore.RenderOriginRows(pr.Origin, styles, selectionBar, anchors, v.showEmail)...)
+	if !opts.version {
+		lines = append(lines, tuicore.RenderOriginRows(pr.Origin, styles, selectionBar, anchors, opts.showEmail)...)
+	}
 	displayAuthor := pr.Author
 	displayTime := pr.Timestamp
 	if pr.OriginalAuthor != nil {
@@ -1131,7 +1178,7 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		}
 	}
 	if pr.Origin != nil {
-		if a := tuicore.FormatOriginAuthorDisplay(pr.Origin, v.showEmail); a != "" {
+		if a := tuicore.FormatOriginAuthorDisplay(pr.Origin, opts.showEmail); a != "" {
 			displayAuthor = review.Author{Name: a}
 		}
 		if pr.Origin.Time != "" {
@@ -1141,27 +1188,27 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		}
 	}
 	authorName := displayAuthor.Name
-	if v.showEmail && displayAuthor.Email != "" {
+	if opts.showEmail && displayAuthor.Email != "" {
 		authorName += " <" + displayAuthor.Email + ">"
 	}
-	authorStyle := tuicore.AuthorStyle(displayAuthor.Email, v.userEmail, styles.Value)
+	authorStyle := tuicore.AuthorStyle(displayAuthor.Email, opts.userEmail, styles.Value)
 	lines = append(lines, selectionBar+styles.Label.Render("Author")+authorStyle.Render(
 		authorName+" · "+tuicore.FormatTime(displayTime)))
 	if pr.MergedBy != nil {
 		mergedByName := pr.MergedBy.Name
-		if v.showEmail && pr.MergedBy.Email != "" {
+		if opts.showEmail && pr.MergedBy.Email != "" {
 			mergedByName += " <" + pr.MergedBy.Email + ">"
 		}
-		mergedByStyle := tuicore.AuthorStyle(pr.MergedBy.Email, v.userEmail, styles.Value)
+		mergedByStyle := tuicore.AuthorStyle(pr.MergedBy.Email, opts.userEmail, styles.Value)
 		lines = append(lines, selectionBar+styles.Label.Render("Merged by")+mergedByStyle.Render(
 			mergedByName+" · "+tuicore.FormatTime(pr.MergedAt)))
 	}
 	if pr.ClosedBy != nil {
 		closedByName := pr.ClosedBy.Name
-		if v.showEmail && pr.ClosedBy.Email != "" {
+		if opts.showEmail && pr.ClosedBy.Email != "" {
 			closedByName += " <" + pr.ClosedBy.Email + ">"
 		}
-		closedByStyle := tuicore.AuthorStyle(pr.ClosedBy.Email, v.userEmail, styles.Value)
+		closedByStyle := tuicore.AuthorStyle(pr.ClosedBy.Email, opts.userEmail, styles.Value)
 		lines = append(lines, selectionBar+styles.Label.Render("Closed by")+closedByStyle.Render(
 			closedByName+" · "+tuicore.FormatTime(pr.ClosedAt)))
 	}
@@ -1170,11 +1217,11 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		parsed := protocol.ParseRef(pr.Base)
 		repoURL := parsed.Repository
 		if repoURL == "" {
-			repoURL = v.workspaceURL
+			repoURL = opts.workspaceURL
 		}
 		branchURL := protocol.BranchURL(repoURL, parsed.Value)
 		var baseText string
-		if loc := branchRefLocation(pr.Base, v.workspaceURL); loc != nil {
+		if loc := branchRefLocation(pr.Base, opts.workspaceURL); loc != nil {
 			baseText = anchors.MarkLink(display, branchURL, *loc)
 		} else if branchURL != "" {
 			baseText = tuicore.Hyperlink(branchURL, display)
@@ -1184,8 +1231,10 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		if pr.BaseTip != "" {
 			baseText += tuicore.Dim.Render(" · #" + pr.BaseTip)
 		}
-		if marker := v.tipStaleMarker("base", pr.BaseTip); marker != "" {
-			baseText += marker
+		if opts.tipStaleMarker != nil {
+			if marker := opts.tipStaleMarker("base", pr.BaseTip); marker != "" {
+				baseText += marker
+			}
 		}
 		lines = append(lines, selectionBar+styles.Label.Render("Base")+baseText)
 	}
@@ -1194,11 +1243,11 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		parsed := protocol.ParseRef(pr.Head)
 		repoURL := parsed.Repository
 		if repoURL == "" {
-			repoURL = v.workspaceURL
+			repoURL = opts.workspaceURL
 		}
 		branchURL := protocol.BranchURL(repoURL, parsed.Value)
 		var headText string
-		if loc := branchRefLocation(pr.Head, v.workspaceURL); loc != nil {
+		if loc := branchRefLocation(pr.Head, opts.workspaceURL); loc != nil {
 			headText = anchors.MarkLink(display, branchURL, *loc)
 		} else if branchURL != "" {
 			headText = tuicore.Hyperlink(branchURL, display)
@@ -1208,15 +1257,17 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 		if pr.HeadTip != "" {
 			headText += tuicore.Dim.Render(" · #" + pr.HeadTip)
 		}
-		if marker := v.tipStaleMarker("head", pr.HeadTip); marker != "" {
-			headText += marker
+		if opts.tipStaleMarker != nil {
+			if marker := opts.tipStaleMarker("head", pr.HeadTip); marker != "" {
+				headText += marker
+			}
 		}
 		lines = append(lines, selectionBar+styles.Label.Render("Head")+headText)
 	}
-	if v.behindCount > 0 && pr.Base != "" {
+	if opts.behindCount > 0 && pr.Base != "" {
 		baseName := shortenBranchRef(pr.Base)
 		lines = append(lines, selectionBar+styles.Label.Render("Behind")+tuicore.Dim.Render(
-			fmt.Sprintf("%d commits behind %s", v.behindCount, baseName)))
+			fmt.Sprintf("%d commits behind %s", opts.behindCount, baseName)))
 	}
 	if len(pr.Reviewers) > 0 {
 		lines = append(lines, selectionBar+styles.Label.Render("Reviewers")+styles.Value.Render(strings.Join(pr.Reviewers, ", ")))
@@ -1224,25 +1275,18 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 	if len(pr.Closes) > 0 {
 		refs := make([]string, len(pr.Closes))
 		for i, ref := range pr.Closes {
-			short := protocol.FormatShortRef(ref, v.workspaceURL)
-			fullRef := protocol.NormalizeRefWithContext(ref, v.workspaceURL, "")
+			short := protocol.FormatShortRef(ref, opts.workspaceURL)
+			fullRef := protocol.NormalizeRefWithContext(ref, opts.workspaceURL, "")
 			parsed := protocol.ParseRef(fullRef)
 			commitURL := protocol.CommitURL(parsed.Repository, parsed.Value)
 			refs[i] = anchors.MarkLink(short, commitURL, tuicore.LocPMIssueDetail(fullRef))
 		}
 		lines = append(lines, selectionBar+styles.Label.Render("Closes")+strings.Join(refs, styles.Value.Render(", ")))
 	}
-	if !v.diffLoaded && !v.isLocalPR() {
-		lines = append(lines, selectionBar+styles.Label.Render("Files")+tuicore.Dim.Render("Press [d] to view diff"))
-	} else if !v.diffLoaded {
-		lines = append(lines, selectionBar+styles.Label.Render("Files")+tuicore.Dim.Render("Loading..."))
-	} else if v.diffCtx.Error != "" {
-		lines = append(lines, selectionBar+styles.Label.Render("Files")+tuicore.Dim.Render(v.diffCtx.Error))
-	} else if v.diffStats.Files > 0 {
-		lines = append(lines, selectionBar+styles.Label.Render("Files")+styles.Value.Render(
-			fmt.Sprintf("%d changed  %s  [d]", v.diffStats.Files, tuicore.RenderDiffStatsBadge(v.diffStats.Added, v.diffStats.Removed))))
-	} else if v.diffCtx.Base != "" && v.diffCtx.Head != "" {
-		lines = append(lines, selectionBar+styles.Label.Render("Files")+tuicore.Dim.Render("0 files changed"))
+	if opts.filesRow != nil {
+		if val := opts.filesRow(); val != "" {
+			lines = append(lines, selectionBar+styles.Label.Render("Files")+val)
+		}
 	}
 	summary := pr.ReviewSummary
 	if summary.Approved > 0 || summary.ChangesRequested > 0 || summary.Pending > 0 {
@@ -1254,20 +1298,22 @@ func (v *PRDetailView) renderPRCard(width int, selected bool, searchQuery string
 			lines = append(lines, selectionBar+styles.Label.Render("Status")+tuicore.Dim.Render("Changes requested"))
 		}
 	}
-	prRef := protocol.ParseRef(pr.ID)
-	if trailerRefs, err := cache.GetTrailerRefsTo(prRef.Repository, prRef.Value, prRef.Branch); err == nil && len(trailerRefs) > 0 {
-		for i, tr := range trailerRefs {
-			rowLabel := "Referenced by"
-			if i > 0 {
-				rowLabel = ""
+	if !opts.version {
+		prRef := protocol.ParseRef(pr.ID)
+		if trailerRefs, err := cache.GetTrailerRefsTo(prRef.Repository, prRef.Value, prRef.Branch); err == nil && len(trailerRefs) > 0 {
+			for i, tr := range trailerRefs {
+				rowLabel := "Referenced by"
+				if i > 0 {
+					rowLabel = ""
+				}
+				subject, _ := protocol.SplitSubjectBody(tr.Message)
+				display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
+				lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
 			}
-			subject, _ := protocol.SplitSubjectBody(tr.Message)
-			display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
-			lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
 		}
 	}
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
-	if v.showRaw {
+	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(pr.ID, selectionBar, width-3)...)
 	} else if pr.Body != "" {
 		for _, line := range strings.Split(tuicore.RenderMarkdownWithAnchors(pr.Body, width-3, anchors), "\n") {

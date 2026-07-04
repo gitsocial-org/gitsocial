@@ -239,7 +239,7 @@ func (v *SprintDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				lines := v.renderSprintCard(sp, width, selected, searchQuery, anchors)
+				lines := renderSprintCard(sp, width, selected, searchQuery, anchors, sprintCardOptions{showRaw: v.showRaw, showEmail: v.showEmail})
 				if sp.HasProposedEdits {
 					banner := "✎  Proposed edits from another repo (press h to review)"
 					if sp.Repository != v.workspaceURL {
@@ -389,11 +389,27 @@ func (v *SprintDetailView) Render(state *tuicore.State) string {
 	return wrapper.Render(content, footer)
 }
 
-func (v *SprintDetailView) renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
+// sprintCardOptions carries view state (show-raw/show-email) plus version-mode
+// settings into the shared sprint hero-card renderer.
+type sprintCardOptions struct {
+	showRaw       bool
+	showEmail     bool
+	version       bool      // render as a historical version (banner + version rules)
+	versionAuthor string    // version banner author display
+	versionTime   time.Time // version banner timestamp
+}
+
+// renderSprintCard renders the sprint hero card shared by the detail view and
+// the version picker. In version mode it shows an edit banner and suppresses
+// current-canonical chrome (origin rows, live issue-progress counts, days-left).
+func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, opts sprintCardOptions) []string {
 	var lines []string
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
+	}
+	if opts.version {
+		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, sp.IsRetracted)...)
 	}
 	title := sp.Title
 	if searchQuery != "" {
@@ -414,22 +430,24 @@ func (v *SprintDetailView) renderSprintCard(sp *pm.Sprint, width int, selected b
 		stateStr = tuicore.Dim.Render("canceled")
 	}
 	lines = append(lines, selectionBar+styles.Label.Render("State")+stateStr)
-	lines = append(lines, tuicore.RenderOriginRows(sp.Origin, styles, selectionBar, anchors, v.showEmail)...)
-	total := sp.IssueCount
-	closed := sp.ClosedCount
-	progressBar := tuicore.RenderProgressBar(closed, total, 16)
-	lines = append(lines, selectionBar+styles.Label.Render("Progress")+styles.Value.Render(progressBar))
-	if sp.State == pm.SprintStateActive {
-		daysLeft := int(time.Until(sp.End).Hours() / 24)
-		if daysLeft < 0 {
-			daysLeft = 0
+	if !opts.version {
+		lines = append(lines, tuicore.RenderOriginRows(sp.Origin, styles, selectionBar, anchors, opts.showEmail)...)
+		total := sp.IssueCount
+		closed := sp.ClosedCount
+		progressBar := tuicore.RenderProgressBar(closed, total, 16)
+		lines = append(lines, selectionBar+styles.Label.Render("Progress")+styles.Value.Render(progressBar))
+		if sp.State == pm.SprintStateActive {
+			daysLeft := int(time.Until(sp.End).Hours() / 24)
+			if daysLeft < 0 {
+				daysLeft = 0
+			}
+			lines = append(lines, selectionBar+styles.Label.Render("Days left")+styles.Value.Render(fmt.Sprintf("%d", daysLeft)))
 		}
-		lines = append(lines, selectionBar+styles.Label.Render("Days left")+styles.Value.Render(fmt.Sprintf("%d", daysLeft)))
 	}
 	dateRange := fmt.Sprintf("%s - %s", sp.Start.Format("Jan 2"), sp.End.Format("Jan 2, 2006"))
 	lines = append(lines, selectionBar+styles.Label.Render("Dates")+styles.Value.Render(dateRange))
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
-	if v.showRaw {
+	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(sp.ID, selectionBar, width-3)...)
 	} else if sp.Body != "" {
 		for _, line := range strings.Split(tuicore.RenderMarkdownWithAnchors(sp.Body, width-3, anchors), "\n") {

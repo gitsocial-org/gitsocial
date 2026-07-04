@@ -29,6 +29,9 @@ type PRVersion struct {
 	HeadTip     string    `json:"head_tip,omitempty"`
 	State       PRState   `json:"state"`
 	IsRetracted bool      `json:"is_retracted,omitempty"`
+	// Fields carries the version's full parsed header so the TUI can reconstruct
+	// the PR as it was at this version for the shared hero card.
+	Fields map[string]string `json:"-"`
 }
 
 // GetPRVersions retrieves all versions of a PR ordered by timestamp ascending (oldest first).
@@ -114,6 +117,7 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 			Timestamp:   ts,
 		}
 		if msg := protocol.ParseMessage(r.Message); msg != nil {
+			v.Fields = msg.Header.Fields
 			v.BaseTip = msg.Header.Fields["base-tip"]
 			v.HeadTip = msg.Header.Fields["head-tip"]
 			v.State = PRState(msg.Header.Fields["state"])

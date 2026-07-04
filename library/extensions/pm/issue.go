@@ -362,15 +362,6 @@ func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {
 		return nil // Not a PM item, skip caching
 	}
 
-	itemType := msg.Header.Fields["type"]
-	if itemType == "" {
-		itemType = string(ItemTypeIssue)
-	}
-	state := msg.Header.Fields["state"]
-	if state == "" {
-		state = string(StateOpen)
-	}
-
 	// Ensure version table is populated for edits
 	editsRef := msg.Header.Fields["edits"]
 	isRetracted := msg.Header.Fields["retracted"] == "true"
@@ -393,88 +384,7 @@ func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {
 	}
 
 	// Store pm_items with commit's own coordinates (view resolves to latest edit)
-	item := PMItem{
-		RepoURL:   repoURL,
-		Hash:      hash,
-		Branch:    branch,
-		Type:      itemType,
-		State:     state,
-		Assignees: cache.ToNullString(msg.Header.Fields["assignees"]),
-		Due:       cache.ToNullString(msg.Header.Fields["due"]),
-		Labels:    cache.ToNullString(msg.Header.Fields["labels"]),
-	}
-
-	// Parse milestone ref
-	if milestone := msg.Header.Fields["milestone"]; milestone != "" {
-		parsed := protocol.ParseRef(milestone)
-		if parsed.Value != "" {
-			mRepoURL := parsed.Repository
-			if mRepoURL == "" {
-				mRepoURL = repoURL
-			}
-			mBranch := parsed.Branch
-			if mBranch == "" {
-				mBranch = branch
-			}
-			item.MilestoneRepoURL = cache.ToNullString(mRepoURL)
-			item.MilestoneHash = cache.ToNullString(parsed.Value)
-			item.MilestoneBranch = cache.ToNullString(mBranch)
-		}
-	}
-
-	// Parse sprint ref
-	if sprint := msg.Header.Fields["sprint"]; sprint != "" {
-		parsed := protocol.ParseRef(sprint)
-		if parsed.Value != "" {
-			sRepoURL := parsed.Repository
-			if sRepoURL == "" {
-				sRepoURL = repoURL
-			}
-			sBranch := parsed.Branch
-			if sBranch == "" {
-				sBranch = branch
-			}
-			item.SprintRepoURL = cache.ToNullString(sRepoURL)
-			item.SprintHash = cache.ToNullString(parsed.Value)
-			item.SprintBranch = cache.ToNullString(sBranch)
-		}
-	}
-
-	// Parse parent ref
-	if parent := msg.Header.Fields["parent"]; parent != "" {
-		parsed := protocol.ParseRef(parent)
-		if parsed.Value != "" {
-			pRepoURL := parsed.Repository
-			if pRepoURL == "" {
-				pRepoURL = repoURL
-			}
-			pBranch := parsed.Branch
-			if pBranch == "" {
-				pBranch = branch
-			}
-			item.ParentRepoURL = cache.ToNullString(pRepoURL)
-			item.ParentHash = cache.ToNullString(parsed.Value)
-			item.ParentBranch = cache.ToNullString(pBranch)
-		}
-	}
-
-	// Parse root ref
-	if root := msg.Header.Fields["root"]; root != "" {
-		parsed := protocol.ParseRef(root)
-		if parsed.Value != "" {
-			rRepoURL := parsed.Repository
-			if rRepoURL == "" {
-				rRepoURL = repoURL
-			}
-			rBranch := parsed.Branch
-			if rBranch == "" {
-				rBranch = branch
-			}
-			item.RootRepoURL = cache.ToNullString(rRepoURL)
-			item.RootHash = cache.ToNullString(parsed.Value)
-			item.RootBranch = cache.ToNullString(rBranch)
-		}
-	}
+	item := MessageToPMItem(msg, repoURL, hash, branch)
 
 	if err := InsertPMItem(item); err != nil {
 		return err

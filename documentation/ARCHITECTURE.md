@@ -195,9 +195,9 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters for identity verification | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
 | `extensions/social`<br>Social layer | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
-| `extensions/pm`<br>Project management | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `FetchRepository`, `Processors` |
-| `extensions/release`<br>Release management | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `FetchRepository`, `Processors` |
-| `extensions/review`<br>Code review | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
+| `extensions/pm`<br>Project management | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `MessageToPMItem`, `FetchRepository`, `Processors` |
+| `extensions/release`<br>Release management | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
+| `extensions/review`<br>Code review | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
 | `extensions/memo`<br>Tiered memos (knowledge as commits) | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
 | `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
 | `import`<br>Platform import pipeline | `SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
@@ -373,6 +373,7 @@ library/tui/
 | `component_` | Reusable stateful components | `component_nav_panel.go` |
 | `registry_` | Global registries | `registry_nav.go` |
 | `form_` | Modal form overlays | `form_issue.go` |
+| `version_item_` | History-picker version items (hero-card detail render) | `version_item_issue.go` |
 | `util_` | Stateless utilities | `util_render.go`, `util_keys.go` |
 
 ### Adding a New Extension

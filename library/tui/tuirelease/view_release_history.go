@@ -12,7 +12,7 @@ func NewReleaseHistoryView(workdir string) *tuicore.HistoryView {
 		ParamName:  "releaseID",
 		Context:    tuicore.ReleaseHistory,
 		TitleLabel: "History",
-		Load:       tuicore.MessageHistoryLoader("release"),
+		Load:       loadReleaseHistory,
 		DiffLoc:    tuicore.LocReleaseHistoryDiff,
 		Detail:     tuicore.LocReleaseDetail,
 		Accept:     tuiproposal.Accept,

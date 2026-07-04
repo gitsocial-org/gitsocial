@@ -645,6 +645,53 @@ func parseAssignees(assigneesStr string) []string {
 	return assignees
 }
 
+// MessageToPMItem builds a PMItem from a parsed PM message and its coordinates
+// (pure: reads header fields only, no cache access).
+func MessageToPMItem(msg *protocol.Message, repoURL, hash, branch string) PMItem {
+	itemType := msg.Header.Fields["type"]
+	if itemType == "" {
+		itemType = string(ItemTypeIssue)
+	}
+	state := msg.Header.Fields["state"]
+	if state == "" {
+		state = string(StateOpen)
+	}
+	item := PMItem{
+		RepoURL:   repoURL,
+		Hash:      hash,
+		Branch:    branch,
+		Type:      itemType,
+		State:     state,
+		Assignees: cache.ToNullString(msg.Header.Fields["assignees"]),
+		Due:       cache.ToNullString(msg.Header.Fields["due"]),
+		StartDate: cache.ToNullString(msg.Header.Fields["start"]),
+		EndDate:   cache.ToNullString(msg.Header.Fields["end"]),
+		Labels:    cache.ToNullString(msg.Header.Fields["labels"]),
+	}
+	setRef := func(field string, repo, h, br *sql.NullString) {
+		parsed := protocol.ParseRef(msg.Header.Fields[field])
+		if parsed.Value == "" {
+			return
+		}
+		refRepo := parsed.Repository
+		if refRepo == "" {
+			refRepo = repoURL
+		}
+		refBranch := parsed.Branch
+		if refBranch == "" {
+			refBranch = branch
+		}
+		*repo = cache.ToNullString(refRepo)
+		*h = cache.ToNullString(parsed.Value)
+		*br = cache.ToNullString(refBranch)
+	}
+	setRef("milestone", &item.MilestoneRepoURL, &item.MilestoneHash, &item.MilestoneBranch)
+	setRef("sprint", &item.SprintRepoURL, &item.SprintHash, &item.SprintBranch)
+	setRef("parent", &item.ParentRepoURL, &item.ParentHash, &item.ParentBranch)
+	setRef("root", &item.RootRepoURL, &item.RootHash, &item.RootBranch)
+	return item
+}
+
 // PMItemToIssue converts a PMItem to an Issue.
 func PMItemToIssue(item PMItem) Issue {
 	var due *time.Time

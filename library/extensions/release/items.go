@@ -183,6 +183,24 @@ func GetReleases(repoURL, branch, cursor string, limit int) Result[[]Release] {
 	return result.Ok(releases)
 }
 
+// MessageToReleaseItem builds a ReleaseItem from a parsed release message and its
+// coordinates (pure: reads header fields only, no cache access).
+func MessageToReleaseItem(msg *protocol.Message, repoURL, hash, branch string) ReleaseItem {
+	return ReleaseItem{
+		RepoURL:     repoURL,
+		Hash:        hash,
+		Branch:      branch,
+		Tag:         cache.ToNullString(msg.Header.Fields["tag"]),
+		Version:     cache.ToNullString(msg.Header.Fields["version"]),
+		Prerelease:  msg.Header.Fields["prerelease"] == "true",
+		Artifacts:   cache.ToNullString(msg.Header.Fields["artifacts"]),
+		ArtifactURL: cache.ToNullString(msg.Header.Fields["artifact-url"]),
+		Checksums:   cache.ToNullString(msg.Header.Fields["checksums"]),
+		SignedBy:    cache.ToNullString(msg.Header.Fields["signed-by"]),
+		SBOM:        cache.ToNullString(msg.Header.Fields["sbom"]),
+	}
+}
+
 // ReleaseItemToRelease converts a ReleaseItem to a Release.
 func ReleaseItemToRelease(item ReleaseItem) Release {
 	subject, body := protocol.SplitSubjectBody(item.Content)

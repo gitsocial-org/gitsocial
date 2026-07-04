@@ -88,29 +88,30 @@ func (v PRVersionItem) RenderListEntry(index, total int, label string, selected 
 	return b.String()
 }
 
-// RenderDetail renders the full detail view for this version.
+// reconstruct rebuilds the pull request at this version from its header fields.
+func (v PRVersionItem) reconstruct() *review.PullRequest {
+	repoURL, hash, branch := v.Ref()
+	msg := &protocol.Message{Header: protocol.Header{Ext: "review", Fields: v.Version.Fields}}
+	item := review.MessageToReviewItem(msg, repoURL, hash, branch)
+	item.AuthorName = v.Version.AuthorName
+	item.AuthorEmail = v.Version.AuthorEmail
+	item.Timestamp = v.Version.Timestamp
+	item.IsRetracted = v.Version.IsRetracted
+	pr := review.ReviewItemToPullRequest(item)
+	// Versions carry their subject/body pre-split; ReviewItemToPullRequest reads
+	// them from an (empty) Content, so restore them from the version directly.
+	pr.Subject = v.Version.Subject
+	pr.Body = v.Version.Body
+	return &pr
+}
+
+// RenderDetail renders this version through the real PR hero card in version mode.
 func (v PRVersionItem) RenderDetail(width int) string {
-	styles := tuicore.RowStylesWithWidths(14, 0)
-	var lines []string
-	lines = append(lines, tuicore.Bold.Render(fmt.Sprintf("Version #%d (%s)", v.Version.Number, v.Version.Label)))
-	lines = append(lines, "")
-	lines = append(lines, styles.Label.Render("Author")+styles.Value.Render(v.AuthorDisplay(v.ShowEmail)))
-	lines = append(lines, styles.Label.Render("Date")+styles.Value.Render(tuicore.FormatFullTime(v.Version.Timestamp)))
-	commitURL := protocol.CommitURL(v.Version.RepoURL, v.Version.CommitHash)
-	commitDisplay := tuicore.Hyperlink(commitURL, v.Version.CommitHash)
-	lines = append(lines, styles.Label.Render("Commit")+commitDisplay)
-	if v.Version.BaseTip != "" {
-		lines = append(lines, styles.Label.Render("Base-Tip")+tuicore.Dim.Render(v.Version.BaseTip))
-	}
-	if v.Version.HeadTip != "" {
-		lines = append(lines, styles.Label.Render("Head-Tip")+tuicore.Dim.Render(v.Version.HeadTip))
-	}
-	if v.Version.State != "" {
-		lines = append(lines, styles.Label.Render("State")+styles.Value.Render(string(v.Version.State)))
-	}
-	if v.Version.IsRetracted {
-		lines = append(lines, "", tuicore.Dim.Render("[deleted]"))
-	}
+	lines := renderPRCard(v.reconstruct(), width, false, "", nil, prCardOptions{
+		version:       true,
+		versionAuthor: v.AuthorDisplay(v.ShowEmail),
+		versionTime:   v.Version.Timestamp,
+	})
 	return strings.Join(lines, "\n")
 }
 

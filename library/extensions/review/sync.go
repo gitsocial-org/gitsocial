@@ -120,13 +120,20 @@ func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 		return nil
 	}
 
-	itemType := msg.Header.Fields["type"]
-	if itemType == "" {
+	if msg.Header.Fields["type"] == "" {
 		return nil
 	}
 
 	cache.ProcessVersionFromHeader(msg, gc.Hash, repoURL, branch)
 
+	item := MessageToReviewItem(msg, repoURL, gc.Hash, branch)
+	return &item
+}
+
+// MessageToReviewItem builds a ReviewItem from a parsed review message and its
+// coordinates (pure: reads header fields only, no cache access). Callers that
+// ingest guard on type/ext and run version processing before calling this.
+func MessageToReviewItem(msg *protocol.Message, repoURL, hash, branch string) ReviewItem {
 	base := msg.Header.Fields["base"]
 	head := msg.Header.Fields["head"]
 	if head != "" {
@@ -141,9 +148,9 @@ func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 
 	item := ReviewItem{
 		RepoURL:          repoURL,
-		Hash:             gc.Hash,
+		Hash:             hash,
 		Branch:           branch,
-		Type:             itemType,
+		Type:             msg.Header.Fields["type"],
 		State:            cache.ToNullString(msg.Header.Fields["state"]),
 		Draft:            boolToInt(msg.Header.Fields["draft"] == "true"),
 		Base:             cache.ToNullString(base),
@@ -189,7 +196,7 @@ func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 		}
 	}
 
-	return &item
+	return item
 }
 
 // processReviewCommit handles a single commit for review extension processing.

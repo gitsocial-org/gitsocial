@@ -4,6 +4,7 @@ package tuipm
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -261,7 +262,7 @@ func (v *IssueDetailView) buildSections() {
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				lines := v.renderIssueCard(issue, milestone, sprint, contributorNames, width, selected, searchQuery, anchors)
+				lines := renderIssueCard(issue, milestone, sprint, contributorNames, width, selected, searchQuery, anchors, issueCardOptions{showRaw: v.showRaw, showEmail: v.showEmail})
 				if issue.HasProposedEdits {
 					banner := "✎  Proposed edits from another repo (press h to review)"
 					if issue.Repository != v.workspaceURL {
@@ -423,11 +424,27 @@ func (v *IssueDetailView) Render(state *tuicore.State) string {
 	return wrapper.Render(content, footer)
 }
 
-func (v *IssueDetailView) renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint, contributorNames map[string]string, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
+// issueCardOptions carries view state (show-raw/show-email) plus version-mode
+// settings into the shared issue hero-card renderer.
+type issueCardOptions struct {
+	showRaw       bool
+	showEmail     bool
+	version       bool      // render as a historical version (banner + version rules)
+	versionAuthor string    // version banner author display
+	versionTime   time.Time // version banner timestamp
+}
+
+// renderIssueCard renders the issue hero card shared by the detail view and the
+// version picker. In version mode it shows an edit banner and suppresses
+// current-canonical chrome (origin rows, "Referenced by" trailer refs).
+func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint, contributorNames map[string]string, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, opts issueCardOptions) []string {
 	var lines []string
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
+	}
+	if opts.version {
+		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, issue.IsRetracted)...)
 	}
 	title := issue.Subject
 	if searchQuery != "" {
@@ -446,7 +463,9 @@ func (v *IssueDetailView) renderIssueCard(issue *pm.Issue, milestone *pm.Milesto
 		stateStr = tuicore.Dim.Render("canceled")
 	}
 	lines = append(lines, selectionBar+styles.Label.Render("State")+stateStr)
-	lines = append(lines, tuicore.RenderOriginRows(issue.Origin, styles, selectionBar, anchors, v.showEmail)...)
+	if !opts.version {
+		lines = append(lines, tuicore.RenderOriginRows(issue.Origin, styles, selectionBar, anchors, opts.showEmail)...)
+	}
 	if len(issue.Assignees) > 0 {
 		lines = append(lines, selectionBar+styles.Label.Render("Assignees")+styles.Value.Render(formatAssignees(issue.Assignees, contributorNames)))
 	}
@@ -487,20 +506,22 @@ func (v *IssueDetailView) renderIssueCard(issue *pm.Issue, milestone *pm.Milesto
 			lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(label))
 		}
 	}
-	ref := protocol.ParseRef(issue.ID)
-	if trailerRefs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(trailerRefs) > 0 {
-		for i, tr := range trailerRefs {
-			rowLabel := "Referenced by"
-			if i > 0 {
-				rowLabel = ""
+	if !opts.version {
+		ref := protocol.ParseRef(issue.ID)
+		if trailerRefs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(trailerRefs) > 0 {
+			for i, tr := range trailerRefs {
+				rowLabel := "Referenced by"
+				if i > 0 {
+					rowLabel = ""
+				}
+				subject, _ := protocol.SplitSubjectBody(tr.Message)
+				display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
+				lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
 			}
-			subject, _ := protocol.SplitSubjectBody(tr.Message)
-			display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
-			lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
 		}
 	}
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
-	if v.showRaw {
+	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(issue.ID, selectionBar, width-3)...)
 	} else if issue.Body != "" {
 		for _, line := range strings.Split(tuicore.RenderMarkdownWithAnchors(issue.Body, width-3, anchors), "\n") {

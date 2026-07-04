@@ -288,11 +288,6 @@ func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {
 		return nil
 	}
 
-	state := msg.Header.Fields["state"]
-	if state == "" {
-		state = string(StateOpen)
-	}
-
 	editsRef := msg.Header.Fields["edits"]
 	isRetracted := msg.Header.Fields["retracted"] == "true"
 	if editsRef != "" {
@@ -305,15 +300,7 @@ func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {
 	}
 
 	// Store pm_items with commit's own coordinates (view resolves to latest edit)
-	item := PMItem{
-		RepoURL: repoURL,
-		Hash:    hash,
-		Branch:  branch,
-		Type:    itemType,
-		State:   state,
-		Due:     cache.ToNullString(msg.Header.Fields["due"]),
-		Labels:  cache.ToNullString(msg.Header.Fields["labels"]),
-	}
+	item := MessageToPMItem(msg, repoURL, hash, branch)
 
 	if err := InsertPMItem(item); err != nil {
 		return err
