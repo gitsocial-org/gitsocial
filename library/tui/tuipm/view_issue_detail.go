@@ -27,6 +27,8 @@ type IssueDetailView struct {
 	issue            *pm.Issue
 	milestone        *pm.Milestone
 	sprint           *pm.Sprint
+	parent           *pm.Issue
+	children         []pm.Issue
 	comments         []social.Post
 	loaded           bool
 	userEmail        string
@@ -68,6 +70,8 @@ func (v *IssueDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.issue = nil
 	v.milestone = nil
 	v.sprint = nil
+	v.parent = nil
+	v.children = nil
 	v.comments = nil
 	v.sectionList.SetSections(nil)
 	if state.DetailSource != nil {
@@ -118,8 +122,14 @@ func (v *IssueDetailView) loadIssue() tea.Cmd {
 				sprint = &res.Data
 			}
 		}
+		parent := resolveParentIssue(&issue)
+		var children []pm.Issue
+		iref := protocol.ParseRef(issue.ID)
+		if res := pm.GetChildIssues(issue.Repository, iref.Value, issue.Branch); res.Success {
+			children = res.Data
+		}
 		contributorNames := buildContributorNameMap(workdir)
-		return IssueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, ContributorNames: contributorNames}
+		return IssueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, Parent: parent, Children: children, ContributorNames: contributorNames}
 	}
 }
 
@@ -128,9 +138,37 @@ type IssueDetailLoadedMsg struct {
 	Issue            *pm.Issue
 	Milestone        *pm.Milestone
 	Sprint           *pm.Sprint
+	Parent           *pm.Issue
+	Children         []pm.Issue
 	Comments         []social.Post
 	ContributorNames map[string]string
 	Err              error
+}
+
+// resolveParentIssue resolves the display parent of an issue at current state:
+// the explicit parent when nested, else the root (a direct child's root IS its
+// parent, GITPM.md §1.7). Returns nil when the issue has no hierarchy. When the
+// referenced issue can't be resolved, a stub carrying just the ref is returned
+// so the card can fall back to a short-ref display with a working anchor.
+func resolveParentIssue(issue *pm.Issue) *pm.Issue {
+	var ref *pm.IssueRef
+	if issue.Parent != nil {
+		ref = issue.Parent
+	} else if issue.Root != nil {
+		ref = issue.Root
+	}
+	if ref == nil {
+		return nil
+	}
+	if it, err := pm.GetPMItem(ref.RepoURL, ref.Hash, ref.Branch); err == nil {
+		p := pm.PMItemToIssue(*it)
+		return &p
+	}
+	return &pm.Issue{
+		ID:         protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch),
+		Repository: ref.RepoURL,
+		Branch:     ref.Branch,
+	}
 }
 
 // Update handles messages.
@@ -142,6 +180,8 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.issue = msg.Issue
 			v.milestone = msg.Milestone
 			v.sprint = msg.Sprint
+			v.parent = msg.Parent
+			v.children = msg.Children
 			for i := range msg.Comments {
 				if msg.Comments[i].Repository == v.workspaceURL {
 					msg.Comments[i].Display.IsWorkspacePost = true
@@ -219,6 +259,16 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 						}
 					}
 				}
+			case "n":
+				if v.issue != nil && v.issue.Repository == v.workspaceURL {
+					issueID := v.issue.ID
+					return func() tea.Msg {
+						return tuicore.NavigateMsg{
+							Location: tuicore.LocPMNewSubIssue(issueID),
+							Action:   tuicore.NavPush,
+						}
+					}
+				}
 			case "C":
 				if v.issue != nil && v.issue.State == pm.StateOpen {
 					proposed := v.issue.Repository != v.workspaceURL
@@ -258,11 +308,12 @@ func (v *IssueDetailView) buildSections() {
 	issue := v.issue
 	milestone := v.milestone
 	sprint := v.sprint
+	parent := v.parent
 	contributorNames := v.contributorNames
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				lines := renderIssueCard(issue, milestone, sprint, contributorNames, width, selected, searchQuery, anchors, issueCardOptions{showRaw: v.showRaw, showEmail: v.showEmail})
+				lines := renderIssueCard(issue, milestone, sprint, parent, contributorNames, width, selected, searchQuery, anchors, issueCardOptions{showRaw: v.showRaw, showEmail: v.showEmail})
 				if issue.HasProposedEdits {
 					banner := "✎  Proposed edits from another repo (press h to review)"
 					if issue.Repository != v.workspaceURL {
@@ -280,6 +331,9 @@ func (v *IssueDetailView) buildSections() {
 				var links []tuicore.CardLink
 				if issue.Origin != nil && issue.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: issue.Origin.URL}})
+				}
+				if parent != nil {
+					links = append(links, tuicore.CardLink{Label: "parent", Location: tuicore.LocPMIssueDetail(parent.ID)})
 				}
 				if milestone != nil {
 					links = append(links, tuicore.CardLink{Label: "milestone", Location: tuicore.LocPMMilestoneDetail(milestone.ID)})
@@ -304,6 +358,36 @@ func (v *IssueDetailView) buildSections() {
 			},
 		}},
 	})
+	// Sub-issues section (current-state children; absent in version mode, which
+	// renders only the hero card).
+	if len(v.children) > 0 {
+		open, closed := 0, 0
+		for _, ch := range v.children {
+			if ch.State == pm.StateClosed {
+				closed++
+			} else {
+				open++
+			}
+		}
+		label := fmt.Sprintf(" Sub-issues (%d open, %d closed)", open, closed)
+		items := make([]tuicore.SectionItem, 0, len(v.children))
+		for _, child := range v.children {
+			child := child
+			childID := child.ID
+			items = append(items, tuicore.SectionItem{
+				Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
+					return renderChildRow(child, selected, searchQuery)
+				},
+				SearchText: func() string { return child.Subject },
+				OnActivate: func() tea.Cmd {
+					return func() tea.Msg {
+						return tuicore.NavigateMsg{Location: tuicore.LocPMIssueDetail(childID), Action: tuicore.NavPush}
+					}
+				},
+			})
+		}
+		sections = append(sections, tuicore.Section{Label: label, Items: items})
+	}
 	// Comments section
 	if len(v.comments) > 0 {
 		label := fmt.Sprintf(" Comments (%d)", len(v.comments))
@@ -407,6 +491,9 @@ func (v *IssueDetailView) Render(state *tuicore.State) string {
 	if v.issue == nil || (!v.issue.IsEdited && !v.issue.HasProposedEdits) {
 		exclude["h"] = true
 	}
+	if v.issue == nil || v.issue.Repository != v.workspaceURL {
+		exclude["n"] = true
+	}
 	if v.milestone == nil {
 		exclude["m"] = true
 	}
@@ -437,7 +524,7 @@ type issueCardOptions struct {
 // renderIssueCard renders the issue hero card shared by the detail view and the
 // version picker. In version mode it shows an edit banner and suppresses
 // current-canonical chrome (origin rows, "Referenced by" trailer refs).
-func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint, contributorNames map[string]string, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, opts issueCardOptions) []string {
+func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint, parent *pm.Issue, contributorNames map[string]string, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, opts issueCardOptions) []string {
 	var lines []string
 	selectionBar := " "
 	if selected {
@@ -471,6 +558,18 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 	}
 	if issue.Due != nil {
 		lines = append(lines, selectionBar+styles.Label.Render("Due")+styles.Value.Render(issue.Due.Format("Jan 2, 2006")))
+	}
+	if parent != nil {
+		display := parent.Subject
+		if display == "" {
+			display = protocol.FormatShortRef(parent.ID, "")
+		} else if parent.State == pm.StateClosed {
+			display += tuicore.Dim.Render(" [closed]")
+		}
+		parsed := protocol.ParseRef(parent.ID)
+		commitURL := protocol.CommitURL(parsed.Repository, parsed.Value)
+		parentDisplay := anchors.MarkLink(display, commitURL, tuicore.LocPMIssueDetail(parent.ID))
+		lines = append(lines, selectionBar+styles.Label.Render("Parent")+parentDisplay)
 	}
 	if milestone != nil {
 		milestoneStr := milestone.Title
@@ -534,6 +633,25 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 		lines = append(lines, selectionBar+tuicore.Dim.Render("No description"))
 	}
 	return lines
+}
+
+// renderChildRow renders a single sub-issue row: state indicator, subject, and
+// short ref. Navigation is wired via the section's OnActivate.
+func renderChildRow(issue pm.Issue, selected bool, searchQuery string) []string {
+	selectionBar := " "
+	if selected {
+		selectionBar = tuicore.Title.Render("▏")
+	}
+	icon, style := "○", tuicore.Title
+	if issue.State == pm.StateClosed {
+		icon, style = "●", tuicore.Dim
+	}
+	subject := issue.Subject
+	if searchQuery != "" {
+		subject = tuicore.HighlightInText(subject, searchQuery)
+	}
+	ref := tuicore.Dim.Render("  " + protocol.FormatShortRef(issue.ID, ""))
+	return []string{selectionBar + style.Render(icon) + " " + subject + ref}
 }
 
 // renderLinkRows renders metadata rows for issue links (blocks, blocked-by, related).
@@ -610,6 +728,7 @@ func (v *IssueDetailView) Bindings() []tuicore.Binding {
 	}
 	return []tuicore.Binding{
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
+		{Key: "n", Label: "sub-issue", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "m", Label: "milestone", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "s", Label: "sprint", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},

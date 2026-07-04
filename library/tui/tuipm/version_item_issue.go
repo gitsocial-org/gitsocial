@@ -16,8 +16,8 @@ type IssueVersionItem struct {
 	workdir string
 }
 
-// reconstruct rebuilds the issue (and resolves milestone/sprint) at this version.
-func (i IssueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint) {
+// reconstruct rebuilds the issue (and resolves parent/milestone/sprint) at this version.
+func (i IssueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint, *pm.Issue) {
 	repoURL, hash, branch := i.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "pm", Fields: i.Version.Fields}}
 	item := pm.MessageToPMItem(msg, repoURL, hash, branch)
@@ -46,13 +46,16 @@ func (i IssueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint) {
 			sprint = &s
 		}
 	}
-	return &issue, milestone, sprint
+	// Parent/root are versioned header fields; resolve to the current issue for
+	// a friendly subject (a direct child's root IS its parent, GITPM.md §1.7).
+	parent := resolveParentIssue(&issue)
+	return &issue, milestone, sprint, parent
 }
 
 // RenderDetail renders this version through the real issue hero card in version mode.
 func (i IssueVersionItem) RenderDetail(width int) string {
-	issue, milestone, sprint := i.reconstruct()
-	lines := renderIssueCard(issue, milestone, sprint, buildContributorNameMap(i.workdir), width, false, "", nil, issueCardOptions{
+	issue, milestone, sprint, parent := i.reconstruct()
+	lines := renderIssueCard(issue, milestone, sprint, parent, buildContributorNameMap(i.workdir), width, false, "", nil, issueCardOptions{
 		version:       true,
 		versionAuthor: i.AuthorDisplay(i.ShowEmail),
 		versionTime:   i.Version.Timestamp,

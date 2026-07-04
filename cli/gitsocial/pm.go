@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
@@ -337,6 +338,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 	var dueDateStr string
 	var milestoneRef string
 	var sprintRef string
+	var parentRef string
 	var blocksStr string
 	var blockedByStr string
 	var relatedStr string
@@ -406,6 +408,17 @@ func newPMIssueCreateCmd() *cobra.Command {
 				opts.Sprint = "#commit:" + sprintRef
 			}
 
+			if parentRef != "" {
+				repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
+				parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, "")
+				if err != nil {
+					PrintError(cmd, err.Error())
+					os.Exit(ExitInvalidArgs)
+				}
+				opts.Parent = parent
+				opts.Root = root
+			}
+
 			opts.Blocks = commitRefList(blocksStr)
 			opts.BlockedBy = commitRefList(blockedByStr)
 			opts.Related = commitRefList(relatedStr)
@@ -432,6 +445,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
 	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone reference (commit hash)")
 	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint reference (commit hash)")
+	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue reference (commit hash); creates a sub-issue")
 	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Issues this blocks (comma-separated hashes)")
 	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Issues blocking this (comma-separated hashes)")
 	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes)")
@@ -442,7 +456,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 // newPMIssueEditCmd creates the command to edit an issue's metadata. Unset
 // flags preserve existing values via changed-flag detection.
 func newPMIssueEditCmd() *cobra.Command {
-	var subject, body, state, assigneesStr, dueDateStr, labelsStr, milestoneRef, sprintRef, blocksStr, blockedByStr, relatedStr string
+	var subject, body, state, assigneesStr, dueDateStr, labelsStr, milestoneRef, sprintRef, parentRef, blocksStr, blockedByStr, relatedStr string
 
 	cmd := &cobra.Command{
 		Use:   "edit <issue-id>",
@@ -497,6 +511,22 @@ func newPMIssueEditCmd() *cobra.Command {
 				ref := commitRefOrEmpty(sprintRef)
 				opts.Sprint = &ref
 			}
+			if cmd.Flags().Changed("parent") {
+				if strings.TrimSpace(parentRef) == "" {
+					empty := ""
+					opts.Parent = &empty
+					opts.Root = &empty
+				} else {
+					repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
+					parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, args[0])
+					if err != nil {
+						PrintError(cmd, err.Error())
+						os.Exit(ExitInvalidArgs)
+					}
+					opts.Parent = &parent
+					opts.Root = &root
+				}
+			}
 			if cmd.Flags().Changed("blocks") {
 				r := commitRefList(blocksStr)
 				opts.Blocks = &r
@@ -534,6 +564,7 @@ func newPMIssueEditCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
 	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone ref (commit hash; empty to clear)")
 	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint ref (commit hash; empty to clear)")
+	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue ref (commit hash; empty to clear hierarchy)")
 	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Issues this blocks (comma-separated hashes; replaces existing)")
 	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Issues blocking this (comma-separated hashes; replaces existing)")
 	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes; replaces existing)")
@@ -1665,6 +1696,13 @@ func printIssueDetails(issue pm.Issue) {
 		fmt.Printf("Due: %s\n", issue.Due.Format("2006-01-02"))
 	}
 
+	// Parent — a direct child's root IS its parent (GITPM.md §1.7).
+	if parentRef := issue.Parent; parentRef != nil {
+		fmt.Printf("Parent: %s\n", formatParentDisplay(*parentRef))
+	} else if issue.Root != nil {
+		fmt.Printf("Parent: %s\n", formatParentDisplay(*issue.Root))
+	}
+
 	if len(issue.Blocks) > 0 {
 		fmt.Printf("Blocks: %s\n", formatIssueRefList(issue.Blocks))
 	}
@@ -1684,10 +1722,42 @@ func printIssueDetails(issue pm.Issue) {
 		}
 	}
 
+	if childRes := pm.GetChildIssues(ref.Repository, ref.Value, issue.Branch); childRes.Success && len(childRes.Data) > 0 {
+		open, closed := 0, 0
+		for _, c := range childRes.Data {
+			if c.State == pm.StateClosed {
+				closed++
+			} else {
+				open++
+			}
+		}
+		fmt.Printf("\nSub-issues (%d open, %d closed):\n", open, closed)
+		for _, c := range childRes.Data {
+			icon := "○"
+			if c.State == pm.StateClosed {
+				icon = "●"
+			}
+			fmt.Printf("  %s %s  %s\n", icon, c.Subject, protocol.FormatShortRef(c.ID, ""))
+		}
+	}
+
 	if issue.Body != "" {
 		fmt.Println()
 		fmt.Println(issue.Body)
 	}
+}
+
+// formatParentDisplay resolves the current subject of a parent/root issue ref,
+// falling back to its short ref when unresolvable.
+func formatParentDisplay(ref pm.IssueRef) string {
+	refID := protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch)
+	shortRef := protocol.FormatShortRef(refID, "")
+	if item, err := pm.GetPMItem(ref.RepoURL, ref.Hash, ref.Branch); err == nil {
+		if subject, _ := protocol.SplitSubjectBody(protocol.ExtractCleanContent(item.Content)); subject != "" {
+			return subject + "  " + shortRef
+		}
+	}
+	return shortRef
 }
 
 func formatIssueRefList(refs []pm.IssueRef) string {

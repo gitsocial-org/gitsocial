@@ -198,6 +198,12 @@ func LocPMIssueDetail(issueID string) Location {
 // LocPMNewIssue creates a location for the new issue form.
 var LocPMNewIssue = Location{Path: "/pm/new-issue"}
 
+// LocPMNewSubIssue creates a location for the new issue form pre-filled to
+// create a sub-issue of the given parent.
+func LocPMNewSubIssue(parentID string) Location {
+	return Location{Path: "/pm/new-issue", Params: map[string]string{"parentID": parentID}}
+}
+
 // LocPMEditIssue creates a location for editing an issue.
 func LocPMEditIssue(issueID string) Location {
 	return Location{Path: "/pm/edit-issue", Params: map[string]string{"issueID": issueID}}

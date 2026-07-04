@@ -345,6 +345,7 @@
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
 | `c` | Comment |
+| `n` | New sub-issue (workspace issues only) |
 | `e` | Edit |
 | `m` | Milestone |
 | `s` | Sprint |

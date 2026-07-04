@@ -32,6 +32,10 @@ type IssueFormData struct {
 	// Labels carries free-form labels (anything outside the framework-driven
 	// status / priority / kind scopes), serialized as `scope/value` strings.
 	Labels []string
+	// Parent, when set (sub-issue creation), is the parent issue ref; the
+	// child's parent/root header fields are derived from it (GITPM.md §1.7).
+	// It has no form field — pre-filled from navigation context only.
+	Parent string
 }
 
 // IssueForm wraps a Huh form for issue creation/editing.
@@ -182,6 +186,12 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 func (f *IssueForm) IsEditMode() bool {
 	return f.issueID != ""
 }
+
+// SetParent records the parent issue ref for sub-issue creation.
+func (f *IssueForm) SetParent(parentRef string) { f.data.Parent = parentRef }
+
+// ParentRef returns the pre-filled parent ref, if any.
+func (f *IssueForm) ParentRef() string { return f.data.Parent }
 
 // buildFormWithDefaults constructs the form, using data values as defaults.
 func (f *IssueForm) buildFormWithDefaults() {
@@ -394,6 +404,15 @@ func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
 		opts.BlockedBy = stripLocalRefs(data.BlockedBy, repoURL)
 		opts.Related = stripLocalRefs(data.Related, repoURL)
 
+		if data.Parent != "" {
+			parent, root, err := pm.DeriveHierarchy(data.Parent, repoURL, "")
+			if err != nil {
+				return IssueCreatedMsg{Err: err}
+			}
+			opts.Parent = parent
+			opts.Root = root
+		}
+
 		result := pm.CreateIssue(workdir, data.Subject, data.Body, opts)
 		if !result.Success {
 			return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
@@ -497,6 +516,7 @@ func stripLocalRefs(refs []string, repoURL string) []string {
 // IssueFormView wraps the form for integration with the TUI host.
 type IssueFormView struct {
 	tuicore.FormViewBase
+	isSubIssue bool
 }
 
 // NewIssueFormView creates a new issue form view. The form itself is
@@ -506,9 +526,15 @@ func NewIssueFormView(_ string) *IssueFormView {
 	return &IssueFormView{}
 }
 
-// Activate creates a fresh form and initializes it.
+// Activate creates a fresh form and initializes it, pre-filling the parent when
+// launched as a sub-issue creation.
 func (v *IssueFormView) Activate(state *tuicore.State) tea.Cmd {
 	form := NewIssueForm(state.Workdir)
+	parentID := state.Router.Location().Param("parentID")
+	v.isSubIssue = parentID != ""
+	if parentID != "" {
+		form.SetParent(parentID)
+	}
 	v.AttachForm(form)
 	return form.Init()
 }
@@ -532,7 +558,12 @@ func (v *IssueFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *IssueFormView) Title() string { return "○  New Issue" }
+func (v *IssueFormView) Title() string {
+	if v.isSubIssue {
+		return "○  New Sub-issue"
+	}
+	return "○  New Issue"
+}
 
 // ViewName returns the view identifier.
 func (v *IssueFormView) ViewName() string { return "pm.issue_form" }
