@@ -1,12 +1,10 @@
-// post_history.go - Edit history view showing post versions with diff display
+// post_history.go - Edit history view showing post versions with diff display.
 package tuisocial
 
 import (
 	"fmt"
 	"strings"
 	"time"
-
-	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -21,35 +19,42 @@ type PostVersionItem struct {
 }
 
 // GetID returns the post's unique identifier.
-func (p PostVersionItem) GetID() string {
-	return p.Post.ID
-}
+func (p PostVersionItem) GetID() string { return p.Post.ID }
 
 // GetTimestamp returns the post's creation time.
-func (p PostVersionItem) GetTimestamp() time.Time {
-	return p.Post.Timestamp
-}
+func (p PostVersionItem) GetTimestamp() time.Time { return p.Post.Timestamp }
 
 // GetEditOf returns the ID of the post this version edits.
-func (p PostVersionItem) GetEditOf() string {
-	return p.Post.EditOf
-}
+func (p PostVersionItem) GetEditOf() string { return p.Post.EditOf }
 
 // IsRetracted returns true if this version has been retracted.
-func (p PostVersionItem) IsRetracted() bool {
-	return p.Post.IsRetracted
-}
+func (p PostVersionItem) IsRetracted() bool { return p.Post.IsRetracted }
 
-// RenderListEntry renders a compact list entry for this version.
-func (p PostVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
-	hash, _ := protocol.NormalizeHash(protocol.ParseRef(p.Post.ID).Value)
+// AuthorDisplay returns the author name, optionally with email.
+func (p PostVersionItem) AuthorDisplay(showEmail bool) string {
 	name := p.Post.Author.Name
 	if name == "" {
 		name = "Anonymous"
 	}
-	if p.ShowEmail && p.Post.Author.Email != "" {
+	if showEmail && p.Post.Author.Email != "" {
 		name += " <" + p.Post.Author.Email + ">"
 	}
+	return name
+}
+
+// Ref returns the post's repo URL, commit hash, and branch.
+func (p PostVersionItem) Ref() (string, string, string) {
+	return p.Post.Repository, protocol.ParseRef(p.Post.ID).Value, p.Post.Branch
+}
+
+// IsOpenProposal reports whether this version is an open cross-repo proposal.
+// Posts have no cross-repo proposal flow, so this is always false.
+func (p PostVersionItem) IsOpenProposal() bool { return false }
+
+// RenderListEntry renders a compact list entry for this version.
+func (p PostVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
+	hash, _ := protocol.NormalizeHash(protocol.ParseRef(p.Post.ID).Value)
+	name := p.AuthorDisplay(p.ShowEmail)
 	if p.Post.Display.IsVerified {
 		name += " " + tuicore.SafeIcon("⚿")
 	}
@@ -91,137 +96,34 @@ func (p PostVersionItem) RenderDetail(width int) string {
 	return tuicore.RenderCard(card, opts)
 }
 
-// HistoryView displays edit history for a post.
-type HistoryView struct {
-	picker       *tuicore.VersionPicker
-	workdir      string
-	workspaceURL string
-	showEmail    bool
+// loadPostHistory fetches and wraps the edit history for a post.
+func loadPostHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
+	parsed := protocol.ParseRef(ctx.Ref)
+	if parsed.Value == "" {
+		return nil, fmt.Errorf("invalid ref: %s", ctx.Ref)
+	}
+	branch := parsed.Branch
+	if branch == "" {
+		branch = gitmsg.GetExtBranch(ctx.Workdir, "social")
+	}
+	posts, err := social.GetEditHistoryPosts(parsed.Repository, parsed.Value, branch, ctx.WorkspaceURL)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]tuicore.VersionItem, len(posts))
+	for i, post := range posts {
+		items[i] = PostVersionItem{Post: post, ShowEmail: ctx.ShowEmail}
+	}
+	return items, nil
 }
 
-// NewHistoryView creates a new history view.
-func NewHistoryView(workdir string) *HistoryView {
-	return &HistoryView{
-		workdir:      workdir,
-		workspaceURL: gitmsg.ResolveRepoURL(workdir),
-		picker:       tuicore.NewVersionPicker(),
-	}
-}
-
-// SetSize sets the view dimensions.
-func (v *HistoryView) SetSize(width, height int) {
-	v.picker.SetSize(width, height)
-}
-
-// Activate loads the edit history when the view becomes active.
-func (v *HistoryView) Activate(state *tuicore.State) tea.Cmd {
-	v.showEmail = state.ShowEmailOnCards
-	loc := state.Router.Location()
-	postID := loc.Param("postID")
-	if postID == "" {
-		return nil
-	}
-	v.picker.SetLoading(true)
-	return v.loadHistory(postID)
-}
-
-// loadHistory fetches the edit history for a post.
-func (v *HistoryView) loadHistory(postID string) tea.Cmd {
-	workdir := v.workdir
-	return func() tea.Msg {
-		parsed := protocol.ParseRef(postID)
-		if parsed.Value == "" {
-			return HistoryLoadedMsg{Err: fmt.Errorf("invalid ref: %s", postID)}
-		}
-		branch := parsed.Branch
-		if branch == "" {
-			branch = gitmsg.GetExtBranch(workdir, "social")
-		}
-		workspaceURL := gitmsg.ResolveRepoURL(workdir)
-		posts, err := social.GetEditHistoryPosts(parsed.Repository, parsed.Value, branch, workspaceURL)
-		if err != nil {
-			return HistoryLoadedMsg{Err: err}
-		}
-		return HistoryLoadedMsg{Versions: posts}
-	}
-}
-
-// Update handles messages and returns commands.
-func (v *HistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	switch msg := msg.(type) {
-	case tea.MouseMsg:
-		handled, cmd := v.picker.HandleMouse(msg)
-		if handled {
-			return cmd
-		}
-	case tea.KeyPressMsg:
-		if msg.String() == "d" {
-			return tuicore.OpenHistoryDiff(v.picker, state, "postID", tuicore.LocHistoryDiff, 1, nil)
-		}
-		handled, cmd := v.picker.HandleKey(msg.String())
-		if handled {
-			return cmd
-		}
-	case HistoryLoadedMsg:
-		v.handleLoaded(msg)
-	}
-	return nil
-}
-
-// handleLoaded processes the loaded history data.
-func (v *HistoryView) handleLoaded(msg HistoryLoadedMsg) {
-	if msg.Err != nil {
-		v.picker.SetLoading(false)
-		return
-	}
-	items := make([]tuicore.VersionItem, len(msg.Versions))
-	for i, post := range msg.Versions {
-		items[i] = PostVersionItem{Post: post, ShowEmail: v.showEmail}
-	}
-	v.picker.SetItems(items)
-}
-
-// Render renders the history view to a string.
-func (v *HistoryView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.History, nil)
-	return wrapper.Render(content, footer)
-}
-
-// IsInputActive returns false since history view has no text input.
-func (v *HistoryView) IsInputActive() bool {
-	return false
-}
-
-// Title returns the header title showing canonical post info.
-func (v *HistoryView) Title() string {
-	items := v.picker.Items()
-	if len(items) == 0 {
-		return "History"
-	}
-	canonical := items[len(items)-1]
-	post := canonical.(PostVersionItem).Post
-	name := post.Author.Name
-	if name == "" {
-		name = "Anonymous"
-	}
-	if v.showEmail && post.Author.Email != "" {
-		name += " <" + post.Author.Email + ">"
-	}
-	title := "History · " + name
-	title += " · " + tuicore.FormatFullTime(post.Timestamp)
-	hash := protocol.ParseRef(post.ID).Value
-	if ref := tuicore.BuildCommitRef(post.Repository, hash, post.Branch, v.workspaceURL); ref != "" {
-		title += " · " + ref
-	}
-	return title
-}
-
-// Bindings returns view-specific key bindings.
-func (v *HistoryView) Bindings() []tuicore.Binding {
-	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []tuicore.Binding{
-		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.History}, Handler: noop},
-	}
+// NewHistoryView creates the edit-history view for a post.
+func NewHistoryView(workdir string) *tuicore.HistoryView {
+	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
+		ParamName:  "postID",
+		Context:    tuicore.History,
+		TitleLabel: "History",
+		Load:       loadPostHistory,
+		DiffLoc:    tuicore.LocHistoryDiff,
+	})
 }

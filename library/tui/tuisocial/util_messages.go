@@ -73,13 +73,6 @@ type RepoRemovedMsg struct {
 	Err     error
 }
 
-// HistoryLoadedMsg is sent when edit history has been loaded
-type HistoryLoadedMsg struct {
-	Versions []social.Post
-	Original social.Post
-	Err      error
-}
-
 // CommentCreatedMsg is sent when a comment is created
 type CommentCreatedMsg struct {
 	Post social.Post

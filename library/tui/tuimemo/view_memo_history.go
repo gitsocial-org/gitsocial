@@ -1,12 +1,10 @@
-// view_memo_history.go - Memo edit-history view (versions picker)
+// view_memo_history.go - Memo edit-history view (versions picker).
 package tuimemo
 
 import (
 	"fmt"
 	"strings"
 	"time"
-
-	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -31,20 +29,34 @@ func (m MemoVersionItem) GetEditOf() string { return m.Version.EditOf }
 // IsRetracted reports whether this version is a retract commit.
 func (m MemoVersionItem) IsRetracted() bool { return m.Version.IsRetracted }
 
+// AuthorDisplay returns the author name, optionally with email.
+func (m MemoVersionItem) AuthorDisplay(showEmail bool) string {
+	name := m.Version.AuthorName
+	if name == "" {
+		name = "Anonymous"
+	}
+	if showEmail && m.Version.AuthorEmail != "" {
+		name += " <" + m.Version.AuthorEmail + ">"
+	}
+	return name
+}
+
+// Ref returns the version's repo URL, commit hash, and branch.
+func (m MemoVersionItem) Ref() (string, string, string) {
+	return m.Version.RepoURL, protocol.ParseRef(m.Version.ID).Value, m.Version.Branch
+}
+
+// IsOpenProposal reports whether this version is an open cross-repo proposal.
+// Memos have no cross-repo proposal flow, so this is always false.
+func (m MemoVersionItem) IsOpenProposal() bool { return false }
+
 // RenderListEntry renders a compact summary line for the picker: header on
 // line 1 (version, label, hash, author, time), body excerpt on line 2, and
 // labels on line 3 (when set).
 func (m MemoVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
 	hash, _ := protocol.NormalizeHash(protocol.ParseRef(m.Version.ID).Value)
-	name := m.Version.AuthorName
-	if name == "" {
-		name = "Anonymous"
-	}
-	if m.ShowEmail && m.Version.AuthorEmail != "" {
-		name += " <" + m.Version.AuthorEmail + ">"
-	}
 	header := fmt.Sprintf("Version %d (%s) - %s - %s - %s",
-		total-index, label, hash, name, m.Version.Timestamp.Format("2006-01-02 15:04:05"))
+		total-index, label, hash, m.AuthorDisplay(m.ShowEmail), m.Version.Timestamp.Format("2006-01-02 15:04:05"))
 	var b strings.Builder
 	if selected {
 		b.WriteString(tuicore.Highlight.Render("▶ " + header))
@@ -91,14 +103,7 @@ func (m MemoVersionItem) RenderDetail(width int) string {
 		lines = append(lines, tuicore.Bold.Render(subj))
 		lines = append(lines, tuicore.Dim.Render(strings.Repeat("─", wrap)))
 	}
-	name := m.Version.AuthorName
-	if name == "" {
-		name = "Anonymous"
-	}
-	if m.ShowEmail && m.Version.AuthorEmail != "" {
-		name += " <" + m.Version.AuthorEmail + ">"
-	}
-	meta := fmt.Sprintf("%s · %s", name, m.Version.Timestamp.Format("2006-01-02 15:04:05"))
+	meta := fmt.Sprintf("%s · %s", m.AuthorDisplay(m.ShowEmail), m.Version.Timestamp.Format("2006-01-02 15:04:05"))
 	hash, _ := protocol.NormalizeHash(protocol.ParseRef(m.Version.ID).Value)
 	if hash != "" {
 		meta += " · " + hash
@@ -114,113 +119,26 @@ func (m MemoVersionItem) RenderDetail(width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// MemoHistoryView displays the edit chain of a memo using the shared VersionPicker.
-type MemoHistoryView struct {
-	picker       *tuicore.VersionPicker
-	workdir      string
-	workspaceURL string
-	showEmail    bool
-	canonical    string // ID of the canonical (latest) memo for the title bar
+// loadMemoHistory fetches and wraps the edit chain for a memo.
+func loadMemoHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
+	versions, err := gitmsg.GetHistory(ctx.Ref, ctx.WorkspaceURL)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]tuicore.VersionItem, len(versions))
+	for i, ver := range versions {
+		items[i] = MemoVersionItem{Version: ver, ShowEmail: ctx.ShowEmail}
+	}
+	return items, nil
 }
 
-// NewMemoHistoryView creates a new memo history view.
-func NewMemoHistoryView(workdir string) *MemoHistoryView {
-	return &MemoHistoryView{
-		workdir:      workdir,
-		workspaceURL: gitmsg.ResolveRepoURL(workdir),
-		picker:       tuicore.NewVersionPicker(),
-	}
-}
-
-// SetSize sets the view dimensions.
-func (v *MemoHistoryView) SetSize(width, height int) { v.picker.SetSize(width, height) }
-
-// Activate loads the edit history for the memo on the current route.
-func (v *MemoHistoryView) Activate(state *tuicore.State) tea.Cmd {
-	v.showEmail = state.ShowEmailOnCards
-	memoID := state.Router.Location().Params["memoID"]
-	if memoID == "" {
-		return nil
-	}
-	v.canonical = memoID
-	v.picker.SetLoading(true)
-	workdir := v.workdir
-	return func() tea.Msg {
-		versions, err := gitmsg.GetHistory(memoID, gitmsg.ResolveRepoURL(workdir))
-		if err != nil {
-			return memoHistoryLoadedMsg{err: err}
-		}
-		return memoHistoryLoadedMsg{versions: versions}
-	}
-}
-
-// Update handles messages.
-func (v *MemoHistoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	switch m := msg.(type) {
-	case tea.MouseMsg:
-		if handled, cmd := v.picker.HandleMouse(m); handled {
-			return cmd
-		}
-	case tea.KeyPressMsg:
-		if m.String() == "d" {
-			return tuicore.OpenHistoryDiff(v.picker, state, "memoID", tuicore.LocMemoHistoryDiff, 1, nil)
-		}
-		if handled, cmd := v.picker.HandleKey(m.String()); handled {
-			return cmd
-		}
-	case memoHistoryLoadedMsg:
-		v.picker.SetLoading(false)
-		if m.err != nil {
-			return nil
-		}
-		items := make([]tuicore.VersionItem, len(m.versions))
-		for i, ver := range m.versions {
-			items[i] = MemoVersionItem{Version: ver, ShowEmail: v.showEmail}
-		}
-		v.picker.SetItems(items)
-	}
-	return nil
-}
-
-// Render renders the history picker to a string.
-func (v *MemoHistoryView) Render(state *tuicore.State) string {
-	wrapper := tuicore.NewViewWrapper(state)
-	content := v.picker.Render()
-	footer := tuicore.RenderFooter(state.Registry, tuicore.MemoHistory, nil)
-	return wrapper.Render(content, footer)
-}
-
-// Bindings returns view-specific keybindings.
-func (v *MemoHistoryView) Bindings() []tuicore.Binding {
-	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []tuicore.Binding{
-		{Key: "d", Label: "version diff", Contexts: []tuicore.Context{tuicore.MemoHistory}, Handler: noop},
-	}
-}
-
-// IsInputActive returns false since the history view has no text input.
-func (v *MemoHistoryView) IsInputActive() bool { return false }
-
-// Title returns the panel header for the history view.
-func (v *MemoHistoryView) Title() string {
-	items := v.picker.Items()
-	if len(items) == 0 {
-		return "☞  History"
-	}
-	canonical := items[len(items)-1].(MemoVersionItem).Version
-	name := canonical.AuthorName
-	if name == "" {
-		name = "Anonymous"
-	}
-	title := "☞  History · " + name + " · " + tuicore.FormatFullTime(canonical.Timestamp)
-	hash := protocol.ParseRef(canonical.ID).Value
-	if ref := tuicore.BuildCommitRef(canonical.RepoURL, hash, canonical.Branch, v.workspaceURL); ref != "" {
-		title += " · " + ref
-	}
-	return title
-}
-
-type memoHistoryLoadedMsg struct {
-	versions []gitmsg.MessageVersion
-	err      error
+// NewMemoHistoryView creates the edit-history view for a memo.
+func NewMemoHistoryView(workdir string) *tuicore.HistoryView {
+	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
+		ParamName:  "memoID",
+		Context:    tuicore.MemoHistory,
+		TitleLabel: "☞  History",
+		Load:       loadMemoHistory,
+		DiffLoc:    tuicore.LocMemoHistoryDiff,
+	})
 }

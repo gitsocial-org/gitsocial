@@ -19,6 +19,13 @@ type VersionItem interface {
 	IsRetracted() bool
 	RenderListEntry(index, total int, label string, selected bool, width int) string
 	RenderDetail(width int) string
+	// AuthorDisplay returns the author's display name for the title bar,
+	// including the email when showEmail is set.
+	AuthorDisplay(showEmail bool) string
+	// Ref returns the version's repo URL, commit hash, and branch.
+	Ref() (repoURL, hash, branch string)
+	// IsOpenProposal reports whether this version is an open cross-repo proposal.
+	IsOpenProposal() bool
 }
 
 // VersionPicker is a reusable component for browsing edit history.
