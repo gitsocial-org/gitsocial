@@ -24,6 +24,7 @@ var (
 	testCacheDir  string
 	tempHomeDir   string
 	origHome      string
+	origXDGConfig string
 	origSessionID string
 )
 
@@ -46,6 +47,12 @@ func TestMain(m *testing.M) {
 	tempHomeDir, _ = os.MkdirTemp("", "memo-test-home-*")
 	origHome = os.Getenv("HOME")
 	os.Setenv("HOME", tempHomeDir)
+	// HOME alone doesn't isolate config paths: UserConfigDir prefers
+	// XDG_CONFIG_HOME (set on Linux CI runners), and the personal repo path
+	// honors GITSOCIAL_PERSONAL_REPO.
+	origXDGConfig = os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHomeDir, ".config"))
+	os.Unsetenv("GITSOCIAL_PERSONAL_REPO")
 
 	origSessionID = os.Getenv("MEMO_SESSION_ID")
 	os.Setenv("MEMO_SESSION_ID", "memo-test-session")
@@ -60,6 +67,11 @@ func TestMain(m *testing.M) {
 		os.Unsetenv("HOME")
 	} else {
 		os.Setenv("HOME", origHome)
+	}
+	if origXDGConfig == "" {
+		os.Unsetenv("XDG_CONFIG_HOME")
+	} else {
+		os.Setenv("XDG_CONFIG_HOME", origXDGConfig)
 	}
 	if origSessionID == "" {
 		os.Unsetenv("MEMO_SESSION_ID")
@@ -91,13 +103,18 @@ func initTestRepo(t *testing.T) string {
 	return dir
 }
 
-// freshHome resets the temporary $HOME between tests so per-tier bare repos
-// don't leak state across cases.
+// freshHome resets the temporary $HOME (and XDG_CONFIG_HOME, which config-path
+// resolution prefers) between tests so per-tier bare repos don't leak state
+// across cases.
 func freshHome(t *testing.T) {
 	t.Helper()
 	newHome := t.TempDir()
 	os.Setenv("HOME", newHome)
-	t.Cleanup(func() { os.Setenv("HOME", tempHomeDir) })
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(newHome, ".config"))
+	t.Cleanup(func() {
+		os.Setenv("HOME", tempHomeDir)
+		os.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHomeDir, ".config"))
+	})
 }
 
 func copyDir(src, dst string) error {

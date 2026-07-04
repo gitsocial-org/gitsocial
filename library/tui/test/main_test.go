@@ -4,6 +4,7 @@ package test
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -26,6 +27,11 @@ func TestMain(m *testing.M) {
 		panic("create temp home: " + err.Error())
 	}
 	os.Setenv("HOME", tmpHome)
+	// HOME alone doesn't isolate config paths: UserConfigDir prefers
+	// XDG_CONFIG_HOME (set on Linux CI runners).
+	origXDGConfig := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
+	os.Unsetenv("GITSOCIAL_PERSONAL_REPO")
 
 	// Create a shared fixture for all tests. This avoids repeating expensive
 	// git init + seed + sync operations per test.
@@ -35,6 +41,11 @@ func TestMain(m *testing.M) {
 
 	// Cleanup
 	os.Setenv("HOME", origHome)
+	if origXDGConfig == "" {
+		os.Unsetenv("XDG_CONFIG_HOME")
+	} else {
+		os.Setenv("XDG_CONFIG_HOME", origXDGConfig)
+	}
 	os.RemoveAll(tmpHome)
 	cache.Reset()
 	if sharedFixture != nil {
