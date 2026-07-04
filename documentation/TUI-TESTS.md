@@ -25,6 +25,13 @@ go test ./library/tui/test/ -run Sequence            # sequence only
 go test -v ./library/tui/test/ -run PR               # verbose, PR-related
 ```
 
+The suite is slow and silent per package until it finishes. For streamed per-test progress (one line per test as it completes, plus a final summary), wrap any of the above with `scripts/test.sh`, which passes its args straight through to `go test -json`:
+
+```bash
+scripts/test.sh ./library/tui/test/...               # all TUI tests, streamed
+scripts/test.sh -run Smoke ./library/tui/test/       # smoke only, streamed
+```
+
 Tests create temp dirs, no external dependencies. Total runtime ~35s (dominated by smoke test's all-keys × all-views matrix).
 
 ---

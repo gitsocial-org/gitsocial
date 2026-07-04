@@ -60,6 +60,8 @@ go test -race ./...              # Race detector
 go test -cover ./...             # Coverage summary
 golangci-lint run --fix ./...    # Lint & fix code
 
+scripts/test.sh                  # Streams per-test progress; wraps `go test -json` (accepts the same args, e.g. `scripts/test.sh -race ./...`)
+
 go test ./library/tui/test/...   # Headless TUI suite (smoke/display/golden/nav/sequence; see TUI-TESTS.md)
 ```
 
