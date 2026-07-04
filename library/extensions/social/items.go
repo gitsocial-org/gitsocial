@@ -989,6 +989,7 @@ func GetEditHistory(repoURL, hash, branch string, workspaceURL string) ([]Social
 			Timestamp:   v.Timestamp,
 			IsRetracted: v.IsRetracted,
 			EditOf:      sql.NullString{String: v.EditOf, Valid: v.EditOf != ""},
+			Labels:      v.Labels,
 		})
 	}
 	return items, nil

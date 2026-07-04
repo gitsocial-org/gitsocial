@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -194,6 +195,7 @@ func newSocialTimelineCmd() *cobra.Command {
 
 // newSocialPostCmd creates the command to create a new post.
 func newSocialPostCmd() *cobra.Command {
+	var labelsStr string
 	cmd := &cobra.Command{
 		Use:   "post <text>",
 		Short: "Create a new post",
@@ -224,7 +226,7 @@ func newSocialPostCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
-			result := social.CreatePost(cfg.WorkDir, content, nil)
+			result := social.CreatePost(cfg.WorkDir, content, &social.CreatePostOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -240,6 +242,8 @@ func newSocialPostCmd() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
 
 	return cmd
 }
@@ -331,6 +335,7 @@ func newSocialRetractCmd() *cobra.Command {
 
 // newSocialCommentCmd creates the command to comment on a post.
 func newSocialCommentCmd() *cobra.Command {
+	var labelsStr string
 	cmd := &cobra.Command{
 		Use:   "comment <post-id> <text>",
 		Short: "Comment on a post",
@@ -357,7 +362,7 @@ func newSocialCommentCmd() *cobra.Command {
 				content = strings.Join(lines, "\n")
 			}
 
-			result := social.CreateComment(cfg.WorkDir, postID, content, nil)
+			result := social.CreateComment(cfg.WorkDir, postID, content, &social.CreateCommentOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -374,11 +379,14 @@ func newSocialCommentCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+
 	return cmd
 }
 
 // newSocialRepostCmd creates the command to repost a post.
 func newSocialRepostCmd() *cobra.Command {
+	var labelsStr string
 	cmd := &cobra.Command{
 		Use:   "repost <post-id>",
 		Short: "Repost a post",
@@ -391,7 +399,7 @@ func newSocialRepostCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			postID := args[0]
 
-			result := social.CreateRepost(cfg.WorkDir, postID, nil)
+			result := social.CreateRepost(cfg.WorkDir, postID, &social.CreateRepostOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -408,11 +416,14 @@ func newSocialRepostCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+
 	return cmd
 }
 
 // newSocialQuoteCmd creates the command to quote a post with commentary.
 func newSocialQuoteCmd() *cobra.Command {
+	var labelsStr string
 	cmd := &cobra.Command{
 		Use:   "quote <post-id> <text>",
 		Short: "Quote a post with your own commentary",
@@ -439,7 +450,7 @@ func newSocialQuoteCmd() *cobra.Command {
 				content = strings.Join(lines, "\n")
 			}
 
-			result := social.CreateQuote(cfg.WorkDir, postID, content, nil)
+			result := social.CreateQuote(cfg.WorkDir, postID, content, &social.CreateQuoteOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -455,6 +466,8 @@ func newSocialQuoteCmd() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
 
 	return cmd
 }

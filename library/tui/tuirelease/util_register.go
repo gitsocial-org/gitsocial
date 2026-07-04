@@ -200,6 +200,10 @@ func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tu
 		Content:      tuicore.CardContent{Text: rel.Body},
 		ContentLinks: tuicore.ExtractContentLinks(rel.Body, rel.Repository, ""),
 	}
+	// Labels render as metadata stats below the content, mirroring PM cards.
+	for _, l := range rel.Labels {
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+	}
 	relEmail := rel.Author.Email
 	if rel.Origin != nil && rel.Origin.AuthorEmail != "" {
 		relEmail = rel.Origin.AuthorEmail

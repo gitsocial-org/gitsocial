@@ -26,6 +26,8 @@ func (r ReleaseVersionItem) reconstruct() *release.Release {
 	item.Timestamp = r.Version.Timestamp
 	item.IsRetracted = r.Version.IsRetracted
 	rel := release.ReleaseItemToRelease(item)
+	// MessageToReleaseItem doesn't carry labels, so restore them from the version.
+	rel.Labels = r.Version.Labels
 	return &rel
 }
 

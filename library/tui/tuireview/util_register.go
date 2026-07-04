@@ -321,6 +321,10 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 		Content:      tuicore.CardContent{Text: pr.Body},
 		ContentLinks: tuicore.ExtractContentLinks(pr.Body, pr.Repository, ""),
 	}
+	// Labels render as metadata stats below the content, mirroring PM cards.
+	for _, l := range pr.Labels {
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+	}
 	prEmail := cardAuthor.Email
 	if pr.Origin != nil && pr.Origin.AuthorEmail != "" {
 		prEmail = pr.Origin.AuthorEmail

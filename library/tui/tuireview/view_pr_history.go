@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuiproposal"
@@ -102,6 +103,8 @@ func (v PRVersionItem) reconstruct() *review.PullRequest {
 	// them from an (empty) Content, so restore them from the version directly.
 	pr.Subject = v.Version.Subject
 	pr.Body = v.Version.Body
+	// MessageToReviewItem doesn't carry labels, so restore them from the version header.
+	pr.Labels = text.SplitCSV(v.Version.Fields["labels"])
 	return &pr
 }
 

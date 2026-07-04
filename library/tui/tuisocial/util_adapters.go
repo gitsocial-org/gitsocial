@@ -135,6 +135,11 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		ContentLinks: tuicore.ExtractContentLinks(content, repoForLinks, ""),
 	}
 
+	// Labels render as metadata stats below the content, mirroring PM cards.
+	for _, l := range post.Labels {
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+	}
+
 	// Handle post type-specific icons and nested content
 	switch post.Type {
 	case social.PostTypeRepost:
@@ -452,6 +457,7 @@ func searchItemToReleaseDisplayItem(item search.Item, id, subject, body string) 
 		Tag:              item.Tag,
 		Version:          item.Version,
 		Prerelease:       item.Prerelease,
+		Labels:           text.SplitCSV(item.Labels),
 		Comments:         item.Comments,
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
@@ -497,6 +503,7 @@ func searchItemToPost(item search.Item) social.Post {
 		Content:      item.Content,
 		CleanContent: item.Content,
 		Type:         postType,
+		Labels:       text.SplitCSV(item.Labels),
 		IsVirtual:    item.IsVirtual,
 		IsStale:      item.IsStale,
 		IsEdited:     item.IsEdited,

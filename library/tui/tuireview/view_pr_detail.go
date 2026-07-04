@@ -1272,6 +1272,13 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	if len(pr.Reviewers) > 0 {
 		lines = append(lines, selectionBar+styles.Label.Render("Reviewers")+styles.Value.Render(strings.Join(pr.Reviewers, ", ")))
 	}
+	for i, l := range pr.Labels {
+		rowLabel := "Labels"
+		if i > 0 {
+			rowLabel = ""
+		}
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+	}
 	if len(pr.Closes) > 0 {
 		refs := make([]string, len(pr.Closes))
 		for i, ref := range pr.Closes {

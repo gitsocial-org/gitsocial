@@ -445,6 +445,13 @@ func renderReleaseCard(rel *release.Release, width int, selected bool, searchQue
 	if rel.Prerelease {
 		lines = append(lines, selectionBar+styles.Label.Render("Pre-release")+styles.Value.Render("yes"))
 	}
+	for i, l := range rel.Labels {
+		rowLabel := "Labels"
+		if i > 0 {
+			rowLabel = ""
+		}
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+	}
 	if len(rel.Artifacts) > 0 {
 		for i, a := range rel.Artifacts {
 			label := "Artifacts"

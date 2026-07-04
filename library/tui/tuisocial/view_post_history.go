@@ -88,7 +88,7 @@ func (p PostVersionItem) RenderDetail(width int) string {
 	})
 	opts := tuicore.CardOptions{
 		MaxLines:  -1,
-		ShowStats: false,
+		ShowStats: true,
 		Width:     width,
 		WrapWidth: width - 5,
 		Markdown:  true,
