@@ -126,32 +126,8 @@ func socialHooks() []fetch.PostFetchHook {
 func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
 	if msg != nil && msg.Header.Ext == "social" {
 		itemType := string(extractPostType(msg))
-		originalRepoURL, originalHash, originalBranch := "", "", ""
-		if orig := msg.Header.Fields["original"]; orig != "" {
-			normalizedRef := protocol.NormalizeRefWithContext(orig, repoURL, branch)
-			parsed := protocol.ParseRef(normalizedRef)
-			if parsed.Value != "" {
-				originalRepoURL = parsed.Repository
-				originalHash = parsed.Value
-				originalBranch = parsed.Branch
-				if originalBranch == "" {
-					originalBranch = branch
-				}
-			}
-		}
-		replyToRepoURL, replyToHash, replyToBranch := "", "", ""
-		if replyTo := msg.Header.Fields["reply-to"]; replyTo != "" {
-			normalizedRef := protocol.NormalizeRefWithContext(replyTo, repoURL, branch)
-			parsed := protocol.ParseRef(normalizedRef)
-			if parsed.Value != "" {
-				replyToRepoURL = parsed.Repository
-				replyToHash = parsed.Value
-				replyToBranch = parsed.Branch
-				if replyToBranch == "" {
-					replyToBranch = branch
-				}
-			}
-		}
+		originalRepoURL, originalHash, originalBranch := parseSocialRefField(msg.Header.Fields["original"], repoURL, branch)
+		replyToRepoURL, replyToHash, replyToBranch := parseSocialRefField(msg.Header.Fields["reply-to"], repoURL, branch)
 
 		_ = InsertSocialItem(SocialItem{
 			RepoURL:         repoURL,
@@ -176,6 +152,23 @@ func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch s
 	} else {
 		upgradeVirtualItem(gc, repoURL)
 	}
+}
+
+// parseSocialRefField parses a social ref header field (original / reply-to)
+// with repo/branch context, applying the same defaulting rules as ingest.
+func parseSocialRefField(fieldValue, repoURL, branch string) (refRepoURL, refHash, refBranch string) {
+	if fieldValue == "" {
+		return "", "", ""
+	}
+	parsed := protocol.ParseRef(protocol.NormalizeRefWithContext(fieldValue, repoURL, branch))
+	if parsed.Value == "" {
+		return "", "", ""
+	}
+	refBranch = parsed.Branch
+	if refBranch == "" {
+		refBranch = branch
+	}
+	return parsed.Repository, parsed.Value, refBranch
 }
 
 // extractPostType determines the post type from a protocol message header.

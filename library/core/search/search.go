@@ -296,22 +296,23 @@ func queryItems(q searchQuery) ([]Item, error) {
 // scanItem scans a row from the search query into an Item.
 func scanItem(rows *sql.Rows) (Item, error) {
 	var item Item
-	var ts, staleSince, message sql.NullString
+	var ts, staleSince, message, rawMessage sql.NullString
 	var isVirtual, hasEdits, hasProposed int
 	var socialType, extension, itemType string
 	var state, labels, assignees, due sql.NullString
 	var base, head, reviewers sql.NullString
-	var tag, version sql.NullString
+	var tag, version, sbom sql.NullString
 	var draft, prerelease, comments int
 
 	err := rows.Scan(
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &ts,
+		&rawMessage,
 		&isVirtual, &staleSince, &hasEdits,
 		&socialType, &extension, &itemType,
 		&state, &labels, &assignees, &due,
 		&draft, &base, &head, &reviewers,
-		&tag, &version, &prerelease, &comments,
+		&tag, &version, &prerelease, &sbom, &comments,
 		&hasProposed,
 	)
 	if err != nil {
@@ -321,6 +322,14 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	if message.Valid {
 		item.Content = protocol.ExtractCleanContent(message.String)
 	}
+	// Origin lives only in the raw message header (platform/url are not columns),
+	// so parse it here to match the native list-view path (cache.ScanResolved).
+	if rawMessage.Valid {
+		if msg := protocol.ParseMessage(rawMessage.String); msg != nil {
+			item.Origin = protocol.ExtractOrigin(&msg.Header)
+		}
+	}
+	item.SBOM = sbom.String
 	if ts.Valid {
 		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
 	}

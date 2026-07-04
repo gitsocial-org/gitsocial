@@ -410,6 +410,7 @@ func searchItemToPMDisplayItem(item search.Item, id, subject, body string) tuico
 		Comments:         item.Comments,
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
+		Origin:           item.Origin,
 	}
 	if item.Due != "" {
 		if t, err := time.Parse(time.RFC3339, item.Due); err == nil {
@@ -440,6 +441,7 @@ func searchItemToReviewDisplayItem(item search.Item, id, subject, body string) t
 		Comments:         item.Comments,
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
+		Origin:           item.Origin,
 	}
 	return tuicore.NewItem(id, "review", item.Type, item.Timestamp, pr)
 }
@@ -461,6 +463,8 @@ func searchItemToReleaseDisplayItem(item search.Item, id, subject, body string) 
 		Comments:         item.Comments,
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
+		SBOM:             item.SBOM,
+		Origin:           item.Origin,
 	}
 	return tuicore.NewItem(id, "release", "release", item.Timestamp, rel)
 }
@@ -483,6 +487,7 @@ func searchItemToMemoDisplayItem(item search.Item, id, subject, body, workspaceU
 		IsEdited:   item.IsEdited,
 		IsVirtual:  item.IsVirtual,
 		IsStale:    item.IsStale,
+		Origin:     item.Origin,
 	}
 	return tuicore.NewItem(id, "memo", "memo", item.Timestamp, m)
 }
@@ -507,6 +512,7 @@ func searchItemToPost(item search.Item) social.Post {
 		IsVirtual:    item.IsVirtual,
 		IsStale:      item.IsStale,
 		IsEdited:     item.IsEdited,
+		Origin:       item.Origin,
 		Display: social.Display{
 			CommitHash: item.Hash,
 		},

@@ -1,7 +1,11 @@
 // types.go - Search types for cross-extension search
 package search
 
-import "time"
+import (
+	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+)
 
 // Params configures a search query.
 type Params struct {
@@ -96,6 +100,12 @@ type Item struct {
 	Prerelease bool   `json:"prerelease,omitempty"`
 	Due        string `json:"due,omitempty"`
 	Comments   int    `json:"comments,omitempty"`
+	SBOM       string `json:"sbom,omitempty"`
+
+	// Origin holds import provenance (author, platform, url, time) parsed from
+	// the raw message header. Nil for non-imported items. Mirrors the native
+	// list-view path so search-reached cards render origin identically.
+	Origin *protocol.Origin `json:"origin,omitempty"`
 
 	// Internal fields for grouping (not serialized, populated by enrichForGrouping)
 	groupState     string

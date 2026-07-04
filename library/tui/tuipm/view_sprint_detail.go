@@ -446,6 +446,13 @@ func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery strin
 	}
 	dateRange := fmt.Sprintf("%s - %s", sp.Start.Format("Jan 2"), sp.End.Format("Jan 2, 2006"))
 	lines = append(lines, selectionBar+styles.Label.Render("Dates")+styles.Value.Render(dateRange))
+	for i, l := range sp.Labels {
+		rowLabel := "Labels"
+		if i > 0 {
+			rowLabel = ""
+		}
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+	}
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(sp.ID, selectionBar, width-3)...)

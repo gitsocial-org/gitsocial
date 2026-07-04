@@ -205,6 +205,9 @@ func MilestoneToCardWithOptions(milestone pm.Milestone, opts MilestoneToCardOpti
 	if milestone.Due != nil {
 		stats = append(stats, tuicore.CardStat{Text: "due: " + milestone.Due.Format("2006-01-02")})
 	}
+	for _, l := range milestone.Labels {
+		stats = append(stats, tuicore.CardStat{Text: l})
+	}
 	if milestone.IssueCount > 0 {
 		stats = append(stats, tuicore.CardStat{Text: fmt.Sprintf("%d/%d issues", milestone.ClosedCount, milestone.IssueCount)})
 	}
@@ -343,6 +346,9 @@ func SprintToCardWithOptions(sprint pm.Sprint, opts SprintToCardOptions) tuicore
 	var stats []tuicore.CardStat
 	dateRange := fmt.Sprintf("%s - %s", sprint.Start.Format("Jan 2, 2006"), sprint.End.Format("Jan 2, 2006"))
 	stats = append(stats, tuicore.CardStat{Text: dateRange})
+	for _, l := range sprint.Labels {
+		stats = append(stats, tuicore.CardStat{Text: l})
+	}
 	if sprint.IssueCount > 0 {
 		stats = append(stats, tuicore.CardStat{Text: fmt.Sprintf("%d/%d issues", sprint.ClosedCount, sprint.IssueCount)})
 	}

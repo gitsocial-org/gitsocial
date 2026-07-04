@@ -167,6 +167,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	tagExpr := coalesceStr(has, [][2]string{{"rli", "tag"}})
 	versionExpr := coalesceStr(has, [][2]string{{"rli", "version"}})
 	prereleaseExpr := coalesceInt(has, [][2]string{{"rli", "prerelease"}})
+	sbomExpr := coalesceStr(has, [][2]string{{"rli", "sbom"}})
 
 	commentsExpr := "0"
 	if hasInteractions {
@@ -181,6 +182,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 
 	query := `SELECT r.repo_url, r.hash, r.branch,
 	       r.effective_author_name, r.effective_author_email, r.effective_message, r.effective_timestamp,
+	       r.message as raw_message,
 	       r.is_virtual, r.stale_since, r.has_edits,
 	       ` + socialTypeExpr + ` as social_type,
 	       ` + extCaseExpr + ` as extension,
@@ -196,6 +198,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	       ` + tagExpr + ` as item_tag,
 	       ` + versionExpr + ` as item_version,
 	       ` + prereleaseExpr + ` as item_prerelease,
+	       ` + sbomExpr + ` as item_sbom,
 	       ` + commentsExpr + ` as item_comments,
 	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.canonical_branch = r.branch AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
 	FROM core_commits r

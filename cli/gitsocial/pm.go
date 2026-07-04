@@ -13,6 +13,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 )
 
@@ -32,6 +33,22 @@ func warnIfFeatureHidden(workdir string, feature string) {
 			fmt.Fprintf(os.Stderr, "warning: sprints are not part of the '%s' framework; consider switching to 'scrum'\n", config.Framework)
 		}
 	}
+}
+
+// runRootThenWarn chains the root command's persistent setup (config injection
+// and cache.Open) before emitting the framework-feature warning. Cobra runs only
+// the nearest PersistentPreRun, so a nested hook on the milestone/sprint groups
+// would otherwise shadow the root's setup and leave the config uninitialized.
+func runRootThenWarn(cmd *cobra.Command, args []string, feature string) error {
+	if root := cmd.Root(); root.PersistentPreRunE != nil {
+		if err := root.PersistentPreRunE(cmd, args); err != nil {
+			return err
+		}
+	}
+	if cfg := GetConfig(cmd); cfg != nil {
+		warnIfFeatureHidden(cfg.WorkDir, feature)
+	}
+	return nil
 }
 
 func init() {
@@ -166,6 +183,7 @@ func newPMIssueCmd() *cobra.Command {
 		newPMIssueListCmd(),
 		newPMIssueShowCmd(),
 		newPMIssueCreateCmd(),
+		newPMIssueEditCmd(),
 		newPMIssueCloseCmd(),
 		newPMIssueReopenCmd(),
 		newPMIssueCommentCmd(),
@@ -360,18 +378,8 @@ func newPMIssueCreateCmd() *cobra.Command {
 			}
 
 			opts := pm.CreateIssueOptions{
-				State: pm.StateOpen,
-			}
-
-			if labelsStr != "" {
-				for _, l := range strings.Split(labelsStr, ",") {
-					l = strings.TrimSpace(l)
-					if idx := strings.Index(l, "/"); idx > 0 {
-						opts.Labels = append(opts.Labels, pm.Label{Scope: l[:idx], Value: l[idx+1:]})
-					} else {
-						opts.Labels = append(opts.Labels, pm.Label{Value: l})
-					}
-				}
+				State:  pm.StateOpen,
+				Labels: parseIssueLabels(labelsStr),
 			}
 
 			if assigneesStr != "" {
@@ -398,30 +406,9 @@ func newPMIssueCreateCmd() *cobra.Command {
 				opts.Sprint = "#commit:" + sprintRef
 			}
 
-			if blocksStr != "" {
-				for _, r := range strings.Split(blocksStr, ",") {
-					r = strings.TrimSpace(r)
-					if r != "" {
-						opts.Blocks = append(opts.Blocks, "#commit:"+r)
-					}
-				}
-			}
-			if blockedByStr != "" {
-				for _, r := range strings.Split(blockedByStr, ",") {
-					r = strings.TrimSpace(r)
-					if r != "" {
-						opts.BlockedBy = append(opts.BlockedBy, "#commit:"+r)
-					}
-				}
-			}
-			if relatedStr != "" {
-				for _, r := range strings.Split(relatedStr, ",") {
-					r = strings.TrimSpace(r)
-					if r != "" {
-						opts.Related = append(opts.Related, "#commit:"+r)
-					}
-				}
-			}
+			opts.Blocks = commitRefList(blocksStr)
+			opts.BlockedBy = commitRefList(blockedByStr)
+			opts.Related = commitRefList(relatedStr)
 
 			result := pm.CreateIssue(cfg.WorkDir, subject, body, opts)
 
@@ -450,6 +437,146 @@ func newPMIssueCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes)")
 
 	return cmd
+}
+
+// newPMIssueEditCmd creates the command to edit an issue's metadata. Unset
+// flags preserve existing values via changed-flag detection.
+func newPMIssueEditCmd() *cobra.Command {
+	var subject, body, state, assigneesStr, dueDateStr, labelsStr, milestoneRef, sprintRef, blocksStr, blockedByStr, relatedStr string
+
+	cmd := &cobra.Command{
+		Use:   "edit <issue-id>",
+		Short: "Edit an issue's metadata",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+
+			cfg := GetConfig(cmd)
+			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			}
+
+			opts := pm.UpdateIssueOptions{}
+			if cmd.Flags().Changed("subject") {
+				opts.Subject = &subject
+			}
+			if cmd.Flags().Changed("body") {
+				opts.Body = &body
+			}
+			if cmd.Flags().Changed("state") {
+				s := pm.State(state)
+				opts.State = &s
+			}
+			if cmd.Flags().Changed("assignees") {
+				a := text.SplitCSV(assigneesStr)
+				opts.Assignees = &a
+			}
+			if cmd.Flags().Changed("due") {
+				if strings.TrimSpace(dueDateStr) == "" {
+					PrintError(cmd, "due date cannot be cleared via edit; provide a YYYY-MM-DD date")
+					os.Exit(ExitInvalidArgs)
+				}
+				t, err := time.Parse("2006-01-02", dueDateStr)
+				if err != nil {
+					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					os.Exit(ExitInvalidArgs)
+				}
+				opts.Due = &t
+			}
+			if cmd.Flags().Changed("labels") {
+				l := parseIssueLabels(labelsStr)
+				opts.Labels = &l
+			}
+			if cmd.Flags().Changed("milestone") {
+				ref := commitRefOrEmpty(milestoneRef)
+				opts.Milestone = &ref
+			}
+			if cmd.Flags().Changed("sprint") {
+				ref := commitRefOrEmpty(sprintRef)
+				opts.Sprint = &ref
+			}
+			if cmd.Flags().Changed("blocks") {
+				r := commitRefList(blocksStr)
+				opts.Blocks = &r
+			}
+			if cmd.Flags().Changed("blocked-by") {
+				r := commitRefList(blockedByStr)
+				opts.BlockedBy = &r
+			}
+			if cmd.Flags().Changed("related") {
+				r := commitRefList(relatedStr)
+				opts.Related = &r
+			}
+
+			result := pm.UpdateIssue(cfg.WorkDir, args[0], opts)
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				PrintSuccess(cmd, "Issue updated")
+				fmt.Println()
+				printIssueDetails(result.Data)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&subject, "subject", "", "Updated subject/title")
+	cmd.Flags().StringVar(&body, "body", "", "Updated body/description")
+	cmd.Flags().StringVar(&state, "state", "", "State (open, closed, canceled)")
+	cmd.Flags().StringVarP(&assigneesStr, "assignees", "a", "", "Assignees (comma-separated emails; replaces existing)")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone ref (commit hash; empty to clear)")
+	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint ref (commit hash; empty to clear)")
+	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Issues this blocks (comma-separated hashes; replaces existing)")
+	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Issues blocking this (comma-separated hashes; replaces existing)")
+	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes; replaces existing)")
+
+	return cmd
+}
+
+// parseIssueLabels parses a comma-separated "scope/value" (or bare "value") string into pm.Label slice.
+func parseIssueLabels(labelsStr string) []pm.Label {
+	var labels []pm.Label
+	for _, l := range strings.Split(labelsStr, ",") {
+		l = strings.TrimSpace(l)
+		if l == "" {
+			continue
+		}
+		if idx := strings.Index(l, "/"); idx > 0 {
+			labels = append(labels, pm.Label{Scope: l[:idx], Value: l[idx+1:]})
+		} else {
+			labels = append(labels, pm.Label{Value: l})
+		}
+	}
+	return labels
+}
+
+// commitRefOrEmpty normalizes a bare hash into a "#commit:" ref, passing through
+// existing refs and empty strings (empty clears the field on edit).
+func commitRefOrEmpty(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || strings.Contains(ref, "#") {
+		return ref
+	}
+	return "#commit:" + ref
+}
+
+// commitRefList parses a comma-separated hash list into "#commit:" refs.
+func commitRefList(refsStr string) []string {
+	var refs []string
+	for _, r := range strings.Split(refsStr, ",") {
+		if norm := commitRefOrEmpty(r); norm != "" {
+			refs = append(refs, norm)
+		}
+	}
+	return refs
 }
 
 func newPMIssueCloseCmd() *cobra.Command {
@@ -602,11 +729,8 @@ func newPMMilestoneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "milestone",
 		Short: "Manage milestones",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cfg := GetConfig(cmd)
-			if cfg != nil {
-				warnIfFeatureHidden(cfg.WorkDir, "milestone")
-			}
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return runRootThenWarn(cmd, args, "milestone")
 		},
 	}
 
@@ -614,6 +738,7 @@ func newPMMilestoneCmd() *cobra.Command {
 		newPMMilestoneListCmd(),
 		newPMMilestoneShowCmd(),
 		newPMMilestoneCreateCmd(),
+		newPMMilestoneEditCmd(),
 		newPMMilestoneCloseCmd(),
 		newPMMilestoneReopenCmd(),
 		newPMMilestoneCancelCmd(),
@@ -727,6 +852,7 @@ func newPMMilestoneShowCmd() *cobra.Command {
 
 func newPMMilestoneCreateCmd() *cobra.Command {
 	var dueDateStr string
+	var labelsStr string
 	var allowDuplicate bool
 
 	cmd := &cobra.Command{
@@ -765,7 +891,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
-			opts := pm.CreateMilestoneOptions{AllowDuplicate: allowDuplicate}
+			opts := pm.CreateMilestoneOptions{AllowDuplicate: allowDuplicate, Labels: text.SplitCSV(labelsStr)}
 
 			if dueDateStr != "" {
 				t, err := time.Parse("2006-01-02", dueDateStr)
@@ -794,7 +920,79 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
 	cmd.Flags().BoolVar(&allowDuplicate, "allow-duplicate", false, "Allow creating a milestone with a title that already exists")
+
+	return cmd
+}
+
+// newPMMilestoneEditCmd creates the command to edit a milestone's metadata.
+func newPMMilestoneEditCmd() *cobra.Command {
+	var title, body, state, dueDateStr, labelsStr string
+
+	cmd := &cobra.Command{
+		Use:   "edit <milestone-id>",
+		Short: "Edit a milestone's metadata",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+
+			cfg := GetConfig(cmd)
+			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			}
+
+			opts := pm.UpdateMilestoneOptions{}
+			if cmd.Flags().Changed("title") {
+				opts.Title = &title
+			}
+			if cmd.Flags().Changed("body") {
+				opts.Body = &body
+			}
+			if cmd.Flags().Changed("state") {
+				s := pm.State(state)
+				opts.State = &s
+			}
+			if cmd.Flags().Changed("due") {
+				if strings.TrimSpace(dueDateStr) == "" {
+					PrintError(cmd, "due date cannot be cleared via edit; provide a YYYY-MM-DD date")
+					os.Exit(ExitInvalidArgs)
+				}
+				t, err := time.Parse("2006-01-02", dueDateStr)
+				if err != nil {
+					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					os.Exit(ExitInvalidArgs)
+				}
+				opts.Due = &t
+			}
+			if cmd.Flags().Changed("labels") {
+				l := text.SplitCSV(labelsStr)
+				opts.Labels = &l
+			}
+
+			result := pm.UpdateMilestone(cfg.WorkDir, args[0], opts)
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				PrintSuccess(cmd, "Milestone updated")
+				fmt.Println()
+				printMilestoneDetails(result.Data)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&title, "title", "", "Updated title")
+	cmd.Flags().StringVar(&body, "body", "", "Updated description")
+	cmd.Flags().StringVar(&state, "state", "", "State (open, closed, canceled)")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
 
 	return cmd
 }
@@ -920,11 +1118,8 @@ func newPMSprintCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sprint",
 		Short: "Manage sprints",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cfg := GetConfig(cmd)
-			if cfg != nil {
-				warnIfFeatureHidden(cfg.WorkDir, "sprint")
-			}
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return runRootThenWarn(cmd, args, "sprint")
 		},
 	}
 
@@ -932,6 +1127,7 @@ func newPMSprintCmd() *cobra.Command {
 		newPMSprintListCmd(),
 		newPMSprintShowCmd(),
 		newPMSprintCreateCmd(),
+		newPMSprintEditCmd(),
 		newPMSprintStartCmd(),
 		newPMSprintCompleteCmd(),
 		newPMSprintCancelCmd(),
@@ -1051,6 +1247,7 @@ func newPMSprintShowCmd() *cobra.Command {
 func newPMSprintCreateCmd() *cobra.Command {
 	var startDateStr string
 	var endDateStr string
+	var labelsStr string
 
 	cmd := &cobra.Command{
 		Use:   "create <title>",
@@ -1106,8 +1303,9 @@ func newPMSprintCreateCmd() *cobra.Command {
 			}
 
 			opts := pm.CreateSprintOptions{
-				Start: start,
-				End:   end,
+				Start:  start,
+				End:    end,
+				Labels: text.SplitCSV(labelsStr),
 			}
 
 			result := pm.CreateSprint(cfg.WorkDir, title, body, opts)
@@ -1129,6 +1327,83 @@ func newPMSprintCreateCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date (YYYY-MM-DD, required)")
 	cmd.Flags().StringVar(&endDateStr, "end", "", "End date (YYYY-MM-DD, required)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
+
+	return cmd
+}
+
+// newPMSprintEditCmd creates the command to edit a sprint's metadata.
+func newPMSprintEditCmd() *cobra.Command {
+	var title, body, state, startDateStr, endDateStr, labelsStr string
+
+	cmd := &cobra.Command{
+		Use:   "edit <sprint-id>",
+		Short: "Edit a sprint's metadata",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+
+			cfg := GetConfig(cmd)
+			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			}
+
+			opts := pm.UpdateSprintOptions{}
+			if cmd.Flags().Changed("title") {
+				opts.Title = &title
+			}
+			if cmd.Flags().Changed("body") {
+				opts.Body = &body
+			}
+			if cmd.Flags().Changed("state") {
+				s := pm.SprintState(state)
+				opts.State = &s
+			}
+			if cmd.Flags().Changed("start") {
+				t, err := time.Parse("2006-01-02", startDateStr)
+				if err != nil {
+					PrintError(cmd, "invalid start date format (use YYYY-MM-DD)")
+					os.Exit(ExitInvalidArgs)
+				}
+				opts.Start = &t
+			}
+			if cmd.Flags().Changed("end") {
+				t, err := time.Parse("2006-01-02", endDateStr)
+				if err != nil {
+					PrintError(cmd, "invalid end date format (use YYYY-MM-DD)")
+					os.Exit(ExitInvalidArgs)
+				}
+				opts.End = &t
+			}
+			if cmd.Flags().Changed("labels") {
+				l := text.SplitCSV(labelsStr)
+				opts.Labels = &l
+			}
+
+			result := pm.UpdateSprint(cfg.WorkDir, args[0], opts)
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				PrintSuccess(cmd, "Sprint updated")
+				fmt.Println()
+				printSprintDetails(result.Data)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&title, "title", "", "Updated title")
+	cmd.Flags().StringVar(&body, "body", "", "Updated description")
+	cmd.Flags().StringVar(&state, "state", "", "State (planned, active, completed, canceled)")
+	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date (YYYY-MM-DD)")
+	cmd.Flags().StringVar(&endDateStr, "end", "", "End date (YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
 
 	return cmd
 }
@@ -1272,11 +1547,16 @@ func printMilestoneLine(m pm.Milestone) {
 }
 
 func printMilestoneDetails(m pm.Milestone) {
+	authorName, authorEmail, created := ResolveDisplayIdentity(m.Author.Name, m.Author.Email, m.Timestamp, m.Origin)
 	fmt.Printf("Milestone: %s\n", m.ID)
 	fmt.Printf("State: %s\n", m.State)
 	fmt.Printf("Title: %s\n", m.Title)
-	fmt.Printf("Author: %s <%s>\n", m.Author.Name, m.Author.Email)
-	fmt.Printf("Created: %s\n", m.Timestamp.Format(time.RFC3339))
+	fmt.Printf("Author: %s <%s>\n", authorName, authorEmail)
+	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
+
+	if len(m.Labels) > 0 {
+		fmt.Printf("Labels: %s\n", strings.Join(m.Labels, ", "))
+	}
 
 	if m.Due != nil {
 		fmt.Printf("Due: %s\n", m.Due.Format("2006-01-02"))
@@ -1310,13 +1590,18 @@ func printSprintLine(s pm.Sprint) {
 }
 
 func printSprintDetails(s pm.Sprint) {
+	authorName, authorEmail, created := ResolveDisplayIdentity(s.Author.Name, s.Author.Email, s.Timestamp, s.Origin)
 	fmt.Printf("Sprint: %s\n", s.ID)
 	fmt.Printf("State: %s\n", s.State)
 	fmt.Printf("Title: %s\n", s.Title)
-	fmt.Printf("Author: %s <%s>\n", s.Author.Name, s.Author.Email)
-	fmt.Printf("Created: %s\n", s.Timestamp.Format(time.RFC3339))
+	fmt.Printf("Author: %s <%s>\n", authorName, authorEmail)
+	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
 	fmt.Printf("Start: %s\n", s.Start.Format("2006-01-02"))
 	fmt.Printf("End: %s\n", s.End.Format("2006-01-02"))
+
+	if len(s.Labels) > 0 {
+		fmt.Printf("Labels: %s\n", strings.Join(s.Labels, ", "))
+	}
 
 	if s.Body != "" {
 		fmt.Println()
@@ -1353,11 +1638,12 @@ func printIssueDetails(issue pm.Issue) {
 		stateDisplay = "closed"
 	}
 
+	authorName, authorEmail, created := ResolveDisplayIdentity(issue.Author.Name, issue.Author.Email, issue.Timestamp, issue.Origin)
 	fmt.Printf("Issue: %s\n", issue.ID)
 	fmt.Printf("State: %s\n", stateDisplay)
 	fmt.Printf("Subject: %s\n", issue.Subject)
-	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(issue.Author.Name, issue.Author.Email, issue.Repository, protocol.ParseRef(issue.ID).Value))
-	fmt.Printf("Created: %s\n", issue.Timestamp.Format(time.RFC3339))
+	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, issue.Repository, protocol.ParseRef(issue.ID).Value))
+	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
 
 	if len(issue.Labels) > 0 {
 		var labelStrs []string

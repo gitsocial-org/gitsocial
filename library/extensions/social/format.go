@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 var mdImageRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?`)
@@ -38,7 +40,16 @@ func formatDate(t time.Time) string {
 func FormatPost(post Post) string {
 	var lines []string
 
-	header := fmt.Sprintf("%s · %s", post.Author.Name, formatDate(post.Timestamp))
+	displayName, displayTime := post.Author.Name, post.Timestamp
+	if a := protocol.OriginDisplayAuthor(post.Origin); a != "" {
+		displayName = a
+		if post.Origin.Time != "" {
+			if t, err := time.Parse(time.RFC3339, post.Origin.Time); err == nil {
+				displayTime = t
+			}
+		}
+	}
+	header := fmt.Sprintf("%s · %s", displayName, formatDate(displayTime))
 	if post.IsEdited {
 		header += " (edited)"
 	}
@@ -62,6 +73,10 @@ func FormatPost(post Post) string {
 		content = content[:200] + "..."
 	}
 	lines = append(lines, content)
+
+	if len(post.Labels) > 0 {
+		lines = append(lines, "  "+strings.Join(post.Labels, " · "))
+	}
 
 	var stats []string
 	if post.Interactions.Comments > 0 {

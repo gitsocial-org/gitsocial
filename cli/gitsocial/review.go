@@ -136,6 +136,7 @@ func newReviewPRCmd() *cobra.Command {
 		newReviewPRCreateCmd(),
 		newReviewPRListCmd(),
 		newReviewPRShowCmd(),
+		newReviewPREditCmd(),
 		newReviewPRUpdateCmd(),
 		newReviewPRMergeCmd(),
 		newReviewPRCloseCmd(),
@@ -152,7 +153,7 @@ func newReviewPRCmd() *cobra.Command {
 }
 
 func newReviewPRCreateCmd() *cobra.Command {
-	var base, head, dependsOnStr, closesStr, reviewersStr string
+	var base, head, dependsOnStr, closesStr, reviewersStr, labelsStr string
 	var draft, stack, allowUnpublished bool
 
 	cmd := &cobra.Command{
@@ -221,6 +222,9 @@ func newReviewPRCreateCmd() *cobra.Command {
 			if reviewersStr != "" {
 				opts.Reviewers = text.SplitCSV(reviewersStr)
 			}
+			if labelsStr != "" {
+				opts.Labels = text.SplitCSV(labelsStr)
+			}
 
 			result := review.CreatePR(cfg.WorkDir, subject, body, opts)
 			if !result.Success {
@@ -244,6 +248,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&stack, "stack", false, "Auto-detect depends-on from base branch matching")
 	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated)")
 	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer email addresses (comma-separated)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as a draft pull request")
 	cmd.Flags().BoolVar(&allowUnpublished, "allow-unpublished-head", false, "Allow creation when head branch is not resolvable on origin")
 
@@ -403,6 +408,84 @@ func newReviewPRShowCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&showVersions, "versions", false, "Show version history")
+	return cmd
+}
+
+// newReviewPREditCmd creates the command to edit a PR's metadata. Unset flags
+// preserve existing values via changed-flag detection. Draft state is toggled
+// via the separate `pr ready` / `pr draft` commands.
+func newReviewPREditCmd() *cobra.Command {
+	var title, body, base, head, reviewersStr, closesStr, dependsOnStr, labelsStr string
+
+	cmd := &cobra.Command{
+		Use:   "edit <pr-ref>",
+		Short: "Edit a pull request's metadata (title, body, reviewers, links)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+
+			cfg := GetConfig(cmd)
+			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "review", "error", err)
+			}
+
+			opts := review.UpdatePROptions{}
+			if cmd.Flags().Changed("title") {
+				opts.Subject = &title
+			}
+			if cmd.Flags().Changed("body") {
+				opts.Body = &body
+			}
+			if cmd.Flags().Changed("base") {
+				opts.Base = &base
+			}
+			if cmd.Flags().Changed("head") {
+				opts.Head = &head
+			}
+			if cmd.Flags().Changed("reviewers") {
+				r := text.SplitCSV(reviewersStr)
+				opts.Reviewers = &r
+			}
+			if cmd.Flags().Changed("closes") {
+				c := text.SplitCSV(closesStr)
+				opts.Closes = &c
+			}
+			if cmd.Flags().Changed("depends-on") {
+				d := text.SplitCSV(dependsOnStr)
+				opts.DependsOn = &d
+			}
+			if cmd.Flags().Changed("labels") {
+				l := text.SplitCSV(labelsStr)
+				opts.Labels = &l
+			}
+
+			result := review.UpdatePR(cfg.WorkDir, args[0], opts)
+			if !result.Success {
+				PrintError(cmd, result.Error.Message)
+				os.Exit(ExitError)
+			}
+
+			if cfg.JSONOutput {
+				PrintJSON(result.Data)
+			} else {
+				PrintSuccess(cmd, "Pull request updated")
+				fmt.Println()
+				printPRDetails(cfg.WorkDir, result.Data)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&title, "title", "", "Updated title/subject")
+	cmd.Flags().StringVar(&body, "body", "", "Updated body/description")
+	cmd.Flags().StringVar(&base, "base", "", "Target branch ref (e.g., #branch:main)")
+	cmd.Flags().StringVar(&head, "head", "", "Source branch ref (e.g., #branch:feature)")
+	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer emails (comma-separated; replaces existing)")
+	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated; replaces existing)")
+	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "PR refs this depends on (comma-separated; replaces existing)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+
 	return cmd
 }
 
@@ -1056,8 +1139,9 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 	} else {
 		fmt.Printf("State: %s\n", pr.State)
 	}
-	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(pr.Author.Name, pr.Author.Email, pr.Repository, protocol.ParseRef(pr.ID).Value))
-	fmt.Printf("Created: %s\n", pr.Timestamp.Format(time.RFC3339))
+	authorName, authorEmail, created := ResolveDisplayIdentity(pr.Author.Name, pr.Author.Email, pr.Timestamp, pr.Origin)
+	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, pr.Repository, protocol.ParseRef(pr.ID).Value))
+	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
 	var observation *review.PRObservation
 	if pr.State == review.PRStateOpen {
 		observation = review.ObserveLivePR(workdir, pr)
@@ -1083,6 +1167,9 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 				fmt.Printf("Behind: %d commits behind %s\n", behind, baseName)
 			}
 		}
+	}
+	if len(pr.Labels) > 0 {
+		fmt.Printf("Labels: %s\n", strings.Join(pr.Labels, ", "))
 	}
 	if len(pr.Reviewers) > 0 {
 		fmt.Printf("Reviewers: %s\n", strings.Join(pr.Reviewers, ", "))

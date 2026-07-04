@@ -136,14 +136,28 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	if issue.Root != nil {
 		createOpts.Root = protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, issue.Root.Hash, issue.Root.RepoURL, issue.Root.Branch), repoURL)
 	}
-	for _, ref := range issue.Blocks {
-		createOpts.Blocks = append(createOpts.Blocks, protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch), repoURL))
+	// Seed link refs from the issue's own forward header declarations only.
+	// issue.BlockedBy / issue.Related carry reverse-edge contributions for
+	// display/query union semantics (GITPM.md §links: blocks/blocked-by are
+	// directional inverses); serializing those into the edit's header would
+	// fabricate links the author never declared. GetLinks returns only this
+	// issue's forward-declared links. Failing here must abort the edit —
+	// proceeding would silently drop the issue's declared links from the
+	// new header.
+	links, err := GetLinks(existing.RepoURL, existing.Hash, existing.Branch)
+	if err != nil {
+		return result.Err[Issue]("LINKS_FAILED", fmt.Sprintf("load issue links: %v", err))
 	}
-	for _, ref := range issue.BlockedBy {
-		createOpts.BlockedBy = append(createOpts.BlockedBy, protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch), repoURL))
-	}
-	for _, ref := range issue.Related {
-		createOpts.Related = append(createOpts.Related, protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch), repoURL))
+	for _, l := range links {
+		ref := protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, l.To.Hash, l.To.RepoURL, l.To.Branch), repoURL)
+		switch l.Type {
+		case LinkTypeBlocks:
+			createOpts.Blocks = append(createOpts.Blocks, ref)
+		case LinkTypeBlockedBy:
+			createOpts.BlockedBy = append(createOpts.BlockedBy, ref)
+		case LinkTypeRelated:
+			createOpts.Related = append(createOpts.Related, ref)
+		}
 	}
 
 	subject := issue.Subject

@@ -978,18 +978,26 @@ func GetEditHistory(repoURL, hash, branch string, workspaceURL string) ([]Social
 	}
 	var items []SocialItem
 	for _, v := range versions {
+		originalRepoURL, originalHash, originalBranch := parseSocialRefField(v.Fields["original"], v.RepoURL, v.Branch)
+		replyToRepoURL, replyToHash, replyToBranch := parseSocialRefField(v.Fields["reply-to"], v.RepoURL, v.Branch)
 		items = append(items, SocialItem{
-			RepoURL:     v.RepoURL,
-			Hash:        v.CommitHash,
-			Branch:      v.Branch,
-			Type:        v.Type,
-			Content:     v.Content,
-			AuthorName:  v.AuthorName,
-			AuthorEmail: v.AuthorEmail,
-			Timestamp:   v.Timestamp,
-			IsRetracted: v.IsRetracted,
-			EditOf:      sql.NullString{String: v.EditOf, Valid: v.EditOf != ""},
-			Labels:      v.Labels,
+			RepoURL:         v.RepoURL,
+			Hash:            v.CommitHash,
+			Branch:          v.Branch,
+			Type:            v.Type,
+			Content:         v.Content,
+			AuthorName:      v.AuthorName,
+			AuthorEmail:     v.AuthorEmail,
+			Timestamp:       v.Timestamp,
+			IsRetracted:     v.IsRetracted,
+			EditOf:          sql.NullString{String: v.EditOf, Valid: v.EditOf != ""},
+			Labels:          v.Labels,
+			OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
+			OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
+			OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
+			ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
+			ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
+			ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
 		})
 	}
 	return items, nil

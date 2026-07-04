@@ -23,32 +23,8 @@ func FormatOriginBadge(origin *protocol.Origin) string {
 }
 
 // FormatOriginAuthor returns the origin author display name.
-// Uses AuthorName directly when available.
-// Falls back to email-based parsing for backward compat (old origin-author data).
-// Returns "" when origin is nil or both fields are empty.
 func FormatOriginAuthor(origin *protocol.Origin) string {
-	if origin == nil {
-		return ""
-	}
-	if origin.AuthorName != "" {
-		return origin.AuthorName
-	}
-	if origin.AuthorEmail == "" {
-		return ""
-	}
-	email := origin.AuthorEmail
-	if strings.HasSuffix(email, "@users.noreply.github.com") {
-		login := strings.TrimSuffix(email, "@users.noreply.github.com")
-		// GitHub may prefix with numeric ID: "12345+octocat"
-		if idx := strings.Index(login, "+"); idx >= 0 {
-			login = login[idx+1:]
-		}
-		return "@" + login
-	}
-	if idx := strings.Index(email, "@"); idx > 0 {
-		return "@" + email[:idx]
-	}
-	return "@" + email
+	return protocol.OriginDisplayAuthor(origin)
 }
 
 // FormatOriginAuthorDisplay returns the origin author name, optionally with email.

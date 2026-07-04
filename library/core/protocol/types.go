@@ -37,6 +37,35 @@ type Origin struct {
 	Platform    string // source platform name (e.g., "github")
 }
 
+// OriginDisplayAuthor returns the origin author display name. Uses AuthorName
+// directly when available, falling back to an @handle derived from the author
+// email (including GitHub's "id+login@users.noreply.github.com" form).
+// Returns "" when origin is nil or both fields are empty.
+func OriginDisplayAuthor(origin *Origin) string {
+	if origin == nil {
+		return ""
+	}
+	if origin.AuthorName != "" {
+		return origin.AuthorName
+	}
+	email := origin.AuthorEmail
+	if email == "" {
+		return ""
+	}
+	if strings.HasSuffix(email, "@users.noreply.github.com") {
+		login := strings.TrimSuffix(email, "@users.noreply.github.com")
+		// GitHub may prefix with numeric ID: "12345+octocat"
+		if idx := strings.Index(login, "+"); idx >= 0 {
+			login = login[idx+1:]
+		}
+		return "@" + login
+	}
+	if idx := strings.Index(email, "@"); idx > 0 {
+		return "@" + email[:idx]
+	}
+	return "@" + email
+}
+
 // ApplyOrigin adds origin-* fields to a header fields map.
 func ApplyOrigin(fields map[string]string, origin *Origin) {
 	if origin == nil {

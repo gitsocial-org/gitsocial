@@ -250,6 +250,7 @@ func newSocialPostCmd() *cobra.Command {
 
 // newSocialEditCmd creates the command to edit an existing post.
 func newSocialEditCmd() *cobra.Command {
+	var labelsStr string
 	cmd := &cobra.Command{
 		Use:   "edit <post-id> <new-text>",
 		Short: "Edit an existing post",
@@ -281,7 +282,13 @@ func newSocialEditCmd() *cobra.Command {
 				os.Exit(ExitInvalidArgs)
 			}
 
-			result := social.EditPost(cfg.WorkDir, postID, content, nil)
+			var opts *social.EditPostOptions
+			if cmd.Flags().Changed("labels") {
+				labels := text.SplitCSV(labelsStr)
+				opts = &social.EditPostOptions{Labels: &labels}
+			}
+
+			result := social.EditPost(cfg.WorkDir, postID, content, opts)
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -298,6 +305,7 @@ func newSocialEditCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
 	return cmd
 }
 

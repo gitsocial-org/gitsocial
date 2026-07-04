@@ -434,6 +434,13 @@ func renderMilestoneCard(ms *pm.Milestone, width int, selected bool, searchQuery
 	if ms.Due != nil {
 		lines = append(lines, selectionBar+styles.Label.Render("Due")+styles.Value.Render(ms.Due.Format("Jan 2, 2006")))
 	}
+	for i, l := range ms.Labels {
+		rowLabel := "Labels"
+		if i > 0 {
+			rowLabel = ""
+		}
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+	}
 	if !opts.version {
 		progressBar := tuicore.RenderProgressBar(ms.ClosedCount, ms.IssueCount, 16)
 		lines = append(lines, selectionBar+styles.Label.Render("Progress")+styles.Value.Render(progressBar))

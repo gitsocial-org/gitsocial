@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 const (
@@ -164,6 +166,26 @@ func stripCommentLines(s string) string {
 // the user is at a TTY (scripts and piped invocations should skip the editor).
 func IsInteractive() bool {
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+}
+
+// ResolveDisplayIdentity returns the author name, email, and timestamp to
+// display, preferring imported-content origin over the git author: the origin
+// author replaces the git author and the origin time replaces the timestamp
+// when parseable. Mirrors the TUI's origin-aware detail cards.
+func ResolveDisplayIdentity(name, email string, ts time.Time, origin *protocol.Origin) (string, string, time.Time) {
+	if origin == nil {
+		return name, email, ts
+	}
+	if a := protocol.OriginDisplayAuthor(origin); a != "" {
+		name = a
+		email = origin.AuthorEmail
+	}
+	if origin.Time != "" {
+		if t, err := time.Parse(time.RFC3339, origin.Time); err == nil {
+			ts = t
+		}
+	}
+	return name, email, ts
 }
 
 // ExitCode converts an error code string to an exit code integer.
