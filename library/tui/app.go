@@ -276,6 +276,9 @@ func NewModel(workdir, cacheDir string) Model {
 	forksView := tuicore.NewForksView(workdir)
 	host.AddView("/config/forks", forksView)
 
+	siteView := tuicore.NewSiteView(workdir)
+	host.AddView("/config/site", siteView)
+
 	identityView := tuicore.NewIdentityView(workdir)
 	host.AddView("/config/identity", identityView)
 
@@ -1020,7 +1023,7 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 				}
 				m.isPushing = true
 				m.host.SetPushing(true)
-				m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
+				m.host.SetPushingInfo(git.PushRemoteURL(m.workdir))
 				return m.startPush(codeBranches)
 			})
 			m.host.State().ChoicePrompt = m.pushChoice.Render()

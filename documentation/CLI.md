@@ -379,6 +379,14 @@ gitsocial remote add https://us-east-1.console.aws.amazon.com/s3/buckets/mybucke
 gitsocial remote add upstream s3://s3.us-east-1.amazonaws.com/mybucket/repo
 ```
 
+### gitsocial site push
+
+Upload the embedded static site to an s3 remote's bucket, alongside the repo data, and seed the refs manifest (`.gitsocial/site/refs.json`) that every subsequent push keeps current. Anyone can then browse the repo's timeline, issues, PRs, and releases from the bucket's public domain with no gitsocial install. The page reads the bucket directly, so it stays current with every push. Remote defaults to `origin`; requires public read on the bucket's serving domain (e.g. r2.dev or a custom domain on Cloudflare R2). Generation-mode buckets (DigitalOcean) render through the manifest, so they need at least one push by a current gitsocial (or this command).
+
+```
+gitsocial site push [remote]
+```
+
 ### gitsocial tui
 
 Launch interactive terminal UI.

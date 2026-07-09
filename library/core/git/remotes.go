@@ -131,6 +131,47 @@ func ReadRemoteRef(workdir, remoteURL, branch string) (string, error) {
 	return parts[0], nil
 }
 
+// PushRemote returns the remote gitsocial publishes to: "origin" normally, or
+// the configured s3 remote when one exists ("origin" still wins when it is
+// itself s3; ties between multiple s3 remotes break alphabetically).
+func PushRemote(workdir string) string {
+	remotes, err := ListRemotes(workdir)
+	if err != nil {
+		return "origin"
+	}
+	s3Name := ""
+	for _, r := range remotes {
+		if !strings.HasPrefix(r.URL, "s3://") {
+			continue
+		}
+		if r.Name == "origin" {
+			return "origin"
+		}
+		if s3Name == "" || r.Name < s3Name {
+			s3Name = r.Name
+		}
+	}
+	if s3Name != "" {
+		return s3Name
+	}
+	return "origin"
+}
+
+// PushRemoteURL returns the push remote's URL, or "" when it isn't configured.
+func PushRemoteURL(workdir string) string {
+	name := PushRemote(workdir)
+	remotes, err := ListRemotes(workdir)
+	if err != nil {
+		return ""
+	}
+	for _, r := range remotes {
+		if r.Name == name {
+			return r.URL
+		}
+	}
+	return ""
+}
+
 // GetOriginURL returns the URL of the origin remote.
 func GetOriginURL(workdir string) string {
 	remotes, err := ListRemotes(workdir)

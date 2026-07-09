@@ -8,6 +8,8 @@ bin/
 build/
 dist/
 tmp/
+# `go build ./...` drops a binary per main package into the cwd (objstore/locals3)
+/locals3
 *.exe
 *.test
 *.out

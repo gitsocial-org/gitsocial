@@ -11,9 +11,9 @@ import (
 
 // CodeBranchesToPush returns the workspace code branches `gitsocial push`
 // publishes alongside gitmsg data: heads of open PRs with unpushed commits,
-// plus the default branch when it's ahead of origin. The default branch is
-// the published face of the repository, so it travels with pushes even when
-// no PR references it. Returns nil when the workspace has no origin remote.
+// plus the default branch when it's ahead of the push remote. The default
+// branch is the published face of the repository, so it travels with pushes
+// even when no PR references it. Returns nil when the workspace has no remote.
 func CodeBranchesToPush(workdir string) (map[string]int, error) {
 	if git.GetOriginURL(workdir) == "" {
 		return nil, nil
@@ -50,10 +50,10 @@ func defaultBranch(workdir string) string {
 	return ""
 }
 
-// PushMergedBase pushes a merged PR's base branch to origin so the remote code
-// catches up with the merged state published on gitmsg/review. No-op when the
-// workspace has no origin remote. Merge callers treat a failure as a warning:
-// the merge itself already succeeded locally.
+// PushMergedBase pushes a merged PR's base branch to the push remote so the
+// remote code catches up with the merged state published on gitmsg/review.
+// No-op when the workspace has no remote. Merge callers treat a failure as a
+// warning: the merge itself already succeeded locally.
 func PushMergedBase(workdir string, pr PullRequest) error {
 	if git.GetOriginURL(workdir) == "" {
 		return nil
@@ -62,7 +62,7 @@ func PushMergedBase(workdir string, pr PullRequest) error {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return fmt.Errorf("base ref %q is not a branch", pr.Base)
 	}
-	if _, err := git.ExecGit(workdir, []string{"push", "origin", parsed.Value}); err != nil {
+	if _, err := git.ExecGit(workdir, []string{"push", git.PushRemote(workdir), parsed.Value}); err != nil {
 		return fmt.Errorf("push %s: %w", parsed.Value, err)
 	}
 	return nil

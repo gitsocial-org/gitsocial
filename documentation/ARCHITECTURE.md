@@ -8,47 +8,32 @@ Single Go library with thin clients: CLI/TUI (direct) and JSON-RPC (stdio).
 
 ## Development
 
-### Branching & Worktrees
+### Branching & Builds
 
-Trunk-based: `main` is the integration branch and stays clean in the primary checkout. Develop each feature on a `feature/<name>` branch in its own git worktree, so several run in parallel. Worktrees live in a sibling directory — standard location `../gitsocial-worktrees`, called `$WT` below.
+Trunk-based: `main` is the integration branch and stays clean. Develop each feature on a `feature/<name>` branch; rebase on `main` and fast-forward merge so history stays linear.
 
 ```bash
-WT=../gitsocial-worktrees
-
-# 0. refresh main — primary checkout; before branching and after any merge
-git switch main && git pull --ff-only
-
-# 1. start a feature
-git worktree add -b feature/<name> "$WT/<name>" main
-
-# 2. build, test & run in "$WT/<name>" (distinct binary — won't clobber main's or a parallel build's)
-go build -o /tmp/gitsocial-<name> ./cli/gitsocial && go test ./...
-# schema-changing work: add --cache-dir /tmp/gs-<name>
-/tmp/gitsocial-<name> tui
-
-# 3. keep current while others are in flight (in "$WT/<name>")
-git fetch origin && git rebase main
-
-# 4. integrate — rebase then fast-forward = linear history
-git -C "$WT/<name>" rebase main
-# from primary; OK while the branch is in its worktree
-git merge --ff-only feature/<name>
-
-# 5. clean up — from primary, not inside the worktree
-git worktree remove "$WT/<name>" && git branch -d feature/<name>
+git switch main && git pull --ff-only        # refresh before branching and after any merge
+git switch -c feature/<name>                 # start a feature
+git fetch origin && git rebase main          # keep current with main
+git switch main && git merge --ff-only feature/<name>   # integrate
+git branch -d feature/<name>                 # clean up
 ```
 
 - `gitmsg/*` and `gitsocial` are protocol/data branches — not for feature work.
-- Integrate and cleanup run from the primary checkout: a branch checked out in a worktree can't be deleted or checked out twice.
-- Run schema-changing branches with a separate `--cache-dir` (as above): the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it in place, after which older binaries (other worktrees, `main`) refuse it. Delete the cache to rebuild.
 
-### Build & Run
+Build, test & run:
 
 ```bash
 go build -o bin/gitsocial ./cli/gitsocial     # Build CLI
+go build -o bin/ ./...                        # Compile-check everything (all mains land in bin/, never the repo root)
+go test ./...                                 # Run tests
 bin/gitsocial social timeline                 # Run command
 bin/gitsocial tui                             # Launch TUI
 ```
+
+- Use distinct build output names so a parallel build or `main`'s binary don't clobber each other (mains land in `bin/`, never the repo root).
+- Schema-changing branches must run with a separate `--cache-dir` (e.g. `--cache-dir /tmp/gs-<name>`): the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it in place, after which older binaries (other branches, `main`) refuse it. Delete the cache to rebuild.
 
 ### Test & Lint
 
@@ -165,8 +150,6 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 **Outside the repo tree:**
 
 ```
-../gitsocial-worktrees/<name>/ # Sibling git worktrees for parallel feature work
-
 ~/.config/gitsocial/           # User config; honors `XDG_CONFIG_HOME`
 ├── settings.json              # Machine-specific settings
 └── personal/                  # Personal-tier bare repo (override: `GITSOCIAL_PERSONAL_REPO`)
@@ -327,29 +310,12 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 ## S3 Remote Backend
 
-Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote. Use `gitsocial clone s3://<endpoint>/<bucket>/<prefix>` to clone from a bucket, or `gitsocial remote add <url>` to register one (both accept a pasted AWS S3 console URL and normalize it), or add an `s3://` URL as a git remote by hand and push/pull normally.
+Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote via the `s3://` remote helper in `core/objstore` (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)). The only stored URL shape is `s3://<endpoint>/<bucket>/<prefix>`. `gitsocial site push` also uploads a browser-only static site alongside the repo, served straight from the bucket layout.
 
-No extra git configuration is needed when going through `gitsocial`, the helper is injected automatically. For bare `git clone s3://…` without gitsocial in the loop, run `git config --global alias.remote-s3 '!gitsocial __git-remote-s3'` once.
+Two docs split by surface:
 
-Git remote helper for `s3://` URLs (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)) is implemented in `core/objstore`.
-
-**URLs.** `s3://<endpoint-host>/<bucket>/<prefix>` is the only stored URL shape — identity and access in one string (cache, lists, and published data all carry it verbatim). A known provider's virtual-host spelling (`s3://bucket.nyc3.digitaloceanspaces.com/repo`) folds into it; bucket-only authorities and query params are errors. `clone`/`remote add` additionally accept, as a boundary convenience only (`protocol.ResolveS3URL`, normalized before anything is stored): an `https://` endpoint or virtual-host URL for a recognized provider (e.g. the `https://<account>.r2.cloudflarestorage.com` endpoint from the R2 dashboard — region/account ride in the host, so nothing is inferred), and a pasted AWS S3 web-console URL (`https://<region>.console.aws.amazon.com/s3/buckets/<bucket>`, whose region lives in a console subdomain rather than an endpoint host). Recognition is gated on the known host set, so a self-hosted endpoint still needs the explicit `s3://` scheme and an ordinary website URL passes through as a plain git remote.
-
-**Bucket layout.** Loose objects (`objects/<xx>/<38-hex>`), one key per ref, a `HEAD` symref key, gitsocial state under `.gitsocial/`.
-
-**Ref updates.** Two modes, pinned per bucket by the `.gitsocial/ref-mode` marker (first writer decides from the endpoint host's provider capability; unknown hosts are probed): `etag` (plain keys with `If-Match` CAS; aws, r2) and `generation` (create-only chains `<ref>/.gen/<counter>` via `If-None-Match: *`, highest generation wins, GC keeps the newest two; do). Readers resolve both shapes from one listing without the marker. Fast-forward is enforced client-side; buckets without conditional-write support are rejected before any ref is written.
-
-**Helper discovery.** Git spawns remote helpers as the subcommand `git remote-s3`, which resolves git aliases, so `alias.remote-s3 = !gitsocial __git-remote-s3` is injected into gitsocial's own git invocations via environment config, and written to the local config of s3-origin workspaces and cloned repos so plain git works there. For bare `git clone s3://…` anywhere: `git config --global alias.remote-s3 '!gitsocial __git-remote-s3'`.
-
-**Environment.**
-
-| Variable | Meaning |
-|----------|---------|
-| `GITSOCIAL_S3_ACCESS_KEY` / `GITSOCIAL_S3_SECRET_KEY` | Credentials (take precedence) |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credential fallback (S3-ecosystem convention) |
-| `GITSOCIAL_S3_ENDPOINT` / `GITSOCIAL_S3_PATH_STYLE` | Dev/self-hosted overrides: endpoint scheme (http) and path-style addressing |
-| `GITSOCIAL_S3_REGION` | SigV4 region for endpoint hosts no preset recognizes |
-| `GITSOCIAL_S3_DEBUG=1` | Dump every request/response to stderr |
+- **[S3.md](S3.md)** — the transport: URL normalization, bucket layout, ref-update modes (etag/generation), cache policy, helper discovery, the local dev server, environment variables, and manual provider testing.
+- **[STATIC-SITE.md](STATIC-SITE.md)** — the browser static site: the site shell, the sharded index/search artifacts (v4), site config, self-refresh versioning, and site testing.
 
 ---
 

@@ -43,6 +43,18 @@ func TestNavigation(t *testing.T) {
 			t.Errorf("after esc: path = %q, want /social/timeline", h.CurrentPath())
 		}
 	})
+	t.Run("SiteEditToggle", func(t *testing.T) {
+		h.Navigate("/config/site")
+		if h.CurrentPath() != "/config/site" {
+			t.Fatalf("expected /config/site, got %q", h.CurrentPath())
+		}
+		h.SendKey("e") // enter edit mode on the first field
+		assertNotEmpty(t, h.Rendered())
+		h.SendKey("esc") // esc cancels edit, stays on the view
+		if h.CurrentPath() != "/config/site" {
+			t.Errorf("after edit esc: path = %q, want /config/site", h.CurrentPath())
+		}
+	})
 	t.Run("MultiLevelBack", func(t *testing.T) {
 		h.Navigate("/social/timeline")
 		h.Navigate("/settings")

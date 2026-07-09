@@ -70,6 +70,15 @@ func TestDisplay(t *testing.T) {
 		assertNotEmpty(t, out)
 		assertContains(t, out, "Settings")
 	})
+	t.Run("Site", func(t *testing.T) {
+		h.Navigate("/config/site")
+		out := h.Rendered()
+		assertNotEmpty(t, out)
+		assertContains(t, out, "Site")
+		assertContains(t, out, "title")
+		assertContains(t, out, "accent")
+		assertContains(t, out, "favicon")
+	})
 	t.Run("Cache", func(t *testing.T) {
 		h.Navigate("/cache")
 		out := h.Rendered()

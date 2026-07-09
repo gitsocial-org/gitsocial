@@ -14,14 +14,15 @@ type UnpushedCounts struct {
 	Lists int `json:"lists"`
 }
 
-// GetUnpushedCounts returns counts of unpushed posts and lists.
+// GetUnpushedCounts returns counts of posts and lists not yet on the push remote.
 func GetUnpushedCounts(workdir, branch string) (*UnpushedCounts, error) {
 	counts := &UnpushedCounts{}
+	remote := git.PushRemote(workdir)
 
 	if branch != "" {
 		result, err := git.ExecGit(workdir, []string{
 			"rev-list", "--count",
-			"origin/" + branch + ".." + branch,
+			remote + "/" + branch + ".." + branch,
 		})
 		if err == nil {
 			if n, err := strconv.Atoi(strings.TrimSpace(result.Stdout)); err == nil {
@@ -47,7 +48,7 @@ func GetUnpushedCounts(workdir, branch string) (*UnpushedCounts, error) {
 		return counts, nil
 	}
 
-	remoteRefs, err := getRemoteGitMsgRefs(workdir)
+	remoteRefs, err := getRemoteGitMsgRefs(workdir, remote)
 	if err != nil {
 		remoteRefs = make(map[string]string)
 	}
@@ -79,22 +80,22 @@ func getLocalGitMsgRefs(workdir string) (map[string]string, error) {
 }
 
 // getRemoteGitMsgRefs returns remote gitmsg refs from locally-tracked remote branches.
-// Uses for-each-ref on refs/remotes/origin/gitmsg/ instead of ls-remote to avoid network calls.
-func getRemoteGitMsgRefs(workdir string) (map[string]string, error) {
+// Uses for-each-ref on refs/remotes/<remote>/gitmsg/ instead of ls-remote to avoid network calls.
+func getRemoteGitMsgRefs(workdir, remote string) (map[string]string, error) {
 	result, err := git.ExecGit(workdir, []string{
 		"for-each-ref",
 		"--format=%(refname) %(objectname)",
-		"refs/remotes/origin/gitmsg/",
+		"refs/remotes/" + remote + "/gitmsg/",
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert refs/remotes/origin/gitmsg/X → refs/gitmsg/X to match local ref format
+	// Convert refs/remotes/<remote>/gitmsg/X → refs/gitmsg/X to match local ref format
 	raw := parseRefOutput(result.Stdout)
 	refs := make(map[string]string, len(raw))
 	for ref, hash := range raw {
-		local := strings.TrimPrefix(ref, "refs/remotes/origin/")
+		local := strings.TrimPrefix(ref, "refs/remotes/"+remote+"/")
 		if local != ref {
 			refs["refs/"+local] = hash
 		} else {

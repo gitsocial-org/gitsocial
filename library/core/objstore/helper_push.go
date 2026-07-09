@@ -85,23 +85,161 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	}
 
 	branchPushed := ""
+	refsMoved := false
+	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
 	for _, cmd := range cmds {
-		if err := h.applyRefUpdate(cmd); err != nil {
+		sha, err := h.applyRefUpdate(cmd)
+		if err != nil {
 			fmt.Fprintf(w, "error %s %s\n", cmd.dst, oneLine(err))
 			continue
 		}
 		fmt.Fprintf(w, "ok %s\n", cmd.dst)
+		refsMoved = true
+		if h.remoteRefs != nil {
+			if cmd.src == "" {
+				delete(h.remoteRefs, cmd.dst)
+			} else {
+				h.remoteRefs[cmd.dst] = sha
+			}
+		}
+		if ext := siteItemsExt(cmd.dst); ext != "" {
+			extPushed[ext] = sha
+		}
 		if cmd.src != "" && strings.HasPrefix(cmd.dst, "refs/heads/") {
 			if branchPushed == "" || cmd.dst == "refs/heads/main" {
 				branchPushed = cmd.dst
 			}
 		}
 	}
-	if branchPushed != "" {
-		h.ensureRemoteHEAD(branchPushed)
+	// Advertise the repo's real default branch (its local HEAD symref) as the
+	// bucket HEAD — never assume "main". Fall back to a pushed branch only when
+	// HEAD can't be read (detached, or a non-repo caller).
+	head := localDefaultBranchRef()
+	if head == "" {
+		head = branchPushed
+	}
+	if head != "" {
+		h.ensureRemoteHEAD(head)
+	}
+	if refsMoved {
+		// Site artifacts (refs manifest + per-extension item/body corpora) serve
+		// ONLY the static read surface, so a plain s3:// git remote with no site
+		// stays clean: gate them on the same site-enabled probe the shell refresh
+		// uses. Best-effort throughout — a probe failure only skips this push's
+		// maintenance, never the git push itself.
+		enabled, _, err := siteEnabled(h.client, h.prefix)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site probe: %v\n", err)
+		} else if enabled {
+			h.writeSiteManifest()
+			h.writeSitePMConfig()
+			h.writeSiteCustomization()
+			h.writeSitePrismExtra()
+			h.updateSiteItems(extPushed)
+			// Site self-refresh: buckets carrying the static read surface pick up
+			// this binary's embedded version on any push. Best-effort, like the
+			// manifest: a failure only leaves the site stale until the next push.
+			if err := refreshSiteIfEnabled(h.client, h.prefix); err != nil {
+				fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
+			}
+		}
 	}
 	fmt.Fprint(w, "\n")
 	return nil
+}
+
+// writeSiteManifest publishes refname → sha as the site refs manifest after
+// every push, so the static read surface discovers refs without bucket
+// listing (public domains don't expose it) and resolves generation-mode refs.
+// Best-effort: a stale manifest only degrades the site until the next push.
+func (h *remoteHelper) writeSiteManifest() {
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
+			return
+		}
+	}
+	if err := putSiteManifest(h.client, h.prefix, refs); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
+	}
+}
+
+// writeSitePMConfig publishes the resolved PM board config after every push, so
+// the static site's board honors the repo's refs/gitmsg/pm/config. Best-effort,
+// same contract as the manifest: a failure only leaves the board on the kanban
+// default until the next push.
+func (h *remoteHelper) writeSitePMConfig() {
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
+			return
+		}
+	}
+	if err := writeSitePMConfig(h.client, h.prefix, refs); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
+	}
+}
+
+// writeSiteCustomization publishes the validated site customization after every
+// push, so the static site honors the repo's refs/gitmsg/core/config `site`
+// sub-object. Best-effort, same contract as the manifest: a failure only leaves
+// the site on its built-in defaults until the next push.
+func (h *remoteHelper) writeSiteCustomization() {
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
+			return
+		}
+	}
+	if err := writeSiteCustomization(h.client, h.prefix, refs); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
+	}
+}
+
+// writeSitePrismExtra publishes the repo-specific extra Prism grammars bundle
+// after every push (scanning the default branch tree for the languages it uses),
+// so the static site highlights the long tail of languages without bloating the
+// base shell. Best-effort, same contract as the manifest: a failure only leaves
+// the site on the base grammars until the next push.
+func (h *remoteHelper) writeSitePrismExtra() {
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site prism extra: %v\n", err)
+			return
+		}
+	}
+	if err := writeSitePrismExtra(h.client, h.prefix, refs); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site prism extra: %v\n", err)
+	}
+}
+
+// updateSiteItems maintains the per-extension site artifacts (metadata index +
+// search corpus) for every pushed gitmsg data branch, alongside the refs
+// manifest. Best-effort, same contract: a stale artifact only degrades the site
+// until the next push. An error here can now only be transient (a network /
+// bucket failure): the artifact state is always repairable on the next push (the
+// repair state machine rebuilds any mismatch from the immutable sealed shards +
+// a bounded walk), so a failed maintenance pass never wedges the index.
+func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
+	for ext, sha := range extPushed {
+		var err error
+		if sha == "" {
+			err = deleteSiteArtifacts(h.client, h.prefix, ext)
+		} else {
+			err = updateSiteItemsIndex(h.client, h.prefix, ext, sha)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: items index %s: %v\n", ext, err)
+		}
+	}
 }
 
 // maxCASRetries bounds the read-check-write loop; contention on GitSocial's
@@ -109,9 +247,10 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 const maxCASRetries = 5
 
 // applyRefUpdate writes or deletes one ref, dispatching on the bucket's ref
-// mode. The stored value is the object src names — for an annotated tag that
-// is the tag object itself, exactly as git stores it.
-func (h *remoteHelper) applyRefUpdate(cmd pushCommand) error {
+// mode, and returns the written sha ("" for a deletion). The stored value is
+// the object src names — for an annotated tag that is the tag object itself,
+// exactly as git stores it.
+func (h *remoteHelper) applyRefUpdate(cmd pushCommand) (string, error) {
 	if h.refMode == refModeGeneration {
 		return h.applyRefUpdateGeneration(cmd)
 	}
@@ -123,16 +262,16 @@ func (h *remoteHelper) applyRefUpdate(cmd pushCommand) error {
 // (fast-forward unless forced), write with If-Match / If-None-Match: *, and
 // re-read on precondition failure. This is git's "old value must match"
 // ref-update contract expressed in S3.
-func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) error {
+func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 	key := h.prefix + cmd.dst
 	if cmd.src == "" {
 		// Deletion stays unconditional: S3 has no conditional DELETE, and git
 		// itself only guards deletes client-side.
-		return h.client.Delete(key)
+		return "", h.client.Delete(key)
 	}
 	sha, err := gitOutput("rev-parse", "--verify", cmd.src)
 	if err != nil {
-		return fmt.Errorf("resolve %s: %w", cmd.src, err)
+		return "", fmt.Errorf("resolve %s: %w", cmd.src, err)
 	}
 	value := []byte(sha + "\n")
 	var lastErr error
@@ -142,15 +281,15 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) error {
 		case errors.Is(err, ErrNotFound):
 			err = h.client.PutIfAbsent(key, value)
 		case err != nil:
-			return fmt.Errorf("read ref %s: %w", cmd.dst, err)
+			return "", fmt.Errorf("read ref %s: %w", cmd.dst, err)
 		default:
 			current := strings.TrimSpace(string(currentRaw))
 			if current == sha {
-				return nil // already up to date
+				return sha, nil // already up to date
 			}
 			if !cmd.forced {
 				if err := checkFastForward(current, sha, cmd.dst); err != nil {
-					return err
+					return "", err
 				}
 			}
 			err = h.client.PutIfMatch(key, value, etag)
@@ -159,9 +298,12 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) error {
 			lastErr = err
 			continue // ref moved underneath us — re-read and re-verify
 		}
-		return err
+		if err != nil {
+			return "", err
+		}
+		return sha, nil
 	}
-	return fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
+	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
 }
 
 // applyRefUpdateGeneration writes or deletes one ref as a generation chain:
@@ -169,19 +311,19 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) error {
 // If-None-Match: * (the only CAS create-only providers enforce), the highest
 // generation is the current value, and superseded generations are cleaned up
 // after a successful write.
-func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) error {
+func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error) {
 	if cmd.src == "" {
-		return h.deleteRefGenerations(cmd.dst)
+		return "", h.deleteRefGenerations(cmd.dst)
 	}
 	sha, err := gitOutput("rev-parse", "--verify", cmd.src)
 	if err != nil {
-		return fmt.Errorf("resolve %s: %w", cmd.src, err)
+		return "", fmt.Errorf("resolve %s: %w", cmd.src, err)
 	}
 	var lastErr error
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		maxGen, err := maxGeneration(h.client, h.prefix, cmd.dst)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if maxGen > 0 {
 			current, err := h.client.Get(genKey(h.prefix, cmd.dst, maxGen))
@@ -190,18 +332,18 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) error {
 				continue // chain advanced and got GC'd underneath us — re-list
 			}
 			if err != nil {
-				return fmt.Errorf("read ref %s: %w", cmd.dst, err)
+				return "", fmt.Errorf("read ref %s: %w", cmd.dst, err)
 			}
 			currentSHA, err := refSHA(cmd.dst, current)
 			if err != nil {
-				return err
+				return "", err
 			}
 			if currentSHA == sha {
-				return nil // already up to date
+				return sha, nil // already up to date
 			}
 			if !cmd.forced {
 				if err := checkFastForward(currentSHA, sha, cmd.dst); err != nil {
-					return err
+					return "", err
 				}
 			}
 		}
@@ -211,12 +353,12 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) error {
 			continue // another writer took this generation — re-list and re-verify
 		}
 		if err != nil {
-			return err
+			return "", err
 		}
 		h.gcGenerations(cmd.dst, maxGen)
-		return nil
+		return sha, nil
 	}
-	return fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
+	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
 }
 
 // gcGenerations best-effort deletes generations older than the written one's
@@ -441,11 +583,26 @@ func (h *remoteHelper) publishRefMode(mode string) (string, error) {
 
 // ensureRemoteHEAD writes HEAD on first push so later clones get a default branch.
 func (h *remoteHelper) ensureRemoteHEAD(branch string) {
-	if _, err := h.client.Get(h.prefix + "HEAD"); err == nil {
-		return
+	if cur, err := h.client.Get(h.prefix + "HEAD"); err == nil {
+		// Keep an existing HEAD unless it points at a gitmsg data branch — never a
+		// valid default (a symptom of the earlier first-pushed-branch heuristic).
+		if !strings.Contains(string(cur), "refs/heads/gitmsg/") {
+			return
+		}
 	}
-	// Best effort: a missing HEAD only degrades clone ergonomics.
+	// Best effort: a missing/wrong HEAD only degrades clone ergonomics.
 	_ = h.client.Put(h.prefix+"HEAD", []byte("ref: "+branch+"\n"))
+}
+
+// localDefaultBranchRef returns the pushing repo's default branch ref (its HEAD
+// symref, e.g. "refs/heads/master") so the bucket advertises the real default —
+// not an assumed "main". Empty when HEAD is detached or unreadable.
+func localDefaultBranchRef() string {
+	ref, err := gitOutput("symbolic-ref", "HEAD")
+	if err != nil || !strings.HasPrefix(ref, "refs/heads/") {
+		return ""
+	}
+	return ref
 }
 
 // uploadMissingObjects uploads every object reachable from srcs that the

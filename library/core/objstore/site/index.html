@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Defense-in-depth CSP (the whitelist sanitizer is the primary control). A
+     static bucket has no response headers, so the policy rides in a meta tag.
+     Directives derived from what the shell actually needs: 'unsafe-inline' for
+     the inline <style> and <script> blocks below; img-src allows https: (the
+     sanitizer's absolute-badge parity) plus blob:/data: (in-bucket image object
+     URLs); connect-src allows https: so the ?base=/?repo= cross-bucket override
+     keeps working. object-src/base-uri/form-action are locked down.
+     frame-ancestors/report-uri are omitted (ignored in a meta CSP). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>gitsocial</title>
+<!-- Favicon: the gitsocial mark (same path as the sidebar/footer logo) inlined as
+     a data: URI so the bucket serves no extra object and it works offline. Stroked
+     in the brand teal so it reads on both light and dark browser tabs. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20200%20200'%3E%3Cpath%20d='m%20191,100%20c%200,3%20-0.1,5%20-0.3,8%20C%20187,148%20158,181%20118,189%2075,198%2033,175%2016,135%20-1,95%2013,49%2049,25%2085,0%20133,5%20164,35%20M%20109,10%20C%2092,9%2067,17%2055,34%2037,59%2045,98%2085,100%20h%2026%20l%2079,0'%20fill='none'%20stroke='%23008787'%20stroke-width='18'%20stroke-linecap='square'%20stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  /* Palette adopted from docs/style.css. Base tokens (bg/text/link) follow the
+     project site; derived tokens (muted/line/panel/chip) are computed off the
+     base with color-mix so they track the active theme without restating.
+     Derived tokens live on body, not :root: the toggle overrides the base
+     tokens via a body class, and a var() inside a custom property resolves
+     where the property is declared, so :root-level derivations would never
+     see the override. */
+  :root {
+    --bg: #f8eed5; --text: #1a1a1a; --link: #008787;
+    --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
+    --pre: #bf8700; --danger: #cf222e;
+    --serif: 'EB Garamond', Georgia, serif;
+    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
+       shade 600 for the light parchment, shade 400 (below) for the dark
+       background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so it
+       stays legible on the cream background (the only per-theme tuning). */
+    --i-cyan: #17a5af; --i-yellow: #a67c00; --i-orange: #d47628; --i-indigo: #693acf;
+    --i-green: #199f43; --i-blue: #1a85d4; --i-red: #d52c36; --i-vermilion: #d5512f;
+    /* Font-size scale. Every font-size in this sheet resolves through one of
+       these tokens, so a size tweak is a single edit. Two families share the
+       same value on purpose (--fs-ui / --fs-code both 0.8rem: mono chrome vs
+       code content) so they can diverge later without a hunt. Headings keep a
+       token per hierarchy level; near-duplicate one-offs (0.78-0.85, 0.9-1.0,
+       0.7-0.76) collapse onto the nearest token. Inline `.markdown code`/`kbd`
+       stay in `em` (they scale with surrounding text, not this global scale). */
+    --fs-h1: 1.6rem; --fs-h2: 1.35rem; --fs-h3: 1.2rem; --fs-h4: 1.05rem;
+    --fs-body: 20px; --fs-lg: 0.95rem;
+    --fs-ui: 0.8rem; --fs-code: 0.8rem; --fs-small: 0.79rem; --fs-dense: 0.72rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #02041b; --text: #c9d1d9; --link: #00d7d7;
+      --i-cyan: #64d1db; --i-yellow: #ffd452; --i-orange: #ffa359; --i-indigo: #9d6afb;
+      --i-green: #5ecc71; --i-blue: #69b1ff; --i-red: #ff6762; --i-vermilion: #ff8c5b;
+    }
+  }
+  body.dark-mode {
+    --bg: #02041b; --text: #c9d1d9; --link: #00d7d7;
+    --i-cyan: #64d1db; --i-yellow: #ffd452; --i-orange: #ffa359; --i-indigo: #9d6afb;
+    --i-green: #5ecc71; --i-blue: #69b1ff; --i-red: #ff6762; --i-vermilion: #ff8c5b;
+  }
+  body.light-mode {
+    --bg: #f8eed5; --text: #1a1a1a; --link: #008787;
+    --i-cyan: #17a5af; --i-yellow: #a67c00; --i-orange: #d47628; --i-indigo: #693acf;
+    --i-green: #199f43; --i-blue: #1a85d4; --i-red: #d52c36; --i-vermilion: #d5512f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    --muted: color-mix(in srgb, var(--text) 68%, var(--bg));
+    --line: color-mix(in srgb, var(--text) 18%, transparent);
+    --panel: color-mix(in srgb, var(--text) 3%, var(--bg));
+    --chip: color-mix(in srgb, var(--text) 9%, transparent);
+    --code-bg: color-mix(in srgb, var(--text) 14%, transparent);
+    /* Subtle button surface: a slight shift off the page background so a normal
+       (border + transparent) button reads as a control, not flat page. */
+    --btn: color-mix(in srgb, var(--text) 5%, var(--bg));
+    min-height: 100vh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--text);
+    font: var(--fs-body)/1.4 var(--serif);
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  /* Two-panel shell echoing the TUI nav + content split. No header bar: the
+     theme control and the brand credit both live in the sidebar. Layout metrics
+     are tokenized so the fixed sidebar footer (below) can span exactly the
+     sidebar's width and sit at its horizontal position without hardcoding. */
+  :root { --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem; }
+  .shell {
+    flex: 1; width: 100%; max-width: var(--shell-max); margin: 0 auto;
+    display: grid; grid-template-columns: var(--nav-w) 1fr; gap: var(--nav-gap);
+    padding: var(--shell-pad) var(--shell-pad) 2rem;
+  }
+  /* Sidebar column: sticky to the viewport and independently scrollable while the
+     footer is pinned to the viewport bottom (position:fixed, below). The nav's own
+     bottom padding reserves the footer's height so the last links scroll fully
+     into view above it, never hidden behind it. 100dvh (with a 100vh fallback)
+     tracks mobile browser chrome. */
+  .nav {
+    min-width: 0; display: flex; flex-direction: column;
+    position: sticky; top: 1.25rem; align-self: start;
+    height: calc(100vh - 2.5rem); height: calc(100dvh - 2.5rem);
+    overflow-y: auto; padding-bottom: 3.25rem;
+  }
+  /* Sidebar header row: repo title, theme toggle (icon-only, before collapse),
+     and the collapse control all on one line. */
+  .nav-header {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding-bottom: 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
+  }
+  .repo-title {
+    flex: 1 1 auto; min-width: 0;
+    font-family: var(--mono); font-weight: 600; font-size: var(--fs-ui);
+    color: var(--muted); word-break: break-word;
+  }
+  .theme-icon, .nav-collapse {
+    flex: 0 0 auto; background: transparent; border: none; cursor: pointer;
+    color: var(--muted); padding: 0; line-height: 1; display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+  }
+  .theme-icon:hover, .nav-collapse:hover { color: var(--text); }
+  .theme-icon svg { width: 13px; height: 13px; display: block; }
+  .nav-collapse { font-family: var(--mono); font-size: var(--fs-lg); }
+  .nav-handle {
+    display: none; position: fixed; top: 0.75rem; left: 0.75rem; z-index: 6;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--muted); font-family: var(--mono); font-size: var(--fs-lg);
+    padding: 0.25rem 0.5rem; cursor: pointer;
+  }
+  .nav-handle:hover { color: var(--text); background: var(--chip); }
+  body.nav-collapsed .nav { display: none; }
+  body.nav-collapsed .shell { grid-template-columns: 1fr; }
+  body.nav-collapsed .nav-handle { display: block; }
+  /* Layout width: fixed (max-width shell, the reading default) or full width
+     (code/diff-friendly), toggled in the sidebar header and persisted. */
+  body.wide .shell { max-width: none; }
+  #nav { display: flex; flex-direction: column; gap: 0.15rem; }
+  /* Grouped nav (mirrors the TUI nav registry): a section is a non-collapsible
+     muted label followed by its links; the group is itself a flex column so the
+     0.15rem rhythm carries inside it. Child links take a slight left indent,
+     GitHub settings-sidebar style. Reuses --muted / --fs-dense; theming rides
+     the CSS variables, so light/dark need no extra rules. */
+  #nav .nav-group { display: flex; flex-direction: column; gap: 0.15rem; }
+  #nav .nav-section, .nav-footer {
+    font-family: var(--mono); font-size: var(--fs-dense); text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); opacity: 0.7;
+    padding: 0.4rem 0.5rem 0.1rem;
+  }
+  #nav .nav-group a { margin-left: 1.5rem; }
+  /* Nav items reuse the tree-row hover feel: a soft rounded chip tint. The
+     active item is signaled by a stronger link-tinted fill + bolder text (the
+     trees.software list style), NOT a left-border indicator. The whole sidebar
+     shares one voice: IBM Plex Mono at 0.8rem (repo title, nav links, glyphs,
+     footer), with the file tree kept a touch denser. */
+  #nav a, #nav .nav-disabled {
+    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: 6px;
+    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+  }
+  #nav a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
+  #nav a.active {
+    color: var(--text); font-weight: 600;
+    background: color-mix(in srgb, var(--link) 14%, transparent);
+  }
+  /* Nav item icons mirror the TUI nav panel's per-item glyphs. Muted like the
+     file-type icons, inheriting the item's hover/active color; a fixed box so
+     labels align regardless of glyph width. */
+  .nav-icon {
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 1rem; margin-right: 0.5rem; color: inherit;
+    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1;
+  }
+  /* Code nav search magnifier: pinned to the item's right edge, muted like the
+     glyphs, brightening on hover. Clicking navigates to Code (if elsewhere) and
+     focuses the tree search input — no second search box. */
+  .nav-search {
+    flex: 0 0 auto; margin-left: auto; display: inline-flex; align-items: center;
+    justify-content: center; width: 1rem; height: 1rem; color: var(--muted); cursor: pointer;
+  }
+  #nav a:hover .nav-search, .nav-search:hover { color: var(--text); }
+  .nav-search .gs-icon { width: 0.85rem; height: 0.85rem; color: inherit; }
+  #nav .nav-disabled { color: var(--muted); opacity: 0.4; cursor: default; }
+  #nav .nav-disabled::after {
+    content: "M1"; font-family: var(--mono); font-size: var(--fs-dense);
+    margin-left: 0.4rem; opacity: 0.8;
+  }
+  .content { min-width: 0; }
+  /* Cards / items. */
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 0.75rem 0.9rem; margin: 0 0 0.7rem;
+  }
+  /* Whole-card navigation: the card links to its item detail, so it takes a
+     pointer cursor and a tree-row-like hover (chip tint + link-tinted border).
+     Inner anchors and text selection keep their own behavior in JS. */
+  .card.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+  .card.clickable:hover {
+    border-color: color-mix(in srgb, var(--link) 45%, var(--line));
+    background: var(--chip);
+  }
+  .card .subject { font-weight: 600; }
+  /* Card head: glyph + state chip + subject + trailing chips on one baseline row,
+     with a small gap so chips never touch (and the chip row aligns to the subject
+     column). The leading glyph drops its own inline margin — the flex gap spaces
+     it — so subject text and any wrapped chips share one left edge. */
+  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.4rem; }
+  .card-head .subject { flex: 0 1 auto; }
+  .card-head .type-glyph { margin-right: 0; }
+  .card .body { white-space: pre-wrap; word-break: break-word; margin-top: 0.3rem; }
+  .card .body.dim { color: var(--muted); }
+  /* List-card body clamp: long messages cap at ~10 rendered lines (body
+     line-height is 1.4, set in the base font shorthand) with a theme-independent
+     mask fade over the last ~2 lines; fixed-em gradient stops keep bodies
+     shorter than the cap fully opaque. JS removes the class when the text fits
+     and attaches the Show more toggle only when it overflows. */
+  .body-clamp {
+    max-height: calc(10 * 1.4em); overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
+    mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
+  }
+  .body-clamp-toggle {
+    display: block; margin-top: 0.2rem; padding: 0.15rem 0;
+    background: transparent; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
+  }
+  .body-clamp-toggle:hover { color: var(--text); }
+  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+  .hash { font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); }
+  /* Type glyphs carry one consistent semantic scheme across every view (timeline,
+     search, lists, board, milestones, detail): a state-bearing glyph (issue,
+     pull-request) is colored by state (open/closed/merged), and every neutral TYPE
+     glyph (release, post, milestone, sprint, memo, …) shares the single muted
+     color. This mirrors the TUI, which dims card glyphs and conveys state through
+     the state chip. */
+  .type-glyph { display: inline-block; width: 1.1em; margin-right: 0.3em; text-align: center; line-height: 1; vertical-align: middle; font-family: var(--mono); color: var(--muted); }
+  .type-glyph.tg-open { color: var(--open); }
+  .type-glyph.tg-closed { color: var(--closed); }
+  .type-glyph.tg-merged { color: var(--merged); }
+  .chip {
+    display: inline-block; background: var(--chip); border-radius: 999px;
+    padding: 0.05rem 0.5rem; font-size: var(--fs-small); color: var(--muted);
+    font-family: var(--mono); font-weight: 500;
+  }
+  .chip.state { color: #fff; }
+  .chip.open { background: var(--open); }
+  .chip.closed { background: var(--closed); }
+  .chip.merged { background: var(--merged); }
+  .chip.pre { background: var(--pre); }
+  /* Milestone/sprint lifecycle state chips. Every state carries a solid fill so
+     the white .chip.state text stays legible (an unmapped state would fall back
+     to the translucent --chip background and vanish). Colors are chosen for
+     WCAG-AA contrast with white in both themes: active reuses the link blue,
+     completed the done green, planned a solid neutral grey, canceled/unknown a
+     muted slate. */
+  .chip.active { background: #1f6feb; }
+  .chip.completed { background: var(--open); }
+  .chip.planned { background: #6b7280; }
+  .chip.canceled { background: #6e7681; }
+  .chip.unknown { background: #6e7681; }
+  .empty, .loading { color: var(--muted); padding: 2.5rem 0; text-align: center; }
+  .err {
+    color: var(--danger); border: 1px solid var(--danger); border-radius: 8px;
+    padding: 0.75rem 0.9rem; background: color-mix(in srgb, var(--danger) 8%, transparent);
+  }
+  .detail dl { margin: 0.6rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.9rem; }
+  .detail dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
+  .detail dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
+  .detail .subject { font-size: var(--fs-h3); margin-bottom: 0.3rem; }
+  .back { display: inline-block; margin-bottom: 0.8rem; color: var(--muted); font-size: var(--fs-ui); }
+  a.repo-title { color: var(--muted); }
+  a.repo-title:hover { color: var(--text); text-decoration: none; }
+  .mono { font-family: var(--mono); }
+  /* File browser: breadcrumb, tree listing, blob view. */
+  .breadcrumb { font-size: var(--fs-ui); margin-bottom: 0.8rem; word-break: break-all; }
+  .breadcrumb a { color: var(--link); }
+  .tree-list {
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    background: var(--panel);
+  }
+  /* Rows use the code-block mono at the blob scale, no inter-row separators
+     (the outer .tree-list border stays), so the browser reads like the blob.
+     Compact vertical rhythm (trees.software density): ~1.6em line boxes. */
+  .tree-row {
+    display: flex; align-items: center; gap: 0.5rem; line-height: 1.6;
+    padding: 0.12rem 0.7rem; font-family: var(--mono); font-size: var(--fs-code); color: var(--text);
+  }
+  .tree-row:hover { background: var(--chip); text-decoration: none; }
+  /* Home root listing: collapsed to HOME_FILE_LIMIT rows with a gradient fade
+     over the last visible row and a centered chevron toggle that flips to
+     "Show less" once expanded. The fade uses the page-background token so it
+     reads on both themes, and takes no pointer events so rows stay clickable. */
+  .home-list { position: relative; }
+  .tree-fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 2.75rem;
+    pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+  }
+  .show-more {
+    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+    width: 100%; margin-top: 0.5rem; padding: 0.35rem;
+    background: transparent; border: none; cursor: pointer; color: var(--muted);
+  }
+  .show-more:hover { color: var(--text); }
+  .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
+  .show-more-label { font-size: var(--fs-small); }
+  .tree-icon { width: 1.1rem; text-align: center; opacity: 0.85; }
+  /* File-type icons (vendored @pierre/vscode-icons, monochrome currentColor, so
+     they read on both themes via the inherited --muted color). Cloned from
+     cached templates; the render layer falls back to the text glyphs when
+     icons.js is absent. */
+  .gs-icon { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted); vertical-align: -0.15em; }
+  .gs-icon svg { width: 100%; height: 100%; display: block; }
+  .tree-icon.gs-icon { width: 1.1rem; height: 1.1rem; opacity: 1; }
+  /* Per-filetype icon color: the monochrome Pierre SVGs inherit currentColor, so
+     tinting is just a color on the wrapper, switched per theme by the --i-* hue
+     tokens. Compound selectors keep specificity above the base .gs-icon --muted.
+     Uncolored keys (folders, unknown, symlink, and the monochrome types) carry
+     no i-* class and stay --muted. */
+  .gs-icon.i-cyan { color: var(--i-cyan); }
+  .gs-icon.i-yellow { color: var(--i-yellow); }
+  .gs-icon.i-orange { color: var(--i-orange); }
+  .gs-icon.i-indigo { color: var(--i-indigo); }
+  .gs-icon.i-green { color: var(--i-green); }
+  .gs-icon.i-blue { color: var(--i-blue); }
+  .gs-icon.i-red { color: var(--i-red); }
+  .gs-icon.i-vermilion { color: var(--i-vermilion); }
+  /* In-place hierarchical tree (Code view + directory routes): directory rows
+     expand children inline. Nesting reads from plain indentation alone (a
+     rail-free spacer sized by depth), no vertical guides. The chevron toggles
+     expansion; the directory name is a real anchor that navigates. */
+  .tree-dir { cursor: pointer; }
+  .tree-indent { flex: 0 0 auto; align-self: stretch; }
+  .tree-chevron-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 0.85rem; flex: 0 0 auto; color: var(--muted); cursor: pointer;
+  }
+  .tree-chevron-btn:hover { color: var(--text); }
+  .tree-name { color: inherit; }
+  .tree-name:hover { text-decoration: none; }
+  .tree-chevron { width: 0.85rem; height: 0.85rem; flex: 0 0 auto; opacity: 0.7; transform: rotate(-90deg); transition: transform 0.12s ease; }
+  .tree-chevron.open { transform: rotate(0); }
+  .tree-chevron-spacer { width: 0.85rem; flex: 0 0 auto; }
+  .tree-dir:focus-visible { outline: 1px solid var(--link); outline-offset: -1px; }
+  .tree-more { color: var(--muted); font-style: italic; }
+  /* In-place file/dir search (Code view): a subtle mono input above the tree,
+     matching the visual language. Matches highlight with the mark tint; a
+     truncation notice reuses the .notice look. */
+  .tree-search-wrap { margin-bottom: 0.6rem; }
+  .tree-search {
+    width: 100%; padding: 0.35rem 0.6rem; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); color: var(--text);
+    font-family: var(--mono); font-size: var(--fs-ui);
+  }
+  .tree-search::placeholder { color: var(--muted); }
+  .tree-search:focus { outline: none; border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
+  .tree-row mark.tree-mark {
+    background: color-mix(in srgb, var(--pre) 30%, transparent);
+    color: inherit; border-radius: 2px; padding: 0 1px;
+  }
+  /* Active row tint (current file/dir in the sidebar tree), matching the nav
+     active fill — a link-tinted background, no left border. */
+  .tree-active, .tree-active:hover { background: color-mix(in srgb, var(--link) 14%, transparent); }
+  /* Code-context sidebar file tree: a compact repo tree nested under the Code
+     nav item so files stay navigable while the content pane shows a blob.
+     Smaller than the content tree to fit the 220px column; long names ellipsize
+     with the full name in a title attr. Hidden when empty, when the sidebar is
+     collapsed (the whole nav is hidden then), and on the narrow top-nav layout. */
+  .nav-tree-slot { margin: 0.1rem 0 0.2rem 0.35rem; overflow-x: hidden; }
+  .nav-tree-slot:empty { display: none; }
+  .nav-tree-list { border: none; background: transparent; }
+  .nav-tree-list .tree-row { padding: 0.06rem 0.3rem; line-height: 1.4; font-size: var(--fs-small); border-radius: 5px; }
+  .nav-tree-list .tree-row .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bc-icon { margin-left: 0.3rem; width: 0.95rem; height: 0.95rem; }
+  .diff-file-icon { width: 0.95rem; height: 0.95rem; }
+  .blob-meta { margin-bottom: 0.6rem; }
+  .blob-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .blob-head .breadcrumb { flex: 1 1 auto; margin-bottom: 0; }
+  .blob-head .view-modes, .blob-head .blob-meta { margin-bottom: 0; flex: 0 0 auto; }
+  .notice {
+    color: var(--pre); border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.4rem 0.7rem; margin-bottom: 0.6rem; font-size: var(--fs-ui);
+  }
+  .blob {
+    border: 1px solid var(--line); border-radius: 10px; overflow: auto;
+    background: var(--panel); font-size: var(--fs-code); line-height: 1.5;
+  }
+  .blob-row { display: flex; }
+  .blob-row.hl { background: color-mix(in srgb, var(--pre) 16%, transparent); }
+  .blob-row .ln {
+    flex: 0 0 auto; min-width: 3rem; text-align: right; padding: 0 0.7rem;
+    color: var(--muted); user-select: none; border-right: 1px solid var(--line);
+  }
+  .blob-row .ln:hover { color: var(--text); text-decoration: none; }
+  .blob-row .lc { white-space: pre; padding: 0 0.7rem; }
+  .blob-img { border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem; background: var(--panel); text-align: center; }
+  .blob-img img { max-width: 100%; height: auto; }
+  /* README / Markdown. */
+  .markdown { margin-top: 1rem; word-break: break-word; }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 1rem 0 0.5rem; line-height: 1.2; }
+  .markdown h1 { font-size: var(--fs-h1); border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+  .markdown h2 { font-size: var(--fs-h2); border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
+  .markdown p { margin: 0.6rem 0; }
+  .markdown ul, .markdown ol { margin: 0.6rem 0 0.6rem 1.4rem; }
+  .markdown li { margin: 0.2rem 0; }
+  .markdown code {
+    font-family: var(--mono); font-size: 0.85em;
+    background: var(--code-bg); border: 1px solid var(--line);
+    padding: 0.05rem 0.3rem; border-radius: 4px;
+  }
+  .markdown pre.codeblock {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.7rem 0.9rem; overflow: auto; margin: 0.7rem 0;
+  }
+  .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
+  .markdown img { max-width: 100%; height: auto; }
+  .markdown div[align="center"], .markdown center, .markdown [align="center"] { text-align: center; }
+  .markdown blockquote {
+    margin: 0.7rem 0; padding: 0.2rem 0.9rem; color: var(--muted);
+    border-left: 3px solid var(--line);
+  }
+  .markdown del, .markdown s, .markdown strike { text-decoration: line-through; opacity: 0.75; }
+  .markdown kbd {
+    font-family: var(--mono); font-size: 0.78em; padding: 0.05rem 0.35rem;
+    border: 1px solid var(--line); border-radius: 4px; background: var(--chip);
+  }
+  .markdown table { border-collapse: collapse; margin: 0.8rem 0; display: block; overflow: auto; max-width: 100%; }
+  .markdown th, .markdown td { border: 1px solid var(--line); padding: 0.3rem 0.6rem; text-align: left; }
+  .markdown th { background: var(--chip); font-weight: 600; }
+  .markdown li.task { list-style: none; margin-left: -1.1rem; }
+  .markdown li.task input { margin-right: 0.4rem; }
+  .markdown ul ul, .markdown ol ol, .markdown ul ol, .markdown ol ul { margin: 0.2rem 0 0.2rem 1.2rem; }
+  /* Rendered|Raw toggle for .md blob views, reusing the diff-mode toggle look. */
+  .view-modes { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 0.6rem; }
+  .body-modes { margin: 0.6rem 0 0.2rem; }
+  /* Raw commit-message pane: the verbatim message (subject + body + GitMsg
+     trailer block) reads as a code block — mono at the code scale, panel
+     background, bordered, rounded. Kept pre-wrap (not pre + horizontal scroll):
+     the message is mostly prose that wants to wrap, and word-break folds the
+     long GitMsg trailer refs rather than forcing the whole pane to scroll
+     sideways (overflow-x stays as a safety valve for anything unbreakable). */
+  .raw-body {
+    white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+    font-family: var(--mono); font-size: var(--fs-code);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+  }
+  .view-toggle {
+    background: transparent; border: none; padding: 0.2rem 0.7rem; cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
+  }
+  .view-toggle:hover { color: var(--text); background: var(--chip); }
+  .view-toggle.active { color: var(--text); background: var(--chip); font-weight: 600; }
+  /* Fullscreen affordance: expand button on code/diff/fenced blocks, and the
+     full-viewport overlay it opens. */
+  .fs-btn {
+    background: transparent; border: 1px solid var(--line); border-radius: 5px;
+    color: var(--muted); cursor: pointer; font-size: var(--fs-small); line-height: 1;
+    padding: 0.15rem 0.35rem;
+  }
+  .fs-btn:hover { color: var(--text); background: var(--chip); }
+  .fs-wrap { position: relative; }
+  .fs-wrap > .fs-btn { position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2; }
+  .fs-overlay { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
+  /* Floating close: a semi-transparent circled X whose center sits on the
+     top-right corner of the content block's border (content padding 1.25rem,
+     button 2rem, so a 0.25rem offset centers it on the corner). The text-mixed
+     backing and currentColor glyph read over code on both themes; dimmed while
+     idle, full opacity on hover. */
+  .fs-close.circle {
+    position: fixed; top: 0.25rem; right: 0.25rem; z-index: 51;
+    width: 2rem; height: 2rem; border-radius: 50%; border: none; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--text) 12%, transparent);
+    color: var(--text); cursor: pointer; font-size: var(--fs-lg); line-height: 1;
+    opacity: 0.6; backdrop-filter: blur(2px);
+    transition: opacity 0.12s ease;
+  }
+  .fs-close.circle:hover { opacity: 1; }
+  .fs-content { position: absolute; inset: 0; overflow: auto; padding: 1.25rem; }
+  .fs-content .blob, .fs-content .diff-file-body, .fs-content pre.codeblock { max-width: 100%; }
+  .meta-strip { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+  /* Diff views: changed-file list, unified + split hunks. */
+  .diff-section { margin-top: 1.2rem; }
+  .diff-head {
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+    padding-bottom: 0.5rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
+  }
+  .diff-head .subject { font-size: var(--fs-h4); }
+  .chip.caveat { background: color-mix(in srgb, var(--pre) 22%, transparent); color: var(--text); }
+  /* Diff bulk-control row: the expand/collapse toggle, the unified|split mode
+     toggle (one button each, label = the action a click performs), and
+     fullscreen cluster at the row's right edge. */
+  .diff-controls { margin-left: auto; display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+  .diff-btn {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
+    padding: 0.2rem 0.6rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--muted); line-height: 1.2;
+  }
+  .diff-btn:hover { color: var(--text); background: var(--chip); }
+  .diff-file { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 0.7rem; background: var(--panel); }
+  .diff-file-head {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.75rem;
+    cursor: pointer; font-size: var(--fs-ui);
+  }
+  .diff-file-head:hover { background: var(--chip); }
+  .diff-status {
+    flex: 0 0 auto; width: 1.1rem; text-align: center; font-family: var(--mono);
+    font-size: var(--fs-small); font-weight: 700; border-radius: 4px; color: #fff;
+  }
+  .diff-status.s-added { background: var(--open); }
+  .diff-status.s-deleted { background: var(--danger); }
+  .diff-status.s-modified { background: var(--pre); }
+  .diff-path { flex: 1 1 auto; word-break: break-all; font-size: var(--fs-code); }
+  .diff-counts { flex: 0 0 auto; display: inline-flex; gap: 0.5rem; font-size: var(--fs-small); }
+  .cnt-add { color: var(--open); }
+  .cnt-del { color: var(--danger); }
+  .diff-file-body { border-top: 1px solid var(--line); overflow: auto; }
+  .diff-hunk-head {
+    font-size: var(--fs-small); color: var(--muted);
+    background: color-mix(in srgb, var(--link) 8%, transparent);
+    padding: 0.15rem 0.7rem;
+  }
+  .diff-line { display: flex; font-size: var(--fs-small); line-height: 1.45; }
+  .diff-line.add { background: color-mix(in srgb, var(--open) 14%, transparent); }
+  .diff-line.del { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+  .dl-num {
+    flex: 0 0 auto; min-width: 2.6rem; text-align: right; padding: 0 0.5rem;
+    color: var(--muted); user-select: none; font-size: var(--fs-dense);
+  }
+  .dl-sign { flex: 0 0 auto; width: 1rem; text-align: center; user-select: none; color: var(--muted); }
+  .dl-text { white-space: pre-wrap; word-break: break-word; padding-right: 0.6rem; flex: 1 1 auto; }
+  /* Split view is one CSS grid (num/code/num/code) so the four columns align
+     and each row's two sides stay height-locked when one wraps. .ds-contents
+     groups a row's four cells yet lets them be direct grid items. */
+  .diff-body.split { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
+  .ds-contents { display: contents; }
+  .ds-full { grid-column: 1 / -1; }
+  .ds-num {
+    text-align: right; padding: 0 0.5rem; color: var(--muted); user-select: none;
+    font-size: var(--fs-dense); line-height: 1.45;
+  }
+  .ds-code {
+    white-space: pre-wrap; word-break: break-word; padding: 0 0.6rem;
+    font-size: var(--fs-small); line-height: 1.45;
+  }
+  .ds-code.ds-left { border-right: 1px solid var(--line); }
+  .ds-num.add, .ds-code.add { background: color-mix(in srgb, var(--open) 14%, transparent); }
+  .ds-num.del, .ds-code.del { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+  .ds-empty { background: color-mix(in srgb, var(--text) 4%, transparent); }
+  /* Word-level intra-line marks: stronger tint over the row's base add/del tint. */
+  mark.dw, mark.aw { color: inherit; border-radius: 2px; padding: 0 1px; }
+  mark.dw { background: color-mix(in srgb, var(--danger) 32%, transparent); }
+  mark.aw { background: color-mix(in srgb, var(--open) 34%, transparent); }
+  /* Collapsed-context divider between hunks (spans all split columns via grid). */
+  .diff-expand {
+    display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+    grid-column: 1 / -1; font-size: var(--fs-small); color: var(--link);
+    background: color-mix(in srgb, var(--link) 6%, transparent); padding: 0.15rem 0.7rem;
+  }
+  .diff-expand:hover { background: color-mix(in srgb, var(--link) 12%, transparent); }
+  .diff-expand-icon { opacity: 0.8; }
+  /* Prism tokens mapped onto the existing palette (subtle; this is a read
+     surface). Both themes inherit through the --link/--pre/--text tokens. */
+  .token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--muted); font-style: italic; }
+  .token.punctuation, .token.operator { color: color-mix(in srgb, var(--text) 75%, var(--bg)); }
+  .token.keyword, .token.tag, .token.selector, .token.atrule, .token.important, .token.builtin { color: var(--link); }
+  .token.function, .token.class-name, .token.attr-name, .token.property { color: color-mix(in srgb, var(--link) 78%, var(--text)); }
+  .token.string, .token.char, .token.attr-value, .token.regex, .token.url { color: var(--pre); }
+  .token.number, .token.boolean, .token.constant, .token.symbol { color: color-mix(in srgb, var(--pre) 65%, var(--text)); }
+  .token.deleted { color: var(--danger); }
+  .token.inserted { color: var(--open); }
+  .token.bold { font-weight: 600; }
+  .token.italic { font-style: italic; }
+  .token.namespace { opacity: 0.7; }
+  /* M3: release assets, filters, threads, embedded context, pm groups, contributors. */
+  .selectable { user-select: all; }
+  .assets { margin-top: 1rem; }
+  .assets-head, .thread-head, .contrib-head,
+  .version-history-head, .review-summary-head, .fb-offscreen-head {
+    font-size: var(--fs-small); color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.05em; margin: 0.9rem 0 0.5rem;
+  }
+  .asset-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); margin-bottom: 0.6rem; }
+  .asset-row {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem;
+    font-size: var(--fs-ui); color: var(--text); border-top: 1px solid var(--line); word-break: break-all;
+  }
+  .asset-list .asset-row:first-child { border-top: none; }
+  a.asset-row:hover { background: var(--chip); text-decoration: none; }
+  .asset-signed { font-size: var(--fs-ui); margin-top: 0.3rem; }
+  .filter-bar { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .filter-chip {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0.15rem 0.7rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--muted);
+  }
+  .filter-chip:hover { color: var(--text); background: var(--chip); }
+  .filter-chip.active { color: var(--text); background: var(--chip); border-color: var(--link); font-weight: 600; }
+  /* Load-more continuation control for walk-backed lists (timeline/issues/PRs/
+     releases/memos/branch log): a centered pill that walks the next history
+     window and appends its resolved items. */
+  .load-more-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; margin: 1rem 0 0.4rem; }
+  .search-tier-note { max-width: 34rem; margin: 0 auto; text-align: center; line-height: 1.5; color: var(--muted); font-size: var(--fs-ui); }
+  .load-more {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0.3rem 1.1rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--muted);
+  }
+  .load-more:hover { color: var(--text); background: var(--chip); border-color: var(--link); }
+  .load-more:disabled { cursor: default; opacity: 0.6; }
+  .thread { margin-top: 1.2rem; }
+  .card.comment { background: var(--panel); }
+  /* Reply-context ("In reply to") block: the parent chain shown above a reply's
+     own post. De-emphasized so the anchor post stays visually primary — smaller
+     text, tighter padding, and a slight fade on the context cards. */
+  .reply-context { margin-top: 0; margin-bottom: 1rem; font-size: var(--fs-ui); opacity: 0.82; }
+  .reply-context .card.comment { padding: 0.5rem 0.7rem; }
+  /* Thread hierarchy: a comment-row lays `depth` rail guides beside the card;
+     each rail-guide is a vertical connector line (one per reply level; indent is
+     capped in JS at THREAD_MAX_DEPTH). align-items:stretch runs the guides the
+     card's full height so they read as continuous connectors, like the TUI. */
+  .comment-row { display: flex; align-items: stretch; }
+  .thread-rail { display: flex; flex: 0 0 auto; }
+  .rail-guide { width: 1.25rem; border-left: 2px solid var(--line); }
+  .comment-row > .card.comment { flex: 1 1 auto; min-width: 0; }
+  /* Detail meta line: author/time on the left, the small Rendered|Raw toggle
+     right-aligned on the same line (the blob-head pattern). */
+  .detail-meta { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.1rem 0; }
+  .detail-meta .meta { flex: 1 1 auto; }
+  .detail-meta .view-modes { margin: 0; flex: 0 0 auto; }
+  .embedded {
+    margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-left: 2px solid var(--line);
+    background: var(--chip); border-radius: 0 6px 6px 0;
+  }
+  .embedded-from { font-style: italic; }
+  .embedded-quote { white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: 0.25rem 0; font-size: var(--fs-ui); }
+  .card.pm-group .pm-member { margin-top: 0.35rem; font-size: var(--fs-lg); padding-left: 0.2rem; }
+  /* PM detail extras (milestone/sprint members, sub-issues, relations),
+     progress bars, the kanban board, and the in-bucket item search. */
+  /* Member rows: flex so the leading state chip sits in a fixed-width slot and
+     the subjects line up vertically no matter the chip label's width. */
+  .pm-member { margin-top: 0.35rem; font-size: var(--fs-lg); padding-left: 0.2rem; display: flex; align-items: baseline; gap: 0.5rem; }
+  .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; box-sizing: border-box; }
+  .pm-members-head, .pm-subissues-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0.9rem 0 0.4rem; }
+  .pm-members, .pm-subissues { margin-top: 0.6rem; }
+  /* Progress bar: a slim track with a link-tinted fill + "n closed of m" label. */
+  .pm-progress { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0 0.5rem; }
+  .pm-bar { flex: 1 1 auto; height: 0.5rem; max-width: 16rem; background: var(--chip); border-radius: 999px; overflow: hidden; }
+  .pm-bar-fill { height: 100%; background: var(--open); border-radius: 999px; }
+  .pm-progress-label { font-size: var(--fs-small); color: var(--muted); flex: 0 0 auto; }
+  /* Issue detail relationship links (parent / milestone / sprint). */
+  .pm-rels { margin: 0.6rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
+  .pm-rel { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: var(--fs-ui); }
+  .pm-rel-label { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; min-width: 4.5rem; }
+  .chip.pm-sub-chip { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--text); }
+  /* Card enrichment chips (labels/assignees/priority/retracted) on issue/PR list
+     cards: a wrapping row below the meta, mirroring the TUI card stats. */
+  .card-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.35rem; }
+  .chip.chip-label { background: var(--chip); color: var(--muted); }
+  .chip.chip-assignee { background: color-mix(in srgb, var(--link) 12%, transparent); color: var(--text); }
+  .chip.chip-priority { color: var(--text); background: var(--chip); }
+  .chip.chip-priority.prio-critical { background: color-mix(in srgb, var(--danger) 26%, transparent); }
+  .chip.chip-priority.prio-high { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+  .chip.chip-priority.prio-medium { background: color-mix(in srgb, var(--pre) 20%, transparent); }
+  .chip.chip-priority.prio-low { background: var(--chip); }
+  .chip.chip-retracted { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--text); }
+  .chip.chip-origin { background: color-mix(in srgb, var(--link) 14%, transparent); color: var(--text); }
+  .chip.chip-due { background: color-mix(in srgb, var(--pre) 18%, transparent); color: var(--text); }
+  .chip.chip-count { background: var(--chip); color: var(--muted); }
+  .chip.chip-review { background: var(--chip); color: var(--text); }
+  .chip.chip-review .review-ok { color: var(--open); font-weight: 600; }
+  .chip.chip-review .review-no { color: var(--danger); font-weight: 600; }
+  /* Kanban board: horizontally scrolling columns, each a header + issue cards. */
+  .board { display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
+  .board-col { flex: 0 0 15rem; min-width: 15rem; background: var(--chip); border-radius: 10px; padding: 0.5rem; }
+  /* A collapsed column shows only its slim header, so it stops taking a full lane
+     of horizontal space while remaining a visible, re-expandable stub. */
+  .board-col.board-col-collapsed { flex: 0 0 auto; min-width: 0; }
+  .board-col-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+  .board-col-name { flex: 1 1 auto; white-space: nowrap; }
+  .board-col-toggle, .board-col-hide {
+    flex: 0 0 auto; background: none; border: none; cursor: pointer; color: var(--muted);
+    font-family: var(--mono); font-size: var(--fs-small); line-height: 1; padding: 0 0.1rem;
+  }
+  .board-col-toggle:hover, .board-col-hide:hover { color: var(--text); }
+  .board-empty { color: var(--muted); text-align: center; padding: 0.6rem 0; font-size: var(--fs-small); }
+  .card.board-card { margin-bottom: 0.5rem; padding: 0.5rem 0.6rem; }
+  .card.board-card .subject { font-size: var(--fs-ui); }
+  /* Board card title line: glyph + subject as ONE flex child so a long subject
+     wraps its text under itself without the glyph splitting onto its own row in a
+     narrow column (G8). The glyph hugs the first line; the subject text flows. */
+  .board-card-title { display: inline; }
+  .board-card-title .type-glyph { margin-right: 0.3em; }
+  .board-more {
+    display: inline-block; margin-top: 0.15rem; font-size: var(--fs-dense);
+    background: none; border: none; color: var(--link); cursor: pointer; font-family: var(--mono); padding: 0.1rem 0.2rem;
+  }
+  .board-card-labels { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+  .chip.board-wip-over { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--text); }
+  /* Board group-by (swimlane) control + lane bands. The control is a labeled
+     chip row; each lane band carries a header and its own columns×issues grid. */
+  .board-controls { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
+  .board-col-restore { border-style: dashed; }
+  .board-groupby-label { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .board-groupby-indicator { font-size: var(--fs-small); color: var(--muted); margin: 0.2rem 0 0.5rem; }
+  /* Lane index: a compact wrap of clickable lane labels that scroll to a lane, so
+     long lanes don't bury the ones after them. */
+  .board-lane-index { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.7rem; }
+  .board-lane-jump {
+    font-size: var(--fs-dense); font-family: var(--mono); color: var(--muted); cursor: pointer;
+    background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.55rem;
+  }
+  .board-lane-jump:hover { color: var(--text); border-color: var(--link); }
+  .board-lane { margin-bottom: 1rem; scroll-margin-top: 0.5rem; }
+  .board-lane-head {
+    font-size: var(--fs-small); color: var(--text); text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.25rem 0.1rem; margin-bottom: 0.4rem; border-bottom: 1px solid var(--line);
+    cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+    position: sticky; top: 0; z-index: 2; background: var(--bg);
+  }
+  .board-lane-caret { flex: 0 0 auto; font-family: var(--mono); }
+  /* In-bucket item search (#/search): input, grouped results, highlighted marks. */
+  .search-input {
+    width: 100%; padding: 0.5rem 0.8rem; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--text); font-family: var(--mono); font-size: var(--fs-ui);
+    margin-bottom: 0.5rem; box-sizing: border-box;
+  }
+  .search-input::placeholder { color: var(--muted); }
+  .search-input:focus { outline: none; border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
+  .search-status { margin-bottom: 0.6rem; }
+  .search-facets { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.1rem 0 0.9rem; }
+  .facet-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem; }
+  .facet-label { flex: 0 0 auto; min-width: 4.2rem; font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .facet-chip { display: inline-flex; align-items: baseline; gap: 0.35rem; font-family: var(--mono); font-size: var(--fs-small); color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.55rem; cursor: pointer; }
+  .facet-chip:hover { border-color: var(--link); }
+  .facet-chip.selected { background: color-mix(in srgb, var(--link) 22%, transparent); border-color: var(--link); }
+  .facet-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .facet-chip.selected .facet-count { color: var(--text); }
+  .facet-more { font-family: var(--mono); font-size: var(--fs-small); color: var(--link); background: none; border: none; cursor: pointer; padding: 0.1rem 0.3rem; }
+  .search-group-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0.9rem 0 0.5rem; }
+  .search-snippet { margin-top: 0.3rem; white-space: normal; }
+  .search-help { text-align: left; padding: 1.5rem 0; }
+  .search-help-scope { margin-top: 0.6rem; font-size: var(--fs-small); color: var(--muted); }
+  mark.search-mark { background: color-mix(in srgb, var(--pre) 34%, transparent); color: var(--text); border-radius: 2px; padding: 0 0.1em; }
+  .contrib { margin: 0.6rem 0 1rem; }
+  .contrib-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  .contrib-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.35rem 0.75rem; font-size: var(--fs-ui); border-top: 1px solid var(--line);
+  }
+  .contrib-list .contrib-row:first-child { border-top: none; }
+  .contrib-name { word-break: break-word; }
+  .contrib-meta { display: inline-flex; gap: 0.5rem; align-items: center; }
+  .contrib-pct { color: var(--muted); font-size: var(--fs-small); font-family: var(--mono); }
+  /* Top-authors heading row: label on the left, a live filter input on the same
+     line; the list scrolls once it grows past a few rows and reveals more on
+     scroll (infinite autoscroll window). */
+  .contrib-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .contrib-filter {
+    font: inherit; font-size: var(--fs-small); color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 0.2rem 0.5rem; min-width: 8rem; max-width: 14rem;
+  }
+  .contrib-filter:focus { outline: none; border-color: var(--muted); }
+  .contrib-scroll { max-height: 22rem; overflow-y: auto; }
+  /* Item version history picker (detail pages, N>1 versions). A compact list of
+     version rows; selecting one repaints the body pane, and a per-row "diff to
+     previous" toggle reveals a unified message-body diff. */
+  .version-history { margin: 1rem 0; }
+  .version-node { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 0.4rem; background: var(--panel); overflow: hidden; }
+  .version-row {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem;
+    cursor: pointer; font-size: var(--fs-ui);
+  }
+  .version-row:hover { background: var(--chip); }
+  .version-row.active { border-left: 3px solid var(--link); background: var(--chip); }
+  .version-row-meta { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; color: var(--muted); flex: 1 1 auto; }
+  .chip.version-label { background: var(--chip); color: var(--text); font-family: var(--mono); }
+  .version-diff-ctl { margin-left: auto; }
+  .version-diff-btn {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
+    padding: 0.1rem 0.5rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--muted); line-height: 1.2;
+  }
+  .version-diff-btn:hover { color: var(--text); background: var(--chip); }
+  .version-diff-pane:not(:empty) { border-top: 1px solid var(--line); }
+  .version-diff { overflow: auto; }
+  /* PR review summary strip: count line + status chip, per-reviewer chips, and
+     verdict feedback bodies. */
+  .review-summary { margin-top: 1.2rem; }
+  .review-summary-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+  .review-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .chip.reviewer-chip { color: var(--text); }
+  .chip.reviewer-chip.fb-approved { background: color-mix(in srgb, var(--open) 20%, transparent); }
+  .chip.reviewer-chip.fb-changes-requested { background: color-mix(in srgb, var(--danger) 20%, transparent); }
+  .chip.reviewer-chip.fb-commented { background: var(--chip); }
+  /* Inline PR feedback cards on the diff (and offscreen block). */
+  .diff-feedback { grid-column: 1 / -1; padding: 0.3rem 0.6rem 0.3rem 2.4rem; background: color-mix(in srgb, var(--link) 5%, transparent); border-top: 1px dashed var(--line); }
+  .fb-card {
+    border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 6px;
+    background: var(--panel); padding: 0.4rem 0.6rem; font-size: var(--fs-ui); margin: 0.2rem 0;
+  }
+  .fb-card.fb-approved { border-left-color: var(--open); }
+  .fb-card.fb-changes-requested { border-left-color: var(--danger); }
+  .fb-head { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.2rem; }
+  .fb-icon { font-family: var(--mono); font-weight: 700; }
+  .fb-author { font-weight: 600; }
+  .fb-card.fb-approved .fb-icon { color: var(--open); }
+  .fb-card.fb-changes-requested .fb-icon { color: var(--danger); }
+  .chip.fb-count { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--text); }
+  .suggestion { margin-top: 0.3rem; }
+  .suggestion-head { font-size: var(--fs-small); color: var(--muted); margin-bottom: 0.2rem; }
+  pre.suggestion-code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.7rem; overflow: auto; }
+  pre.suggestion-code code { font-family: var(--mono); font-size: var(--fs-code); }
+  .fb-offscreen { border-top: 1px solid var(--line); padding: 0.4rem 0.7rem; }
+  .fb-offscreen-item { display: flex; align-items: flex-start; gap: 0.4rem; margin-top: 0.3rem; }
+  .fb-offscreen-item > .meta { flex: 0 0 auto; padding-top: 0.5rem; }
+  .fb-offscreen-item > .fb-card { flex: 1 1 auto; min-width: 0; }
+  /* Sidebar footer: the brand credit pinned to the bottom of the sidebar
+     viewport (position:sticky bottom:0) so it stays put while the nav links
+     scroll beneath it. margin-top:auto still shoves it below the links when the
+     nav is short. An opaque background + top border hide links scrolling under
+     it. Small bottom inset only (the sidebar column owns the outer gap now).
+     Shares the sidebar voice: IBM Plex Mono at 0.8rem. */
+  /* Sidebar footer: fixed to the viewport bottom, spanning exactly the sidebar's
+     width (--nav-w) at the sidebar's horizontal position. The shell is centered
+     (max-width --shell-max, margin auto) with --shell-pad inset, so the sidebar's
+     left edge from the viewport is the centering margin plus the pad; max() clamps
+     the margin to 0 when the viewport is narrower than the shell. Opaque bg over
+     the scrolling nav; the nav reserves matching bottom padding so links clear it.
+     Sits above the content (z-index) but the content column never underlaps it. */
+  .nav-footer {
+    position: fixed; bottom: 0; z-index: 6;
+    left: calc(max(0px, (100vw - var(--shell-max)) / 2) + var(--shell-pad));
+    width: var(--nav-w);
+    padding: 0.5rem; background: var(--bg);
+    border-top: 1px solid var(--line);
+    font-size: 0.65rem;
+  }
+  /* Full-width layout drops the shell max-width, so the sidebar's left edge is just
+     the shell pad from the viewport (no centering margin) — track it so the fixed
+     footer stays aligned under the sidebar in wide mode too, not shifted right. */
+  body.wide .nav-footer { left: var(--shell-pad); }
+  /* A collapsed desktop sidebar hides the nav, so its fixed footer must hide too. */
+  body.nav-collapsed .nav-footer { display: none; }
+  .foot-brand { display: inline-flex; align-items: center; gap: 0.7rem; color: var(--muted); }
+  .foot-brand:hover { text-decoration: none; color: var(--text); }
+  .logo-small { width: 18px; height: 18px; color: inherit; display: block; }
+  .nav-footer .logo-small { width: 14px; height: 14px; }
+  /* Analytics: per-extension item counts (stat grid) and the commits-per-month
+     activity bar row (CSS-only, no chart library). */
+  .analytics-section { margin: 1.2rem 0; }
+  .stat-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+  .stat-cell {
+    flex: 1 1 6rem; min-width: 6rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0.5rem 0.6rem; text-align: center;
+  }
+  .stat-value { font-size: var(--fs-h3); font-weight: 600; }
+  .stat-value-text { font-size: var(--fs-ui); font-weight: 600; padding-top: 0.35rem; }
+  .stat-label { font-size: var(--fs-small); color: var(--muted); margin-top: 0.1rem; }
+  .activity-plot { display: flex; align-items: flex-start; gap: 0.35rem; }
+  .activity-plot .activity-chart { flex: 1 1 0; min-width: 0; }
+  .activity-yaxis {
+    flex: 0 0 auto; height: 192px; box-sizing: border-box; min-width: 1.6rem;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 0.5rem 0 1.4rem; text-align: right; font-size: var(--fs-dense); color: var(--muted);
+  }
+  .activity-ytick { line-height: 1; }
+  .activity-chart {
+    display: flex; align-items: flex-end; gap: 3px; height: 192px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+    padding: 0.5rem 0.6rem 0.3rem; overflow-x: auto;
+  }
+  /* Fixed ~12-periods-per-view: columns grow to fill when few, but never shrink
+     below 1/12 of the visible width, so a long history stays legible and scrolls
+     horizontally (the chart's overflow-x) instead of squishing. 33px = 11 * 3px gap. */
+  .activity-col { flex: 1 0 calc((100% - 33px) / 12); min-width: 0; display: flex; flex-direction: column; align-items: center; height: 100%; }
+  .activity-bar-wrap { flex: 1 1 auto; width: 100%; display: flex; align-items: flex-end; }
+  .activity-bar { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--link) 55%, transparent); }
+  .activity-label { width: 100%; text-align: center; font-size: var(--fs-dense); color: var(--muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Stacked activity chart: a full-height bar per period, split into per-kind
+     color segments (bottom-up), with a granularity toggle and color legend. */
+  .analytics-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+  .activity-chart.stacked { align-items: flex-end; }
+  .activity-stack { width: 100%; min-height: 2px; display: flex; flex-direction: column-reverse; border-radius: 2px 2px 0 0; overflow: hidden; }
+  .activity-seg { width: 100%; min-height: 1px; }
+  .akind-posts { background: var(--link); }
+  .akind-issues { background: var(--open); }
+  .akind-prs { background: var(--merged); }
+  .akind-releases { background: var(--pre); }
+  .akind-memos { background: color-mix(in srgb, var(--link) 45%, var(--pre)); }
+  .akind-commits { background: color-mix(in srgb, var(--text) 45%, var(--bg)); }
+  .chart-filter { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0.6rem; }
+  .chart-filter .filter-chip { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .legend-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }
+  .gran-toggle { display: inline-flex; gap: 0.25rem; }
+  .gran-btn {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
+    padding: 0.1rem 0.55rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--muted); line-height: 1.4; text-transform: capitalize;
+  }
+  .gran-btn:hover { color: var(--text); background: var(--chip); }
+  .gran-btn.active { color: var(--text); background: var(--chip); border-color: var(--link); }
+  /* Author names carry an email tooltip on hover (title attr). */
+  .author[title] { cursor: help; }
+  /* Configuration page: reader-preference control rows + read-only ext configs. */
+  .config-section { margin: 1.2rem 0; }
+  .config-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+  .pref-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+    padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); margin-bottom: 0.4rem;
+  }
+  .pref-label { font-size: var(--fs-ui); }
+  .pref-btn {
+    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
+    padding: 0.2rem 0.7rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-small); color: var(--text); min-width: 6rem;
+  }
+  .pref-btn:hover { background: var(--chip); border-color: var(--link); }
+  .config-ext { margin-bottom: 0.6rem; }
+  .config-ext-head { font-weight: 600; margin-bottom: 0.3rem; }
+  /* Site config section: an accent color swatch and the favicon preview. */
+  .config-swatch { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .config-swatch-dot { width: 0.85rem; height: 0.85rem; border-radius: 3px; border: 1px solid var(--line); }
+  .config-favicon { width: 1.1rem; height: 1.1rem; vertical-align: middle; border-radius: 3px; }
+  /* Mobile hamburger + slide-over drawer (base = desktop, hidden). The bar and
+     scrim only appear at <=720px; the drawer CSS lives in the media block. */
+  .mobile-bar { display: none; }
+  .nav-scrim { display: none; }
+  /* Inline SVG icon (not a ☰ text glyph, whose ink sits high in the em box and
+     defeats box-centering): the icon box is the ink, so flex centering is exact. */
+  .nav-hamburger {
+    background: transparent; border: none; color: var(--text); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0.1rem 0.3rem; flex: 0 0 auto;
+  }
+  .nav-hamburger svg { display: block; }
+  /* Mobile title links home (same route as the desktop repo-title) and centers on
+     the bar's cross axis so it sits level with the hamburger despite the smaller
+     font — display:flex + align-items:center pins the text box to the row center. */
+  .mobile-title {
+    display: flex; align-items: center; min-width: 0;
+    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mobile-title:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 720px) {
+    /* Compact top bar with the hamburger + repo title, sticky at the top. */
+    .mobile-bar {
+      display: flex; align-items: center; gap: 0.6rem;
+      position: sticky; top: 0; z-index: 7;
+      background: var(--bg); border-bottom: 1px solid var(--line);
+      padding: 0.5rem 0.75rem;
+    }
+    .shell { grid-template-columns: 1fr; gap: 0.75rem; padding-top: 0.75rem; }
+    /* The nav becomes an off-canvas drawer. display:flex !important overrides the
+       desktop body.nav-collapsed hide so a persisted desktop-collapse never traps
+       a mobile user; visibility is driven by the transform + body.nav-open. */
+    .nav {
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 9;
+      width: 82%; max-width: 300px; max-height: none; overflow-y: auto;
+      background: var(--bg); border-right: 1px solid var(--line);
+      padding: 1rem; transform: translateX(-100%);
+      transition: transform 0.2s ease; display: flex !important;
+    }
+    /* In the drawer the footer is a normal block (position:static) so it moves
+       with the drawer's transform (a fixed footer would escape the off-canvas
+       transform and stay on screen while the drawer is closed). margin-top:auto
+       keeps it at the drawer's bottom; the nav's desktop bottom-padding reservation
+       is unneeded here. */
+    .nav-footer {
+      position: static; left: auto; width: auto; margin-top: auto; margin-bottom: -1rem;
+      padding: 0.7rem 0 0.5rem; z-index: auto;
+    }
+    .nav { padding-bottom: 1rem; }
+    body.nav-collapsed .nav-footer { display: flex; }
+    body.nav-open .nav { transform: translateX(0); }
+    body.nav-open .nav-scrim { display: block; position: fixed; inset: 0; z-index: 8; background: color-mix(in srgb, #000 45%, transparent); }
+    body.nav-collapsed .shell { grid-template-columns: 1fr; }
+    /* The desktop floating handle is never the mobile mechanism. */
+    .nav-handle { display: none !important; }
+    #nav { flex-direction: column; }
+    .nav-tree-slot { display: block; }
+    /* The graph gutter is the one wide element; let it scroll on its own. */
+    .graph-scroll { overflow-x: auto; }
+  }
+
+  /* Page-level actions above a list (compare links, "browse files"). */
+  .page-actions { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: baseline; margin: 0.2rem 0 0.8rem; }
+  .action-link { font-size: var(--fs-sm); color: var(--link); }
+  .compare-link { margin-left: 0.5rem; font-size: var(--fs-sm); }
+
+  /* Compare page: base/head pickers, then a PR-style commits + files diff. */
+  .compare-pickers { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 0.8rem; margin: 0.4rem 0 1rem; }
+  .compare-field { display: flex; flex-direction: column; gap: 0.15rem; }
+  .compare-select { padding: 0.25rem 0.4rem; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; }
+  .compare-dots { align-self: center; padding-bottom: 0.3rem; }
+  .compare-commits { margin: 1rem 0; }
+
+  /* Commit graph: SVG lane gutter beside a fixed-row-height text column. */
+  .graph-scroll { overflow-x: auto; }
+  .graph-body { display: flex; align-items: flex-start; gap: 0.6rem; }
+  .graph-gutter-wrap { flex: 0 0 auto; }
+  .graph-gutter { display: block; }
+  .graph-text-col { flex: 1 1 auto; min-width: 0; }
+  .graph-line { display: flex; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
+  .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 0.5rem; min-width: 0; width: 100%; }
+  .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .graph-meta { flex: 0 0 auto; }
+  .branch-tip { background: color-mix(in srgb, var(--link) 18%, transparent); color: var(--link); }
+</style>
+</head>
+<body>
+<button id="nav-handle" class="nav-handle" aria-label="Show navigation" title="Show navigation">»</button>
+<!-- Mobile top bar (shown only <=720px): a hamburger that opens the sidebar as a
+     slide-over drawer, plus the repo title. The desktop collapse handle (»)
+     stays desktop-only; the hamburger is the sole mobile mechanism. -->
+<div id="mobile-bar" class="mobile-bar">
+  <button id="nav-hamburger" class="nav-hamburger" aria-label="Open navigation" aria-expanded="false" aria-controls="nav"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <a id="mobile-title" class="mobile-title" href="#/">repository</a>
+</div>
+<div id="nav-scrim" class="nav-scrim"></div>
+<div class="shell">
+  <aside class="nav">
+    <div class="nav-header">
+      <a class="repo-title" id="repo-title" href="#/">repository</a>
+      <button id="theme-toggle" class="theme-icon" aria-label="Toggle dark mode" title="Toggle theme">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <g id="moon-icon">
+            <mask id="moon-mask">
+              <rect width="20" height="20" fill="white" />
+              <circle cx="16" cy="7" r="10" fill="black" />
+            </mask>
+            <circle cx="10" cy="10" r="10" fill="currentColor" mask="url(#moon-mask)" />
+          </g>
+          <g id="sun-icon" style="display: none;">
+            <circle cx="10" cy="10" r="3" fill="currentColor" />
+            <path d="M10 1V3M10 17V19M19 10H17M3 10H1M16.5 3.5L15.1 4.9M4.9 15.1L3.5 16.5M16.5 16.5L15.1 15.1M4.9 4.9L3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </g>
+        </svg>
+      </button>
+      <button id="width-toggle" class="nav-collapse" aria-label="Toggle layout width" title="Toggle fixed/full width">↔</button>
+      <button id="nav-collapse" class="nav-collapse" aria-label="Collapse navigation" title="Collapse navigation">«</button>
+    </div>
+    <!-- Nav item glyphs mirror the TUI nav panel (component_nav_panel.go +
+         extensions/*/nav.go): Timeline ⏱, Issues ○, Pull Requests ⑂, Releases ⏏,
+         Memos ☞, Lists ☷ (social My Lists), Analytics ◧, Configuration ⚙
+         (util_router.go). Home/Code have no TUI nav item, so they take tasteful
+         stand-ins (⌂, ❯); Branches reuses the TUI "My Repository" branch glyph ⎇.
+         Grouping is website-oriented rather than a strict TUI mirror: the PM
+         section holds Board, Issues, Milestones, Sprints; the site-only Repository
+         group leads with Pull Requests, then Code, Branches (the code-and-changes
+         cluster), hoisted directly after PM so code is high in the list; and
+         Releases/Memos trail as single-destination plain links. Sections are
+         non-collapsible labels; child links keep their data-nav so
+         #nav a[data-nav] still matches them through the wrapper. -->
+    <nav id="nav">
+      <a href="#/search" data-nav="search"><span class="nav-icon">⌕</span>Search</a>
+      <a href="#/" data-nav="home"><span class="nav-icon">⌂</span>Home</a>
+      <div class="nav-group">
+        <div class="nav-section">Social</div>
+        <a href="#/timeline" data-nav="timeline"><span class="nav-icon">⏱</span>Timeline</a>
+        <a href="#/lists" data-nav="lists"><span class="nav-icon">☷</span>Lists</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-section">PM</div>
+        <a href="#/board" data-nav="board"><span class="nav-icon">▦</span>Board</a>
+        <a href="#/issues" data-nav="issues"><span class="nav-icon">○</span>Issues</a>
+        <a href="#/milestones" data-nav="milestones"><span class="nav-icon">◇</span>Milestones</a>
+        <a href="#/sprints" data-nav="sprints"><span class="nav-icon">◷</span>Sprints</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-section">Repository</div>
+        <a href="#/prs" data-nav="prs"><span class="nav-icon">⑂</span>Pull Requests</a>
+        <a href="#/code" data-nav="code"><span class="nav-icon">❯</span>Code<span id="nav-code-search" class="nav-search" role="button" tabindex="0" aria-label="Search files" title="Search files"></span></a>
+        <!-- Filled by gs-app.js (updateCodeSidebar) in code/dir/blob routes only: a
+             compact repo file tree nested under Code, sharing the content tree's
+             expansion state. Empty (and display:none) on every other route. -->
+        <div id="nav-tree-slot" class="nav-tree-slot"></div>
+        <a href="#/branches" data-nav="branches"><span class="nav-icon">⎇</span>Branches</a>
+        <a href="#/graph" data-nav="graph"><span class="nav-icon">⑃</span>Graph</a>
+        <a href="#/tags" data-nav="tags"><span class="nav-icon">⌗</span>Tags</a>
+      </div>
+      <a href="#/releases" data-nav="releases"><span class="nav-icon">⏏</span>Releases</a>
+      <a href="#/memos" data-nav="memos" id="nav-memos"><span class="nav-icon">☞</span>Memos</a>
+      <a href="#/analytics" data-nav="analytics"><span class="nav-icon">◧</span>Analytics</a>
+      <a href="#/config" data-nav="config"><span class="nav-icon">⚙</span>Configuration</a>
+    </nav>
+    <!-- Sidebar footer: the brand credit, pinned to the bottom of the nav column
+         (margin-top:auto). Replaces the old page-wide footer element. -->
+    <div class="nav-footer">
+      <a class="foot-brand" href="https://gitsocial.org">
+        <svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" />
+        </svg>
+        <span>Built with GitSocial</span>
+      </a>
+    </div>
+  </aside>
+  <main id="view" class="content"><div class="loading">Loading…</div></main>
+</div>
+<script>
+  // Theme toggle, reused verbatim from docs/index.html: prefers-color-scheme
+  // default plus a persisted body.light-mode / body.dark-mode override.
+  (function () {
+    const toggleButton = document.getElementById('theme-toggle');
+    const moonIcon = document.getElementById('moon-icon');
+    const sunIcon = document.getElementById('sun-icon');
+    const body = document.body;
+    function getSystemTheme() {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    function getCurrentTheme() {
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) return savedTheme.replace('-mode', '');
+      return getSystemTheme();
+    }
+    function updateIcon(theme) {
+      if (theme === 'dark') { moonIcon.style.display = 'none'; sunIcon.style.display = 'block'; }
+      else { moonIcon.style.display = 'block'; sunIcon.style.display = 'none'; }
+    }
+    function setTheme(theme) {
+      body.classList.remove('light-mode', 'dark-mode');
+      body.classList.add(theme + '-mode');
+      localStorage.setItem('theme', theme + '-mode');
+      updateIcon(theme);
+    }
+    body.classList.add(getCurrentTheme() + '-mode');
+    updateIcon(getCurrentTheme());
+    toggleButton.addEventListener('click', () => {
+      const currentTheme = getCurrentTheme();
+      setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    });
+  })();
+  // Sidebar collapse: hide the nav to a floating expand handle, persisted to
+  // localStorage['navCollapsed']. Independent of the narrow-screen top-nav CSS,
+  // which still applies to the nav while it is shown.
+  (function () {
+    const body = document.body;
+    const collapse = document.getElementById('nav-collapse');
+    const handle = document.getElementById('nav-handle');
+    function apply(collapsed) {
+      body.classList.toggle('nav-collapsed', collapsed);
+      try { localStorage.setItem('navCollapsed', collapsed ? '1' : '0'); } catch (e) { /* private mode */ }
+    }
+    let saved = '0';
+    try { saved = localStorage.getItem('navCollapsed') || '0'; } catch (e) { /* private mode */ }
+    body.classList.toggle('nav-collapsed', saved === '1');
+    collapse.addEventListener('click', () => apply(true));
+    handle.addEventListener('click', () => apply(false));
+  })();
+  // Layout width toggle: body.wide lifts the shell's max-width (code/diff
+  // friendly); fixed is the reading default. Persisted like the theme.
+  (function () {
+    const body = document.body;
+    const toggle = document.getElementById('width-toggle');
+    let saved = 'fixed';
+    try { saved = localStorage.getItem('layout') || 'fixed'; } catch (e) { /* private mode */ }
+    body.classList.toggle('wide', saved === 'wide');
+    toggle.addEventListener('click', () => {
+      const wide = !body.classList.contains('wide');
+      body.classList.toggle('wide', wide);
+      try { localStorage.setItem('layout', wide ? 'wide' : 'fixed'); } catch (e) { /* private mode */ }
+    });
+  })();
+  // Mobile hamburger drawer: the hamburger opens the sidebar as a slide-over,
+  // closed by the scrim, by any navigation (hashchange), or by following a nav
+  // link. This is the sole mobile mechanism; the desktop collapse handle is CSS-
+  // hidden below 720px, and a persisted desktop-collapse can't hide the drawer
+  // (its display:flex is forced in the media query).
+  (function () {
+    const body = document.body;
+    const burger = document.getElementById('nav-hamburger');
+    const scrim = document.getElementById('nav-scrim');
+    const nav = document.querySelector('.nav');
+    function setOpen(open) {
+      body.classList.toggle('nav-open', open);
+      if (burger) burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    if (burger) burger.addEventListener('click', () => setOpen(!body.classList.contains('nav-open')));
+    if (scrim) scrim.addEventListener('click', () => setOpen(false));
+    window.addEventListener('hashchange', () => setOpen(false));
+    if (nav) nav.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('a[href^="#"]')) setOpen(false); });
+  })();
+</script>
+<script>
+  // Configure Prism before it loads so it never auto-highlights the page: the
+  // reader drives it explicitly via Prism.tokenize. prism.js is a relative
+  // same-origin asset (self-contained constraint holds); when it is absent the
+  // reader falls back to plain text nodes.
+  window.Prism = window.Prism || {};
+  window.Prism.manual = true;
+</script>
+<script src="prism.js"></script>
+<!-- Repo-specific extra Prism grammars, published by `gitsocial site push` when
+     the repo uses languages beyond the base bundle (prism-extra.js). Absent on
+     buckets that need no extra grammars (or pushed by an older gitsocial), in
+     which case only the base grammars highlight — a clean plain-text fallback.
+     Loaded after prism.js so its Prism.languages.extend("clike"...) resolve. -->
+<script src="prism-extra.js" onerror="this.remove()"></script>
+<script src="icons.js"></script>
+<script src="gs-core.js"></script>
+<script src="gs-render.js"></script>
+<script src="gs-app.js"></script>
+</body>
+</html>

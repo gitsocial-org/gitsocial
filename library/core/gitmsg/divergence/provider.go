@@ -44,9 +44,10 @@ func (p *provider) GetNotifications(workdir string,
 		return nil, nil
 	}
 	now := time.Now()
+	remote := git.PushRemote(workdir)
 	var out []notifications.Notification
 	for _, branch := range gitmsg.GetExtBranches(workdir) {
-		err := git.ValidatePushPreconditions(workdir, "origin", branch)
+		err := git.ValidatePushPreconditions(workdir, remote, branch)
 		if err == nil || !errors.Is(err, git.ErrDiverged) {
 			continue
 		}

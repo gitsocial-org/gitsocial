@@ -1,0 +1,273 @@
+// site.go - embedded static read-surface shell for bucket-hosted repos
+
+package objstore
+
+import (
+	"crypto/sha256"
+	"embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"net/http"
+	"sort"
+	"strings"
+)
+
+// SiteFiles holds the browser-only read surface uploaded alongside a bucket-hosted repo.
+//
+//go:embed site
+var SiteFiles embed.FS
+
+// Site state keys under the dot-prefixed namespace no git ref can collide with.
+const (
+	// siteManifestKey is the push-maintained refs manifest (refname → sha) the
+	// static site reads instead of listing the bucket (public domains don't
+	// expose listing, and generation-mode refs can't be resolved without it).
+	siteManifestKey = ".gitsocial/site/refs.json"
+	// siteVersionKey records the hash of the shipped site files so pushes can
+	// skip the refresh when the bucket's copy is already current.
+	siteVersionKey = ".gitsocial/site/version"
+	// siteStatsKey holds push-computed counts the browser cannot cheaply derive
+	// (regular git commits have no metadata index), read by the analytics page.
+	siteStatsKey = ".gitsocial/site/stats.json"
+)
+
+// siteFileNames lists the embedded site files in upload order.
+func siteFileNames() ([]string, error) {
+	entries, err := fs.ReadDir(SiteFiles, "site")
+	if err != nil {
+		return nil, fmt.Errorf("read embedded site dir: %w", err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// siteContentType maps a site file to the Content-Type it must be served with
+// (browsers won't render/execute S3's default octet-stream).
+func siteContentType(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".html"):
+		return "text/html; charset=utf-8"
+	case strings.HasSuffix(name, ".js"):
+		return "text/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".json"):
+		return "application/json"
+	case strings.HasSuffix(name, ".css"):
+		return "text/css; charset=utf-8"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// siteCompressible reports whether a site file is a text asset worth
+// brotli-compressing before upload. Buckets never compress on the fly, so the
+// shell's largest assets (the JS bundles, the HTML shell) must be stored
+// pre-compressed to arrive small on the wire.
+func siteCompressible(name string) bool {
+	return strings.HasSuffix(name, ".js") || strings.HasSuffix(name, ".html") ||
+		strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".css")
+}
+
+// siteVersion hashes the embedded site files (names + content) so a bucket's
+// copy can be compared against what this binary ships.
+func siteVersion() (string, error) {
+	names, err := siteFileNames()
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	for _, name := range names {
+		data, err := SiteFiles.ReadFile("site/" + name)
+		if err != nil {
+			return "", fmt.Errorf("read embedded %s: %w", name, err)
+		}
+		fmt.Fprintf(h, "%s %d\n", name, len(data))
+		h.Write(data)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// uploadSiteFiles puts every embedded site file plus the version marker.
+func uploadSiteFiles(client *Client, prefix string) error {
+	names, err := siteFileNames()
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		data, err := SiteFiles.ReadFile("site/" + name)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", name, err)
+		}
+		headers := map[string]string{"Content-Type": siteContentType(name)}
+		// Shell assets ship once per version, so pay full-quality brotli once.
+		if siteCompressible(name) {
+			compressed, err := brotliCompress(data, brotliQualityShard)
+			if err != nil {
+				return fmt.Errorf("compress %s: %w", name, err)
+			}
+			data = compressed
+			headers["Content-Encoding"] = "br"
+		}
+		resp, err := client.do(http.MethodPut, prefix+name, nil, data, headers)
+		if err != nil {
+			return fmt.Errorf("upload %s: %w", name, err)
+		}
+		resp.Body.Close()
+	}
+	version, err := siteVersion()
+	if err != nil {
+		return err
+	}
+	if err := client.Put(prefix+siteVersionKey, []byte(version+"\n")); err != nil {
+		return fmt.Errorf("write site version: %w", err)
+	}
+	return nil
+}
+
+// siteEnabled reports whether the bucket carries the static read surface. The
+// version marker is the cheap signal (present ⇒ enabled, and its value is
+// returned so refreshSiteIfEnabled can skip re-uploading a current shell); when
+// it is absent the shell's index.html HEAD decides (a pre-version-marker
+// bucket). A non-site bucket (plain s3:// git remote) reports false so the push
+// path skips every site-only artifact (refs manifest, item/body corpora), never
+// accumulating files it will not serve.
+func siteEnabled(client *Client, prefix string) (enabled bool, markerVersion string, err error) {
+	current, err := client.Get(prefix + siteVersionKey)
+	switch {
+	case err == nil:
+		return true, strings.TrimSpace(string(current)), nil
+	case errors.Is(err, ErrNotFound):
+		resp, headErr := client.do(http.MethodHead, prefix+"index.html", nil, nil, nil)
+		if errors.Is(headErr, ErrNotFound) {
+			return false, "", nil
+		}
+		if headErr != nil {
+			return false, "", fmt.Errorf("probe site shell: %w", headErr)
+		}
+		resp.Body.Close()
+		return true, "", nil
+	default:
+		return false, "", fmt.Errorf("read site version: %w", err)
+	}
+}
+
+// refreshSiteIfEnabled re-uploads the site files when the bucket carries a
+// site whose version differs from this binary's embedded copy (last writer
+// wins across mixed binary versions). Buckets without a site are left alone;
+// the one-time existence probe only runs while the version marker is absent.
+func refreshSiteIfEnabled(client *Client, prefix string) error {
+	version, err := siteVersion()
+	if err != nil {
+		return err
+	}
+	enabled, marker, err := siteEnabled(client, prefix)
+	if err != nil {
+		return err
+	}
+	if !enabled || marker == version {
+		return nil
+	}
+	return uploadSiteFiles(client, prefix)
+}
+
+// putSiteManifest writes the refname → sha map as the site refs manifest.
+func putSiteManifest(client *Client, prefix string, refs map[string]string) error {
+	data, err := json.Marshal(refs)
+	if err != nil {
+		return fmt.Errorf("marshal site manifest: %w", err)
+	}
+	resp, err := client.do(http.MethodPut, prefix+siteManifestKey, nil, data, map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return fmt.Errorf("upload %s: %w", siteManifestKey, err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// SetRemoteHead points the bucket's HEAD symref at the given branch, so git
+// clone and the browser code view use the repo's real default branch (e.g.
+// "master") rather than an assumed "main" or whatever branch happened to be
+// pushed first. Written authoritatively on `gitsocial site push`.
+func SetRemoteHead(remoteURL string, env HelperEnv, branch string) error {
+	if branch == "" {
+		return nil
+	}
+	client, prefix, _, err := clientForRemote(remoteURL, env)
+	if err != nil {
+		return err
+	}
+	body := []byte("ref: refs/heads/" + branch + "\n")
+	resp, err := client.do(http.MethodPut, prefix+"HEAD", nil, body, map[string]string{"Content-Type": "text/plain"})
+	if err != nil {
+		return fmt.Errorf("write HEAD: %w", err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// WriteSiteStats publishes a small stats blob at .gitsocial/site/stats.json for
+// the browser read surface. It carries counts with no metadata index — the
+// default branch's regular commit count — that the pusher (which has the git
+// repo) computes cheaply and the browser reads in one fetch. Refreshed on
+// `gitsocial site push`; a plain git push leaves it until the next site push.
+func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error {
+	client, prefix, _, err := clientForRemote(remoteURL, env)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(stats)
+	if err != nil {
+		return fmt.Errorf("marshal site stats: %w", err)
+	}
+	// Brotli-compressed (Content-Encoding: br) like the item corpora — the commit
+	// times can be large; the browser's fetch decodes it transparently.
+	comp, err := brotliCompress(data, brotliQualityFull)
+	if err != nil {
+		return fmt.Errorf("compress site stats: %w", err)
+	}
+	resp, err := client.do(http.MethodPut, prefix+siteStatsKey, nil, comp, map[string]string{"Content-Type": "application/json", "Content-Encoding": "br"})
+	if err != nil {
+		return fmt.Errorf("upload %s: %w", siteStatsKey, err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// PushSite uploads the embedded site files to the bucket behind a canonical
+// s3 remote URL, at the repo's key prefix, seeds the refs manifest, and runs
+// the item-artifact state machine over every extension data branch (appending,
+// repairing, or advancing a bootstrap as the current state demands) so buckets
+// pushed by older gitsocial versions render fully right away.
+func PushSite(remoteURL string, env HelperEnv) error {
+	client, prefix, _, err := clientForRemote(remoteURL, env)
+	if err != nil {
+		return err
+	}
+	if err := uploadSiteFiles(client, prefix); err != nil {
+		return err
+	}
+	refs, err := readRemoteRefs(client, prefix)
+	if err != nil {
+		return fmt.Errorf("read refs for site manifest: %w", err)
+	}
+	if err := putSiteManifest(client, prefix, refs); err != nil {
+		return err
+	}
+	if err := writeSitePMConfig(client, prefix, refs); err != nil {
+		return err
+	}
+	if err := writeSiteCustomization(client, prefix, refs); err != nil {
+		return err
+	}
+	if err := writeSitePrismExtra(client, prefix, refs); err != nil {
+		return err
+	}
+	return rebuildSiteItems(client, prefix, refs)
+}

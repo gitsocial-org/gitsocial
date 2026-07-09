@@ -49,9 +49,10 @@ func (p *PushPreview) IsEmpty() bool {
 // because this package can't depend on extensions.
 func GetPushPreview(workdir string, codeBranches map[string]int) (*PushPreview, error) {
 	preview := &PushPreview{}
+	remote := git.PushRemote(workdir)
 
 	for _, branch := range GetExtBranches(workdir) {
-		err := git.ValidatePushPreconditions(workdir, "origin", branch)
+		err := git.ValidatePushPreconditions(workdir, remote, branch)
 		if err != nil {
 			if errors.Is(err, git.ErrDetachedHead) || errors.Is(err, git.ErrGitRemote) {
 				return nil, err
@@ -69,7 +70,7 @@ func GetPushPreview(workdir string, codeBranches map[string]int) (*PushPreview, 
 
 	localRefs, err := getLocalGitMsgRefs(workdir)
 	if err == nil && len(localRefs) > 0 {
-		remoteRefs, err := getRemoteGitMsgRefs(workdir)
+		remoteRefs, err := getRemoteGitMsgRefs(workdir, remote)
 		if err != nil {
 			remoteRefs = make(map[string]string)
 		}
@@ -93,24 +94,26 @@ func GetPushPreview(workdir string, codeBranches map[string]int) (*PushPreview, 
 }
 
 // Push pushes all extension branches, gitmsg refs, and the given code branches
-// to remote. Extension branches go through PushBranchWithMerge so divergent
-// histories auto-resolve (empty-tree append-only branches → conflict-free
-// merge) instead of failing non-fast-forward and dropping the user into raw
-// git. Code branches (open PR heads, resolved by the caller) are pushed first
-// — plain push, no auto-merge — so the gitmsg/review push only publishes PRs
-// whose head is reachable on origin.
+// to the push remote (origin, or the configured s3 remote — git.PushRemote).
+// Extension branches go through PushBranchWithMerge so divergent histories
+// auto-resolve (empty-tree append-only branches → conflict-free merge) instead
+// of failing non-fast-forward and dropping the user into raw git. Code branches
+// (open PR heads, resolved by the caller) are pushed first — plain push, no
+// auto-merge — so the gitmsg/review push only publishes PRs whose head is
+// reachable on the remote.
 func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult, error) {
 	preview, err := GetPushPreview(workdir, codeBranches)
 	if err != nil {
 		return nil, err
 	}
 	result := &PushResult{Refs: preview.Refs}
+	remote := git.PushRemote(workdir)
 
 	for _, bp := range preview.Code {
 		result.CodeCommits += bp.Commits
 		if !dryRun {
-			if _, err := git.ExecGit(workdir, []string{"push", "origin", bp.Branch}); err != nil {
-				return nil, wrapCodePushError(bp.Branch, err)
+			if _, err := git.ExecGit(workdir, []string{"push", remote, bp.Branch}); err != nil {
+				return nil, wrapCodePushError(remote, bp.Branch, err)
 			}
 		}
 	}
@@ -126,29 +129,29 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 
 	if preview.Refs > 0 && !dryRun {
 		if _, err := git.ExecGit(workdir, []string{
-			"push", "origin", "refs/gitmsg/*:refs/gitmsg/*",
+			"push", remote, "refs/gitmsg/*:refs/gitmsg/*",
 		}); err != nil {
 			return nil, wrapStateRefPushError(err)
 		}
 		// The just-pushed state refs now match the remote; mirror them into the
 		// remote-tracking namespace so the next offline push preview doesn't
 		// re-report them as unpushed before the following fetch.
-		mirrorGitMsgRefsToTracking(workdir)
+		mirrorGitMsgRefsToTracking(workdir, remote)
 	}
 
 	return result, nil
 }
 
 // mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's remote-tracking
-// counterpart (refs/remotes/origin/gitmsg/*) at the local hash. Called after a
+// counterpart (refs/remotes/<remote>/gitmsg/*) at the local hash. Called after a
 // push so the push preview reflects the new remote state without a fetch.
-func mirrorGitMsgRefsToTracking(workdir string) {
+func mirrorGitMsgRefsToTracking(workdir, remote string) {
 	localRefs, err := getLocalGitMsgRefs(workdir)
 	if err != nil {
 		return
 	}
 	for ref, hash := range localRefs {
-		tracking := "refs/remotes/origin/" + strings.TrimPrefix(ref, "refs/")
+		tracking := "refs/remotes/" + remote + "/" + strings.TrimPrefix(ref, "refs/")
 		if err := git.WriteRef(workdir, tracking, hash); err != nil {
 			// Best-effort: a stale preview is harmless, so don't fail the push.
 			continue
@@ -159,9 +162,9 @@ func mirrorGitMsgRefsToTracking(workdir string) {
 // wrapCodePushError contextualizes a failed code-branch push. Non-FF here
 // usually means the PR head was rebased; code branches must never auto-merge,
 // so point the user at an explicit force-with-lease instead.
-func wrapCodePushError(branch string, err error) error {
+func wrapCodePushError(remote, branch string, err error) error {
 	if isNonFastForward(err) {
-		return fmt.Errorf("push %s: remote has diverged (rebased head?) — review and push manually with `git push --force-with-lease origin %s`: %w", branch, branch, err)
+		return fmt.Errorf("push %s: remote has diverged (rebased head?) — review and push manually with `git push --force-with-lease %s %s`: %w", branch, remote, branch, err)
 	}
 	return fmt.Errorf("push %s: %w", branch, err)
 }

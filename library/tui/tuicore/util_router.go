@@ -345,6 +345,9 @@ var LocReviewPRs = Location{Path: "/review/prs"}
 // LocForks creates a location for the forks management view.
 var LocForks = Location{Path: "/config/forks"}
 
+// LocSite creates a location for the site customization view.
+var LocSite = Location{Path: "/config/site"}
+
 // LocMemoList creates a location for the merged memo list view.
 var LocMemoList = Location{Path: "/memo/list"}
 
@@ -669,6 +672,7 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	r.Register(NavItem{ID: "config", Label: "Configuration", Icon: "⚙", Order: 10, Enabled: true})
 	r.Register(NavItem{ID: "config.core", Label: "Core", Icon: "※", Parent: "config", Order: 0, Enabled: false})
 	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
+	r.Register(NavItem{ID: "config.site", Label: "Site", Icon: "◱", Parent: "config", Order: 7, Enabled: true})
 	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: true})
 	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
 	r.Register(NavItem{ID: "config.release", Label: "Release", Icon: "⏏", Parent: "config", Order: 4, Enabled: true})

@@ -396,9 +396,9 @@ func GetCommit(workdir, hash string) (*Commit, error) {
 	return &commits[0], nil
 }
 
-// GetUnpushedCommits returns hashes of commits not yet pushed to origin.
+// GetUnpushedCommits returns hashes of commits not yet pushed to the push remote.
 func GetUnpushedCommits(workdir, branch string) (map[string]struct{}, error) {
-	originRef := "origin/" + branch
+	originRef := PushRemote(workdir) + "/" + branch
 	_, err := ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", originRef})
 	if err != nil {
 		slog.Debug("no remote tracking branch", "branch", branch)
@@ -422,12 +422,12 @@ func GetUnpushedCommits(workdir, branch string) (map[string]struct{}, error) {
 }
 
 // UnpushedOnBranch returns hashes of commits reachable from the local branch
-// that are not present on any origin remote branch. Unlike GetUnpushedCommits,
-// it also counts a never-pushed branch (one with no origin/<branch> tracking
+// that are not present on any push-remote branch. Unlike GetUnpushedCommits,
+// it also counts a never-pushed branch (one with no <remote>/<branch> tracking
 // ref) so a PR head that has never reached the remote is still detected. A
 // branch that doesn't exist locally yields an empty set (rev-list errors).
 func UnpushedOnBranch(workdir, branch string) (map[string]struct{}, error) {
-	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", branch, "--not", "--remotes=origin/*"})
+	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", branch, "--not", "--remotes=" + PushRemote(workdir) + "/*"})
 	if err != nil {
 		slog.Debug("rev-list unpushed-on-branch", "error", err, "branch", branch)
 		return map[string]struct{}{}, nil
@@ -442,13 +442,14 @@ func UnpushedOnBranch(workdir, branch string) (map[string]struct{}, error) {
 	return hashes, nil
 }
 
-// GetAllUnpushedCommits returns hashes of every local commit that origin doesn't have,
-// across all local branches and tags. Used by views that aggregate items spanning
-// multiple branches (e.g. timeline mixing gitmsg/* items with feature-branch commits).
+// GetAllUnpushedCommits returns hashes of every local commit the push remote
+// doesn't have, across all local branches and tags. Used by views that aggregate
+// items spanning multiple branches (e.g. timeline mixing gitmsg/* items with
+// feature-branch commits).
 func GetAllUnpushedCommits(workdir string) (map[string]struct{}, error) {
 	result, err := ExecGit(workdir, []string{
 		"rev-list", "--abbrev-commit", "--abbrev=12",
-		"--branches", "--tags", "--not", "--remotes=origin/*",
+		"--branches", "--tags", "--not", "--remotes=" + PushRemote(workdir) + "/*",
 	})
 	if err != nil {
 		slog.Debug("rev-list all unpushed", "error", err)

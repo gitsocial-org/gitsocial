@@ -17,9 +17,11 @@
 
 ## About
 
-GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md), and any S3-compatible bucket can be a git remote via the built-in [`s3://` backend](documentation/ARCHITECTURE.md#s3-remote-backend).
+GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md). 
 
-GitSocial fetches into timeline activity from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
+Any S3-compatible bucket can be a git remote via the built-in [`s3://` backend](documentation/S3.md) and can serve a [complete static site](documentation/STATIC-SITE.md) of the repo straight from the bucket.
+
+GitSocial builds your timeline from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
 
 ## Installation
 
@@ -63,6 +65,7 @@ Works for S3-compatible buckets too:
 ```bash
 gitsocial clone s3://s3.example.com/mybucket/myrepo
 gitsocial remote add s3://s3.example.com/mybucket/myrepo
+gitsocial site push          # publish a browsable website from the bucket
 ```
 
 ## Documentation
@@ -74,7 +77,8 @@ gitsocial remote add s3://s3.example.com/mybucket/myrepo
 | [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
 | [Identity Verification](documentation/IDENTITY.md) | Decentralized trust model, attestation sources, caching |
 | [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
-| [S3 Remote](documentation/ARCHITECTURE.md#s3-remote-backend) | Buckets as git remotes, canonical URLs, atomic ref updates |
+| [S3 Remote](documentation/S3.md) | Buckets as git remotes, canonical URLs, atomic ref updates |
+| [Static Site](documentation/STATIC-SITE.md) | Zero-dependency repo website served from the bucket: timeline, issues, PRs, releases, code |
 
 ### Extensions
 

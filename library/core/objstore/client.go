@@ -119,6 +119,13 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 	for name, value := range headers {
 		req.Header.Set(name, value)
 	}
+	// Stamp every upload with its cache policy (immutable loose objects vs
+	// always-revalidate mutable state) at this single chokepoint, so both the
+	// git-push and site-push write paths get it. Cache-Control is not a signed
+	// header, so this never affects SigV4.
+	if method == http.MethodPut && req.Header.Get("Cache-Control") == "" {
+		req.Header.Set("Cache-Control", cacheControlForKey(key))
+	}
 	signRequest(req, c.cfg.AccessKey, c.cfg.SecretKey, c.cfg.Region, "s3", payloadHash, time.Now())
 	debug := os.Getenv("GITSOCIAL_S3_DEBUG") == "1"
 	if debug {

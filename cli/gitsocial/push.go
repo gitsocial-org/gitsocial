@@ -21,11 +21,13 @@ func newPushCmd() *cobra.Command {
 		Short: "Push local changes to remote",
 		Long: `Push all local GitMsg changes to the remote repository.
 
+Pushes to origin, or to the configured s3 remote when one exists.
+
 This pushes:
   - Branch commits (posts, comments, reposts, quotes)
   - GitMsg refs (lists, configs)
-  - Code branches: the default branch when it's ahead of origin, and heads of
-    open pull requests, so others can fetch the code your published data
+  - Code branches: the default branch when it's ahead of the remote, and heads
+    of open pull requests, so others can fetch the code your published data
     points at (--no-code skips)
 
 Divergent histories on gitmsg/* branches (when two clones write between syncs)

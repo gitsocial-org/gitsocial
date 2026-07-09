@@ -88,20 +88,18 @@ type remoteHelper struct {
 	client     *Client
 	prefix     string
 	gitDir     string
-	fetched    map[string]bool // object SHAs confirmed present this session
-	capability Capability      // provider's declared conditional-write support
-	refMode    string          // resolved lazily on first push (refModeETag/refModeGeneration)
+	fetched    map[string]bool   // object SHAs confirmed present this session
+	capability Capability        // provider's declared conditional-write support
+	refMode    string            // resolved lazily on first push (refModeETag/refModeGeneration)
+	remoteRefs map[string]string // ref state from list, kept current by push for the site manifest
 }
 
-// RunHelper speaks the git remote-helper protocol on in/out for the given
-// s3:// remote URL until EOF or an empty command line.
-func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
+// clientForRemote builds the S3 client, key prefix, and provider capability
+// for a canonical s3 remote URL, honoring the env's dev/self-hosted overrides.
+func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capability, error) {
 	endpointHost, bucket, prefix, err := ParseS3URL(remoteURL)
 	if err != nil {
-		return err
-	}
-	if env.GitDir == "" {
-		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
+		return nil, "", CapabilityUnknown, err
 	}
 	// The URL's endpoint host is authoritative; the env endpoint override
 	// exists for dev/self-hosted servers (http scheme, path-style addressing).
@@ -124,6 +122,19 @@ func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) err
 		Bucket:    bucket,
 		PathStyle: env.PathStyle,
 	})
+	if err != nil {
+		return nil, "", CapabilityUnknown, err
+	}
+	return client, prefix, capability, nil
+}
+
+// RunHelper speaks the git remote-helper protocol on in/out for the given
+// s3:// remote URL until EOF or an empty command line.
+func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
+	if env.GitDir == "" {
+		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
+	}
+	client, prefix, capability, err := clientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -185,6 +196,7 @@ func (h *remoteHelper) list(w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	h.remoteRefs = refs
 	names := make([]string, 0, len(refs))
 	for name := range refs {
 		names = append(names, name)
@@ -357,6 +369,8 @@ func tagChildren(body []byte) []string {
 }
 
 // treeChildren parses the binary tree format: "<mode> <name>\0" + 20-byte SHA.
+// Gitlink entries (mode 160000, submodule commits) are skipped: they reference
+// objects that live in the submodule's repository, not this one.
 func treeChildren(body []byte, sha string) ([]string, error) {
 	var out []string
 	for len(body) > 0 {
@@ -364,7 +378,10 @@ func treeChildren(body []byte, sha string) ([]string, error) {
 		if nul < 0 || len(body) < nul+21 {
 			return nil, fmt.Errorf("tree %s: truncated entry", sha)
 		}
-		out = append(out, fmt.Sprintf("%x", body[nul+1:nul+21]))
+		mode, _, _ := strings.Cut(string(body[:nul]), " ")
+		if mode != "160000" {
+			out = append(out, fmt.Sprintf("%x", body[nul+1:nul+21]))
+		}
 		body = body[nul+21:]
 	}
 	return out, nil

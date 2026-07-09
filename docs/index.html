@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GitSocial - Cross-forge collaboration platform</title>
   <meta name="description"
-    content="GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on gitmsg/* branches with structured trailers, and any S3-compatible bucket can be a git remote.">
+    content="GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on gitmsg/* branches with structured trailers. Any S3-compatible bucket can be a git remote and can serve a browsable static site of the repo.">
   <meta name="keywords"
     content="git, go, social, cli, decentralized, tui, rpc, kanban, scrum, sbom, cross-forge, s3, object storage, serverless">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -67,12 +67,17 @@
       <h2 id="about">Cross-forge collaboration platform</h2>
       <p>GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on
         <code>gitmsg/*</code> branches with <a
-          href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md">structured trailers</a>,
-        and any S3-compatible bucket can be a git remote via the built-in <a
-          href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/ARCHITECTURE.md#s3-remote-backend"><code>s3://</code>
-          backend</a>.</p>
+          href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md">structured trailers</a>.
+      </p>
       <br />
-      <p>GitSocial fetches into timeline activity from repositories added to <a
+      <p>
+        Any S3-compatible bucket can be a git remote via the built-in <a
+          href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/S3.md"><code>s3://</code>
+          backend</a> and can serve a <a
+          href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/STATIC-SITE.md">complete static site</a>
+        of the repo straight from the bucket.</p>
+      <br />
+      <p>GitSocial builds your timeline from repositories added to <a
           href="https://github.com/gitsocial-org/gitsocial/blob/main/specs/GITMSG.md#2-lists">lists</a> or registered as
         <a href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/REVIEW.md#forks">forks</a>.</p>
 
@@ -104,7 +109,8 @@ gitsocial tui            # explore in the terminal</code></pre>
 
       <p>Works for S3-compatible buckets too:</p>
       <pre><code>gitsocial clone s3://s3.example.com/mybucket/myrepo
-gitsocial remote add s3://s3.example.com/mybucket/myrepo</code></pre>
+gitsocial remote add s3://s3.example.com/mybucket/myrepo
+gitsocial site push          # publish a browsable website from the bucket</code></pre>
 
       <h2 id="documentation">Documentation</h2>
       <h3>Concepts</h3>
@@ -132,9 +138,14 @@ gitsocial remote add s3://s3.example.com/mybucket/myrepo</code></pre>
             <td>Notification types, scopes, and triggers</td>
           </tr>
           <tr>
-            <td><a href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/ARCHITECTURE.md#s3-remote-backend">S3
+            <td><a href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/S3.md">S3
                 Remote</a></td>
             <td>Buckets as git remotes, canonical URLs, atomic ref updates</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/gitsocial-org/gitsocial/blob/main/documentation/STATIC-SITE.md">Static
+                Site</a></td>
+            <td>Zero-dependency repo website served from the bucket: timeline, issues, PRs, releases, code</td>
           </tr>
         </tbody>
       </table>

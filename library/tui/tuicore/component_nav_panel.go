@@ -288,6 +288,8 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocConfig("core")
 	case "config.forks":
 		return LocForks
+	case "config.site":
+		return LocSite
 	case "config.social":
 		return LocConfig("social")
 	case "config.pm":

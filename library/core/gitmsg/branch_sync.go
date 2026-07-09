@@ -22,12 +22,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
-// FetchAndMergeBranch fetches branch from origin into the local branch ref,
-// creating an empty-tree merge commit when local and remote have diverged.
-// Idempotent and safe to call on a fresh local branch (the remote tip is
-// adopted directly). Suitable for any gitmsg/* branch.
+// FetchAndMergeBranch fetches branch from the push remote (origin, or the
+// configured s3 remote) into the local branch ref, creating an empty-tree
+// merge commit when local and remote have diverged. Idempotent and safe to
+// call on a fresh local branch (the remote tip is adopted directly). Suitable
+// for any gitmsg/* branch.
 func FetchAndMergeBranch(repoPath, branch string) error {
-	if _, err := git.ExecGit(repoPath, []string{"fetch", "origin", branch}); err != nil {
+	if _, err := git.ExecGit(repoPath, []string{"fetch", git.PushRemote(repoPath), branch}); err != nil {
 		return err
 	}
 	remoteTip := fullHash(repoPath, "FETCH_HEAD")
@@ -61,11 +62,12 @@ func FetchAndMergeBranch(repoPath, branch string) error {
 	}
 }
 
-// PushBranchWithMerge pushes branch to origin. On a non-fast-forward rejection,
-// runs FetchAndMergeBranch and retries once. Any non-FF failure on the retry
-// surfaces as an error so the caller can report it.
+// PushBranchWithMerge pushes branch to the push remote. On a non-fast-forward
+// rejection, runs FetchAndMergeBranch and retries once. Any non-FF failure on
+// the retry surfaces as an error so the caller can report it.
 func PushBranchWithMerge(repoPath, branch string) error {
-	_, err := git.ExecGit(repoPath, []string{"push", "origin", branch})
+	remote := git.PushRemote(repoPath)
+	_, err := git.ExecGit(repoPath, []string{"push", remote, branch})
 	if err == nil {
 		return nil
 	}
@@ -75,7 +77,7 @@ func PushBranchWithMerge(repoPath, branch string) error {
 	if mergeErr := FetchAndMergeBranch(repoPath, branch); mergeErr != nil {
 		return mergeErr
 	}
-	_, err = git.ExecGit(repoPath, []string{"push", "origin", branch})
+	_, err = git.ExecGit(repoPath, []string{"push", remote, branch})
 	return err
 }
 

@@ -1,0 +1,43 @@
+{
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end.",
+  "messageCases": [
+    {
+      "name": "gpgsig-message-body",
+      "message": "Fix the widget layout\n\nThe grid collapsed on narrow screens; this pins the min-width.\n\nGitMsg: ext=\"pm\" v=\"1\" type=\"issue\" state=\"closed\"",
+      "expectSubject": "Fix the widget layout",
+      "expectHeader": "GitMsg: ext=\"pm\" v=\"1\" type=\"issue\" state=\"closed\""
+    },
+    {
+      "name": "crlf-line-endings",
+      "message": "Ship release v2.1\r\n\r\nHighlights:\r\n- faster search\r\n\r\nGitMsg: ext=\"release\" v=\"1\" type=\"release\" tag=\"v2.1\"",
+      "expectSubject": "Ship release v2.1",
+      "expectHeader": "GitMsg: ext=\"release\" v=\"1\" type=\"release\" tag=\"v2.1\""
+    },
+    {
+      "name": "body-starts-with-gitmsg-empty-subject",
+      "message": "GitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "no-header",
+      "message": "Plain commit with no trailer\n\nJust a body.",
+      "expectSubject": "Plain commit with no trailer",
+      "expectHeader": ""
+    }
+  ],
+  "rawObjectCases": [
+    {
+      "name": "gpgsig-raw-object",
+      "commitText": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nparent 1111111111111111111111111111111111111111\nauthor Ada <ada@example.com> 1700000000 +0000\ncommitter Ada <ada@example.com> 1700000000 +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n iQIzBAABCgAdFiEExampleKeyFingerprintForTestingPurposesOnly1234567890\n AAoJEExampleSignatureBytesThatSpanMultipleContinuationLinesWith\n BlankContinuationLinesInThePgpArmorBlockToExerciseTheHeaderSplit\n -----END PGP SIGNATURE-----\n\nSign the important thing\n\nBody after a signed header block.\n\nGitMsg: ext=\"review\" v=\"1\" type=\"pull-request\" state=\"open\"",
+      "expectSubject": "Sign the important thing",
+      "expectHeader": "GitMsg: ext=\"review\" v=\"1\" type=\"pull-request\" state=\"open\""
+    },
+    {
+      "name": "crlf-raw-object",
+      "commitText": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor Bob <bob@example.com> 1700000100 +0000\ncommitter Bob <bob@example.com> 1700000100 +0000\n\nWindows checkout\r\n\r\nEdited on a CRLF machine.\r\n\r\nGitMsg: ext=\"memo\" v=\"1\" type=\"memo\"",
+      "expectSubject": "Windows checkout",
+      "expectHeader": "GitMsg: ext=\"memo\" v=\"1\" type=\"memo\""
+    }
+  ]
+}
