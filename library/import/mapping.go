@@ -194,6 +194,15 @@ func RebuildMapping(workdir string, mapping *MappingFile) int {
 			if itemType == "" {
 				continue
 			}
+			// Milestones are keyed by title (their ExternalID), but the origin URL
+			// only carries the platform number. Recover the title from the commit
+			// subject so the rebuilt key matches the create-time key. Otherwise a
+			// cache/mapping wipe re-imports every milestone as a duplicate.
+			if itemType == "milestone" {
+				if subject, _ := protocol.SplitSubjectBody(msg.Content); subject != "" {
+					externalID = subject
+				}
+			}
 			if mapping.Source == "" && origin.Platform != "" {
 				mapping.Source = origin.Platform
 			}

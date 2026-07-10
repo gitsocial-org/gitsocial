@@ -1168,7 +1168,10 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 		if m.DueDate != nil {
 			dueStr = m.DueDate.Format("2006-01-02")
 		}
-		if curTitle == m.Title && curBody == m.Body && item.State == m.State && nullStr(item.Due) == dueStr {
+		// Compare against trimmed platform text: stored content has its outer
+		// whitespace stripped, so an untrimmed body would never match and every
+		// --update would re-emit an identical edit.
+		if curTitle == strings.TrimSpace(m.Title) && curBody == strings.TrimSpace(m.Body) && item.State == m.State && nullStr(item.Due) == dueStr {
 			if !m.UpdatedAt.IsZero() {
 				mapping.SetUpdatedAt(key, m.UpdatedAt)
 			}
@@ -1214,8 +1217,8 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 		if milestoneRef != "" {
 			_, platMsHash, _ = parseRefComponents(milestoneRef, repoURL, branch)
 		}
-		if curTitle == issue.Title &&
-			curBody == issue.Body &&
+		if curTitle == strings.TrimSpace(issue.Title) &&
+			curBody == strings.TrimSpace(issue.Body) &&
 			item.State == issue.State &&
 			sortedCSV(nullStr(item.Labels)) == sortedCSV(labelStr) &&
 			sortedCSV(nullStr(item.Assignees)) == sortedCSV(strings.Join(issue.Assignees, ",")) &&
@@ -1356,8 +1359,8 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		labels := MapLabels(pr.Labels, opts.LabelMode)
 		curTitle, curBody := protocol.SplitSubjectBody(item.Content)
 		if currentState == pr.State &&
-			curTitle == pr.Title &&
-			curBody == pr.Body &&
+			curTitle == strings.TrimSpace(pr.Title) &&
+			curBody == strings.TrimSpace(pr.Body) &&
 			sortedCSV(nullStr(item.Labels)) == sortedCSV(strings.Join(labels, ",")) &&
 			sortedCSV(nullStr(item.Reviewers)) == sortedCSV(strings.Join(pr.Reviewers, ",")) {
 			if !pr.UpdatedAt.IsZero() {
@@ -1500,8 +1503,8 @@ func updateRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats 
 		}
 		curName, curBody := protocol.SplitSubjectBody(item.Content)
 		platArtifacts := strings.Join(r.Artifacts, ",")
-		if curName == r.Name &&
-			curBody == r.Body &&
+		if curName == strings.TrimSpace(r.Name) &&
+			curBody == strings.TrimSpace(r.Body) &&
 			item.Prerelease == r.Prerelease &&
 			sortedCSV(nullStr(item.Artifacts)) == sortedCSV(platArtifacts) &&
 			nullStr(item.ArtifactURL) == r.ArtifactURL {
