@@ -685,6 +685,12 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		// Resolve merge-base/merge-head for merged PRs during prepare
 		var mBase, mHead string
 		if pr.State == "merged" && pr.MergeCommit != "" {
+			// A merged PR's diff anchors on the merge commit (merge-base = merge^1,
+			// merge-head = merge), which lives on the source repo's default branch.
+			// A normal clone already has it; a shallow/partial clone doesn't, so
+			// fetch just that one commit (merged PRs only — never fork heads) so the
+			// tips below resolve to real objects instead of a truncated SHA.
+			ensureCommitPresent(opts.WorkDir, opts.RepoURL, pr.MergeCommit)
 			if b, err := git.ReadRef(opts.WorkDir, pr.MergeCommit+"^1"); err == nil {
 				mBase = b
 			}
@@ -831,6 +837,24 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		}
 	}
 	return stats
+}
+
+// ensureCommitPresent fetches a single commit (and any missing ancestors) from
+// repoURL into workdir when it isn't already present, anchoring it under a local
+// ref so its objects survive gc. Used for merged-PR merge commits so their
+// merge-base/merge-head diff resolves on shallow or partial clones. Best-effort:
+// a failed fetch leaves the caller's truncated-SHA fallback in place.
+func ensureCommitPresent(workdir, repoURL, sha string) {
+	if workdir == "" || repoURL == "" || sha == "" {
+		return
+	}
+	if _, err := git.ReadRef(workdir, sha); err == nil {
+		return
+	}
+	if err := git.FetchRefspec(workdir, repoURL, sha); err != nil {
+		return
+	}
+	_ = git.WriteRef(workdir, "refs/gitsocial/import/merge/"+sha, sha)
 }
 
 // stackEdge represents a detected parent/child stack relationship between two PRs.
