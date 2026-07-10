@@ -17,6 +17,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -345,7 +346,8 @@ func corePush(s *Server) HandlerFunc {
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		result, err := gitmsg.Push(s.session.Workdir, false)
+		codeBranches, _ := review.CodeBranchesToPush(s.session.Workdir)
+		result, err := gitmsg.Push(s.session.Workdir, false, codeBranches)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}

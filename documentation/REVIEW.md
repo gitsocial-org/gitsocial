@@ -516,6 +516,8 @@ Four merge strategies available per-PR via `--strategy` flag. Teams pick per-PR 
       ●  pr merge <ref> --strategy merge   # force merge commit
 ```
 
+After a successful merge, the base branch is pushed to origin so the remote code agrees with the merged state published on `gitmsg/review`. A failed base push is reported as a warning (the merge itself already happened locally); push the base manually to recover.
+
 ### Messages
 
 **Merge edit (same for all strategies — the git operation differs, but the review record is the same):**

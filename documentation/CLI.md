@@ -168,11 +168,12 @@ Reports unread notification count after completion (e.g., "You have 3 new notifi
 
 ### gitsocial push
 
-Push local changes to remote.
+Push local changes to remote: `gitmsg/*` extension branches (auto-merged on divergence), `refs/gitmsg/*` state refs, and workspace code branches — the default branch when it's ahead of origin, plus heads of open PRs (plain push, never auto-merged or forced) — so others can fetch the code your published data points at. Other feature branches stay local until a PR references them.
 
 ```
 gitsocial push
-gitsocial push --dry-run
+gitsocial push --dry-run     # Preview what would be pushed
+gitsocial push --no-code     # Skip code branches (default branch + PR heads)
 ```
 
 ### gitsocial config

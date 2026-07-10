@@ -4,6 +4,7 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -154,7 +155,15 @@ func reviewUpdatePR(s *Server) HandlerFunc {
 
 func reviewMergePR(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
-		return fromResult(review.MergePR(workdir, ref, review.MergeStrategyFF))
+		res := review.MergePR(workdir, ref, review.MergeStrategyFF)
+		if res.Success {
+			// Publish the merged base so origin's code agrees with the merged
+			// state on gitmsg/review. Failure is a warning: the merge succeeded.
+			if err := review.PushMergedBase(workdir, res.Data); err != nil {
+				slog.Warn("merged locally, but pushing the base branch failed", "error", err)
+			}
+		}
+		return fromResult(res)
 	}, s)
 }
 

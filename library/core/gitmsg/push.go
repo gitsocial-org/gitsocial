@@ -4,18 +4,21 @@ package gitmsg
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 type PushResult struct {
-	Commits int `json:"commits"`
-	Refs    int `json:"refs"`
+	Commits     int `json:"commits"`
+	CodeCommits int `json:"codeCommits"`
+	Refs        int `json:"refs"`
 }
 
 type PushPreview struct {
 	Branches []BranchPushCount `json:"branches"`
+	Code     []BranchPushCount `json:"code,omitempty"`
 	Refs     int               `json:"refs"`
 }
 
@@ -35,13 +38,16 @@ func (p *PushPreview) TotalCommits() int {
 
 // IsEmpty reports whether the preview has nothing to push.
 func (p *PushPreview) IsEmpty() bool {
-	return p.Refs == 0 && p.TotalCommits() == 0
+	return p.Refs == 0 && p.TotalCommits() == 0 && len(p.Code) == 0
 }
 
 // GetPushPreview enumerates branches and refs that would be pushed without
 // touching the remote. Mirrors Push's validation/counting logic so the
-// breakdown matches what Push would actually do.
-func GetPushPreview(workdir string) (*PushPreview, error) {
+// breakdown matches what Push would actually do. codeBranches maps workspace
+// code branches referenced by published data (open PR heads) to their
+// unpushed-commit counts; callers resolve it (e.g. review.UnpushedHeadBranches)
+// because this package can't depend on extensions.
+func GetPushPreview(workdir string, codeBranches map[string]int) (*PushPreview, error) {
 	preview := &PushPreview{}
 
 	for _, branch := range GetExtBranches(workdir) {
@@ -74,19 +80,40 @@ func GetPushPreview(workdir string) (*PushPreview, error) {
 		}
 	}
 
+	names := make([]string, 0, len(codeBranches))
+	for b := range codeBranches {
+		names = append(names, b)
+	}
+	sort.Strings(names)
+	for _, b := range names {
+		preview.Code = append(preview.Code, BranchPushCount{Branch: b, Commits: codeBranches[b]})
+	}
+
 	return preview, nil
 }
 
-// Push pushes all extension branches and gitmsg refs to remote. Extension
-// branches go through PushBranchWithMerge so divergent histories auto-resolve
-// (empty-tree append-only branches → conflict-free merge) instead of failing
-// non-fast-forward and dropping the user into raw git.
-func Push(workdir string, dryRun bool) (*PushResult, error) {
-	preview, err := GetPushPreview(workdir)
+// Push pushes all extension branches, gitmsg refs, and the given code branches
+// to remote. Extension branches go through PushBranchWithMerge so divergent
+// histories auto-resolve (empty-tree append-only branches → conflict-free
+// merge) instead of failing non-fast-forward and dropping the user into raw
+// git. Code branches (open PR heads, resolved by the caller) are pushed first
+// — plain push, no auto-merge — so the gitmsg/review push only publishes PRs
+// whose head is reachable on origin.
+func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult, error) {
+	preview, err := GetPushPreview(workdir, codeBranches)
 	if err != nil {
 		return nil, err
 	}
 	result := &PushResult{Refs: preview.Refs}
+
+	for _, bp := range preview.Code {
+		result.CodeCommits += bp.Commits
+		if !dryRun {
+			if _, err := git.ExecGit(workdir, []string{"push", "origin", bp.Branch}); err != nil {
+				return nil, wrapCodePushError(bp.Branch, err)
+			}
+		}
+	}
 
 	for _, bp := range preview.Branches {
 		result.Commits += bp.Commits
@@ -127,6 +154,16 @@ func mirrorGitMsgRefsToTracking(workdir string) {
 			continue
 		}
 	}
+}
+
+// wrapCodePushError contextualizes a failed code-branch push. Non-FF here
+// usually means the PR head was rebased; code branches must never auto-merge,
+// so point the user at an explicit force-with-lease instead.
+func wrapCodePushError(branch string, err error) error {
+	if isNonFastForward(err) {
+		return fmt.Errorf("push %s: remote has diverged (rebased head?) — review and push manually with `git push --force-with-lease origin %s`: %w", branch, branch, err)
+	}
+	return fmt.Errorf("push %s: %w", branch, err)
 }
 
 // wrapStateRefPushError contextualizes a non-fast-forward rejection on the

@@ -434,10 +434,12 @@ type PRCreatedMsg struct {
 	Err error
 }
 
-// PRUpdatedMsg is sent when a pull request is updated.
+// PRUpdatedMsg is sent when a pull request is updated. Warn carries a
+// non-fatal follow-up problem (e.g. merged locally but the base push failed).
 type PRUpdatedMsg struct {
-	PR  review.PullRequest
-	Err error
+	PR   review.PullRequest
+	Warn string
+	Err  error
 }
 
 // PRRetractedMsg is sent when a pull request is retracted.
@@ -530,11 +532,19 @@ func handlePRUpdated(msg PRUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	case review.PRStateClosed:
 		verb = "Closed"
 	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(
-		fmt.Sprintf("%s: %s", verb, msg.PR.Subject),
-		tuicore.MessageTypeSuccess,
-		5*time.Second,
-	)
+	var msgCmd tea.Cmd
+	if msg.Warn != "" {
+		warnMsg := fmt.Sprintf("%s: %s (%s)", verb, msg.PR.Subject, msg.Warn)
+		msgCmd = ctx.Host().SetMessageWithTimeout(warnMsg, tuicore.MessageTypeWarning, 8*time.Second)
+		ctx.Host().State().AddLogEntry(tuicore.LogSeverityWarn, warnMsg, "review")
+		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
+	} else {
+		msgCmd = ctx.Host().SetMessageWithTimeout(
+			fmt.Sprintf("%s: %s", verb, msg.PR.Subject),
+			tuicore.MessageTypeSuccess,
+			5*time.Second,
+		)
+	}
 	return true, tea.Batch(msgCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{
 			Location: tuicore.LocReviewPRDetail(msg.PR.ID),

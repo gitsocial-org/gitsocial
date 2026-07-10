@@ -835,6 +835,11 @@ func (v *PRDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
 		if !result.Success {
 			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
+		// Publish the merged base so origin's code agrees with the merged
+		// state on gitmsg/review. Failure is a warning: the merge succeeded.
+		if err := review.PushMergedBase(workdir, result.Data); err != nil {
+			return PRUpdatedMsg{PR: result.Data, Warn: fmt.Sprintf("base push failed, push it manually: %s", err)}
+		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
 }

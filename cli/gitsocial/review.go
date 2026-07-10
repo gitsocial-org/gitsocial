@@ -539,10 +539,17 @@ func newReviewPRMergeCmd() *cobra.Command {
 				os.Exit(ExitError)
 			}
 
+			// Publish the merged base so origin's code agrees with the merged
+			// state on gitmsg/review. Failure is a warning: the merge succeeded.
+			pushErr := review.PushMergedBase(cfg.WorkDir, result.Data)
+
 			if cfg.JSONOutput {
 				PrintJSON(result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request merged")
+			}
+			if pushErr != nil {
+				PrintError(cmd, fmt.Sprintf("merged locally, but pushing the base branch failed (push it manually): %s", pushErr))
 			}
 		},
 	}
