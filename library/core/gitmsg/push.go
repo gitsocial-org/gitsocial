@@ -14,6 +14,7 @@ type PushResult struct {
 	Commits     int `json:"commits"`
 	CodeCommits int `json:"codeCommits"`
 	Refs        int `json:"refs"`
+	Tags        int `json:"tags"`
 }
 
 type PushPreview struct {
@@ -118,6 +119,12 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 		}
 	}
 
+	tags, err := pushTags(workdir, remote, dryRun)
+	if err != nil {
+		return nil, err
+	}
+	result.Tags = tags
+
 	for _, bp := range preview.Branches {
 		result.Commits += bp.Commits
 		if !dryRun {
@@ -140,6 +147,35 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 	}
 
 	return result, nil
+}
+
+// pushTags pushes all local tags to the remote and returns how many were
+// accepted as new or moved. Runs with --porcelain so the count parses stably:
+// one ref per line, "=" marking up-to-date tags (not counted); a rejected tag
+// surfaces as a git error. --dry-run contacts the remote but updates nothing.
+// A workspace without the remote configured is a no-op, like code branches.
+func pushTags(workdir, remote string, dryRun bool) (int, error) {
+	if _, err := git.ExecGit(workdir, []string{"remote", "get-url", remote}); err != nil {
+		return 0, nil
+	}
+	args := []string{"push", remote, "--tags", "--porcelain"}
+	if dryRun {
+		args = append(args, "--dry-run")
+	}
+	out, err := git.ExecGit(workdir, args)
+	if err != nil {
+		return 0, fmt.Errorf("push tags: %w", err)
+	}
+	count := 0
+	for _, line := range strings.Split(out.Stdout, "\n") {
+		if strings.HasPrefix(line, "=") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		if strings.Contains(line, "refs/tags/") {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's remote-tracking

@@ -26,6 +26,7 @@ Pushes to origin, or to the configured s3 remote when one exists.
 This pushes:
   - Branch commits (posts, comments, reposts, quotes)
   - GitMsg refs (lists, configs)
+  - Tags (all local tags)
   - Code branches: the default branch when it's ahead of the remote, and heads
     of open pull requests, so others can fetch the code your published data
     points at (--no-code skips)
@@ -66,7 +67,7 @@ Examples:
 				return
 			}
 
-			if result.Commits == 0 && result.CodeCommits == 0 && result.Refs == 0 {
+			if result.Commits == 0 && result.CodeCommits == 0 && result.Refs == 0 && result.Tags == 0 {
 				fmt.Println("Nothing to push")
 				return
 			}
@@ -84,6 +85,9 @@ Examples:
 			}
 			if result.Refs > 0 {
 				fmt.Printf("  Refs: %d\n", result.Refs)
+			}
+			if result.Tags > 0 {
+				fmt.Printf("  Tags: %d\n", result.Tags)
 			}
 			if !dryRun {
 				fmt.Println("Done.")
