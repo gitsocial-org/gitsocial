@@ -214,6 +214,25 @@ const body = (kids) => ({ nodeType: 1, tagName: "BODY", attributes: [], childNod
   // relative img → data-gs-src deferred marker
   out = GS.sanitizeInert(body([iel("img", [{ name: "src", value: "documentation/images/x.png" }], [])]), { ctx: {}, branch: "main", dir: "" });
   ok("relative img → data-gs-src marker", attrOf(out[0], "data-gs-src") === "documentation/images/x.png" && attrOf(out[0], "data-gs-branch") === "main" && attrOf(out[0], "src") === null, JSON.stringify(out[0].attributes));
+  // relative href → in-site file route (fragment rides as heading anchor, dir honored)
+  out = GS.sanitizeInert(body([iel("a", [{ name: "href", value: "specs/GITMSG.md#2-lists" }], [itext("x")])]), { ctx: {}, branch: "main", dir: "" });
+  ok("relative href → file route with anchor", attrOf(out[0], "href") === "#file:specs/GITMSG.md@main:2-lists", JSON.stringify(out[0].attributes));
+  out = GS.sanitizeInert(body([iel("a", [{ name: "href", value: "specs/GITMSG.md" }], [itext("x")])]), { ctx: {}, branch: "main", dir: "" });
+  ok("relative href without fragment → plain file route", attrOf(out[0], "href") === "#file:specs/GITMSG.md@main");
+  out = GS.sanitizeInert(body([iel("a", [{ name: "href", value: "../specs/GITMSG.md" }], [itext("x")])]), { ctx: {}, branch: "main", dir: "documentation" });
+  ok("relative href honors dir + ..", attrOf(out[0], "href") === "#file:specs/GITMSG.md@main");
+  // relative href without a branch base stays dropped (commit bodies)
+  out = GS.sanitizeInert(body([iel("a", [{ name: "href", value: "specs/GITMSG.md" }], [itext("x")])]), {});
+  ok("relative href dropped without branch base", attrOf(out[0], "href") === null);
+  // markdown-native relative link resolves too (renderInline path)
+  const mdRoot = GS.renderMarkdown("[trailers](specs/GITMSG.md)", { ctx: {}, branch: "main", dir: "" });
+  const mdA = findTag(mdRoot, "a")[0];
+  ok("markdown relative link → file route", mdA && mdA.getAttribute("href") === "#file:specs/GITMSG.md@main");
+  // heading slug ids (md- prefixed, dedup'd) + in-page anchor hrefs preserved
+  const tocRoot = GS.renderMarkdown("# Quick Start\n\n## Quick Start\n\n[qs](#quick-start)\n", { ctx: {}, branch: "main", dir: "" });
+  const tocH = [...findTag(tocRoot, "h1"), ...findTag(tocRoot, "h2")];
+  ok("heading slug ids dedup", tocH[0].getAttribute("id") === "md-quick-start" && tocH[1].getAttribute("id") === "md-quick-start-1", JSON.stringify(tocH.map((h) => h.attributes)));
+  ok("in-page anchor href preserved", findTag(tocRoot, "a").some((a) => a.getAttribute("href") === "#quick-start"));
   // unknown tag unwrapped to children
   out = GS.sanitizeInert(body([iel("marquee", [], [itext("keep"), iel("b", [], [itext("bold")])])]), {});
   ok("unknown tag unwrapped to children", !out.some((n) => n.tagName === "MARQUEE") && out.some((n) => n.tagName === "B") && out.map(textOf).join("").includes("keep"), JSON.stringify(out.map((n) => n.tagName || n.nodeValue)));

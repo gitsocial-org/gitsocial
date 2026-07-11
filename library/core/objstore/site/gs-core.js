@@ -965,6 +965,21 @@
       if (!obj || obj.type !== "commit") continue;
       const c = parseCommit(h, obj.body);
       state.commits.push(c);
+      // Branch attribution for the code-timeline walk: a tip is reached via its
+      // own branch; every parent inherits the branch it was first reached from,
+      // except the default branch always wins (a commit on main shows "main",
+      // not a feature branch that happens to be walked first). Inert for the
+      // graph walk (no tipBranch/reachedVia on its state).
+      if (state.reachedVia) {
+        const tb = state.tipBranch && state.tipBranch[h];
+        // A commit that IS a branch tip is attributed to that branch (the default
+        // branch wins over an already-assigned feature attribution); otherwise it
+        // keeps the branch it was first reached from.
+        const via = (tb === state.defaultBranch ? tb : (state.reachedVia[h] || tb)) || "";
+        if (via) state.reachedVia[h] = via;
+        const isDefault = via && via === state.defaultBranch;
+        for (const p of c.parents) if (!(p in state.reachedVia) || isDefault) state.reachedVia[p] = via;
+      }
       for (const p of c.parents) if (!state.visited.has(p)) state.frontier.push(p);
     }
     return state;
@@ -1796,6 +1811,9 @@
       if (rest && head in LEGACY_BRANCH) return legacyCommit(rest, LEGACY_BRANCH[head]);
       return { type: "notfound" };
     }
+    // A plain fragment (#quick-start) is an in-page anchor into the home
+    // README: route home and scroll to its md- slugged heading after render.
+    if (/^[A-Za-z0-9][\w.-]*$/.test(frag)) return { type: "home", anchor: frag };
     const colon = frag.indexOf(":");
     if (colon <= 0) return { type: "notfound" };
     const reftype = frag.slice(0, colon);
@@ -1824,14 +1842,20 @@
       const at = value.indexOf("@");
       const path = at < 0 ? value : value.slice(0, at);
       let branch = at < 0 ? "" : value.slice(at + 1);
-      let line = null, lineEnd = null;
+      // Branch names cannot contain ":", so anything after it is a suffix:
+      // ":L<n>[-<m>]" is a line anchor, any other slug shape a heading anchor.
+      let line = null, lineEnd = null, anchor = "";
       const lc = branch.indexOf(":");
       if (lc >= 0) {
-        const lm = /^L(\d+)(?:-(\d+))?$/.exec(branch.slice(lc + 1));
+        const suffix = branch.slice(lc + 1);
+        const lm = /^L(\d+)(?:-(\d+))?$/.exec(suffix);
         if (lm) { line = parseInt(lm[1], 10); if (lm[2]) lineEnd = parseInt(lm[2], 10); }
+        else if (/^[A-Za-z0-9][\w.-]*$/.test(suffix)) anchor = suffix;
         branch = branch.slice(0, lc);
       }
-      return { type: "file", path, branch, line, lineEnd };
+      const route = { type: "file", path, branch, line, lineEnd };
+      if (anchor) route.anchor = anchor;
+      return route;
     }
     return { type: "notfound" };
   }
@@ -1970,6 +1994,8 @@
         out.push(it);
       }
     }
+    const code = await resolveCodeItems(ctx, WALK_CAP);
+    for (const it of code.items) { it._ext = "code"; out.push(it); }
     out.sort((a, b) => b.effectiveTime - a.effectiveTime);
     return out;
   }
@@ -2002,6 +2028,67 @@
     });
   }
 
+  // codeCommitItem wraps one plain default-branch commit as a timeline item in
+  // the same shape resolveItems produces (commit / header / content /
+  // effectiveTime / versions), so the merge, sort, and card dispatch treat it
+  // uniformly. A code commit carries no GitMsg header (header is {}), so
+  // timelineTyped's type filter, loadInteractionCounts, and edit resolution all
+  // no-op for it. Its effectiveTime is the git author time (no origin-time).
+  function codeCommitItem(commit, branch) {
+    return {
+      commit, header: {}, content: commit.content, rawMessage: commit.rawMessage,
+      edited: false, editorName: "", author: effectiveAuthor(commit, null),
+      effectiveTime: commit.authorTime || 0, versions: [], _code: true, _branch: branch || "",
+    };
+  }
+
+  // codeWalkState returns the single resumable walk over EVERY pushed code branch
+  // (refs/heads/* except the gitmsg/* data branches), seeded at all their tips at
+  // once. Matching the TUI's all-branch timeline, this interleaves plain commits
+  // from the default branch and every feature branch in one newest-first stream,
+  // deduped by hash (a commit reachable from several branches appears once). Null
+  // when the repo has no code branches (a data-only bucket). The walk records the
+  // branch every tip belongs to (state.tipBranch) so a commit's card links under
+  // the branch whose walk reached it first (graphWalkStep records reachedVia).
+  async function codeWalkState(ctx) {
+    const key = "codeTimeline";
+    let w = ctx.walks[key];
+    if (w) return w;
+    const { branches, defaultBranch } = await listBranches(ctx);
+    const code = branches.filter((b) => !b.name.startsWith("gitmsg/"));
+    const seeds = [];
+    const tipBranch = {};
+    for (const b of code) {
+      const sha = await refTip(ctx, b.ref);
+      if (!sha) continue;
+      if (!(sha in tipBranch)) tipBranch[sha] = b.name;
+      seeds.push(sha);
+    }
+    if (!seeds.length) return null;
+    w = ctx.walks[key] = { state: { visited: new Set(), frontier: seeds.slice(), commits: [], tipBranch, reachedVia: {}, defaultBranch } };
+    return w;
+  }
+
+  // resolveCodeItems returns plain commits across all code branches as timeline
+  // items (newest-first, UN-hydrated — the loose walk already carries bodies),
+  // advancing the shared graph-style walk just far enough to surface at least
+  // `need` items or exhaust every branch, in step with the timeline window.
+  // Commits carrying a GitMsg header are skipped (they belong to an ext branch
+  // merged into a line; the ext spec owns them), so a merge of a data branch
+  // never double-lists. Each item is attributed to the branch whose walk first
+  // reached it (reachedVia), so its hash links under a real branch route. `more`
+  // reports unwalked history remains.
+  async function resolveCodeItems(ctx, need) {
+    const w = await codeWalkState(ctx);
+    if (!w) return { items: [], more: false };
+    return withWalkLock(w, async () => {
+      if (w.state.commits.length === 0) await graphWalkStep(ctx, w.state, WALK_CAP);
+      while (w.state.frontier.length && w.state.commits.length < need) await graphWalkStep(ctx, w.state, WALK_CAP);
+      const items = w.state.commits.filter((c) => !c.gitmsg).map((c) => codeCommitItem(c, w.state.reachedVia[c.hash] || w.state.tipBranch[c.hash] || ""));
+      return { items, more: w.state.frontier.length > 0 };
+    });
+  }
+
   // loadTimelineWindow is the bounded, autoscroll-paged merged timeline. It grows
   // a `shown` cursor by TIMELINE_WINDOW per extend, merges every data branch's
   // resolved metadata (newest-first, NO body fetches) by effective time, takes the
@@ -2026,6 +2113,13 @@
         merged.push(it);
       }
     }
+    // Plain code commits from every pushed code branch, interleaved so the feed
+    // matches the CLI/TUI all-branch timeline (which lists code commits alongside
+    // posts/issues/PRs/releases). One merged, deduped walk across branch tips,
+    // advanced in step with the window — not walked to the root up front.
+    const code = await resolveCodeItems(ctx, need);
+    if (code.more) more = true;
+    for (const it of code.items) { it._ext = "code"; merged.push(it); }
     merged.sort((a, b) => b.effectiveTime - a.effectiveTime);
     const windowItems = merged.slice(0, need);
     await hydrateItems(ctx, windowItems);
@@ -3413,7 +3507,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, resolveCodeItems, readRefMode, newContext,
     loadManifest, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,

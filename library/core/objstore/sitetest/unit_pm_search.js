@@ -130,6 +130,11 @@ eq(GS.parseRoute("#/search/author:alice"), { type: "search", q: "author:alice" }
 eq(GS.parseRoute("#/search/" + encodeURIComponent("state:open dark")), { type: "search", q: "state:open dark" }, "#/search decodes an encoded query");
 eq(GS.parseRoute("#/tags"), { type: "tags" }, "#/tags route");
 eq(GS.parseRoute("#tag:v1.0"), { type: "tag", name: "v1.0" }, "#tag:<name> route");
+eq(GS.parseRoute("#quick-start"), { type: "home", anchor: "quick-start" }, "plain fragment routes home with anchor");
+eq(GS.parseRoute("#file:documentation/REVIEW.md@main:forks"), { type: "file", path: "documentation/REVIEW.md", branch: "main", line: null, lineEnd: null, anchor: "forks" }, "file route carries a heading anchor");
+eq(GS.parseRoute("#file:a/b.md@main:L12-20"), { type: "file", path: "a/b.md", branch: "main", line: 12, lineEnd: 20 }, "file line suffix still parses as lines, not anchor");
+eq(GS.parseRoute("#2-lists"), { type: "home", anchor: "2-lists" }, "digit-leading fragment routes home with anchor");
+eq(GS.parseRoute("#bad^frag"), { type: "notfound" }, "non-anchor junk fragment stays notfound");
 
 console.log("=== B1 board config resolution ===");
 const bcfg = GS.buildBoard(issues, { name: "Minimal", columns: [{ name: "Open", filter: "state:open" }, { name: "Closed", filter: "state:closed" }] });

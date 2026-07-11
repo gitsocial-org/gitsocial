@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, graphView, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, graphView, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -17,6 +17,14 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // to hydrate its first window, so this is generous — it only trips on a genuine
   // stall, never a slow-but-progressing load).
   const WATCHDOG_MS = 30000;
+
+  // scrollToAnchor scrolls to a rendered markdown heading (md- slugged id),
+  // retrying briefly because markdown panes can fill in after the view mounts.
+  function scrollToAnchor(slug, tries) {
+    const t = document.getElementById("md-" + mdSlug(slug));
+    if (t && t.scrollIntoView) { t.scrollIntoView(); return; }
+    if (tries > 0 && typeof setTimeout === "function") setTimeout(() => scrollToAnchor(slug, tries - 1), 200);
+  }
 
   async function route(ctx) {
     const r = parseRoute(location.hash);
@@ -105,6 +113,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch) : await commitDetail(ctx, r.hash));
       } else if (r.type === "home") {
         setView(await homeView(ctx));
+        if (r.anchor) scrollToAnchor(r.anchor, 10);
       } else if (r.type === "analytics") {
         setView(await analyticsView(ctx));
       } else if (r.type === "board") {
@@ -133,6 +142,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         setView(await codeView(ctx));
       } else if (r.type === "file") {
         setView(await treeOrBlob(ctx, r.path, r.branch, r.line, r.lineEnd));
+        if (r.anchor) scrollToAnchor(r.anchor, 10);
       } else if (r.type === "reserved") {
         setView(comingSoon(r));
       } else {

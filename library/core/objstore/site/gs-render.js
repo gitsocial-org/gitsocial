@@ -637,10 +637,34 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // source extension, so each entry keeps its native shape (issue / PR / release
   // / post) while interleaving by effective time.
   function timelineCard(item, counts) {
+    if (item._ext === "code") return commitTimelineCard(item);
     if (item._ext === "pm") return issueCard(item, 0, counts);
     if (item._ext === "review") return prCard(item, counts);
     if (item._ext === "release") return releaseCard(item);
     return socialCard(item, counts);
+  }
+
+  // commitTimelineCard renders a plain code commit in the merged timeline: a
+  // "commit" glyph, the subject, and the author/time/hash meta linking to the
+  // commit detail under the branch it was reached via. It carries no GitMsg
+  // header, so no state/enrichment chips and no interaction counts — reusing the
+  // branch-log commit-card shape (subject + meta) for visual parity.
+  function commitTimelineCard(item) {
+    const c = item.commit;
+    const branch = item._branch || "";
+    const card = el("div", { class: "card" }, []);
+    const head = el("div", { class: "card-head" }, [
+      el("a", { class: "subject", href: commitRef(c.hash, branch) }, [subjectBody(c.content)[0] || "(no message)"]),
+    ]);
+    head.prepend(el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]));
+    card.append(head);
+    const meta = el("span", { class: "meta" }, [
+      commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ",
+      el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]),
+    ]);
+    if (branch) meta.append(el("span", { class: "chip" }, [branch]));
+    card.append(meta);
+    return cardNav(card, c.hash, branch);
   }
 
   // versionLabel names a version by its position in the canonical-first list:
@@ -899,8 +923,25 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const SANITIZE_ATTRS = new Set(["align", "alt", "title", "width", "height", "src", "href", "open"]);
 
   // hrefOk keeps the today's-gate href set (absolute web/mailto, in-page and
-  // root-relative); bare-relative hrefs are dropped, matching the existing gate.
+  // root-relative); bare-relative hrefs go through relativeHref instead.
   function hrefOk(v) { return /^(https?:|mailto:|#|\/)/i.test(v || ""); }
+
+  // relativeHref resolves a bare-relative markdown/HTML href (e.g. a README's
+  // specs/GITMSG.md#2-lists link) to the in-site file route, against the same
+  // { branch, dir } base the relative-image resolver uses. Schemes,
+  // protocol-relative, in-page, and root-relative hrefs are not its job
+  // (hrefOk gates those). A fragment rides along as a heading-anchor suffix
+  // (:slug); queries are dropped. Returns "" when not resolvable.
+  function relativeHref(raw, mdctx) {
+    if (!raw || !mdctx || !mdctx.branch) return "";
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) || raw.startsWith("//") || raw.startsWith("#") || raw.startsWith("/")) return "";
+    const hashAt = raw.indexOf("#");
+    const frag = hashAt >= 0 ? raw.slice(hashAt + 1) : "";
+    const path = (hashAt >= 0 ? raw.slice(0, hashAt) : raw).split("?")[0];
+    if (!path) return "";
+    const slug = frag ? mdSlug(frag) : "";
+    return fileRef(joinPath(mdctx.dir || "", path), mdctx.branch) + (slug ? ":" + slug : "");
+  }
 
   // applyImgSrc gates an image source: an absolute https src is kept verbatim
   // (GitHub parity for badges); a bucket-relative path becomes a data-gs-src
@@ -939,7 +980,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const name = (a.name || "").toLowerCase();
         if (!SANITIZE_ATTRS.has(name)) continue;
         const value = a.value == null ? "" : String(a.value);
-        if (name === "href") { if (hrefOk(value)) clean.setAttribute("href", value); continue; }
+        if (name === "href") {
+          const href = hrefOk(value) ? value : relativeHref(value, mdctx);
+          if (href) clean.setAttribute("href", href);
+          continue;
+        }
         if (name === "src") { rawSrc = value; continue; }
         if (name === "alt") { alt = value; continue; }
         clean.setAttribute(name, value);
@@ -1034,7 +1079,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       else if (s.type === "rawhtml") for (const n of sanitizeHtml(s.value, mdctx)) out.push(n);
       else if (s.type === "link") {
         const a = el("a", {}, renderInline(s.spans, mdctx));
-        if (hrefOk(s.href)) a.setAttribute("href", s.href);
+        const href = hrefOk(s.href) ? s.href : relativeHref(s.href, mdctx);
+        if (href) a.setAttribute("href", href);
         out.push(a);
       } else if (mdctx && mdctx.hardBreaks && s.value.indexOf("\n") >= 0) {
         // GitHub comment semantics: a single newline is a hard <br>, so a plain
@@ -1079,9 +1125,31 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return table;
   }
 
+  // mdSlug builds a GitHub-style anchor slug from heading text.
+  function mdSlug(s) { return (s || "").toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-"); }
+
+  // spanText flattens inline spans to their plain text (for heading slugs).
+  function spanText(spans) {
+    let t = "";
+    for (const s of spans || []) t += s.value != null ? s.value : spanText(s.spans);
+    return t;
+  }
+
   // renderMdBlock renders one markdown-native block into a parent element.
   function renderMdBlock(block, parent, mdctx) {
-    if (block.type === "heading") parent.append(el("h" + block.level, {}, renderInline(block.spans, mdctx)));
+    if (block.type === "heading") {
+      const h = el("h" + block.level, {}, renderInline(block.spans, mdctx));
+      // Headings get md- prefixed slug ids (dedup'd per document) so in-page
+      // anchors have a scroll target; the prefix keeps them clear of app ids.
+      const slug = mdSlug(spanText(block.spans));
+      if (slug && mdctx.slugs) {
+        let id = slug, n = 1;
+        while (mdctx.slugs.has(id)) id = slug + "-" + n++;
+        mdctx.slugs.add(id);
+        h.setAttribute("id", "md-" + id);
+      }
+      parent.append(h);
+    }
     else if (block.type === "thematic") parent.append(el("hr", {}, []));
     else if (block.type === "code") {
       const codeEl = highlightTo(el("code", {}, []), block.text, langForFence(block.lang));
@@ -1123,10 +1191,38 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // carries { ctx, branch, dir } so relative images resolve to in-bucket blobs.
   function renderMarkdown(text, mdctx) {
     mdctx = mdctx || {};
+    if (!mdctx.slugs) mdctx.slugs = new Set();
     const root = el("div", { class: "markdown" }, []);
     renderBlocksInto(root, parseMarkdown(text), mdctx);
     if (mdctx.ctx) resolveImages(root, mdctx.ctx);
+    wireInPageAnchors(root);
     return root;
+  }
+
+  // wireInPageAnchors makes plain #fragment links (a document's own TOC) scroll
+  // to their md- slugged heading on click instead of re-routing. The URL is
+  // updated via pushState (no hashchange, no re-render) so the anchor is
+  // shareable: on a file route it becomes the file's heading-anchor form
+  // (#file:path@branch:slug), on home the plain #fragment; a direct load of
+  // either routes back to the document + scrolls (parseRoute).
+  function wireInPageAnchors(root) {
+    if (!root.querySelectorAll) return;
+    for (const a of Array.from(root.querySelectorAll('a[href^="#"]'))) {
+      const frag = (a.getAttribute("href") || "").slice(1);
+      if (!/^[A-Za-z0-9][\w.-]*$/.test(frag)) continue;
+      if (typeof a.addEventListener !== "function") continue;
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const slug = mdSlug(frag);
+        if (typeof history !== "undefined" && history.pushState && typeof location !== "undefined") {
+          const cur = parseRoute(location.hash);
+          const target = cur.type === "file" ? fileRef(cur.path, cur.branch) + ":" + slug : "#" + frag;
+          history.pushState(null, "", target);
+        }
+        const t = document.getElementById("md-" + slug);
+        if (t && t.scrollIntoView) t.scrollIntoView();
+      });
+    }
   }
 
   // renderCommitBody renders a commit message body (everything after the subject
@@ -3963,6 +4059,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

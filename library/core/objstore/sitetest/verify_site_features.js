@@ -248,6 +248,50 @@ async function main() {
   ok("board card wraps glyph + subject in one title line", !!titleLine, "titleLine=" + !!titleLine);
   ok("the glyph and subject live inside that single title line", titleLine && findClass(titleLine, "type-glyph").length === 1 && findClass(titleLine, "subject").length === 1);
 
+  // ---- merged timeline includes plain code commits (CLI/TUI parity) ----
+  // thread-demo's code branches (main + feature/notes-expand) carry plain
+  // commits with no GitMsg header; they must interleave with posts/issues/PRs
+  // in the merged timeline, attributed to the right branch, deduped.
+  const tctx = GS.newContext(BASE);
+  const tl = await GS.loadTimelineItems(tctx);
+  const code = tl.filter((i) => i._ext === "code");
+  ok("timeline includes plain code commits", code.length > 0, "count=" + code.length);
+  ok("code commits carry no GitMsg header", code.every((i) => !i.commit.gitmsg && Object.keys(i.header).length === 0));
+  // Interleaved (not all grouped at the end): a code commit sits before some
+  // non-code item, and the whole feed stays newest-first by effectiveTime.
+  const firstCodeIdx = tl.findIndex((i) => i._ext === "code");
+  const lastNonCodeIdx = tl.map((i) => i._ext).lastIndexOf("social") >= 0 ? tl.map((i) => i._ext).lastIndexOf("social") : tl.length - 1;
+  ok("code commits interleave with ext items (not appended at the end)", firstCodeIdx >= 0 && firstCodeIdx < lastNonCodeIdx, "firstCode=" + firstCodeIdx + " lastSocial=" + lastNonCodeIdx);
+  let tsorted = true; for (let i = 1; i < tl.length; i++) if (tl[i].effectiveTime > tl[i - 1].effectiveTime) { tsorted = false; break; }
+  ok("timeline with code commits stays newest-first by effectiveTime", tsorted);
+  // Dedup: a commit reachable from two branches appears once.
+  const seen = {}; let dup = 0; for (const i of code) { if (seen[i.commit.hash]) dup++; seen[i.commit.hash] = 1; }
+  ok("code commits are deduped across branches", dup === 0, "dups=" + dup);
+  // Branch attribution: every code commit names a real code branch, and shared
+  // ancestors attribute to the default branch (main), not a feature branch.
+  const codeBranches = new Set(code.map((i) => i._branch));
+  ok("code commits attribute to real branches (main present)", codeBranches.has("main"), "branches=" + Array.from(codeBranches).join(","));
+  const readme = code.find((i) => /Initial commit: README/.test(i.content));
+  ok("a shared ancestor attributes to the default branch (main)", readme && readme._branch === "main", "branch=" + (readme && readme._branch));
+  const featOnly = code.find((i) => /Expand and edit notes/.test(i.content));
+  ok("a feature-only commit attributes to its feature branch", featOnly && featOnly._branch === "feature/notes-expand", "branch=" + (featOnly && featOnly._branch));
+
+  // ---- code-commit timeline card renders subject/author/hash to commit route ----
+  const cc = GS.timelineCard(code[0], null);
+  ok("code timeline card renders the commit subject", findClass(cc, "subject").length > 0 && textOf(findClass(cc, "subject")[0]).length > 0, textOf(findClass(cc, "subject")[0] || { _children: [] }));
+  ok("code timeline card carries a commit glyph", findClass(cc, "type-glyph").some((g) => g._cls.has("tg-commit")));
+  ok("code timeline card links its hash to #commit:", findClass(cc, "hash").some((h) => (h.getAttribute("href") || "").indexOf("#commit:") === 0), findClass(cc, "hash").map((h) => h.getAttribute("href")).join(" | "));
+  ok("code timeline card has no state/enrichment chip row (no header)", findClass(cc, "card-chips").length === 0);
+
+  // ---- windowed timeline pages code commits in step (bounded, deduped) ----
+  const wctx = GS.newContext(BASE);
+  const w1 = await GS.loadTimelineWindow(wctx, false);
+  const w2 = await GS.loadTimelineWindow(wctx, true);
+  ok("windowed timeline surfaces code commits", w1.items.some((i) => i._ext === "code"));
+  const wseen = {}; let wdup = 0; for (const i of w2.items) { if (wseen[i.commit.hash]) wdup++; wseen[i.commit.hash] = 1; }
+  ok("windowed timeline advance keeps items deduped", wdup === 0, "dups=" + wdup);
+  ok("windowed timeline code count matches un-windowed set", w2.items.filter((i) => i._ext === "code").length === code.length, "w2=" + w2.items.filter((i) => i._ext === "code").length + " full=" + code.length);
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }
