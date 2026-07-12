@@ -114,6 +114,8 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 			}
 		}
 	}
+	// Leases apply to this batch only; a later batch gets fresh option cas lines.
+	h.leases = nil
 	// Report is complete: emit the terminating blank line and flush it out to git
 	// NOW, before any post-push bucket maintenance. The gitremote-helpers(7)
 	// protocol has git block reading our stdout for the per-ref status + blank
@@ -318,6 +320,29 @@ func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
 // per-element refs is rare, so hitting this means something is spinning.
 const maxCASRetries = 5
 
+// zeroOID is git's null object id (in a cas lease: the ref must not exist).
+const zeroOID = "0000000000000000000000000000000000000000"
+
+// checkLease enforces a --force-with-lease expectation (recorded by `option
+// cas`, see helper.go) at write time: the remote's current value ("" = absent)
+// must equal the expected one ("" = must not exist). A match authorizes the
+// update even when it is not a fast-forward; a mismatch rejects with git's
+// conventional "stale info" phrasing so porcelain output reads like a native
+// lease failure. Both ref-mode CAS loops re-check on every attempt, so a
+// concurrent pusher landing between read and write is caught on the retry's
+// re-read, never slipped past. leased=false means no lease applies and the
+// normal fast-forward rules decide.
+func (h *remoteHelper) checkLease(dst, current string) (leased bool, err error) {
+	expected, ok := h.leases[dst]
+	if !ok {
+		return false, nil
+	}
+	if current != expected {
+		return true, fmt.Errorf("stale info")
+	}
+	return true, nil
+}
+
 // applyRefUpdate writes or deletes one ref, dispatching on the bucket's ref
 // mode, and returns the written sha ("" for a deletion). The stored value is
 // the object src names — for an annotated tag that is the tag object itself,
@@ -351,6 +376,9 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 		currentRaw, etag, err := h.client.GetWithETag(key)
 		switch {
 		case errors.Is(err, ErrNotFound):
+			if _, leaseErr := h.checkLease(cmd.dst, ""); leaseErr != nil {
+				return "", leaseErr
+			}
 			err = h.client.PutIfAbsent(key, value)
 		case err != nil:
 			return "", fmt.Errorf("read ref %s: %w", cmd.dst, err)
@@ -359,7 +387,11 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 			if current == sha {
 				return sha, nil // already up to date
 			}
-			if !cmd.forced {
+			leased, leaseErr := h.checkLease(cmd.dst, current)
+			if leaseErr != nil {
+				return "", leaseErr
+			}
+			if !leased && !cmd.forced {
 				if err := checkFastForward(current, sha, cmd.dst); err != nil {
 					return "", err
 				}
@@ -413,11 +445,17 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 			if currentSHA == sha {
 				return sha, nil // already up to date
 			}
-			if !cmd.forced {
+			leased, leaseErr := h.checkLease(cmd.dst, currentSHA)
+			if leaseErr != nil {
+				return "", leaseErr
+			}
+			if !leased && !cmd.forced {
 				if err := checkFastForward(currentSHA, sha, cmd.dst); err != nil {
 					return "", err
 				}
 			}
+		} else if _, leaseErr := h.checkLease(cmd.dst, ""); leaseErr != nil {
+			return "", leaseErr
 		}
 		err = h.client.PutIfAbsent(genKey(h.prefix, cmd.dst, maxGen+1), []byte(sha+"\n"))
 		if errors.Is(err, ErrPreconditionFailed) {

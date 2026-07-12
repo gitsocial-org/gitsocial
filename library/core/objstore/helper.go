@@ -92,6 +92,7 @@ type remoteHelper struct {
 	capability Capability        // provider's declared conditional-write support
 	refMode    string            // resolved lazily on first push (refModeETag/refModeGeneration)
 	remoteRefs map[string]string // ref state from list, kept current by push for the site manifest
+	leases     map[string]string // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
 	progress   Progress          // stderr progress hook (nil = silent)
 }
 
@@ -157,7 +158,9 @@ func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) err
 		line := scanner.Text()
 		switch {
 		case line == "capabilities":
-			fmt.Fprint(w, "fetch\npush\n\n")
+			fmt.Fprint(w, "option\nfetch\npush\n\n")
+		case strings.HasPrefix(line, "option "):
+			fmt.Fprintf(w, "%s\n", h.option(strings.TrimPrefix(line, "option ")))
 		case line == "list", line == "list for-push":
 			if err := h.list(w); err != nil {
 				return err
@@ -197,6 +200,32 @@ func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) err
 		}
 	}
 	return scanner.Err()
+}
+
+// option handles one "option <name> <value>" command and returns the protocol
+// reply. Only "cas" — the per-ref --force-with-lease expectation git sends
+// ahead of a push batch (value "<refname>:<expected-oid>") — is supported;
+// every other option answers "unsupported", which git treats as a clean
+// decline (the same result it got from a helper without the option capability,
+// so nothing that worked before can regress). The recorded lease is enforced
+// by the push ref-update CAS loops (see checkLease in helper_push.go).
+func (h *remoteHelper) option(spec string) string {
+	name, value, _ := strings.Cut(spec, " ")
+	if name != "cas" {
+		return "unsupported"
+	}
+	refName, oid, ok := strings.Cut(value, ":")
+	if !ok || refName == "" || len(oid) != 40 {
+		return "error malformed cas value"
+	}
+	if oid == zeroOID {
+		oid = "" // the lease asserts the ref must not exist yet
+	}
+	if h.leases == nil {
+		h.leases = map[string]string{}
+	}
+	h.leases[refName] = oid
+	return "ok"
 }
 
 // list prints every ref (resolving generation chains) and the HEAD symref.

@@ -569,6 +569,108 @@ func TestS3Helper_casRetryOnContention(t *testing.T) {
 	}
 }
 
+// TestS3Helper_forceWithLease: git conveys --force-with-lease to the helper via
+// the remote-helper cas option. A matching lease authorizes a fast-forward push
+// (behaves as normal) and a non-fast-forward rewrite; a lease invalidated by a
+// concurrent writer BETWEEN the helper's read and its CAS write rejects with
+// git's "stale info" (the write-time re-check, not just the client-side one);
+// a lease stale already at list time is rejected by git client-side.
+func TestS3Helper_forceWithLease(t *testing.T) {
+	src, env, fixture, remote := pushTestRepo(t)
+	gitIn(t, src, env, "push", remote, "main")
+	baseSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+
+	// Lease on a plain fast-forward: behaves as a normal push.
+	commitIn(t, src, env, "ff.txt", "fast forward")
+	ffSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+	gitIn(t, src, env, "push", "--force-with-lease=main:"+baseSHA, remote, "main")
+	if data, _ := fixture.object("repo/refs/heads/main"); strings.TrimSpace(string(data)) != ffSHA {
+		t.Fatalf("ref after fast-forward lease push = %q, want %s", strings.TrimSpace(string(data)), ffSHA)
+	}
+
+	// Rewrite history: plain push is rejected non-fast-forward, the matching
+	// lease authorizes it.
+	gitIn(t, src, env, "-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test",
+		"commit", "--amend", "-m", "rewritten")
+	rewrittenSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+	out := gitInErr(t, src, env, "push", remote, "main")
+	if !strings.Contains(out, "non-fast-forward") {
+		t.Fatalf("plain push after rewrite = %q, want non-fast-forward rejection", out)
+	}
+	gitIn(t, src, env, "push", "--force-with-lease=main:"+ffSHA, remote, "main")
+	if data, _ := fixture.object("repo/refs/heads/main"); strings.TrimSpace(string(data)) != rewrittenSHA {
+		t.Errorf("ref after lease push = %q, want %s", strings.TrimSpace(string(data)), rewrittenSHA)
+	}
+
+	// Concurrent writer moves the ref between the helper's read and its CAS
+	// write: the 412 retry re-reads, sees the lease no longer holds, and rejects
+	// with "stale info" instead of retrying past it.
+	gitIn(t, src, env, "-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test",
+		"commit", "--amend", "-m", "rewritten again")
+	concurrentSHA := strings.Repeat("beef", 10)
+	fixture.mu.Lock()
+	fixture.contendKey = "repo/refs/heads/main"
+	fixture.contendValue = []byte(concurrentSHA + "\n")
+	fixture.mu.Unlock()
+	out = gitInErr(t, src, env, "push", "--force-with-lease=main:"+rewrittenSHA, remote, "main")
+	if !strings.Contains(out, "stale info") {
+		t.Errorf("write-time stale lease output = %q, want stale info rejection", out)
+	}
+	fixture.mu.Lock()
+	contended := fixture.contended
+	fixture.mu.Unlock()
+	if !contended {
+		t.Fatal("contention hook never fired; write-time lease path untested")
+	}
+	if data, _ := fixture.object("repo/refs/heads/main"); strings.TrimSpace(string(data)) != concurrentSHA {
+		t.Errorf("concurrent writer's ref = %q, want it preserved as %s", strings.TrimSpace(string(data)), concurrentSHA)
+	}
+
+	// Lease stale already at list time: git rejects client-side (same phrasing).
+	out = gitInErr(t, src, env, "push", "--force-with-lease=main:"+rewrittenSHA, remote, "main")
+	if !strings.Contains(out, "stale info") {
+		t.Errorf("list-time stale lease output = %q, want stale info rejection", out)
+	}
+}
+
+// TestS3Helper_generationForceWithLease: the cas lease holds in generation mode
+// — a matching lease authorizes a rewrite by advancing the chain, and a
+// concurrent generation taken between list and create rejects with stale info.
+func TestS3Helper_generationForceWithLease(t *testing.T) {
+	src, env, fixture, remote := generationTestRepo(t)
+	gitIn(t, src, env, "push", remote, "main")
+	baseSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+
+	gitIn(t, src, env, "-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test",
+		"commit", "--amend", "-m", "rewritten")
+	rewrittenSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+	out := gitInErr(t, src, env, "push", remote, "main")
+	if !strings.Contains(out, "non-fast-forward") {
+		t.Fatalf("plain push after rewrite = %q, want non-fast-forward rejection", out)
+	}
+	gitIn(t, src, env, "push", "--force-with-lease=main:"+baseSHA, remote, "main")
+	if data, _ := fixture.object("repo/refs/heads/main/.gen/0000000002"); strings.TrimSpace(string(data)) != rewrittenSHA {
+		t.Errorf("generation 2 after lease push = %q, want %s", strings.TrimSpace(string(data)), rewrittenSHA)
+	}
+
+	// A concurrent writer takes the next generation between the helper's list
+	// and its create: the retry re-reads the new tip, the lease no longer holds.
+	gitIn(t, src, env, "-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test",
+		"commit", "--amend", "-m", "rewritten again")
+	concurrentSHA := strings.Repeat("feed", 10)
+	fixture.mu.Lock()
+	fixture.contendKey = "repo/refs/heads/main/.gen/0000000003"
+	fixture.contendValue = []byte(concurrentSHA + "\n")
+	fixture.mu.Unlock()
+	out = gitInErr(t, src, env, "push", "--force-with-lease=main:"+rewrittenSHA, remote, "main")
+	if !strings.Contains(out, "stale info") {
+		t.Errorf("write-time stale lease output = %q, want stale info rejection", out)
+	}
+	if data, _ := fixture.object("repo/refs/heads/main/.gen/0000000003"); strings.TrimSpace(string(data)) != concurrentSHA {
+		t.Errorf("concurrent writer's generation = %q, want it preserved as %s", strings.TrimSpace(string(data)), concurrentSHA)
+	}
+}
+
 // TestS3Helper_pushRejectsNonCASBucket: a bucket that ignores conditional
 // headers must fail the probe before any ref is written.
 func TestS3Helper_pushRejectsNonCASBucket(t *testing.T) {
