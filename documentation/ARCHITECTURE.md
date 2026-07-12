@@ -315,7 +315,7 @@ Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc
 Two docs split by surface:
 
 - **[S3.md](S3.md)** — the transport: URL normalization, bucket layout, ref-update modes (etag/generation), cache policy, helper discovery, the local dev server, environment variables, and manual provider testing.
-- **[STATIC-SITE.md](STATIC-SITE.md)** — the browser static site: the site shell, the sharded index/search artifacts (v4), site config, self-refresh versioning, and site testing.
+- **[STATIC-SITE.md](STATIC-SITE.md)** — the browser static site: the site shell, the sharded index/search artifacts (gitmsg v4, code v5), site config, self-refresh versioning, and site testing.
 
 ---
 

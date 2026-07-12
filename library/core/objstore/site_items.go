@@ -59,6 +59,13 @@ const (
 	// A reader treats anything not at the current version as absent and falls
 	// back to the bounded loose-object walk until a push rewrites the artifacts.
 	siteItemsVersion = 4
+	// siteCodeItemsVersion is the CODE corpus's schema version: v5 entries carry
+	// the commit's parent shas so the repository graph renders from the index
+	// instead of a per-commit loose-object walk. The version salts the code
+	// corpus's shard content hashes (shardContentHash), so a push onto a v4
+	// bucket sees no valid manifest, re-bootstraps, and seals fresh v5 shards
+	// under new keys. The gitmsg corpora stay at siteItemsVersion, byte-identical.
+	siteCodeItemsVersion = 5
 	// brotliQualityFull is used for every no-cache doc (both corpora's heads and
 	// manifests, the cursor). Quality 9 (not the max 11) because max quality on a
 	// ~50MB corpus takes ~60s in the pure-Go encoder for only ~10% smaller output,
@@ -117,6 +124,10 @@ type siteMetaEntry struct {
 	// byte-identical to before (they never set it), so their sealed shards' content
 	// hashes and keys are unchanged.
 	Branch string `json:"branch,omitempty"`
+	// Parents is the commit's parent shas, set only for CODE-corpus entries
+	// (v5+): the repository graph needs the parent DAG, which nothing else in the
+	// index carries. `omitempty` keeps gitmsg-extension entries byte-identical.
+	Parents []string `json:"parents,omitempty"`
 }
 
 // entrySHA implements shardEntry for the metadata index corpus.
@@ -151,6 +162,10 @@ type walkedItem struct {
 	// Branch is set only by the code corpus walk (walkCodeItems): the branch a
 	// code commit is attributed to. Empty for the gitmsg-extension walks.
 	Branch string
+	// Parents is set only by the code corpus walk: the commit's parent shas,
+	// projected into the v5 code metadata entries for the graph. Nil for the
+	// gitmsg-extension walks.
+	Parents []string
 }
 
 // metaOf projects a walked commit into a metadata-index entry.
@@ -223,7 +238,7 @@ func readItemsCursor(client *Client, prefix, ext string) (*siteItemsCursor, erro
 	if err != nil {
 		return nil, err
 	}
-	if !found || c.Version != siteItemsVersion || len(c.OldestIndexed) != 40 {
+	if !found || c.Version != itemsDocVersion(ext) || len(c.OldestIndexed) != 40 {
 		return nil, nil
 	}
 	return &c, nil
@@ -231,7 +246,7 @@ func readItemsCursor(client *Client, prefix, ext string) (*siteItemsCursor, erro
 
 // putItemsCursor writes one extension's bootstrap cursor (no-cache, brotli q9).
 func putItemsCursor(client *Client, prefix, ext, tip, oldestIndexed string) error {
-	comp, err := compressJSON(&siteItemsCursor{Version: siteItemsVersion, Tip: tip, OldestIndexed: oldestIndexed}, brotliQualityFull)
+	comp, err := compressJSON(&siteItemsCursor{Version: itemsDocVersion(ext), Tip: tip, OldestIndexed: oldestIndexed}, brotliQualityFull)
 	if err != nil {
 		return err
 	}
@@ -301,13 +316,23 @@ func reconstructCursor(client *Client, prefix, ext string, manifest *siteShardMa
 	if tip == "" {
 		tip = newTip
 	}
-	return &siteItemsCursor{Version: siteItemsVersion, Tip: tip, OldestIndexed: oldest}, nil
+	return &siteItemsCursor{Version: itemsDocVersion(ext), Tip: tip, OldestIndexed: oldest}, nil
 }
 
 // siteItemsShardKey returns a sealed metadata shard's full key under one
 // extension's items dir.
 func siteItemsShardKey(ext, hash string) string {
 	return siteItemsDir(ext) + shardObjectName(hash)
+}
+
+// itemsDocVersion returns the metadata-index schema version for one corpus:
+// siteCodeItemsVersion for the code corpus (entries carry parents), else the
+// shared siteItemsVersion.
+func itemsDocVersion(ext string) int {
+	if ext == siteCodeExt {
+		return siteCodeItemsVersion
+	}
+	return siteItemsVersion
 }
 
 // itemsCorpus wires the metadata-index key names and doc marshaling into the
@@ -319,8 +344,9 @@ var itemsCorpus = shardCorpus[siteMetaEntry]{
 	shardName:   shardObjectName,
 	shardKey:    siteItemsShardKey,
 	dir:         siteItemsDir,
-	marshalDoc: func(tip string, entries []siteMetaEntry) any {
-		return &siteItemsDoc{Version: siteItemsVersion, Tip: tip, Items: entries}
+	version:     itemsDocVersion,
+	marshalDoc: func(ext, tip string, entries []siteMetaEntry) any {
+		return &siteItemsDoc{Version: itemsDocVersion(ext), Tip: tip, Items: entries}
 	},
 }
 

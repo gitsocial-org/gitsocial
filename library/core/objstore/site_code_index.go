@@ -27,6 +27,9 @@
 //     dedups by sha, and records each commit's attributed branch (mirroring the
 //     reader's reachedVia: the default branch always wins, else the first branch
 //     that reached the commit), stored in each entry's Branch field.
+//   - PARENTS in every entry (schema v5, siteCodeItemsVersion): the repository
+//     graph renders its DAG from the index instead of a per-commit loose-object
+//     walk. The gitmsg-extension corpora stay at v4, byte-identical.
 //
 // Everything else — the sealed brotli shards, the head, the manifest/complete
 // semantics, the bootstrap cursor, the budgeted multi-push walk, the local-source
@@ -170,11 +173,13 @@ func walkCodeItems(client *Client, prefix string, tips []codeTip, defaultBranch 
 		if defaultReach[sha] {
 			branch = defaultBranch
 		}
-		// A code commit (no GitMsg header) joins the corpus, attributed to `branch`.
-		// A gitmsg-carrying commit is walked for reachability but not listed.
+		// A code commit (no GitMsg header) joins the corpus, attributed to `branch`
+		// and carrying its parent shas (the graph's DAG edges). A gitmsg-carrying
+		// commit is walked for reachability but not listed.
 		if c.item.Header == "" {
 			w := c.item
 			w.Branch = branch
+			w.Parents = c.parents
 			items = append(items, w)
 			sp.walk(len(items), 0)
 		}
@@ -227,11 +232,12 @@ func codeDefaultReachable(client *Client, prefix string, tips []codeTip, default
 }
 
 // codeMetaOf projects a walked (already branch-attributed) code commit into a
-// metadata-index entry, carrying the attributed branch alongside the shared
-// metadata fields metaOf produces.
+// metadata-index entry, carrying the attributed branch and parent shas (v5)
+// alongside the shared metadata fields metaOf produces.
 func codeMetaOf(w walkedItem) siteMetaEntry {
 	e := metaOf(w)
 	e.Branch = w.Branch
+	e.Parents = w.Parents
 	return e
 }
 

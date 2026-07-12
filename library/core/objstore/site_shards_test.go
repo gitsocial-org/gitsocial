@@ -111,18 +111,23 @@ func TestWriteBodiesSharded_SealBoundaries(t *testing.T) {
 
 func TestShardContentHash_StableAndOrdered(t *testing.T) {
 	e := bodyEntries(4)
-	h1 := shardContentHash(e)
-	h2 := shardContentHash(bodyEntries(4))
+	h1 := shardContentHash(siteItemsVersion, e)
+	h2 := shardContentHash(siteItemsVersion, bodyEntries(4))
 	if h1 != h2 {
 		t.Fatalf("same members yielded different hashes: %s vs %s", h1, h2)
 	}
 	// A different membership (one extra commit) yields a different key.
-	if shardContentHash(bodyEntries(5)) == h1 {
+	if shardContentHash(siteItemsVersion, bodyEntries(5)) == h1 {
 		t.Errorf("different membership produced the same content hash %s", h1)
 	}
 	// Reordered members yield a different key (ordering is part of identity).
-	if shardContentHash(reverseGeneric(e)) == h1 {
+	if shardContentHash(siteItemsVersion, reverseGeneric(e)) == h1 {
 		t.Errorf("reordered members produced the same content hash %s", h1)
+	}
+	// A schema tick (a non-v4 version) salts the hash so the same membership
+	// seals under a NEW key, while v4 stays byte-identical to the pre-salt hash.
+	if shardContentHash(siteCodeItemsVersion, e) == h1 {
+		t.Errorf("versioned hash matched the unsalted v4 hash %s", h1)
 	}
 }
 

@@ -43,6 +43,17 @@ async function main() {
   // merge-base..merge-head reconstruction did not fire.
   ok("did not fall back to 'tips not present'", !textOf(view).includes("not present in this bucket"), "fell back to the tips notice");
 
+  // ---- graph decoration: the deleted, merged head branch is recovered from the
+  // merged-PR header (merge-head/head-tip short shas) and badged on its row as a
+  // dimmed historical chip linking to the PR detail.
+  setHash("#/graph");
+  await GS.route(ctx);
+  await wait(500);
+  const mergedChips = findClass(viewNode, "merged-branch");
+  ok("graph badges the merged (deleted) head branch", mergedChips.map(textOf).includes("feature/changelog"), "chips=" + mergedChips.map(textOf).join(","));
+  const chipHrefs = mergedChips.map((n) => n.getAttribute("href") || "");
+  ok("merged-branch chip links to the PR detail", chipHrefs.some((h) => h.includes("@gitmsg/review")), chipHrefs.join(","));
+
   done();
 }
 main().catch((e) => { console.error(e); process.exit(1); });

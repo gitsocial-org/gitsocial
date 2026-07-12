@@ -264,6 +264,17 @@
     return m ? m[1].slice(0, 12) : null;
   }
 
+  // parseBranchField splits a PR base/head field ("[url]#branch:<name>") into
+  // its repo url ("" for workspace-relative) and branch name.
+  function parseBranchField(field) {
+    const s = field || "";
+    const hash = s.indexOf("#");
+    const url = hash > 0 ? s.slice(0, hash) : "";
+    const rest = hash >= 0 ? s.slice(hash + 1) : s;
+    const m = /^branch:(.+)$/.exec(rest);
+    return { url, name: m ? m[1] : "" };
+  }
+
   // effectiveTime returns an item's display/sort timestamp (unix seconds),
   // COALESCEing an imported item's `origin-time` (the real upstream publish
   // time) over the git commit's author time, mirroring the cache's
@@ -490,15 +501,18 @@
 
   // loadItemsIndexSharded reads the manifest, then fetches only the eager set
   // (newest sealed shard + head) and returns the index object. Null when the
-  // bucket carries no manifest or an older version. The eager items are
-  // newest-first (head newest→oldest, then the newest shard newest→oldest).
+  // bucket carries no manifest or an unknown version (4 is the shared gitmsg
+  // schema; 5 is the code corpus whose entries also carry parents — the
+  // returned index's `version` tells the graph whether the DAG is present).
+  // The eager items are newest-first (head newest→oldest, then the newest
+  // shard newest→oldest).
   async function loadItemsIndexSharded(ctx, ext) {
     const dir = ".gitsocial/site/items/" + ext + "/";
     const mtext = await fetchText(ctx.base, dir + "manifest.json");
     if (!mtext) return null;
     let m;
     try { m = JSON.parse(mtext); } catch { return null; }
-    if (!m || m.version !== 4 || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(m.shards)) return null;
+    if (!m || (m.version !== 4 && m.version !== 5) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(m.shards)) return null;
     const newest = m.shards.length ? m.shards[m.shards.length - 1] : null;
     // Oldest-first ingestion order is: sealed shards (oldest→newest), then the
     // head (newest overall). The eager set is the newest sealed shard + head, so
@@ -519,7 +533,7 @@
     const residentShas = new Set(items.map((e) => e.sha));
     const olderShards = m.shards.slice(0, Math.max(0, m.shards.length - 1)).map((s) => dir + s.key).reverse();
     return {
-      version: 4, tip: m.tip, complete: m.complete !== false, bodiesBytes: m.bodiesBytes || 0,
+      version: m.version, tip: m.tip, complete: m.complete !== false, bodiesBytes: m.bodiesBytes || 0,
       items, residentShas, olderShards, dir, allResident: olderShards.length === 0,
       olderBytes: m.shards.slice(0, Math.max(0, m.shards.length - 1)).reduce((n, s) => n + (s.bytes || 0), 0),
     };
@@ -965,32 +979,126 @@
   // GRAPH_WINDOW is the number of commits the repository graph loads per window.
   const GRAPH_WINDOW = 150;
 
+  // loadGraphDecorations gathers the graph's ref decorations (git log
+  // --decorate style) once per context, from data the route already has or a
+  // fixed few index fetches — never a per-commit object GET. Returns:
+  //   tips — full sha -> [live code-branch names] (gitmsg/* excluded, matching
+  //          the code-branches-only graph), defaultBranch — HEAD's branch (its
+  //          chip renders as the solid `default` variant);
+  //   tags — raw refs.json tag sha -> [tag names]. No peeling (same rule as the
+  //          tags LIST, which also never fetches tag objects): a lightweight
+  //          tag's sha is its commit and lands on a row; an annotated tag's sha
+  //          is its TAG object and never matches, so it simply doesn't badge;
+  //   merged — [{ short, name, prSha }] from merged-PR headers in the review
+  //          index's RESIDENT eager set (manifest + newest shard + head — older
+  //          merged PRs stay unlabeled rather than draining the corpus): the
+  //          recorded merge-head / head-tip short shas mark the rows carrying a
+  //          (possibly deleted) head branch's work; prSha is the canonical PR's
+  //          full sha when resident, for a chip link to the PR detail.
+  // Cached as a promise on ctx.walks so the indexed and loose paths, and every
+  // load-more, share one load.
+  async function loadGraphDecorations(ctx) {
+    const key = "graphDecor";
+    if (ctx.walks[key]) return ctx.walks[key];
+    const load = (async () => {
+      const { branches, defaultBranch } = await listBranches(ctx);
+      const tips = {};
+      for (const b of branches) {
+        if (b.name.startsWith("gitmsg/")) continue;
+        const sha = await refTip(ctx, b.ref);
+        if (sha) (tips[sha] = tips[sha] || []).push(b.name);
+      }
+      const tags = {};
+      for (const t of await listTags(ctx)) (tags[t.sha] = tags[t.sha] || []).push(t.name);
+      let idx = null;
+      try { idx = await loadItemsIndex(ctx, "review"); } catch (e) { if (e && e.forbidden) throw e; }
+      const merged = [];
+      const seen = new Set();
+      for (const e of (idx ? idx.items : [])) {
+        const h = parseGitmsg(String(e.header || ""));
+        if (!h || h.ext !== "review" || h.type !== "pull-request" || h.state !== "merged") continue;
+        const name = parseBranchField(h.head).name;
+        if (!name || name.startsWith("gitmsg/")) continue;
+        // The canonical PR sha (a merged state rides on an edit whose `edits`
+        // names the canonical) — resolved within the resident set only.
+        const canonShort = refHash(h.edits || "");
+        const canon = canonShort ? idx.items.find((x) => String(x.sha || "").startsWith(canonShort)) : e;
+        for (const short of [h["merge-head"], h["head-tip"]]) {
+          if (!short || !/^[0-9a-f]{6,40}$/.test(short) || seen.has(short + " " + name)) continue;
+          seen.add(short + " " + name);
+          merged.push({ short, name, prSha: canon ? canon.sha : "" });
+        }
+      }
+      return { tips, tags, defaultBranch, merged };
+    })();
+    ctx.walks[key] = load;
+    return load;
+  }
+
+  // loadGraphWindowIndexed serves the repository graph from the code items index
+  // when its entries carry parents (corpus v5), or returns null so
+  // loadGraphWindow falls back to the loose walk (an absent index, or a v4
+  // bucket pushed before parents existed). The resident index entries — shared
+  // with the timeline/branch-log walk, so shards load once — are sorted
+  // newest-first by author time (the same order the loose walk pops) and cut to
+  // a `shown` cursor that grows GRAPH_WINDOW per extend, draining older shards
+  // until it is filled, mirroring loadBranchLogIndexed's paging. The indexed
+  // graph covers CODE branches only (the corpus's membership): gitmsg/* data
+  // branches, which the loose walk used to interleave, are omitted —
+  // decorations are filtered to match so no label points at an absent row.
+  async function loadGraphWindowIndexed(ctx, extend) {
+    const w = await codeIndexWalkState(ctx);
+    if (!w || !w.hasParents) return null;
+    const key = "graphIndexed";
+    const g = ctx.walks[key] || (ctx.walks[key] = { shown: 0 });
+    const decor = await loadGraphDecorations(ctx);
+    return withWalkLock(w, async () => {
+      g.shown = extend ? g.shown + GRAPH_WINDOW : Math.max(g.shown, GRAPH_WINDOW);
+      // Drain older shards until the window fills or no pending shard remains
+      // (progress-guarded, matching loadBranchLogIndexed).
+      let guard = (w.older || []).length, stall = 0;
+      while ((w.older && w.older.length) && w.items.length < g.shown) {
+        await loadNextCodeShard(ctx, w);
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      const ordered = w.items.slice().sort((a, b) => (b.authorTime || 0) - (a.authorTime || 0));
+      const commits = ordered.slice(0, g.shown);
+      const truncated = ordered.length > g.shown || (w.older && w.older.length > 0) || !w.complete;
+      return { commits, truncated, decor };
+    });
+  }
+
   // loadGraphWindow walks the commit DAG across all branch heads, newest-first by
   // committer/author time, GRAPH_WINDOW commits per window with resumable
-  // load-more. It seeds a max-heap-like frontier from every branch tip and pops
-  // the newest commit, expanding its parents, so a merged multi-branch history is
-  // interleaved in time order (what a graph needs for stable lane assignment).
-  // Returns { commits, truncated, tips } where commits carry { hash, short,
-  // parents, authorName, authorEmail, authorTime, content } and tips maps a tip
-  // sha to the branch name(s) that point at it (for tip labels). The walk state
-  // is cached on ctx so load-more continues without refetching.
+  // load-more. When the bucket carries a v5 code items index (entries with
+  // parents) the window is served from the index with no per-commit object GET
+  // (loadGraphWindowIndexed); otherwise it seeds a max-heap-like frontier from
+  // every branch tip and pops the newest commit, expanding its parents, so a
+  // merged multi-branch history is interleaved in time order (what a graph needs
+  // for stable lane assignment). Returns { commits, truncated, decor } where
+  // commits carry { hash, short, parents, authorName, authorEmail, authorTime,
+  // content } and decor is the loadGraphDecorations ref map (branch tips, tags,
+  // merged-PR labels) the renderer badges rows from. The walk state is cached
+  // on ctx so load-more continues without refetching.
   async function loadGraphWindow(ctx, extend) {
+    const indexed = await loadGraphWindowIndexed(ctx, extend);
+    if (indexed) return indexed;
     const key = "graph";
     let entry = ctx.walks[key];
     if (!entry) {
       const { branches } = await listBranches(ctx);
-      const tips = {};
       const seeds = [];
       for (const b of branches) {
         const sha = await refTip(ctx, b.ref);
-        if (!sha) continue;
-        (tips[sha] = tips[sha] || []).push(b.name);
-        seeds.push(sha);
+        if (sha) seeds.push(sha);
       }
-      entry = ctx.walks[key] = { tips, state: { visited: new Set(), frontier: seeds.slice(), commits: [] } };
+      entry = ctx.walks[key] = { state: { visited: new Set(), frontier: seeds.slice(), commits: [] } };
     }
+    const decor = await loadGraphDecorations(ctx);
     if (extend || entry.state.commits.length === 0) await graphWalkStep(ctx, entry.state, GRAPH_WINDOW);
-    return { commits: entry.state.commits.slice(), truncated: entry.state.frontier.length > 0, tips: entry.tips };
+    return { commits: entry.state.commits.slice(), truncated: entry.state.frontier.length > 0, decor };
   }
 
   // graphWalkStep advances a graph walk by up to `windowCap` more commits. Unlike
@@ -2114,10 +2222,12 @@
   // (subjectBody's first line) and the record is NOT marked hollow — the timeline
   // never fetches the loose object for a code card, which is exactly the ~50 GETs
   // the index removes. `branch` rides on the record so codeCommitItem links it
-  // under the attributed branch route. Detail views still fetch the loose object.
+  // under the attributed branch route, and `parents` (v5 entries) carries the
+  // DAG edges the graph renders. Detail views still fetch the loose object.
   function codeMetaCommit(e) {
     return {
-      hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "", parents: [],
+      hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "",
+      parents: Array.isArray(e.parents) ? e.parents : [],
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
       content: String(e.subject || ""), rawMessage: String(e.subject || ""),
       subject: String(e.subject || ""), gitmsg: null, refs: [], _branch: e.branch || "",
@@ -2206,6 +2316,8 @@
   // walk). Seeded once per context from the code corpus's eager set (newest shard
   // + head, newest-first), with the remaining older shards pending on w.older for
   // on-demand paging — the same shape seedWalkFromIndex builds for an extension.
+  // `hasParents` marks a v5 corpus (entries carry parent shas) so the graph
+  // knows the DAG is servable from the index.
   async function codeIndexWalkState(ctx) {
     const key = "codeIndex";
     if (ctx.walks[key] !== undefined) return ctx.walks[key];
@@ -2215,7 +2327,7 @@
     const seen = new Set();
     const items = [];
     for (const e of idx.items) { if (!seen.has(e.sha)) { seen.add(e.sha); items.push(codeMetaCommit(e)); } }
-    const w = { items, seen, older: idx.olderShards.slice(), complete: idx.complete };
+    const w = { items, seen, older: idx.olderShards.slice(), complete: idx.complete, hasParents: idx.version >= 5 };
     ctx.walks[key] = w;
     return w;
   }
@@ -3717,7 +3829,7 @@
   const core = {
     deriveBase, fetchBytes, fetchText, inflate, parseLooseObject, objectKey,
     getObject, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
-    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, resolveItems,
+    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
     feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,

@@ -74,7 +74,8 @@ var bodiesCorpus = shardCorpus[siteBodyEntry]{
 	shardName:   shardObjectName,
 	shardKey:    bodiesShardKey,
 	dir:         siteBodiesDir,
-	marshalDoc: func(tip string, entries []siteBodyEntry) any {
+	version:     func(string) int { return siteItemsVersion },
+	marshalDoc: func(_, tip string, entries []siteBodyEntry) any {
 		return &siteBodyIndex{Version: siteItemsVersion, Tip: tip, Items: entries}
 	},
 }

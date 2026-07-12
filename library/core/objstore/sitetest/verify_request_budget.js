@@ -7,9 +7,9 @@
 // measured table prints so future readers see the real numbers.
 //
 // Index-fed routes (timeline, default-branch log, list tabs, item/PR detail,
-// home, tags/branches, analytics, merged-PR detail) get tight ceilings — their
-// cost is the index slice + the rendered slice, not a history walk. The
-// deliberate walks (graph, compare, a non-default-branch log) are bounded by
+// home, tags/branches, analytics, merged-PR detail, the graph) get tight
+// ceilings — their cost is the index slice + the rendered slice, not a history
+// walk. The deliberate walks (compare, a non-default-branch log) are bounded by
 // their walk window, not the index; they get ceilings too so "bounded" is never
 // "unmeasured".
 require("./shim.js");
@@ -104,8 +104,12 @@ async function main() {
   // code index, NOT a ~775-GET base-branch walk. Post-fix ceiling.
   await run("merged-PR detail", "merged-demo", GS.commitRef(mergedPR.commit.hash, "gitmsg/review"), 40, 900);
 
+  // The graph is index-fed since the v5 code corpus (entries carry parents):
+  // manifest + eager shard/head + refs, no per-commit walk, plus the review
+  // index's eager set (3 fetches) for the merged-PR branch decorations.
+  await run("graph (indexed)", TD, "#/graph", 15);
+
   // Deliberate walks — bounded by their walk window, measured and capped.
-  await run("graph (walk)", TD, "#/graph", 80);
   await run("compare (walk)", TD, "#/compare:main...feature%2Fnotes-expand", 40, 700);
   await run("non-default-branch log (walk)", TD, "branch:feature/notes-expand", 30);
 

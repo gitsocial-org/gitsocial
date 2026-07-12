@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 )
 
 // errNoManifestForBackfill signals a BACKFILL that raced a manifest reset (the
@@ -81,7 +82,8 @@ type shardCorpus[E shardEntry] struct {
 	shardName   func(hash string) string
 	shardKey    func(ext, hash string) string
 	dir         func(ext string) string
-	marshalDoc  func(tip string, entries []E) any
+	version     func(ext string) int
+	marshalDoc  func(ext, tip string, entries []E) any
 }
 
 // sealedFrontier returns a manifest's newest sealed member sha (the newest
@@ -103,8 +105,15 @@ func shardObjectName(hash string) string {
 
 // shardContentHash returns the first 12 hex of sha256 over the member commit
 // shas joined oldest-first — the stable, compression-free key of a sealed shard.
-func shardContentHash[E shardEntry](group []E) string {
+// A non-v4 schema version salts the hash so a schema tick (e.g. the code
+// corpus's v5 parents) yields NEW shard keys and the skip-existing seal
+// re-uploads rather than trusting a stale-schema object; v4 stays unsalted so
+// every already-sealed v4 shard's key (gitmsg items, bodies) is unchanged.
+func shardContentHash[E shardEntry](version int, group []E) string {
 	h := sha256.New()
+	if version != siteItemsVersion {
+		fmt.Fprintf(h, "v%d\n", version)
+	}
 	for _, e := range group {
 		h.Write([]byte(e.entrySHA()))
 		h.Write([]byte{'\n'})
@@ -124,8 +133,8 @@ func reverseGeneric[E shardEntry](in []E) []E {
 
 // putShardDoc uploads one corpus document (a sealed shard or the head) and
 // returns its compressed size.
-func putShardDoc[E shardEntry](client *Client, corpus shardCorpus[E], key, tip string, entries []E, quality int) (int, error) {
-	comp, err := compressJSON(corpus.marshalDoc(tip, entries), quality)
+func putShardDoc[E shardEntry](client *Client, corpus shardCorpus[E], ext, key, tip string, entries []E, quality int) (int, error) {
+	comp, err := compressJSON(corpus.marshalDoc(ext, tip, entries), quality)
 	if err != nil {
 		return 0, err
 	}
@@ -145,7 +154,7 @@ func putShardDoc[E shardEntry](client *Client, corpus shardCorpus[E], key, tip s
 // the reader's full-search size hint, is then a slight under-count until the next
 // push resees the size, and no shard is ever fetched to learn its size).
 func sealShardGeneric[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, group []E, sizeByHash map[string]int) (siteShardEntry, int, error) {
-	hash := shardContentHash(group)
+	hash := shardContentHash(corpus.version(ext), group)
 	key := prefix + corpus.shardKey(ext, hash)
 	endTip := group[len(group)-1].entrySHA()
 	size, exists, err := objectSize(client, key)
@@ -153,7 +162,7 @@ func sealShardGeneric[E shardEntry](client *Client, corpus shardCorpus[E], prefi
 		return siteShardEntry{}, 0, err
 	}
 	if !exists {
-		if size, err = putShardDoc(client, corpus, key, endTip, group, brotliQualityShard); err != nil {
+		if size, err = putShardDoc(client, corpus, ext, key, endTip, group, brotliQualityShard); err != nil {
 			return siteShardEntry{}, 0, err
 		}
 	} else if size == 0 {
@@ -345,7 +354,7 @@ func prependSegmentPlan[E shardEntry](client *Client, corpus shardCorpus[E], pre
 // putHead writes a plan's head document and records its compressed size on the
 // plan (so the manifest write that follows totals shards + head).
 func putHead[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext, tip string, plan *shardPlan[E]) error {
-	headBytes, err := putShardDoc(client, corpus, prefix+corpus.headKey(ext), tip, plan.head, brotliQualityFull)
+	headBytes, err := putShardDoc(client, corpus, ext, prefix+corpus.headKey(ext), tip, plan.head, brotliQualityFull)
 	if err != nil {
 		return err
 	}
@@ -360,7 +369,7 @@ func putHead[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext, t
 // total compressed bytes (shards + head).
 func putManifest[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext, tip string, plan shardPlan[E], bodiesBytes int, complete bool) (int, error) {
 	total := plan.sealedBytes + plan.headBytes
-	m := &siteShardManifest{Version: siteItemsVersion, Tip: tip, TotalBytes: total, Complete: complete, BodiesBytes: bodiesBytes, Shards: plan.shards, Head: siteShardHead{Count: len(plan.head), Bytes: plan.headBytes}}
+	m := &siteShardManifest{Version: corpus.version(ext), Tip: tip, TotalBytes: total, Complete: complete, BodiesBytes: bodiesBytes, Shards: plan.shards, Head: siteShardHead{Count: len(plan.head), Bytes: plan.headBytes}}
 	if err := putShardManifest(client, corpus, prefix, ext, m); err != nil {
 		return 0, err
 	}
@@ -382,14 +391,15 @@ func readDocItems[E shardEntry](client *Client, key string) ([]E, error) {
 }
 
 // readShardManifest fetches one corpus's manifest; nil (no error) when absent,
-// an older version, or unparseable.
+// not this corpus's version (an old-schema bucket, treated as absent so the
+// classifier re-bootstraps), or unparseable.
 func readShardManifest[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string) (*siteShardManifest, error) {
 	var m siteShardManifest
 	found, err := readCompressedJSON(client, prefix+corpus.manifestKey(ext), &m)
 	if err != nil {
 		return nil, err
 	}
-	if !found || m.Version != siteItemsVersion || len(m.Tip) != 40 {
+	if !found || m.Version != corpus.version(ext) || len(m.Tip) != 40 {
 		return nil, nil
 	}
 	return &m, nil

@@ -7,7 +7,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, flattenThread, getObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, flattenThread, getObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the in-app route types a detail page's "back" may return to
   // (a list/board/search the user came from). Detail routes (commit/tag) are
@@ -2151,18 +2151,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // parseBranchField splits a PR base/head field ("[<repo-url>]#branch:<name>")
-  // into its optional repo URL and branch name. A URL marks a foreign branch
-  // whose objects are not in this bucket.
-  function parseBranchField(field) {
-    const s = field || "";
-    const hash = s.indexOf("#");
-    const url = hash > 0 ? s.slice(0, hash) : "";
-    const rest = hash >= 0 ? s.slice(hash + 1) : s;
-    const m = /^branch:(.+)$/.exec(rest);
-    return { url, name: m ? m[1] : "" };
-  }
-
   // resolveTipCommit resolves a PR tip to a full commit sha in this bucket. It
   // resolves the branch ref, prefers the exact recorded short tip (matching the
   // live tip or found in a bounded walk), and otherwise falls back to the live
@@ -3964,13 +3952,36 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return svg;
   }
 
-  // graphRowText builds the text column for one graph row: short hash (commit
-  // link), subject, author, date, and any branch-tip labels for this commit.
-  function graphRowText(r, tips) {
+  // graphRefChips returns the ref decoration chips for one graph row (git log
+  // --decorate style): live code-branch tips (the default branch as the solid
+  // `default` variant), tags (lightweight only — an annotated tag's object sha
+  // never matches a commit row; see loadGraphDecorations), and merged-PR
+  // head-branch chips prefix-matched on the recorded merge-head/head-tip short
+  // shas — rendered dashed/dimmed since the ref is historical, linked to the PR
+  // detail when the canonical PR sha is known, and suppressed when the same
+  // name is already on the row as a live tip.
+  function graphRefChips(hash, decor) {
+    if (!decor) return [];
+    const chips = [];
+    const live = decor.tips[hash] || [];
+    for (const name of live) chips.push(el("span", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : "") }, [name]));
+    for (const name of decor.tags[hash] || []) chips.push(el("span", { class: "chip tag-tip" }, [name]));
+    for (const m of decor.merged || []) {
+      if (!hash.startsWith(m.short) || live.includes(m.name)) continue;
+      chips.push(m.prSha
+        ? el("a", { class: "chip branch-tip merged-branch", href: commitRef(m.prSha, "gitmsg/review"), title: "merged pull request" }, [m.name])
+        : el("span", { class: "chip branch-tip merged-branch", title: "merged pull request" }, [m.name]));
+    }
+    return chips;
+  }
+
+  // graphRowText builds the text column for one graph row: ref decoration chips
+  // (branch tips / tags / merged-PR branches), short hash (commit link),
+  // subject, author, date.
+  function graphRowText(r, decor) {
     const c = r.commit;
     const row = el("div", { class: "graph-row-text" }, []);
-    const labels = tips && tips[c.hash];
-    if (labels) for (const name of labels) row.append(el("span", { class: "chip branch-tip" }, [name]));
+    for (const chip of graphRefChips(c.hash, decor)) row.append(chip);
     row.append(el("a", { class: "hash mono", href: commitRef(c.hash, "") }, [c.short]));
     row.append(el("span", { class: "graph-subject" }, [subjectBody(c.content)[0] || "(no message)"]));
     row.append(el("span", { class: "meta graph-meta" }, [
@@ -3981,11 +3992,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // graphBody renders the assigned rows: an SVG lane gutter beside a stacked list
   // of per-row text lines (fixed GRAPH_ROW_H each so they align with the gutter).
-  function graphBody(rows, laneCount, tips) {
+  function graphBody(rows, laneCount, decor) {
     const gutter = buildGraphGutter(rows, laneCount);
     const textCol = el("div", { class: "graph-text-col" }, []);
     for (const r of rows) {
-      const line = el("div", { class: "graph-line" }, [graphRowText(r, tips)]);
+      const line = el("div", { class: "graph-line" }, [graphRowText(r, decor)]);
       line.style.height = GRAPH_ROW_H + "px";
       textCol.append(line);
     }
@@ -3996,9 +4007,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // time-ordered commit graph over the newest window of history (GRAPH_WINDOW
   // commits across all branch heads), with a "Load more" that walks the next
   // window and re-lays the lanes over the grown set. The lane gutter is inline SVG
-  // (colored lane lines, fork/merge elbows, dots); each row shows the short hash
-  // (commit link), subject, author, date, and branch-tip labels. Empty when the
-  // repository has no commits.
+  // (colored lane lines, fork/merge elbows, dots); each row shows ref decoration
+  // chips (branch tips, tags, merged-PR branches — graphRefChips), the short
+  // hash (commit link), subject, author, date. Empty when the repository has no
+  // commits.
   async function graphView(ctx) {
     let data = await loadGraphWindow(ctx, false);
     const wrap = el("div", { class: "detail graph" }, []);
@@ -4012,7 +4024,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     let moreWrap = null;
     function render() {
       const { rows, laneCount } = assignGraphLanes(data.commits);
-      scroll.replaceChildren(graphBody(rows, laneCount, data.tips));
+      scroll.replaceChildren(graphBody(rows, laneCount, data.decor));
       if (moreWrap) { moreWrap.remove(); moreWrap = null; }
       if (!data.truncated) return;
       const btn = el("button", { class: "load-more", type: "button" }, ["Load more"]);

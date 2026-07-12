@@ -1010,6 +1010,14 @@
   .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .graph-meta { flex: 0 0 auto; }
   .branch-tip { background: color-mix(in srgb, var(--link) 18%, transparent); color: var(--link); }
+  .branch-tip.default { background: var(--link); color: var(--bg); }
+  .tag-tip { background: color-mix(in srgb, var(--open) 18%, transparent); color: var(--open); }
+  /* A merged-PR head branch is historical (the ref may be deleted): dashed
+     outline + dimmed, so it never reads as a live ref. */
+  .chip.merged-branch {
+    background: transparent; border: 1px dashed color-mix(in srgb, var(--merged) 60%, transparent);
+    color: color-mix(in srgb, var(--merged) 85%, var(--text)); text-decoration: none;
+  }
 </style>
 </head>
 <body>

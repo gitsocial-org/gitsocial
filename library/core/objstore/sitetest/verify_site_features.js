@@ -138,6 +138,11 @@ async function main() {
   const rowTexts = findClass(viewNode, "graph-subject").map(textOf);
   ok("graph rows show commit subjects", rowTexts.length > 0 && rowTexts.some((t) => /notes|README|python|rust/i.test(t)), rowTexts.slice(0, 4).join(" | "));
   ok("graph labels a branch tip", findClass(viewNode, "branch-tip").length > 0, "tips=" + findClass(viewNode, "branch-tip").length);
+  const defChips = findClass(viewNode, "branch-tip").filter((n) => n._cls && n._cls.has("default"));
+  ok("graph marks the default branch chip as `default`", defChips.length === 1 && textOf(defChips[0]) === "main", "default chips=" + defChips.map(textOf).join(","));
+  const tagChips = findClass(viewNode, "tag-tip").map(textOf);
+  ok("graph badges the lightweight tag on its row", tagChips.includes("v1.0-light"), "tags=" + tagChips.join(","));
+  ok("annotated tag stays unbadged (its refs.json sha is the tag object, never a row; no peel fetch)", !tagChips.includes("v1.0"), "tags=" + tagChips.join(","));
   const hashes = findClass(viewNode, "graph-row-text").flatMap((r) => findClass(r, "hash").map((h) => h.getAttribute("href") || ""));
   ok("graph short hashes link to commit detail", hashes.some((h) => /^#commit:/.test(h)), hashes.slice(0, 3).join(","));
 
@@ -304,7 +309,7 @@ async function main() {
   // artifact is present, carries NO code bodies corpus, and that resolving the
   // code items fetches zero commit objects (only the index shard/head JSON).
   const codeManifest = await GS.fetchText(BASE, ".gitsocial/site/items/code/manifest.json");
-  ok("code items index manifest is published", !!codeManifest && JSON.parse(codeManifest).version === 4, (codeManifest || "").slice(0, 60));
+  ok("code items index manifest is published (v5, parents)", !!codeManifest && JSON.parse(codeManifest).version === 5, (codeManifest || "").slice(0, 60));
   const codeBodies = await GS.fetchText(BASE, ".gitsocial/site/bodies/code/manifest.json");
   ok("code corpus is metadata-only (no bodies index)", !codeBodies, "bodies manifest unexpectedly present");
   {
