@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/gitsocial-org/gitsocial/library/clientfetch"
+	"github.com/gitsocial-org/gitsocial/library/clientpush"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -17,7 +18,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
-	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -340,14 +340,23 @@ func coreSetSetting() HandlerFunc {
 func corePush(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		// extensions param accepted for API compatibility; push always pushes all initialized extensions
-		_, rpcErr := decodeParams[struct {
+		p, rpcErr := decodeParams[struct {
 			Extensions []string `json:"extensions"`
+			Remote     string   `json:"remote"`
+			All        bool     `json:"all"`
+			NoSite     bool     `json:"noSite"`
+			NoCode     bool     `json:"noCode"`
 		}](raw)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		codeBranches, _ := review.CodeBranchesToPush(s.session.Workdir)
-		result, err := gitmsg.Push(s.session.Workdir, false, codeBranches)
+		opts := clientpush.Options{
+			Remote:      p.Remote,
+			NoCode:      p.NoCode,
+			NoSite:      p.NoSite,
+			AllBranches: p.All,
+		}
+		result, err := clientpush.Publish(s.session.Workdir, opts, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}

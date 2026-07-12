@@ -826,7 +826,7 @@ func TestPush_noBranches(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 
-	result, err := Push(dir, true, nil)
+	result, err := Push(dir, true, nil, "", false)
 	if err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}
@@ -845,7 +845,7 @@ func TestPush_noRemote(t *testing.T) {
 	// Create a gitmsg branch but no remote
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post")
 
-	_, err := Push(dir, true, nil)
+	_, err := Push(dir, true, nil, "", false)
 	if err == nil {
 		t.Error("Push() should error when no remote configured")
 	}
@@ -874,7 +874,7 @@ func TestPush_dryRun(t *testing.T) {
 	// Add more commits locally
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post 3")
 
-	result, err := Push(dir, true, nil)
+	result, err := Push(dir, true, nil, "", false)
 	if err != nil {
 		t.Fatalf("Push() dry run error = %v", err)
 	}
@@ -907,7 +907,7 @@ func TestPush_dryRunWithUnpushedRefs(t *testing.T) {
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post 2")
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post 3")
 
-	result, err := Push(dir, true, nil)
+	result, err := Push(dir, true, nil, "", false)
 	if err != nil {
 		t.Fatalf("Push() dry run error = %v", err)
 	}
@@ -991,7 +991,7 @@ func TestPush_withRefs(t *testing.T) {
 	fullResult, _ := git.ExecGit(dir, []string{"rev-parse", head})
 	git.WriteRef(dir, "refs/gitmsg/social/config", fullResult.Stdout)
 
-	result, err := Push(dir, true, nil)
+	result, err := Push(dir, true, nil, "", false)
 	if err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}
@@ -1026,7 +1026,7 @@ func TestPush_actualPush(t *testing.T) {
 	git.WriteRef(dir, "refs/gitmsg/social/config", fullResult.Stdout)
 
 	// Actual push (not dry run)
-	result, err := Push(dir, false, nil)
+	result, err := Push(dir, false, nil, "", false)
 	if err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}

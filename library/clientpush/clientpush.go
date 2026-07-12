@@ -1,0 +1,175 @@
+// clientpush.go - Shared publish orchestration (data push + browser site) for
+// the thin clients (CLI, TUI, RPC). Centralized so the three can't drift on how
+// a `gitsocial push` publishes: they all resolve code branches the same way,
+// push the gitmsg data, and — for s3 remotes not opted out — publish the site.
+//
+// Why here and not in core/gitmsg: objstore already imports gitmsg (site
+// customization / config readers), so gitmsg.Push MUST NOT call objstore (import
+// cycle). This package sits a layer up, importing both gitmsg and objstore, and
+// wires push-then-site as one user-visible operation. Site failure after a
+// successful data push is a WARNING on the result, never an error: the data push
+// stands (spec decision).
+//
+// Site gate distinction: a push routed through gitsocial (this orchestrator)
+// creates the site on any s3 remote that hasn't opted out — a bucket with no
+// site gets one. That is separate from the git remote helper's OWN post-push
+// maintenance (core/objstore helper_push.go), which stays gated on the
+// site-enabled probe so a plain `git push` to a site-less bucket keeps it clean.
+package clientpush
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+)
+
+// Options configures a publish. Zero value = default behavior (reason-based
+// data push + site for s3 remotes).
+type Options struct {
+	Remote      string // explicit target; "" resolves via git.PushRemote
+	DryRun      bool   // preview only, touch nothing
+	NoCode      bool   // skip code branches (default branch + open-PR heads)
+	NoSite      bool   // skip the site step (overrides config)
+	AllBranches bool   // publish every local branch (refs/heads/*), not just reasoned
+}
+
+// SiteOutcome is the site-publication result of a publish. Published is true
+// when the site step ran successfully; Skipped names why it didn't run (empty
+// when it ran); Err holds a site failure that did NOT fail the data push (the
+// data push still succeeded). Error mirrors Err as a string for JSON/RPC
+// consumers (error itself doesn't serialize).
+type SiteOutcome struct {
+	Published bool   `json:"published"`
+	Skipped   string `json:"skipped,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Err       error  `json:"-"`
+}
+
+// Result combines the data-push result with the site outcome and whether the
+// remote was empty before this push (first publish).
+type Result struct {
+	Push      *gitmsg.PushResult `json:"push"`
+	Site      SiteOutcome        `json:"site"`
+	EmptyBoot bool               `json:"emptyBoot"`
+}
+
+// ResolveRemote returns the remote a publish targets given the explicit choice
+// (empty resolves via the config/heuristic order in git.PushRemote).
+func ResolveRemote(workdir, remote string) string {
+	if remote != "" {
+		return remote
+	}
+	return git.PushRemote(workdir)
+}
+
+// Preview returns the offline push preview for the resolved remote, including
+// --all extras when requested. Used by dry-run and the TUI prompt.
+func Preview(workdir string, opts Options) (*gitmsg.PushPreview, string, error) {
+	remote := ResolveRemote(workdir, opts.Remote)
+	codeBranches := resolveCodeBranches(workdir, opts.NoCode)
+	preview, err := gitmsg.GetPushPreview(workdir, codeBranches, remote, opts.AllBranches)
+	return preview, remote, err
+}
+
+// resolveCodeBranches returns the reason-based code branches to publish, or nil
+// when code is opted out. Centralized so CLI/TUI/RPC agree.
+func resolveCodeBranches(workdir string, noCode bool) map[string]int {
+	if noCode {
+		return nil
+	}
+	branches, _ := review.CodeBranchesToPush(workdir)
+	return branches
+}
+
+// Publish runs the data push, then (for s3 remotes not opted out) publishes the
+// browser site. onBranch reports coarse per-branch push progress (nil = none);
+// siteProgress reports site-upload progress (nil = none). The data push and the
+// site step share one operation from the caller's view, but their failure modes
+// differ: a data-push error is returned as err (nothing published); a site error
+// after a good data push lands in Result.Site.Err (the push still succeeded).
+func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
+	remote := ResolveRemote(workdir, opts.Remote)
+	codeBranches := resolveCodeBranches(workdir, opts.NoCode)
+
+	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
+
+	pushResult, err := gitmsg.PushWithProgress(workdir, opts.DryRun, codeBranches, remote, opts.AllBranches, onBranch)
+	if err != nil {
+		return nil, err
+	}
+	res.Push = pushResult
+
+	res.Site = publishSite(workdir, pushResult.RemoteURL, opts, siteProgress)
+	return res, nil
+}
+
+// publishSite runs the site step for the resolved remote URL, deciding whether
+// it applies. Non-s3 remotes and opt-outs are silently skipped with a reason; a
+// dry run never touches the bucket. A site error is captured (warning), not
+// returned, so it can't undo a successful data push.
+func publishSite(workdir, remoteURL string, opts Options, progress objstore.Progress) SiteOutcome {
+	if opts.NoSite {
+		return SiteOutcome{Skipped: "--no-site"}
+	}
+	if !git.PushSiteEnabled(workdir) {
+		return SiteOutcome{Skipped: "config gitsocial.pushSite=false"}
+	}
+	if !strings.HasPrefix(remoteURL, "s3://") {
+		return SiteOutcome{Skipped: "non-s3 remote"}
+	}
+	if opts.DryRun {
+		return SiteOutcome{Skipped: "dry-run"}
+	}
+	if err := PublishSite(workdir, remoteURL, progress); err != nil {
+		return SiteOutcome{Err: err, Error: err.Error()}
+	}
+	return SiteOutcome{Published: true}
+}
+
+// PublishSite uploads the browser static site to an s3 bucket and refreshes the
+// bucket HEAD + push-time stats. Shared by `gitsocial push` (via Publish) and
+// the explicit `gitsocial site push` so their site wiring can't drift. HEAD and
+// stats are best-effort: a failure there does not fail the site push.
+func PublishSite(workdir, remoteURL string, progress objstore.Progress) error {
+	if err := objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, progress); err != nil {
+		return err
+	}
+	// Point the bucket HEAD at the repo's real default branch (not an assumed
+	// "main"), and publish push-time stats (the default branch's commit count +
+	// times) the browser can't cheaply derive. Best-effort: never fails the push.
+	branch, times, err := defaultBranchStats(workdir)
+	if err != nil {
+		return nil
+	}
+	_ = objstore.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
+	stats := map[string]any{"branch": branch, "commits": len(times), "commitTimes": times}
+	_ = objstore.WriteSiteStats(remoteURL, objstore.HelperEnvFromOS(), stats)
+	return nil
+}
+
+// defaultBranchStats returns the current branch and every regular commit's
+// author time (unix seconds) on it — the served default branch in the bucket.
+// The browser buckets these into the analytics activity chart with the same
+// period logic it uses for items, and the count is len().
+func defaultBranchStats(workdir string) (string, []int, error) {
+	br, err := git.ExecGit(workdir, []string{"rev-parse", "--abbrev-ref", "HEAD"})
+	if err != nil {
+		return "", nil, err
+	}
+	lr, err := git.ExecGit(workdir, []string{"log", "--format=%ct", "HEAD"})
+	if err != nil {
+		return "", nil, err
+	}
+	fields := strings.Fields(lr.Stdout)
+	times := make([]int, 0, len(fields))
+	for _, f := range fields {
+		if n, e := strconv.Atoi(f); e == nil {
+			times = append(times, n)
+		}
+	}
+	return strings.TrimSpace(br.Stdout), times, nil
+}

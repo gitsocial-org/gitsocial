@@ -1,6 +1,6 @@
 # Static Site
 
-`gitsocial site push` publishes a complete, browsable website of your repository (timeline, issues and boards, pull requests, releases, code, search, analytics) into the same S3-compatible bucket that hosts the repo.
+`gitsocial push` publishes a complete, browsable website of your repository (timeline, issues and boards, pull requests, releases, code, search, analytics) into the same S3-compatible bucket that hosts the repo, alongside the repo data.
 
 The site is plain static files read directly by the browser: no server, no build step, no dependencies, and nothing for visitors to install. Anyone with the bucket's public URL can follow the project without a forge account, and the site stays current automatically because every later `gitsocial push` refreshes the data it reads.
 
@@ -10,11 +10,12 @@ The site is plain static files read directly by the browser: no server, no build
 
 ```bash
 gitsocial remote add s3://<endpoint>/<bucket>/<prefix>   # once: bucket as a remote (see S3.md)
-gitsocial push                                           # repo data
-gitsocial site push [remote]                             # upload/refresh the site (remote defaults to origin)
+gitsocial push                                           # publish repo data + the browsable website
 ```
 
-The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. After the first `site push` the bucket is site-enabled: every subsequent push maintains the data artifacts the site reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without re-running `site push`.
+`gitsocial push` publishes the site by default for `s3://` remotes — a bucket with no site gets one on the first push. Opt out per-push with `--no-site`, or persistently with `git config gitsocial.pushSite false`. `gitsocial site push [remote]` remains as an **explicit site refresh** (upload/re-derive the site without pushing new data); the remote defaults to the [push remote](S3.md#push-remote-resolution). See [S3.md → Push behavior](S3.md#push-behavior-publish-by-default) for the full flag set and the two site-gate rules (`gitsocial push` creates a site; plain `git push` does not).
+
+The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. Once the bucket is site-enabled, every subsequent push maintains the data artifacts the site reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without a manual refresh.
 
 ## Customization
 

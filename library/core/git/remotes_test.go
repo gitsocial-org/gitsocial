@@ -85,6 +85,45 @@ func TestGetOriginURL_noRemotes(t *testing.T) {
 	}
 }
 
+func TestPushRemote_configOverHeuristic(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	// origin is s3, so the heuristic would pick origin. A configured remote
+	// must win over that.
+	ExecGit(dir, []string{"remote", "add", "origin", "s3://s3.example.com/bucket/repo"})
+	ExecGit(dir, []string{"remote", "add", "backup", "s3://s3.example.com/other/repo"})
+	ExecGit(dir, []string{"config", "gitsocial.pushRemote", "backup"})
+
+	if got := PushRemote(dir); got != "backup" {
+		t.Errorf("PushRemote() = %q, want backup (config overrides heuristic)", got)
+	}
+}
+
+func TestPushRemote_missingConfiguredFallsBack(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	// Configured name doesn't exist as a remote; must fall through to the
+	// heuristic (origin, which is s3 here).
+	ExecGit(dir, []string{"remote", "add", "origin", "s3://s3.example.com/bucket/repo"})
+	ExecGit(dir, []string{"config", "gitsocial.pushRemote", "ghost"})
+
+	if got := PushRemote(dir); got != "origin" {
+		t.Errorf("PushRemote() = %q, want origin (heuristic fallback for missing config)", got)
+	}
+}
+
+func TestConfiguredPushRemote(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	if got := ConfiguredPushRemote(dir); got != "" {
+		t.Errorf("ConfiguredPushRemote() = %q, want empty when unset", got)
+	}
+	ExecGit(dir, []string{"config", "gitsocial.pushRemote", "backup"})
+	if got := ConfiguredPushRemote(dir); got != "backup" {
+		t.Errorf("ConfiguredPushRemote() = %q, want backup", got)
+	}
+}
+
 func TestGetRemoteDefaultBranch_fallback(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)

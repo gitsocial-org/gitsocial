@@ -65,7 +65,7 @@ Works for S3-compatible buckets too:
 ```bash
 gitsocial clone s3://s3.example.com/mybucket/myrepo
 gitsocial remote add s3://s3.example.com/mybucket/myrepo
-gitsocial site push          # publish a browsable website from the bucket
+gitsocial push               # publish repo data + a browsable website to the bucket
 ```
 
 ## Documentation

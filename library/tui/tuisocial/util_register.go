@@ -389,13 +389,40 @@ func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, te
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
 		return true, nil
 	}
-	var msgCmd tea.Cmd
-	if msg.Commits == 0 && msg.Refs == 0 {
-		msgCmd = ctx.Host().SetMessageWithTimeout("Nothing to push", tuicore.MessageTypeSuccess, 5*time.Second)
-	} else {
-		msgCmd = ctx.Host().SetMessageWithTimeout(fmt.Sprintf("Pushed %d commits, %d refs", msg.Commits, msg.Refs), tuicore.MessageTypeSuccess, 5*time.Second)
-	}
+	text, tone := formatPushCompletion(msg)
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, tone, 5*time.Second)
 	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnpushedCount(), msgCmd)
+}
+
+// formatPushCompletion builds the completion toast: remote name, counts (incl.
+// tags when > 0), and the site outcome (published / skipped / failed). A site
+// failure downgrades the tone to warning (the data push still succeeded), per
+// the spec — it is never an error.
+func formatPushCompletion(msg PushCompletedMsg) (string, tuicore.MessageType) {
+	var head string
+	if msg.Commits == 0 && msg.Refs == 0 && msg.Tags == 0 {
+		head = "Nothing to push"
+	} else {
+		parts := []string{fmt.Sprintf("%d commits", msg.Commits), fmt.Sprintf("%d refs", msg.Refs)}
+		if msg.Tags > 0 {
+			parts = append(parts, fmt.Sprintf("%d tags", msg.Tags))
+		}
+		head = "Pushed " + strings.Join(parts, ", ")
+	}
+	if msg.Remote != "" {
+		head += " to " + msg.Remote
+	}
+	tone := tuicore.MessageTypeSuccess
+	switch {
+	case msg.SiteErr != nil:
+		head += " · site failed: " + msg.SiteErr.Error()
+		tone = tuicore.MessageTypeWarning
+	case msg.SitePublished:
+		head += " · site published"
+	case msg.SiteSkipped != "":
+		head += " · site skipped"
+	}
+	return head, tone
 }
 
 func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {

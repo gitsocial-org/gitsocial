@@ -19,7 +19,56 @@ func newRemoteCmd() *cobra.Command {
 		Short: "Manage repository remotes",
 	}
 	cmd.AddCommand(newRemoteAddCmd())
+	cmd.AddCommand(newRemoteDefaultCmd())
 	return cmd
+}
+
+// newRemoteDefaultCmd sets or reports git config gitsocial.pushRemote, the
+// remote gitsocial push and site push target by default.
+func newRemoteDefaultCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "default [name]",
+		Short: "Set or show the default push remote (gitsocial.pushRemote)",
+		Long: `Set the remote gitsocial pushes to by default, stored in
+git config gitsocial.pushRemote. With no argument, prints the current
+resolution: the configured name, or "heuristic: <resolved>" when unset.
+
+Examples:
+  gitsocial remote default            # Show the current resolution
+  gitsocial remote default backup     # Set "backup" as the default push remote`,
+		Args: cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+
+			if len(args) == 0 {
+				configured := git.ConfiguredPushRemote(cfg.WorkDir)
+				if cfg.JSONOutput {
+					PrintJSON(map[string]string{"configured": configured, "resolved": git.PushRemote(cfg.WorkDir)})
+					return
+				}
+				if configured != "" {
+					fmt.Println(configured)
+				} else {
+					fmt.Printf("heuristic: %s\n", git.PushRemote(cfg.WorkDir))
+				}
+				return
+			}
+
+			name := args[0]
+			if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", name}); err != nil {
+				PrintError(cmd, fmt.Sprintf("remote %q does not exist", name))
+				os.Exit(ExitError)
+			}
+			if _, err := git.ExecGit(cfg.WorkDir, []string{"config", "gitsocial.pushRemote", name}); err != nil {
+				PrintError(cmd, fmt.Sprintf("set gitsocial.pushRemote: %v", err))
+				os.Exit(ExitError)
+			}
+			PrintSuccess(cmd, fmt.Sprintf("Default push remote set to %q", name))
+		},
+	}
 }
 
 // newRemoteAddCmd adds a remote, resolving s3:// and pasted AWS S3 console URLs

@@ -231,4 +231,17 @@ func TestSequence(t *testing.T) {
 			})
 		}
 	})
+	// PushConfirmNamesRemote: 'p' on the config view opens the push confirm,
+	// which names the resolved remote. The fixture has a single non-s3 origin
+	// and no gitsocial.pushRemote, so the target resolves to "origin" with no
+	// picker (the picker needs 2+ s3 remotes, which the shared fixture can't
+	// provide; the picker/prompt construction is unit-tested in the tui package).
+	t.Run("PushConfirmNamesRemote", func(t *testing.T) {
+		h.NavigateTo(tuicore.LocConfig("social"))
+		h.SendKey("p")
+		out := rendered(h)
+		assertContains(t, out, "Push to origin")
+		assertContains(t, out, "tags checked at push")
+		h.SendKey("n") // dismiss
+	})
 }

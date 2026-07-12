@@ -3,10 +3,12 @@ package tui
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/clientfetch"
+	"github.com/gitsocial-org/gitsocial/library/clientpush"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -1026,29 +1029,14 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			if m.isPushing || m.isFetching || m.pushChoice.IsActive() {
 				return nil
 			}
-			codeBranches, _ := review.CodeBranchesToPush(m.workdir)
-			preview, err := gitmsg.GetPushPreview(m.workdir, codeBranches)
-			if err != nil {
-				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+			// Picker first when the target is ambiguous: 2+ s3 remotes and nothing
+			// configured. A single candidate or a configured default resolves
+			// silently and goes straight to the confirm.
+			s3 := git.S3Remotes(m.workdir)
+			if len(s3) >= 2 && git.ConfiguredPushRemote(m.workdir) == "" {
+				return m.showPushRemotePicker(s3)
 			}
-			if preview.IsEmpty() {
-				return m.host.SetMessageWithTimeout("Nothing to push", tuicore.MessageTypeSuccess, 5*time.Second)
-			}
-			m.pushChoice.Show(buildPushConfirmPrompt(preview), []tuicore.Choice{
-				{Key: "y", Label: "es"},
-				{Key: "n", Label: "o"},
-			}, func(key string) tea.Cmd {
-				m.host.State().ChoicePrompt = ""
-				if key != "y" {
-					return nil
-				}
-				m.isPushing = true
-				m.host.SetPushing(true)
-				m.host.SetPushingInfo(git.PushRemoteURL(m.workdir))
-				return m.startPush(codeBranches)
-			})
-			m.host.State().ChoicePrompt = m.pushChoice.Render()
-			return nil
+			return m.showPushConfirm("")
 		},
 		StartLFSPush: func() tea.Cmd {
 			if m.isPushing || m.isFetching {
@@ -1056,6 +1044,9 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			}
 			m.isPushing = true
 			m.host.SetPushing(true)
+			// LFS objects go to origin unconditionally (git.PushLFS runs
+			// `git lfs push origin --all`, independent of the gitsocial push
+			// remote), so the status URL is origin's, not the publish remote's.
 			m.host.SetPushingInfo(git.GetOriginURL(m.workdir))
 			return m.startLFSPush()
 		},
@@ -1232,11 +1223,67 @@ func breakdownTotal(breakdown map[string]int) int {
 	return total
 }
 
-// startPush runs gitmsg.Push with the user-confirmed code branches: code
-// branches go first (so the gitmsg/review push records PRs whose head is
-// reachable on origin), then gitmsg/* branches, which auto-merge on divergence
-// (empty-tree append-only → conflict-free) instead of failing non-fast-forward.
-func (m *Model) startPush(codeBranches map[string]int) tea.Cmd {
+// showPushRemotePicker shows the remote picker (number keys 1..n, enter =
+// resolved default, D = pick + persist default, esc cancels), then chains into
+// the confirm for the chosen remote. Only reached when the target is ambiguous.
+func (m *Model) showPushRemotePicker(s3 []string) tea.Cmd {
+	defaultRemote := git.PushRemote(m.workdir)
+	m.pushChoice.Show(buildRemotePickerPrompt(defaultRemote), buildRemotePickerChoices(s3), func(key string) tea.Cmd {
+		m.host.State().ChoicePrompt = ""
+		switch key {
+		case "enter":
+			return m.showPushConfirm(defaultRemote)
+		case "D":
+			// Persist the resolved default, then confirm against it.
+			if err := git.SetConfiguredPushRemote(m.workdir, defaultRemote); err != nil {
+				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+			}
+			return m.showPushConfirm(defaultRemote)
+		}
+		if n, err := strconv.Atoi(key); err == nil && n >= 1 && n <= len(s3) {
+			return m.showPushConfirm(s3[n-1])
+		}
+		return nil
+	})
+	m.host.State().ChoicePrompt = m.pushChoice.Render()
+	return nil
+}
+
+// showPushConfirm builds the offline preview for the chosen remote (empty =
+// resolve via config/heuristic) and shows the y/n confirm. Never hard-gates on
+// an empty preview (tags are uncountable offline); the confirm is always
+// offered so a tags-only push still happens.
+func (m *Model) showPushConfirm(remote string) tea.Cmd {
+	preview, resolved, err := clientpush.Preview(m.workdir, clientpush.Options{Remote: remote})
+	if err != nil {
+		return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+	}
+	remoteURL := git.RemoteURL(m.workdir, resolved)
+	m.pushChoice.Show(buildPushConfirmPrompt(preview, resolved, remoteURL), []tuicore.Choice{
+		{Key: "y", Label: "es"},
+		{Key: "n", Label: "o"},
+	}, func(key string) tea.Cmd {
+		m.host.State().ChoicePrompt = ""
+		if key != "y" {
+			return nil
+		}
+		m.isPushing = true
+		m.host.SetPushing(true)
+		m.host.SetPushingInfo(remoteURL)
+		return m.startPush(resolved)
+	})
+	m.host.State().ChoicePrompt = m.pushChoice.Render()
+	return nil
+}
+
+// startPush publishes to remote via clientpush.Publish (data push + browser
+// site, mirroring the CLI). Code branches go first (so the gitmsg/review push
+// records PRs whose head is reachable), then gitmsg/* branches auto-merge on
+// divergence, then — for s3 remotes not opted out — the site. Per-branch
+// progress feeds the status line; the site step surfaces as a "site" phase.
+// The site helper's own stderr is invisible in the TUI, so site progress stays
+// coarse (one phase line).
+func (m *Model) startPush(remote string) tea.Cmd {
 	m.bgPushCh = make(chan tea.Msg, 64)
 	ch := m.bgPushCh
 	workdir := m.workdir
@@ -1247,18 +1294,34 @@ func (m *Model) startPush(codeBranches map[string]int) tea.Cmd {
 			default: // channel full — drop the coarse update; completion still delivered
 			}
 		}
-		result, err := gitmsg.PushWithProgress(workdir, false, codeBranches, onBranch)
+		siteProgress := func(phase string, done, total int) {
+			select {
+			case ch <- pushProgressMsg{branch: "site: " + phase, done: done, total: total}:
+			default:
+			}
+		}
+		result, err := clientpush.Publish(workdir, clientpush.Options{Remote: remote}, onBranch, siteProgress)
 		if err != nil {
 			ch <- tuisocial.PushCompletedMsg{Err: err}
 		} else {
-			ch <- tuisocial.PushCompletedMsg{Commits: result.Commits + result.CodeCommits, Refs: result.Refs}
+			p := result.Push
+			ch <- tuisocial.PushCompletedMsg{
+				Commits:       p.Commits + p.CodeCommits,
+				Refs:          p.Refs,
+				Tags:          p.Tags,
+				Remote:        p.Remote,
+				SitePublished: result.Site.Published,
+				SiteSkipped:   result.Site.Skipped,
+				SiteErr:       result.Site.Err,
+			}
 		}
 		close(ch)
 	}()
 	return drainBgImportCmd(ch)
 }
 
-// pushProgressMsg carries a coarse per-branch push step for the status line.
+// pushProgressMsg carries a coarse per-branch (or "site") push step for the
+// status line.
 type pushProgressMsg struct {
 	branch      string
 	done, total int
@@ -1904,11 +1967,24 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 }
 
 // buildPushConfirmPrompt builds the single-line confirmation prompt for push,
-// breaking commits down per extension branch and adding a refs total if any.
-// Code branches (workspace-local refs referenced by open PRs that still have
-// unpushed commits) are appended so reviewers can fetch the PR's head once
-// the push completes.
-func buildPushConfirmPrompt(p *gitmsg.PushPreview) string {
+// naming the resolved remote (and its URL host) then breaking commits down per
+// extension branch, a refs total, and code branches (workspace-local refs
+// referenced by open PRs that still have unpushed commits) so reviewers can
+// fetch the PR's head once the push completes.
+//
+// The preview cannot count tags offline (git keeps no remote tag-tracking
+// state), so the prompt always notes "tags checked at push". When the preview
+// is empty we still offer the push — a tags-only change is invisible here yet
+// real, and a truly no-op push is cheap — with an explicit "(no counted
+// changes; tags checked at push)" instead of hard-gating on "Nothing to push".
+//
+// Future work: the preview has no remote-branch state, so it can't flag code
+// branches the remote has never seen ("new branch"); that needs a remote probe.
+func buildPushConfirmPrompt(p *gitmsg.PushPreview, remote, remoteURL string) string {
+	target := remote
+	if host := pushRemoteHost(remoteURL); host != "" {
+		target = fmt.Sprintf("%s (%s)", remote, host)
+	}
 	var parts []string
 	for _, b := range p.Branches {
 		name := strings.TrimPrefix(b.Branch, "gitmsg/")
@@ -1918,12 +1994,52 @@ func buildPushConfirmPrompt(p *gitmsg.PushPreview) string {
 		parts = append(parts, fmt.Sprintf("%d refs", p.Refs))
 	}
 	for _, b := range p.Code {
-		parts = append(parts, fmt.Sprintf("%d %s", b.Commits, b.Branch))
+		parts = append(parts, fmt.Sprintf("code: %s (%d)", b.Branch, b.Commits))
 	}
+	body := strings.Join(parts, ", ")
 	if len(parts) == 0 {
-		return "Push?"
+		body = "no counted changes; tags checked at push"
+	} else {
+		body += "; tags checked at push"
 	}
-	return "Push " + strings.Join(parts, ", ") + "?"
+	return fmt.Sprintf("Push to %s: %s?", target, body)
+}
+
+// pushRemoteHost returns the host of a remote URL for the confirm prompt (e.g.
+// "…r2.cloudflarestorage.com" from an s3:// URL). Returns "" for URLs without a
+// parseable host, in which case the prompt names the remote alone.
+func pushRemoteHost(remoteURL string) string {
+	if remoteURL == "" {
+		return ""
+	}
+	u, err := url.Parse(remoteURL)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Host
+}
+
+// buildRemotePickerPrompt / buildRemotePickerChoices back the push remote
+// picker shown when 2+ s3 remotes exist and nothing is configured. Number keys
+// 1..n pick a remote, enter takes the resolved default, D persists the default
+// pick via git config, esc cancels.
+func buildRemotePickerPrompt(defaultRemote string) string {
+	return fmt.Sprintf("Push to which remote? (enter=%s, D=set default)", defaultRemote)
+}
+
+// buildRemotePickerChoices maps each s3 remote to a number key, then adds enter
+// (resolved default) and D (persist default). The returned slice order matches
+// the remotes slice so the handler can index back to a name by key.
+func buildRemotePickerChoices(remotes []string) []tuicore.Choice {
+	choices := make([]tuicore.Choice, 0, len(remotes)+2)
+	for i, name := range remotes {
+		choices = append(choices, tuicore.Choice{Key: strconv.Itoa(i + 1), Label: " " + name})
+	}
+	choices = append(choices,
+		tuicore.Choice{Key: "enter", Label: " default"},
+		tuicore.Choice{Key: "D", Label: " set default"},
+	)
+	return choices
 }
 
 // formatImportProgress turns a ProgressEvent into footer phase + detail.

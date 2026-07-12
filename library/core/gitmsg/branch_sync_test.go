@@ -140,7 +140,7 @@ func TestPush_autoMergesDivergentExtensionBranch(t *testing.T) {
 	if _, err := git.CreateCommitOnBranch(cloneA, "gitmsg/social", "A: initial post"); err != nil {
 		t.Fatalf("A initial commit: %v", err)
 	}
-	if _, err := Push(cloneA, false, nil); err != nil {
+	if _, err := Push(cloneA, false, nil, "", false); err != nil {
 		t.Fatalf("A initial push: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func TestPush_autoMergesDivergentExtensionBranch(t *testing.T) {
 	if _, err := git.CreateCommitOnBranch(cloneB, "gitmsg/social", "B: my reply"); err != nil {
 		t.Fatalf("B commit: %v", err)
 	}
-	if _, err := Push(cloneB, false, nil); err != nil {
+	if _, err := Push(cloneB, false, nil, "", false); err != nil {
 		t.Fatalf("B push: %v", err)
 	}
 
@@ -162,7 +162,7 @@ func TestPush_autoMergesDivergentExtensionBranch(t *testing.T) {
 
 	// Pre-fix, this push fails non-fast-forward and the user is stuck.
 	// Post-fix, PushBranchWithMerge auto-merges and the push succeeds.
-	result, err := Push(cloneA, false, nil)
+	result, err := Push(cloneA, false, nil, "", false)
 	if err != nil {
 		t.Fatalf("A divergent push: %v", err)
 	}

@@ -237,3 +237,133 @@ func TestCLI_statusJSON(t *testing.T) {
 		t.Error("status --json returned an empty object")
 	}
 }
+
+func TestCLI_remoteDefault_setAndShow(t *testing.T) {
+	dir := initCLITestRepo(t)
+	cacheDir := t.TempDir()
+
+	// No config yet: reports the heuristic resolution (origin here).
+	stdout, stderr, code := runCLI(t, dir, cacheDir, "remote", "default")
+	if code != 0 {
+		t.Fatalf("remote default (show): exit %d\n%s%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "heuristic: origin") {
+		t.Errorf("remote default show = %q, want mention of heuristic: origin", stdout)
+	}
+
+	// Add a second remote and set it as the default.
+	cmd := exec.Command("git", "-C", dir, "remote", "add", "backup", "s3://s3.example.com/bucket/repo")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git remote add backup: %v\n%s", err, out)
+	}
+	_, stderr, code = runCLI(t, dir, cacheDir, "remote", "default", "backup")
+	if code != 0 {
+		t.Fatalf("remote default backup: exit %d\n%s", code, stderr)
+	}
+
+	// Now it reports the configured name (not the heuristic).
+	stdout, _, code = runCLI(t, dir, cacheDir, "remote", "default")
+	if code != 0 {
+		t.Fatalf("remote default (show configured): exit %d", code)
+	}
+	if strings.TrimSpace(stdout) != "backup" {
+		t.Errorf("remote default show = %q, want backup", strings.TrimSpace(stdout))
+	}
+}
+
+func TestCLI_remoteDefault_missingRemoteErrors(t *testing.T) {
+	dir := initCLITestRepo(t)
+	_, stderr, code := runCLI(t, dir, t.TempDir(), "remote", "default", "ghost")
+	if code == 0 {
+		t.Error("remote default with a nonexistent remote should exit non-zero")
+	}
+	if !strings.Contains(stderr, "ghost") {
+		t.Errorf("stderr = %q, want mention of the missing remote", stderr)
+	}
+}
+
+// initCLIRepoWithBareRemote creates a git repo whose "origin" points at a fresh
+// local bare remote (a non-s3 path, so the site step is skipped), with the
+// initial commit already pushed. Returns the work dir.
+func initCLIRepoWithBareRemote(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bare := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "--bare", "-b", "main", bare},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	for _, args := range [][]string{
+		{"init", "-b", "main"},
+		{"config", "user.email", "cli-test@test.com"},
+		{"config", "user.name", "CLI Test"},
+		{"commit", "--allow-empty", "-m", "init"},
+		{"remote", "add", "origin", bare},
+		{"push", "origin", "main"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return dir
+}
+
+// TestCLI_push_noSiteOnNonS3Remote: `push --no-site` to a non-s3 remote reports
+// the site as skipped and exits 0.
+func TestCLI_push_noSiteOnNonS3Remote(t *testing.T) {
+	dir := initCLIRepoWithBareRemote(t)
+	cacheDir := t.TempDir()
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
+		t.Fatalf("social init: exit %d\n%s", code, stderr)
+	}
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "post", "hello"); code != 0 {
+		t.Fatalf("social post: exit %d\n%s", code, stderr)
+	}
+
+	stdout, stderr, code := runCLI(t, dir, cacheDir, "push", "--no-site")
+	if code != 0 {
+		t.Fatalf("push --no-site: exit %d\n%s%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Site: skipped (--no-site)") {
+		t.Errorf("push stdout = %q, want Site: skipped (--no-site)", stdout)
+	}
+}
+
+// TestCLI_push_dryRunJSON: `push --dry-run --json` emits the combined result and
+// touches nothing.
+func TestCLI_push_dryRunJSON(t *testing.T) {
+	dir := initCLIRepoWithBareRemote(t)
+	cacheDir := t.TempDir()
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
+		t.Fatalf("social init: exit %d\n%s", code, stderr)
+	}
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "post", "hello"); code != 0 {
+		t.Fatalf("social post: exit %d\n%s", code, stderr)
+	}
+
+	stdout, stderr, code := runCLI(t, dir, cacheDir, "--json", "push", "--dry-run")
+	if code != 0 {
+		t.Fatalf("push --dry-run --json: exit %d\n%s%s", code, stdout, stderr)
+	}
+	var res struct {
+		Push struct {
+			Remote string `json:"remote"`
+		} `json:"push"`
+		Site struct {
+			Published bool `json:"published"`
+		} `json:"site"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
+		t.Fatalf("push --dry-run --json output is not JSON: %v\n%s", err, stdout)
+	}
+	if res.Push.Remote != "origin" {
+		t.Errorf("push.remote = %q, want origin", res.Push.Remote)
+	}
+	if res.Site.Published {
+		t.Error("dry-run should not publish a site")
+	}
+}

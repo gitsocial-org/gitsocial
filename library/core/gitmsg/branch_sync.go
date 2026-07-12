@@ -28,7 +28,14 @@ import (
 // call on a fresh local branch (the remote tip is adopted directly). Suitable
 // for any gitmsg/* branch.
 func FetchAndMergeBranch(repoPath, branch string) error {
-	if _, err := git.ExecGit(repoPath, []string{"fetch", git.PushRemote(repoPath), branch}); err != nil {
+	return FetchAndMergeBranchTo(repoPath, git.PushRemote(repoPath), branch)
+}
+
+// FetchAndMergeBranchTo is FetchAndMergeBranch against an explicit remote. The
+// gitsocial-push path threads its resolved remote through here so a
+// non-fast-forward retry merges against the same target it pushed to.
+func FetchAndMergeBranchTo(repoPath, remote, branch string) error {
+	if _, err := git.ExecGit(repoPath, []string{"fetch", remote, branch}); err != nil {
 		return err
 	}
 	remoteTip := fullHash(repoPath, "FETCH_HEAD")
@@ -66,7 +73,13 @@ func FetchAndMergeBranch(repoPath, branch string) error {
 // rejection, runs FetchAndMergeBranch and retries once. Any non-FF failure on
 // the retry surfaces as an error so the caller can report it.
 func PushBranchWithMerge(repoPath, branch string) error {
-	remote := git.PushRemote(repoPath)
+	return PushBranchWithMergeTo(repoPath, git.PushRemote(repoPath), branch)
+}
+
+// PushBranchWithMergeTo is PushBranchWithMerge against an explicit remote. The
+// gitsocial-push path threads its resolved remote through here so the push and
+// its non-FF merge-retry target the same remote.
+func PushBranchWithMergeTo(repoPath, remote, branch string) error {
 	_, err := git.ExecGit(repoPath, []string{"push", remote, branch})
 	if err == nil {
 		return nil
@@ -74,7 +87,7 @@ func PushBranchWithMerge(repoPath, branch string) error {
 	if !isNonFastForward(err) {
 		return err
 	}
-	if mergeErr := FetchAndMergeBranch(repoPath, branch); mergeErr != nil {
+	if mergeErr := FetchAndMergeBranchTo(repoPath, remote, branch); mergeErr != nil {
 		return mergeErr
 	}
 	_, err = git.ExecGit(repoPath, []string{"push", remote, branch})
