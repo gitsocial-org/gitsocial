@@ -3,6 +3,7 @@ package objstore
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -53,7 +54,20 @@ func NewClient(cfg Config) (*Client, error) {
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
 		return nil, fmt.Errorf("objstore: credentials required (GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
 	}
-	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second}}, nil
+	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second, Transport: newTransport()}}, nil
+}
+
+// newTransport returns an HTTP transport sized for the concurrent push
+// upload pool: stdlib's default keeps only 2 idle connections per host, so a
+// pool of N workers would churn N-2 fresh TLS handshakes every round. Keep
+// enough idle connections alive to match a generous pool and cap total
+// connections so a large custom pool can't exhaust local sockets.
+func newTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns = 128
+	t.MaxIdleConnsPerHost = 64
+	t.MaxConnsPerHost = 128
+	return t
 }
 
 // firstEnv returns the first non-empty value among the named env vars.
@@ -96,6 +110,41 @@ var (
 	ErrNotFound           = fmt.Errorf("objstore: not found")
 	ErrPreconditionFailed = fmt.Errorf("objstore: precondition failed")
 )
+
+// httpStatusError carries a non-2xx HTTP status code so callers (the GET retry)
+// can tell a transient server fault (5xx, 429 — worth retrying) from a client
+// error (4xx — not). A transport-level error (killed connection, DNS, TLS)
+// carries no status code and is surfaced separately; the retry treats it as
+// transient too.
+type httpStatusError struct {
+	code int
+	err  error
+}
+
+func (e *httpStatusError) Error() string { return e.err.Error() }
+func (e *httpStatusError) Unwrap() error { return e.err }
+
+// isTransientReadError reports whether a failed GET/HEAD/LIST is worth retrying:
+// a 5xx or 429 status (the provider is momentarily unavailable or throttling —
+// e.g. Cloudflare's transient 503) or a transport-level error with no status
+// (a dropped connection, a DNS/TLS blip). A 404/403/412 or any other 4xx is a
+// definite answer and never retried. GETs are idempotent, so a retry is always
+// safe.
+func isTransientReadError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPreconditionFailed) {
+		return false
+	}
+	var se *httpStatusError
+	if errors.As(err, &se) {
+		return se.code == 429 || (se.code >= 500 && se.code <= 599)
+	}
+	// No HTTP status reached us: a transport-level failure (connection reset,
+	// timeout, DNS). Idempotent read, so retry.
+	return true
+}
 
 func (c *Client) do(method, key string, query url.Values, body []byte, headers map[string]string) (*http.Response, error) {
 	u, err := c.objectURL(key)
@@ -159,7 +208,7 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		resp.Body.Close()
-		return nil, fmt.Errorf("objstore: %s %s: HTTP %d: %s", method, key, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return nil, &httpStatusError{code: resp.StatusCode, err: fmt.Errorf("objstore: %s %s: HTTP %d: %s", method, key, resp.StatusCode, strings.TrimSpace(string(respBody)))}
 	}
 	return resp, nil
 }
@@ -176,6 +225,41 @@ func (c *Client) Get(key string) ([]byte, error) {
 		return nil, fmt.Errorf("objstore: read %s: %w", key, err)
 	}
 	return data, nil
+}
+
+// retryBackoff paces read/PUT retries; len+1 = total attempts. A var so tests
+// can shrink the waits (shared by putObjectWithRetry and the read retries).
+var retryBackoff = []time.Duration{500 * time.Millisecond, 2 * time.Second}
+
+// withReadRetry runs an idempotent read (GET/HEAD/LIST) and retries it on a
+// transient fault (5xx, 429, or a transport-level error) with bounded backoff,
+// so a single Cloudflare 503 or a dropped connection mid-walk costs one retried
+// read instead of losing a long operation. A definite answer (success, 404,
+// 403, any other 4xx) returns immediately; a fault that persists past the
+// attempts surfaces the last error. ctx aborts the wait when a peer has already
+// failed a pooled operation (pass context.TODO() for an un-pooled read).
+func withReadRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
+	var result T
+	var err error
+	for attempt := 0; ; attempt++ {
+		if result, err = fn(); err == nil || attempt >= len(retryBackoff) || !isTransientReadError(err) {
+			return result, err
+		}
+		timer := time.NewTimer(retryBackoff[attempt])
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return result, err
+		case <-timer.C:
+		}
+	}
+}
+
+// GetRetry is Get with transient-fault retry (see withReadRetry): the read path
+// long operations depend on (object GETs in the site walk, ref reads, manifest
+// reads) so a momentary provider hiccup doesn't lose the whole pass.
+func (c *Client) GetRetry(key string) ([]byte, error) {
+	return withReadRetry(context.TODO(), func() ([]byte, error) { return c.Get(key) })
 }
 
 // GetWithETag downloads an object and returns its ETag for a later If-Match write.
@@ -241,15 +325,38 @@ func (c *Client) Delete(key string) error {
 // listBucketResult is the ListObjectsV2 response envelope.
 type listBucketResult struct {
 	Contents []struct {
-		Key string `xml:"Key"`
+		Key  string `xml:"Key"`
+		ETag string `xml:"ETag"`
 	} `xml:"Contents"`
 	IsTruncated           bool   `xml:"IsTruncated"`
 	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
+// ListedObject is one key and its ETag from a bucket listing.
+type ListedObject struct {
+	Key  string
+	ETag string
+}
+
 // List returns every key under the given prefix (ListObjectsV2, paginated).
 func (c *Client) List(prefix string) ([]string, error) {
-	var keys []string
+	objs, err := c.ListWithETags(prefix)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, len(objs))
+	for i, obj := range objs {
+		keys[i] = obj.Key
+	}
+	return keys, nil
+}
+
+// ListWithETags returns every key under the given prefix with its ETag
+// (ListObjectsV2, paginated). The ETag comes free in the listing, so a caller
+// that only needs to know whether the listing changed (the site push-state
+// digest) never issues a per-key GET.
+func (c *Client) ListWithETags(prefix string) ([]ListedObject, error) {
+	var objs []ListedObject
 	token := ""
 	for {
 		q := url.Values{}
@@ -269,10 +376,10 @@ func (c *Client) List(prefix string) ([]string, error) {
 			return nil, fmt.Errorf("objstore: decode list response: %w", err)
 		}
 		for _, obj := range result.Contents {
-			keys = append(keys, obj.Key)
+			objs = append(objs, ListedObject{Key: obj.Key, ETag: obj.ETag})
 		}
 		if !result.IsTruncated || result.NextContinuationToken == "" {
-			return keys, nil
+			return objs, nil
 		}
 		token = result.NextContinuationToken
 	}

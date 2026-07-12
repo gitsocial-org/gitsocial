@@ -71,8 +71,11 @@ type siteShardHead struct {
 }
 
 // shardCorpus describes one corpus to the generic layer: how to name its keys
-// and how to marshal a shard/head document from a tip + entries.
+// and how to marshal a shard/head document from a tip + entries. label
+// ("items"/"bodies") tags this corpus's shard-upload progress so the two
+// corpora's identical shard counts don't read as duplicate work.
 type shardCorpus[E shardEntry] struct {
+	label       string
 	manifestKey func(ext string) string
 	headKey     func(ext string) string
 	shardName   func(hash string) string
@@ -198,7 +201,7 @@ type shardPlan[E shardEntry] struct {
 // planSharded seals every full oldest-first group of a full (re)build and
 // returns the plan (sealed shards + trailing head). Shards already present are
 // skipped (content-hash keyed), so a rebuild recompresses nothing.
-func planSharded[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, entries []E, sizeByHash map[string]int) (shardPlan[E], error) {
+func planSharded[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, entries []E, sizeByHash map[string]int, sp *siteProgress) (shardPlan[E], error) {
 	oldest := reverseGeneric(entries)
 	numSealed := len(oldest) / shardBodyCount
 	plan := shardPlan[E]{shards: make([]siteShardEntry, 0, numSealed)}
@@ -209,6 +212,7 @@ func planSharded[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ex
 		}
 		plan.shards = append(plan.shards, shard)
 		plan.sealedBytes += size
+		sp.shards(corpus.label, i+1, numSealed)
 	}
 	plan.head = oldest[numSealed*shardBodyCount:]
 	return plan, nil
@@ -217,14 +221,15 @@ func planSharded[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ex
 // planAppend seals any groups a newest-first gap fills on top of the existing
 // head (prior sealed shards untouched) and returns the plan carrying the prior +
 // new sealed shards and the trailing head.
-func planAppend[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, gap, headItems []E, manifest *siteShardManifest) (shardPlan[E], error) {
+func planAppend[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, gap, headItems []E, manifest *siteShardManifest, sp *siteProgress) (shardPlan[E], error) {
 	newHead := append(append([]E{}, headItems...), reverseGeneric(gap)...)
 	sizeByHash := shardSizes(manifest)
 	plan := shardPlan[E]{shards: append([]siteShardEntry{}, manifest.Shards...)}
 	for _, s := range plan.shards {
 		plan.sealedBytes += s.Bytes
 	}
-	for len(newHead) >= shardBodyCount {
+	toSeal := len(newHead) / shardBodyCount
+	for done := 0; len(newHead) >= shardBodyCount; done++ {
 		shard, size, err := sealShardGeneric(client, corpus, prefix, ext, newHead[:shardBodyCount], sizeByHash)
 		if err != nil {
 			return shardPlan[E]{}, err
@@ -232,6 +237,7 @@ func planAppend[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext
 		plan.shards = append(plan.shards, shard)
 		plan.sealedBytes += size
 		newHead = newHead[shardBodyCount:]
+		sp.shards(corpus.label, done+1, toSeal)
 	}
 	plan.head = newHead
 	return plan, nil
@@ -246,14 +252,15 @@ func planAppend[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext
 // recompressing the sealed history. keptShards is the frontier prefix (empty for
 // a bootstrap-from-root); tail is oldest-first-above-the-frontier reversed to
 // newest-first by the caller's walk, so it is reversed back here.
-func planTail[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, keptShards []siteShardEntry, tail []E) (shardPlan[E], error) {
+func planTail[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, keptShards []siteShardEntry, tail []E, sp *siteProgress) (shardPlan[E], error) {
 	newHead := reverseGeneric(tail)
 	sizeByHash := shardSizes(&siteShardManifest{Shards: keptShards})
 	plan := shardPlan[E]{shards: append([]siteShardEntry{}, keptShards...)}
 	for _, s := range plan.shards {
 		plan.sealedBytes += s.Bytes
 	}
-	for len(newHead) >= shardBodyCount {
+	toSeal := len(newHead) / shardBodyCount
+	for done := 0; len(newHead) >= shardBodyCount; done++ {
 		shard, size, err := sealShardGeneric(client, corpus, prefix, ext, newHead[:shardBodyCount], sizeByHash)
 		if err != nil {
 			return shardPlan[E]{}, err
@@ -261,6 +268,7 @@ func planTail[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext s
 		plan.shards = append(plan.shards, shard)
 		plan.sealedBytes += size
 		newHead = newHead[shardBodyCount:]
+		sp.shards(corpus.label, done+1, toSeal)
 	}
 	plan.head = newHead
 	return plan, nil
@@ -274,8 +282,9 @@ func planTail[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext s
 // (shorter) shard. Sizes may therefore be uneven (a segment length need not
 // divide shardBodyCount), which the reader treats opaquely; content-hash keying
 // makes every seal skip-existing on retry.
-func sealSegment[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, segment []E, sizeByHash map[string]int) ([]siteShardEntry, int, error) {
+func sealSegment[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, segment []E, sizeByHash map[string]int, sp *siteProgress) ([]siteShardEntry, int, error) {
 	oldest := reverseGeneric(segment)
+	toSeal := (len(oldest) + shardBodyCount - 1) / shardBodyCount
 	var shards []siteShardEntry
 	var total int
 	for len(oldest) > 0 {
@@ -290,6 +299,7 @@ func sealSegment[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ex
 		shards = append(shards, shard)
 		total += size
 		oldest = oldest[n:]
+		sp.shards(corpus.label, len(shards), toSeal)
 	}
 	return shards, total, nil
 }
@@ -305,7 +315,7 @@ func sealSegment[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ex
 // dropped from current before the prepend, so re-running never duplicates them.
 // The manifest write that follows records the prepended-older prefix; a clobber
 // self-heals on the next push.
-func prependSegmentPlan[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, segment, head []E) (shardPlan[E], string, error) {
+func prependSegmentPlan[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, segment, head []E, sp *siteProgress) (shardPlan[E], string, error) {
 	current, err := readShardManifest(client, corpus, prefix, ext)
 	if err != nil {
 		return shardPlan[E]{}, "", err
@@ -313,7 +323,7 @@ func prependSegmentPlan[E shardEntry](client *Client, corpus shardCorpus[E], pre
 	if current == nil {
 		return shardPlan[E]{}, "", errNoManifestForBackfill
 	}
-	older, olderBytes, err := sealSegment(client, corpus, prefix, ext, segment, shardSizes(current))
+	older, olderBytes, err := sealSegment(client, corpus, prefix, ext, segment, shardSizes(current), sp)
 	if err != nil {
 		return shardPlan[E]{}, "", err
 	}

@@ -24,10 +24,12 @@ async function main() {
   ok("merged PR present in review items", !!pr, "no pull-request item found");
   if (!pr) return done();
 
-  // Route to the PR detail page and let the async diff resolve.
+  // Route to the PR detail page and let the async diff resolve. The diff is a
+  // background enrichment (paints after the base detail), so poll for it
+  // instead of a fixed wait — a fixed 1.5s flakes under load.
   setHash(GS.commitRef(pr.commit.hash, "gitmsg/review"));
   await GS.route(ctx);
-  await wait(1500);
+  for (let i = 0; i < 40 && findClass(viewNode, "diff-section").length === 0; i++) await wait(250);
   const view = viewNode;
 
   ok("PR renders as merged", textOf(view).toLowerCase().includes("merged"), "no merged state on page");

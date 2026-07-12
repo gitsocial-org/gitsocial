@@ -110,6 +110,13 @@ type siteMetaEntry struct {
 	TS      int64  `json:"ts"`
 	Header  string `json:"header"`
 	Subject string `json:"subject"`
+	// Branch is the attributed branch for a CODE-corpus entry (the default branch
+	// when the commit is reachable from it, else the first code branch that reached
+	// it), so the reader links a code commit's card under a real branch route
+	// without a loose-object walk. `omitempty` keeps every gitmsg-extension entry
+	// byte-identical to before (they never set it), so their sealed shards' content
+	// hashes and keys are unchanged.
+	Branch string `json:"branch,omitempty"`
 }
 
 // entrySHA implements shardEntry for the metadata index corpus.
@@ -141,6 +148,9 @@ type walkedItem struct {
 	TS      int64
 	Header  string
 	Message string
+	// Branch is set only by the code corpus walk (walkCodeItems): the branch a
+	// code commit is attributed to. Empty for the gitmsg-extension walks.
+	Branch string
 }
 
 // metaOf projects a walked commit into a metadata-index entry.
@@ -303,6 +313,7 @@ func siteItemsShardKey(ext, hash string) string {
 // itemsCorpus wires the metadata-index key names and doc marshaling into the
 // generic shard layer.
 var itemsCorpus = shardCorpus[siteMetaEntry]{
+	label:       "items",
 	manifestKey: siteItemsManifestKey,
 	headKey:     siteItemsHeadKey,
 	shardName:   shardObjectName,
@@ -334,9 +345,12 @@ type bucketCommit struct {
 	parents []string
 }
 
-// getBucketCommit fetches and parses one commit object from the bucket.
+// getBucketCommit fetches and parses one commit object from the bucket. The GET
+// retries transient faults (a 503 mid-walk, a dropped connection): a long
+// bootstrap walk over thousands of commits must survive one provider hiccup
+// rather than lose the whole pass.
 func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
-	compressed, err := client.Get(prefix + "objects/" + sha[:2] + "/" + sha[2:])
+	compressed, err := client.GetRetry(prefix + "objects/" + sha[:2] + "/" + sha[2:])
 	if err != nil {
 		return bucketCommit{}, fmt.Errorf("get object %s: %w", sha, err)
 	}
@@ -414,7 +428,19 @@ func parseAuthorIdent(ident string) (name, email string, ts int64) {
 // stopAt is collected). A bounded gap walk (APPEND / REPAIR tail) passes the
 // same budget; its stopAt frontier terminates it well below the budget, so
 // budgetHit stays false there.
-func walkBucketItems(client *Client, prefix, tip string, stopAt map[string]bool, budget int) ([]walkedItem, map[string]bool, bool, error) {
+func walkBucketItems(client *Client, prefix, tip string, stopAt map[string]bool, budget int, sp *siteProgress) ([]walkedItem, map[string]bool, bool, error) {
+	return walkBucketItemsProgress(client, prefix, tip, stopAt, budget, 0, sp)
+}
+
+// walkBucketItemsProgress is walkBucketItems with an explicit progress total:
+// walkTotal is the ceiling reported to the Progress hook. Every current caller
+// passes 0 (a plain count): the walk budget is a per-push CAP the walk usually
+// won't reach, not the branch size, so reporting done/budget would show a
+// misleading percentage; and neither the manifest nor the cursor tracks the true
+// remaining commit count. walkTotal never affects the walk itself, only the
+// progress label — a caller that DID know the real remaining size could pass it
+// for an honest percentage.
+func walkBucketItemsProgress(client *Client, prefix, tip string, stopAt map[string]bool, budget, walkTotal int, sp *siteProgress) ([]walkedItem, map[string]bool, bool, error) {
 	visited := map[string]bool{}
 	met := map[string]bool{}
 	frontier := []string{tip}
@@ -433,11 +459,12 @@ func walkBucketItems(client *Client, prefix, tip string, stopAt map[string]bool,
 		if len(items) >= budget {
 			return items, met, true, nil
 		}
-		c, err := getBucketCommit(client, prefix, sha)
+		c, err := getCommit(sp.commitSource(), client, prefix, sha)
 		if err != nil {
 			return nil, nil, false, err
 		}
 		items = append(items, c.item)
+		sp.walk(len(items), walkTotal)
 		frontier = append(append([]string{}, c.parents...), frontier...)
 	}
 	return items, met, false, nil
@@ -490,19 +517,19 @@ func putCompressed(client *Client, key string, compressed []byte) error {
 
 // planItems seals a full items (re)build's shards, returning the plan (staged so
 // the two corpora can interleave shard/head/manifest writes).
-func planItems(client *Client, prefix, ext string, meta []siteMetaEntry) (shardPlan[siteMetaEntry], error) {
-	return planSharded(client, itemsCorpus, prefix, ext, meta, nil)
+func planItems(client *Client, prefix, ext string, meta []siteMetaEntry, sp *siteProgress) (shardPlan[siteMetaEntry], error) {
+	return planSharded(client, itemsCorpus, prefix, ext, meta, nil, sp)
 }
 
 // planItemsAppend seals any shards an items gap fills, returning the plan.
-func planItemsAppend(client *Client, prefix, ext string, gap, headItems []siteMetaEntry, manifest *siteShardManifest) (shardPlan[siteMetaEntry], error) {
-	return planAppend(client, itemsCorpus, prefix, ext, gap, headItems, manifest)
+func planItemsAppend(client *Client, prefix, ext string, gap, headItems []siteMetaEntry, manifest *siteShardManifest, sp *siteProgress) (shardPlan[siteMetaEntry], error) {
+	return planAppend(client, itemsCorpus, prefix, ext, gap, headItems, manifest, sp)
 }
 
 // planItemsTail rebuilds an items corpus from its kept sealed shards plus a
 // freshly-walked tail (REPAIR).
-func planItemsTail(client *Client, prefix, ext string, keptShards []siteShardEntry, tail []siteMetaEntry) (shardPlan[siteMetaEntry], error) {
-	return planTail(client, itemsCorpus, prefix, ext, keptShards, tail)
+func planItemsTail(client *Client, prefix, ext string, keptShards []siteShardEntry, tail []siteMetaEntry, sp *siteProgress) (shardPlan[siteMetaEntry], error) {
+	return planTail(client, itemsCorpus, prefix, ext, keptShards, tail, sp)
 }
 
 // putItemsHead writes an items plan's head document.
@@ -534,7 +561,7 @@ func readItemsHeadEntries(client *Client, key string) ([]siteMetaEntry, error) {
 // false (no error) when the key is absent, or when the stored bytes are not
 // valid brotli/JSON — so callers fall back to a fresh walk.
 func readCompressedJSON(client *Client, key string, v any) (found bool, err error) {
-	data, err := client.Get(key)
+	data, err := client.GetRetry(key)
 	if errors.Is(err, ErrNotFound) {
 		return false, nil
 	}
@@ -560,18 +587,18 @@ func readCompressedJSON(client *Client, key string, v any) (found bool, err erro
 // idempotent on retry. bodiesBytes is threaded from the bodies manifest onto the
 // items manifest for the reader's full-search download size. complete is false
 // when the walk stopped at the budget with older history still to backfill.
-func putSiteArtifacts(client *Client, prefix, ext, tip string, items []walkedItem, complete bool) error {
+func putSiteArtifacts(client *Client, prefix, ext, tip string, items []walkedItem, complete bool, sp *siteProgress) error {
 	meta := make([]siteMetaEntry, len(items))
 	bodies := make([]siteBodyEntry, len(items))
 	for i, w := range items {
 		meta[i] = metaOf(w)
 		bodies[i] = bodyOf(w)
 	}
-	bodiesPlan, err := planBodies(client, prefix, ext, bodies)
+	bodiesPlan, err := planBodies(client, prefix, ext, bodies, sp)
 	if err != nil {
 		return err
 	}
-	itemsPlan, err := planItems(client, prefix, ext, meta)
+	itemsPlan, err := planItems(client, prefix, ext, meta, sp)
 	if err != nil {
 		return err
 	}
@@ -634,7 +661,7 @@ func deleteSiteArtifacts(client *Client, prefix, ext string) error {
 //     prepend it to both manifests, advancing (or, on reaching the root, clearing)
 //     the cursor. A newTip that advanced mid-bootstrap classifies as APPEND
 //     instead, which owns the newest end and bumps cursor.tip.
-func updateSiteItemsIndex(client *Client, prefix, ext, newTip string) error {
+func updateSiteItemsIndex(client *Client, prefix, ext, newTip string, sp *siteProgress) error {
 	items, err := readItemsManifest(client, prefix, ext)
 	if err != nil {
 		return err
@@ -668,13 +695,13 @@ func updateSiteItemsIndex(client *Client, prefix, ext, newTip string) error {
 	case actionNoOp:
 		return nil
 	case actionAppend:
-		return appendItemsGap(client, prefix, ext, newTip, items, bodies, cursor, itemsHead, bodiesHead)
+		return appendItemsGap(client, prefix, ext, newTip, items, bodies, cursor, itemsHead, bodiesHead, sp)
 	case actionRepair:
-		return repairItemsState(client, prefix, ext, newTip, items, bodies, cursor)
+		return repairItemsState(client, prefix, ext, newTip, items, bodies, cursor, sp)
 	case actionBackfill:
-		return backfillItems(client, prefix, ext, cursor, items, itemsHead)
+		return backfillItems(client, prefix, ext, cursor, items, itemsHead, sp)
 	default: // actionBootstrap
-		return bootstrapItems(client, prefix, ext, newTip)
+		return bootstrapItems(client, prefix, ext, newTip, sp)
 	}
 }
 
@@ -686,24 +713,24 @@ func updateSiteItemsIndex(client *Client, prefix, ext, newTip string) error {
 // and their head counts match; if the bounded walk cannot reach that tip (an
 // unexpected concurrent rewrite between the read and the walk) it falls through
 // to REPAIR, which never does a from-scratch capped walk.
-func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *siteShardManifest, cursor *siteItemsCursor, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry) error {
+func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *siteShardManifest, cursor *siteItemsCursor, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry, sp *siteProgress) error {
 	known := map[string]bool{items.Tip: true}
 	for _, e := range itemsHead {
 		known[e.SHA] = true
 	}
-	gap, met, _, err := walkBucketItems(client, prefix, newTip, known, siteItemsWalkBudget)
+	gap, met, _, err := walkBucketItems(client, prefix, newTip, known, siteItemsWalkBudget, sp)
 	if err != nil || !met[items.Tip] {
-		return repairItemsState(client, prefix, ext, newTip, items, bodies, cursor)
+		return repairItemsState(client, prefix, ext, newTip, items, bodies, cursor, sp)
 	}
 	// APPEND owns only the newest end. With no cursor the index is already
 	// complete and the cursor stays absent (no finalize needed). With a bootstrap
 	// in flight it stays in flight: the head advances, oldestIndexed is untouched,
 	// and cursor.tip bumps to newTip.
 	if cursor == nil {
-		return putGapArtifacts(client, prefix, ext, newTip, gap, items, bodies, itemsHead, bodiesHead, true)
+		return putGapArtifacts(client, prefix, ext, newTip, gap, items, bodies, itemsHead, bodiesHead, true, sp)
 	}
 	pending := &siteItemsCursor{Tip: newTip, OldestIndexed: cursor.OldestIndexed}
-	if err := putGapArtifacts(client, prefix, ext, newTip, gap, items, bodies, itemsHead, bodiesHead, pending == nil); err != nil {
+	if err := putGapArtifacts(client, prefix, ext, newTip, gap, items, bodies, itemsHead, bodiesHead, pending == nil, sp); err != nil {
 		return err
 	}
 	return finalizeCursor(client, prefix, ext, pending)
@@ -715,8 +742,13 @@ func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *s
 // the prior behavior). If the budget is hit, it seals the newest budget prefix
 // (a valid servable newest-first index) with complete=false and writes a cursor
 // whose oldestIndexed is the oldest sealed sha, so the next push backfills older.
-func bootstrapItems(client *Client, prefix, ext, newTip string) error {
-	walked, _, budgetHit, err := walkBucketItems(client, prefix, newTip, nil, siteItemsWalkBudget)
+func bootstrapItems(client *Client, prefix, ext, newTip string, sp *siteProgress) error {
+	// The walk budget is a per-push CAP, not the branch size: a branch of any
+	// size (from a handful of commits to millions) walks against the same 50k
+	// ceiling, so reporting done/budget would show a misleading "12%" on a branch
+	// that is actually nearly done. The true remaining size is unknown until the
+	// frontier empties, so report a plain count (total=0).
+	walked, _, budgetHit, err := walkBucketItemsProgress(client, prefix, newTip, nil, siteItemsWalkBudget, 0, sp)
 	if err != nil {
 		return err
 	}
@@ -724,7 +756,7 @@ func bootstrapItems(client *Client, prefix, ext, newTip string) error {
 	if budgetHit {
 		pending = &siteItemsCursor{Tip: newTip, OldestIndexed: walked[len(walked)-1].SHA}
 	}
-	if err := putSiteArtifacts(client, prefix, ext, newTip, walked, pending == nil); err != nil {
+	if err := putSiteArtifacts(client, prefix, ext, newTip, walked, pending == nil, sp); err != nil {
 		return err
 	}
 	return finalizeCursor(client, prefix, ext, pending)
@@ -758,7 +790,7 @@ func bootstrapItems(client *Client, prefix, ext, newTip string) error {
 // the frontier and from an already-indexed newer commit could be re-walked into
 // a backfill shard, duplicating that membership across two shards. The extra
 // boundaries make the walk halt at any indexed frontier.
-func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, items *siteShardManifest, itemsHead []siteMetaEntry) error {
+func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, items *siteShardManifest, itemsHead []siteMetaEntry, sp *siteProgress) error {
 	frontier, err := manifestOldestSha(client, prefix, ext, items, itemsHead)
 	if err != nil {
 		return err
@@ -766,7 +798,7 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 	if frontier == "" {
 		return completeBackfill(client, prefix, ext)
 	}
-	oldest, err := getBucketCommit(client, prefix, frontier)
+	oldest, err := getCommit(sp.commitSource(), client, prefix, frontier)
 	if err != nil {
 		return err
 	}
@@ -786,7 +818,10 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 	}
 	segment, budgetHit := []walkedItem{}, false
 	for _, p := range oldest.parents {
-		seg, _, hit, err := walkBucketItems(client, prefix, p, stop, siteItemsWalkBudget-len(segment))
+		// Plain count (total=0): the budget is a per-push cap and the manifest/
+		// cursor track only the oldest-indexed frontier, not how many older commits
+		// remain, so no honest percentage is knowable here (see bootstrapItems).
+		seg, _, hit, err := walkBucketItemsProgress(client, prefix, p, stop, siteItemsWalkBudget-len(segment), 0, sp)
 		if err != nil {
 			return err
 		}
@@ -806,7 +841,7 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 	if budgetHit {
 		pending = &siteItemsCursor{Tip: cursor.Tip, OldestIndexed: segment[len(segment)-1].SHA}
 	}
-	if err := prependSegment(client, prefix, ext, segment, pending == nil); err != nil {
+	if err := prependSegment(client, prefix, ext, segment, pending == nil, sp); err != nil {
 		return err
 	}
 	return finalizeCursor(client, prefix, ext, pending)
@@ -843,7 +878,7 @@ func markManifestComplete[E shardEntry](client *Client, corpus shardCorpus[E], p
 // on the next push). Write order: bodies shard(s) + manifest, then items shard(s)
 // + manifest; the head is untouched. complete is true only when this segment
 // reached the branch root.
-func prependSegment(client *Client, prefix, ext string, segment []walkedItem, complete bool) error {
+func prependSegment(client *Client, prefix, ext string, segment []walkedItem, complete bool, sp *siteProgress) error {
 	segMeta := make([]siteMetaEntry, 0, len(segment))
 	segBodies := make([]siteBodyEntry, 0, len(segment))
 	for _, w := range segment {
@@ -854,7 +889,7 @@ func prependSegment(client *Client, prefix, ext string, segment []walkedItem, co
 	if err != nil {
 		return err
 	}
-	bodiesPlan, bodiesTip, err := prependSegmentPlan(client, bodiesCorpus, prefix, ext, segBodies, bodiesHead)
+	bodiesPlan, bodiesTip, err := prependSegmentPlan(client, bodiesCorpus, prefix, ext, segBodies, bodiesHead, sp)
 	if err != nil {
 		return err
 	}
@@ -866,7 +901,7 @@ func prependSegment(client *Client, prefix, ext string, segment []walkedItem, co
 	if err != nil {
 		return err
 	}
-	itemsPlan, itemsTip, err := prependSegmentPlan(client, itemsCorpus, prefix, ext, segMeta, itemsHead)
+	itemsPlan, itemsTip, err := prependSegmentPlan(client, itemsCorpus, prefix, ext, segMeta, itemsHead, sp)
 	if err != nil {
 		return err
 	}
@@ -880,18 +915,18 @@ func prependSegment(client *Client, prefix, ext string, segment []walkedItem, co
 // head, bodies manifest, items manifest). Manifests land last so an interruption
 // leaves at worst "bodies ahead of items", which REPAIR handles. complete is
 // false while a bootstrap is still backfilling older history.
-func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedItem, itemsManifest, bodiesManifest *siteShardManifest, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry, complete bool) error {
+func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedItem, itemsManifest, bodiesManifest *siteShardManifest, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry, complete bool, sp *siteProgress) error {
 	gapMeta := make([]siteMetaEntry, 0, len(gap))
 	gapBodies := make([]siteBodyEntry, 0, len(gap))
 	for _, w := range gap {
 		gapMeta = append(gapMeta, metaOf(w))
 		gapBodies = append(gapBodies, bodyOf(w))
 	}
-	bodiesPlan, err := planBodiesAppend(client, prefix, ext, gapBodies, bodiesHead, bodiesManifest)
+	bodiesPlan, err := planBodiesAppend(client, prefix, ext, gapBodies, bodiesHead, bodiesManifest, sp)
 	if err != nil {
 		return err
 	}
-	itemsPlan, err := planItemsAppend(client, prefix, ext, gapMeta, itemsHead, itemsManifest)
+	itemsPlan, err := planItemsAppend(client, prefix, ext, gapMeta, itemsHead, itemsManifest, sp)
 	if err != nil {
 		return err
 	}
@@ -908,20 +943,51 @@ func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedIte
 	return putItemsManifest(client, prefix, ext, newTip, itemsPlan, total, complete)
 }
 
-// rebuildSiteItems drives every extension data branch present in refs through the
-// same state machine as a helper push (used by `gitsocial site push`). It is
-// idempotent and budget-aware: a small branch (re)builds in one call exactly as
-// before; a branch past the budget starts (or advances) the resumable bootstrap
-// instead of erroring, reusing every already-sealed shard via skip-existing.
-func rebuildSiteItems(client *Client, prefix string, refs map[string]string) error {
+// rebuildSiteItems drives every extension data branch present in refs, plus the
+// single code items index across every code branch, through the same state
+// machine as a helper push (used by `gitsocial site push`). It is idempotent and
+// budget-aware: a small branch (re)builds in one call exactly as before; a branch
+// past the budget starts (or advances) the resumable bootstrap instead of
+// erroring, reusing every already-sealed shard via skip-existing. defaultBranch is
+// the repo's default (from the bucket HEAD) so the code index attributes commits
+// to it correctly.
+func rebuildSiteItems(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress) error {
 	for _, ext := range siteItemsExts {
 		tip, ok := refs["refs/heads/gitmsg/"+ext]
 		if !ok {
 			continue
 		}
-		if err := updateSiteItemsIndex(client, prefix, ext, tip); err != nil {
+		sp := &siteProgress{progress: progress, ext: ext, src: src}
+		if err := updateSiteItemsIndex(client, prefix, ext, tip, sp); err != nil {
 			return fmt.Errorf("build items index %s: %w", ext, err)
 		}
 	}
+	tips := codeBranchTips(refs, defaultBranch)
+	sp := &siteProgress{progress: progress, ext: siteCodeExt, src: src}
+	if err := updateSiteCodeIndex(client, prefix, tips, defaultBranch, sp); err != nil {
+		return fmt.Errorf("build code index: %w", err)
+	}
 	return nil
+}
+
+// siteItemsBootstrapPending reports whether any extension's items index is still
+// an incomplete bootstrap after a pass (its manifest.Complete is false), so the
+// caller can decline to stamp the push-state marker: a follow-up push must not be
+// skipped while a bootstrap has more older segments to backfill (which no ref
+// move signals). Best-effort — a read error is reported as pending, so at worst
+// the marker is left unstamped and the next push does a (harmless) full pass.
+func siteItemsBootstrapPending(client *Client, prefix string, refs map[string]string) bool {
+	for _, ext := range siteItemsExts {
+		if _, ok := refs["refs/heads/gitmsg/"+ext]; !ok {
+			continue
+		}
+		items, err := readItemsManifest(client, prefix, ext)
+		if err != nil {
+			return true
+		}
+		if items != nil && !items.Complete {
+			return true
+		}
+	}
+	return codeIndexBootstrapPending(client, prefix)
 }

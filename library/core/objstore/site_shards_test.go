@@ -59,7 +59,7 @@ func newestFirst(in []siteBodyEntry) []siteBodyEntry { return reverseGeneric(in)
 // then head, then manifest): the composition putSiteArtifacts interleaves across
 // both corpora, driven here for one corpus at a time.
 func writeCorpus[E shardEntry](client *Client, corpus shardCorpus[E], ext, tip string, entries []E, bodiesBytes int) (int, error) {
-	plan, err := planSharded(client, corpus, "", ext, entries, nil)
+	plan, err := planSharded(client, corpus, "", ext, entries, nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -148,7 +148,7 @@ func TestSealShard_StableKeyAcrossWriteAndAppend(t *testing.T) {
 		headB, _ := readBodyDocItems(clientB, bodiesHeadKey("pm"))
 		gapOldest := bodyEntries(8)[4:] // commits 5..8, oldest-first
 		gapNewestFirst := reverseGeneric(gapOldest)
-		planB, err := planBodiesAppend(clientB, "", "pm", gapNewestFirst, headB, mB0)
+		planB, err := planBodiesAppend(clientB, "", "pm", gapNewestFirst, headB, mB0, nil)
 		if err != nil {
 			t.Fatalf("planBodiesAppend: %v", err)
 		}

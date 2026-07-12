@@ -18,6 +18,13 @@ type Settings struct {
 	Display    DisplaySettings
 	Extensions ExtensionsSettings
 	Identity   IdentitySettings
+	S3         S3Settings
+}
+
+// S3Settings controls the s3:// remote backend.
+type S3Settings struct {
+	// Concurrency is the number of concurrent object uploads per push.
+	Concurrency int
 }
 
 // IdentitySettings controls per-user identity verification policy.
@@ -87,6 +94,9 @@ func DefaultSettings() *Settings {
 		},
 		Identity: IdentitySettings{
 			DNSVerification: false,
+		},
+		S3: S3Settings{
+			Concurrency: 16,
 		},
 	}
 }
@@ -161,6 +171,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.FormatBool(s.Extensions.Memo), true
 	case "identity.dns_verification":
 		return strconv.FormatBool(s.Identity.DNSVerification), true
+	case "s3.concurrency":
+		return strconv.Itoa(s.S3.Concurrency), true
 	case "fetch.workspace_mode":
 		return "(per-repo)", true
 	default:
@@ -251,6 +263,12 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("identity.dns_verification must be true or false")
 		}
 		s.Identity.DNSVerification = value == "true"
+	case "s3.concurrency":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 {
+			return fmt.Errorf("s3.concurrency must be a positive integer")
+		}
+		s.S3.Concurrency = n
 	case "fetch.workspace_mode":
 		return fmt.Errorf("use settings view to change workspace mode (per-repo setting)")
 	default:
@@ -268,6 +286,7 @@ func ListKeys() []string {
 		"fetch.auto.interval",
 		"fetch.auto.backoff",
 		"fetch.workspace_mode",
+		"s3.concurrency",
 		"output.color",
 		"log.level",
 		"display.show_email",

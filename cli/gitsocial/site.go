@@ -79,7 +79,16 @@ must allow public reads for visitors without credentials.`,
 				PrintError(cmd, fmt.Sprintf("remote %q is not an s3 remote: %s", name, remoteURL))
 				os.Exit(ExitError)
 			}
-			if err := objstore.PushSite(remoteURL, objstore.HelperEnvFromOS()); err != nil {
+			// Live progress to stderr (same TTY/non-TTY policy as the git-spawned
+			// helper); suppressed in --json so machine output stays clean.
+			var progress objstore.Progress
+			var progressDone = func() {}
+			if !cfg.JSONOutput {
+				progress, progressDone = objstore.StderrProgress()
+			}
+			err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), cfg.WorkDir, progress)
+			progressDone()
+			if err != nil {
 				PrintError(cmd, fmt.Sprintf("push site to %s: %v", remoteURL, err))
 				os.Exit(ExitError)
 			}

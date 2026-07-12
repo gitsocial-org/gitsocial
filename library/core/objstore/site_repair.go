@@ -103,13 +103,13 @@ func classifyItemsState(items, bodies *siteShardManifest, cursor *siteItemsCurso
 // "bodies ahead of items", which a later REPAIR fixes. When a cursor is pending
 // (bootstrap in flight) the rebuilt manifests stay incomplete so the next push
 // still backfills the older history; REPAIR heals only the newest (head) end.
-func repairItemsState(client *Client, prefix, ext, newTip string, items, bodies *siteShardManifest, cursor *siteItemsCursor) error {
+func repairItemsState(client *Client, prefix, ext, newTip string, items, bodies *siteShardManifest, cursor *siteItemsCursor, sp *siteProgress) error {
 	complete := cursor == nil
-	bodiesTail, bodiesKept, err := walkCorpusTail(client, prefix, newTip, bodies)
+	bodiesTail, bodiesKept, err := walkCorpusTail(client, prefix, newTip, bodies, sp)
 	if err != nil {
 		return err
 	}
-	itemsTail, itemsKept, err := walkCorpusTail(client, prefix, newTip, items)
+	itemsTail, itemsKept, err := walkCorpusTail(client, prefix, newTip, items, sp)
 	if err != nil {
 		return err
 	}
@@ -121,11 +121,11 @@ func repairItemsState(client *Client, prefix, ext, newTip string, items, bodies 
 	for i, w := range itemsTail {
 		itemsEntries[i] = metaOf(w)
 	}
-	bodiesPlan, err := planBodiesTail(client, prefix, ext, bodiesKept, bodiesEntries)
+	bodiesPlan, err := planBodiesTail(client, prefix, ext, bodiesKept, bodiesEntries, sp)
 	if err != nil {
 		return err
 	}
-	itemsPlan, err := planItemsTail(client, prefix, ext, itemsKept, itemsEntries)
+	itemsPlan, err := planItemsTail(client, prefix, ext, itemsKept, itemsEntries, sp)
 	if err != nil {
 		return err
 	}
@@ -153,13 +153,13 @@ func repairItemsState(client *Client, prefix, ext, newTip string, items, bodies 
 //   - Frontier unreachable (history rewrite under the artifacts): the old sealed
 //     shards are stale, so reset by walking the whole branch from newTip
 //     (budgeted) and keeping nothing.
-func walkCorpusTail(client *Client, prefix, newTip string, manifest *siteShardManifest) ([]walkedItem, []siteShardEntry, error) {
+func walkCorpusTail(client *Client, prefix, newTip string, manifest *siteShardManifest, sp *siteProgress) ([]walkedItem, []siteShardEntry, error) {
 	frontier, has := manifest.sealedFrontier()
 	if !has {
-		walked, _, _, err := walkBucketItems(client, prefix, newTip, nil, siteItemsWalkBudget)
+		walked, _, _, err := walkBucketItems(client, prefix, newTip, nil, siteItemsWalkBudget, sp)
 		return walked, nil, err
 	}
-	tail, met, _, err := walkBucketItems(client, prefix, newTip, map[string]bool{frontier: true}, siteItemsWalkBudget)
+	tail, met, _, err := walkBucketItems(client, prefix, newTip, map[string]bool{frontier: true}, siteItemsWalkBudget, sp)
 	if err != nil {
 		return nil, nil, err
 	}

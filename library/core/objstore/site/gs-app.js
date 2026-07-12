@@ -6,11 +6,17 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, graphView, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, setGrammarBase, graphView, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
   let pendingTreeFocus = false;
+
+  // routeGen is a monotonic token bumped on every route() entry. A route captures
+  // its own gen and paints the shared #view only while it is still the current
+  // one, so a slower earlier navigation can never clobber a newer view that has
+  // already painted (rapid nav timeline→detail, or two overlapping route drivers).
+  let routeGen = 0;
 
   // WATCHDOG_MS bounds how long a route may sit on "Loading…" before the boot
   // watchdog surfaces a visible error (a large real repo can take several seconds
@@ -27,6 +33,16 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   }
 
   async function route(ctx) {
+    // Claim the current route generation. Every paint below goes through the
+    // guarded `setView`, which drops writes once a newer route() has started —
+    // so a slow earlier route (its async view resolving late) cannot overwrite a
+    // newer route's already-painted view. `setView` here shadows the module one.
+    const myGen = ++routeGen;
+    const setView = (nodes) => { if (myGen === routeGen) NS.setView(nodes); };
+    // Point the grammar loader at this session's bucket base (idempotent), so a
+    // caller that drives route() directly (headless tests) still lazy-loads
+    // grammars from the right place without going through init().
+    if (ctx && ctx.base) setGrammarBase(ctx.base);
     const r = parseRoute(location.hash);
     if (r.canonical && r.canonical !== location.hash) { location.replace(r.canonical); return; }
     // Remember the last in-app hash so a detail page's "back" returns to where the
@@ -82,10 +98,20 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         }
       }
       if (r.type === "index" && r.tab === "timeline") {
-        const [first, counts] = await Promise.all([loadTimelineWindow(ctx, false), loadInteractionCounts(ctx)]);
+        // First paint must not wait on the interaction counts: on a mid-push or
+        // index-stale bucket the count load can walk loose objects, so gating the
+        // window behind it (an old Promise.all) left the page on "Loading…" behind
+        // a long walk. Paint the window immediately with no counts, then load them
+        // in the background and re-draw the visible cards once they arrive. `counts`
+        // is a live reference the drawBody closure reads each render, so both the
+        // initial slice and every autoscroll window pick up counts as soon as ready.
+        const first = await loadTimelineWindow(ctx, false);
+        let counts = null;
+        let lastRedraw = null;
         setView(autoScrollListView(first,
-          (items, box) => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), "No activity in this repository yet.")),
+          (items, box) => { lastRedraw = () => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), "No activity in this repository yet.")); lastRedraw(); },
           () => loadTimelineWindow(ctx, true)));
+        loadInteractionCounts(ctx).then((c) => { counts = c; if (lastRedraw) lastRedraw(); }).catch(() => {});
       } else if (r.type === "index" && r.tab === "memos") {
         const first = await loadExtItemsWindow(ctx, "memo", false);
         setView(pagedListView(first,
@@ -284,6 +310,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 
   async function init() {
     const ctx = newContext(deriveBase(location));
+    // Grammar files are fetched relative to the bucket base, so tell the render
+    // layer where the site is served from before any code block is highlighted.
+    setGrammarBase(ctx.base);
     const name = repoTitle(ctx.base);
     // The document/tab title names the browsed project, not the static "gitsocial"
     // shell placeholder — derived from the same served-directory name as the chrome.

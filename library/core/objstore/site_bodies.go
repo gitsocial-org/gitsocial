@@ -68,6 +68,7 @@ func bodiesShardKey(ext, hash string) string {
 // bodiesCorpus wires the bodies key names and doc marshaling into the generic
 // shard layer.
 var bodiesCorpus = shardCorpus[siteBodyEntry]{
+	label:       "bodies",
 	manifestKey: bodiesManifestKey,
 	headKey:     bodiesHeadKey,
 	shardName:   shardObjectName,
@@ -102,19 +103,19 @@ func objectSize(client *Client, key string) (int, bool, error) {
 
 // planBodies seals a full bodies (re)build's shards, returning the plan (staged
 // so the two corpora can interleave shard/head/manifest writes).
-func planBodies(client *Client, prefix, ext string, bodies []siteBodyEntry) (shardPlan[siteBodyEntry], error) {
-	return planSharded(client, bodiesCorpus, prefix, ext, bodies, nil)
+func planBodies(client *Client, prefix, ext string, bodies []siteBodyEntry, sp *siteProgress) (shardPlan[siteBodyEntry], error) {
+	return planSharded(client, bodiesCorpus, prefix, ext, bodies, nil, sp)
 }
 
 // planBodiesAppend seals any shards a bodies gap fills, returning the plan.
-func planBodiesAppend(client *Client, prefix, ext string, gap, headItems []siteBodyEntry, manifest *siteShardManifest) (shardPlan[siteBodyEntry], error) {
-	return planAppend(client, bodiesCorpus, prefix, ext, gap, headItems, manifest)
+func planBodiesAppend(client *Client, prefix, ext string, gap, headItems []siteBodyEntry, manifest *siteShardManifest, sp *siteProgress) (shardPlan[siteBodyEntry], error) {
+	return planAppend(client, bodiesCorpus, prefix, ext, gap, headItems, manifest, sp)
 }
 
 // planBodiesTail rebuilds a bodies corpus from its kept sealed shards plus a
 // freshly-walked tail (REPAIR).
-func planBodiesTail(client *Client, prefix, ext string, keptShards []siteShardEntry, tail []siteBodyEntry) (shardPlan[siteBodyEntry], error) {
-	return planTail(client, bodiesCorpus, prefix, ext, keptShards, tail)
+func planBodiesTail(client *Client, prefix, ext string, keptShards []siteShardEntry, tail []siteBodyEntry, sp *siteProgress) (shardPlan[siteBodyEntry], error) {
+	return planTail(client, bodiesCorpus, prefix, ext, keptShards, tail, sp)
 }
 
 // putBodiesHead writes a bodies plan's head document.

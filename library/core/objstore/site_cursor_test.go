@@ -130,7 +130,7 @@ func TestBootstrap_ResumesAcrossPushesToRoot(t *testing.T) {
 			for _, k := range before {
 				puts[k] = bucket.putCount(siteItemsDir("social") + k)
 			}
-			if err := rebuildSiteItems(client, "", map[string]string{"refs/heads/gitmsg/social": tip}); err != nil {
+			if err := rebuildSiteItems(client, "", map[string]string{"refs/heads/gitmsg/social": tip}, "", nil, nil); err != nil {
 				t.Fatalf("rebuild after complete: %v", err)
 			}
 			after := shardKeySet(t, client)

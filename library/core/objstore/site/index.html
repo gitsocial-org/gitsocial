@@ -1194,12 +1194,11 @@
   window.Prism.manual = true;
 </script>
 <script src="prism.js"></script>
-<!-- Repo-specific extra Prism grammars, published by `gitsocial site push` when
-     the repo uses languages beyond the base bundle (prism-extra.js). Absent on
-     buckets that need no extra grammars (or pushed by an older gitsocial), in
-     which case only the base grammars highlight — a clean plain-text fallback.
-     Loaded after prism.js so its Prism.languages.extend("clike"...) resolve. -->
-<script src="prism-extra.js" onerror="this.remove()"></script>
+<!-- Non-base grammars (python/rust/c/...) are not bundled here: the reader
+     lazy-loads grammars/prism-<lang>.js on first use (gs-render.js ensureGrammar)
+     and upgrades the plain text in place, so the shell stays small and a repo
+     pays only for the languages a visitor opens. A missing grammar file stays
+     plain text (a clean fallback). -->
 <script src="icons.js"></script>
 <script src="gs-core.js"></script>
 <script src="gs-render.js"></script>

@@ -91,8 +91,9 @@ printf 'one\ntwo\n' >"$W/notes.txt"
 git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
 printf 'one\ntwo\nthree\n' >"$W/notes.txt"
 git -C "$W" add -A && git -C "$W" commit -qm "Extend notes"
-# Source files in non-base languages, so `gitsocial site push` scans the tree and
-# publishes prism-extra.js with just python + rust grammars (E1 coverage).
+# Source files in non-base languages, so the reader lazy-loads their grammars
+# (grammars/prism-python.js, prism-rust.js) when a visitor opens them; the shell
+# ships every grammar file (E1 coverage: verify_grammars.js / verify_site_features.js).
 printf 'def main():\n    print("hello")\n' >"$W/hello.py"
 printf 'fn main() {\n    println!("hi");\n}\n' >"$W/main.rs"
 git -C "$W" add -A && git -C "$W" commit -qm "Add python and rust sources"
@@ -186,6 +187,11 @@ git -C "$W" tag v1.0-light main
 git -C "$W" tag -a v1.0 -m "First public release" main
 
 # publish content branches, tags, then a curated list, then the site shell.
+# main + feature/notes-expand carry plain (non-gitmsg) code commits, so the site
+# push below builds the single CODE items index (.gitsocial/site/items/code/,
+# metadata-only, no bodies) that the reader's timeline sources code commits from
+# without a per-commit loose-object walk (verify_site_features.js code-index
+# assertions; the multi-branch attribution rides on main vs feature/notes-expand).
 git -C "$W" push -q origin main
 git -C "$W" push -q origin feature/notes-expand
 git -C "$W" push -q origin 'refs/tags/*:refs/tags/*'

@@ -33,17 +33,23 @@ const (
 	siteStatsKey = ".gitsocial/site/stats.json"
 )
 
-// siteFileNames lists the embedded site files in upload order.
+// siteFileNames lists the embedded site files in upload order, walking
+// subdirectories (e.g. site/grammars/) so nested assets ship too. Names are
+// returned relative to site/ (e.g. "grammars/prism-python.js"), the same shape
+// SiteFiles.ReadFile and the upload key expect.
 func siteFileNames() ([]string, error) {
-	entries, err := fs.ReadDir(SiteFiles, "site")
+	var names []string
+	err := fs.WalkDir(SiteFiles, "site", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			names = append(names, strings.TrimPrefix(path, "site/"))
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("read embedded site dir: %w", err)
-	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if !e.IsDir() {
-			names = append(names, e.Name())
-		}
 	}
 	sort.Strings(names)
 	return names, nil
@@ -121,6 +127,11 @@ func uploadSiteFiles(client *Client, prefix string) error {
 		}
 		resp.Body.Close()
 	}
+	// The shell now ships every Prism grammar under grammars/ and lazy-loads
+	// them, so the old push-published prism-extra.js bundle is obsolete. Delete
+	// it best-effort whenever the shell is (re)uploaded so buckets pushed by an
+	// earlier binary stay tidy; a delete failure never fails the shell upload.
+	_ = client.Delete(prefix + obsoletePrismExtraKey)
 	version, err := siteVersion()
 	if err != nil {
 		return err
@@ -130,6 +141,11 @@ func uploadSiteFiles(client *Client, prefix string) error {
 	}
 	return nil
 }
+
+// obsoletePrismExtraKey is the retired push-published extra-grammars bundle
+// (replaced by the shell's lazy-loaded grammars/ files). Deleted on shell upload
+// so it doesn't linger on buckets first pushed by an older binary.
+const obsoletePrismExtraKey = ".gitsocial/site/prism-extra.js"
 
 // siteEnabled reports whether the bucket carries the static read surface. The
 // version marker is the cheap signal (present ⇒ enabled, and its value is
@@ -175,6 +191,24 @@ func refreshSiteIfEnabled(client *Client, prefix string) error {
 		return nil
 	}
 	return uploadSiteFiles(client, prefix)
+}
+
+// readSiteDefaultBranch returns the repo's default branch name from the bucket's
+// HEAD symref key (`ref: refs/heads/<branch>`), used by the code items index for
+// default-branch attribution. Empty (best-effort) when HEAD is absent or not a
+// symref — the code walk then attributes every commit to the first branch that
+// reached it, which the reader tolerates.
+func readSiteDefaultBranch(client *Client, prefix string) string {
+	body, err := client.Get(prefix + "HEAD")
+	if err != nil {
+		return ""
+	}
+	target := strings.TrimSpace(string(body))
+	ref, ok := strings.CutPrefix(target, "ref:")
+	if !ok {
+		return ""
+	}
+	return strings.TrimPrefix(strings.TrimSpace(ref), "refs/heads/")
 }
 
 // putSiteManifest writes the refname → sha map as the site refs manifest.
@@ -245,15 +279,42 @@ func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error
 // the item-artifact state machine over every extension data branch (appending,
 // repairing, or advancing a bootstrap as the current state demands) so buckets
 // pushed by older gitsocial versions render fully right away.
-func PushSite(remoteURL string, env HelperEnv) error {
+//
+// workdir is the local checkout the site push runs from (env.GitDir is used when
+// set instead): the items walk reads commits from that repo's odb rather than a
+// per-commit bucket GET, since every commit it visits is an ancestor of a bucket
+// ref tip and so present locally too. Empty (and no GIT_DIR) ⇒ bucket-only walk.
+func PushSite(remoteURL string, env HelperEnv, workdir string, progress Progress) error {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
+	src := newLocalCommitSource(env.GitDir, workdir)
+	defer src.close()
+	return pushSite(client, prefix, src, progress)
+}
+
+// pushSite is PushSite over a resolved client/prefix (the unit-testable core).
+// src (may be nil) is the local commit source for the items walk.
+func pushSite(client *Client, prefix string, src *localCommitSource, progress Progress) error {
+	// Skip the whole expensive pass when nothing a site artifact derives from has
+	// changed since the last successful pass at this shell version — detected in
+	// ~2-3 round trips (refs/ list + HEAD + marker GET). The marker is only an
+	// optimization: any error or mismatch below falls through to the full pass,
+	// and skipDigest is "" when it couldn't be trusted (never a wrong skip).
+	shellVersion, err := siteVersion()
+	if err != nil {
+		return err
+	}
+	upToDate, skipDigest := siteMaintenanceUpToDate(client, prefix, shellVersion)
+	if upToDate {
+		progress.call("site up to date", 1, 1)
+		return nil
+	}
 	if err := uploadSiteFiles(client, prefix); err != nil {
 		return err
 	}
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := readRemoteRefsProgress(client, prefix, progress)
 	if err != nil {
 		return fmt.Errorf("read refs for site manifest: %w", err)
 	}
@@ -266,8 +327,16 @@ func PushSite(remoteURL string, env HelperEnv) error {
 	if err := writeSiteCustomization(client, prefix, refs); err != nil {
 		return err
 	}
-	if err := writeSitePrismExtra(client, prefix, refs); err != nil {
+	if err := rebuildSiteItems(client, prefix, refs, readSiteDefaultBranch(client, prefix), src, progress); err != nil {
 		return err
 	}
-	return rebuildSiteItems(client, prefix, refs)
+	// Stamp the marker LAST, only after a fully successful pass, so an interrupted
+	// pass leaves the marker stale-or-absent and the next push redoes the work. An
+	// in-progress bootstrap (an incomplete items index) is NOT a finished pass: it
+	// has older segments to backfill that no ref move signals, so leave the marker
+	// unstamped and let the next push advance it rather than skip.
+	if !siteItemsBootstrapPending(client, prefix, refs) {
+		writeSitePushState(client, prefix, shellVersion, skipDigest)
+	}
+	return nil
 }

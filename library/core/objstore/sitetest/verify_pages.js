@@ -159,7 +159,7 @@ async function item7() {
   ok("chart series filter present with an 'all' chip + per-kind swatches", findClass(viewNode, "chart-filter").length === 1 && findClass(viewNode, "legend-swatch").length >= 1 && findClass(viewNode, "filter-chip").some((c) => textOf(c) === "all"));
   ok("stacked activity segments render", findClass(viewNode, "activity-seg").length > 0, "segs=" + findClass(viewNode, "activity-seg").length);
   // Top authors ranking (item-count based, with percentages and email tooltips).
-  ok("top-authors section renders with percentages", /Top authors/.test(vt) && findClass(viewNode, "contrib-pct").length > 0);
+  ok("top-authors section renders with percentages", /Authors \d/.test(vt) && findClass(viewNode, "contrib-pct").length > 0);
   // B5: each author name is a deep-link into #/search with the author facet
   // prefilled, and the heading carries a live filter input.
   const contrib = findClass(viewNode, "contrib").length ? findClass(viewNode, "contrib")[findClass(viewNode, "contrib").length - 1] : null;

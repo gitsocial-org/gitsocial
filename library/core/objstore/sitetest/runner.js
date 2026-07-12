@@ -25,9 +25,17 @@ const DEFAULT = [
   "verify_items_shards.js",
   "verify_interrupted_push.js",
   "verify_partial_bootstrap.js",
+  "verify_stale_index_bounds.js",
+  "verify_stale_index_detail.js",
+  "verify_stale_index_routes.js",
   "verify_site_features.js",
+  "verify_code_index.js",
+  "verify_branch_log_index.js",
+  "verify_grammars.js",
   "verify_sparse_repo.js",
   "verify_merged_diff.js",
+  "verify_route_supersede.js",
+  "verify_request_budget.js",
 ];
 
 // Legacy battery: needs the original frozen buckets (hardcoded commit hashes,

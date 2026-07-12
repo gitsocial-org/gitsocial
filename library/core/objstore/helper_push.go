@@ -14,6 +14,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -21,6 +22,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // pushCommand is one parsed "push [+]<src>:<dst>" line.
@@ -111,6 +114,31 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 			}
 		}
 	}
+	// Report is complete: emit the terminating blank line and flush it out to git
+	// NOW, before any post-push bucket maintenance. The gitremote-helpers(7)
+	// protocol has git block reading our stdout for the per-ref status + blank
+	// line, so anything slow between the ref writes and this flush leaves git idle
+	// waiting on a report that already landed — on a large multi-ref push over a
+	// high-latency bucket the maintenance below runs long enough to look like a
+	// hang (git and the helper both at 0% CPU), and refs that already updated
+	// would appear to fail. Maintenance must therefore run strictly after git has
+	// its report; it is best-effort and its outcome never affects the push.
+	fmt.Fprint(w, "\n")
+	if f, ok := w.(interface{ Flush() error }); ok {
+		if err := f.Flush(); err != nil {
+			return err
+		}
+	}
+	h.postPushMaintenance(branchPushed, refsMoved, extPushed)
+	return nil
+}
+
+// postPushMaintenance runs the best-effort bucket upkeep that follows a
+// successful push — advertising the default branch as HEAD and refreshing the
+// static read surface's artifacts. It runs only AFTER the push report has been
+// flushed to git (see push): none of this is part of git's ref-update contract,
+// so a slow or failed maintenance pass must never delay or fail the push itself.
+func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, extPushed map[string]string) {
 	// Advertise the repo's real default branch (its local HEAD symref) as the
 	// bucket HEAD — never assume "main". Fall back to a pushed branch only when
 	// HEAD can't be read (detached, or a non-repo caller).
@@ -121,31 +149,63 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	if head != "" {
 		h.ensureRemoteHEAD(head)
 	}
-	if refsMoved {
-		// Site artifacts (refs manifest + per-extension item/body corpora) serve
-		// ONLY the static read surface, so a plain s3:// git remote with no site
-		// stays clean: gate them on the same site-enabled probe the shell refresh
-		// uses. Best-effort throughout — a probe failure only skips this push's
-		// maintenance, never the git push itself.
-		enabled, _, err := siteEnabled(h.client, h.prefix)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site probe: %v\n", err)
-		} else if enabled {
-			h.writeSiteManifest()
-			h.writeSitePMConfig()
-			h.writeSiteCustomization()
-			h.writeSitePrismExtra()
-			h.updateSiteItems(extPushed)
-			// Site self-refresh: buckets carrying the static read surface pick up
-			// this binary's embedded version on any push. Best-effort, like the
-			// manifest: a failure only leaves the site stale until the next push.
-			if err := refreshSiteIfEnabled(h.client, h.prefix); err != nil {
-				fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
-			}
+	if !refsMoved {
+		return
+	}
+	// Site artifacts (refs manifest + per-extension item/body corpora) serve
+	// ONLY the static read surface, so a plain s3:// git remote with no site
+	// stays clean: gate them on the same site-enabled probe the shell refresh
+	// uses. Best-effort throughout — a probe failure only skips this push's
+	// maintenance, never the git push itself.
+	enabled, _, err := siteEnabled(h.client, h.prefix)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site probe: %v\n", err)
+		return
+	}
+	if !enabled {
+		return
+	}
+	// The refs-derived artifacts (refs manifest, pm/site config, prism grammars)
+	// depend ONLY on the refs/ listing + HEAD, so skip re-deriving them when a
+	// prior pass already covered this exact ref state at this shell version —
+	// detected in ~2-3 round trips. The helper just moved refs, so its OWN push
+	// almost always changes the digest and runs the full block; the win is a
+	// concurrent/duplicate push whose ref state another pusher already handled.
+	// The per-branch site-items append below is NOT gated on the marker: those
+	// branches just moved, and updateSiteItemsIndex already does its own cheap
+	// tip comparison, so the marker must never mask that append.
+	shellVersion, verErr := siteVersion()
+	upToDate, digest := false, ""
+	if verErr == nil {
+		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion)
+	}
+	if !upToDate {
+		h.writeSiteManifest()
+		h.writeSitePMConfig()
+		h.writeSiteCustomization()
+	}
+	h.updateSiteItems(extPushed)
+	// Site self-refresh: buckets carrying the static read surface pick up
+	// this binary's embedded version on any push. Best-effort, like the
+	// manifest: a failure only leaves the site stale until the next push.
+	if err := refreshSiteIfEnabled(h.client, h.prefix); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
+	}
+	// Stamp the marker after the refs-derived writes so a later push against this
+	// same ref state can skip them. Best-effort: a wrong/missing marker only costs
+	// extra work next time, never a wrong skip. Skipped when we didn't run the
+	// block (upToDate), couldn't trust the digest (""), or a bootstrap is still
+	// backfilling — same rule as pushSite: a stamped marker would make the next
+	// site pass skip the backfill that no ref move signals.
+	if !upToDate {
+		refs := h.remoteRefs
+		if refs == nil {
+			refs, _ = readRemoteRefs(h.client, h.prefix)
+		}
+		if refs != nil && !siteItemsBootstrapPending(h.client, h.prefix, refs) {
+			writeSitePushState(h.client, h.prefix, shellVersion, digest)
 		}
 	}
-	fmt.Fprint(w, "\n")
-	return nil
 }
 
 // writeSiteManifest publishes refname → sha as the site refs manifest after
@@ -202,43 +262,55 @@ func (h *remoteHelper) writeSiteCustomization() {
 	}
 }
 
-// writeSitePrismExtra publishes the repo-specific extra Prism grammars bundle
-// after every push (scanning the default branch tree for the languages it uses),
-// so the static site highlights the long tail of languages without bloating the
-// base shell. Best-effort, same contract as the manifest: a failure only leaves
-// the site on the base grammars until the next push.
-func (h *remoteHelper) writeSitePrismExtra() {
-	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site prism extra: %v\n", err)
-			return
-		}
-	}
-	if err := writeSitePrismExtra(h.client, h.prefix, refs); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site prism extra: %v\n", err)
-	}
-}
-
 // updateSiteItems maintains the per-extension site artifacts (metadata index +
-// search corpus) for every pushed gitmsg data branch, alongside the refs
-// manifest. Best-effort, same contract: a stale artifact only degrades the site
-// until the next push. An error here can now only be transient (a network /
-// bucket failure): the artifact state is always repairable on the next push (the
-// repair state machine rebuilds any mismatch from the immutable sealed shards +
-// a bounded walk), so a failed maintenance pass never wedges the index.
+// search corpus) for every pushed gitmsg data branch, plus the single code items
+// index across every pushed code branch, alongside the refs manifest. Best-effort,
+// same contract: a stale artifact only degrades the site until the next push. An
+// error here can now only be transient (a network / bucket failure): the artifact
+// state is always repairable on the next push (the repair state machine rebuilds
+// any mismatch from the immutable sealed shards + a bounded walk), so a failed
+// maintenance pass never wedges the index.
 func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
+	// The helper runs as a git child with GIT_DIR set, so every commit the walk
+	// visits (an ancestor of a just-pushed tip) is present in the local odb —
+	// read it there instead of a per-commit bucket GET. One source serves the
+	// whole pass across extensions and the code corpus.
+	src := newLocalCommitSource(h.gitDir, "")
+	defer src.close()
 	for ext, sha := range extPushed {
 		var err error
 		if sha == "" {
 			err = deleteSiteArtifacts(h.client, h.prefix, ext)
 		} else {
-			err = updateSiteItemsIndex(h.client, h.prefix, ext, sha)
+			err = updateSiteItemsIndex(h.client, h.prefix, ext, sha, &siteProgress{progress: h.progress, ext: ext, src: src})
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: items index %s: %v\n", ext, err)
 		}
+	}
+	h.updateSiteCodeItems(src)
+}
+
+// updateSiteCodeItems maintains the single code items index across every pushed
+// code branch. Unlike the per-extension indexes it is keyed on ALL current code
+// tips (a synthetic digest tip), so any code-branch push runs it and a push that
+// touched only ext branches sees a NO-OP after a cheap manifest read. The current
+// code tips and the default branch come from the bucket's refs (the authoritative
+// post-push state) and the pushing repo's HEAD. Best-effort, same contract.
+func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: code index refs: %v\n", err)
+			return
+		}
+	}
+	defaultBranch := strings.TrimPrefix(localDefaultBranchRef(), "refs/heads/")
+	tips := codeBranchTips(refs, defaultBranch)
+	sp := &siteProgress{progress: h.progress, ext: siteCodeExt, src: src}
+	if err := updateSiteCodeIndex(h.client, h.prefix, tips, defaultBranch, sp); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: code index: %v\n", err)
 	}
 }
 
@@ -664,10 +736,74 @@ func (h *remoteHelper) remoteTipsPresentLocally() ([]string, error) {
 	return tips, nil
 }
 
+// encodedObject is one loose object ready to upload: its sha and zlib bytes.
+type encodedObject struct {
+	sha        string
+	compressed []byte
+}
+
+// listResumeThreshold is the git-computed delta size at or above which
+// uploadObjects first LISTs the bucket's objects/ prefix to skip objects already
+// present (an interrupted initial push then resumes where it stopped instead of
+// re-PUTting everything). The LIST costs ~1 round trip per 1,000 keys, so it only
+// pays off once the delta is large: below this, the handful of redundant PUTs an
+// interrupted small push would repeat is cheaper than the extra listing. 2,000 is
+// ~2 LIST round trips against the delta's thousands of PUTs — a rounding error on
+// a large push, pure overhead on a small one.
+const listResumeThreshold = 2000
+
+// filterPresentObjects removes shas already on the bucket from a large upload
+// delta, so an interrupted initial push resumes instead of re-PUTting every
+// object. It only LISTs (and only pays that cost) when the delta is at least
+// listResumeThreshold; below that it returns the input unchanged. Keys are
+// content-addressed, so a present key IS the finished object — no ETag/size
+// comparison is needed. A LIST error is non-fatal: fall back to uploading the
+// full delta (the PUTs are idempotent), never fail the push over the
+// optimization.
+func filterPresentObjects(client *Client, prefix string, shas []string) []string {
+	if len(shas) < listResumeThreshold {
+		return shas
+	}
+	objs, err := client.ListWithETags(prefix + "objects/")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: list objects for resume: %v\n", err)
+		return shas
+	}
+	present := make(map[string]bool, len(objs))
+	for _, o := range objs {
+		// objects/<xx>/<38-hex> -> reassemble the 40-hex sha.
+		rel := strings.TrimPrefix(o.Key, prefix+"objects/")
+		rel = strings.Replace(rel, "/", "", 1)
+		if len(rel) == 40 {
+			present[rel] = true
+		}
+	}
+	kept := shas[:0:0]
+	for _, sha := range shas {
+		if !present[sha] {
+			kept = append(kept, sha)
+		}
+	}
+	return kept
+}
+
 // uploadObjects streams objects out of the local odb via `git cat-file
-// --batch`, re-encodes each as a loose object, and uploads it. Content
-// addressing makes re-uploads idempotent, so no per-object existence check.
+// --batch`, re-encodes each as a loose object, and uploads them through a
+// bounded worker pool. Content addressing makes each object immutable and
+// re-uploads idempotent, so upload order is free: no ordering constraint holds
+// across objects, and the ref-update phase runs only after this returns nil.
+// Uploads are one HTTP round trip each, so serial transfer is pure round-trip
+// latency; the pool overlaps that latency across resolveUploadConcurrency
+// workers. The cat-file read stays sequential (one git process) and feeds the
+// pool as a producer.
 func (h *remoteHelper) uploadObjects(shas []string) error {
+	if len(shas) == 0 {
+		return nil
+	}
+	// On a large delta, drop objects already on the bucket so an interrupted
+	// initial push resumes instead of re-uploading everything (below the
+	// threshold this is a no-op — the LIST would cost more than it saves).
+	shas = filterPresentObjects(h.client, h.prefix, shas)
 	if len(shas) == 0 {
 		return nil
 	}
@@ -688,79 +824,118 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 		_ = cmd.Wait()
 	}()
 
-	// The batch read stays sequential (one git process); uploads fan out with
-	// bounded parallelism so push latency isn't one HTTP round trip per object.
-	const uploadParallelism = 8
-	sem := make(chan struct{}, uploadParallelism)
-	var wg sync.WaitGroup
+	produce := func(ctx context.Context, out chan<- encodedObject) error {
+		reader := bufio.NewReaderSize(stdout, 1<<20)
+		for _, sha := range shas {
+			if _, err := io.WriteString(stdin, sha+"\n"); err != nil {
+				return err
+			}
+			header, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("cat-file %s: %w", sha, err)
+			}
+			fields := strings.Fields(strings.TrimSpace(header))
+			if len(fields) != 3 || fields[1] == "missing" {
+				return fmt.Errorf("cat-file %s: unexpected response %q", sha, strings.TrimSpace(header))
+			}
+			objType := fields[1]
+			var size int64
+			if _, err := fmt.Sscanf(fields[2], "%d", &size); err != nil {
+				return fmt.Errorf("cat-file %s: bad size in %q", sha, header)
+			}
+			content := make([]byte, size)
+			if _, err := io.ReadFull(reader, content); err != nil {
+				return fmt.Errorf("cat-file %s: read content: %w", sha, err)
+			}
+			if _, err := reader.Discard(1); err != nil { // trailing newline
+				return fmt.Errorf("cat-file %s: %w", sha, err)
+			}
+			compressed, err := encodeLooseObject(objType, content)
+			if err != nil {
+				return err
+			}
+			h.fetched[sha] = true
+			select {
+			case out <- encodedObject{sha: sha, compressed: compressed}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	}
+	return uploadEncodedObjects(h.client, h.prefix, resolveUploadConcurrency(), len(shas), h.progress, produce)
+}
+
+// uploadEncodedObjects runs a bounded worker pool that PUTs each object the
+// producer emits. The first hard error (from the producer or any worker)
+// cancels the context so peers stop promptly and the producer unblocks, then
+// the wrapped error is returned. Objects are content-addressed and immutable,
+// so worker order is irrelevant; refs move only after this returns nil.
+//
+// total is the object count (for progress); progress (nil = silent) is called
+// as each object lands, throttled by the caller-provided hook.
+func uploadEncodedObjects(client *Client, prefix string, concurrency, total int, progress Progress, produce func(context.Context, chan<- encodedObject) error) error {
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	work := make(chan encodedObject)
+	var firstErr error
 	var errMu sync.Mutex
-	var uploadErr error
 	setErr := func(err error) {
 		errMu.Lock()
-		if uploadErr == nil {
-			uploadErr = err
+		if firstErr == nil {
+			firstErr = err
+			cancel() // stop peers and unblock the producer
 		}
 		errMu.Unlock()
 	}
-	failed := func() bool {
-		errMu.Lock()
-		defer errMu.Unlock()
-		return uploadErr != nil
+
+	var done int64
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for obj := range work {
+				key := prefix + "objects/" + obj.sha[:2] + "/" + obj.sha[2:]
+				if err := putObjectWithRetry(ctx, client, key, obj.compressed); err != nil {
+					setErr(fmt.Errorf("upload object %s: %w", obj.sha, err))
+					continue
+				}
+				progress.call("objects", int(atomic.AddInt64(&done, 1)), total)
+			}
+		}()
 	}
 
-	reader := bufio.NewReaderSize(stdout, 1<<20)
-	for _, sha := range shas {
-		if failed() {
-			break
-		}
-		if _, err := io.WriteString(stdin, sha+"\n"); err != nil {
-			setErr(err)
-			break
-		}
-		header, err := reader.ReadString('\n')
-		if err != nil {
-			setErr(fmt.Errorf("cat-file %s: %w", sha, err))
-			break
-		}
-		fields := strings.Fields(strings.TrimSpace(header))
-		if len(fields) != 3 || fields[1] == "missing" {
-			setErr(fmt.Errorf("cat-file %s: unexpected response %q", sha, strings.TrimSpace(header)))
-			break
-		}
-		objType := fields[1]
-		var size int64
-		if _, err := fmt.Sscanf(fields[2], "%d", &size); err != nil {
-			setErr(fmt.Errorf("cat-file %s: bad size in %q", sha, header))
-			break
-		}
-		content := make([]byte, size)
-		if _, err := io.ReadFull(reader, content); err != nil {
-			setErr(fmt.Errorf("cat-file %s: read content: %w", sha, err))
-			break
-		}
-		if _, err := reader.Discard(1); err != nil { // trailing newline
-			setErr(fmt.Errorf("cat-file %s: %w", sha, err))
-			break
-		}
-		compressed, err := encodeLooseObject(objType, content)
-		if err != nil {
-			setErr(err)
-			break
-		}
-		h.fetched[sha] = true
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(sha string, compressed []byte) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
-			if err := h.client.Put(key, compressed); err != nil {
-				setErr(fmt.Errorf("upload object %s: %w", sha, err))
-			}
-		}(sha, compressed)
+	if err := produce(ctx, work); err != nil {
+		setErr(err)
 	}
+	close(work)
 	wg.Wait()
-	return uploadErr
+	return firstErr
+}
+
+// putObjectWithRetry retries a failed object PUT so a transient fault (a
+// killed connection, a throttle) costs one retried object instead of failing
+// the whole push — objects are content-addressed, so re-PUTs are idempotent.
+// Persistent failures still surface after the attempts run out, and the pool
+// context aborts the wait when a peer has already failed the push. It shares
+// retryBackoff (client.go) with the read retries.
+func putObjectWithRetry(ctx context.Context, client *Client, key string, body []byte) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		if err = client.Put(key, body); err == nil || attempt >= len(retryBackoff) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(retryBackoff[attempt]):
+		}
+	}
 }
 
 // encodeLooseObject builds git's loose-object format: zlib("<type> <size>\0" + content).

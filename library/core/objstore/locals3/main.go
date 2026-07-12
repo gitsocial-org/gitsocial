@@ -120,7 +120,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			sort.Strings(keys)
 			fmt.Fprint(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>`)
 			for _, k := range keys {
-				fmt.Fprintf(w, "<Contents><Key>%s</Key></Contents>", k)
+				// Emit the content md5 as the ETag, matching real S3 (whose listings
+				// carry per-object ETags). Callers that fingerprint a listing by
+				// (key, ETag) — e.g. the site push-state marker — depend on the ETag
+				// tracking an object's VALUE, not just its key's presence.
+				etag := ""
+				if body, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(k))); err == nil {
+					etag = etagOf(body)
+				}
+				fmt.Fprintf(w, "<Contents><Key>%s</Key><ETag>%s</ETag></Contents>", k, etag)
 			}
 			fmt.Fprint(w, `</ListBucketResult>`)
 			return

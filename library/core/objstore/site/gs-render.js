@@ -7,7 +7,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, flattenThread, getObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, flattenThread, getObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the in-app route types a detail page's "back" may return to
   // (a list/board/search the user came from). Detail routes (commit/tag) are
@@ -157,10 +157,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // ---- Syntax highlighting via Prism (browser only, no innerHTML) ----
 
   // File-extension → Prism grammar name. The base grammars (go/js/ts/json/yaml/
-  // bash/markdown/markup/css) ship in prism.js; the rest (python/rust/c/...) ride
-  // in the push-published prism-extra.js when the repo uses them, else the grammar
-  // is simply absent and the file renders unhighlighted (a clean fallback). Kept
-  // in sync with prismExtByExt in site_prism.go (which grammars a push bundles).
+  // bash/markdown/markup/css/diff) ship in prism.js; the rest (python/rust/c/...)
+  // are lazy-loaded from grammars/prism-<lang>.js the first time a file/block in
+  // that language is rendered (see ensureGrammar), so the shell stays small and a
+  // repo pays only for the languages a visitor actually opens. A missing grammar
+  // file degrades to plain text.
   const EXT_LANG = {
     go: "go", js: "javascript", mjs: "javascript", ts: "typescript",
     json: "json", yaml: "yaml", yml: "yaml", sh: "bash", bash: "bash",
@@ -173,8 +174,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     toml: "toml", php: "php", cs: "csharp",
     ini: "ini", proto: "protobuf", lua: "lua",
   };
-  // Markdown fence tag (and its common aliases) → Prism grammar name. Extra
-  // grammars highlight only when prism-extra.js supplied them (see EXT_LANG).
+  // Markdown fence tag (and its common aliases) → Prism grammar name. Non-base
+  // grammars are lazy-loaded on first use (see ensureGrammar / EXT_LANG).
   const FENCE_LANG = {
     go: "go", golang: "go", js: "javascript", javascript: "javascript",
     mjs: "javascript", jsx: "javascript", ts: "typescript", typescript: "typescript",
@@ -189,6 +190,97 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ini: "ini", proto: "protobuf", protobuf: "protobuf", lua: "lua",
     docker: "docker", dockerfile: "docker",
   };
+
+  // BASE_GRAMMARS are the grammars already bundled in prism.js (and its clike
+  // base), so they are highlighted synchronously and never lazy-loaded.
+  const BASE_GRAMMARS = {
+    markup: 1, css: 1, clike: 1, javascript: 1, typescript: 1, json: 1,
+    yaml: 1, bash: 1, go: 1, markdown: 1, diff: 1,
+  };
+  // GRAMMAR_DEPS lists, for each lazy-loaded grammar, the OTHER lazy-loaded
+  // grammars it extends and that must therefore load first (deps before the
+  // dependent). Grammars that extend only a base grammar (clike/markup/css,
+  // already in prism.js) have no entry. Ported from prismGrammars in the retired
+  // site_prism.go. A grammar not listed here has no lazy-load dependencies.
+  const GRAMMAR_DEPS = {
+    cpp: ["c"],
+  };
+
+  // grammarBase is the bucket base URL (trailing slash) grammar files are fetched
+  // relative to, set once at boot by setGrammarBase(deriveBase(location)). "" when
+  // unset (the loader then no-ops and highlighting stays base-only).
+  let grammarBase = "";
+  function setGrammarBase(base) { grammarBase = base || ""; }
+
+  // grammarState caches per-session grammar loads: a grammar name maps to a
+  // Promise that resolves true once loaded (or false on a quiet failure), so a
+  // grammar file is fetched at most once and concurrent requests share it.
+  const grammarState = new Map();
+
+  // fetchGrammarText GETs grammars/prism-<name>.js relative to grammarBase and
+  // returns its source text, or null on any failure (404, network, no fetch/base)
+  // — every one a quiet fallback to plain text, never an error.
+  async function fetchGrammarText(name) {
+    if (!grammarBase || typeof fetch !== "function") return null;
+    try {
+      const res = await fetch(grammarBase + "grammars/prism-" + name + ".js");
+      if (!res || !res.ok) return null;
+      return await res.text();
+    } catch (e) { return null; }
+  }
+
+  // evalGrammar runs a fetched grammar component with Prism in scope, so its
+  // `Prism.languages.X = ...` / `!function(e){...}(Prism)` body registers the
+  // grammar on the shared Prism global. Returns true when Prism.languages gained
+  // the language, false otherwise. Grammar files are trusted vendored assets
+  // (shipped in the shell), never visitor content.
+  function evalGrammar(name, src) {
+    const P = getPrism();
+    if (!P || !src) return false;
+    try {
+      // eslint-disable-next-line no-new-func
+      new Function("Prism", src)(P);
+    } catch (e) { return false; }
+    return !!(P.languages && P.languages[name]);
+  }
+
+  // ensureGrammar loads the grammar `name` (and its dependency chain, deps first)
+  // into Prism.languages, returning a Promise<boolean> for whether it is now
+  // available. Base grammars resolve true immediately; an already-loaded (or
+  // in-flight) grammar reuses its cached Promise; a missing grammar file or a
+  // failed dependency resolves false (the caller keeps plain text). Browser-only:
+  // absent fetch/Prism/base it resolves whether the grammar happens to be present.
+  function ensureGrammar(name) {
+    const P = getPrism();
+    if (!name || !P || (P.languages && P.languages[name])) return Promise.resolve(!!(P && P.languages && P.languages[name]));
+    if (BASE_GRAMMARS[name]) return Promise.resolve(false);
+    if (grammarState.has(name)) return grammarState.get(name);
+    const load = (async () => {
+      for (const dep of GRAMMAR_DEPS[name] || []) {
+        if (!(await ensureGrammar(dep))) return false;
+      }
+      const src = await fetchGrammarText(name);
+      if (src === null) return false;
+      return evalGrammar(name, src);
+    })();
+    grammarState.set(name, load);
+    return load;
+  }
+
+  // lazyHighlight renders `lang`-highlighted content into a freshly-emptied
+  // parent NOW (synchronously) via `render`, then — when the grammar is not yet
+  // loaded but is lazy-loadable — kicks off ensureGrammar and, on success,
+  // re-renders in place so the plain text upgrades to highlighted without ever
+  // blocking. A no-op re-render when the grammar fails to load (parent keeps its
+  // plain text). Used by every highlight entry point so lazy loading is uniform.
+  function lazyHighlight(parent, lang, render) {
+    render();
+    const P = getPrism();
+    if (!P || !lang || !parent || (P.languages && P.languages[lang]) || BASE_GRAMMARS[lang]) return;
+    ensureGrammar(lang).then((ok) => {
+      if (ok && parent) { parent.replaceChildren(); render(); }
+    });
+  }
 
   // langForPath returns the Prism grammar name for a file path, or null.
   function langForPath(path) {
@@ -226,11 +318,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // highlightTo appends syntax-highlighted DOM for `code` to `parent`. With
-  // Prism present and the grammar bundled it tokenizes and builds spans via el()
-  // (never innerHTML, so the escaping invariant holds); otherwise it appends a
-  // single plain text node. Returns parent.
-  function highlightTo(parent, code, lang) {
+  // highlightNow appends `lang`-highlighted DOM for `code` to `parent` using only
+  // the grammars currently loaded (no lazy load): tokenized spans when the
+  // grammar is present, else a single plain text node. The escaping invariant
+  // holds (el()/text nodes, never innerHTML). Returns parent.
+  function highlightNow(parent, code, lang) {
     const P = getPrism();
     const grammar = P && lang && P.languages ? P.languages[lang] : null;
     if (!P || !grammar) { parent.append(document.createTextNode(code)); return parent; }
@@ -244,11 +336,19 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return parent;
   }
 
-  // highlightLines tokenizes a whole text once and returns one array of
-  // { text, cls } segments per source line (splitting token leaves on newlines),
-  // so a blob view keeps whole-file-accurate highlighting under its per-line row
-  // structure. Falls back to plain per-line segments when Prism/grammar absent.
-  function highlightLines(code, lang) {
+  // highlightTo appends syntax-highlighted DOM for `code` to `parent`, lazy-
+  // loading the grammar when needed: it renders plain text now and upgrades it
+  // in place once grammars/prism-<lang>.js loads (progressive enhancement, never
+  // blocking; a missing grammar stays plain). Returns parent.
+  function highlightTo(parent, code, lang) {
+    lazyHighlight(parent, lang, () => highlightNow(parent, code, lang));
+    return parent;
+  }
+
+  // linesFor splits a whole-text Prism tokenization into one { text, cls }
+  // segment array per source line (splitting token leaves on newlines), or plain
+  // per-line segments when the grammar is absent.
+  function linesFor(code, lang) {
     const P = getPrism();
     const grammar = P && lang && P.languages ? P.languages[lang] : null;
     const raw = code.split("\n");
@@ -265,6 +365,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
     }
     return lines;
+  }
+
+  // highlightLines returns one { text, cls } segment array per source line for a
+  // blob view, using only currently-loaded grammars. The blob view (rawBlobPane)
+  // lazy-loads the grammar itself and rebuilds its rows on load, so this stays a
+  // pure synchronous helper.
+  function highlightLines(code, lang) {
+    return linesFor(code, lang);
   }
 
   // appendSegments fills a container with { text, cls } segments as escaped
@@ -1612,30 +1720,45 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // rawBlobPane builds the monospace, line-numbered blob body with whole-file
   // Prism highlighting and line-number anchors (click sets #file:...:L<n>,
-  // shift-click extends a range). Returns { code, firstHl }.
+  // shift-click extends a range). Rows render with whatever grammar is loaded
+  // now, then rebuild in place once the file's lazy-loaded grammar arrives
+  // (progressive enhancement; a missing grammar stays plain). Returns
+  // { code, firstHl }.
   function rawBlobPane(textStr, path, branch, line, lineEnd) {
     const from = line || 0, to = lineEnd || line || 0;
-    const segLines = highlightLines(textStr, langForPath(path));
+    const lang = langForPath(path);
     blobAnchor = line || null;
     const code = el("div", { class: "blob" }, []);
     let firstHl = null;
-    segLines.forEach((segs, idx) => {
-      const n = idx + 1;
-      const hl = n >= from && n <= to && from > 0;
-      const row = el("div", { class: "blob-row" + (hl ? " hl" : "") }, []);
-      const num = el("a", { class: "ln mono", href: fileRef(path, branch, n) }, [String(n)]);
-      num.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        let lo = n, hi = n;
-        if (ev.shiftKey && blobAnchor) { lo = Math.min(blobAnchor, n); hi = Math.max(blobAnchor, n); }
-        else blobAnchor = n;
-        location.hash = fileRef(path, branch, lo, hi === lo ? null : hi);
+    // build fills `code` with one row per source line, highlighting with the
+    // grammars loaded at call time. Re-runnable so a later grammar load upgrades
+    // the whole pane; firstHl tracks the first highlighted-range row for scroll.
+    const build = () => {
+      code.replaceChildren();
+      firstHl = null;
+      highlightLines(textStr, lang).forEach((segs, idx) => {
+        const n = idx + 1;
+        const hl = n >= from && n <= to && from > 0;
+        const row = el("div", { class: "blob-row" + (hl ? " hl" : "") }, []);
+        const num = el("a", { class: "ln mono", href: fileRef(path, branch, n) }, [String(n)]);
+        num.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          let lo = n, hi = n;
+          if (ev.shiftKey && blobAnchor) { lo = Math.min(blobAnchor, n); hi = Math.max(blobAnchor, n); }
+          else blobAnchor = n;
+          location.hash = fileRef(path, branch, lo, hi === lo ? null : hi);
+        });
+        row.append(num);
+        row.append(appendSegments(el("span", { class: "lc mono" }, []), segs));
+        code.append(row);
+        if (hl && !firstHl) firstHl = row;
       });
-      row.append(num);
-      row.append(appendSegments(el("span", { class: "lc mono" }, []), segs));
-      code.append(row);
-      if (hl && !firstHl) firstHl = row;
-    });
+    };
+    build();
+    const P = getPrism();
+    if (P && lang && !(P.languages && P.languages[lang]) && !BASE_GRAMMARS[lang]) {
+      ensureGrammar(lang).then((ok) => { if (ok) build(); });
+    }
     return { code, firstHl };
   }
 
@@ -2053,8 +2176,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!live) return { status: "absent" };
     if (short && live.startsWith(short)) return { status: "ok", sha: live, exact: true };
     if (short) {
-      // Deep budget: a recorded tip can sit far behind the live tip on a
-      // long-running branch, so search DETAIL_WALK_CAP back before falling back.
+      // Resolve the recorded tip (which can sit far behind the live tip on a
+      // long-running branch) by prefix match over the code items index first —
+      // the branch's commits are in the merged code corpus — falling back to a
+      // bounded loose walk only when the index can't answer (absent/non-v4, or a
+      // sha predating the bootstrap).
+      const indexed = await resolveShortShaFromIndex(ctx, short);
+      if (indexed) return { status: "ok", sha: indexed, exact: true };
       const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
       const hit = commits.find((c) => c.hash.startsWith(short));
       if (hit) return { status: "ok", sha: hit.hash, exact: true };
@@ -2066,17 +2194,28 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // to full commit shas present in this bucket. Both are reachable from the PR's
   // base branch: an imported merge stores the merge commit and its first parent
   // (both on the base line), a native merge stores the fork-point base and the
-  // head tip (reachable as the merge commit's second parent). Walks the base
-  // branch once, following all parents like the base-tip resolver. Null when the
-  // base is foreign or absent, or either sha isn't found within the walk budget.
+  // head tip (reachable as the merge commit's second parent). Resolves each short
+  // sha by prefix match over the code items index (full sha per code commit,
+  // draining shards newest-first) — the index removes the ~hundreds of loose GETs
+  // the base-branch walk used to cost. Falls back to that bounded walk only for
+  // a short that the index can't answer (index absent/non-v4, or the sha predates
+  // the bootstrap or sits on a non-indexed object). Null when the base is foreign
+  // or absent, or either sha stays unresolved. Ambiguity mirrors the walk: the
+  // first (newest-first) prefix match wins, no uniqueness check.
   async function resolveMergedRefs(ctx, baseField, baseShort, headShort) {
     const { url, name } = parseBranchField(baseField);
     if (url || !name) return null;
     const live = await refTip(ctx, "refs/heads/" + name);
     if (!live) return null;
-    const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
-    const find = (short) => (live.startsWith(short) ? live : (commits.find((c) => c.hash.startsWith(short)) || {}).hash || null);
-    const baseSha = find(baseShort), headSha = find(headShort);
+    let commits = null;
+    const walk = async () => (commits || (commits = await walkHistory(ctx, live, DETAIL_WALK_CAP)));
+    const find = async (short) => {
+      if (live.startsWith(short)) return live;
+      const indexed = await resolveShortShaFromIndex(ctx, short);
+      if (indexed) return indexed;
+      return ((await walk()).find((c) => c.hash.startsWith(short)) || {}).hash || null;
+    };
+    const baseSha = await find(baseShort), headSha = await find(headShort);
     return baseSha && headSha ? { baseSha, headSha } : null;
   }
 
@@ -2357,12 +2496,30 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
+  // enrichDetail runs one background enrichment step and appends its section to
+  // the already-painted detail. Producer returns a node (or null); place is an
+  // optional inserter (default append). A step's own bounded walk (a PR diff's
+  // merge-base search, a thread's social walk) thus runs AFTER first paint, never
+  // gating it — the timeline-bug fix applied to the detail routes: a stale/absent
+  // index degrades to bounded background work, never an eternal "Loading…".
+  // Failures (missing object, cap, transient 403/429 on a bounded walk) are
+  // swallowed so one slow section never blanks the resolved detail.
+  function enrichDetail(root, producer, place) {
+    Promise.resolve().then(producer).then((node) => {
+      if (node) (place ? place(node) : root.append(node));
+    }).catch(() => { /* enrichment is best-effort; the base detail already painted */ });
+  }
+
   // itemDetail resolves the item matching hash — deepening the history walk up to
   // DETAIL_WALK_CAP so an old permalink past the first window still resolves (a
-  // "searching history" note shows while it deepens) — then renders it with its
-  // same-repo reply context (parent chain above the item), comment thread, and
-  // any embedded cross-repo context. Releases add an assets section; PRs add
-  // the files-changed diff.
+  // "searching history" note shows while it deepens). The commit itself is one
+  // loose GET: it paints the base detail (subject, body, meta, header, embedded
+  // cross-repo context, release assets) as soon as the item resolves, then
+  // enriches progressively in the BACKGROUND — same-repo reply context (parent
+  // chain above the item), pm relations/members, the PR review summary and
+  // files-changed diff, and the comment thread. Each enrichment carries its own
+  // bounded walk, so none of them gates first paint (the class of hang that left
+  // a merged PR's detail on "Loading…" behind a 2000-commit merge-base walk).
   async function itemDetail(ctx, hash, branch) {
     const cv = COMMIT_VIEW[branch];
     const onProgress = (visited) => setView([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
@@ -2370,35 +2527,52 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!item) return [el("div", { class: "err" }, [cv.label + " not found."])];
     const skip = cv.ext === "release" ? RELEASE_ASSET_KEYS : [];
     const nodes = detailView(item, { tab: cv.tab, branch }, skip, ctx);
+    const root = nodes[0];
+    // Base paint (synchronous, item already hydrated): embedded cross-repo
+    // context and release assets cost no walk, so they land with first paint.
+    for (const e of embeddedRefs(item.commit, item.header)) root.append(embeddedBlock(e));
+    if (cv.ext === "release") {
+      const sec = releaseAssetsSection(item.header);
+      if (sec) root.append(sec);
+    }
     // Same-repo reply context (ancestor chain, or the quoted-excerpt fallback)
-    // renders above the item so a bare permalink of a reply still reads as one.
-    const replyCtx = await replyContextSection(ctx, item, branch);
-    if (replyCtx) nodes[0].insertBefore(replyCtx, nodes[0].children[1] || null);
-    for (const e of embeddedRefs(item.commit, item.header)) nodes[0].append(embeddedBlock(e));
+    // renders above the item so a bare permalink of a reply still reads as one;
+    // its findRefItem walks are bounded but backgrounded off first paint.
+    enrichDetail(root, () => replyContextSection(ctx, item, branch),
+      (node) => root.insertBefore(node, root.children[1] || null));
     if (cv.ext === "pm") {
       // Milestone/sprint member lists + progress, or an issue's parent/milestone/
       // sprint links and sub-issue list, from the already-resolved pm set.
-      for (const extra of await pmDetailExtras(ctx, item, items)) nodes[0].append(extra);
-    }
-    if (cv.ext === "release") {
-      const sec = releaseAssetsSection(item.header);
-      if (sec) nodes[0].append(sec);
+      enrichDetail(root, async () => {
+        const wrap = el("div", {}, []);
+        for (const extra of await pmDetailExtras(ctx, item, items)) wrap.append(extra);
+        return wrap.childNodes.length ? wrap : null;
+      });
     }
     if (branch === "gitmsg/review" && (item.header.type || "") === "pull-request") {
       // Feedback rides gitmsg/review alongside the PR; findItemDeep already walked
-      // it (feedback is newer than its PR, so it is in the accumulated set).
-      const fb = prFeedback(items, item.commit.short);
-      // Feedback records come body-less from the metadata index; fetch their
-      // loose objects so verdicts, authors, and comment bodies render.
-      await hydrateItems(ctx, fb.all);
-      const summary = reviewSummary(fb.all, item.header.reviewers || "");
-      const summarySec = reviewSummarySection(summary, fb.nonFile);
-      if (summarySec) nodes[0].append(summarySec);
-      const sec = await prDiffSection(ctx, item.header, fb.file);
-      if (sec) nodes[0].append(sec);
+      // it (feedback is newer than its PR, so it is in the accumulated set). The
+      // review summary and the files-changed diff (whose merge-base / tip search
+      // is a bounded but potentially large loose walk) enrich in the background.
+      enrichDetail(root, async () => {
+        const fb = prFeedback(items, item.commit.short);
+        // Feedback records come body-less from the metadata index; fetch their
+        // loose objects so verdicts, authors, and comment bodies render.
+        await hydrateItems(ctx, fb.all);
+        const summary = reviewSummary(fb.all, item.header.reviewers || "");
+        return reviewSummarySection(summary, fb.nonFile);
+      });
+      enrichDetail(root, async () => {
+        const file = prFeedback(items, item.commit.short).file;
+        // Per-line feedback bodies come body-less from the index; hydrate them so
+        // the diff's anchored comments render.
+        await hydrateItems(ctx, file);
+        return prDiffSection(ctx, item.header, file);
+      });
     }
-    const thread = await itemThreadSection(ctx, item);
-    if (thread) nodes[0].append(thread);
+    // Comment thread: the social walk is bounded (DETAIL_WALK_CAP) but can be a
+    // large loose walk on an index-absent social branch, so it enriches last.
+    enrichDetail(root, () => itemThreadSection(ctx, item));
     return nodes;
   }
 
@@ -3189,10 +3363,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     function draw() {
       const all = matches();
       const rows = all.slice(0, shown);
-      // Count label: distinct-author total, and (when windowed or filtered) how many
-      // rows are actually shown, so N never overstates the list.
-      const suffix = (rows.length < all.length || all.length !== authors.length) ? (" · showing " + rows.length) : "";
-      label.textContent = "Top authors (" + authors.length + suffix + ")";
+      // Count label: shown/total while the window (or a filter) hides rows, so
+      // the count never overstates the list; plain total once everything shows.
+      label.textContent = rows.length < authors.length ? "Authors " + rows.length + "/" + authors.length : "Authors " + authors.length;
       list.replaceChildren();
       if (!rows.length) { list.append(el("div", { class: "empty" }, ["No authors match “" + filter.value + "”."])); return; }
       for (const a of rows) {
@@ -3244,6 +3417,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     if (data.latestRelease) facts.append(el("span", { class: "chip" }, ["latest " + data.latestRelease]));
     wrap.append(facts);
+    // On an index-absent or stale-manifest bucket each extension's set is bounded
+    // to its most-recent commits (no unbounded loose walk), so the aggregates
+    // reflect recent activity only — say so, in the search view's voice, rather
+    // than presenting a partial total as complete.
+    if (data.partial) wrap.append(el("div", { class: "search-tier-note" }, [
+      "Showing recent activity only: this bucket's item index is missing or still building, so analytics cover the most recent items rather than all history. Push with a current gitsocial (or run `gitsocial site push`) to index the full history.",
+    ]));
     if (!data.total) { wrap.append(el("div", { class: "empty" }, ["No activity to analyze yet."])); return [wrap]; }
     const authors = topItemAuthors(data.entries);
     const summarySlot = el("div", {}, []);
@@ -4059,6 +4239,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

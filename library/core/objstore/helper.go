@@ -92,6 +92,7 @@ type remoteHelper struct {
 	capability Capability        // provider's declared conditional-write support
 	refMode    string            // resolved lazily on first push (refModeETag/refModeGeneration)
 	remoteRefs map[string]string // ref state from list, kept current by push for the site manifest
+	progress   Progress          // stderr progress hook (nil = silent)
 }
 
 // clientForRemote builds the S3 client, key prefix, and provider capability
@@ -138,7 +139,15 @@ func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) err
 	if err != nil {
 		return err
 	}
-	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability}
+	// Progress goes to the helper's STDERR (out is the git protocol stream);
+	// git relays a remote helper's stderr to the user's terminal. GIT_QUIET
+	// silences it, mirroring git's own progress suppression.
+	var pw *progressWriter
+	if os.Getenv("GIT_QUIET") == "" {
+		pw = newProgressWriter(os.Stderr, stderrIsTTY())
+	}
+	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability, progress: pw.Progress()}
+	defer pw.finish()
 
 	w := bufio.NewWriter(out)
 	defer w.Flush()

@@ -29,14 +29,51 @@ type memObject struct {
 
 // memBucket is a threadsafe in-memory object store implementing http.Handler.
 type memBucket struct {
-	mu   sync.Mutex
-	objs map[string]memObject
-	puts map[string]int
+	mu        sync.Mutex
+	objs      map[string]memObject
+	puts      map[string]int
+	gets      map[string]int  // per-key non-list GET count (skip-path assertions)
+	lists     int             // ListObjectsV2 request count
+	failPuts  map[string]bool // keys whose PUT returns 500 (simulated hard error)
+	flakyPuts map[string]int  // keys whose next N PUTs return 500, then succeed
+	failGets  map[string]int  // keys whose GETs return 500 forever (>0 = armed)
+	flakyGets map[string]int  // keys whose next N GETs return 500, then succeed
 }
 
 // newMemBucket returns an empty in-memory bucket.
 func newMemBucket() *memBucket {
-	return &memBucket{objs: map[string]memObject{}, puts: map[string]int{}}
+	return &memBucket{objs: map[string]memObject{}, puts: map[string]int{}, gets: map[string]int{}, failPuts: map[string]bool{}, flakyPuts: map[string]int{}, failGets: map[string]int{}, flakyGets: map[string]int{}}
+}
+
+// failPut marks a bucket-relative key so its next PUTs return HTTP 500.
+func (m *memBucket) failPut(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failPuts[key] = true
+}
+
+// flakyPut marks a bucket-relative key so its next n PUTs return HTTP 500,
+// after which PUTs succeed (simulated transient fault).
+func (m *memBucket) flakyPut(key string, n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.flakyPuts[key] = n
+}
+
+// failGet marks a bucket-relative key so every GET returns HTTP 500 (a
+// fault that never clears — the read-retry must give up and surface the error).
+func (m *memBucket) failGet(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failGets[key] = 1
+}
+
+// flakyGet marks a bucket-relative key so its next n GETs return HTTP 500,
+// after which GETs succeed (a transient read fault the retry must absorb).
+func (m *memBucket) flakyGet(key string, n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.flakyGets[key] = n
 }
 
 // putCount returns how many times a key (bucket-relative) was PUT.
@@ -44,6 +81,31 @@ func (m *memBucket) putCount(key string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.puts[key]
+}
+
+// getCount returns how many non-list GETs a key (bucket-relative) received.
+func (m *memBucket) getCount(key string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.gets[key]
+}
+
+// listCount returns how many ListObjectsV2 requests the bucket received.
+func (m *memBucket) listCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lists
+}
+
+// totalPuts returns the total number of successful PUTs across all keys.
+func (m *memBucket) totalPuts() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	total := 0
+	for _, n := range m.puts {
+		total += n
+	}
+	return total
 }
 
 // etag returns the quoted md5 hex of bytes, matching S3 ETag shape.
@@ -66,7 +128,18 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		if r.URL.Query().Get("list-type") == "2" {
+			m.lists++
 			m.list(w, r)
+			return
+		}
+		m.gets[key]++
+		if m.failGets[key] > 0 {
+			w.WriteHeader(500)
+			return
+		}
+		if m.flakyGets[key] > 0 {
+			m.flakyGets[key]--
+			w.WriteHeader(500)
 			return
 		}
 		obj, ok := m.objs[key]
@@ -98,6 +171,15 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	case http.MethodPut:
 		body, _ := io.ReadAll(r.Body)
+		if m.failPuts[key] {
+			w.WriteHeader(500)
+			return
+		}
+		if m.flakyPuts[key] > 0 {
+			m.flakyPuts[key]--
+			w.WriteHeader(500)
+			return
+		}
 		existing, exists := m.objs[key]
 		if r.Header.Get("If-None-Match") == "*" && exists {
 			w.WriteHeader(412)
@@ -131,7 +213,7 @@ func (m *memBucket) list(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(keys)
 	fmt.Fprint(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>`)
 	for _, k := range keys {
-		fmt.Fprintf(w, "<Contents><Key>%s</Key></Contents>", k)
+		fmt.Fprintf(w, "<Contents><Key>%s</Key><ETag>%s</ETag></Contents>", k, etag(m.objs[k].body))
 	}
 	fmt.Fprint(w, `</ListBucketResult>`)
 }

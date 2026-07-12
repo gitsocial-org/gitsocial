@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
@@ -41,6 +42,11 @@ type s3Fixture struct {
 	contendKey   string
 	contendValue []byte
 	contended    bool
+	// blockKey, when set, holds every PUT to that bucket-relative key until
+	// unblock is closed — used to freeze post-push site maintenance while the
+	// test observes that git already got its ref-update report.
+	blockKey string
+	unblock  chan struct{}
 }
 
 func etagFor(data []byte) string {
@@ -55,6 +61,14 @@ func (f *s3Fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/"+f.bucket)
 	path = strings.TrimPrefix(path, "/")
+	// Freeze a designated maintenance PUT (outside the fixture lock, so reads
+	// keep flowing) until the test unblocks it.
+	f.mu.Lock()
+	blockKey, unblock := f.blockKey, f.unblock
+	f.mu.Unlock()
+	if r.Method == http.MethodPut && blockKey != "" && path == blockKey && unblock != nil {
+		<-unblock
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch r.Method {
@@ -360,6 +374,91 @@ func TestS3Helper_pushRoundTrip(t *testing.T) {
 	gitIn(t, src, env, "push", remote, ":refs/gitmsg/core/forks/cafe0001")
 	if _, ok := fixture.object("myrepo/refs/gitmsg/core/forks/cafe0001"); ok {
 		t.Error("deleted ref key still present in bucket")
+	}
+}
+
+// TestS3Helper_pushReportsBeforeSiteMaintenance is the regression for the
+// end-of-push hang: on a site-enabled bucket the helper must flush its per-ref
+// status report (gitremote-helpers(7): status lines + blank line) to git BEFORE
+// running post-push site-artifact maintenance. If maintenance ran inside the
+// status exchange, a slow/blocked maintenance pass would leave git idle waiting
+// on a report whose refs already landed — the observed multi-ref-push deadlock.
+// Here maintenance is frozen indefinitely; the push must still report success
+// promptly (proving the report preceded maintenance), after which we unblock.
+func TestS3Helper_pushReportsBeforeSiteMaintenance(t *testing.T) {
+	src := initCLITestRepo(t)
+	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
+	if err := os.WriteFile(filepath.Join(src, "README.md"), []byte("report first\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, src, baseEnv, "add", "README.md")
+	gitIn(t, src, baseEnv, "-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test", "commit", "-m", "readme")
+	gitIn(t, src, baseEnv, "branch", "gitmsg/social", "main")
+	gitIn(t, src, baseEnv, "branch", "feature/x", "main")
+
+	fixture := &s3Fixture{bucket: "report-bucket", objects: map[string][]byte{}, unblock: make(chan struct{})}
+	// Mark the bucket as site-enabled so post-push maintenance runs, and freeze
+	// its first write (the refs manifest) so maintenance cannot progress.
+	fixture.putObject("myrepo/.gitsocial/site/version", []byte("test\n"))
+	fixture.mu.Lock()
+	fixture.blockKey = "myrepo/.gitsocial/site/refs.json"
+	fixture.mu.Unlock()
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+	env := s3HelperEnv(t, server.URL, baseEnv)
+	remote := s3FixtureRemote(server.URL, "report-bucket/myrepo")
+
+	// Run the multi-ref push; capture stderr live (git prints the ref report to
+	// stderr). Maintenance is frozen, so a correct helper still reports promptly.
+	cmd := exec.Command("git", "-C", src, "push", remote, "main", "gitmsg/social", "feature/x")
+	cmd.Env = env
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	// Scan stderr incrementally — the report lines must arrive while the process
+	// is still alive (maintenance frozen), so this must NOT wait for EOF/exit.
+	reported := make(chan string, 1)
+	go func() {
+		var seen strings.Builder
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			seen.WriteString(scanner.Text())
+			seen.WriteByte('\n')
+			if strings.Contains(seen.String(), "main") &&
+				strings.Contains(seen.String(), "gitmsg/social") &&
+				strings.Contains(seen.String(), "feature/x") {
+				reported <- seen.String()
+				return
+			}
+		}
+	}()
+	// The report must arrive while maintenance is frozen forever. A pre-fix helper
+	// only reports after maintenance (which never completes), so this times out.
+	select {
+	case <-reported:
+		// Every ref must have landed on the bucket before the report.
+		for _, key := range []string{
+			"myrepo/refs/heads/main",
+			"myrepo/refs/heads/gitmsg/social",
+			"myrepo/refs/heads/feature/x",
+		} {
+			if _, ok := fixture.object(key); !ok {
+				t.Errorf("ref %s not written before report", key)
+			}
+		}
+	case <-time.After(20 * time.Second):
+		close(fixture.unblock) // let the helper unwind so the process can exit
+		cmd.Wait()
+		t.Fatal("push did not report ref status while site maintenance was frozen — status exchange is blocked behind maintenance (the end-of-push hang)")
+	}
+	// Unblock maintenance and let the push finish cleanly.
+	close(fixture.unblock)
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("push exited non-zero after maintenance unblocked: %v", err)
 	}
 }
 

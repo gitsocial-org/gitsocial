@@ -194,7 +194,7 @@ func assertLockstepState(t *testing.T, client *Client, ext string, wantShas []st
 // contract: with a manifest present no state may error).
 func mustUpdate(t *testing.T, client *Client, ext, tip string) {
 	t.Helper()
-	if err := updateSiteItemsIndex(client, "", ext, tip); err != nil {
+	if err := updateSiteItemsIndex(client, "", ext, tip, nil); err != nil {
 		t.Fatalf("updateSiteItemsIndex(%s): %v", tip[:8], err)
 	}
 }
@@ -359,11 +359,11 @@ func TestRepair_ConcurrentAppends_LastWriterStale(t *testing.T) {
 		// the same pre-push state) appends only to tip A and lands LAST,
 		// clobbering the manifests back to A while the branch is at B.
 		mustUpdate(t, client, "social", shas[7])
-		gapA, _, _, err := walkBucketItems(client, "", shas[6], map[string]bool{items0.Tip: true}, siteItemsWalkBudget)
+		gapA, _, _, err := walkBucketItems(client, "", shas[6], map[string]bool{items0.Tip: true}, siteItemsWalkBudget, nil)
 		if err != nil {
 			t.Fatalf("walk writer-2 gap: %v", err)
 		}
-		if err := putGapArtifacts(client, "", "social", shas[6], gapA, items0, bodies0, itemsHead0, bodiesHead0, true); err != nil {
+		if err := putGapArtifacts(client, "", "social", shas[6], gapA, items0, bodies0, itemsHead0, bodiesHead0, true, nil); err != nil {
 			t.Fatalf("writer-2 stale append: %v", err)
 		}
 		// The following push self-heals to the branch tip.
@@ -387,7 +387,7 @@ func TestRepair_ConcurrentAppends_TornHeads(t *testing.T) {
 		// sequence for tip A (head of 3) lands in between; writer 1 then writes
 		// its manifests. Result: manifests at B, heads at A (a torn state whose
 		// head counts mismatch both manifests).
-		gapB, _, _, err := walkBucketItems(client, "", shas[7], map[string]bool{items0.Tip: true}, siteItemsWalkBudget)
+		gapB, _, _, err := walkBucketItems(client, "", shas[7], map[string]bool{items0.Tip: true}, siteItemsWalkBudget, nil)
 		if err != nil {
 			t.Fatalf("walk writer-1 gap: %v", err)
 		}
@@ -397,11 +397,11 @@ func TestRepair_ConcurrentAppends_TornHeads(t *testing.T) {
 			gapBMeta = append(gapBMeta, metaOf(w))
 			gapBBodies = append(gapBBodies, bodyOf(w))
 		}
-		bodiesPlan, err := planBodiesAppend(client, "", "social", gapBBodies, bodiesHead0, bodies0)
+		bodiesPlan, err := planBodiesAppend(client, "", "social", gapBBodies, bodiesHead0, bodies0, nil)
 		if err != nil {
 			t.Fatalf("writer-1 bodies plan: %v", err)
 		}
-		itemsPlan, err := planItemsAppend(client, "", "social", gapBMeta, itemsHead0, items0)
+		itemsPlan, err := planItemsAppend(client, "", "social", gapBMeta, itemsHead0, items0, nil)
 		if err != nil {
 			t.Fatalf("writer-1 items plan: %v", err)
 		}
@@ -412,11 +412,11 @@ func TestRepair_ConcurrentAppends_TornHeads(t *testing.T) {
 			t.Fatalf("writer-1 items head: %v", err)
 		}
 		// Writer 2's full sequence for tip A interleaves here.
-		gapA, _, _, err := walkBucketItems(client, "", shas[6], map[string]bool{items0.Tip: true}, siteItemsWalkBudget)
+		gapA, _, _, err := walkBucketItems(client, "", shas[6], map[string]bool{items0.Tip: true}, siteItemsWalkBudget, nil)
 		if err != nil {
 			t.Fatalf("walk writer-2 gap: %v", err)
 		}
-		if err := putGapArtifacts(client, "", "social", shas[6], gapA, items0, bodies0, itemsHead0, bodiesHead0, true); err != nil {
+		if err := putGapArtifacts(client, "", "social", shas[6], gapA, items0, bodies0, itemsHead0, bodiesHead0, true, nil); err != nil {
 			t.Fatalf("writer-2 append: %v", err)
 		}
 		// Writer 1 finishes with its manifest writes.

@@ -103,6 +103,20 @@ func GetPushPreview(workdir string, codeBranches map[string]int) (*PushPreview, 
 // auto-merge — so the gitmsg/review push only publishes PRs whose head is
 // reachable on the remote.
 func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult, error) {
+	return PushWithProgress(workdir, dryRun, codeBranches, nil)
+}
+
+// PushBranchProgress reports which branch is being pushed and its position in
+// the batch (done, total), for a coarse per-branch UI indicator (the TUI status
+// line). It is called just before each branch's push. nil = no reporting.
+// The object/site-shard granularity below the branch push lives in the git
+// remote helper's stderr (see core/objstore), which git relays to the terminal;
+// callers that go through a subprocess (`gitsocial push`, `git push`) see that
+// directly, so this callback stays coarse on purpose.
+type PushBranchProgress func(branch string, done, total int)
+
+// PushWithProgress is Push with a coarse per-branch progress callback. See Push.
+func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, onBranch PushBranchProgress) (*PushResult, error) {
 	preview, err := GetPushPreview(workdir, codeBranches)
 	if err != nil {
 		return nil, err
@@ -110,8 +124,19 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 	result := &PushResult{Refs: preview.Refs}
 	remote := git.PushRemote(workdir)
 
+	// One coarse step per branch push plus the tags push and the state-refs push.
+	total := len(preview.Code) + len(preview.Branches) + 2
+	done := 0
+	step := func(branch string) {
+		done++
+		if onBranch != nil {
+			onBranch(branch, done, total)
+		}
+	}
+
 	for _, bp := range preview.Code {
 		result.CodeCommits += bp.Commits
+		step(bp.Branch)
 		if !dryRun {
 			if _, err := git.ExecGit(workdir, []string{"push", remote, bp.Branch}); err != nil {
 				return nil, wrapCodePushError(remote, bp.Branch, err)
@@ -119,6 +144,7 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 		}
 	}
 
+	step("tags")
 	tags, err := pushTags(workdir, remote, dryRun)
 	if err != nil {
 		return nil, err
@@ -127,6 +153,7 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 
 	for _, bp := range preview.Branches {
 		result.Commits += bp.Commits
+		step(bp.Branch)
 		if !dryRun {
 			if err := PushBranchWithMerge(workdir, bp.Branch); err != nil {
 				return nil, fmt.Errorf("push %s: %w", bp.Branch, err)
@@ -135,6 +162,7 @@ func Push(workdir string, dryRun bool, codeBranches map[string]int) (*PushResult
 	}
 
 	if preview.Refs > 0 && !dryRun {
+		step("refs/gitmsg/*")
 		if _, err := git.ExecGit(workdir, []string{
 			"push", remote, "refs/gitmsg/*:refs/gitmsg/*",
 		}); err != nil {

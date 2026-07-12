@@ -5,7 +5,7 @@
 //   a detail page's back link returns to where the user came from
 //   the Tags page lists tags; a tag route resolves to the commit (annotated peeled)
 //   the board group-by control renders swimlane lanes
-//   the push publishes prism-extra.js with just the repo's non-base grammars
+//   the shell ships lazy-loaded grammars/prism-<lang>.js; the old bundle is gone
 //   the branch compare view (#/compare:<base>...<head>) diffs three-dot and lists commits
 //   the repository graph (#/graph) renders a multi-branch commit DAG with lanes
 //   the push publishes .gitsocial/site/site-config.json from refs/gitmsg/core/config
@@ -91,13 +91,15 @@ async function main() {
   ok("deep-link prefills the search input", input && input.value === "onboarding", input && input.value);
   ok("deep-link executes the query on load (results shown, no help)", findClass(viewNode, "search-group-head").length > 0 || /result/.test(textOf(findClass(viewNode, "search-status")[0] || { _children: [] })), textOf(viewNode).slice(0, 80));
 
-  // ---- push-published prism-extra.js carries just the repo's grammars ----
-  // The fixture's thread-demo has .py + .rs sources, so the tree scan publishes
-  // python + rust and nothing else (base grammars ship in prism.js).
+  // ---- shell ships lazy-loaded grammar files; the retired bundle is gone ----
+  // Non-base grammars now ride as individual grammars/prism-<lang>.js files the
+  // reader lazy-loads on demand (see verify_grammars.js for the reader behavior).
+  // Here we only assert the transport: the grammar files are served and the old
+  // push-published prism-extra.js bundle is absent (never written; cleaned up).
   const zlib = require("zlib");
   const http = require("http");
-  const extra = await new Promise((resolve) => {
-    http.get(BASE + ".gitsocial/site/prism-extra.js", (res) => {
+  const get = (key) => new Promise((resolve) => {
+    http.get(BASE + key, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("end", () => {
@@ -107,9 +109,12 @@ async function main() {
       });
     }).on("error", () => resolve({ status: 0, text: "" }));
   });
-  ok("prism-extra.js is published for a repo using non-base languages", extra.status === 200, "status=" + extra.status);
-  ok("prism-extra.js carries python and rust", /languages\.python=/.test(extra.text) && /languages\.rust\b|for\(var/.test(extra.text) && /Grammars: python, rust/.test(extra.text), extra.text.split("\n")[3]);
-  ok("prism-extra.js excludes base and unused grammars", !/Grammars:[^\n]*\b(go|javascript|java|swift)\b/.test(extra.text), extra.text.split("\n")[3]);
+  const py = await get("grammars/prism-python.js");
+  ok("grammars/prism-python.js is served by the shell", py.status === 200 && /Prism\.languages\.python=/.test(py.text), "status=" + py.status);
+  const cpp = await get("grammars/prism-cpp.js");
+  ok("grammars/prism-cpp.js is served (a dependency-chained grammar)", cpp.status === 200 && /extend\("c"/.test(cpp.text), "status=" + cpp.status);
+  const gone = await get(".gitsocial/site/prism-extra.js");
+  ok("the retired prism-extra.js bundle is not published", gone.status === 404, "status=" + gone.status);
 
   // ---- branch compare view (three-dot diff + head-side commit list) ----
   await route("#/compare:" + encodeURIComponent("main") + "..." + encodeURIComponent("feature/notes-expand"), true);
@@ -291,6 +296,28 @@ async function main() {
   const wseen = {}; let wdup = 0; for (const i of w2.items) { if (wseen[i.commit.hash]) wdup++; wseen[i.commit.hash] = 1; }
   ok("windowed timeline advance keeps items deduped", wdup === 0, "dups=" + wdup);
   ok("windowed timeline code count matches un-windowed set", w2.items.filter((i) => i._ext === "code").length === code.length, "w2=" + w2.items.filter((i) => i._ext === "code").length + " full=" + code.length);
+
+  // ---- code commits are sourced from the push-maintained code items index ----
+  // thread-demo's `site push` builds .gitsocial/site/items/code/ (metadata-only,
+  // no bodies), so the timeline surfaces code commits from index JSON with NO
+  // per-commit loose-object GET — the ~fetches-per-first-visit win. Assert the
+  // artifact is present, carries NO code bodies corpus, and that resolving the
+  // code items fetches zero commit objects (only the index shard/head JSON).
+  const codeManifest = await GS.fetchText(BASE, ".gitsocial/site/items/code/manifest.json");
+  ok("code items index manifest is published", !!codeManifest && JSON.parse(codeManifest).version === 4, (codeManifest || "").slice(0, 60));
+  const codeBodies = await GS.fetchText(BASE, ".gitsocial/site/bodies/code/manifest.json");
+  ok("code corpus is metadata-only (no bodies index)", !codeBodies, "bodies manifest unexpectedly present");
+  {
+    const realFetch = global.fetch;
+    let looseGets = 0;
+    const looseRe = /objects\/[0-9a-f]{2}\/[0-9a-f]{38}$/;
+    global.fetch = async (u, o) => { if (looseRe.test(String(u).split("?")[0])) looseGets++; return realFetch(u, o); };
+    const ictx = GS.newContext(BASE);
+    const r = await GS.resolveCodeItems(ictx, 200);
+    global.fetch = realFetch;
+    ok("code timeline sources from the index (no per-commit loose GETs)", looseGets === 0, "looseGets=" + looseGets + " items=" + r.items.length);
+    ok("index-sourced code items carry their subject + branch", r.items.length > 0 && r.items.every((i) => i.content.length > 0 && typeof i._branch === "string"), "count=" + r.items.length);
+  }
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

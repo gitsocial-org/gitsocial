@@ -88,6 +88,9 @@ var Registry = []KeySpec{
 	{Key: "fetch.auto.backoff", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
 		Desc: "Slow auto-fetch when idle; reset to the base interval when new items arrive."},
 
+	{Key: "s3.concurrency", Scope: ScopePersonalConfig, Type: KeyInt, Default: "16",
+		Desc: "Concurrent object uploads per s3:// push (overridden by GITSOCIAL_S3_CONCURRENCY)."},
+
 	// fetch.workspace_mode is a per-repo-URL map; handled outside the Registry
 	// via Get/WriteWorkspaceMode (the personal config also stores the map, but
 	// the shape doesn't fit Manager.Write's scalar contract).

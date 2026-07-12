@@ -738,6 +738,19 @@
     return !(w.older && w.older.length) && !w.state.frontier.length;
   }
 
+  // extSetComplete reports whether `ext`'s already-loaded walk covers its WHOLE
+  // history — true for an index-seeded walk (its item set came from the metadata
+  // shards, complete regardless of the loose bound) or a genuinely exhausted loose
+  // walk; false when a loose walk stopped at the COUNTS_WALK_CAP bound (an
+  // index-absent or stale-manifest bucket). Callers that ran loadExtItemsAll use
+  // it to decide whether to note limited coverage. Returns true when the branch is
+  // absent (nothing to cover). Reads the cached walk; drives no fetches.
+  async function extSetComplete(ctx, ext) {
+    const w = await extWalkState(ctx, ext);
+    if (!w) return true;
+    return !!w.indexBacked || extWalkExhausted(w);
+  }
+
   // extWalkState returns an extension branch's resumable walk (null when the
   // branch is absent), seeding a fresh state from the items index once per
   // tip so list, detail, and thread paths share the index-backed set.
@@ -852,12 +865,64 @@
 
   // loadBranchLogWindow is the resumable branch-log walk: a paged commit list
   // (newest-first accumulated commits) with truncated marking unwalked history.
+  // For the DEFAULT branch, when the bucket carries the v4 code items index, the
+  // log is served from the index metadata (loadBranchLogIndexed) with NO
+  // per-commit loose-object GET: a commit reachable from the default tip always
+  // attributes to the default branch (site_code_index.go: "default wins"), so
+  // entry.branch === defaultBranch is exactly the default branch's log, already
+  // newest-first. Non-default branches (the index can't answer reachability for
+  // them — shared ancestors attribute to default) and index-absent/non-v4 buckets
+  // fall through to the loose walk unchanged.
   async function loadBranchLogWindow(ctx, name, extend) {
+    const indexed = await loadBranchLogIndexed(ctx, name, extend);
+    if (indexed) return indexed;
     const tip = await refTip(ctx, "refs/heads/" + name);
     if (!tip) return { tip: null, items: [], truncated: false };
     const w = walkStateFor(ctx, "branch:" + name, tip);
     if (extend || w.state.commits.length === 0) await walkStep(ctx, w.state, WALK_CAP);
     return { tip, items: walkedCommits(w.state), truncated: w.state.frontier.length > 0 };
+  }
+
+  // loadBranchLogIndexed serves the DEFAULT branch's log from the code items
+  // index, or returns null so loadBranchLogWindow falls back to the loose walk.
+  // Null when: the branch is not the bucket's default, or no v4 code index is
+  // present. It reuses the timeline's index machinery (codeIndexWalkState +
+  // loadNextCodeShard) so shard paging is not duplicated — the same immutable,
+  // browser-cached shards the code timeline reads. The default branch's commits
+  // are the index entries attributed to it (default wins over any feature
+  // attribution), already newest-first; a `shown` cursor grows WALK_CAP per
+  // extend, draining older shards until it is filled or every shard is resident,
+  // so autoscroll/Load-more paging extends the log one shard page at a time. Like
+  // the code timeline this simply serves the index state — an in-flight push whose
+  // live default tip is ahead of the index shows the last-indexed state and the
+  // next push closes the gap (the code corpus manifest tip is a synthetic digest,
+  // not a real commit sha, so a live-tip-to-index bridge is not available here).
+  async function loadBranchLogIndexed(ctx, name, extend) {
+    const { defaultBranch } = await listBranches(ctx);
+    if (!defaultBranch || name !== defaultBranch) return null;
+    const w = await codeIndexWalkState(ctx);
+    if (!w) return null;
+    const tip = await refTip(ctx, "refs/heads/" + name);
+    const key = "branchLog:" + name;
+    const b = ctx.walks[key] || (ctx.walks[key] = { shown: 0 });
+    return withWalkLock(w, async () => {
+      b.shown = extend ? b.shown + WALK_CAP : Math.max(b.shown, WALK_CAP);
+      const filtered = () => w.items.filter((c) => (c._branch || "") === defaultBranch);
+      // Drain older shards until the default-branch slice fills the cursor or no
+      // pending shard remains (progress-guarded: a shard that adds nothing stops
+      // the loop rather than spinning).
+      let guard = (w.older || []).length, stall = 0;
+      while ((w.older && w.older.length) && filtered().length < b.shown) {
+        await loadNextCodeShard(ctx, w);
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      const items = filtered();
+      const shown = items.slice(0, b.shown);
+      const truncated = items.length > b.shown || (w.older && w.older.length > 0) || !w.complete;
+      return { tip, items: shown, truncated };
+    });
   }
 
   // startExcludingWalk seeds a resumable walk at `tip` whose visited set is
@@ -2042,6 +2107,23 @@
     };
   }
 
+  // codeMetaCommit converts one code items-index entry into a body-less commit
+  // record for the timeline. Unlike a gitmsg metaCommit, a code entry carries a
+  // real subject and its attributed branch but NO GitMsg header; the commit card
+  // renders subject + author/time/hash only, so `content` is set to the subject
+  // (subjectBody's first line) and the record is NOT marked hollow — the timeline
+  // never fetches the loose object for a code card, which is exactly the ~50 GETs
+  // the index removes. `branch` rides on the record so codeCommitItem links it
+  // under the attributed branch route. Detail views still fetch the loose object.
+  function codeMetaCommit(e) {
+    return {
+      hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "", parents: [],
+      authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
+      content: String(e.subject || ""), rawMessage: String(e.subject || ""),
+      subject: String(e.subject || ""), gitmsg: null, refs: [], _branch: e.branch || "",
+    };
+  }
+
   // codeWalkState returns the single resumable walk over EVERY pushed code branch
   // (refs/heads/* except the gitmsg/* data branches), seeded at all their tips at
   // once. Matching the TUI's all-branch timeline, this interleaves plain commits
@@ -2070,15 +2152,20 @@
   }
 
   // resolveCodeItems returns plain commits across all code branches as timeline
-  // items (newest-first, UN-hydrated — the loose walk already carries bodies),
-  // advancing the shared graph-style walk just far enough to surface at least
-  // `need` items or exhaust every branch, in step with the timeline window.
-  // Commits carrying a GitMsg header are skipped (they belong to an ext branch
-  // merged into a line; the ext spec owns them), so a merge of a data branch
-  // never double-lists. Each item is attributed to the branch whose walk first
-  // reached it (reachedVia), so its hash links under a real branch route. `more`
-  // reports unwalked history remains.
+  // items (newest-first), advancing just far enough to surface at least `need`
+  // items or exhaust the history, in step with the timeline window. When the
+  // bucket carries the push-maintained code items index (.gitsocial/site/items/
+  // code/, v4), items are sourced from it metadata-only — the newest shard + head
+  // cover the first window with a couple of JSON fetches and NO per-commit
+  // loose-object GET (a code card renders subject + meta, so no body hydration),
+  // and older shards page in on demand exactly like the ext items. Absent (or
+  // non-v4) index buckets fall back to the loose graph walk below, which is
+  // unchanged so old buckets keep working. Each item is attributed to a real
+  // branch (the index carries it; the loose walk derives reachedVia). `more`
+  // reports unwalked/older history remains.
   async function resolveCodeItems(ctx, need) {
+    const indexed = await resolveCodeItemsIndexed(ctx, need);
+    if (indexed) return indexed;
     const w = await codeWalkState(ctx);
     if (!w) return { items: [], more: false };
     return withWalkLock(w, async () => {
@@ -2086,6 +2173,99 @@
       while (w.state.frontier.length && w.state.commits.length < need) await graphWalkStep(ctx, w.state, WALK_CAP);
       const items = w.state.commits.filter((c) => !c.gitmsg).map((c) => codeCommitItem(c, w.state.reachedVia[c.hash] || w.state.tipBranch[c.hash] || ""));
       return { items, more: w.state.frontier.length > 0 };
+    });
+  }
+
+  // resolveCodeItemsIndexed sources the timeline's code commits from the code
+  // items index when present, returning null (no index → caller uses the loose
+  // walk). It seeds a resumable index walk from the eager set (newest shard +
+  // head) once, then drains older metadata shards until at least `need` items are
+  // surfaced or every shard is resident — mirroring resolveExtItems' shard paging,
+  // but building code items (subject-only metaCommits, no hydration). `more` is
+  // true while older shards remain unloaded OR the manifest is an incomplete
+  // bootstrap (older history still to be indexed).
+  async function resolveCodeItemsIndexed(ctx, need) {
+    const w = await codeIndexWalkState(ctx);
+    if (!w) return null;
+    return withWalkLock(w, async () => {
+      let guard = (w.older || []).length, stall = 0;
+      while ((w.older && w.older.length) && w.items.length < need) {
+        await loadNextCodeShard(ctx, w);
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      const items = w.items.map((c) => codeCommitItem(c, c._branch || ""));
+      const more = (w.older && w.older.length > 0) || !w.complete;
+      return { items, more };
+    });
+  }
+
+  // codeIndexWalkState returns the resumable index-backed code walk (null when the
+  // bucket carries no code items index, so the caller falls back to the loose
+  // walk). Seeded once per context from the code corpus's eager set (newest shard
+  // + head, newest-first), with the remaining older shards pending on w.older for
+  // on-demand paging — the same shape seedWalkFromIndex builds for an extension.
+  async function codeIndexWalkState(ctx) {
+    const key = "codeIndex";
+    if (ctx.walks[key] !== undefined) return ctx.walks[key];
+    let idx = null;
+    try { idx = await loadItemsIndex(ctx, "code"); } catch (e) { if (e && e.forbidden) throw e; }
+    if (!idx) { ctx.walks[key] = null; return null; }
+    const seen = new Set();
+    const items = [];
+    for (const e of idx.items) { if (!seen.has(e.sha)) { seen.add(e.sha); items.push(codeMetaCommit(e)); } }
+    const w = { items, seen, older: idx.olderShards.slice(), complete: idx.complete };
+    ctx.walks[key] = w;
+    return w;
+  }
+
+  // loadNextCodeShard pulls the next-older pending shard of the code index onto
+  // the index-backed code walk (its metadata entries become subject-only
+  // codeMetaCommits). Older shards are consumed newest→oldest, deepening the
+  // timeline one immutable, browser-cached shard at a time. Mirrors
+  // loadNextItemShard for the ext corpora.
+  async function loadNextCodeShard(ctx, w) {
+    if (!w.older || !w.older.length) return false;
+    const keyName = w.older.shift();
+    const text = await fetchText(ctx.base, keyName);
+    if (!text) return true;
+    let doc;
+    try { doc = JSON.parse(text); } catch { return true; }
+    const entries = (doc && Array.isArray(doc.items)) ? doc.items.slice().reverse() : [];
+    for (const e of entries) {
+      if (w.seen.has(e.sha)) continue;
+      w.seen.add(e.sha);
+      w.items.push(codeMetaCommit(e));
+    }
+    return true;
+  }
+
+  // resolveShortShaFromIndex resolves a SHORT commit sha to its full sha using
+  // the code items index (every code commit's full sha), draining older shards
+  // newest-first until a prefix match is found or every shard is resident.
+  // Returns the full sha, or null when the index is absent or the prefix is not
+  // present (the caller then falls back to a loose-object walk — the sha may
+  // predate the index bootstrap's completeness or sit on a non-indexed object).
+  // Ambiguity: mirrors the loose walk's `commits.find(...startsWith)` — the
+  // first (newest-first) prefix match wins, no uniqueness check, matching the
+  // single-target resolution the walk performs today.
+  async function resolveShortShaFromIndex(ctx, short) {
+    if (!short) return null;
+    const w = await codeIndexWalkState(ctx);
+    if (!w) return null;
+    return withWalkLock(w, async () => {
+      const hit = () => (w.items.find((c) => c.hash.startsWith(short)) || {}).hash || null;
+      let found = hit();
+      let guard = (w.older || []).length, stall = 0;
+      while (!found && w.older && w.older.length) {
+        await loadNextCodeShard(ctx, w);
+        found = hit();
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      return found;
     });
   }
 
@@ -2479,8 +2659,10 @@
 
   // loadInteractionCounts builds the cross-branch interaction/review tallies the
   // list cards show (TUI card-stat parity), keyed by a target item's short hash.
-  // It loads the social and review item sets (index-backed, uncapped, body-free —
-  // cheap on an indexed bucket) and reduces their relations:
+  // It loads the social and review item sets (body-free; index-backed and
+  // exhaustive on an indexed bucket, but bounded to COUNTS_WALK_CAP loose commits
+  // when an ext has no index, so a mid-push/stale bucket never stalls the timeline
+  // behind an unbounded loose walk) and reduces their relations:
   //   - a social comment (has `original`) increments the target's comment count;
   //     a social reply-to a comment also counts toward the referenced item.
   //   - a social repost / quote increments the original's repost / quote count.
@@ -2509,7 +2691,7 @@
       const m = /[#:]([0-9a-f]{7,40})(?:@|$)/.exec(ref || "");
       return m ? m[1].slice(0, 12) : refHash(ref);
     };
-    const social = await loadExtItemsAll(ctx, "social").catch(() => []);
+    const social = await loadExtItemsForCounts(ctx, "social").catch(() => []);
     for (const it of social) {
       const h = it.header || {};
       const t = it.header && it.header.type;
@@ -2518,7 +2700,7 @@
       else if (t === "quote") bump(orig, "quotes");
       else if (t === "comment" || h.original) bump(orig, "comments");
     }
-    const review = await loadExtItemsAll(ctx, "review").catch(() => []);
+    const review = await loadExtItemsForCounts(ctx, "review").catch(() => []);
     // Latest verdict per (PR short, reviewer email) so a reviewer's re-review does
     // not double-count, mirroring reviewSummary's latest-verdict-per-reviewer rule.
     const verdicts = new Map();
@@ -3280,22 +3462,43 @@
   ];
   const ANALYTICS_KINDS = ANALYTICS_SPECS.map((s) => s.kind);
 
-  // loadExtItemsAll returns ALL of an extension's resolved items, metadata-only
-  // (UN-hydrated, no body fetches) — the analytics input. It walks the branch to
-  // exhaustion, so it is uncapped; an index-seeded walk pulls every older metadata
-  // shard (immutable, browser-cached) and costs no loose-object fetches, while a
-  // non-index bucket walks its full history once (cached on ctx). Empty when the
-  // branch is absent.
-  async function loadExtItemsAll(ctx, ext) {
+  // COUNTS_WALK_CAP bounds the loose-object walk an exhaustive-set loader is
+  // allowed to do for ONE extension when that extension has no metadata index (or
+  // a stale one that never bridges), so its items resolve only by walking loose
+  // objects. The full item set is only cheap when the index is present and
+  // current; without it, exhaustion degrades to one loose GET per commit —
+  // hundreds to thousands of sequential GETs on a big data branch (mid-push, a
+  // bucket pushed by plain git, a never-indexed ext), which stalls the view behind
+  // an unbounded walk and can trip R2 rate limits. The full set is never
+  // first-paint-critical: counts are a card-stat nicety, and a filter/board/
+  // analytics view degrades quietly to the most recent COUNTS_WALK_CAP commits.
+  // An index-backed walk is exhausted from cheap, browser-cached metadata shards
+  // and ignores this cap, so an indexed bucket is unchanged (exact, exhaustive).
+  const COUNTS_WALK_CAP = WALK_CAP;
+
+  // loadExtItemsAll returns an extension's resolved items, metadata-only
+  // (UN-hydrated, no body fetches) — the input to the filter/board/analytics
+  // views and the interaction counts. An index-seeded walk pulls every older
+  // metadata shard (immutable, browser-cached) and costs no loose-object fetches,
+  // so an indexed bucket yields the COMPLETE set. On an index-absent or stale
+  // bucket the walk falls to loose objects; `looseCap` bounds THAT walk to its
+  // most-recent `looseCap` commits (default COUNTS_WALK_CAP) so first paint is
+  // never gated on an unbounded exhaustion walk. Empty when the branch is absent.
+  async function loadExtItemsAll(ctx, ext, looseCap) {
+    const cap = looseCap || COUNTS_WALK_CAP;
     const w = await extWalkState(ctx, ext);
     if (!w) return [];
     return withWalkLock(w, async () => {
       if (w.state.commits.length === 0) await stepExtWalk(ctx, w, WALK_CAP);
-      // Same progress guard as resolveExtItems: a step that neither adds commits nor
-      // drains an older shard is a stall; break rather than spin (so a malformed
-      // corpus degrades to a partial list, never an eternal "Loading…").
+      // Progress guard: a step that neither adds commits nor drains an older shard
+      // is a stall; break rather than spin (a malformed corpus degrades to a
+      // partial list, never an eternal "Loading…"). Loose-walk cap: an index-backed
+      // state has an empty frontier (its steps only drain cheap older shards) so
+      // w.older drives it to exhaustion regardless of the cap; a loose walk stops
+      // once `cap` commits have been visited.
       let guardN = w.state.commits.length, guardShards = (w.older || []).length, stall = 0;
       while (!extWalkExhausted(w)) {
+        if (!(w.older && w.older.length) && w.state.visited.size >= cap) break;
         await stepExtWalk(ctx, w, WALK_CAP);
         const n = w.state.commits.length, s = (w.older || []).length;
         if (n === guardN && s === guardShards) { if (++stall >= 2) break; } else stall = 0;
@@ -3303,6 +3506,13 @@
       }
       return resolveItems(walkedCommits(w.state));
     });
+  }
+
+  // loadExtItemsForCounts returns an extension's resolved items for the interaction
+  // tallies. A thin alias over loadExtItemsAll's default (COUNTS_WALK_CAP) loose
+  // bound: exact on an indexed bucket, the most-recent cap commits otherwise.
+  async function loadExtItemsForCounts(ctx, ext) {
+    return loadExtItemsAll(ctx, ext);
   }
 
   // loadSiteStats fetches the push-computed stats blob (.gitsocial/site/stats.json)
@@ -3317,18 +3527,24 @@
     return stats;
   }
 
-  // loadAnalyticsData loads every extension's full item set (metadata-only) and
-  // reduces it to the flat, body-free entry list the analytics view aggregates:
-  // one { kind, time, author, email } per counted item. Also returns the running
+  // loadAnalyticsData loads every extension's item set (metadata-only) and reduces
+  // it to the flat, body-free entry list the analytics view aggregates: one
+  // { kind, time, author, email } per counted item. Also returns the running
   // per-kind totals, the ordered kind list, the grand total, and the latest
-  // release label. Uncapped (no 200-item ceiling); the cost is one full walk per
-  // branch, which is free on an index-seeded bucket.
+  // release label. The item set is COMPLETE on an index-seeded bucket (cheap
+  // metadata shards, no loose fetches); on an index-absent or stale bucket each
+  // branch's loose walk is bounded to its most-recent COUNTS_WALK_CAP commits (the
+  // partial flag the view surfaces), never an unbounded exhaustion fan-out. Also
+  // returns `partial`: true when any extension's set was capped by the loose bound,
+  // so the view can note the coverage is limited to recent items.
   async function loadAnalyticsData(ctx) {
     const entries = [];
     const perKind = {};
     let latestRelease = "";
+    let partial = false;
     for (const spec of ANALYTICS_SPECS) {
       const items = await loadExtItemsAll(ctx, spec.ext);
+      if (!(await extSetComplete(ctx, spec.ext))) partial = true;
       if (spec.ext === "release") latestRelease = latestReleaseVersion(items);
       let count = 0;
       for (const it of items) {
@@ -3344,7 +3560,7 @@
       }
       perKind[spec.kind] = count;
     }
-    return { entries, perKind, kinds: ANALYTICS_KINDS.slice(), total: entries.length, latestRelease };
+    return { entries, perKind, kinds: ANALYTICS_KINDS.slice(), total: entries.length, latestRelease, partial };
   }
 
   // activityBuckets buckets analytics entries into contiguous periods at the
@@ -3505,9 +3721,9 @@
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
     feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,
-    loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, GRAPH_WINDOW,
+    loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, resolveCodeItems, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadManifest, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
@@ -3517,7 +3733,7 @@
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary,
-    itemLabels, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
+    itemLabels, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
     SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel,
     buildIssueHierarchy, pmProgress, searchItems, searchItemsFaceted, parseSearchFilters, itemMatchesHash, searchableText, itemSubject, typeGlyph, loadSearchWindow, fullSearchBytes,
     SEARCH_GROUPS, hashEq,

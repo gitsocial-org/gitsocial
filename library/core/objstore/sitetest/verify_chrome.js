@@ -89,7 +89,7 @@ async function main() {
   // ---- B: Analytics page carries the (rebuilt) top-authors ranking block ----
   await run("#/analytics");
   ok("B Analytics page shows the contributor block", hasClassDeep(viewNode, "contrib"), textOf(viewNode).slice(0, 60));
-  ok("B Analytics shows the top-authors ranking", /Top authors/.test(textOf(viewNode)));
+  ok("B Analytics shows the top-authors ranking", /Authors \d/.test(textOf(viewNode)));
 
   // ---- E: Home without README (demo-project: 1 file, no README) ----
   global.__ctx = GS.newContext((process.env.GS_SITE_ORIGIN||"http://localhost:8000")+"/demo-project/");

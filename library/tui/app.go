@@ -86,6 +86,11 @@ type Model struct {
 	// it ends.
 	bgImportCh chan tea.Msg
 
+	// bgPushCh streams pushProgressMsg + PushCompletedMsg from the background
+	// push goroutine, so the status line updates per branch. Created when a
+	// push starts, closed when it ends.
+	bgPushCh chan tea.Msg
+
 	// Nav panel hidden (fullscreen diff mode)
 	navHidden bool
 
@@ -788,6 +793,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.host.SetMessageWithTimeout(summary, msgType, 10*time.Second),
 		)
 
+	case pushProgressMsg:
+		// Coarse per-branch push step: reflect the current branch on the status
+		// line, then keep draining the channel. Object/site-shard granularity
+		// below the branch push lives in the git helper's stderr (unavailable to
+		// the TUI without streaming ExecGit — kept deliberately coarse here).
+		m.host.SetPushingInfo(fmt.Sprintf("%s (%d/%d)", msg.branch, msg.done, msg.total))
+		return m, drainBgImportCmd(m.bgPushCh)
+
+	case tuisocial.PushCompletedMsg:
+		m.isPushing = false
+		m.bgPushCh = nil
+		if handled, cmd := tuicore.DispatchMessage(msg, &m); handled {
+			return m, cmd
+		}
+		return m, nil
+
 	case tuicore.ExportArtifactMsg:
 		return m, m.exportArtifact(msg)
 
@@ -1215,14 +1236,32 @@ func breakdownTotal(breakdown map[string]int) int {
 // branches go first (so the gitmsg/review push records PRs whose head is
 // reachable on origin), then gitmsg/* branches, which auto-merge on divergence
 // (empty-tree append-only → conflict-free) instead of failing non-fast-forward.
-func (m Model) startPush(codeBranches map[string]int) tea.Cmd {
-	return func() tea.Msg {
-		result, err := gitmsg.Push(m.workdir, false, codeBranches)
-		if err != nil {
-			return tuisocial.PushCompletedMsg{Err: err}
+func (m *Model) startPush(codeBranches map[string]int) tea.Cmd {
+	m.bgPushCh = make(chan tea.Msg, 64)
+	ch := m.bgPushCh
+	workdir := m.workdir
+	go func() {
+		onBranch := func(branch string, done, total int) {
+			select {
+			case ch <- pushProgressMsg{branch: branch, done: done, total: total}:
+			default: // channel full — drop the coarse update; completion still delivered
+			}
 		}
-		return tuisocial.PushCompletedMsg{Commits: result.Commits + result.CodeCommits, Refs: result.Refs}
-	}
+		result, err := gitmsg.PushWithProgress(workdir, false, codeBranches, onBranch)
+		if err != nil {
+			ch <- tuisocial.PushCompletedMsg{Err: err}
+		} else {
+			ch <- tuisocial.PushCompletedMsg{Commits: result.Commits + result.CodeCommits, Refs: result.Refs}
+		}
+		close(ch)
+	}()
+	return drainBgImportCmd(ch)
+}
+
+// pushProgressMsg carries a coarse per-branch push step for the status line.
+type pushProgressMsg struct {
+	branch      string
+	done, total int
 }
 
 // startLFSPush begins pushing LFS objects to the remote repository.
