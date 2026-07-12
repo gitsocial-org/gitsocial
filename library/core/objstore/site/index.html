@@ -1011,7 +1011,8 @@
   .graph-meta { flex: 0 0 auto; }
   .branch-tip { background: color-mix(in srgb, var(--link) 18%, transparent); color: var(--link); }
   .branch-tip.default { background: var(--link); color: var(--bg); }
-  .tag-tip { background: color-mix(in srgb, var(--open) 18%, transparent); color: var(--open); }
+  /* Tags get a solid border, no fill: filled chips are reserved for branches. */
+  .tag-tip { background: transparent; border: 1px solid color-mix(in srgb, var(--open) 60%, transparent); color: var(--open); }
   /* A merged-PR head branch is historical (the ref may be deleted): dashed
      outline + dimmed, so it never reads as a live ref. */
   .chip.merged-branch {

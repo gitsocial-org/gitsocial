@@ -16,6 +16,7 @@ const here = __dirname;
 const DEFAULT = [
   "unit_versions_feedback.js",
   "unit_pm_search.js",
+  "unit_graph_order.js",
   "unit_lists_config_analytics.cjs",
   "unit_parity.js",
   "verify_403.js",

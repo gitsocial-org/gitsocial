@@ -146,6 +146,32 @@ async function main() {
   const hashes = findClass(viewNode, "graph-row-text").flatMap((r) => findClass(r, "hash").map((h) => h.getAttribute("href") || ""));
   ok("graph short hashes link to commit detail", hashes.some((h) => /^#commit:/.test(h)), hashes.slice(0, 3).join(","));
 
+  // ---- search includes plain code commits (subject level, Commits group) ----
+  {
+    const sctx = GS.newContext(BASE);
+    const corpus = await GS.loadSearchWindow(sctx, false);
+    const codeOf = (res) => (res.groups || []).find((g) => g.ext === "code");
+    const free = GS.searchItemsFaceted("notes", corpus.perExt, null);
+    const freeCode = codeOf(free);
+    ok("free text matches a code commit subject (Commits group)", !!freeCode && freeCode.count > 0,
+      "groups=" + (free.groups || []).map((g) => g.ext + ":" + g.count).join(","));
+    const byAuthor = GS.searchItemsFaceted("author:ada@example.com notes", corpus.perExt, null);
+    const authorCode = codeOf(byAuthor);
+    ok("author: facet returns code commits", !!authorCode && authorCode.count > 0,
+      "groups=" + (byAuthor.groups || []).map((g) => g.ext + ":" + g.count).join(","));
+    const otherAuthor = GS.searchItemsFaceted("author:nobody@example.com notes", corpus.perExt, null);
+    ok("author: facet excludes non-matching code commits", !codeOf(otherAuthor), "unexpected code hits");
+    const anyCode = (corpus.perExt.code || [])[0];
+    ok("search corpus carries a code lane", !!anyCode, "perExt.code empty");
+    if (anyCode) {
+      const byHash = GS.searchItemsFaceted(anyCode.commit.hash.slice(0, 10), corpus.perExt, null);
+      const hashCode = codeOf(byHash);
+      ok("hash-prefix query resolves a code commit", !!hashCode && hashCode.items.some((it) => it.commit.hash === anyCode.commit.hash),
+        "groups=" + (byHash.groups || []).map((g) => g.ext + ":" + g.count).join(","));
+    }
+    ok("code lane marks the corpus light (subject-level, body-less)", corpus.light === true, "light=" + corpus.light);
+  }
+
   // ---- push publishes site-config.json from refs/gitmsg/core/config ----
   const cust = await GS.loadSiteCustomization(GS.newContext(BASE));
   ok("site-config.json is present and parsed", !!cust && typeof cust === "object", "cust=" + JSON.stringify(cust));

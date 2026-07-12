@@ -3071,11 +3071,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // or complete coverage.
   function searchHelp(corpus) {
     const box = el("div", { class: "search-help empty" }, []);
-    box.append(el("div", {}, ["Search loaded issues, pull requests, posts, releases, and memos by subject, content, author, or labels."]));
+    box.append(el("div", {}, ["Search loaded issues, pull requests, posts, releases, memos, and code commits by subject, content, author, or labels."]));
     box.append(el("div", { class: "search-help-scope" }, ["Filter with type:issue, state:open, author:alice, label:bug, or @alice — then refine with the facet chips."]));
     box.append(el("div", { class: "search-help-scope" }, ["Find by commit with hash:abc1234 (or a bare 7-40 hex hash), and narrow by date with after:2026-01-01 or before:2026-12-31."]));
-    let scope = "All history is loaded; search covers every item in this bucket.";
-    if (corpus.truncated || corpus.light || corpus.hasOlder) scope = "Recent items are searched by subject, author, and labels; use Load full search index to cover all history and match message bodies.";
+    let scope = "All history is loaded; search covers every item in this bucket (code commits match by subject and author).";
+    if (corpus.truncated || corpus.light || corpus.hasOlder) scope = "Recent items are searched by subject, author, and labels; use Load full search index to cover all history and match message bodies (code commits stay subject-level).";
     box.append(el("div", { class: "search-help-scope" }, [scope]));
     return box;
   }
@@ -3106,7 +3106,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function searchView(ctx, initialQuery) {
     const wrap = el("div", { class: "search-view" }, []);
     wrap.append(el("a", { class: "back", href: "#/" }, ["← back"]));
-    const input = el("input", { class: "search-input", type: "text", placeholder: "Search issues, PRs, posts, releases, memos…", "aria-label": "Search items", autocomplete: "off", spellcheck: "false" }, []);
+    const input = el("input", { class: "search-input", type: "text", placeholder: "Search issues, PRs, posts, releases, memos, commits…", "aria-label": "Search items", autocomplete: "off", spellcheck: "false" }, []);
     if (initialQuery) input.value = initialQuery;
     wrap.append(input);
     searchInputEl = input;

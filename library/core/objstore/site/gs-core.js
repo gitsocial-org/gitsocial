@@ -1035,16 +1035,63 @@
     return load;
   }
 
+  // orderGraphWindow emits up to `cap` resident code-index commits in the loose
+  // graph walk's order: seed the resident DAG's heads, repeatedly pop the
+  // newest-authorTime frontier entry (the FIRST such entry wins a tie, so equal
+  // timestamps keep a stable order), emit it, and push its resident parents.
+  // The result is topological (a parent never precedes the child that reached
+  // it) yet time-interleaved across branches — exactly what assignGraphLanes
+  // needs. A plain ts-desc sort is NOT that: rebases preserve author dates, so
+  // a linear first-parent chain can be ts-non-monotonic, and every inversion
+  // split the chain into a phantom parallel lane. Heads are derived from the
+  // resident set itself (entries no resident entry names as a parent) rather
+  // than the live branch refs, so the graph serves the last-indexed state even
+  // when a ref moved ahead of the index (matching loadBranchLogIndexed); the
+  // resident set is a prefix of the writer's tip-seeded walk, so every resident
+  // entry is reachable from a resident head. Parents outside the resident set
+  // are not pushed — they join the frontier once an older shard drains, and the
+  // emitted window's edges to them stay absent (the lane simply ends). Returns
+  // { commits, more } — more is true when resident entries remain beyond the
+  // cap. Deterministic and recomputed per window: draining older shards only
+  // APPENDS older entries (never a new child of a resident one), so a grown
+  // window keeps the previous window as its exact prefix.
+  function orderGraphWindow(items, cap) {
+    const byHash = new Map();
+    for (const c of items) if (!byHash.has(c.hash)) byHash.set(c.hash, c);
+    const isParent = new Set();
+    for (const c of byHash.values()) for (const p of c.parents || []) isParent.add(p);
+    const frontier = [];
+    for (const c of byHash.values()) if (!isParent.has(c.hash)) frontier.push(c.hash);
+    const visited = new Set();
+    const commits = [];
+    while (frontier.length && commits.length < cap) {
+      let best = 0, bestT = -Infinity;
+      for (let i = 0; i < frontier.length; i++) {
+        const c = byHash.get(frontier[i]);
+        const t = (c && c.authorTime) || 0;
+        if (t > bestT) { bestT = t; best = i; }
+      }
+      const h = frontier.splice(best, 1)[0];
+      if (visited.has(h)) continue;
+      visited.add(h);
+      const c = byHash.get(h);
+      if (!c) continue;
+      commits.push(c);
+      for (const p of c.parents || []) if (byHash.has(p) && !visited.has(p)) frontier.push(p);
+    }
+    return { commits, more: frontier.some((h) => !visited.has(h)) };
+  }
+
   // loadGraphWindowIndexed serves the repository graph from the code items index
   // when its entries carry parents (corpus v5), or returns null so
   // loadGraphWindow falls back to the loose walk (an absent index, or a v4
   // bucket pushed before parents existed). The resident index entries — shared
-  // with the timeline/branch-log walk, so shards load once — are sorted
-  // newest-first by author time (the same order the loose walk pops) and cut to
-  // a `shown` cursor that grows GRAPH_WINDOW per extend, draining older shards
-  // until it is filled, mirroring loadBranchLogIndexed's paging. The indexed
-  // graph covers CODE branches only (the corpus's membership): gitmsg/* data
-  // branches, which the loose walk used to interleave, are omitted —
+  // with the timeline/branch-log walk, so shards load once — are ordered by the
+  // in-memory frontier-pop walk (orderGraphWindow, the loose walk's order) and
+  // cut to a `shown` cursor that grows GRAPH_WINDOW per extend, draining older
+  // shards until it is filled, mirroring loadBranchLogIndexed's paging. The
+  // indexed graph covers CODE branches only (the corpus's membership): gitmsg/*
+  // data branches, which the loose walk used to interleave, are omitted —
   // decorations are filtered to match so no label points at an absent row.
   async function loadGraphWindowIndexed(ctx, extend) {
     const w = await codeIndexWalkState(ctx);
@@ -1063,10 +1110,9 @@
         if (n === guard) { if (++stall >= 2) break; } else stall = 0;
         guard = n;
       }
-      const ordered = w.items.slice().sort((a, b) => (b.authorTime || 0) - (a.authorTime || 0));
-      const commits = ordered.slice(0, g.shown);
-      const truncated = ordered.length > g.shown || (w.older && w.older.length > 0) || !w.complete;
-      return { commits, truncated, decor };
+      const ordered = orderGraphWindow(w.items, g.shown);
+      const truncated = ordered.more || (w.older && w.older.length > 0) || !w.complete;
+      return { commits: ordered.commits, truncated, decor };
     });
   }
 
@@ -2847,18 +2893,25 @@
 
   // ---- In-bucket item search (tier i: over already-walked items) ----
 
-  // SEARCH_GROUPS orders and labels the extension groups the in-bucket search
-  // returns (mirroring the TUI/core search group-by=extension). review/release
-  // are type-filtered to their standalone units (PRs, releases); pm/social/memo
-  // pass all resolved items.
+  // SEARCH_GROUPS orders and labels the groups the in-bucket search returns.
+  // The core search (CLI/TUI) sweeps every cached commit — gitmsg items AND
+  // plain code commits — so the site matches it: the gitmsg extensions search
+  // their resolved items, and the Commits group searches plain code commits at
+  // subject level from the code items index (the code corpus is deliberately
+  // metadata-only, so full text never covers code bodies). review/release are
+  // type-filtered to their standalone units (PRs, releases); pm/social/memo
+  // pass all resolved items. The code group's branch is "" — a code hit links
+  // to the plain commit detail route.
   const SEARCH_GROUPS = [
     { ext: "pm", label: "Issues", branch: "gitmsg/pm", type: null },
     { ext: "review", label: "Pull Requests", branch: "gitmsg/review", type: "pull-request" },
     { ext: "social", label: "Posts", branch: "gitmsg/social", type: null },
     { ext: "release", label: "Releases", branch: "gitmsg/release", type: "release" },
     { ext: "memo", label: "Memos", branch: "gitmsg/memo", type: null },
+    { ext: "code", label: "Commits", branch: "", type: null },
   ];
-  // SEARCH_EXTS is every extension branch the search walks.
+  // SEARCH_EXTS is every gitmsg extension branch the search walks (the code
+  // lane is fed separately from the code items index in buildSearchCorpus).
   const SEARCH_EXTS = ["social", "pm", "review", "release", "memo"];
   // Header fields worth matching a query against (labels/tag/type/state/version/
   // assignees), beyond the item subject/content and effective author.
@@ -2897,7 +2950,7 @@
   const FACET_FIELDS = ["type", "state", "author", "label"];
   // EXT_DEFAULT_TYPE names the Type-facet value for an item whose header carries
   // no explicit type (a plain post, a bare issue), so every item buckets.
-  const EXT_DEFAULT_TYPE = { social: "post", pm: "issue", review: "pull-request", release: "release", memo: "memo" };
+  const EXT_DEFAULT_TYPE = { social: "post", pm: "issue", review: "pull-request", release: "release", memo: "memo", code: "commit" };
   // TYPE_ALIASES normalizes a typed `type:` token so the query box and the chips
   // share one vocabulary (type:pr === the pull-request chip).
   const TYPE_ALIASES = { pr: "pull-request", prs: "pull-request" };
@@ -2923,7 +2976,7 @@
   // TYPE_GLYPH maps a gitmsg item type to the compact leading glyph the TUI cards
   // use (see tuisocial/util_adapters.go). Issues vary by state and are resolved in
   // typeGlyph; the rest are fixed.
-  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞" };
+  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞", commit: "◦" };
 
   // typeGlyph returns an item's leading type glyph, matching the TUI card icons:
   // ○ open / ● closed for issues, and the fixed TYPE_GLYPH for every other type
@@ -3152,13 +3205,14 @@
   // searches complete message text. An extension with neither falls back to the
   // display items walked so far, with the "Search deeper" affordance (truncated).
   // Cached on ctx; a deeper request advances only the fallback walks.
-  // olderItemBytes sums the compressed size of every extension's not-yet-resident
-  // older metadata shards — the download the "search older items" affordance
-  // incurs (the light-search counterpart of fullSearchBytes). 0 once every
-  // extension's shards are resident or a bucket has no index.
+  // olderItemBytes sums the compressed size of every corpus's not-yet-resident
+  // older metadata shards — including the code corpus, which the search drains
+  // too — the download the "search older items" affordance incurs (the
+  // light-search counterpart of fullSearchBytes). 0 once every corpus's shards
+  // are resident or a bucket has no index.
   async function olderItemBytes(ctx) {
     let total = 0;
-    for (const ext of SEARCH_EXTS) {
+    for (const ext of SEARCH_EXTS.concat("code")) {
       const idx = await loadItemsIndex(ctx, ext);
       if (idx && !idx.allResident) total += idx.olderBytes || 0;
     }
@@ -3190,6 +3244,31 @@
       const r = await loadExtItemsWindow(ctx, ext, extend);
       perExt[ext] = r.items;
       if (r.truncated) truncated = true;
+    }
+    // Plain code commits join at SUBJECT level from the code items index
+    // (shared with the timeline/graph walks, so shards load once). The code
+    // corpus is deliberately metadata-only — no bodies corpus — so the full
+    // tier never upgrades these entries; in the light tier their presence marks
+    // the corpus `light` (body-less results exist), and "search older" drains
+    // the code shards like the extension corpora. No index (a v<4 or data-only
+    // bucket): no code lane, the pre-index behavior.
+    const cw = await codeIndexWalkState(ctx);
+    if (cw) {
+      await withWalkLock(cw, async () => {
+        if (searchOlder) {
+          let guard = (cw.older || []).length, stall = 0;
+          while (cw.older && cw.older.length) {
+            await loadNextCodeShard(ctx, cw);
+            const n = (cw.older || []).length;
+            if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+            guard = n;
+          }
+        }
+        perExt.code = cw.items.map((c) => codeCommitItem(c, c._branch || ""));
+      });
+      if (perExt.code.length && !full) light = true;
+      if (cw.older && cw.older.length) hasOlder = true;
+      if (!cw.complete) partial = true;
     }
     ctx.searchCorpus = { perExt, truncated, light, hasOlder, partial, full: !!full, older: !!searchOlder };
     return ctx.searchCorpus;
@@ -3833,7 +3912,7 @@
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
     feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,
-    loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, GRAPH_WINDOW,
+    loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
     loadTimelineItems, loadTimelineWindow, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadManifest, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
