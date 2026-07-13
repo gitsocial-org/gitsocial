@@ -2113,7 +2113,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       f.renderBody = () => {
         if (!f.model) return;
         if (f.model.binary) { body.replaceChildren(el("div", { class: "notice" }, ["Binary file changed."])); return; }
-        if (f.model.tooLarge) { body.replaceChildren(el("div", { class: "notice" }, ["File too large to diff."])); return; }
+        if (f.model.tooLarge) {
+          const anyway = el("button", { class: "load-more", type: "button" }, ["Diff anyway"]);
+          anyway.addEventListener("click", async () => {
+            anyway.disabled = true; anyway.textContent = "Diffing…";
+            f.model = await fileDiff(ctx, entry, true);
+            counts.replaceChildren(el("span", { class: "cnt-add" }, ["+" + f.model.adds]), el("span", { class: "cnt-del" }, ["-" + f.model.dels]));
+            f.renderBody();
+          });
+          body.replaceChildren(el("div", { class: "notice" }, ["File too large to diff. ", anyway]));
+          return;
+        }
         if (!f.model.hunks.length) {
           const kids = [el("div", { class: "empty" }, ["No line changes."])];
           if (entryFb.length) kids.push(offscreenBlock(entryFb));

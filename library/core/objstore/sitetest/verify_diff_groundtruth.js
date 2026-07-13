@@ -28,6 +28,8 @@ function unit() {
   const big = Array.from({ length: 3000 }, (_, i) => "line" + i).join("\n");
   const big2 = Array.from({ length: 3000 }, (_, i) => "LINE" + i).join("\n");
   ok("diffLines >5000 total bails to null", GS.diffLines(big, big2) === null);
+  const forced = GS.diffLines(big, big2, true);
+  ok("diffLines force bypasses the cap (Diff anyway)", Array.isArray(forced) && forced.length === 6000 && forced.every((o) => o.op !== "eq"));
   // hunk building sanity
   const h = GS.buildHunks(d3, 3);
   ok("buildHunks one hunk header", h.length === 1 && h[0].oldStart === 1 && h[0].newStart === 1, JSON.stringify(h[0] && { os: h[0].oldStart, oc: h[0].oldCount, ns: h[0].newStart, nc: h[0].newCount }));

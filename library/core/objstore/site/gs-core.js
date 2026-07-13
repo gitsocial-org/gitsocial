@@ -1735,11 +1735,12 @@
   // diffLines runs a Myers O(ND) diff over two texts and returns an ordered
   // edit script of { op: 'eq'|'add'|'del', line }. Returns null when the pair
   // is too large (> MAX_DIFF_LINES total), so callers fall back to a plain
-  // "too large to diff" notice rather than an O(N*D) blow-up.
-  function diffLines(aText, bText) {
+  // "too large to diff" notice rather than an O(N*D) blow-up; `force` skips the
+  // cap for an explicit user opt-in ("Diff anyway").
+  function diffLines(aText, bText, force) {
     const a = splitLines(aText);
     const b = splitLines(bText);
-    if (a.length + b.length > MAX_DIFF_LINES) return null;
+    if (!force && a.length + b.length > MAX_DIFF_LINES) return null;
     const N = a.length, M = b.length;
     const max = N + M;
     const offset = max;
@@ -1940,15 +1941,16 @@
   // fileDiff fetches the blob pair for one changed entry and produces a diff
   // model: { binary } for NUL-sniffed content, { tooLarge } for blobs over the
   // cap or line-diffs past MAX_DIFF_LINES, else { hunks, adds, dels }. Fetch is
-  // lazy: callers invoke this only when a file is expanded.
-  async function fileDiff(ctx, entry) {
+  // lazy: callers invoke this only when a file is expanded. `force` bypasses
+  // both size caps (the "Diff anyway" opt-in); binary stays binary.
+  async function fileDiff(ctx, entry, force) {
     const aObj = entry.shaA ? await getObject(ctx, entry.shaA) : null;
     const bObj = entry.shaB ? await getObject(ctx, entry.shaB) : null;
     const aBytes = aObj ? aObj.body : new Uint8Array(0);
     const bBytes = bObj ? bObj.body : new Uint8Array(0);
     if (isBinary(aBytes) || isBinary(bBytes)) return { binary: true };
-    if (aBytes.length > DIFF_BLOB_CAP || bBytes.length > DIFF_BLOB_CAP) return { tooLarge: true };
-    const ops = diffLines(new TextDecoder().decode(aBytes), new TextDecoder().decode(bBytes));
+    if (!force && (aBytes.length > DIFF_BLOB_CAP || bBytes.length > DIFF_BLOB_CAP)) return { tooLarge: true };
+    const ops = diffLines(new TextDecoder().decode(aBytes), new TextDecoder().decode(bBytes), force);
     if (ops === null) return { tooLarge: true };
     let adds = 0, dels = 0;
     for (const o of ops) { if (o.op === "add") adds++; else if (o.op === "del") dels++; }
