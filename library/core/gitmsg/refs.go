@@ -79,27 +79,54 @@ func getLocalGitMsgRefs(workdir string) (map[string]string, error) {
 	return parseRefOutput(result.Stdout), nil
 }
 
-// getRemoteGitMsgRefs returns remote gitmsg refs from locally-tracked remote branches.
-// Uses for-each-ref on refs/remotes/<remote>/gitmsg/ instead of ls-remote to avoid network calls.
+// trackingPrefix returns the local namespace mirroring the remote's
+// refs/gitmsg/* state refs, as last seen by a push or fetch. Deliberately
+// outside refs/remotes/<remote>/: there the gitmsg/<ext> branch tracking refs
+// (e.g. .../gitmsg/release) block child mirrors (.../gitmsg/release/0.1.0/artifacts)
+// with git's directory/file ref conflict, so those mirrors could never be
+// written and their refs read as unpushed forever.
+func trackingPrefix(remote string) string {
+	return "refs/gitsocial/tracking/" + remote + "/gitmsg/"
+}
+
+// TrackingRefspec returns the fetch refspec that mirrors the remote's
+// refs/gitmsg/* state refs into the tracking namespace the offline push
+// preview reads (see trackingPrefix).
+func TrackingRefspec(remote string) string {
+	return "+refs/gitmsg/*:" + trackingPrefix(remote) + "*"
+}
+
+// getRemoteGitMsgRefs returns the remote's gitmsg state refs from the local
+// tracking mirror (no network calls). Reads the legacy refs/remotes/<remote>/gitmsg/
+// mirror first, then overlays the current tracking namespace, so refs mirrored
+// before the namespace move still count as pushed.
 func getRemoteGitMsgRefs(workdir, remote string) (map[string]string, error) {
-	result, err := git.ExecGit(workdir, []string{
+	refs := make(map[string]string)
+	legacy, err := git.ExecGit(workdir, []string{
 		"for-each-ref",
 		"--format=%(refname) %(objectname)",
 		"refs/remotes/" + remote + "/gitmsg/",
 	})
-	if err != nil {
-		return nil, err
+	if err == nil {
+		// Convert refs/remotes/<remote>/gitmsg/X → refs/gitmsg/X to match local ref format
+		for ref, hash := range parseRefOutput(legacy.Stdout) {
+			if local := strings.TrimPrefix(ref, "refs/remotes/"+remote+"/"); local != ref {
+				refs["refs/"+local] = hash
+			}
+		}
 	}
 
-	// Convert refs/remotes/<remote>/gitmsg/X → refs/gitmsg/X to match local ref format
-	raw := parseRefOutput(result.Stdout)
-	refs := make(map[string]string, len(raw))
-	for ref, hash := range raw {
-		local := strings.TrimPrefix(ref, "refs/remotes/"+remote+"/")
-		if local != ref {
-			refs["refs/"+local] = hash
-		} else {
-			refs[ref] = hash
+	result, err := git.ExecGit(workdir, []string{
+		"for-each-ref",
+		"--format=%(refname) %(objectname)",
+		trackingPrefix(remote),
+	})
+	if err != nil {
+		return refs, err
+	}
+	for ref, hash := range parseRefOutput(result.Stdout) {
+		if local := strings.TrimPrefix(ref, trackingPrefix(remote)); local != ref {
+			refs["refs/gitmsg/"+local] = hash
 		}
 	}
 	return refs, nil

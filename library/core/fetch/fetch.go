@@ -85,11 +85,11 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 		if err := git.FetchRefspec(workdir, "origin", "+refs/gitmsg/*:refs/gitmsg/*"); err != nil {
 			log.Debug("fetch gitmsg refs", "error", err)
 		}
-		// Mirror remote gitmsg state refs into a remote-tracking namespace too, so
+		// Mirror remote gitmsg state refs into the tracking namespace too, so
 		// the offline push preview can tell which local state refs (forks, config,
 		// lists, declines) are already on the remote. Without this every local
 		// state ref reads as unpushed, showing a spurious "Push 1 refs?".
-		if err := git.FetchRefspec(workdir, "origin", "+refs/gitmsg/*:refs/remotes/origin/gitmsg/*"); err != nil {
+		if err := git.FetchRefspec(workdir, "origin", gitmsg.TrackingRefspec("origin")); err != nil {
 			log.Debug("fetch gitmsg tracking refs", "error", err)
 		}
 		// Fast-forward local gitmsg branches from remote

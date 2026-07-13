@@ -12,7 +12,12 @@ import (
 // (the heuristic would prefer "origin") plus a configured gitsocial.pushRemote,
 // then pushes with an explicit remote name. The explicit param must win over
 // both: gitmsg/* branches land on the named remote and the tracking mirror is
-// written under refs/remotes/<name>/gitmsg/*, not the heuristic's or config's.
+// written under the named remote's tracking namespace, not the heuristic's or
+// config's. Also covers a state ref nested under a pushed branch name
+// (refs/gitmsg/release/config vs branch gitmsg/release), whose mirror the old
+// refs/remotes/<remote>/gitmsg/* namespace could never hold (directory/file
+// ref conflict with the branch tracking ref), leaving it counted as unpushed
+// forever.
 func TestPush_explicitRemoteWins(t *testing.T) {
 	originRemote := t.TempDir()
 	backupRemote := t.TempDir()
@@ -46,11 +51,19 @@ func TestPush_explicitRemoteWins(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 	socialTip := fullHash(work, "refs/heads/gitmsg/social")
-	// A per-element state ref under refs/gitmsg/core/* (does not collide with any
-	// pushed branch name, so its remote-tracking mirror can be written).
 	stateRef := "refs/gitmsg/core/forks/deadbeef"
 	if err := git.WriteRef(work, stateRef, socialTip); err != nil {
 		t.Fatalf("write state ref: %v", err)
+	}
+	// A state ref nested under a pushed branch name: the branch push creates the
+	// refs/remotes/backup/gitmsg/release tracking ref before the mirror step, so
+	// the old namespace couldn't hold this ref's mirror (D/F conflict).
+	if _, err := git.CreateCommitOnBranch(work, "gitmsg/release", "a release"); err != nil {
+		t.Fatalf("commit on branch: %v", err)
+	}
+	nestedRef := "refs/gitmsg/release/config"
+	if err := git.WriteRef(work, nestedRef, socialTip); err != nil {
+		t.Fatalf("write nested state ref: %v", err)
 	}
 
 	result, err := Push(work, false, nil, "backup", false)
@@ -77,13 +90,26 @@ func TestPush_explicitRemoteWins(t *testing.T) {
 		t.Errorf("backup state ref = %q, want %q", tip, socialTip)
 	}
 
-	// The tracking mirror must be written under refs/remotes/backup/gitmsg/*,
-	// not refs/remotes/origin/gitmsg/*.
-	if tip := localRef(t, work, "refs/remotes/backup/gitmsg/core/forks/deadbeef"); tip != socialTip {
+	// The tracking mirror must be written under backup's tracking namespace,
+	// not origin's — including the ref nested under the pushed branch name.
+	if tip := localRef(t, work, trackingPrefix("backup")+"core/forks/deadbeef"); tip != socialTip {
 		t.Errorf("tracking mirror under backup = %q, want %q", tip, socialTip)
 	}
-	if tip := localRef(t, work, "refs/remotes/origin/gitmsg/core/forks/deadbeef"); tip != "" {
+	if tip := localRef(t, work, trackingPrefix("backup")+"release/config"); tip != socialTip {
+		t.Errorf("nested tracking mirror under backup = %q, want %q", tip, socialTip)
+	}
+	if tip := localRef(t, work, trackingPrefix("origin")+"core/forks/deadbeef"); tip != "" {
 		t.Errorf("tracking mirror under origin = %q, want empty", tip)
+	}
+
+	// With every mirror written, the offline preview must count zero unpushed
+	// state refs (branch counts are tracked separately, via fetch).
+	preview, err := GetPushPreview(work, nil, "backup", false)
+	if err != nil {
+		t.Fatalf("GetPushPreview: %v", err)
+	}
+	if preview.Refs != 0 {
+		t.Errorf("preview.Refs after push = %d, want 0", preview.Refs)
 	}
 }
 

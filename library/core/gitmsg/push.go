@@ -292,16 +292,16 @@ func pushTags(workdir, remote string, dryRun bool) (int, error) {
 	return count, nil
 }
 
-// mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's remote-tracking
-// counterpart (refs/remotes/<remote>/gitmsg/*) at the local hash. Called after a
-// push so the push preview reflects the new remote state without a fetch.
+// mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's tracking
+// mirror (see trackingPrefix) at the local hash. Called after a push so the
+// push preview reflects the new remote state without a fetch.
 func mirrorGitMsgRefsToTracking(workdir, remote string) {
 	localRefs, err := getLocalGitMsgRefs(workdir)
 	if err != nil {
 		return
 	}
 	for ref, hash := range localRefs {
-		tracking := "refs/remotes/" + remote + "/" + strings.TrimPrefix(ref, "refs/")
+		tracking := trackingPrefix(remote) + strings.TrimPrefix(ref, "refs/gitmsg/")
 		if err := git.WriteRef(workdir, tracking, hash); err != nil {
 			// Best-effort: a stale preview is harmless, so don't fail the push.
 			continue
