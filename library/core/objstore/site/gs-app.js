@@ -308,6 +308,35 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(cfg.favicon); }
   }
 
+  // startFreshnessWatch keeps a long-lived tab honest: loaded state is never
+  // mutated in place, so a maintainer's push would otherwise stay invisible
+  // until a manual reload. On return to the tab (focus / visibility), refs.json
+  // is re-read (a no-cache key: a cheap 304 when unchanged) and any change —
+  // every push moves a ref — surfaces a reload pill instead of silent
+  // staleness. The baseline loads shortly after boot, off the critical path.
+  function startFreshnessWatch(ctx) {
+    let baseline = null, lastCheck = 0, pill = null;
+    const showPill = () => {
+      if (pill) return;
+      pill = el("button", { class: "update-pill", type: "button" }, ["New updates · Refresh"]);
+      pill.addEventListener("click", () => location.reload());
+      document.body.append(pill);
+    };
+    const check = async () => {
+      const now = Date.now();
+      if (pill || now - lastCheck < 30000) return;
+      lastCheck = now;
+      let cur = null;
+      try { cur = await NS.fetchText(ctx.base, ".gitsocial/site/refs.json"); } catch { return; }
+      if (cur === null) return;
+      if (baseline === null) baseline = cur;
+      else if (cur !== baseline) showPill();
+    };
+    setTimeout(check, 3000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+  }
+
   async function init() {
     const ctx = newContext(deriveBase(location));
     // Grammar files are fetched relative to the bucket base, so tell the render
@@ -320,6 +349,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     setDocTitle(name);
     applySiteCustomization(ctx, name);
     wireNavSearch();
+    startFreshnessWatch(ctx);
     const run = () => route(ctx);
     window.addEventListener("hashchange", run);
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("keydown", onGlobalKey);
