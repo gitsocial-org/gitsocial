@@ -23,7 +23,8 @@ func newPushCmd() *cobra.Command {
 		Use:   "push [remote]",
 		Short: "Publish local changes (data + browser site) to a remote",
 		Long: `Publish all local GitMsg changes to the remote repository, and — for s3
-remotes — the browsable static site alongside the data.
+remotes with the site.publish guard enabled — the browsable static site
+alongside the data.
 
 The target remote is resolved in this order: the positional [remote] argument,
 then git config gitsocial.pushRemote, then a heuristic (origin if it's an s3
@@ -37,13 +38,15 @@ This publishes:
   - Code branches: the default branch when it's ahead of the remote, and heads
     of open pull requests, so others can fetch the code your published data
     points at (--no-code skips)
-  - The browser static site, for s3 remotes (--no-site skips; or set
-    ` + "`git config gitsocial.pushSite false`" + ` to opt out persistently). A
-    bucket with no site gets one. Non-s3 remotes skip this step silently.
+  - The browser static site, for s3 remotes when the repo enables it with
+    ` + "`gitsocial config site set publish true`" + ` (default off; a bucket with
+    no site then gets one). --no-site skips per push, and ` + "`git config`" + `
+    ` + "`gitsocial.pushSite false`" + ` opts a machine out persistently. Non-s3
+    remotes skip this step silently.
 
-A first push to an empty remote bootstraps the whole bucket (data + site) with
-no extra flags. Use --all to publish every local branch (wholesale mirror),
-not just the reason-based set.
+A first push to an empty remote bootstraps the whole bucket with no extra
+flags. Use --all to publish every local branch (wholesale mirror), not just
+the reason-based set.
 
 Divergent histories on gitmsg/* branches (when two clones write between syncs)
 are auto-merged — the empty-tree append-only shape of those branches makes the
@@ -135,7 +138,9 @@ func printPushResult(result *clientpush.Result, dryRun bool) {
 	nothing := p.Commits == 0 && p.CodeCommits == 0 && p.Refs == 0 && p.Tags == 0 && p.AllBranches == 0
 	if nothing && !result.Site.Published {
 		fmt.Println("Nothing to push")
-		if result.Site.Skipped != "" {
+		if result.Site.Err != nil {
+			fmt.Printf("Site: failed: %v\n", result.Site.Err)
+		} else if result.Site.Skipped != "" {
 			fmt.Printf("Site: skipped (%s)\n", result.Site.Skipped)
 		}
 		return

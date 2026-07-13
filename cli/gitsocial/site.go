@@ -24,8 +24,9 @@ func newSiteCmd() *cobra.Command {
 }
 
 // newSitePushCmd uploads the embedded site shell to an s3 remote's bucket. This
-// is the explicit site refresh; `gitsocial push` also publishes the site by
-// default, so this command is for refreshing the site without a data push.
+// is the explicit site refresh / catch-up; once `site.publish` is enabled,
+// `gitsocial push` maintains the site on every push, so this command is for
+// refreshing the site without a data push.
 func newSitePushCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "push [remote]",
@@ -36,8 +37,11 @@ releases from the bucket's public domain with no gitsocial install. Remote
 defaults to the gitsocial push remote (git config gitsocial.pushRemote, else
 the s3 remote heuristic).
 
-Note: ` + "`gitsocial push`" + ` already publishes the site by default. Use this
-command to refresh the site without pushing new data.
+The site is enabled per repo with ` + "`gitsocial config site set publish true`" + `
+(default off; publish the config with a regular push). Once enabled, every
+` + "`gitsocial push`" + ` maintains the site; use this command to refresh it — or to
+catch an already-pushed repo up right after enabling the guard — without
+pushing new data.
 
 The page reads the bucket directly, so it stays current with every push; the
 bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2)
@@ -69,10 +73,14 @@ must allow public reads for visitors without credentials.`,
 			if !cfg.JSONOutput {
 				progress, progressDone = objstore.StderrProgress()
 			}
-			err = clientpush.PublishSite(cfg.WorkDir, remoteURL, progress)
+			published, err := clientpush.PublishSite(cfg.WorkDir, remoteURL, progress)
 			progressDone()
 			if err != nil {
 				PrintError(cmd, fmt.Sprintf("push site to %s: %v", remoteURL, err))
+				os.Exit(ExitError)
+			}
+			if !published {
+				PrintError(cmd, "site publishing is disabled for this repo; enable with `gitsocial config site set publish true`")
 				os.Exit(ExitError)
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Uploaded browser read-surface to %s", remoteURL))

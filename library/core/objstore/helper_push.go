@@ -154,20 +154,31 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	if !refsMoved {
 		return
 	}
-	// Site artifacts (refs manifest + per-extension item/body corpora) serve
-	// ONLY the static read surface, so a plain s3:// git remote with no site
-	// stays clean: gate them on the same site-enabled probe the shell refresh
-	// uses. Best-effort throughout — a probe failure only skips this push's
-	// maintenance, never the git push itself.
-	enabled, _, err := siteEnabled(h.client, h.prefix)
+	// The static site is gated on the PUSHED site.publish guard (the `site`
+	// sub-object of refs/gitmsg/core/config), the only enabler: without it a
+	// plain s3:// git remote stays clean, and a bucket whose site predates the
+	// guard is left untouched with a one-line hint. Best-effort throughout — a
+	// read failure only skips this push's maintenance, never the git push itself.
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site maintenance: %v\n", err)
+			return
+		}
+	}
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site probe: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)
 		return
 	}
-	if !enabled {
+	if !cfgOK || cfg.Publish != "true" {
+		if enabled, _, probeErr := siteEnabled(h.client, h.prefix); probeErr == nil && enabled {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: bucket has a site; set `gitsocial config site set publish true` to keep maintaining it\n")
+		}
 		return
 	}
-	// The refs-derived artifacts (refs manifest, pm/site config, prism grammars)
+	// The refs-derived artifacts (refs manifest, pm/site config, the shell)
 	// depend ONLY on the refs/ listing + HEAD, so skip re-deriving them when a
 	// prior pass already covered this exact ref state at this shell version —
 	// detected in ~2-3 round trips. The helper just moved refs, so its OWN push
@@ -181,31 +192,46 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	if verErr == nil {
 		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion)
 	}
+	shellUploaded := false
 	if !upToDate {
+		// Shell first (creation on a guard-enabled bucket, or the self-refresh to
+		// this binary's embedded version), so a reader never sees data artifacts
+		// without an entry page. Best-effort like everything here.
+		var err error
+		if shellUploaded, err = ensureSiteShell(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
+		}
 		h.writeSiteManifest()
 		h.writeSitePMConfig()
 		h.writeSiteCustomization()
 	}
 	h.updateSiteItems(extPushed)
-	// Site self-refresh: buckets carrying the static read surface pick up
-	// this binary's embedded version on any push. Best-effort, like the
-	// manifest: a failure only leaves the site stale until the next push.
-	if err := refreshSiteIfEnabled(h.client, h.prefix); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
+	// index.html is dual-owned: the generated front page while the page layer is
+	// effective, the embedded shell otherwise. A shell (re)upload above overwrites
+	// it with the shell, so if the page layer is effective AND its page set is
+	// already complete-and-current (the narrow case where updateSiteItems moved no
+	// tip, so the marker below would NOT be withheld and the next site push would
+	// skip), reclaim the generated front page now. When tips DID move, the page
+	// layer is pending and the marker is withheld, so the next `site push`
+	// rebuilds pages (and reclaims index.html) — no reclaim needed here.
+	reclaimOK := true
+	if shellUploaded {
+		reclaimOK = h.reclaimSitePagesFront(refs)
 	}
 	// Stamp the marker after the refs-derived writes so a later push against this
 	// same ref state can skip them. Best-effort: a wrong/missing marker only costs
 	// extra work next time, never a wrong skip. Skipped when we didn't run the
-	// block (upToDate), couldn't trust the digest (""), or a bootstrap is still
-	// backfilling — same rule as pushSite: a stamped marker would make the next
-	// site pass skip the backfill that no ref move signals.
-	if !upToDate {
-		refs := h.remoteRefs
-		if refs == nil {
-			refs, _ = readRemoteRefs(h.client, h.prefix)
-		}
-		if refs != nil && !siteItemsBootstrapPending(h.client, h.prefix, refs) {
-			writeSitePushState(h.client, h.prefix, shellVersion, digest)
+	// block (upToDate), couldn't trust the digest (""), a bootstrap is still
+	// backfilling, or the HTML page layer still has work (a pending bootstrap or
+	// cleanup, or consumed tips this push just moved past) that only a site pass
+	// runs — a stamped marker would make the next site pass skip it. Also withheld
+	// when a shell-upload reclaim of index.html FAILED: sitePagesState inspects the
+	// manifest/tips, not index.html's content, so a stamped marker would let the
+	// next push skip and leave index.html stranded as the embedded shell.
+	if !upToDate && reclaimOK {
+		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs)
+		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
+			writeSitePushState(h.client, h.prefix, shellVersion, digest, pagesState)
 		}
 	}
 }
@@ -291,6 +317,50 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 		}
 	}
 	h.updateSiteCodeItems(src)
+}
+
+// reclaimSitePagesFront re-writes the generated front page (index.html) after a
+// shell (re)upload clobbered it, but ONLY when the page layer is effective and
+// its page set is already complete-and-current — the narrow case a shell-version
+// bump on a plain push leaves the marker stampable (no tip moved), so the next
+// site push would skip and index.html would stay the shell. When the page set is
+// pending/absent/stale, or the layer is off, there is nothing to reclaim (the
+// marker is withheld anyway, so the next `site push` rebuilds/reclaims), and
+// this returns ok=true. It returns ok=FALSE only when a reclaim it should have
+// done FAILED, so the caller withholds the marker (a stamped marker would let the
+// next push skip and strand index.html as the shell).
+func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string) (ok bool) {
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs)
+	if err != nil {
+		return false // can't tell if a reclaim was needed: withhold the marker
+	}
+	url, on := sitePagesEffective(cfg, cfgOK)
+	if !on {
+		return true // layer off: index.html is legitimately the shell
+	}
+	site := sitePageSiteFor(h.prefix, cfg, url)
+	manifest, err := readSitePagesManifest(h.client, h.prefix)
+	if err != nil {
+		return false
+	}
+	if manifest == nil || manifest.Cursor != nil || manifest.SiteHash != sitePageSiteHash(site) {
+		return true // page set pending/stale: a site push rebuilds+reclaims
+	}
+	manifests, tips, err := readSitePagesManifests(h.client, h.prefix, refs)
+	if err != nil {
+		return false
+	}
+	if !sitePagesTipsCurrent(manifest, tips) {
+		return true // tips moved: pending, a site push rebuilds+reclaims
+	}
+	src := newLocalCommitSource(h.gitDir, "")
+	defer src.close()
+	readme := readSiteFrontReadme(src, readSiteDefaultBranch(h.client, h.prefix))
+	if err := reclaimSiteFrontPage(h.client, h.prefix, site, manifests, readme); err != nil {
+		fmt.Fprintf(os.Stderr, "gitsocial s3: reclaim front page: %v\n", err)
+		return false
+	}
+	return true
 }
 
 // updateSiteCodeItems maintains the single code items index across every pushed

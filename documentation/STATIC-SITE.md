@@ -1,6 +1,6 @@
 # Static Site
 
-`gitsocial push` publishes a complete, browsable website of your repository (timeline, issues and boards, pull requests, releases, code, search, analytics) into the same S3-compatible bucket that hosts the repo, alongside the repo data.
+Once enabled, `gitsocial push` publishes a complete, browsable website of your repository (timeline, issues and boards, pull requests, releases, code, search, analytics) into the same S3-compatible bucket that hosts the repo, alongside the repo data — plus an optional crawlable HTML page layer (see [HTML pages](#html-pages)).
 
 The site is plain static files read directly by the browser: no server, no build step, no dependencies, and nothing for visitors to install. Anyone with the bucket's public URL can follow the project without a forge account, and the site stays current automatically because every later `gitsocial push` refreshes the data it reads.
 
@@ -8,14 +8,46 @@ The site is plain static files read directly by the browser: no server, no build
 
 ## Publish
 
+The site is **off by default** and enabled per repo by the `publish` guard, stored in the site config so the decision travels with the repo:
+
 ```bash
 gitsocial remote add s3://<endpoint>/<bucket>/<prefix>   # once: bucket as a remote (see S3.md)
+gitsocial config site set publish true                   # master switch for the static site
 gitsocial push                                           # publish repo data + the browsable website
 ```
 
-`gitsocial push` publishes the site by default for `s3://` remotes — a bucket with no site gets one on the first push. Opt out per-push with `--no-site`, or persistently with `git config gitsocial.pushSite false`. `gitsocial site push [remote]` remains as an **explicit site refresh** (upload/re-derive the site without pushing new data); the remote defaults to the [push remote](S3.md#push-remote-resolution). See [S3.md → Push behavior](S3.md#push-behavior-publish-by-default) for the full flag set and the two site-gate rules (`gitsocial push` creates a site; plain `git push` does not).
+`publish` gates everything the site consists of — the shell, `refs.json`, the pm/site config artifacts, the items/bodies/code indexes, and the HTML pages. Unset or false, `gitsocial push` and plain `git push` move repo data only; a bucket that already carries a site (created before the guard existed, or by another clone) is left untouched with a one-line hint naming the config to set. Because the guard lives in the pushed config ref (`refs/gitmsg/core/config`), a plain `git push` that carries it maintains — and on a fresh bucket creates — the site too.
 
-The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. Once the bucket is site-enabled, every subsequent push maintains the data artifacts the site reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without a manual refresh.
+`--no-site` skips the site step for one push, and `git config gitsocial.pushSite false` opts a machine out persistently. Both remain force-offs on top of the guard, never enablers: `site.publish=true` is the only thing that turns the site on.
+
+`gitsocial site push [remote]` remains the **explicit site refresh**: it re-derives the whole site without pushing data, and is the "catch up now" command right after enabling the guards on an already-pushed repo — nothing is re-pushed, since every artifact derives from bucket + local state under the existing budgets. The remote defaults to the [push remote](S3.md#push-remote-resolution).
+
+The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. Once the bucket carries the site, every subsequent push maintains the data artifacts it reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without a manual refresh.
+
+## HTML pages
+
+A second guard adds a crawlable, no-JS HTML layer at the prefix root — real pages for every item, readable by any crawler or text browser and unfurling with OG cards:
+
+```bash
+gitsocial config site set pages true
+gitsocial config site set url "https://example.com/"    # absolute base: canonicals, OG and the sitemap need it
+```
+
+Effective only when all three hold: `publish=true`, `pages=true`, and a valid `url`. Every push then maintains, next to `index.html`:
+
+- `i/<shorthash>.html` — one page per top-level gitmsg item, its thread inlined: replies in timestamp order, resolved edits with an "edited" marker, tombstones for retractions, PR review-state chips and `file:line` feedback anchors, release artifact blocks. Threads cap at ~100 replies / ~200 KB with an explicit "N more replies" marker.
+- `issues/ prs/ posts/ releases/ memos/` — per-type list pages: a mutable `index.html` head plus immutable sealed `<n>.html` pages (100 entries each), chained "older →". Milestones and sprints fold into `issues`.
+- `index.html` — the **generated front page** (the newest items interleaved with code commits — code links into the app, so object count scales with items, never history — then the default branch's README as escaped text, ~8 KB cap). Since the entry flip (M8), the pages maintainer OWNS `index.html` while the page layer is effective; when the page layer is off, `index.html` is the embedded SPA shell instead (see [Progressive enhancement](#progressive-enhancement-the-pages-are-the-site)). The pre-flip `timeline.html` key is retired and swept on every push.
+- `pages.css` — the shared stylesheet; each page also inlines a tiny base style so a saved or curl'ed copy reads decently on its own.
+- `sitemap.xml` + `robots.txt` — the site root plus every item page with `<lastmod>` from its latest activity; past ~40K URLs the sitemap becomes an index over immutable `sitemap-<n>.xml` parts plus a rewritten `sitemap-head.xml`.
+
+Pages are a projection of the push's own index artifacts (never a second git walk), rendered as escaped plain text — no markdown or highlighting; the SPA remains the rich surface. Maintenance is incremental: a reply regenerates only its thread's page, the affected list heads, the front page and the sitemap. First-time generation is budgeted (~5000 pages per push, `GITSOCIAL_SITE_PAGES_BUDGET` override) and resumes across pushes — a partial set is a valid newest-first prefix, and list pages and the sitemap claim only what exists. Setting `pages false` (or removing `url`) deletes the whole page layer on the next push and **restores the embedded SPA shell at `index.html`** (index.html is dual-owned, never deleted). Machine state lives at `.gitsocial/site/pages.json`; the page keys are part of the [reserved root namespace](S3.md#bucket-layout).
+
+### Progressive enhancement: the pages ARE the site
+
+Every generated page is a complete, crawlable, no-JS-readable HTML document — and the SPA is an enhancement layer that upgrades it in place. Each page references `gs-upgrade.js` with `defer` and carries three boot hooks: a `<meta name="gs-route">` route (the shell's `parseRoute` grammar), a `data-base` attribute on the `<div id="gs-page">` mount, and the mount itself. On load, `gs-upgrade.js` resolves the artifact base (the `data-base` attribute, or the `?base=`/`?repo=` cross-bucket override), injects the app chrome plus the shared `pages-app.css` (extracted from the shell's inline styles so both the shell and an upgraded page render the same look), loads `gs-core`/`gs-render`/`gs-app` relative to that base, and boots the app on the page's route. A `location.hash` deep-link WINS over the page's `gs-route` meta, so a shared `#/…` link or a timeline code-commit link opens its target on any page it lands on. Post-boot navigation `pushState`s clean page URLs for routes that have pages (items, type lists, the front page) and keeps hash routes for app-only surfaces (search, board, analytics, code, compare); reloads always work because every page URL is a real bucket object. The boot is inert on failure: the reader (`gs-core`/`gs-render`) loads before the body is ever replaced, so a broken or partial upgrade leaves the static, readable page fully intact.
+
+**Dual-mode `index.html` ownership.** `index.html` is the generated front page while the page layer is effective, the embedded shell otherwise. `uploadSiteFiles`/`ensureSiteShell` always ship the shell first; when pages are effective, the pages pass then overwrites `index.html` with the generated front page (`rebuildSitePages` runs after `uploadSiteFiles`, and even its no-op-tips branch reclaims `index.html` — so a shell-version bump that re-ships the shell can never strand `index.html` as the shell). A shared item's copy-link/share affordance in the booted app hands out the page URL (`{site.url}i/<short>.html`) when the site config carries a valid `url` and `pages` is on, else the in-app hash URL.
 
 ## Customization
 
@@ -34,12 +66,15 @@ gitsocial config site list
 | `title` | plain string, trimmed, ≤ 200 chars |
 | `accent`, `accentDark` | strict `#rgb` / `#rrggbb` hex |
 | `favicon` | `data:image/png|webp|svg+xml` URI, ≤ 32 KB (the CLI converts an `@path` for you) |
+| `url` | absolute `https://` base URL (`http://` only for localhost), no query/fragment, trailing slash normalized, ≤ 500 chars |
+| `description` | plain string, trimmed, ≤ 300 chars (front-page meta/OG description) |
+| `publish`, `pages` | `true` / `false`, both default false — the [site](#publish) and [HTML page](#html-pages) guards |
 
 Both the writer and the reader validate every field with the same rules, so a bad config never breaks the page; if nothing survives validation the artifact is deleted and the site falls back to its defaults. The `.gitsocial/site/assets/` prefix is reserved for future binary assets; nothing reads or writes it today.
 
 ## How it works
 
-The whole site lives in `core/objstore/site/`, embedded in the binary via `SiteFiles`: `index.html` plus the reader JS (`gs-core.js` / `gs-render.js` / `gs-app.js`), which reads the [bucket layout](S3.md#bucket-layout) directly and re-implements gitmsg message parsing in JS. Layout or protocol changes must touch it too, and editing a file under `core/objstore/site/` requires rebuilding the binary before `site push`. `SiteFiles` ships every file under `site/` recursively (subdirectories included), so `uploadSiteFiles` publishes the whole shell — including the syntax-highlighting grammars under `site/grammars/`.
+The whole site lives in `core/objstore/site/`, embedded in the binary via `SiteFiles`: `index.html`, the reader JS (`gs-core.js` / `gs-render.js` / `gs-app.js`), the page-entry boot layer `gs-upgrade.js`, and the extracted app stylesheet `pages-app.css` (linked by both the shell and the generated pages so an upgraded page renders the same look), which reads the [bucket layout](S3.md#bucket-layout) directly and re-implements gitmsg message parsing in JS. Layout or protocol changes must touch it too, and editing a file under `core/objstore/site/` requires rebuilding the binary before `site push`. `SiteFiles` ships every file under `site/` recursively (subdirectories included), so `uploadSiteFiles` publishes the whole shell — including the syntax-highlighting grammars under `site/grammars/`.
 
 Syntax highlighting is Prism (`prism.js` bundles the common grammars: go/js/ts/json/yaml/bash/markdown/markup/css/diff). Every other language ships as its own `site/grammars/prism-<lang>.js` file (regenerate with `scripts_gen_grammars.sh` from the vendored `prismcomp/` 1.30.0 build); the reader lazy-loads one on first use (`ensureGrammar` in `gs-render.js`), loading any dependency chain first (e.g. `cpp`→`c`), caching per session, and upgrading the already-rendered plain text in place. A code block renders un-highlighted immediately and never blocks on the fetch; a missing grammar file stays plain text. This replaces the old push-time tree scan that published a per-repo `prism-extra.js` bundle — `site push` (and any shell re-upload) now deletes that obsolete key best-effort.
 
@@ -53,4 +88,4 @@ Visitor cost stays flat as history grows: opening the site downloads the fixed 1
 
 The site can be served by the disk-backed local S3 server used for the transport (`library/core/objstore/locals3`; see [S3.md § Local development](S3.md#local-development)), so a locally built site is browsable exactly as it would be from a real bucket.
 
-`library/core/objstore/sitetest` is the headless test harness: `fixture.sh` builds a fixture bucket, `serve.js` serves it with real bucket cache/`Content-Encoding` headers, and `runner.js` drives the browser-side suites (writer/reader parity, interrupted and partial-bootstrap pushes, and the feature verifiers under `verify_*.js`). The `GITSOCIAL_SITE_SHARD_COUNT` / `GITSOCIAL_SITE_WALK_BUDGET` overrides shrink shard sizes and walk budgets so bootstrap paths are exercised on small fixtures.
+`library/core/objstore/sitetest` is the headless test harness: `fixture.sh` builds a fixture bucket (guards enabled; thread-demo also carries the HTML page layer), `serve.js` serves it with real bucket cache/`Content-Encoding` headers, and `runner.js` drives the browser-side suites (writer/reader parity, interrupted and partial-bootstrap pushes, the feature verifiers under `verify_*.js`, and the HTML page layer via `verify_html_pages.js`). The `GITSOCIAL_SITE_SHARD_COUNT` / `GITSOCIAL_SITE_WALK_BUDGET` / `GITSOCIAL_SITE_PAGES_BUDGET` / `GITSOCIAL_SITE_SITEMAP_PART` overrides shrink shard sizes, walk/page budgets and the sitemap part size so bootstrap and sharding paths are exercised on small fixtures.

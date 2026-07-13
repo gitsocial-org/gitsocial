@@ -18,14 +18,20 @@ import (
 const coreConfigSiteKey = "site"
 
 // SiteCustomization is the workspace-editable site customization: a title, a
-// light accent and optional dark accent (both #rgb/#rrggbb hex), and an optional
-// favicon data URI. Empty fields are omitted on write (and drop the artifact when
-// all are empty), mirroring the push-time validation.
+// light accent and optional dark accent (both #rgb/#rrggbb hex), an optional
+// favicon data URI, the site's canonical base URL, a description, and the two
+// publish guards ("true"/"false"; both default off). Empty fields are omitted
+// on write (and drop the artifact when all are empty), mirroring the push-time
+// validation.
 type SiteCustomization struct {
-	Title      string `json:"title,omitempty"`
-	Accent     string `json:"accent,omitempty"`
-	AccentDark string `json:"accentDark,omitempty"`
-	Favicon    string `json:"favicon,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Accent      string `json:"accent,omitempty"`
+	AccentDark  string `json:"accentDark,omitempty"`
+	Favicon     string `json:"favicon,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Description string `json:"description,omitempty"`
+	Publish     string `json:"publish,omitempty"`
+	Pages       string `json:"pages,omitempty"`
 }
 
 // ReadWorkspaceSiteCustomization returns the `site` sub-object of the workspace's
@@ -65,6 +71,18 @@ func WriteWorkspaceSiteCustomization(workdir string, c SiteCustomization) error 
 	}
 	if c.Favicon != "" {
 		site["favicon"] = c.Favicon
+	}
+	if c.URL != "" {
+		site["url"] = c.URL
+	}
+	if c.Description != "" {
+		site["description"] = c.Description
+	}
+	if c.Publish != "" {
+		site["publish"] = c.Publish
+	}
+	if c.Pages != "" {
+		site["pages"] = c.Pages
 	}
 	if len(site) == 0 {
 		delete(config, coreConfigSiteKey)

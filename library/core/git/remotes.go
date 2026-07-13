@@ -235,11 +235,11 @@ func configuredPushRemote(workdir string) string {
 	return strings.TrimSpace(result.Stdout)
 }
 
-// PushSiteEnabled reports whether gitsocial push should also publish the browser
-// static site to s3 remotes. Reads git config gitsocial.pushSite through git's
-// own --bool normalization (false/no/off/0 ⇒ off; unset or any other value ⇒
-// on): the site is published by default and only an explicit falsey value opts
-// out, mirroring git's boolean-config conventions.
+// PushSiteEnabled reports whether this machine allows the site step of a
+// gitsocial push at all. Reads git config gitsocial.pushSite through git's own
+// --bool normalization (false/no/off/0 ⇒ off; unset or any other value ⇒ on).
+// This is a per-machine force-off, never an enabler: the site itself is gated
+// on the repo's site.publish config guard (default off).
 func PushSiteEnabled(workdir string) bool {
 	result, err := ExecGit(workdir, []string{"config", "--bool", "--get", "gitsocial.pushSite"})
 	if err != nil {

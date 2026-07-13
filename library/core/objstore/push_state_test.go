@@ -150,7 +150,7 @@ func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 // version; a version bump reads as absent.
 func TestSitePushState_RoundTrip(t *testing.T) {
 	client, _ := testClient(t)
-	writeSitePushState(client, "", "shellv1", "digest-abc")
+	writeSitePushState(client, "", "shellv1", "digest-abc", sitePagesStateOff)
 	state, ok := readSitePushState(client, "")
 	if !ok {
 		t.Fatal("marker must round-trip")
@@ -160,7 +160,7 @@ func TestSitePushState_RoundTrip(t *testing.T) {
 	}
 	// An empty digest is never written (can never match a real digest).
 	client2, bucket2 := testClient(t)
-	writeSitePushState(client2, "", "shellv1", "")
+	writeSitePushState(client2, "", "shellv1", "", sitePagesStateOff)
 	if bucket2.putCount(sitePushStateKey) != 0 {
 		t.Error("an empty digest must not write a marker")
 	}
@@ -175,7 +175,7 @@ func TestSiteMaintenanceUpToDate_ShellVersionBump(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refsHeadDigest: %v", err)
 	}
-	writeSitePushState(client, "", "old-shell", digest)
+	writeSitePushState(client, "", "old-shell", digest, sitePagesStateOff)
 	// Same digest but a newer shell version: not up to date.
 	if up, _ := siteMaintenanceUpToDate(client, "", "new-shell"); up {
 		t.Error("a shell-version mismatch must force a full pass")

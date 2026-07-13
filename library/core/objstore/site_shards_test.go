@@ -264,3 +264,48 @@ func TestManifest_RoundTripFields(t *testing.T) {
 // reverseMeta reverses an oldest-first metadata slice to newest-first (the shape
 // writeCorpus expects).
 func reverseMeta(in []siteMetaEntry) []siteMetaEntry { return reverseGeneric(in) }
+
+// TestReadCompressedJSON_TranscodedBody pins the provider-transcoding fallback:
+// Cloudflare R2 transparently decompresses `Content-Encoding: br` objects when
+// the requester doesn't advertise br support (Go's transport only advertises
+// gzip), so a stored artifact arrives as plain JSON. Such a body must still be
+// read — treating it as absent silently re-bootstrapped every corpus on every
+// push and permanently blocked the HTML page layer.
+func TestReadCompressedJSON_TranscodedBody(t *testing.T) {
+	client, _ := testClient(t)
+	tip := fmt.Sprintf("%040x", 42)
+	meta := []siteMetaEntry{{SHA: tip, Author: "a", TS: 1, Subject: "s"}}
+	if _, err := writeCorpus(client, itemsCorpus, "pm", tip, meta, 0); err != nil {
+		t.Fatalf("writeCorpus: %v", err)
+	}
+	// Simulate the transcoding provider: replace the stored manifest with its
+	// decompressed bytes (plain JSON, no Content-Encoding).
+	compressed, err := client.Get(itemsCorpus.manifestKey("pm"))
+	if err != nil {
+		t.Fatalf("get manifest: %v", err)
+	}
+	plain, err := brotliDecompress(compressed)
+	if err != nil {
+		t.Fatalf("decompress manifest: %v", err)
+	}
+	if err := client.Put(itemsCorpus.manifestKey("pm"), plain); err != nil {
+		t.Fatalf("put plain manifest: %v", err)
+	}
+	m, err := readItemsManifest(client, "", "pm")
+	if err != nil {
+		t.Fatalf("readItemsManifest: %v", err)
+	}
+	if m == nil {
+		t.Fatalf("transcoded (plain JSON) manifest read as absent")
+	}
+	if m.Tip != tip || !m.Complete {
+		t.Errorf("transcoded manifest content wrong: %+v", m)
+	}
+	// Garbage must still read as absent, not error.
+	if err := client.Put(itemsCorpus.manifestKey("pm"), []byte("not json")); err != nil {
+		t.Fatalf("put garbage: %v", err)
+	}
+	if m, err := readItemsManifest(client, "", "pm"); err != nil || m != nil {
+		t.Errorf("garbage manifest: got (%+v, %v), want (nil, nil)", m, err)
+	}
+}

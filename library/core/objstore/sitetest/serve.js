@@ -8,15 +8,18 @@ const path = require("path");
 const crypto = require("crypto");
 
 // cacheControlFor mirrors the upload-time classification (objstore/cache_control.go):
-// content-addressed loose objects (objects/<xx>/<38-hex>) and sealed shards of
+// content-addressed loose objects (objects/<xx>/<38-hex>), sealed shards of
 // either corpus (.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json,
-// content-hashed and written once) are immutable, every other served key
-// revalidates. Derived from the URL so the served bucket behaves like a real one
-// at 127.0.0.1.
+// content-hashed and written once), sealed HTML list pages (<type>/<n>.html)
+// and sealed sitemap parts (sitemap-<n>.xml) are immutable, every other served
+// key revalidates. Derived from the URL so the served bucket behaves like a
+// real one at 127.0.0.1.
 function cacheControlFor(rel) {
   const loose = /(?:^|\/)objects\/[0-9a-fA-F]{2}\/[0-9a-fA-F]{38}$/.test(rel);
   const shard = /\.gitsocial\/site\/(?:bodies|items)\/[^/]+\/shard-[0-9a-f]+\.json$/.test(rel);
-  return (loose || shard) ? "public, max-age=31536000, immutable" : "no-cache";
+  const sealedList = /(?:^|\/)(?:issues|prs|posts|releases|memos)\/\d+\.html$/.test(rel);
+  const sealedSitemap = /(?:^|\/)sitemap-\d+\.xml$/.test(rel);
+  return (loose || shard || sealedList || sealedSitemap) ? "public, max-age=31536000, immutable" : "no-cache";
 }
 
 const TYPES = {
@@ -24,6 +27,8 @@ const TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json",
   ".css": "text/css; charset=utf-8",
+  ".xml": "application/xml",
+  ".txt": "text/plain; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".png": "image/png",
   ".gif": "image/gif",

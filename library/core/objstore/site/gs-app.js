@@ -43,8 +43,12 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // caller that drives route() directly (headless tests) still lazy-loads
     // grammars from the right place without going through init().
     if (ctx && ctx.base) setGrammarBase(ctx.base);
-    const r = parseRoute(location.hash);
-    if (r.canonical && r.canonical !== location.hash) { location.replace(r.canonical); return; }
+    // Capture the hash NOW: on an upgraded page, gs-upgrade's syncURL rewrites
+    // the URL to a clean (hashless) page URL right after this handler's
+    // synchronous prefix, so location.hash is unreliable after the first await.
+    const hashAtEntry = location.hash;
+    const r = parseRoute(hashAtEntry);
+    if (r.canonical && r.canonical !== hashAtEntry) { location.replace(r.canonical); return; }
     // Remember the last in-app hash so a detail page's "back" returns to where the
     // user came from (a board/milestone/sprint/search list), not a fixed default.
     // Updated AFTER a detail render reads it (see recordRoute at the end).
@@ -197,7 +201,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     }
     // Record this hash as the "came from" for the NEXT navigation's back link.
     // Detail routes are excluded so back never bounces detail→detail.
-    if (r.type !== "commit" && r.type !== "tag") ctx.lastHash = location.hash;
+    if (r.type !== "commit" && r.type !== "tag") ctx.lastHash = hashAtEntry;
     // Content is rendered (cache warmed); reflect the code-context sidebar tree.
     await updateCodeSidebar(ctx, r);
     // Honor a deferred magnifier focus once the Code tree (and its search) exist.

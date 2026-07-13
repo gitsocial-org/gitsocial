@@ -22,10 +22,59 @@ const (
 // cacheControlForKey classifies a bucket key by mutability and returns the
 // Cache-Control value it must be stored (and served) with.
 func cacheControlForKey(key string) string {
-	if isLooseObjectKey(key) || isSealedShardKey(key) {
+	if isLooseObjectKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) {
 		return cacheControlImmutable
 	}
 	return cacheControlRevalidate
+}
+
+// isSealedSitemapPartKey reports whether a key is a sealed (full, immutable)
+// sitemap part — `sitemap-<n>.xml` at a path boundary. The index (sitemap.xml)
+// and the mutable newest part (sitemap-head.xml) stay no-cache.
+func isSealedSitemapPartKey(key string) bool {
+	name := key[strings.LastIndex(key, "/")+1:]
+	rest, ok := strings.CutPrefix(name, "sitemap-")
+	if !ok {
+		return false
+	}
+	n, ok := strings.CutSuffix(rest, ".xml")
+	return ok && isDigitString(n)
+}
+
+// isSealedListPageKey reports whether a key is a sealed (immutable) HTML list
+// page — `<type>/<n>.html` under one of the five page type directories at a
+// path boundary. Everything else the page layer writes (item pages, the
+// mutable index.html type-list heads, the generated front page index.html,
+// pages.css) stays no-cache: those keys rewrite in place on later pushes.
+func isSealedListPageKey(key string) bool {
+	slash := strings.LastIndex(key, "/")
+	if slash < 0 {
+		return false
+	}
+	name, ok := strings.CutSuffix(key[slash+1:], ".html")
+	if !ok || !isDigitString(name) {
+		return false
+	}
+	dir := key[:slash]
+	for _, l := range sitePageLists {
+		if dir == l.Dir || strings.HasSuffix(dir, "/"+l.Dir) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDigitString reports whether s is non-empty and all decimal digits.
+func isDigitString(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // isSealedShardKey reports whether a key is a sealed shard of either corpus

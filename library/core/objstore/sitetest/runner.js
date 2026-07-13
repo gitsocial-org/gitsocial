@@ -23,6 +23,8 @@ const DEFAULT = [
   "verify_threads.js",
   "verify_memos.js",
   "verify_pages.js",
+  "verify_html_pages.js",
+  "verify_upgrade_boot.js",
   "verify_items_shards.js",
   "verify_interrupted_push.js",
   "verify_partial_bootstrap.js",

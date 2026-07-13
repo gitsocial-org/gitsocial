@@ -20,7 +20,7 @@ const sha = (n) => String(n).padStart(40, "0");
 const fileEntry = (name, s) => ({ mode: "100644", name, sha: sha(s), type: "blob" });
 const dirEntry = (name, s) => ({ mode: "40000", name, sha: sha(s), type: "tree" });
 
-const HTML = fs.readFileSync(require("path").join(__dirname,"../site/index.html"), "utf8");
+const HTML = fs.readFileSync(require("path").join(__dirname,"../site/index.html"), "utf8") + "\n" + fs.readFileSync(require("path").join(__dirname,"../site/pages-app.css"), "utf8");
 
 function block(css, sel) { const i = css.indexOf(sel); if (i < 0) return ""; return css.slice(i, css.indexOf("}", i)); }
 

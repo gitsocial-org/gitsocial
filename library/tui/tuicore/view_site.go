@@ -31,10 +31,14 @@ var siteFields = []siteField{
 	{"accent", "hex color, e.g. #0a7", func(c *objstore.SiteCustomization) *string { return &c.Accent }},
 	{"accentDark", "hex color for dark mode", func(c *objstore.SiteCustomization) *string { return &c.AccentDark }},
 	{"favicon", "data:image/png|webp|svg+xml URI", func(c *objstore.SiteCustomization) *string { return &c.Favicon }},
+	{"url", "absolute https:// base URL, e.g. https://example.com/", func(c *objstore.SiteCustomization) *string { return &c.URL }},
+	{"description", "plain text, 300 chars max", func(c *objstore.SiteCustomization) *string { return &c.Description }},
+	{"publish", "true/false: master switch for the static site (default false)", func(c *objstore.SiteCustomization) *string { return &c.Publish }},
+	{"pages", "true/false: crawlable HTML pages (needs publish + url)", func(c *objstore.SiteCustomization) *string { return &c.Pages }},
 }
 
 // SiteView displays and edits the workspace's site customization (title, accent,
-// accentDark, favicon). Values live in the core config's `site` sub-object, which
+// accentDark, favicon, url, description). Values live in the core config's `site` sub-object, which
 // `gitsocial site push` publishes as the static site's site-config.json.
 type SiteView struct {
 	config       objstore.SiteCustomization
@@ -175,6 +179,9 @@ func (v *SiteView) saveCurrent() tea.Cmd {
 		v.err = msg
 		return nil
 	}
+	if label == "url" && value != "" {
+		value, _ = objstore.NormalizeSiteURL(value)
+	}
 	updated := v.config
 	*siteFields[v.cursor].get(&updated) = value
 	if err := objstore.WriteWorkspaceSiteCustomization(v.workdir, updated); err != nil {
@@ -203,6 +210,18 @@ func validateSiteField(label, value string) string {
 	case "favicon":
 		if !objstore.ValidSiteFavicon(value) {
 			return "invalid favicon (data:image/png|webp|svg+xml URI, max 32KB)"
+		}
+	case "url":
+		if _, ok := objstore.NormalizeSiteURL(value); !ok {
+			return "invalid URL (absolute https://, no query/fragment)"
+		}
+	case "description":
+		if len(value) > objstore.SiteConfigMaxDescription {
+			return "description too long (max 300 chars)"
+		}
+	case "publish", "pages":
+		if value != "true" && value != "false" {
+			return "must be true or false"
 		}
 	}
 	return ""

@@ -109,6 +109,9 @@ global.document = {
 // it, so tests drive card-nav suppression by mutating global.__selection.
 global.__selection = { isCollapsed: true };
 global.window = { addEventListener() {}, matchMedia: () => ({ matches: false }), getSelection: () => global.__selection };
+// Clipboard stub: the share/copy-link affordance calls navigator.clipboard.
+// writeText; record the last copied text so a suite can assert what was handed out.
+global.navigator = { clipboard: { writeText: (t) => { global.__copied = t; return Promise.resolve(); } } };
 // In-memory localStorage so persisted UI state (diffview, theme) is assertable.
 global.localStorage = {
   _m: {},

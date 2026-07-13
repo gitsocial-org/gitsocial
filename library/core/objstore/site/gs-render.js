@@ -863,6 +863,47 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return val;
   }
 
+  // shareURL returns the best shareable URL for an item: the canonical PAGE URL
+  // ({site.url}i/<short>.html) when the site config carries a valid url AND the
+  // HTML page layer is enabled (pages === "true") — those are the site's
+  // permanent, crawlable, shared-forever URLs; otherwise the in-app hash URL
+  // (origin + base path + #commit:<short>@<branch>), which always resolves. ctx
+  // carries the site customization loaded once per context (loadSiteCustomization);
+  // it may be absent (a bucket with no site config), in which case the hash URL
+  // is used. `short` is the item's short hash, `branch` its ext data branch.
+  function shareURL(ctx, short, branch) {
+    const cfg = ctx && ctx.siteCustomization;
+    if (cfg && cfg.pages === "true" && typeof cfg.url === "string" && /^https?:\/\//.test(cfg.url)) {
+      const base = cfg.url.endsWith("/") ? cfg.url : cfg.url + "/";
+      return base + "i/" + short + ".html";
+    }
+    // Hash URL: the served base directory plus the app hash route. ctx.base is
+    // the absolute site root; strip any trailing "#..." the location may carry.
+    const base = (ctx && ctx.base) || "";
+    return base + commitRef(short, branch);
+  }
+
+  // shareControl renders a minimal copy-link affordance for an item detail: a
+  // mono button that copies shareURL() to the clipboard and flashes "Copied".
+  // The URL is resolved at click time so a site config that loads after the
+  // detail renders is still honored. Clipboard failures fall back silently.
+  function shareControl(ctx, short, branch) {
+    const btn = el("button", { class: "share-link", type: "button", title: "Copy a link to this item" }, ["Copy link"]);
+    btn.addEventListener("click", async () => {
+      let url = shareURL(ctx, short, branch);
+      // The site config may still be loading; a fresh read makes the page URL
+      // available as soon as it lands, without blocking first paint.
+      if (ctx && ctx.siteCustomization === undefined && typeof loadSiteCustomization === "function") {
+        try { await loadSiteCustomization(ctx); url = shareURL(ctx, short, branch); } catch (e) { /* keep hash URL */ }
+      }
+      let done = false;
+      try { if (navigator && navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(url); done = true; } } catch (e) { /* clipboard denied */ }
+      btn.textContent = done ? "Copied" : url;
+      setTimeout(() => { btn.textContent = "Copy link"; }, done ? 1500 : 4000);
+    });
+    return btn;
+  }
+
   // version; the subject, meta, body (Rendered|Raw), and header fields all repaint
   // for the selected version. The latest version is shown by default.
   function detailView(item, kind, skipKeys, ctx) {
@@ -871,7 +912,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       : [{ commit: item.commit, header: item.header, content: item.content, rawMessage: item.rawMessage, author: item.author, editorName: item.editorName, edited: item.edited, effectiveTime: item.effectiveTime }];
     const sel = { idx: versions.length - 1 };
     const wrap = el("div", { class: "detail" }, []);
-    wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]));
+    // Back link plus a copy-link/share affordance handing out the item's page URL
+    // ({site.url}i/<short>.html) when the site config enables the HTML page layer,
+    // else the in-app hash URL. On one row so the share control sits by the back
+    // link without disturbing the meta line below.
+    wrap.append(el("div", { class: "detail-topbar" }, [
+      el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]),
+      shareControl(ctx, item.commit.short, kind.branch),
+    ]));
     const subjectEl = el("div", { class: "subject" }, []);
     wrap.append(subjectEl);
     const metaSlot = el("div", { class: "detail-meta" }, []);

@@ -584,8 +584,13 @@ func readItemsHeadEntries(client *Client, key string) ([]siteMetaEntry, error) {
 }
 
 // readCompressedJSON fetches and brotli-decodes a document into v. found is
-// false (no error) when the key is absent, or when the stored bytes are not
-// valid brotli/JSON — so callers fall back to a fresh walk.
+// false (no error) when the key is absent or not valid JSON — so callers fall
+// back to a fresh walk. Bodies that fail the brotli decode are parsed as-is:
+// some providers (Cloudflare R2) transparently decompress `Content-Encoding:
+// br` objects when the requester doesn't advertise br support (Go's transport
+// only advertises gzip), so the stored artifact arrives as plain JSON.
+// Treating that as absent silently re-bootstrapped every corpus on every push
+// and permanently blocked the HTML page layer behind siteItemsBootstrapPending.
 func readCompressedJSON(client *Client, key string, v any) (found bool, err error) {
 	data, err := client.GetRetry(key)
 	if errors.Is(err, ErrNotFound) {
@@ -595,8 +600,8 @@ func readCompressedJSON(client *Client, key string, v any) (found bool, err erro
 		return false, fmt.Errorf("read %s: %w", key, err)
 	}
 	raw, err := brotliDecompress(data)
-	if err != nil {
-		return false, nil
+	if err != nil || !json.Valid(raw) {
+		raw = data
 	}
 	if json.Unmarshal(raw, v) != nil {
 		return false, nil
@@ -996,22 +1001,22 @@ func rebuildSiteItems(client *Client, prefix string, refs map[string]string, def
 	return nil
 }
 
-// siteItemsBootstrapPending reports whether any extension's items index is still
-// an incomplete bootstrap after a pass (its manifest.Complete is false), so the
-// caller can decline to stamp the push-state marker: a follow-up push must not be
-// skipped while a bootstrap has more older segments to backfill (which no ref
-// move signals). Best-effort — a read error is reported as pending, so at worst
-// the marker is left unstamped and the next push does a (harmless) full pass.
+// siteItemsBootstrapPending reports whether any extension's items index still
+// needs work only a full site pass runs: an incomplete bootstrap
+// (manifest.Complete false, with older segments to backfill), or a data branch
+// with NO manifest at all — the helper's per-push maintenance only indexes the
+// branches that push moved, so a guard-enabled bucket can carry data branches
+// no push has indexed yet. Either way the push-state marker must stay unstamped
+// (no ref move signals the remaining work). Best-effort — a read error is
+// reported as pending, so at worst the marker is left unstamped and the next
+// push does a (harmless) full pass.
 func siteItemsBootstrapPending(client *Client, prefix string, refs map[string]string) bool {
 	for _, ext := range siteItemsExts {
 		if _, ok := refs["refs/heads/gitmsg/"+ext]; !ok {
 			continue
 		}
 		items, err := readItemsManifest(client, prefix, ext)
-		if err != nil {
-			return true
-		}
-		if items != nil && !items.Complete {
+		if err != nil || items == nil || !items.Complete {
 			return true
 		}
 	}

@@ -89,9 +89,17 @@ func (s *localCommitSource) close() {
 // commit reads one commit's raw object body (the bytes after git's "commit
 // <size>\0" header) from the local odb. ok is false — never an error — when the
 // object is absent locally or the process has gone bad, so the caller falls back
-// to the bucket GET for that sha. A hard IO/protocol error retires the process
-// (every later read then misses) rather than failing the walk.
+// to the bucket GET for that sha.
 func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
+	return s.object(sha, "commit")
+}
+
+// object reads one object's raw body by name (a sha, or any rev-spec cat-file
+// accepts, e.g. "refs/heads/main:README.md" for the front page's README blob),
+// requiring the given object type. ok is false — never an error — on a miss or
+// a type mismatch. A hard IO/protocol error retires the process (every later
+// read then misses) rather than failing the caller.
+func (s *localCommitSource) object(name, wantType string) (body []byte, ok bool) {
 	if s == nil {
 		return nil, false
 	}
@@ -100,7 +108,7 @@ func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
 	if s.broken {
 		return nil, false
 	}
-	if _, err := io.WriteString(s.stdin, sha+"\n"); err != nil {
+	if _, err := io.WriteString(s.stdin, name+"\n"); err != nil {
 		s.broken = true
 		return nil, false
 	}
@@ -110,12 +118,13 @@ func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
 		return nil, false
 	}
 	fields := strings.Fields(strings.TrimSpace(header))
-	// "<sha> missing" — absent locally (shallow clone, gc race); a clean miss.
+	// "<name> missing" — absent locally (shallow clone, gc race) or an
+	// unresolvable rev-spec; a clean miss.
 	if len(fields) == 2 && fields[1] == "missing" {
 		return nil, false
 	}
-	if len(fields) != 3 || fields[1] != "commit" {
-		// Non-commit or malformed: don't try to consume a body we can't size.
+	if len(fields) != 3 {
+		// Malformed: don't try to consume a body we can't size.
 		s.broken = true
 		return nil, false
 	}
@@ -133,7 +142,8 @@ func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
 		s.broken = true
 		return nil, false
 	}
-	return content, true
+	// The stream is consumed either way; a wrong type is just a miss.
+	return content, fields[1] == wantType
 }
 
 // getCommit returns one commit for the walk, preferring the local odb and

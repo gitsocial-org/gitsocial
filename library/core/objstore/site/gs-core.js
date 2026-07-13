@@ -27,11 +27,17 @@
 
   // deriveBase returns the absolute directory the repo is served from. A
   // ?base=/?repo= query param overrides; otherwise it is the page's own
-  // directory, so the site works under any bucket prefix.
+  // directory, so the site works under any bucket prefix. When gs-upgrade.js
+  // boots the app from a generated page (an item page under i/, a type list
+  // under a type dir), the page's own directory is NOT the site root, so the
+  // upgrade layer resolves the artifact base from the page's data-base attribute
+  // (honoring the ?base=/?repo= override) and publishes it as window.__gsBase;
+  // deriveBase prefers it so every artifact fetch stays anchored at the root.
   function deriveBase(loc) {
     const params = new URLSearchParams(loc.search || "");
     const override = params.get("base") || params.get("repo");
     if (override) return override.endsWith("/") ? override : override + "/";
+    if (root.__gsBase) return root.__gsBase;
     const path = loc.pathname || "/";
     const dir = path.slice(0, path.lastIndexOf("/") + 1);
     return (loc.origin || "") + dir;

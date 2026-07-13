@@ -20,7 +20,7 @@ function hasClassDeep(node, cls){ return findClass(node, cls).length>0; }
 function fire(node, ev, props){ (node&&node._handlers&&node._handlers[ev]||[]).forEach(fn=>fn(Object.assign({preventDefault(){},stopPropagation(){},key:""},props||{}))); }
 async function run(hash){ setHash(hash); await GS.route(global.__ctx); await wait(700); }
 
-const HTML = fs.readFileSync(require("path").join(__dirname,"../site/index.html"), "utf8");
+const HTML = fs.readFileSync(require("path").join(__dirname,"../site/index.html"), "utf8") + "\n" + fs.readFileSync(require("path").join(__dirname,"../site/pages-app.css"), "utf8");
 
 async function main() {
   await wait(2500); // drain init home route

@@ -53,11 +53,12 @@ func readEnc(path string) string {
 
 // cacheControlFor classifies a request key the way real buckets are stamped on
 // upload (see objstore/cache_control.go): content-addressed loose objects
-// (`objects/<xx>/<38-hex>`) and sealed shards of either corpus
+// (`objects/<xx>/<38-hex>`), sealed shards of either corpus
 // (`.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json`, content-hashed and
-// written once) are immutable, everything else revalidates. Derived from the key
-// rather than persisted, since both are pattern-identifiable and locals3 stays
-// dependency-free.
+// written once), sealed HTML list pages (`<type>/<n>.html`) and sealed sitemap
+// parts (`sitemap-<n>.xml`) are immutable, everything else revalidates. Derived
+// from the key rather than persisted, since all are pattern-identifiable and
+// locals3 stays dependency-free.
 func cacheControlFor(key string) string {
 	i := strings.Index(key, "objects/")
 	if i >= 0 && (i == 0 || key[i-1] == '/') {
@@ -66,9 +67,22 @@ func cacheControlFor(key string) string {
 			return "public, max-age=31536000, immutable"
 		}
 	}
+	file := key[strings.LastIndexByte(key, '/')+1:]
 	if strings.Contains(key, ".gitsocial/site/bodies/") || strings.Contains(key, ".gitsocial/site/items/") {
-		file := key[strings.LastIndexByte(key, '/')+1:]
 		if strings.HasPrefix(file, "shard-") && strings.HasSuffix(file, ".json") {
+			return "public, max-age=31536000, immutable"
+		}
+	}
+	if isDigits(strings.TrimSuffix(file, ".html")) && strings.HasSuffix(file, ".html") {
+		dir := key[:strings.LastIndexByte(key, '/')+1]
+		for _, d := range []string{"issues/", "prs/", "posts/", "releases/", "memos/"} {
+			if strings.HasSuffix(dir, "/"+d) || dir == d {
+				return "public, max-age=31536000, immutable"
+			}
+		}
+	}
+	if rest, ok := strings.CutPrefix(file, "sitemap-"); ok {
+		if n, ok := strings.CutSuffix(rest, ".xml"); ok && isDigits(n) {
 			return "public, max-age=31536000, immutable"
 		}
 	}
@@ -102,6 +116,19 @@ func contentTypeFor(key string) string {
 		return t
 	}
 	return "application/octet-stream"
+}
+
+// isDigits reports whether s is non-empty and all decimal digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // isHex reports whether s is non-empty and all hex digits.

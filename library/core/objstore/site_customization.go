@@ -2,7 +2,7 @@
 //
 // The repo's site customization lives at refs/gitmsg/core/config as a commit
 // whose message is the core config JSON with a `site` sub-object (title, accent,
-// accentDark, favicon). This resolves that sub-object at push time, validates it
+// accentDark, favicon, url, description, publish, pages). This resolves that sub-object at push time, validates it
 // strictly, and emits it as .gitsocial/site/site-config.json alongside the other
 // mutable site artifacts. The reader loads it (no-cache, refreshed on every push)
 // and applies the overrides; an absent or malformed config deletes the artifact
@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -29,6 +30,12 @@ const SiteConfigMaxTitle = 200
 // small (the whole reason it is a data URI: no extra bucket object).
 const SiteFaviconMaxBytes = 32 * 1024
 
+// SiteConfigMaxURL bounds the site base URL (site.url), after normalization.
+const SiteConfigMaxURL = 500
+
+// SiteConfigMaxDescription bounds the site description (site.description).
+const SiteConfigMaxDescription = 300
+
 // siteHexRe matches a strict CSS hex color (#rgb or #rrggbb), the only accent
 // shape the writer emits and the reader applies.
 var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
@@ -38,13 +45,35 @@ var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
 
 // siteCustomization is the validated customization the reader consumes: a title,
-// an accent (light) and optional accentDark, and an optional favicon data URI.
-// Only the fields that survive validation are emitted; empties are omitted.
+// an accent (light) and optional accentDark, an optional favicon data URI, the
+// site's canonical base URL, a description, and the two publish guards. Only the
+// fields that survive validation are emitted; empties are omitted.
 type siteCustomization struct {
-	Title      string `json:"title,omitempty"`
-	Accent     string `json:"accent,omitempty"`
-	AccentDark string `json:"accentDark,omitempty"`
-	Favicon    string `json:"favicon,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Accent      string `json:"accent,omitempty"`
+	AccentDark  string `json:"accentDark,omitempty"`
+	Favicon     string `json:"favicon,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Description string `json:"description,omitempty"`
+	Publish     string `json:"publish,omitempty"` // "true" enables the static site (default off)
+	Pages       string `json:"pages,omitempty"`   // "true" enables the HTML page layer (needs publish + url)
+}
+
+// siteBoolString normalizes a raw guard value to "true"/"false" ("" when it is
+// neither — the guard is then treated as unset, i.e. off).
+func siteBoolString(v interface{}) string {
+	switch t := v.(type) {
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case string:
+		if s := strings.TrimSpace(t); s == "true" || s == "false" {
+			return s
+		}
+	}
+	return ""
 }
 
 // ValidSiteAccent reports whether v is a strict #rgb/#rrggbb hex color.
@@ -54,6 +83,34 @@ func ValidSiteAccent(v string) bool { return siteHexRe.MatchString(v) }
 // svg+xml) within the size cap.
 func ValidSiteFavicon(v string) bool {
 	return len(v) <= SiteFaviconMaxBytes && siteFaviconRe.MatchString(v)
+}
+
+// NormalizeSiteURL validates and normalizes a site base URL: absolute https
+// (http only for localhost/127.0.0.1, the locals3 dev loop), no query or
+// fragment, normalized to a trailing slash, within the length cap. Returns
+// ok=false when invalid.
+func NormalizeSiteURL(v string) (string, bool) {
+	v = strings.TrimSpace(v)
+	u, err := url.Parse(v)
+	if err != nil || u.Host == "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", false
+	}
+	switch u.Scheme {
+	case "https":
+	case "http":
+		if h := u.Hostname(); h != "localhost" && h != "127.0.0.1" {
+			return "", false
+		}
+	default:
+		return "", false
+	}
+	if !strings.HasSuffix(v, "/") {
+		v += "/"
+	}
+	if len(v) > SiteConfigMaxURL {
+		return "", false
+	}
+	return v, true
 }
 
 // validateSiteCustomization keeps only the fields that pass strict validation,
@@ -78,7 +135,25 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	if s, ok := raw["favicon"].(string); ok && ValidSiteFavicon(s) {
 		c.Favicon = s
 	}
-	if c.Title == "" && c.Accent == "" && c.AccentDark == "" && c.Favicon == "" {
+	if s, ok := raw["url"].(string); ok {
+		if norm, valid := NormalizeSiteURL(s); valid {
+			c.URL = norm
+		}
+	}
+	if s, ok := raw["description"].(string); ok {
+		s = strings.TrimSpace(s)
+		if len(s) > SiteConfigMaxDescription {
+			s = s[:SiteConfigMaxDescription]
+		}
+		c.Description = s
+	}
+	if v, ok := raw["publish"]; ok {
+		c.Publish = siteBoolString(v)
+	}
+	if v, ok := raw["pages"]; ok {
+		c.Pages = siteBoolString(v)
+	}
+	if c == (siteCustomization{}) {
 		return siteCustomization{}, false
 	}
 	return c, true

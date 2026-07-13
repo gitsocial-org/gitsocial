@@ -113,7 +113,7 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 
 // siteConfigKeys are the customization fields settable under the core config's
 // `site` sub-object, published as the static site's site-config.json artifact.
-var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true}
+var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "url": true, "description": true, "publish": true, "pages": true}
 
 // newSiteConfigCmd creates the `config site` group for the static-site
 // customization stored under the `site` sub-object of refs/gitmsg/core/config.
@@ -127,11 +127,18 @@ and published to the bucket as .gitsocial/site/site-config.json on the next
 ` + "`gitsocial site push`" + ` (or any push to a site-enabled bucket).
 
 Keys:
-  title       plain text shown in the tab title and header
-  accent      accent color, strict #rgb or #rrggbb hex (e.g. #0a7)
-  accentDark  optional accent color for dark mode (same hex form)
-  favicon     an image path (@path/to/icon.png) or a data: URI; png/webp/svg,
-              32KB max`,
+  title        plain text shown in the tab title and header
+  accent       accent color, strict #rgb or #rrggbb hex (e.g. #0a7)
+  accentDark   optional accent color for dark mode (same hex form)
+  favicon      an image path (@path/to/icon.png) or a data: URI; png/webp/svg,
+               32KB max
+  url          the site's public base URL, absolute https:// (http:// only for
+               localhost), no query/fragment; normalized to a trailing slash
+  description  plain text description of the site, 300 chars max
+  publish      true/false (default false): master switch for the static site;
+               unset or false, pushes move repo data only
+  pages        true/false (default false): the crawlable HTML page layer;
+               effective only with publish=true and a valid url`,
 	}
 	cmd.AddCommand(newSiteConfigGetCmd(), newSiteConfigSetCmd(), newSiteConfigListCmd())
 	return cmd
@@ -193,7 +200,7 @@ func newSiteConfigListCmd() *cobra.Command {
 				fmt.Println("No site customization set")
 				return
 			}
-			for _, k := range []string{"title", "accent", "accentDark", "favicon"} {
+			for _, k := range []string{"title", "accent", "accentDark", "favicon", "url", "description", "publish", "pages"} {
 				if v, ok := site[k].(string); ok && v != "" {
 					fmt.Printf("%s = %s\n", k, siteConfigDisplay(k, v))
 				}
@@ -214,11 +221,18 @@ func newSiteConfigSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a site customization value",
-		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon.
+		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon,
+url, description, publish, pages.
 
   accent / accentDark  strict #rgb or #rrggbb hex (e.g. #0a7 or #00dddd)
   favicon              @path/to/icon.png to read+encode a raw image (png/webp/
-                       svg), or a data: URI directly; 32KB max`,
+                       svg), or a data: URI directly; 32KB max
+  url                  absolute https:// URL (http:// only for localhost), no
+                       query/fragment; normalized to a trailing slash
+  description          plain text, 300 chars max
+  publish / pages      true or false (both default false): publish enables the
+                       static site; pages enables the crawlable HTML page layer
+                       (effective only with publish=true and a valid url)`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -227,7 +241,7 @@ func newSiteConfigSetCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			key, value := args[0], args[1]
 			if !siteConfigKeys[key] {
-				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon)", key))
+				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, url, description, publish, pages)", key))
 				os.Exit(ExitError)
 			}
 			resolved, err := resolveSiteConfigValue(key, value)
@@ -261,7 +275,8 @@ func newSiteConfigSetCmd() *cobra.Command {
 // resolveSiteConfigValue validates (and for a favicon, loads/encodes) a raw CLI
 // value into what is stored: accent colors must be strict hex; a favicon may be
 // an @path to a raw image (base64-encoded into a data URI) or a data URI, of an
-// allowed type (png/webp/svg+xml) within the 32KB cap.
+// allowed type (png/webp/svg+xml) within the 32KB cap; a url is normalized to a
+// trailing slash; a description is trimmed and length-checked.
 func resolveSiteConfigValue(key, value string) (string, error) {
 	switch key {
 	case "accent", "accentDark":
@@ -271,6 +286,27 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 		return value, nil
 	case "favicon":
 		return resolveFaviconValue(value)
+	case "url":
+		norm, ok := objstore.NormalizeSiteURL(value)
+		if !ok {
+			return "", fmt.Errorf("url must be an absolute https:// URL with no query or fragment (http:// only for localhost), got %q", value)
+		}
+		return norm, nil
+	case "description":
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return "", fmt.Errorf("description must not be empty")
+		}
+		if len(trimmed) > objstore.SiteConfigMaxDescription {
+			return "", fmt.Errorf("description too long: %d chars (max %d)", len(trimmed), objstore.SiteConfigMaxDescription)
+		}
+		return trimmed, nil
+	case "publish", "pages":
+		v := strings.ToLower(strings.TrimSpace(value))
+		if v != "true" && v != "false" {
+			return "", fmt.Errorf("%s must be true or false, got %q", key, value)
+		}
+		return v, nil
 	default:
 		return value, nil
 	}

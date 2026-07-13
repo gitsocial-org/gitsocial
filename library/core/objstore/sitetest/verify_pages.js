@@ -24,6 +24,10 @@ const fileEntry = (name, s) => ({ mode: "100644", name, sha: sha(s), type: "blob
 const dirEntry = (name, s) => ({ mode: "40000", name, sha: sha(s), type: "tree" });
 function treeBytes(entries) { const parts = []; for (const e of entries) parts.push(Buffer.from(e.mode + " " + e.name + "\0", "utf8"), Buffer.from(e.sha, "hex")); return new Uint8Array(Buffer.concat(parts)); }
 const HTML = fs.readFileSync(require("path").join(__dirname, "../site/index.html"), "utf8");
+// The shell's full CSS was extracted from index.html's inline <style> into
+// pages-app.css (shared with the upgraded pages since the M8 entry flip); CSS
+// rule assertions read it, markup/JS assertions still read index.html.
+const CSS = fs.readFileSync(require("path").join(__dirname, "../site/pages-app.css"), "utf8");
 const APP = fs.readFileSync(require("path").join(__dirname, "../site/gs-app.js"), "utf8");
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const TD = ORIGIN + "/" + (process.env.GS_SITE_BUCKET || "thread-demo") + "/";
@@ -45,7 +49,7 @@ function item2() {
   ok("mobile top bar present", /id="mobile-bar"/.test(HTML) && /class="mobile-bar"/.test(HTML));
   ok("hamburger button present (aria-controls=nav)", /id="nav-hamburger"[^>]*aria-controls="nav"/.test(HTML));
   ok("nav scrim present", /id="nav-scrim"/.test(HTML));
-  const media = HTML.slice(HTML.lastIndexOf("@media (max-width: 720px)"));
+  const media = CSS.slice(CSS.lastIndexOf("@media (max-width: 720px)"));
   ok("drawer: nav is a fixed slide-over (transform)", /\.nav\s*\{[^}]*position:\s*fixed[^}]*transform:\s*translateX\(-100%\)/.test(media.replace(/\n/g, " ")));
   ok("drawer opens on body.nav-open", /body\.nav-open\s+\.nav\s*\{[^}]*translateX\(0\)/.test(media.replace(/\n/g, " ")));
   ok("nav forced display:flex (collapse can't trap mobile)", /\.nav\s*\{[^}]*display:\s*flex\s*!important/.test(media.replace(/\n/g, " ")));
@@ -57,7 +61,7 @@ function item2() {
 
 async function item3() {
   console.log("\n--- Item 3: Full-width tree row click targets ---");
-  ok(".tree-dir cursor is pointer (full-row affordance)", /\.tree-dir\s*\{\s*cursor:\s*pointer/.test(HTML));
+  ok(".tree-dir cursor is pointer (full-row affordance)", /\.tree-dir\s*\{\s*cursor:\s*pointer/.test(CSS));
   const ctx = GS.newContext("http://x/");
   ctx.objects.set(sha(10), { type: "tree", body: treeBytes([fileEntry("a.go", 11)]) });
   const root = [dirEntry("src", 10), fileEntry("readme.md", 12)];

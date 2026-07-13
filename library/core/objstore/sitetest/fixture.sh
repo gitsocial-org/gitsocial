@@ -76,6 +76,10 @@ git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
 gg social init >/dev/null
 UP=$(gg --json social post "Original upstream idea: loose-object readers over dumb HTTP." | idof)
 gg remote add "s3://$HOST/other-demo" >/dev/null
+# The site is guard-gated (default off): enable publish locally so `site push`
+# runs. The config ref is deliberately NOT pushed and pages stay off, so
+# other-demo doubles as the guards-off page fixture (zero page keys).
+gg config site set publish true >/dev/null
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 gg site push >/dev/null
@@ -216,6 +220,13 @@ gg config site set title "Thread Demo" >/dev/null
 gg config site set accent "#0a7" >/dev/null
 gg config site set accentDark "#0dd" >/dev/null
 gg config site set favicon "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAf8QO7uMAAAAAElFTkSuQmCC" >/dev/null
+# The publish/pages guards (both default off) + the site base URL enable the
+# static site AND the crawlable HTML page layer (verify_html_pages.js). The url
+# carries the build-time locals3 port; suites derive the base from
+# site-config.json rather than hardcoding it.
+gg config site set publish true >/dev/null
+gg config site set pages true >/dev/null
+gg config site set url "http://127.0.0.1:$port/thread-demo/" >/dev/null
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
 gg site push >/dev/null
 
@@ -236,8 +247,12 @@ for B in interrupted-demo healed-demo; do
 	gg social post "First post before the interruption." >/dev/null
 	gg social post "Second post before the interruption." >/dev/null
 	gg remote add "s3://$HOST/$B" >/dev/null
+	# publish guard: locally for `site push`, and pushed (refs/gitmsg/*) so
+	# healed-demo's later plain heal push runs the helper's maintenance.
+	gg config site set publish true >/dev/null
 	git -C "$W" push -q origin main
 	git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
+	git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
 	gg site push >/dev/null
 	rm -f "$served/$B/.gitsocial/site/items/social/manifest.json" \
 		"$served/$B/.gitsocial/site/items/social/manifest.json.gsenc"
@@ -271,6 +286,7 @@ for B in partial-demo extended-demo; do
 		gg social post "Post number $i in the resumable bootstrap chain." >/dev/null
 	done
 	gg remote add "s3://$HOST/$B" >/dev/null
+	gg config site set publish true >/dev/null
 	git -C "$W" push -q origin main
 	git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 	gg site push >/dev/null
@@ -294,6 +310,7 @@ gg pm init >/dev/null
 gg pm issue create "Only-issue repo: no social corpus at all" -l "kind/task" >/dev/null
 gg pm issue create "Second issue so the board has cards" -l "kind/feature" >/dev/null
 gg remote add "s3://$HOST/sparse-demo" >/dev/null
+gg config site set publish true >/dev/null
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
@@ -311,6 +328,7 @@ printf 'main\n' >"$W/README.md"
 git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
 gg review init >/dev/null
 gg remote add "s3://$HOST/merged-demo" >/dev/null
+gg config site set publish true >/dev/null
 # feature branch adds CHANGELOG.md; main then advances so the merge is a true
 # merge commit (head tip = merge^2, reachable from no published branch ref).
 git -C "$W" switch -q -c feature/changelog

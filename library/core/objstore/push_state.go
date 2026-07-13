@@ -43,11 +43,26 @@ const sitePushStateKey = ".gitsocial/site/push-state"
 // sitePushState is the marker written after a full maintenance pass: the digest
 // of the (refs/ listing + HEAD) etags that pass observed, plus the embedded site
 // shell version, so a newer binary (different shell) still runs a full pass.
+// Pages records the HTML page layer's state that pass left behind
+// (sitePagesStateOff / sitePagesStateOn): a marker stamped by an older binary
+// (no pages field) or under a different pages schema never matches, so a pending
+// pages bootstrap can't be masked by a pre-pages marker.
 type sitePushState struct {
 	Version      int    `json:"version"`
 	ShellVersion string `json:"shellVersion"`
 	RefsDigest   string `json:"refsDigest"`
+	Pages        string `json:"pages,omitempty"`
 }
+
+// Pages-state vocabulary the marker records. sitePagesStateOff means the page
+// layer was off (and any stale page set deleted) when the pass finished;
+// sitePagesStateOn means it was fully generated at the current pages schema. A
+// config change that would flip the state also moves refs/gitmsg/core/config,
+// which the digest covers — so the marker check only needs to recognize its own
+// binary's vocabulary, never re-resolve the config.
+const sitePagesStateOff = "off"
+
+var sitePagesStateOn = fmt.Sprintf("v%d", sitePagesVersion)
 
 // sitePushStateVersion is the marker schema version; a marker at any other
 // version is treated as absent (runs a full pass).
@@ -118,16 +133,18 @@ func readSitePushState(client *Client, prefix string) (sitePushState, bool) {
 // costs extra work, never a wrong skip.
 func siteMaintenanceUpToDate(client *Client, prefix, shellVersion string) (upToDate bool, digest string) {
 	state, ok := readSitePushState(client, prefix)
-	if !ok || state.ShellVersion != shellVersion {
-		digest, err := refsHeadDigest(client, prefix)
-		if err != nil {
-			return false, ""
-		}
-		return false, digest
-	}
 	digest, err := refsHeadDigest(client, prefix)
 	if err != nil {
 		return false, ""
+	}
+	if !ok || state.ShellVersion != shellVersion {
+		return false, digest
+	}
+	// A marker without a recognizable pages state was stamped by a pages-unaware
+	// binary (or a different pages schema): it must not skip the pass that would
+	// generate (or clean up) the HTML page layer.
+	if state.Pages != sitePagesStateOff && state.Pages != sitePagesStateOn {
+		return false, digest
 	}
 	return digest == state.RefsDigest, digest
 }
@@ -135,13 +152,14 @@ func siteMaintenanceUpToDate(client *Client, prefix, shellVersion string) (upToD
 // writeSitePushState stamps the marker at the end of a successful full pass.
 // Best-effort: a write failure only means the NEXT push cannot skip (extra
 // work), never a wrong skip, so the error is swallowed by every caller. digest
-// may be "" when the pre-pass digest computation failed; in that case the marker
-// is left untouched (an empty digest can never match a real one).
-func writeSitePushState(client *Client, prefix, shellVersion, digest string) {
-	if digest == "" {
+// may be "" when the pre-pass digest computation failed, and pagesState "" when
+// the page layer's state couldn't be trusted; either way the marker is left
+// untouched (it can never validate, so writing it would be noise).
+func writeSitePushState(client *Client, prefix, shellVersion, digest, pagesState string) {
+	if digest == "" || pagesState == "" {
 		return
 	}
-	data, err := json.Marshal(sitePushState{Version: sitePushStateVersion, ShellVersion: shellVersion, RefsDigest: digest})
+	data, err := json.Marshal(sitePushState{Version: sitePushStateVersion, ShellVersion: shellVersion, RefsDigest: digest, Pages: pagesState})
 	if err != nil {
 		return
 	}

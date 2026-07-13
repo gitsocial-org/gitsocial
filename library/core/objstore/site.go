@@ -100,6 +100,37 @@ func siteVersion() (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
+// uploadShellFile puts one embedded site file (by its site/-relative name) with
+// its Content-Type, brotli-compressing the text assets like uploadSiteFiles.
+func uploadShellFile(client *Client, prefix, name string) error {
+	data, err := SiteFiles.ReadFile("site/" + name)
+	if err != nil {
+		return fmt.Errorf("read embedded %s: %w", name, err)
+	}
+	headers := map[string]string{"Content-Type": siteContentType(name)}
+	// Shell assets ship once per version, so pay full-quality brotli once.
+	if siteCompressible(name) {
+		compressed, err := brotliCompress(data, brotliQualityShard)
+		if err != nil {
+			return fmt.Errorf("compress %s: %w", name, err)
+		}
+		data = compressed
+		headers["Content-Encoding"] = "br"
+	}
+	resp, err := client.do(http.MethodPut, prefix+name, nil, data, headers)
+	if err != nil {
+		return fmt.Errorf("upload %s: %w", name, err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// uploadShellIndexHTML puts just the embedded shell index.html — the flip back
+// to the shell entry on the pages-disable path (see deleteSitePages).
+func uploadShellIndexHTML(client *Client, prefix string) error {
+	return uploadShellFile(client, prefix, "index.html")
+}
+
 // uploadSiteFiles puts every embedded site file plus the version marker.
 func uploadSiteFiles(client *Client, prefix string) error {
 	names, err := siteFileNames()
@@ -107,25 +138,9 @@ func uploadSiteFiles(client *Client, prefix string) error {
 		return err
 	}
 	for _, name := range names {
-		data, err := SiteFiles.ReadFile("site/" + name)
-		if err != nil {
-			return fmt.Errorf("read embedded %s: %w", name, err)
+		if err := uploadShellFile(client, prefix, name); err != nil {
+			return err
 		}
-		headers := map[string]string{"Content-Type": siteContentType(name)}
-		// Shell assets ship once per version, so pay full-quality brotli once.
-		if siteCompressible(name) {
-			compressed, err := brotliCompress(data, brotliQualityShard)
-			if err != nil {
-				return fmt.Errorf("compress %s: %w", name, err)
-			}
-			data = compressed
-			headers["Content-Encoding"] = "br"
-		}
-		resp, err := client.do(http.MethodPut, prefix+name, nil, data, headers)
-		if err != nil {
-			return fmt.Errorf("upload %s: %w", name, err)
-		}
-		resp.Body.Close()
 	}
 	// The shell now ships every Prism grammar under grammars/ and lazy-loads
 	// them, so the old push-published prism-extra.js bundle is obsolete. Delete
@@ -147,13 +162,11 @@ func uploadSiteFiles(client *Client, prefix string) error {
 // so it doesn't linger on buckets first pushed by an older binary.
 const obsoletePrismExtraKey = ".gitsocial/site/prism-extra.js"
 
-// siteEnabled reports whether the bucket carries the static read surface. The
-// version marker is the cheap signal (present ⇒ enabled, and its value is
-// returned so refreshSiteIfEnabled can skip re-uploading a current shell); when
-// it is absent the shell's index.html HEAD decides (a pre-version-marker
-// bucket). A non-site bucket (plain s3:// git remote) reports false so the push
-// path skips every site-only artifact (refs manifest, item/body corpora), never
-// accumulating files it will not serve.
+// siteEnabled reports whether the bucket carries the static read surface — the
+// signal behind the "bucket has a site but site.publish is off" hint. The
+// version marker is the cheap check (present ⇒ enabled, and its value is
+// returned); when it is absent the shell's index.html HEAD decides (a
+// pre-version-marker bucket).
 func siteEnabled(client *Client, prefix string) (enabled bool, markerVersion string, err error) {
 	current, err := client.Get(prefix + siteVersionKey)
 	switch {
@@ -174,23 +187,26 @@ func siteEnabled(client *Client, prefix string) (enabled bool, markerVersion str
 	}
 }
 
-// refreshSiteIfEnabled re-uploads the site files when the bucket carries a
-// site whose version differs from this binary's embedded copy (last writer
-// wins across mixed binary versions). Buckets without a site are left alone;
-// the one-time existence probe only runs while the version marker is absent.
-func refreshSiteIfEnabled(client *Client, prefix string) error {
+// ensureSiteShell uploads the embedded site files when the bucket's version
+// marker is absent or differs from this binary's embedded copy (last writer
+// wins across mixed binary versions). With the site.publish guard on, this is
+// what creates the shell on a bucket that has none — the guard travels with
+// the repo, so a plain `git push` carrying it bootstraps the site too. Returns
+// uploaded=true when it re-shipped the assets, so a caller can reclaim any
+// dual-owned key (index.html) the fresh upload just overwrote.
+func ensureSiteShell(client *Client, prefix string) (uploaded bool, err error) {
 	version, err := siteVersion()
 	if err != nil {
-		return err
+		return false, err
 	}
-	enabled, marker, err := siteEnabled(client, prefix)
-	if err != nil {
-		return err
+	current, err := client.Get(prefix + siteVersionKey)
+	if err == nil && strings.TrimSpace(string(current)) == version {
+		return false, nil
 	}
-	if !enabled || marker == version {
-		return nil
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return false, fmt.Errorf("read site version: %w", err)
 	}
-	return uploadSiteFiles(client, prefix)
+	return true, uploadSiteFiles(client, prefix)
 }
 
 // readSiteDefaultBranch returns the repo's default branch name from the bucket's
@@ -280,18 +296,29 @@ func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error
 // repairing, or advancing a bootstrap as the current state demands) so buckets
 // pushed by older gitsocial versions render fully right away.
 //
+// The workspace's site.publish guard (the `site` sub-object of the local
+// refs/gitmsg/core/config — the same value the data push publishes) is the only
+// enabler: unset/false returns published=false and touches nothing, printing a
+// one-line hint via progress when the bucket already carries a site.
+//
 // workdir is the local checkout the site push runs from (env.GitDir is used when
 // set instead): the items walk reads commits from that repo's odb rather than a
 // per-commit bucket GET, since every commit it visits is an ancestor of a bucket
 // ref tip and so present locally too. Empty (and no GIT_DIR) ⇒ bucket-only walk.
-func PushSite(remoteURL string, env HelperEnv, workdir string, progress Progress) error {
+func PushSite(remoteURL string, env HelperEnv, workdir string, progress Progress) (published bool, err error) {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
-		return err
+		return false, err
+	}
+	if cfg, err := ReadWorkspaceSiteCustomization(workdir); err != nil || cfg.Publish != "true" {
+		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
+			progress.call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
+		}
+		return false, nil
 	}
 	src := newLocalCommitSource(env.GitDir, workdir)
 	defer src.close()
-	return pushSite(client, prefix, src, progress)
+	return true, pushSite(client, prefix, src, progress)
 }
 
 // pushSite is PushSite over a resolved client/prefix (the unit-testable core).
@@ -327,16 +354,33 @@ func pushSite(client *Client, prefix string, src *localCommitSource, progress Pr
 	if err := writeSiteCustomization(client, prefix, refs); err != nil {
 		return err
 	}
-	if err := rebuildSiteItems(client, prefix, refs, readSiteDefaultBranch(client, prefix), src, progress); err != nil {
+	defaultBranch := readSiteDefaultBranch(client, prefix)
+	if err := rebuildSiteItems(client, prefix, refs, defaultBranch, src, progress); err != nil {
 		return err
+	}
+	// The HTML page layer projects the item artifacts written above, so it runs
+	// after them — but only once the items index is complete: one bootstrap at a
+	// time, and pages generated from a partial index would claim a wrong prefix.
+	itemsPending := siteItemsBootstrapPending(client, prefix, refs)
+	pagesPending, pagesState := itemsPending, ""
+	if !itemsPending {
+		var err error
+		if pagesPending, pagesState, err = rebuildSitePages(client, prefix, refs, defaultBranch, src, progress); err != nil {
+			return err
+		}
+	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs); err == nil {
+		if _, on := sitePagesEffective(cfg, ok); on {
+			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial site push`)", 1, 1)
+		}
 	}
 	// Stamp the marker LAST, only after a fully successful pass, so an interrupted
 	// pass leaves the marker stale-or-absent and the next push redoes the work. An
-	// in-progress bootstrap (an incomplete items index) is NOT a finished pass: it
-	// has older segments to backfill that no ref move signals, so leave the marker
-	// unstamped and let the next push advance it rather than skip.
-	if !siteItemsBootstrapPending(client, prefix, refs) {
-		writeSitePushState(client, prefix, shellVersion, skipDigest)
+	// in-progress bootstrap (an incomplete items index, or an incomplete page set
+	// still under its budget cursor) is NOT a finished pass: it has more work no
+	// ref move signals, so leave the marker unstamped and let the next push
+	// advance it rather than skip.
+	if !itemsPending && !pagesPending {
+		writeSitePushState(client, prefix, shellVersion, skipDigest, pagesState)
 	}
 	return nil
 }
