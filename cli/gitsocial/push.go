@@ -83,24 +83,29 @@ Examples:
 				fmt.Println("Dry run - no changes will be pushed")
 			}
 
-			// First-publish line: bare push to an empty remote bootstraps the whole
+			// Immediate start line (resolution is local git config), then the
+			// first-publish line: bare push to an empty remote bootstraps the whole
 			// bucket. Detected before the push (one refs listing); printed for the
 			// human, suppressed under --json.
 			if !cfg.JSONOutput && !dryRun {
 				resolved := clientpush.ResolveRemote(cfg.WorkDir, remote)
+				fmt.Printf("Pushing to %s ...\n", resolved)
 				if gitmsg.RemoteIsEmpty(cfg.WorkDir, resolved) {
 					fmt.Printf("Publishing to empty remote %q ...\n", resolved)
 				}
 			}
 
-			// Live site-upload progress to stderr (same policy as the git-spawned
-			// helper); suppressed under --json so machine output stays clean.
+			// Live per-branch and site-upload progress to stderr (same policy as
+			// the git-spawned helper); suppressed under --json so machine output
+			// stays clean.
 			var siteProgress objstore.Progress
+			var onBranch gitmsg.PushBranchProgress
 			siteDone := func() {}
 			if !cfg.JSONOutput {
 				siteProgress, siteDone = objstore.StderrProgress()
+				onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
 			}
-			result, err := clientpush.Publish(cfg.WorkDir, opts, nil, siteProgress)
+			result, err := clientpush.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
 			siteDone()
 			if err != nil {
 				PrintError(cmd, err.Error())
