@@ -50,7 +50,7 @@ func codeCorpusEntries(t *testing.T, client *Client) []siteMetaEntry {
 	if err != nil || m == nil {
 		t.Fatalf("code manifest: %v (nil=%v)", err, m == nil)
 	}
-	var out []siteMetaEntry
+	out := make([]siteMetaEntry, 0, len(m.Shards))
 	for _, s := range m.Shards {
 		entries, err := readItemsHeadEntries(client, siteItemsDir(siteCodeExt)+s.Key)
 		if err != nil {
