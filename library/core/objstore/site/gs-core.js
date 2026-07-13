@@ -3076,7 +3076,9 @@
   // searchItemsFaceted runs the in-bucket search with faceting. `query` may carry
   // typed filters; `filters` holds the clicked-chip selections as
   // { type, state, author, label } Sets. Returns the extension-grouped results
-  // (every active field applied) plus per-field facet buckets whose counts are
+  // (every active field applied), the same hits as a `flat` recency-ordered lane
+  // ({item, group} pairs — the default presentation), plus per-field facet
+  // buckets whose counts are
   // drill-down (each field counted with the OTHER fields applied), so a chip shows
   // how many results it would add. Honest over the loaded corpus. An idle query
   // (no terms, no typed, no chips) yields empty results and no facets.
@@ -3114,13 +3116,19 @@
     }
     const passes = (row, skip) => FACET_FIELDS.every((fld) => fld === skip || matchesFacet(row.it, row.ext, fld, chip[fld], typed[fld]));
     const byExt = new Map();
+    const flat = [];
     let total = 0;
     for (const row of pool) {
       if (!passes(row, null)) continue;
       let g = byExt.get(row.spec.ext);
       if (!g) { g = { ext: row.spec.ext, label: row.spec.label, branch: row.spec.branch, count: 0, items: [] }; byExt.set(row.spec.ext, g); }
       g.items.push(row.it); g.count++; total++;
+      flat.push({ item: row.it, group: g });
     }
+    // The flat lane is the default presentation: recency across ALL groups so a
+    // yesterday's commit is never buried under an old release, with hash hits
+    // and subject matches still surfaced first within the same relevance rank.
+    flat.sort((a, b) => (searchRelevance(b.item, terms, hashes) - searchRelevance(a.item, terms, hashes)) || (b.item.effectiveTime - a.item.effectiveTime));
     const groups = [];
     // Within a group, rank by relevance (hash hit, then subject over body-only),
     // then recency — a cheap relevance sort over the today-recency-only order.
@@ -3141,7 +3149,7 @@
       facets[fld] = Array.from(counts, ([value, count]) => ({ value, count, selected: facetSelected(fld, value, chip[fld], typed[fld]) }))
         .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
     }
-    return { query: (query || "").trim().toLowerCase(), terms, total, groups, facets };
+    return { query: (query || "").trim().toLowerCase(), terms, total, groups, flat, facets };
   }
 
   // searchItems is the facet-free entry point (backward-compatible shape) the

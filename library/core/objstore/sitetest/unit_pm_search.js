@@ -89,6 +89,14 @@ const r = GS.searchItems("dark", perExt);
 eq(r.total, 3, "dark matches issue+PR+post subjects (feedback excluded by pull-request type filter)");
 eq(r.groups.map((x) => x.label + ":" + x.count), ["Issues:1", "Pull Requests:1", "Posts:1"], "grouped by extension, ordered, per-group counts");
 ok(r.groups.every((x) => x.branch), "each group carries its data branch for the detail link");
+// flat lane: the default presentation is recent-first across ALL types, so a
+// newer post outranks an older PR and issue instead of sinking below its group
+const flat = GS.searchItemsFaceted("dark", perExt, null).flat;
+eq(flat.map((f) => f.item.commit.short), [H("5"), H("3"), H("1")], "flat lane is recent-first across types");
+ok(flat.every((f) => f.group && f.group.ext && f.group.branch), "flat entries carry their group for the glyph and detail link");
+// a hash-prefix hit is pinned above newer non-hash matches in the flat lane
+const flatHash = GS.searchItemsFaceted(perExt.pm[0].commit.hash.slice(0, 8) + " dark", perExt, null).flat;
+eq(flatHash.length && flatHash[0].item.commit.short, H("1"), "hash-prefix hit pinned first in the flat lane");
 // author search
 eq(GS.searchItems("ada", perExt).total, 2, "author 'Ada' matches her two pm items");
 // label search

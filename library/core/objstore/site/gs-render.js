@@ -3050,17 +3050,23 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, group.branch);
   }
 
-  // searchResults renders the grouped result list: a per-extension header with a
-  // match count, then the hit cards. The "no results" empty state names the query.
-  function searchResults(res, query) {
+  // searchResults renders the result list: by default the flat recency-ordered
+  // lane (each card carries its type glyph, so type stays visible without the
+  // headers); `grouped` switches to the per-extension sections with match
+  // counts. The "no results" empty state names the query.
+  function searchResults(res, query, grouped) {
     if (!res.total) {
       const shown = query || res.query;
       return [el("div", { class: "empty" }, [shown ? "No results for “" + shown + "”." : "No items match the selected filters."])];
     }
     const out = [];
-    for (const g of res.groups) {
-      out.push(el("div", { class: "search-group-head mono" }, [g.label + " (" + g.count + ")"]));
-      for (const it of g.items) out.push(searchResultCard(it, g, query));
+    if (grouped) {
+      for (const g of res.groups) {
+        out.push(el("div", { class: "search-group-head mono" }, [g.label + " (" + g.count + ")"]));
+        for (const it of g.items) out.push(searchResultCard(it, g, query));
+      }
+    } else {
+      for (const f of res.flat) out.push(searchResultCard(f.item, f.group, query));
     }
     return out;
   }
@@ -3087,8 +3093,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function focusSearchInput() { if (searchInputEl && searchInputEl.focus) { searchInputEl.focus(); return true; } return false; }
 
   // searchView renders the in-bucket item search (#/search): a debounced query
-  // input over the already-walked items of every extension, results grouped by
-  // extension with per-group counts and highlighted matches, and an honest scope
+  // input over the already-walked items of every extension, results recent-first
+  // across all types (a toggle restores per-extension sections), and an honest scope
   // humanBytes formats a byte count as a compact KB/MB string (one decimal for MB).
   function humanBytes(n) {
     if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
@@ -3119,6 +3125,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // filters in the query box) and which facets the user expanded past the cap.
     const filters = { type: new Set(), state: new Set(), author: new Set(), label: new Set() };
     let facetExpanded = {};
+    let grouped = false;
     const FACET_UI = [["type", "Type"], ["state", "State"], ["author", "Author"], ["label", "Labels"]];
     const FACET_CAP = 8;
     // facetChip renders one clickable value chip with its drill-down count; a
@@ -3201,7 +3208,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const nodes = [];
       const facetBox = renderFacets(res);
       if (facetBox) nodes.push(facetBox);
-      for (const n of searchResults(res, res.terms)) nodes.push(n);
+      // Results are recent-first across all types by default; the toggle
+      // restores the per-extension sections.
+      const groupBtn = el("button", { class: "facet-chip" + (grouped ? " selected" : ""), type: "button" }, ["Group by type"]);
+      groupBtn.addEventListener("click", () => { grouped = !grouped; draw(); });
+      nodes.push(el("div", { class: "facet-row search-sort" }, [groupBtn]));
+      for (const n of searchResults(res, res.terms, grouped)) nodes.push(n);
       results.replaceChildren(...nodes);
       renderDeeper();
     }
