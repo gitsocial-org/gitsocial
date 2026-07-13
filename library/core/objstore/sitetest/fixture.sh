@@ -182,7 +182,10 @@ gg social fetch "s3://$HOST/other-demo" >/dev/null
 gg social quote "s3://$HOST/other-demo#commit:$UP@gitmsg/social" "Great point from upstream, quoting for the thread." >/dev/null
 
 # a lightweight and an annotated tag, so the site's Tags page has both shapes
-# (the annotated tag must be peeled through its tag object to a commit).
+# (the annotated tag must be peeled through its tag object to a commit), plus
+# an earlier tag two commits back so the tag page's commits-since-previous-tag
+# list and files-changed-since-previous-tag diff have a real span to render.
+git -C "$W" tag v0.9 main~2
 git -C "$W" tag v1.0-light main
 git -C "$W" tag -a v1.0 -m "First public release" main
 

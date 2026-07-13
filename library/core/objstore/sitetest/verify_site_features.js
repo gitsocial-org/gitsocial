@@ -82,8 +82,23 @@ async function main() {
   await route("#tag:v1.0");
   ok("annotated tag v1.0 peels to its commit (detail renders, not 'unreachable')", findClass(viewNode, "detail").length > 0 && !/unreachable|not found/i.test(textOf(viewNode)), textOf(viewNode).slice(0, 80));
   ok("annotated tag shows its annotation message", /First public release/.test(textOf(viewNode)) || findClass(viewNode, "tag-annotation").length > 0, textOf(viewNode).slice(0, 80));
+  // v1.0's previous tag (version order) is v1.0-light at the same commit: the
+  // commits-since section renders with its empty state and a compare link.
+  ok("tag page shows a commits-since-previous-tag section", /Commits since v1\.0-light/.test(textOf(viewNode)), textOf(viewNode).slice(-120));
+  ok("same-commit previous tag yields the empty state", /No commits since v1\.0-light/.test(textOf(viewNode)), textOf(viewNode).slice(-120));
+  ok("tag page links a compare against the previous tag", findClass(viewNode, "action-link").some((a) => (a.getAttribute("href") || "").includes("compare")), findClass(viewNode, "action-link").map((a) => a.getAttribute("href")).join(","));
   await route("#tag:v1.0-light");
   ok("lightweight tag resolves straight to its commit", findClass(viewNode, "detail").length > 0 && !/unreachable/i.test(textOf(viewNode)));
+  // v1.0-light's previous tag is v0.9, two commits back on main: the commits
+  // section lists that span as milestone-style member one-liners and the page
+  // diffs against the previous tag.
+  const tagRows = findClass(viewNode, "pm-member");
+  ok("tag page lists the commits since the previous tag as member one-liners", /Commits since v0\.9 \(\d/.test(textOf(viewNode)) && tagRows.length > 0, String(tagRows.length));
+  ok("tag page diffs against the previous tag", findClass(viewNode, "diff-section").length > 0 && /Files changed since v0\.9/.test(textOf(viewNode)), textOf(viewNode).slice(-120));
+  await route("#tag:v0.9");
+  const oldestRows = findClass(viewNode, "pm-member");
+  ok("oldest tag lists its full history in the commits section", oldestRows.length > 0, String(oldestRows.length));
+  ok("oldest tag has no diff section (nothing to diff against)", findClass(viewNode, "diff-section").length === 0, String(findClass(viewNode, "diff-section").length));
 
   // ---- search deep-link initializes and executes ----
   await route("#/search/" + encodeURIComponent("onboarding"));

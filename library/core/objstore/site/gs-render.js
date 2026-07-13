@@ -3770,28 +3770,104 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
-  // tagDetail resolves one tag by name (#tag:<name>) to its commit and renders
-  // the commit detail. An annotated tag is peeled to its commit (peelTag chases
-  // the tag object's `object` line); a lightweight tag points straight at the
-  // commit. Shows the annotation message (annotated tags) above the commit. Not
-  // found when the tag is absent from the manifest or its object is unreachable.
+  // parseTagger parses a raw tag-object tagger line value ("Name <email> ts tz")
+  // into { name, email, time }; null when absent or unparseable (lightweight
+  // tags have no tag object, so no tagger).
+  function parseTagger(tagger) {
+    const m = /^(.*) <([^>]*)> (\d+) /.exec(tagger || "");
+    return m ? { name: m[1], email: m[2], time: parseInt(m[3], 10) } : null;
+  }
+
+  // tagDetail renders the tag page (#tag:<name>) milestone-shaped: a tag-centric
+  // header (name, signed chip, annotation message, tagger — or the tagged
+  // commit's author for lightweight tags — and a link row to the tagged commit),
+  // then the commits the tag introduces over the previous tag (version order,
+  // the changelog neighbor), then the file diff against that previous tag —
+  // three-dot semantics like the compare page, not the tagged commit's own
+  // diff. An annotated tag is peeled to its commit (peelTag chases the tag
+  // object's `object` line); a lightweight tag points straight at the commit.
+  // Not found when the tag is absent from the manifest or unreachable.
   async function tagDetail(ctx, name) {
     const tags = await listTags(ctx);
     const t = tags.find((x) => x.name === name);
     if (!t) return [el("div", { class: "err" }, ["Tag not found: " + name])];
     const peeled = await peelTag(ctx, t.sha);
     if (!peeled.commit) return [el("div", { class: "err" }, ["Tag target unreachable: " + name])];
-    const nodes = await commitDetail(ctx, peeled.commit);
-    if ((peeled.message || peeled.signed) && nodes[0] && nodes[0].insertBefore) {
-      const chips = [el("span", { class: "chip" }, ["tag " + name])];
-      // The PGP/SSH signature block is stripped from the annotation (peelTag);
-      // a small unobtrusive chip stands in for it rather than dumping the armor.
-      if (peeled.signed) chips.push(el("span", { class: "chip chip-signed" }, ["✓ signed"]));
-      const banner = el("div", { class: "tag-annotation" }, chips);
-      if (peeled.message) banner.append(el("div", { class: "body" }, [peeled.message]));
-      nodes[0].insertBefore(banner, nodes[0].children[1] || null);
+    const cobj = await getObject(ctx, peeled.commit);
+    const c = cobj && cobj.type === "commit" ? parseCommit(peeled.commit, cobj.body) : null;
+
+    const wrap = el("div", { class: "detail" }, []);
+    wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/tags") }, ["← back"]));
+    const subject = el("div", { class: "subject" }, [name]);
+    // The PGP/SSH signature block is stripped from the annotation (peelTag);
+    // a small unobtrusive chip stands in for it rather than dumping the armor.
+    if (peeled.signed) subject.append(" ", el("span", { class: "chip chip-signed" }, ["✓ signed"]));
+    wrap.append(subject);
+    const meta = el("span", { class: "meta" }, []);
+    const tagger = parseTagger(peeled.tagger);
+    if (tagger) meta.append(authorEl(tagger.name, tagger.email), " · ", timeEl(tagger.time), " · ");
+    else if (c) meta.append(commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ");
+    const cLink = el("a", { class: "hash", href: commitRef(peeled.commit, "") }, [peeled.commit.slice(0, 12)]);
+    meta.append("tagged commit ", cLink);
+    if (c) meta.append(" ", el("a", { href: commitRef(peeled.commit, "") }, [subjectBody(c.content)[0] || ""]));
+    wrap.append(el("div", { class: "detail-meta" }, [meta]));
+    if (peeled.message) wrap.append(el("div", { class: "tag-annotation" }, [el("div", { class: "body" }, [peeled.message])]));
+
+    const idx = tags.findIndex((x) => x.name === name);
+    const prev = idx >= 0 ? tags[idx + 1] : undefined;
+    const prevCommit = prev ? (await peelTag(ctx, prev.sha)).commit : null;
+    if (prevCommit) wrap.append(el("div", { class: "page-actions" }, [
+      el("a", { class: "action-link", href: compareRef(prev.name, name) }, ["⇄ compare with " + prev.name]),
+    ]));
+    wrap.append(await tagCommitsSection(ctx, prev, prevCommit, peeled.commit));
+
+    // File diff against the previous tag, three-dot like compareView: merge-base
+    // (normally the previous tag itself on linear history) vs this tag's tree.
+    // Skipped for the oldest tag (nothing to diff against) and for a previous
+    // tag on the same commit (empty by definition).
+    if (prevCommit && prevCommit !== peeled.commit) {
+      const mb = await mergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
+      const headTree = await commitTree(ctx, peeled.commit);
+      const baseTree = await commitTree(ctx, mb || prevCommit);
+      if (headTree && baseTree) {
+        const entries = await diffTrees(ctx, baseTree, headTree);
+        wrap.append(diffSection(ctx, entries, "Files changed since " + prev.name, mb ? [] : ["no common ancestor — raw two-dot diff"]));
+      }
     }
-    return nodes;
+    return [wrap];
+  }
+
+  // commitMemberRow is a compact short-hash + linked-subject one-liner for a
+  // commit listed on the tag page — the milestone member-row style
+  // (issueMemberRow), with the mono hash standing in the state chip's slot.
+  function commitMemberRow(c) {
+    return el("div", { class: "pm-member" }, [
+      el("a", { class: "hash mono", href: commitRef(c.hash, "") }, [c.short]),
+      el("a", { href: commitRef(c.hash, "") }, [subjectBody(c.content)[0] || "(no message)"]),
+    ]);
+  }
+
+  // tagCommitsSection lists the commits a tag introduces over the previous tag:
+  // commits reachable from the tag's commit but not from the previous tag's,
+  // newest-first, paged, as milestone-style member one-liners under a counted
+  // "Commits since <prev> (n)" header (the count grows with each loaded window;
+  // the Load more control itself signals a deeper history). The oldest tag — or
+  // one whose previous tag can't be peeled to a commit — lists the tag's full
+  // history instead.
+  async function tagCommitsSection(ctx, prev, prevCommit, commit) {
+    const countEl = el("span", {}, ["0"]);
+    const label = prevCommit ? "Commits since " + prev.name : "Commits";
+    const head = el("div", { class: "pm-members-head mono" }, [label + " (", countEl, ")"]);
+    const wrap = el("div", { class: "pm-members" }, [head]);
+    const first = await loadCompareCommitsWindow(ctx, prevCommit || "", commit, false);
+    if (!first.items.length) wrap.append(el("div", { class: "empty" }, [prevCommit ? "No commits since " + prev.name + "." : "No commits."]));
+    else for (const n of pagedListView(first,
+      (commits, box) => {
+        countEl.textContent = String(commits.length);
+        box.replaceChildren(...commits.map(commitMemberRow));
+      },
+      () => loadCompareCommitsWindow(ctx, prevCommit || "", commit, true))) wrap.append(n);
+    return wrap;
   }
 
   // branchLogCard renders one commit row for the branch log (subject + author/
