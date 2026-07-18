@@ -999,9 +999,14 @@
   .graph-gutter-wrap { flex: 0 0 auto; }
   .graph-gutter { display: block; }
   .graph-text-col { flex: 1 1 auto; min-width: 0; }
-  .graph-line { display: flex; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
+  .graph-line { display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
   .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 0.5rem; min-width: 0; width: 100%; }
   .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* One fixed-height row must stay one line: a long branch name (dependabot/…)
+     gets a single-line ellipsis cap instead of wrapping over neighboring rows,
+     and chips shrink to a readable stub before they crush the subject (the
+     full name rides the title tooltip; a crowded row ends in a +N chip). */
+  .graph-row-text .chip { flex: 0 1 auto; min-width: 3.5rem; max-width: 14rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .graph-meta { flex: 0 0 auto; }
   .branch-tip { background: color-mix(in srgb, var(--link) 18%, transparent); color: var(--link); }
   .branch-tip.default { background: var(--link); color: var(--bg); }

@@ -4106,19 +4106,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // shas — rendered dashed/dimmed since the ref is historical, linked to the PR
   // detail when the canonical PR sha is known, and suppressed when the same
   // name is already on the row as a live tip.
+  // A row keeps at most GRAPH_ROW_CHIPS decorations; the rest fold into one
+  // "+N" chip whose tooltip lists them, so a many-branch mirror (dozens of
+  // bot-branch tips) can't crowd the hash/subject out of the fixed-height row.
+  const GRAPH_ROW_CHIPS = 3;
   function graphRefChips(hash, decor) {
     if (!decor) return [];
     const chips = [];
+    const push = (name, node) => chips.push({ name, node });
     const live = decor.tips[hash] || [];
-    for (const name of live) chips.push(el("span", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : "") }, [name]));
-    for (const name of decor.tags[hash] || []) chips.push(el("span", { class: "chip tag-tip" }, [name]));
+    for (const name of live) push(name, el("span", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : ""), title: name }, [name]));
+    for (const name of decor.tags[hash] || []) push(name, el("span", { class: "chip tag-tip", title: name }, [name]));
     for (const m of decor.merged || []) {
       if (!hash.startsWith(m.short) || live.includes(m.name)) continue;
-      chips.push(m.prSha
-        ? el("a", { class: "chip branch-tip merged-branch", href: commitRef(m.prSha, "gitmsg/review"), title: "merged pull request" }, [m.name])
-        : el("span", { class: "chip branch-tip merged-branch", title: "merged pull request" }, [m.name]));
+      push(m.name, m.prSha
+        ? el("a", { class: "chip branch-tip merged-branch", href: commitRef(m.prSha, "gitmsg/review"), title: m.name + " (merged pull request)" }, [m.name])
+        : el("span", { class: "chip branch-tip merged-branch", title: m.name + " (merged pull request)" }, [m.name]));
     }
-    return chips;
+    if (chips.length <= GRAPH_ROW_CHIPS) return chips.map((c) => c.node);
+    const rest = chips.slice(GRAPH_ROW_CHIPS).map((c) => c.name);
+    return chips.slice(0, GRAPH_ROW_CHIPS).map((c) => c.node)
+      .concat(el("span", { class: "chip branch-tip", title: rest.join("\n") }, ["+" + rest.length]));
   }
 
   // graphRowText builds the text column for one graph row: ref decoration chips
