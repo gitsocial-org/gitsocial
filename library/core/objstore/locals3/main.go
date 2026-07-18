@@ -6,8 +6,11 @@
 // stored as files under <root>/<key>; path-style requests carry the bucket name
 // as the first path segment, so each first path segment = bucket = directory
 // under -root (bucket "showcase" lands at <root>/showcase/). ETags are the md5
-// of the on-disk content. Standalone: stdlib only, no repo deps, so it compiles
-// under `go build ./...` without affecting anything else.
+// of the on-disk content. GETs also serve the pushed static site browsably
+// (extension-derived Content-Type, trailing-slash directory index), so one
+// port is the whole local provider — git remote and website — like a real
+// bucket. Standalone: stdlib only, no repo deps, so it compiles under
+// `go build ./...` without affecting anything else.
 package main
 
 import (
@@ -72,6 +75,35 @@ func cacheControlFor(key string) string {
 	return "no-cache"
 }
 
+// contentTypes maps served file extensions to Content-Type (mirrors
+// sitetest/serve.js): real buckets serve the type stored at upload, and the
+// browser needs it to apply stylesheets and scripts — Go's sniffing calls
+// CSS/JS text/plain, which browsers refuse. Extension-derived so locals3
+// stays a plain file tree (no per-object metadata beyond .gsenc).
+var contentTypes = map[string]string{
+	".html":  "text/html; charset=utf-8",
+	".js":    "text/javascript; charset=utf-8",
+	".json":  "application/json",
+	".css":   "text/css; charset=utf-8",
+	".xml":   "application/xml",
+	".txt":   "text/plain; charset=utf-8",
+	".md":    "text/markdown; charset=utf-8",
+	".png":   "image/png",
+	".gif":   "image/gif",
+	".jpg":   "image/jpeg",
+	".svg":   "image/svg+xml",
+	".woff2": "font/woff2",
+}
+
+// contentTypeFor returns the Content-Type for a key (octet-stream when the
+// extension is unknown — loose objects, ref keys).
+func contentTypeFor(key string) string {
+	if t, ok := contentTypes[strings.ToLower(filepath.Ext(key))]; ok {
+		return t
+	}
+	return "application/octet-stream"
+}
+
 // isHex reports whether s is non-empty and all hex digits.
 func isHex(s string) bool {
 	if s == "" {
@@ -89,6 +121,12 @@ func isHex(s string) bool {
 // handle implements the GET/PUT/DELETE + ListObjectsV2 surface under a lock.
 func handle(w http.ResponseWriter, r *http.Request) {
 	key := strings.TrimPrefix(r.URL.Path, "/")
+	// Directory index for browsing: a trailing-slash GET/HEAD answers with its
+	// index.html, so the pushed static site is browsable straight off this port
+	// (one endpoint serves both the S3 API and the website, like a real bucket).
+	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasSuffix(key, "/") && r.URL.RawQuery == "" {
+		key += "index.html"
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	switch r.Method {
@@ -142,6 +180,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		etag := etagOf(body)
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Cache-Control", cacheControlFor(key))
+		w.Header().Set("Content-Type", contentTypeFor(key))
 		if enc := readEnc(path); enc != "" {
 			w.Header().Set("Content-Encoding", enc)
 		}
@@ -161,6 +200,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("ETag", etagOf(body))
 		w.Header().Set("Cache-Control", cacheControlFor(key))
+		w.Header().Set("Content-Type", contentTypeFor(key))
 		// Content-Length lets the pusher's skip-existing check read a sealed
 		// shard's stored size from a HEAD alone (real buckets set it too).
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
@@ -208,7 +248,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 // main binds the listener (ephemeral by default) and serves until killed.
 func main() {
-	addr := flag.String("addr", "127.0.0.1:0", "listen address")
+	// 9000 is the S3-ecosystem convention (MinIO's default) and gives a stable
+	// port for persisted s3://localhost:9000/… remote URLs; tests that need
+	// collision-free parallel servers pass -addr 127.0.0.1:0 explicitly.
+	addr := flag.String("addr", "127.0.0.1:9000", "listen address")
 	flag.StringVar(&root, "root", "", "bucket root directory")
 	flag.Parse()
 	if root == "" {
