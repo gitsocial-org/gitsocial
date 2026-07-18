@@ -167,7 +167,9 @@ func isR2AccountID(s string) bool {
 // name an endpoint host (bare bucket names) are invalid and normalize to "".
 func canonicalS3URL(rawURL string) string {
 	u, err := url.Parse(rawURL)
-	if err != nil || !strings.Contains(u.Host, ".") {
+	// A dot or a port marks a real endpoint host; a bare bucket name has neither
+	// (bucket names can't contain ":"), so localhost:8000 passes and s3://bucket/repo doesn't.
+	if err != nil || (!strings.Contains(u.Host, ".") && !strings.Contains(u.Host, ":")) {
 		return ""
 	}
 	authority := strings.ToLower(u.Host)

@@ -14,10 +14,13 @@ type UnpushedCounts struct {
 	Lists int `json:"lists"`
 }
 
-// GetUnpushedCounts returns counts of posts and lists not yet on the push remote.
-func GetUnpushedCounts(workdir, branch string) (*UnpushedCounts, error) {
+// GetUnpushedCounts returns counts of posts and lists not yet on remote
+// ("" resolves via git.PushRemote).
+func GetUnpushedCounts(workdir, branch, remote string) (*UnpushedCounts, error) {
 	counts := &UnpushedCounts{}
-	remote := git.PushRemote(workdir)
+	if remote == "" {
+		remote = git.PushRemote(workdir)
+	}
 
 	if branch != "" {
 		result, err := git.ExecGit(workdir, []string{

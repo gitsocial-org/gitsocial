@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -61,7 +62,9 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 		return "", "", "", fmt.Errorf("s3 URLs take no parameters (configure endpoint/path-style via GITSOCIAL_S3_* env): %s", raw)
 	}
 	authority := strings.ToLower(u.Host)
-	if !strings.Contains(authority, ".") {
+	// A dot or a port marks a real endpoint host; a bare bucket name has neither
+	// (bucket names can't contain ":"), so localhost:8000 passes and s3://bucket/repo doesn't.
+	if !strings.Contains(authority, ".") && !strings.Contains(authority, ":") {
 		return "", "", "", fmt.Errorf("s3 URLs must name the endpoint host: s3://<endpoint-host>/<bucket>/<prefix> (got %s)", raw)
 	}
 	trail := strings.Trim(u.Path, "/")
@@ -81,6 +84,20 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 		trail += "/"
 	}
 	return endpointHost, bucket, trail, nil
+}
+
+// hostAddressKind classifies an endpoint authority (host or host:port):
+// ipLiteral is true for any IP address, loopback for localhost/127.x/::1.
+func hostAddressKind(authority string) (ipLiteral, loopback bool) {
+	host := authority
+	if h, _, err := net.SplitHostPort(authority); err == nil {
+		host = h
+	}
+	if host == "localhost" {
+		return false, true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil, ip != nil && ip.IsLoopback()
 }
 
 // remoteHelper holds the state for one helper invocation.
@@ -105,9 +122,20 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 	}
 	// The URL's endpoint host is authoritative; the env endpoint override
 	// exists for dev/self-hosted servers (http scheme, path-style addressing).
+	// Without an override, IP-literal and localhost hosts get dev defaults:
+	// virtual-host addressing can't work there (bucket.<ip> never resolves),
+	// and loopback servers speak plain http.
 	endpoint := env.Endpoint
+	pathStyle := env.PathStyle
 	if endpoint == "" {
-		endpoint = "https://" + endpointHost
+		scheme := "https"
+		if ip, loopback := hostAddressKind(endpointHost); ip || loopback {
+			pathStyle = true
+			if loopback {
+				scheme = "http"
+			}
+		}
+		endpoint = scheme + "://" + endpointHost
 	}
 	region := env.Region
 	capability := CapabilityUnknown
@@ -122,7 +150,7 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 		Endpoint:  endpoint,
 		Region:    region,
 		Bucket:    bucket,
-		PathStyle: env.PathStyle,
+		PathStyle: pathStyle,
 	})
 	if err != nil {
 		return nil, "", CapabilityUnknown, err

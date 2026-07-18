@@ -137,7 +137,7 @@ func coreStatus(s *Server) HandlerFunc {
 			status := extStatusWithUnpushed{Initialized: gitmsg.IsExtInitialized(workdir, ext)}
 			if status.Initialized {
 				status.Branch = gitmsg.GetExtBranch(workdir, ext)
-				if counts, err := gitmsg.GetUnpushedCounts(workdir, status.Branch); err == nil {
+				if counts, err := gitmsg.GetUnpushedCounts(workdir, status.Branch, ""); err == nil {
 					status.Unpushed = counts.Posts + counts.Lists
 				}
 			}

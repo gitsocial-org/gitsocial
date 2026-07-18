@@ -392,7 +392,7 @@ func (m Model) loadInitialUnpushedCount() tea.Cmd {
 	return func() tea.Msg {
 		total := 0
 		for _, branch := range gitmsg.GetExtBranches(workdir) {
-			if counts, err := gitmsg.GetUnpushedCounts(workdir, branch); err == nil && counts != nil {
+			if counts, err := gitmsg.GetUnpushedCounts(workdir, branch, ""); err == nil && counts != nil {
 				total += counts.Posts
 			}
 		}

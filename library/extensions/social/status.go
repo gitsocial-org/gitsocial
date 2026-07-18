@@ -70,7 +70,7 @@ func Status(workdir, cacheDir string) Result[StatusData] {
 		Lists:  []ListInfo{},
 	}
 
-	if unpushed, err := gitmsg.GetUnpushedCounts(workdir, branch); err != nil {
+	if unpushed, err := gitmsg.GetUnpushedCounts(workdir, branch, ""); err != nil {
 		log.Debug("get unpushed counts failed", "error", err)
 	} else if unpushed != nil && (unpushed.Posts > 0 || unpushed.Lists > 0) {
 		data.Unpushed = &UnpushedCounts{

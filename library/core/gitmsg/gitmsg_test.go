@@ -583,7 +583,7 @@ func TestGetUnpushedCounts_noBranch(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 
-	counts, err := GetUnpushedCounts(dir, "")
+	counts, err := GetUnpushedCounts(dir, "", "")
 	if err != nil {
 		t.Fatalf("GetUnpushedCounts() error = %v", err)
 	}
@@ -599,7 +599,7 @@ func TestGetUnpushedCounts_noRemote(t *testing.T) {
 	// Create the gitmsg branch so there are commits to count
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post 1")
 
-	counts, err := GetUnpushedCounts(dir, "gitmsg/social")
+	counts, err := GetUnpushedCounts(dir, "gitmsg/social", "")
 	if err != nil {
 		t.Fatalf("GetUnpushedCounts() error = %v", err)
 	}
@@ -936,7 +936,7 @@ func TestGetUnpushedCounts_withRemote(t *testing.T) {
 
 	git.CreateCommitOnBranch(dir, "gitmsg/social", "post 2")
 
-	counts, err := GetUnpushedCounts(dir, "gitmsg/social")
+	counts, err := GetUnpushedCounts(dir, "gitmsg/social", "")
 	if err != nil {
 		t.Fatalf("GetUnpushedCounts() error = %v", err)
 	}
@@ -964,7 +964,7 @@ func TestGetUnpushedCounts_withLocalRefs(t *testing.T) {
 	git.WriteRef(dir, "refs/gitmsg/social/config", fullResult.Stdout)
 	git.WriteRef(dir, "refs/gitmsg/social/lists/following", fullResult.Stdout)
 
-	counts, err := GetUnpushedCounts(dir, "")
+	counts, err := GetUnpushedCounts(dir, "", "")
 	if err != nil {
 		t.Fatalf("GetUnpushedCounts() error = %v", err)
 	}

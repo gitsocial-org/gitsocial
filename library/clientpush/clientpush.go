@@ -70,18 +70,18 @@ func ResolveRemote(workdir, remote string) string {
 // --all extras when requested. Used by dry-run and the TUI prompt.
 func Preview(workdir string, opts Options) (*gitmsg.PushPreview, string, error) {
 	remote := ResolveRemote(workdir, opts.Remote)
-	codeBranches := resolveCodeBranches(workdir, opts.NoCode)
+	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
 	preview, err := gitmsg.GetPushPreview(workdir, codeBranches, remote, opts.AllBranches)
 	return preview, remote, err
 }
 
-// resolveCodeBranches returns the reason-based code branches to publish, or nil
-// when code is opted out. Centralized so CLI/TUI/RPC agree.
-func resolveCodeBranches(workdir string, noCode bool) map[string]int {
+// resolveCodeBranches returns the reason-based code branches to publish against
+// the resolved remote, or nil when code is opted out. Centralized so CLI/TUI/RPC agree.
+func resolveCodeBranches(workdir string, noCode bool, remote string) map[string]int {
 	if noCode {
 		return nil
 	}
-	branches, _ := review.CodeBranchesToPush(workdir)
+	branches, _ := review.CodeBranchesToPush(workdir, remote)
 	return branches
 }
 
@@ -93,7 +93,7 @@ func resolveCodeBranches(workdir string, noCode bool) map[string]int {
 // after a good data push lands in Result.Site.Err (the push still succeeded).
 func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
 	remote := ResolveRemote(workdir, opts.Remote)
-	codeBranches := resolveCodeBranches(workdir, opts.NoCode)
+	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
 
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
 

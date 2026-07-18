@@ -422,12 +422,16 @@ func GetUnpushedCommits(workdir, branch string) (map[string]struct{}, error) {
 }
 
 // UnpushedOnBranch returns hashes of commits reachable from the local branch
-// that are not present on any push-remote branch. Unlike GetUnpushedCommits,
-// it also counts a never-pushed branch (one with no <remote>/<branch> tracking
-// ref) so a PR head that has never reached the remote is still detected. A
-// branch that doesn't exist locally yields an empty set (rev-list errors).
-func UnpushedOnBranch(workdir, branch string) (map[string]struct{}, error) {
-	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", branch, "--not", "--remotes=" + PushRemote(workdir) + "/*"})
+// that are not present on any branch of remote ("" resolves via PushRemote).
+// Unlike GetUnpushedCommits, it also counts a never-pushed branch (one with no
+// <remote>/<branch> tracking ref) so a PR head that has never reached the
+// remote is still detected. A branch that doesn't exist locally yields an
+// empty set (rev-list errors).
+func UnpushedOnBranch(workdir, branch, remote string) (map[string]struct{}, error) {
+	if remote == "" {
+		remote = PushRemote(workdir)
+	}
+	result, err := ExecGit(workdir, []string{"rev-list", "--abbrev-commit", "--abbrev=12", branch, "--not", "--remotes=" + remote + "/*"})
 	if err != nil {
 		slog.Debug("rev-list unpushed-on-branch", "error", err, "branch", branch)
 		return map[string]struct{}{}, nil

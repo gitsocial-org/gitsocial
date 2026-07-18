@@ -81,7 +81,7 @@ func GetPushPreview(workdir string, codeBranches map[string]int, remote string, 
 				continue
 			}
 		}
-		counts, err := GetUnpushedCounts(workdir, branch)
+		counts, err := GetUnpushedCounts(workdir, branch, remote)
 		if err != nil || counts.Posts == 0 {
 			continue
 		}

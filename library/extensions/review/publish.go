@@ -11,20 +11,21 @@ import (
 
 // CodeBranchesToPush returns the workspace code branches `gitsocial push`
 // publishes alongside gitmsg data: heads of open PRs with unpushed commits,
-// plus the default branch when it's ahead of the push remote. The default
-// branch is the published face of the repository, so it travels with pushes
-// even when no PR references it. Returns nil when the workspace has no remote.
-func CodeBranchesToPush(workdir string) (map[string]int, error) {
+// plus the default branch when it's ahead of remote ("" resolves via
+// git.PushRemote). The default branch is the published face of the repository,
+// so it travels with pushes even when no PR references it. Returns nil when
+// the workspace has no remote.
+func CodeBranchesToPush(workdir, remote string) (map[string]int, error) {
 	if git.GetOriginURL(workdir) == "" {
 		return nil, nil
 	}
-	branches, err := UnpushedHeadBranches(workdir)
+	branches, err := UnpushedHeadBranches(workdir, remote)
 	if branches == nil {
 		branches = make(map[string]int)
 	}
 	if def := defaultBranch(workdir); def != "" {
 		if _, ok := branches[def]; !ok {
-			if unpushed, uerr := git.UnpushedOnBranch(workdir, def); uerr == nil && len(unpushed) > 0 {
+			if unpushed, uerr := git.UnpushedOnBranch(workdir, def, remote); uerr == nil && len(unpushed) > 0 {
 				branches[def] = len(unpushed)
 			}
 		}
