@@ -337,6 +337,10 @@
     // intact because the body has not been replaced yet. The optional enhancers
     // (icons/prism) are best-effort.
     try { await loadScript(base + "icons.js"); } catch (e) { /* icons optional */ }
+    // Manual mode before prism loads (mirrors the shell): prism's tail otherwise
+    // runs an unmanaged highlightAll() over the not-yet-replaced static page.
+    window.Prism = window.Prism || {};
+    window.Prism.manual = true;
     try { await loadScript(base + "prism.js"); } catch (e) { /* prism optional */ }
     await loadScript(base + "gs-core.js");
     await loadScript(base + "gs-render.js");
