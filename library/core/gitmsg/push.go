@@ -2,13 +2,29 @@
 package gitmsg
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
+
+// pushTimeout bounds git invocations that transfer objects over the network.
+// The default ExecGit timeout (30s) is sized for local plumbing and kills a
+// large transfer mid-flight (an empty-bucket bootstrap pushes the whole
+// history); 15 minutes matches the clone path's allowance.
+const pushTimeout = 15 * time.Minute
+
+// execGitTransfer runs a network-transfer git command (push/fetch) under
+// pushTimeout instead of the default short timeout.
+func execGitTransfer(workdir string, args []string) (*git.ExecResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+	defer cancel()
+	return git.ExecGitContext(ctx, workdir, args)
+}
 
 type PushResult struct {
 	Commits     int    `json:"commits"`
@@ -189,7 +205,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.CodeCommits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if _, err := git.ExecGit(workdir, []string{"push", remote, bp.Branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", remote, bp.Branch}); err != nil {
 				return nil, wrapCodePushError(remote, bp.Branch, err)
 			}
 		}
@@ -202,7 +218,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.AllBranches++
 		step(branch)
 		if !dryRun {
-			if _, err := git.ExecGit(workdir, []string{"push", remote, branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", remote, branch}); err != nil {
 				return nil, wrapCodePushError(remote, branch, err)
 			}
 		}
@@ -228,7 +244,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 	if preview.Refs > 0 {
 		step("refs/gitmsg/*")
 		if !dryRun {
-			if _, err := git.ExecGit(workdir, []string{
+			if _, err := execGitTransfer(workdir, []string{
 				"push", remote, "refs/gitmsg/*:refs/gitmsg/*",
 			}); err != nil {
 				return nil, wrapStateRefPushError(err)
@@ -276,7 +292,7 @@ func pushTags(workdir, remote string, dryRun bool) (int, error) {
 	if dryRun {
 		args = append(args, "--dry-run")
 	}
-	out, err := git.ExecGit(workdir, args)
+	out, err := execGitTransfer(workdir, args)
 	if err != nil {
 		return 0, fmt.Errorf("push tags: %w", err)
 	}

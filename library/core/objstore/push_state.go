@@ -94,6 +94,18 @@ func refsHeadDigest(client *Client, prefix string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
+// foldSiteOverride folds a per-remote deployment override into a push-state
+// digest so a changed override (which never moves a bucket ref) still
+// invalidates the skip marker and regenerates that bucket. An empty override
+// returns the digest unchanged, keeping the no-override digest byte-identical to
+// before this existed.
+func foldSiteOverride(digest string, ov SiteOverride) string {
+	if ov == (SiteOverride{}) {
+		return digest
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(digest+"\x00"+ov.URL+"\x00"+ov.Publish+"\x00"+ov.Pages)))
+}
+
 // headObjectETag returns a key's ETag via a HEAD request, or "" (no error) when
 // the key is absent (a bucket with no HEAD symref yet).
 func headObjectETag(client *Client, key string) (string, error) {
@@ -131,12 +143,16 @@ func readSitePushState(client *Client, prefix string) (sitePushState, bool) {
 // (list/HEAD/marker) yields upToDate=false with an empty digest — the caller
 // then runs the full pass and skips the marker write, so a transient fault only
 // costs extra work, never a wrong skip.
-func siteMaintenanceUpToDate(client *Client, prefix, shellVersion string) (upToDate bool, digest string) {
+func siteMaintenanceUpToDate(client *Client, prefix, shellVersion string, ov SiteOverride) (upToDate bool, digest string) {
 	state, ok := readSitePushState(client, prefix)
 	digest, err := refsHeadDigest(client, prefix)
 	if err != nil {
 		return false, ""
 	}
+	// Fold in the per-remote override: it is invisible to the bucket refs, so a
+	// changed override would otherwise leave the digest identical and be skipped.
+	// An empty override leaves the digest byte-identical to the no-override case.
+	digest = foldSiteOverride(digest, ov)
 	if !ok || state.ShellVersion != shellVersion {
 		return false, digest
 	}

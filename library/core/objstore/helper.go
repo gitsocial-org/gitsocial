@@ -111,6 +111,7 @@ type remoteHelper struct {
 	remoteRefs map[string]string // ref state from list, kept current by push for the site manifest
 	leases     map[string]string // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
 	progress   Progress          // stderr progress hook (nil = silent)
+	override   SiteOverride      // per-remote site deployment overrides (read from git config)
 }
 
 // clientForRemote builds the S3 client, key prefix, and provider capability
@@ -159,8 +160,11 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 }
 
 // RunHelper speaks the git remote-helper protocol on in/out for the given
-// s3:// remote URL until EOF or an empty command line.
-func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
+// s3:// remote URL until EOF or an empty command line. remoteName is the git
+// remote the helper was invoked for (per gitremote-helpers(7)); it reads that
+// remote's per-remote site overrides from git config so the bucket-side site
+// maintenance honors them. An anonymous-URL invocation passes "" (no overrides).
+func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
 	if env.GitDir == "" {
 		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
 	}
@@ -175,7 +179,7 @@ func RunHelper(remoteURL string, env HelperEnv, in io.Reader, out io.Writer) err
 	if os.Getenv("GIT_QUIET") == "" {
 		pw = newProgressWriter(os.Stderr, stderrIsTTY())
 	}
-	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability, progress: pw.Progress()}
+	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
 	defer pw.finish()
 
 	w := bufio.NewWriter(out)

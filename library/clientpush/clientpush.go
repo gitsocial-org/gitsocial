@@ -68,6 +68,29 @@ func ResolveRemote(workdir, remote string) string {
 	return git.PushRemote(workdir)
 }
 
+// ResolveSiteOverride reads a remote's per-remote site deployment overrides from
+// git config (remote.<name>.gitsocial-site-{url,publish,pages}). Empty struct
+// when the remote name is empty or no keys are set. Shared so the CLI, the
+// `gitsocial push` site step, and `gitsocial site push` all resolve the same
+// values the git remote helper reads bucket-side.
+func ResolveSiteOverride(workdir, remote string) objstore.SiteOverride {
+	if remote == "" {
+		return objstore.SiteOverride{}
+	}
+	get := func(suffix string) string {
+		out, err := git.ExecGit(workdir, []string{"config", "--get", "remote." + remote + "." + suffix})
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(out.Stdout)
+	}
+	return objstore.SiteOverride{
+		URL:     get(objstore.SiteOverrideURLKey),
+		Publish: get(objstore.SiteOverridePublishKey),
+		Pages:   get(objstore.SiteOverridePagesKey),
+	}
+}
+
 // Preview returns the offline push preview for the resolved remote, including
 // --all extras when requested. Used by dry-run and the TUI prompt.
 func Preview(workdir string, opts Options) (*gitmsg.PushPreview, string, error) {
@@ -99,13 +122,21 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
 
+	// Real push (not dry-run) against an s3 remote: reconcile the tracking refs
+	// to the bucket's actual state before counting, so a recreated/drifted bucket
+	// doesn't silently skip branches. Best-effort — a listing failure leaves the
+	// existing (possibly stale) counting, self-healing on the next push.
+	if !opts.DryRun {
+		reconcileTrackingRefs(workdir, remote)
+	}
+
 	pushResult, err := gitmsg.PushWithProgress(workdir, opts.DryRun, codeBranches, remote, opts.AllBranches, onBranch)
 	if err != nil {
 		return nil, err
 	}
 	res.Push = pushResult
 
-	res.Site = publishSite(workdir, pushResult.RemoteURL, opts, siteProgress)
+	res.Site = publishSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
 	return res, nil
 }
 
@@ -114,7 +145,7 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 // guard are skipped with a reason; a dry run never touches the bucket. A site
 // error is captured (warning), not returned, so it can't undo a successful data
 // push.
-func publishSite(workdir, remoteURL string, opts Options, progress objstore.Progress) SiteOutcome {
+func publishSite(workdir, remote, remoteURL string, opts Options, progress objstore.Progress) SiteOutcome {
 	if opts.NoSite {
 		return SiteOutcome{Skipped: "--no-site"}
 	}
@@ -127,7 +158,7 @@ func publishSite(workdir, remoteURL string, opts Options, progress objstore.Prog
 	if opts.DryRun {
 		return SiteOutcome{Skipped: "dry-run"}
 	}
-	published, err := PublishSite(workdir, remoteURL, progress)
+	published, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if err != nil {
 		return SiteOutcome{Err: err, Error: err.Error()}
 	}
@@ -138,13 +169,15 @@ func publishSite(workdir, remoteURL string, opts Options, progress objstore.Prog
 }
 
 // PublishSite uploads the browser static site to an s3 bucket and refreshes the
-// bucket HEAD + push-time stats. Shared by `gitsocial push` (via Publish) and
-// the explicit `gitsocial site push` so their site wiring can't drift.
+// bucket HEAD + push-time stats. override carries the target remote's per-remote
+// deployment overrides (url/publish/pages) so the site stamps this bucket's own
+// values. Shared by `gitsocial push` (via Publish) and the explicit
+// `gitsocial site push` so their site wiring can't drift.
 // published is false (no error) when the workspace's site.publish guard is not
 // enabled — the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the site push.
-func PublishSite(workdir, remoteURL string, progress objstore.Progress) (published bool, err error) {
-	published, err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, progress)
+func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published bool, err error) {
+	published, err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
 	if err != nil || !published {
 		return published, err
 	}

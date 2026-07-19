@@ -191,20 +191,75 @@ func PushRemote(workdir string) string {
 	return "origin"
 }
 
-// ConfiguredPushRemote returns the value of git config gitsocial.pushRemote,
-// or "" when unset. Exposed for the `remote default` command's no-arg report.
+// ConfiguredPushRemote returns the first value of git config
+// gitsocial.pushRemote, or "" when unset. Exposed for the `remote default`
+// command's no-arg report.
 func ConfiguredPushRemote(workdir string) string {
 	return configuredPushRemote(workdir)
 }
 
-// SetConfiguredPushRemote persists the default push remote via
-// git config gitsocial.pushRemote <name> (per-clone, like remotes themselves).
-// Used by the TUI push picker's "persist this choice" action.
-func SetConfiguredPushRemote(workdir, name string) error {
-	if _, err := ExecGit(workdir, []string{"config", "gitsocial.pushRemote", name}); err != nil {
-		return fmt.Errorf("set gitsocial.pushRemote: %w", err)
+// ConfiguredPushRemotes returns every configured gitsocial.pushRemote value
+// (git config --get-all), in config order, or nil when unset. The key is
+// multi-valued so a publish can fan out to several buckets.
+func ConfiguredPushRemotes(workdir string) []string {
+	result, err := ExecGit(workdir, []string{"config", "--get-all", "gitsocial.pushRemote"})
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		if name := strings.TrimSpace(line); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// PushRemotes returns the remotes gitsocial publishes to by default: every
+// configured gitsocial.pushRemote that exists as a remote, or a single-element
+// slice from the PushRemote heuristic when none are configured/valid. Callers
+// that push to one remote still use PushRemote; multi-remote push uses this.
+func PushRemotes(workdir string) []string {
+	remotes, err := ListRemotes(workdir)
+	if err != nil {
+		return []string{PushRemote(workdir)}
+	}
+	exists := map[string]bool{}
+	for _, r := range remotes {
+		exists[r.Name] = true
+	}
+	var valid []string
+	for _, name := range ConfiguredPushRemotes(workdir) {
+		if exists[name] {
+			valid = append(valid, name)
+		}
+	}
+	if len(valid) == 0 {
+		return []string{PushRemote(workdir)}
+	}
+	return valid
+}
+
+// SetConfiguredPushRemotes replaces the multi-valued gitsocial.pushRemote config
+// with the given names (per-clone, like remotes themselves). An empty list
+// unsets the key entirely, reverting to the PushRemote heuristic.
+func SetConfiguredPushRemotes(workdir string, names []string) error {
+	// Clear the key first so a shorter list doesn't leave stale trailing values;
+	// --unset-all on an unset key is a benign exit-5, tolerated.
+	_, _ = ExecGit(workdir, []string{"config", "--unset-all", "gitsocial.pushRemote"})
+	for _, name := range names {
+		if _, err := ExecGit(workdir, []string{"config", "--add", "gitsocial.pushRemote", name}); err != nil {
+			return fmt.Errorf("set gitsocial.pushRemote: %w", err)
+		}
 	}
 	return nil
+}
+
+// SetConfiguredPushRemote persists a single default push remote (per-clone, like
+// remotes themselves), replacing any previously configured set. Used by the TUI
+// push picker's "persist this choice" action.
+func SetConfiguredPushRemote(workdir, name string) error {
+	return SetConfiguredPushRemotes(workdir, []string{name})
 }
 
 // S3Remotes returns the names of all s3-scheme remotes, sorted alphabetically.
@@ -225,14 +280,15 @@ func S3Remotes(workdir string) []string {
 	return names
 }
 
-// configuredPushRemote returns the value of git config gitsocial.pushRemote,
-// or "" when unset.
+// configuredPushRemote returns the first value of git config
+// gitsocial.pushRemote, or "" when unset. Reads via --get-all (the key is
+// multi-valued; a plain --get errors when several values are set).
 func configuredPushRemote(workdir string) string {
-	result, err := ExecGit(workdir, []string{"config", "--get", "gitsocial.pushRemote"})
-	if err != nil {
+	names := ConfiguredPushRemotes(workdir)
+	if len(names) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(result.Stdout)
+	return names[0]
 }
 
 // PushSiteEnabled reports whether this machine allows the site step of a

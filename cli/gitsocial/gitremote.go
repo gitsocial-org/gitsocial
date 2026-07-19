@@ -20,11 +20,14 @@ func newGitRemoteS3Cmd() *cobra.Command {
 		// No PersistentPreRunE side effects wanted here (cache open, logging
 		// re-init) — but they are harmless and give the helper log config.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			url := args[0]
+			// Two args: <remote-name> <url> (a configured remote, whose per-remote
+			// site overrides the helper reads). One arg: an anonymous URL, no name
+			// and so no overrides.
+			name, url := "", args[0]
 			if len(args) == 2 {
-				url = args[1]
+				name, url = args[0], args[1]
 			}
-			return objstore.RunHelper(url, objstore.HelperEnvFromOS(), os.Stdin, os.Stdout)
+			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), os.Stdin, os.Stdout)
 		},
 	}
 }

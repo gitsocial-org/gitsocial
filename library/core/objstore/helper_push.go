@@ -167,7 +167,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 			return
 		}
 	}
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs)
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)
 		return
@@ -190,7 +190,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	shellVersion, verErr := siteVersion()
 	upToDate, digest := false, ""
 	if verErr == nil {
-		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion)
+		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion, h.override)
 	}
 	shellUploaded := false
 	if !upToDate {
@@ -229,7 +229,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// manifest/tips, not index.html's content, so a stamped marker would let the
 	// next push skip and leave index.html stranded as the embedded shell.
 	if !upToDate && reclaimOK {
-		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs)
+		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override)
 		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
 			writeSitePushState(h.client, h.prefix, shellVersion, digest, pagesState)
 		}
@@ -285,7 +285,7 @@ func (h *remoteHelper) writeSiteCustomization() {
 			return
 		}
 	}
-	if err := writeSiteCustomization(h.client, h.prefix, refs); err != nil {
+	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
 	}
 }
@@ -330,7 +330,7 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 // done FAILED, so the caller withholds the marker (a stamped marker would let the
 // next push skip and strand index.html as the shell).
 func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string) (ok bool) {
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs)
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override)
 	if err != nil {
 		return false // can't tell if a reclaim was needed: withhold the marker
 	}
@@ -1079,4 +1079,26 @@ func gitOutput(args ...string) (string, error) {
 // oneLine collapses an error message to a single line for status reporting.
 func oneLine(err error) string {
 	return strings.ReplaceAll(err.Error(), "\n", " ")
+}
+
+// readRemoteSiteOverride reads a remote's per-remote site deployment overrides
+// from git config (remote.<name>.gitsocial-site-{url,publish,pages}), using the
+// GIT_DIR git handed the helper. An empty name (anonymous-URL invocation) or an
+// unset key yields no override for that field.
+func readRemoteSiteOverride(remoteName string) SiteOverride {
+	if remoteName == "" {
+		return SiteOverride{}
+	}
+	get := func(suffix string) string {
+		v, err := gitOutput("config", "--get", "remote."+remoteName+"."+suffix)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(v)
+	}
+	return SiteOverride{
+		URL:     get(SiteOverrideURLKey),
+		Publish: get(SiteOverridePublishKey),
+		Pages:   get(SiteOverridePagesKey),
+	}
 }

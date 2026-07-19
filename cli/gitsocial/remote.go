@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -24,19 +25,22 @@ func newRemoteCmd() *cobra.Command {
 }
 
 // newRemoteDefaultCmd sets or reports git config gitsocial.pushRemote, the
-// remote gitsocial push and site push target by default.
+// remote(s) gitsocial push and site push target by default. The key is
+// multi-valued: a bare `gitsocial push` fans out to every configured remote.
 func newRemoteDefaultCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "default [name]",
-		Short: "Set or show the default push remote (gitsocial.pushRemote)",
-		Long: `Set the remote gitsocial pushes to by default, stored in
-git config gitsocial.pushRemote. With no argument, prints the current
-resolution: the configured name, or "heuristic: <resolved>" when unset.
+		Use:   "default [name...]",
+		Short: "Set or show the default push remote(s) (gitsocial.pushRemote)",
+		Long: `Set the remote(s) gitsocial pushes to by default, stored in
+git config gitsocial.pushRemote (multi-valued). With no argument, prints the
+current resolution: the configured names, or "heuristic: <resolved>" when unset.
+With several names, a bare ` + "`gitsocial push`" + ` fans out to each in order.
 
 Examples:
   gitsocial remote default            # Show the current resolution
-  gitsocial remote default backup     # Set "backup" as the default push remote`,
-		Args: cobra.MaximumNArgs(1),
+  gitsocial remote default backup     # Set "backup" as the default push remote
+  gitsocial remote default r2 s3      # Push to both "r2" and "s3" by default`,
+		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -44,29 +48,30 @@ Examples:
 			cfg := GetConfig(cmd)
 
 			if len(args) == 0 {
-				configured := git.ConfiguredPushRemote(cfg.WorkDir)
+				configured := git.ConfiguredPushRemotes(cfg.WorkDir)
 				if cfg.JSONOutput {
-					PrintJSON(map[string]string{"configured": configured, "resolved": git.PushRemote(cfg.WorkDir)})
+					PrintJSON(map[string]any{"configured": configured, "resolved": git.PushRemotes(cfg.WorkDir)})
 					return
 				}
-				if configured != "" {
-					fmt.Println(configured)
+				if len(configured) > 0 {
+					fmt.Println(strings.Join(configured, " "))
 				} else {
-					fmt.Printf("heuristic: %s\n", git.PushRemote(cfg.WorkDir))
+					fmt.Printf("heuristic: %s\n", strings.Join(git.PushRemotes(cfg.WorkDir), " "))
 				}
 				return
 			}
 
-			name := args[0]
-			if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", name}); err != nil {
-				PrintError(cmd, fmt.Sprintf("remote %q does not exist", name))
+			for _, name := range args {
+				if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", name}); err != nil {
+					PrintError(cmd, fmt.Sprintf("remote %q does not exist", name))
+					os.Exit(ExitError)
+				}
+			}
+			if err := git.SetConfiguredPushRemotes(cfg.WorkDir, args); err != nil {
+				PrintError(cmd, err.Error())
 				os.Exit(ExitError)
 			}
-			if _, err := git.ExecGit(cfg.WorkDir, []string{"config", "gitsocial.pushRemote", name}); err != nil {
-				PrintError(cmd, fmt.Sprintf("set gitsocial.pushRemote: %v", err))
-				os.Exit(ExitError)
-			}
-			PrintSuccess(cmd, fmt.Sprintf("Default push remote set to %q", name))
+			PrintSuccess(cmd, fmt.Sprintf("Default push remote(s) set to %q", strings.Join(args, " ")))
 		},
 	}
 }

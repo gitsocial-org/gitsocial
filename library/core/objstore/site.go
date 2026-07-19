@@ -305,12 +305,17 @@ func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error
 // set instead): the items walk reads commits from that repo's odb rather than a
 // per-commit bucket GET, since every commit it visits is an ancestor of a bucket
 // ref tip and so present locally too. Empty (and no GIT_DIR) ⇒ bucket-only walk.
-func PushSite(remoteURL string, env HelperEnv, workdir string, progress Progress) (published bool, err error) {
+func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, progress Progress) (published bool, err error) {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
 		return false, err
 	}
-	if cfg, err := ReadWorkspaceSiteCustomization(workdir); err != nil || cfg.Publish != "true" {
+	// The publish guard is effective (the per-remote override wins over the
+	// workspace value) so a remote configured with publish=false carries data
+	// but no site, and publish=true can render a bucket the repo hasn't opted in.
+	cfg, cfgErr := ReadWorkspaceSiteCustomization(workdir)
+	eff, effOK := applySiteOverride(siteCustomization(cfg), cfg != SiteCustomization{}, ov)
+	if cfgErr != nil || !effOK || eff.Publish != "true" {
 		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
 			progress.call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
 		}
@@ -318,12 +323,13 @@ func PushSite(remoteURL string, env HelperEnv, workdir string, progress Progress
 	}
 	src := newLocalCommitSource(env.GitDir, workdir)
 	defer src.close()
-	return true, pushSite(client, prefix, src, progress)
+	return true, pushSite(client, prefix, src, ov, progress)
 }
 
 // pushSite is PushSite over a resolved client/prefix (the unit-testable core).
-// src (may be nil) is the local commit source for the items walk.
-func pushSite(client *Client, prefix string, src *localCommitSource, progress Progress) error {
+// src (may be nil) is the local commit source for the items walk; ov carries
+// the per-remote deployment overrides applied at the site-config boundary.
+func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOverride, progress Progress) error {
 	// Skip the whole expensive pass when nothing a site artifact derives from has
 	// changed since the last successful pass at this shell version — detected in
 	// ~2-3 round trips (refs/ list + HEAD + marker GET). The marker is only an
@@ -333,7 +339,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, progress Pr
 	if err != nil {
 		return err
 	}
-	upToDate, skipDigest := siteMaintenanceUpToDate(client, prefix, shellVersion)
+	upToDate, skipDigest := siteMaintenanceUpToDate(client, prefix, shellVersion, ov)
 	if upToDate {
 		progress.call("site up to date", 1, 1)
 		return nil
@@ -351,7 +357,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, progress Pr
 	if err := writeSitePMConfig(client, prefix, refs); err != nil {
 		return err
 	}
-	if err := writeSiteCustomization(client, prefix, refs); err != nil {
+	if err := writeSiteCustomization(client, prefix, refs, ov); err != nil {
 		return err
 	}
 	defaultBranch := readSiteDefaultBranch(client, prefix)
@@ -365,10 +371,10 @@ func pushSite(client *Client, prefix string, src *localCommitSource, progress Pr
 	pagesPending, pagesState := itemsPending, ""
 	if !itemsPending {
 		var err error
-		if pagesPending, pagesState, err = rebuildSitePages(client, prefix, refs, defaultBranch, src, progress); err != nil {
+		if pagesPending, pagesState, err = rebuildSitePages(client, prefix, refs, defaultBranch, src, progress, ov); err != nil {
 			return err
 		}
-	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs); err == nil {
+	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov); err == nil {
 		if _, on := sitePagesEffective(cfg, ok); on {
 			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial site push`)", 1, 1)
 		}

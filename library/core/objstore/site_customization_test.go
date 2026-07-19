@@ -105,7 +105,7 @@ func TestWriteSiteCustomization(t *testing.T) {
 		client, bucket := testClient(t)
 		sha := seedCoreConfigCommit(t, client, `{"version":1,"site":{"title":"Demo","accent":"#0a7","accentDark":"#0dd"}}`)
 		refs := map[string]string{"refs/gitmsg/core/config": sha}
-		if err := writeSiteCustomization(client, "", refs); err != nil {
+		if err := writeSiteCustomization(client, "", refs, SiteOverride{}); err != nil {
 			t.Fatalf("writeSiteCustomization: %v", err)
 		}
 		data, err := client.Get(siteCustomizationKey)
@@ -126,7 +126,7 @@ func TestWriteSiteCustomization(t *testing.T) {
 
 	t.Run("absent ref deletes/skips the artifact", func(t *testing.T) {
 		client, _ := testClient(t)
-		if err := writeSiteCustomization(client, "", map[string]string{}); err != nil {
+		if err := writeSiteCustomization(client, "", map[string]string{}, SiteOverride{}); err != nil {
 			t.Fatalf("writeSiteCustomization (absent): %v", err)
 		}
 		if _, err := client.Get(siteCustomizationKey); err == nil {
@@ -141,7 +141,7 @@ func TestWriteSiteCustomization(t *testing.T) {
 		}
 		sha := seedCoreConfigCommit(t, client, `{not valid json`)
 		refs := map[string]string{"refs/gitmsg/core/config": sha}
-		if err := writeSiteCustomization(client, "", refs); err != nil {
+		if err := writeSiteCustomization(client, "", refs, SiteOverride{}); err != nil {
 			t.Fatalf("writeSiteCustomization (malformed): %v", err)
 		}
 		if _, err := client.Get(siteCustomizationKey); err == nil {
@@ -156,7 +156,7 @@ func TestWriteSiteCustomization(t *testing.T) {
 		}
 		sha := seedCoreConfigCommit(t, client, `{"version":1,"branch":"gitmsg/core"}`)
 		refs := map[string]string{"refs/gitmsg/core/config": sha}
-		if err := writeSiteCustomization(client, "", refs); err != nil {
+		if err := writeSiteCustomization(client, "", refs, SiteOverride{}); err != nil {
 			t.Fatalf("writeSiteCustomization (no site): %v", err)
 		}
 		if _, err := client.Get(siteCustomizationKey); err == nil {

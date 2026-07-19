@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 )
@@ -115,6 +116,49 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 // `site` sub-object, published as the static site's site-config.json artifact.
 var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "url": true, "description": true, "publish": true, "pages": true}
 
+// siteOverrideKeys maps the per-remote-overridable deployment keys to their git
+// config suffix (remote.<name>.<suffix>). Only these three deployment keys are
+// overridable per remote; identity keys stay shared in the config ref.
+var siteOverrideKeys = map[string]string{
+	"url":     objstore.SiteOverrideURLKey,
+	"publish": objstore.SiteOverridePublishKey,
+	"pages":   objstore.SiteOverridePagesKey,
+}
+
+// readRemoteSiteOverrideValue returns a remote's override for a deployment key
+// from git config (remote.<name>.<suffix>), or "" when unset.
+func readRemoteSiteOverrideValue(workdir, remote, key string) string {
+	suffix, ok := siteOverrideKeys[key]
+	if !ok {
+		return ""
+	}
+	out, err := git.ExecGit(workdir, []string{"config", "--get", "remote." + remote + "." + suffix})
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out.Stdout)
+}
+
+// effectiveSiteConfigMap returns the site customization for a remote: the config
+// ref's `site` sub-object overlaid by that remote's per-remote deployment
+// overrides (url/publish/pages). remote "" returns the config ref map unchanged.
+func effectiveSiteConfigMap(workdir, remote string) map[string]interface{} {
+	site := readSiteConfigMap(workdir)
+	if remote == "" {
+		return site
+	}
+	merged := map[string]interface{}{}
+	for k, v := range site {
+		merged[k] = v
+	}
+	for key := range siteOverrideKeys {
+		if v := readRemoteSiteOverrideValue(workdir, remote, key); v != "" {
+			merged[key] = v
+		}
+	}
+	return merged
+}
+
 // newSiteConfigCmd creates the `config site` group for the static-site
 // customization stored under the `site` sub-object of refs/gitmsg/core/config.
 func newSiteConfigCmd() *cobra.Command {
@@ -156,9 +200,10 @@ func readSiteConfigMap(workdir string) map[string]interface{} {
 }
 
 func newSiteConfigGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var remote string
+	cmd := &cobra.Command{
 		Use:   "get <key>",
-		Short: "Get a site customization value",
+		Short: "Get a site customization value (effective, with --remote overrides)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -166,7 +211,7 @@ func newSiteConfigGetCmd() *cobra.Command {
 			}
 			cfg := GetConfig(cmd)
 			key := args[0]
-			site := readSiteConfigMap(cfg.WorkDir)
+			site := effectiveSiteConfigMap(cfg.WorkDir, remote)
 			val, ok := site[key].(string)
 			if !ok || val == "" {
 				PrintError(cmd, fmt.Sprintf("key not found: %s", key))
@@ -179,19 +224,22 @@ func newSiteConfigGetCmd() *cobra.Command {
 			}
 		},
 	}
+	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective value for this remote (config ref overlaid by its url/publish/pages overrides)")
+	return cmd
 }
 
 func newSiteConfigListCmd() *cobra.Command {
-	return &cobra.Command{
+	var remote string
+	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all site customization values",
+		Short: "List all site customization values (effective, with --remote overrides)",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			site := readSiteConfigMap(cfg.WorkDir)
+			site := effectiveSiteConfigMap(cfg.WorkDir, remote)
 			if cfg.JSONOutput {
 				PrintJSON(site)
 				return
@@ -207,6 +255,8 @@ func newSiteConfigListCmd() *cobra.Command {
 			}
 		},
 	}
+	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective values for this remote (config ref overlaid by its url/publish/pages overrides)")
+	return cmd
 }
 
 // siteConfigDisplay truncates a long favicon data URI for readable listing.
@@ -218,7 +268,8 @@ func siteConfigDisplay(key, value string) string {
 }
 
 func newSiteConfigSetCmd() *cobra.Command {
-	return &cobra.Command{
+	var remote string
+	cmd := &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a site customization value",
 		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon,
@@ -232,7 +283,12 @@ url, description, publish, pages.
   description          plain text, 300 chars max
   publish / pages      true or false (both default false): publish enables the
                        static site; pages enables the crawlable HTML page layer
-                       (effective only with publish=true and a valid url)`,
+                       (effective only with publish=true and a valid url)
+
+With --remote <name>, the value is stored per-remote in git config
+(remote.<name>.gitsocial-site-<key>) instead of the shared config ref, so it
+applies only when publishing to that remote. Only the deployment keys url,
+publish, and pages are overridable per-remote; identity keys travel with the repo.`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -240,6 +296,10 @@ url, description, publish, pages.
 			}
 			cfg := GetConfig(cmd)
 			key, value := args[0], args[1]
+			if remote != "" {
+				setRemoteSiteOverride(cmd, cfg, remote, key, value)
+				return
+			}
 			if !siteConfigKeys[key] {
 				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, url, description, publish, pages)", key))
 				os.Exit(ExitError)
@@ -269,6 +329,38 @@ url, description, publish, pages.
 				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, siteConfigDisplay(key, resolved)))
 			}
 		},
+	}
+	cmd.Flags().StringVar(&remote, "remote", "", "Store the value per-remote in git config (only url/publish/pages)")
+	return cmd
+}
+
+// setRemoteSiteOverride writes a per-remote deployment override to git config
+// (remote.<name>.gitsocial-site-<key>). Only the deployment keys url/publish/
+// pages are overridable, and each is validated with the same rules as the shared
+// config key before it is stored.
+func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value string) {
+	suffix, ok := siteOverrideKeys[key]
+	if !ok {
+		PrintError(cmd, fmt.Sprintf("only url, publish, and pages are overridable per-remote (got %q)", key))
+		os.Exit(ExitError)
+	}
+	if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", remote}); err != nil {
+		PrintError(cmd, fmt.Sprintf("remote %q does not exist", remote))
+		os.Exit(ExitError)
+	}
+	resolved, err := resolveSiteConfigValue(key, value)
+	if err != nil {
+		PrintError(cmd, err.Error())
+		os.Exit(ExitError)
+	}
+	if _, err := git.ExecGit(cfg.WorkDir, []string{"config", "remote." + remote + "." + suffix, resolved}); err != nil {
+		PrintError(cmd, fmt.Sprintf("set remote.%s.%s: %v", remote, suffix, err))
+		os.Exit(ExitError)
+	}
+	if cfg.JSONOutput {
+		PrintJSON(map[string]string{"remote": remote, "key": key, "value": resolved})
+	} else {
+		PrintSuccess(cmd, fmt.Sprintf("remote %q: %s = %s", remote, key, resolved))
 	}
 }
 

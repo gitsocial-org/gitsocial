@@ -175,8 +175,8 @@ func sitePageSiteHash(site sitePageSite) string {
 // stamped marker would make the next site push skip work no ref move signals.
 // Best-effort: any read error reports pending with no stampable state, costing
 // at worst an extra full pass, never a wrong skip.
-func sitePagesState(client *Client, prefix string, refs map[string]string) (state string, pending bool) {
-	cfg, ok, err := readSiteCustomization(client, prefix, refs)
+func sitePagesState(client *Client, prefix string, refs map[string]string, ov SiteOverride) (state string, pending bool) {
+	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov)
 	if err != nil {
 		return "", true
 	}
@@ -209,8 +209,8 @@ func sitePagesState(client *Client, prefix string, refs map[string]string) (stat
 // incomplete deletion) so the caller leaves the push-state marker unstamped and
 // the next push resumes; state is the marker's pages-state component ("" while
 // pending).
-func rebuildSitePages(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress) (pending bool, state string, err error) {
-	cfg, ok, err := readSiteCustomization(client, prefix, refs)
+func rebuildSitePages(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress, ov SiteOverride) (pending bool, state string, err error) {
+	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov)
 	if err != nil {
 		return false, "", err
 	}

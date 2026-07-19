@@ -73,7 +73,8 @@ must allow public reads for visitors without credentials.`,
 			if !cfg.JSONOutput {
 				progress, progressDone = objstore.StderrProgress()
 			}
-			published, err := clientpush.PublishSite(cfg.WorkDir, remoteURL, progress)
+			override := clientpush.ResolveSiteOverride(cfg.WorkDir, name)
+			published, err := clientpush.PublishSite(cfg.WorkDir, remoteURL, override, progress)
 			progressDone()
 			if err != nil {
 				PrintError(cmd, fmt.Sprintf("push site to %s: %v", remoteURL, err))

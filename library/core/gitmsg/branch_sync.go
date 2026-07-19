@@ -35,7 +35,7 @@ func FetchAndMergeBranch(repoPath, branch string) error {
 // gitsocial-push path threads its resolved remote through here so a
 // non-fast-forward retry merges against the same target it pushed to.
 func FetchAndMergeBranchTo(repoPath, remote, branch string) error {
-	if _, err := git.ExecGit(repoPath, []string{"fetch", remote, branch}); err != nil {
+	if _, err := execGitTransfer(repoPath, []string{"fetch", remote, branch}); err != nil {
 		return err
 	}
 	remoteTip := fullHash(repoPath, "FETCH_HEAD")
@@ -80,7 +80,7 @@ func PushBranchWithMerge(repoPath, branch string) error {
 // gitsocial-push path threads its resolved remote through here so the push and
 // its non-FF merge-retry target the same remote.
 func PushBranchWithMergeTo(repoPath, remote, branch string) error {
-	_, err := git.ExecGit(repoPath, []string{"push", remote, branch})
+	_, err := execGitTransfer(repoPath, []string{"push", remote, branch})
 	if err == nil {
 		return nil
 	}
@@ -90,7 +90,7 @@ func PushBranchWithMergeTo(repoPath, remote, branch string) error {
 	if mergeErr := FetchAndMergeBranchTo(repoPath, remote, branch); mergeErr != nil {
 		return mergeErr
 	}
-	_, err = git.ExecGit(repoPath, []string{"push", remote, branch})
+	_, err = execGitTransfer(repoPath, []string{"push", remote, branch})
 	return err
 }
 

@@ -44,6 +44,56 @@ var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 // Kept in sync with the reader's favicon guard in gs-app.js.
 var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
 
+// Per-remote site-override git config keys, stored on the remote definition
+// (remote.<name>.<suffix>) as machine-local deployment state. Only the
+// deployment keys (url, publish, pages) are overridable; identity keys stay
+// shared in the repo's config ref. See documentation/STATIC-SITE.md.
+const (
+	SiteOverrideURLKey     = "gitsocial-site-url"
+	SiteOverridePublishKey = "gitsocial-site-publish"
+	SiteOverridePagesKey   = "gitsocial-site-pages"
+)
+
+// SiteOverride carries a remote's per-remote deployment-key overrides; each ""
+// field means "not overridden" (the repo config value stands). Applied over
+// readSiteCustomization's result at that single boundary so every consumer
+// (guards, canonical/OG URL, siteHash, site-config.json) sees effective values.
+type SiteOverride struct {
+	URL     string
+	Publish string
+	Pages   string
+}
+
+// applySiteOverride overlays a remote's deployment overrides onto a resolved
+// customization, normalizing each override the same way the shared keys are
+// (url through NormalizeSiteURL, publish/pages through siteBoolString). An
+// override can turn a previously-empty customization into a publishable one
+// (ok=true), matching the single-boundary contract.
+func applySiteOverride(c siteCustomization, ok bool, ov SiteOverride) (siteCustomization, bool) {
+	if ov == (SiteOverride{}) {
+		return c, ok
+	}
+	if ov.URL != "" {
+		if norm, valid := NormalizeSiteURL(ov.URL); valid {
+			c.URL = norm
+		}
+	}
+	if ov.Publish != "" {
+		if b := siteBoolString(ov.Publish); b != "" {
+			c.Publish = b
+		}
+	}
+	if ov.Pages != "" {
+		if b := siteBoolString(ov.Pages); b != "" {
+			c.Pages = b
+		}
+	}
+	if c == (siteCustomization{}) {
+		return siteCustomization{}, false
+	}
+	return c, true
+}
+
 // siteCustomization is the validated customization the reader consumes: a title,
 // an accent (light) and optional accentDark, an optional favicon data URI, the
 // site's canonical base URL, a description, and the two publish guards. Only the
@@ -159,12 +209,26 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	return c, true
 }
 
-// readSiteCustomization resolves refs/gitmsg/core/config from the bucket's
-// objects and extracts its validated `site` sub-object. Returns ok=false (no
-// error) when the ref is absent, the object is missing/not a commit, the message
-// is not valid config JSON, or nothing in `site` survives validation — the
-// caller then deletes the artifact (reader falls back to its defaults).
-func readSiteCustomization(client *Client, prefix string, refs map[string]string) (siteCustomization, bool, error) {
+// readSiteCustomization resolves the bucket's site customization and overlays
+// the per-remote deployment overrides (ov) at this single boundary, so every
+// consumer sees effective values. See readSiteBaseCustomization for the base
+// resolution and applySiteOverride for the override rules.
+func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride) (siteCustomization, bool, error) {
+	base, ok, err := readSiteBaseCustomization(client, prefix, refs)
+	if err != nil {
+		return siteCustomization{}, false, err
+	}
+	c, ok := applySiteOverride(base, ok, ov)
+	return c, ok, nil
+}
+
+// readSiteBaseCustomization resolves refs/gitmsg/core/config from the bucket's
+// objects and extracts its validated `site` sub-object (no per-remote overrides
+// applied). Returns ok=false (no error) when the ref is absent, the object is
+// missing/not a commit, the message is not valid config JSON, or nothing in
+// `site` survives validation — the caller then deletes the artifact (reader
+// falls back to its defaults).
+func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string) (siteCustomization, bool, error) {
 	sha, present := refs["refs/gitmsg/core/config"]
 	if !present || len(sha) != 40 {
 		return siteCustomization{}, false, nil
@@ -190,8 +254,8 @@ func readSiteCustomization(client *Client, prefix string, refs map[string]string
 // the repo's refs/gitmsg/core/config `site` sub-object. Absent/malformed config
 // deletes the artifact (reader falls back to its defaults). Best-effort by
 // contract; written on the same refs-moved path that maintains refs.json.
-func writeSiteCustomization(client *Client, prefix string, refs map[string]string) error {
-	cfg, ok, err := readSiteCustomization(client, prefix, refs)
+func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride) error {
+	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov)
 	if err != nil {
 		return err
 	}

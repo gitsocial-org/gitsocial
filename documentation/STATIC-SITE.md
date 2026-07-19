@@ -73,6 +73,19 @@ gitsocial config site list
 
 Both the writer and the reader validate every field with the same rules, so a bad config never breaks the page; if nothing survives validation the artifact is deleted and the site falls back to its defaults. The `.gitsocial/site/assets/` prefix is reserved for future binary assets; nothing reads or writes it today.
 
+### Per-remote overrides
+
+The three **deployment** keys — `url`, `publish`, `pages` — can be overridden per remote, so one repo can publish to two buckets each stamping its own identity (a repo published to two buckets otherwise stamps one bucket's URL into the other's canonicals, OG tags, and feed). Overrides are machine-local git config on the remote definition, `remote.<name>.gitsocial-site-{url,publish,pages}`, set with `--remote`:
+
+```bash
+gitsocial config site set url https://r2.example.com/ --remote r2   # this bucket's own canonical URL
+gitsocial config site set publish false --remote backup             # backup bucket carries data but no site
+gitsocial config site get url --remote r2                            # effective (override, else config ref)
+gitsocial config site list --remote r2                              # effective merged view
+```
+
+Only the deployment keys are overridable; identity keys (`title`, `description`, `accent`, `favicon`) travel with the repo in the config ref and are never per-remote. The override is applied over the config ref's `site` sub-object at a single resolution boundary (`readSiteCustomization`), so every consumer agrees on the effective value: the publish/pages guards, the absolute-URL page artifacts (canonicals, OG, sitemap, the Atom feed), the page-set `siteHash`, and the `site-config.json` artifact the SPA reads. An overridden `url` goes through the same `NormalizeSiteURL` validation as the shared key. Since a changed override is invisible to the bucket refs, it is folded into the push-state skip digest, so setting or changing an override triggers a full regen of exactly that bucket on the next push. The git remote helper reads the same keys from git config, so a plain `git push <remote>` honors the override too; an anonymous-URL invocation (no remote name) gets no overrides.
+
 ## How it works
 
 The whole site lives in `core/objstore/site/`, embedded in the binary via `SiteFiles`: `index.html`, the reader JS (`gs-core.js` / `gs-render.js` / `gs-app.js`), the page-entry boot layer `gs-upgrade.js`, and the extracted app stylesheet `pages-app.css` (linked by both the shell and the generated pages so an upgraded page renders the same look), which reads the [bucket layout](S3.md#bucket-layout) directly and re-implements gitmsg message parsing in JS. Layout or protocol changes must touch it too, and editing a file under `core/objstore/site/` requires rebuilding the binary before `site push`. `SiteFiles` ships every file under `site/` recursively (subdirectories included), so `uploadSiteFiles` publishes the whole shell — including the syntax-highlighting grammars under `site/grammars/`.

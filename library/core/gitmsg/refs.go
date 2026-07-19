@@ -99,6 +99,20 @@ func TrackingRefspec(remote string) string {
 	return "+refs/gitmsg/*:" + trackingPrefix(remote) + "*"
 }
 
+// TrackingRefPrefix returns the local namespace that mirrors the remote's
+// refs/gitmsg/* state refs (see trackingPrefix). Exposed for the push-path
+// tracking-ref reconcile.
+func TrackingRefPrefix(remote string) string {
+	return trackingPrefix(remote)
+}
+
+// TrackingRef maps a remote gitmsg ref (refs/gitmsg/X) to the local tracking
+// ref that mirrors it (see trackingPrefix). Exposed for the push-path reconcile
+// that syncs tracking refs to the bucket's actual state.
+func TrackingRef(remote, gitmsgRef string) string {
+	return trackingPrefix(remote) + strings.TrimPrefix(gitmsgRef, "refs/gitmsg/")
+}
+
 // getRemoteGitMsgRefs returns the remote's gitmsg state refs from the local
 // tracking mirror (no network calls). Reads the legacy refs/remotes/<remote>/gitmsg/
 // mirror first, then overlays the current tracking namespace, so refs mirrored

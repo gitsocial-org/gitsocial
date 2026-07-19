@@ -124,6 +124,66 @@ func TestConfiguredPushRemote(t *testing.T) {
 	}
 }
 
+func TestSetConfiguredPushRemotes_multiValued(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	if got := ConfiguredPushRemotes(dir); got != nil {
+		t.Errorf("ConfiguredPushRemotes() = %v, want nil when unset", got)
+	}
+	if err := SetConfiguredPushRemotes(dir, []string{"r2", "s3"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes: %v", err)
+	}
+	got := ConfiguredPushRemotes(dir)
+	if len(got) != 2 || got[0] != "r2" || got[1] != "s3" {
+		t.Fatalf("ConfiguredPushRemotes() = %v, want [r2 s3]", got)
+	}
+	// The first value stays available via the singular accessor (a plain --get
+	// would error on a multi-valued key).
+	if first := ConfiguredPushRemote(dir); first != "r2" {
+		t.Errorf("ConfiguredPushRemote() = %q, want r2 (first value)", first)
+	}
+	// Replacing with a shorter list drops the stale trailing values.
+	if err := SetConfiguredPushRemotes(dir, []string{"only"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes replace: %v", err)
+	}
+	if got := ConfiguredPushRemotes(dir); len(got) != 1 || got[0] != "only" {
+		t.Fatalf("after replace, ConfiguredPushRemotes() = %v, want [only]", got)
+	}
+	// An empty list unsets the key entirely.
+	if err := SetConfiguredPushRemotes(dir, nil); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes unset: %v", err)
+	}
+	if got := ConfiguredPushRemotes(dir); got != nil {
+		t.Errorf("after unset, ConfiguredPushRemotes() = %v, want nil", got)
+	}
+}
+
+func TestPushRemotes_resolution(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	ExecGit(dir, []string{"remote", "add", "origin", "s3://s3.example.com/bucket/repo"})
+	ExecGit(dir, []string{"remote", "add", "r2", "s3://r2.example.com/bucket/repo"})
+	// No config: falls back to the single-element heuristic.
+	if got := PushRemotes(dir); len(got) != 1 || got[0] != "origin" {
+		t.Fatalf("PushRemotes() unconfigured = %v, want [origin]", got)
+	}
+	// Configured multi-valued: every existing configured remote, in order.
+	if err := SetConfiguredPushRemotes(dir, []string{"r2", "origin"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes: %v", err)
+	}
+	if got := PushRemotes(dir); len(got) != 2 || got[0] != "r2" || got[1] != "origin" {
+		t.Fatalf("PushRemotes() configured = %v, want [r2 origin]", got)
+	}
+	// A configured name that isn't a real remote is dropped; if none survive, the
+	// heuristic single-element fallback stands.
+	if err := SetConfiguredPushRemotes(dir, []string{"ghost", "origin"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes ghost: %v", err)
+	}
+	if got := PushRemotes(dir); len(got) != 1 || got[0] != "origin" {
+		t.Fatalf("PushRemotes() with a ghost = %v, want [origin]", got)
+	}
+}
+
 func TestGetRemoteDefaultBranch_fallback(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)

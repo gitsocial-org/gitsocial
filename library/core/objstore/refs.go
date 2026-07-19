@@ -62,6 +62,18 @@ func readRemoteRefs(client *Client, prefix string) (map[string]string, error) {
 	return readRemoteRefsProgress(client, prefix, nil)
 }
 
+// ListRemoteRefs returns refname → sha for every ref in the bucket behind a
+// canonical s3 remote URL (the same listing the push-state digest reads). It is
+// the narrow entry the push-path tracking-ref reconcile needs without reaching
+// into objstore internals.
+func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) {
+	client, prefix, _, err := clientForRemote(remoteURL, env)
+	if err != nil {
+		return nil, err
+	}
+	return readRemoteRefs(client, prefix)
+}
+
 // readRemoteRefsProgress is readRemoteRefs with a progress hook: reading each
 // ref is one GET, so a bucket with many refs (fork registrations) is a long
 // silent phase without it. The per-ref GETs run through a bounded worker pool

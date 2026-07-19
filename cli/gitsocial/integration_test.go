@@ -367,3 +367,44 @@ func TestCLI_push_dryRunJSON(t *testing.T) {
 		t.Error("dry-run should not publish a site")
 	}
 }
+
+// TestCLI_push_multiRemote_oneFailingContinues: `push broken good` reports the
+// failing remote and exits non-zero, but the healthy remote still receives the
+// data (a failed remote must not block the others).
+func TestCLI_push_multiRemote_oneFailingContinues(t *testing.T) {
+	dir := t.TempDir()
+	good := t.TempDir()
+	if out, err := exec.Command("git", "init", "--bare", "-b", "main", good).CombinedOutput(); err != nil {
+		t.Fatalf("init good bare: %v\n%s", err, out)
+	}
+	broken := t.TempDir() // an empty dir, not a git repo → pushes to it fail
+	for _, args := range [][]string{
+		{"init", "-b", "main"},
+		{"config", "user.email", "cli-test@test.com"},
+		{"config", "user.name", "CLI Test"},
+		{"commit", "--allow-empty", "-m", "init"},
+		{"remote", "add", "good", good},
+		{"remote", "add", "broken", broken},
+		{"push", "good", "main"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	cacheDir := t.TempDir()
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
+		t.Fatalf("social init: exit %d\n%s", code, stderr)
+	}
+	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "post", "hello"); code != 0 {
+		t.Fatalf("social post: exit %d\n%s", code, stderr)
+	}
+
+	// broken first: it must fail, yet the good remote still gets the push.
+	stdout, stderr, code := runCLI(t, dir, cacheDir, "push", "--no-site", "broken", "good")
+	if code == 0 {
+		t.Errorf("a failing remote must make push exit non-zero\n%s%s", stdout, stderr)
+	}
+	if out, err := exec.Command("git", "-C", good, "rev-parse", "--verify", "refs/heads/gitmsg/social").CombinedOutput(); err != nil {
+		t.Errorf("good remote did not receive the push despite a failing peer: %v\n%s", err, out)
+	}
+}
