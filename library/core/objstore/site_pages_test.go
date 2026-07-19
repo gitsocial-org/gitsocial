@@ -11,12 +11,14 @@ package objstore
 import (
 	"crypto/sha1"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // makePageCommit builds a loose commit with a controllable author identity (the
@@ -46,10 +48,10 @@ type pageMsgSpec struct {
 	ts     int64
 }
 
-// seedSocialMessages appends the given messages as a linear chain on top of
-// parent, uploads the objects, points refs/heads/gitmsg/social at the new tip,
+// seedExtMessages appends the given messages as a linear chain on top of
+// parent, uploads the objects, points refs/heads/gitmsg/<ext> at the new tip,
 // and returns the shas oldest-first.
-func seedSocialMessages(t *testing.T, client *Client, parent string, specs []pageMsgSpec) []string {
+func seedExtMessages(t *testing.T, client *Client, ext, parent string, specs []pageMsgSpec) []string {
 	t.Helper()
 	shas := make([]string, 0, len(specs))
 	for i, s := range specs {
@@ -67,10 +69,16 @@ func seedSocialMessages(t *testing.T, client *Client, parent string, specs []pag
 		shas = append(shas, sha)
 		parent = sha
 	}
-	if err := client.Put("refs/heads/gitmsg/social", []byte(parent+"\n")); err != nil {
-		t.Fatalf("seed social ref: %v", err)
+	if err := client.Put("refs/heads/gitmsg/"+ext, []byte(parent+"\n")); err != nil {
+		t.Fatalf("seed %s ref: %v", ext, err)
 	}
 	return shas
+}
+
+// seedSocialMessages is seedExtMessages on the social data branch.
+func seedSocialMessages(t *testing.T, client *Client, parent string, specs []pageMsgSpec) []string {
+	t.Helper()
+	return seedExtMessages(t, client, "social", parent, specs)
 }
 
 // seedPagesConfig writes a core config commit carrying the given site
@@ -106,14 +114,16 @@ func pagesRefs(client *Client, t *testing.T) map[string]string {
 	return refs
 }
 
-// buildPages runs the items index and the page layer for the current social
-// branch (the direct, shell-free equivalent of a site push's tail).
+// buildPages runs the items index for every present gitmsg data branch and the
+// page layer (the direct, shell-free equivalent of a site push's tail).
 func buildPages(t *testing.T, client *Client) (pending bool, state string) {
 	t.Helper()
 	refs := pagesRefs(client, t)
-	if tip, ok := refs["refs/heads/gitmsg/social"]; ok {
-		if err := updateSiteItemsIndex(client, "", "social", tip, nil); err != nil {
-			t.Fatalf("items index: %v", err)
+	for _, ext := range siteItemsExts {
+		if tip, ok := refs["refs/heads/gitmsg/"+ext]; ok {
+			if err := updateSiteItemsIndex(client, "", ext, tip, nil); err != nil {
+				t.Fatalf("items index %s: %v", ext, err)
+			}
 		}
 	}
 	pending, state, err := rebuildSitePages(client, "", pagesRefs(client, t), "", nil, nil)
@@ -210,7 +220,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if keyExists(client, sitePagesLegacyFrontKey) {
 		t.Error("pages on: retired timeline.html must not exist")
 	}
-	for _, key := range []string{sitePagesManifestKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html"} {
+	for _, key := range []string{sitePagesManifestKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
 		if !keyExists(client, key) {
 			t.Errorf("pages on: %s must exist", key)
 		}
@@ -237,7 +247,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if err := pushSite(client, "", nil, nil); err != nil {
 		t.Fatalf("pushSite disable: %v", err)
 	}
-	gone := append([]string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, "posts/index.html", "issues/index.html", sitePagesManifestKey}, itemKeys...)
+	gone := append([]string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
 	for _, key := range gone {
 		if keyExists(client, key) {
 			t.Errorf("disable: %s must be deleted", key)
@@ -324,6 +334,15 @@ func TestSitePages_SealedListOverflow(t *testing.T) {
 	page1 := getKey(t, client, "posts/1.html")
 	if strings.Contains(page1, "older →") {
 		t.Error("page 1 (oldest) must have no older link")
+	}
+	// Sealed AND head list pages carry both autodiscovery links: the global feed
+	// and their own type feed.
+	globalLink := `<link rel="alternate" type="application/atom+xml" title="Pages Test" href="https://example.com/feed.xml">`
+	typeLink := `<link rel="alternate" type="application/atom+xml" title="posts · Pages Test" href="https://example.com/posts/feed.xml">`
+	for name, page := range map[string]string{"posts/index.html": head, "posts/1.html": page1} {
+		if !strings.Contains(page, globalLink) || !strings.Contains(page, typeLink) {
+			t.Errorf("%s must carry both the global and type feed autodiscovery links", name)
+		}
 	}
 	if !strings.Contains(page1, "post number 000") || !strings.Contains(page1, "post number 099") {
 		t.Error("page 1 must hold the oldest hundred")
@@ -717,6 +736,337 @@ func TestSitePages_FrontReadme(t *testing.T) {
 	}
 	if i, j := strings.Index(front, "readme fixture post"), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
 		t.Error("README must render after the timeline entries")
+	}
+}
+
+// atomFeedDoc mirrors the Atom feed shape for round-trip parsing in the tests.
+type atomFeedDoc struct {
+	XMLName  xml.Name `xml:"feed"`
+	ID       string   `xml:"id"`
+	Title    string   `xml:"title"`
+	Subtitle string   `xml:"subtitle"`
+	Updated  string   `xml:"updated"`
+	Links    []struct {
+		Rel  string `xml:"rel,attr"`
+		Href string `xml:"href,attr"`
+	} `xml:"link"`
+	Entries []atomFeedEntry `xml:"entry"`
+}
+
+// atomFeedEntry mirrors one Atom entry for round-trip parsing in the tests.
+type atomFeedEntry struct {
+	Title     string `xml:"title"`
+	ID        string `xml:"id"`
+	Updated   string `xml:"updated"`
+	Published string `xml:"published"`
+	Author    struct {
+		Name string `xml:"name"`
+	} `xml:"author"`
+	Category struct {
+		Term string `xml:"term,attr"`
+	} `xml:"category"`
+	Link struct {
+		Rel  string `xml:"rel,attr"`
+		Href string `xml:"href,attr"`
+	} `xml:"link"`
+	Content struct {
+		Type  string `xml:"type,attr"`
+		Value string `xml:",chardata"`
+	} `xml:"content"`
+}
+
+// feedLink returns the href of the feed-level link with the given rel.
+func feedLink(f atomFeedDoc, rel string) string {
+	for _, l := range f.Links {
+		if l.Rel == rel {
+			return l.Href
+		}
+	}
+	return ""
+}
+
+// feedEntryByTitle finds a parsed feed entry by its title.
+func feedEntryByTitle(t *testing.T, f atomFeedDoc, title string) atomFeedEntry {
+	t.Helper()
+	for _, e := range f.Entries {
+		if e.Title == title {
+			return e
+		}
+	}
+	t.Fatalf("feed entry %q not found", title)
+	return atomFeedEntry{}
+}
+
+func TestSitePages_AtomFeed(t *testing.T) {
+	client, bucket := testClient(t)
+	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "true", "url": "https://example.com/", "title": "Feed Test", "description": "a & b feed"})
+	hostile := "Bad <subject> & \"quotes\""
+	shas := seedSocialMessages(t, client, "", []pageMsgSpec{
+		{msg: "Apple post\n\nbody", ts: 1000},
+		{msg: hostile + "\n\n<b>bold</b> & stuff", author: "Eve <x>", ts: 1010},
+		{msg: "Cherry post\n\nbody", ts: 1020},
+		{msg: "Date post\n\nbody line one\nline two\n\npara two", ts: 1030},
+		{msg: "Subject only post", ts: 1035},
+		{msg: "Long post\n\n" + strings.Repeat("x", siteFeedBodyMax+1000), ts: 1036},
+	})
+	// Retract Cherry so it is excluded from the feed.
+	retract := "GitMsg: ext=\"social\"; edits=\"#commit:" + shas[2][:12] + "@gitmsg/social\"; retracted=\"true\"; v=\"0.1.0\""
+	seedSocialMessages(t, client, shas[5], []pageMsgSpec{{msg: retract, ts: 1040}})
+
+	// A memo item (newest of all) must be excluded from the feed.
+	msha, mloose := makePageCommit(t, "", "Mem", "mem@example.com", "Memo entry\n\nmemo body", 1050)
+	if err := client.Put("objects/"+msha[:2]+"/"+msha[2:], mloose); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Put("refs/heads/gitmsg/memo", []byte(msha+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateSiteItemsIndex(client, "", "memo", msha, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+
+	raw := getKey(t, client, sitePagesFeedKey)
+	if strings.Contains(raw, "<subject>") || strings.Contains(raw, "Memo entry") || strings.Contains(raw, "Cherry post") {
+		t.Errorf("feed carries excluded/unescaped content:\n%s", raw)
+	}
+	if !strings.Contains(raw, "Bad &lt;subject&gt; &amp; &quot;quotes&quot;") {
+		t.Error("hostile subject must be XML-escaped in the feed")
+	}
+	var f atomFeedDoc
+	if err := xml.Unmarshal([]byte(raw), &f); err != nil {
+		t.Fatalf("feed is not well-formed XML: %v", err)
+	}
+	if f.ID != "https://example.com/" || f.Title != "Feed Test" || f.Subtitle != "a & b feed" {
+		t.Errorf("feed metadata wrong: id=%q title=%q subtitle=%q", f.ID, f.Title, f.Subtitle)
+	}
+	if feedLink(f, "self") != "https://example.com/feed.xml" || feedLink(f, "alternate") != "https://example.com/" {
+		t.Errorf("feed self/alternate links wrong: %+v", f.Links)
+	}
+	if len(f.Entries) != 5 {
+		t.Fatalf("feed has %d entries, want 5 (Cherry retracted, memo excluded)", len(f.Entries))
+	}
+	// Newest-first: Long (1036), Subject only (1035), Date (1030), hostile
+	// (1010), Apple (1000).
+	wantTitles := []string{"Long post", "Subject only post", "Date post", hostile, "Apple post"}
+	for i, want := range wantTitles {
+		if f.Entries[i].Title != want {
+			t.Errorf("feed entry %d title = %q, want %q", i, f.Entries[i].Title, want)
+		}
+	}
+	e := f.Entries[2]
+	if e.ID != "https://example.com/i/"+shas[3][:12]+".html" || e.ID != e.Link.Href || e.Link.Rel != "alternate" {
+		t.Errorf("entry id/link wrong: id=%q link=%+v", e.ID, e.Link)
+	}
+	if e.Category.Term != "post" || e.Author.Name == "" {
+		t.Errorf("entry category/author wrong: term=%q author=%q", e.Category.Term, e.Author.Name)
+	}
+	if _, err := time.Parse(time.RFC3339, e.Updated); err != nil {
+		t.Errorf("entry updated %q not RFC3339: %v", e.Updated, err)
+	}
+	if _, err := time.Parse(time.RFC3339, f.Updated); err != nil {
+		t.Errorf("feed updated %q not RFC3339: %v", f.Updated, err)
+	}
+	// The feed's <updated> is the newest ENTRY's activity (Long, 1036), not the
+	// memo's newer timestamp.
+	if want := time.Unix(1036, 0).UTC().Format(time.RFC3339); f.Updated != want {
+		t.Errorf("feed updated = %q, want the newest entry's activity %q", f.Updated, want)
+	}
+
+	// Entry content: the item's own body as escaped <p>/<br> HTML (subject
+	// stripped), double-escaped in the raw XML.
+	if e.Content.Type != "html" || e.Content.Value != "<p>body line one<br>line two</p><p>para two</p>" {
+		t.Errorf("content wrong: type=%q value=%q", e.Content.Type, e.Content.Value)
+	}
+	if strings.Contains(raw, "<p>body") || strings.Contains(raw, "<b>bold") {
+		t.Error("content must not carry literal HTML in the raw XML")
+	}
+	// An XML/HTML-special body is escaped INSIDE the content HTML (one XML
+	// unescape by the parser leaves escaped-HTML text, never markup).
+	if got := feedEntryByTitle(t, f, hostile).Content.Value; got != "<p>&lt;b&gt;bold&lt;/b&gt; &amp; stuff</p>" {
+		t.Errorf("hostile body content = %q, want the inner-escaped form", got)
+	}
+	// A subject-only item carries no content element.
+	if got := feedEntryByTitle(t, f, "Subject only post").Content.Value; got != "" {
+		t.Errorf("subject-only entry must omit content, got %q", got)
+	}
+	// An over-cap body truncates with a marker paragraph.
+	long := feedEntryByTitle(t, f, "Long post").Content.Value
+	if !strings.HasPrefix(long, "<p>xxxx") || !strings.HasSuffix(long, "<p>… truncated</p>") {
+		t.Errorf("long body must truncate with a marker, got %d bytes ending %q", len(long), long[max(0, len(long)-40):])
+	}
+	if len(long) > siteFeedBodyMax+100 {
+		t.Errorf("truncated content is %d bytes, want ~%d", len(long), siteFeedBodyMax)
+	}
+
+	// Autodiscovery: every generated page carries the alternate feed link with
+	// an ABSOLUTE href (a relative one resolves to garbage once gs-upgrade.js
+	// hash-rewrites the location).
+	discovery := `<link rel="alternate" type="application/atom+xml" title="Feed Test" href="https://example.com/feed.xml">`
+	front := getKey(t, client, sitePagesFrontKey)
+	if !strings.Contains(front, discovery) {
+		t.Error("front page missing the absolute Atom autodiscovery link")
+	}
+	item := getKey(t, client, "i/"+shas[0][:12]+".html")
+	if !strings.Contains(item, discovery) {
+		t.Error("item page missing the absolute Atom autodiscovery link")
+	}
+	if head := getKey(t, client, "posts/index.html"); !strings.Contains(head, discovery) {
+		t.Error("list head page missing the absolute Atom autodiscovery link")
+	}
+
+	// No-op reclaim pass (no tips moved) must not rewrite the feed.
+	feedPuts := bucket.putCount(sitePagesFeedKey)
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending on reclaim pass")
+	}
+	if bucket.putCount(sitePagesFeedKey) != feedPuts {
+		t.Error("a no-op pass must not rewrite feed.xml")
+	}
+
+	// Incremental append: a new top-level post chained off the current social tip
+	// must add a feed entry and rewrite feed.xml.
+	socialTip := strings.TrimSpace(getKey(t, client, "refs/heads/gitmsg/social"))
+	seedSocialMessages(t, client, socialTip, []pageMsgSpec{{msg: "Elder post\n\nelder body", ts: 1070}})
+	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
+		t.Fatalf("incremental pending=%v state=%q", pending, state)
+	}
+	if bucket.putCount(sitePagesFeedKey) <= feedPuts {
+		t.Error("an item-appending push must rewrite feed.xml")
+	}
+	f = atomFeedDoc{}
+	if err := xml.Unmarshal([]byte(getKey(t, client, sitePagesFeedKey)), &f); err != nil {
+		t.Fatalf("incremental feed not well-formed: %v", err)
+	}
+	if got := feedEntryByTitle(t, f, "Elder post").Content.Value; got != "<p>elder body</p>" {
+		t.Errorf("appended post content = %q, want its body", got)
+	}
+	// The incremental pass builds from metadata: an entry OUTSIDE the delta must
+	// still carry content (its body fetched back from the corpus).
+	if got := feedEntryByTitle(t, f, "Apple post").Content.Value; got != "<p>body</p>" {
+		t.Errorf("non-delta entry content = %q, want its corpus body", got)
+	}
+}
+
+func TestSitePages_AtomFeedCap(t *testing.T) {
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	specs := make([]pageMsgSpec, 0, sitePagesFrontSize+5)
+	for i := 0; i < sitePagesFrontSize+5; i++ {
+		specs = append(specs, pageMsgSpec{msg: fmt.Sprintf("feed post %03d", i), ts: int64(1000 + i)})
+	}
+	seedSocialMessages(t, client, "", specs)
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	var f atomFeedDoc
+	if err := xml.Unmarshal([]byte(getKey(t, client, sitePagesFeedKey)), &f); err != nil {
+		t.Fatalf("feed not well-formed: %v", err)
+	}
+	if len(f.Entries) != sitePagesFrontSize {
+		t.Fatalf("feed has %d entries, want the cap %d", len(f.Entries), sitePagesFrontSize)
+	}
+	// Newest-first: the cap keeps the newest, drops the oldest five.
+	newest := fmt.Sprintf("feed post %03d", sitePagesFrontSize+4)
+	if f.Entries[0].Title != newest {
+		t.Errorf("first entry = %q, want newest %q", f.Entries[0].Title, newest)
+	}
+	for _, e := range f.Entries {
+		if e.Title == "feed post 000" {
+			t.Error("the oldest post must be dropped by the cap")
+		}
+	}
+}
+
+func TestSitePages_TypeFeeds(t *testing.T) {
+	client, bucket := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "Social one\n\npost body", ts: 1000}})
+	issues := seedExtMessages(t, client, "pm", "", []pageMsgSpec{{msg: "Issue one\n\nissue body", ts: 1010}})
+	seedExtMessages(t, client, "memo", "", []pageMsgSpec{{msg: "Memo one\n\nmemo body", ts: 1020}})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+
+	// Isolation: each type feed carries only its own extension's items.
+	posts := getKey(t, client, "posts/feed.xml")
+	if !strings.Contains(posts, "Social one") || strings.Contains(posts, "Issue one") || strings.Contains(posts, "Memo one") {
+		t.Errorf("posts feed must carry only posts:\n%s", posts)
+	}
+	issuesFeed := getKey(t, client, "issues/feed.xml")
+	if !strings.Contains(issuesFeed, "Issue one") || strings.Contains(issuesFeed, "Social one") {
+		t.Errorf("issues feed must carry only issues:\n%s", issuesFeed)
+	}
+	// Memos get a type feed even though the main feed excludes them.
+	if memos := getKey(t, client, "memos/feed.xml"); !strings.Contains(memos, "Memo one") {
+		t.Error("memos feed must carry the memo")
+	}
+	main := getKey(t, client, sitePagesFeedKey)
+	if strings.Contains(main, "Memo one") || !strings.Contains(main, "Issue one") || !strings.Contains(main, "Social one") {
+		t.Error("main feed must interleave posts+issues and still exclude memos")
+	}
+
+	// A type feed's identity block and body content.
+	var f atomFeedDoc
+	if err := xml.Unmarshal([]byte(issuesFeed), &f); err != nil {
+		t.Fatalf("issues feed not well-formed: %v", err)
+	}
+	if f.ID != "https://example.com/issues/feed.xml" || f.Title != "issues · Pages Test" {
+		t.Errorf("issues feed identity wrong: id=%q title=%q", f.ID, f.Title)
+	}
+	if feedLink(f, "self") != "https://example.com/issues/feed.xml" || feedLink(f, "alternate") != "https://example.com/issues/index.html" {
+		t.Errorf("issues feed self/alternate links wrong: %+v", f.Links)
+	}
+	entry := feedEntryByTitle(t, f, "Issue one")
+	if entry.Category.Term != "issue" || entry.Content.Value != "<p>issue body</p>" {
+		t.Errorf("issues feed entry wrong: term=%q content=%q", entry.Category.Term, entry.Content.Value)
+	}
+
+	// A type with no items still gets a well-formed empty feed at epoch.
+	f = atomFeedDoc{}
+	if err := xml.Unmarshal([]byte(getKey(t, client, "prs/feed.xml")), &f); err != nil {
+		t.Fatalf("prs feed not well-formed: %v", err)
+	}
+	if len(f.Entries) != 0 || f.Updated != "1970-01-01T00:00:00Z" {
+		t.Errorf("empty prs feed wrong: %d entries, updated %q", len(f.Entries), f.Updated)
+	}
+
+	// Item pages and the front page carry only the global autodiscovery link.
+	typeLink := `title="issues · Pages Test" href="https://example.com/issues/feed.xml"`
+	if front := getKey(t, client, sitePagesFrontKey); strings.Contains(front, "issues/feed.xml") {
+		t.Error("the front page must carry only the global feed link")
+	}
+	itemPage := getKey(t, client, "i/"+issues[0][:12]+".html")
+	if strings.Contains(itemPage, "issues/feed.xml") || !strings.Contains(itemPage, `href="https://example.com/feed.xml"`) {
+		t.Error("an item page must carry only the global feed link")
+	}
+	if head := getKey(t, client, "issues/index.html"); !strings.Contains(head, typeLink) {
+		t.Error("the issues list head must advertise its type feed")
+	}
+
+	// Incremental: an issues-only push rewrites issues/feed.xml and the main
+	// feed, never the other type feeds.
+	mainPuts, issuesPuts := bucket.putCount(sitePagesFeedKey), bucket.putCount("issues/feed.xml")
+	postsPuts, memosPuts := bucket.putCount("posts/feed.xml"), bucket.putCount("memos/feed.xml")
+	seedExtMessages(t, client, "pm", issues[0], []pageMsgSpec{{msg: "Issue two\n\nsecond body", ts: 1030}})
+	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
+		t.Fatalf("incremental pending=%v state=%q", pending, state)
+	}
+	if bucket.putCount("issues/feed.xml") != issuesPuts+1 || bucket.putCount(sitePagesFeedKey) != mainPuts+1 {
+		t.Error("an issues push must rewrite the issues feed and the main feed once")
+	}
+	if bucket.putCount("posts/feed.xml") != postsPuts || bucket.putCount("memos/feed.xml") != memosPuts {
+		t.Error("an issues push must not rewrite unaffected type feeds")
+	}
+	f = atomFeedDoc{}
+	if err := xml.Unmarshal([]byte(getKey(t, client, "issues/feed.xml")), &f); err != nil {
+		t.Fatalf("incremental issues feed not well-formed: %v", err)
+	}
+	if got := feedEntryByTitle(t, f, "Issue two").Content.Value; got != "<p>second body</p>" {
+		t.Errorf("incremental issues entry content = %q, want its body", got)
 	}
 }
 

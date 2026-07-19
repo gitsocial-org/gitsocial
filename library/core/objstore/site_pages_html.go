@@ -48,6 +48,12 @@ const (
 	sitePagesSitemapHeadKey = "sitemap-head.xml"
 	// sitePagesRobotsKey is the crawler policy file.
 	sitePagesRobotsKey = "robots.txt"
+	// sitePagesFeedKey is the Atom 1.0 feed of the newest top-level items, one
+	// more crawl-surface artifact in the sitemap/robots class.
+	sitePagesFeedKey = "feed.xml"
+	// siteFeedBodyMax caps one feed entry's raw body bytes before paragraph
+	// rendering (a cut appends a truncation marker, like the README cap).
+	siteFeedBodyMax = 4 * 1024
 	// sitePageDescriptionLen bounds the meta/OG description (~160 chars).
 	sitePageDescriptionLen = 160
 )
@@ -129,7 +135,9 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <meta property="og:site_name" content="{{.SiteTitle}}">
 <meta property="og:url" content="{{.Canonical}}">
 <meta name="twitter:card" content="summary">
-<meta name="gs-route" content="{{.Route}}">
+<link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="{{.Feed}}">
+{{if .TypeFeed}}<link rel="alternate" type="application/atom+xml" title="{{.TypeFeedTitle}}" href="{{.TypeFeed}}">
+{{end}}<meta name="gs-route" content="{{.Route}}">
 <style>@BASE@</style>
 <link rel="stylesheet" href="{{.Base}}pages.css">
 <script defer src="{{.Base}}gs-upgrade.js"></script>
@@ -179,13 +187,16 @@ var sitePageTemplates = template.Must(template.New("pages").Parse(strings.Replac
 
 // sitePageChrome is the shared head/shell data every page stamps.
 type sitePageChrome struct {
-	Title       string // full <title> (subject · site title)
-	Description string // meta/OG description, whitespace-collapsed, ~160 chars
-	OGTitle     string // og:title (the bare subject)
-	SiteTitle   string
-	Canonical   string // absolute self URL from site.url
-	Route       string // gs-route content, in the shell's parseRoute grammar
-	Base        string // relative path from this page to the site root ("./" or "../")
+	Title         string // full <title> (subject · site title)
+	Description   string // meta/OG description, whitespace-collapsed, ~160 chars
+	OGTitle       string // og:title (the bare subject)
+	SiteTitle     string
+	Canonical     string // absolute self URL from site.url
+	Route         string // gs-route content, in the shell's parseRoute grammar
+	Base          string // relative path from this page to the site root ("./" or "../")
+	Feed          string // absolute feed.xml URL for the autodiscovery link (a relative href breaks after gs-upgrade.js hash-rewrites the location)
+	TypeFeed      string // absolute <dir>/feed.xml URL — a second autodiscovery link on a type's list pages ("" elsewhere)
+	TypeFeedTitle string // the type feed link's distinct display title ("<label> · <site title>")
 }
 
 // sitePageChip is one state/type chip.
@@ -559,6 +570,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 		Canonical:   site.URL + "i/" + it.Msg.Short + ".html",
 		Route:       route,
 		Base:        "../",
+		Feed:        site.URL + sitePagesFeedKey,
 	}
 	if pageItemType(it) == "release" {
 		if s := buildSiteReleaseArtifacts(it); s != nil {
@@ -766,4 +778,208 @@ func newestLastmod(entries []siteSitemapEntry) string {
 func writeSiteRobots(client *Client, prefix string, site sitePageSite) error {
 	body := "User-agent: *\nAllow: /\nSitemap: " + site.URL + "sitemap.xml\n"
 	return putSiteText(client, prefix+sitePagesRobotsKey, "text/plain; charset=utf-8", []byte(body))
+}
+
+// siteFeedEntry is one Atom entry projected from a top-level item: its title,
+// canonical page URL (also its stable <id>), latest activity and creation
+// times, display author, item-type category term, and body HTML.
+type siteFeedEntry struct {
+	title     string
+	href      string
+	updated   int64
+	published int64
+	author    string
+	term      string
+	content   string // escaped <p>/<br> HTML of the item's own body ("" = no content element)
+}
+
+// selectSiteFeedItems picks one feed's item set: the newest sitePagesFrontSize
+// non-retracted top-level items of the given extensions (code commits absent —
+// they have no item page to link), newest-first by (effective time, sha)
+// exactly like the front page's interleave. Selection runs before body
+// attachment so bodies are never fetched for items the cap drops.
+func selectSiteFeedItems(roots map[string][]*sitePageItem, done map[string]int, exts []string) []*sitePageItem {
+	var items []*sitePageItem
+	for _, ext := range exts {
+		for _, it := range roots[ext][:done[ext]] {
+			if !it.Retracted {
+				items = append(items, it)
+			}
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		ti, tj := pageEffectiveTime(items[i].Msg), pageEffectiveTime(items[j].Msg)
+		if ti != tj {
+			return ti > tj
+		}
+		return items[i].Msg.SHA > items[j].Msg.SHA
+	})
+	if len(items) > sitePagesFrontSize {
+		items = items[:sitePagesFrontSize]
+	}
+	return items
+}
+
+// siteFeedContentHTML renders an item's own body (subject stripped, replies
+// excluded) as escaped <p>/<br> HTML for the entry's content element, capped
+// at siteFeedBodyMax with a truncation marker paragraph; "" when the item has
+// no body beyond its subject.
+func siteFeedContentHTML(it *sitePageItem) string {
+	_, body := protocol.SplitSubjectBody(pageItemBody(it))
+	truncated := false
+	if len(body) > siteFeedBodyMax {
+		body, truncated = strings.ToValidUTF8(body[:siteFeedBodyMax], ""), true
+	}
+	paras := sitePageParas(body)
+	if paras == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, para := range paras {
+		b.WriteString("<p>")
+		for i, line := range para {
+			if i > 0 {
+				b.WriteString("<br>")
+			}
+			b.WriteString(siteXMLEscaper.Replace(line))
+		}
+		b.WriteString("</p>")
+	}
+	if truncated {
+		b.WriteString("<p>… truncated</p>")
+	}
+	return b.String()
+}
+
+// buildSiteFeedEntries projects the selected (body-attached) items into Atom
+// entries.
+func buildSiteFeedEntries(items []*sitePageItem, site sitePageSite) []siteFeedEntry {
+	entries := make([]siteFeedEntry, 0, len(items))
+	for _, it := range items {
+		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+		if subject == "" {
+			subject = sitePageTypeLabel(pageItemType(it))
+		}
+		name, _ := pageDisplayAuthor(it.Msg)
+		entries = append(entries, siteFeedEntry{
+			title:     subject,
+			href:      site.URL + "i/" + it.Msg.Short + ".html",
+			updated:   sitePageLastActivity(it),
+			published: pageEffectiveTime(it.Msg),
+			author:    name,
+			term:      pageItemType(it),
+			content:   siteFeedContentHTML(it),
+		})
+	}
+	return entries
+}
+
+// siteFeedHead is one feed document's identity block: the main feed carries
+// the site's, a type feed its list's.
+type siteFeedHead struct {
+	id       string
+	title    string
+	subtitle string // omitted when empty
+	self     string
+	alt      string
+}
+
+// renderSiteFeed renders one Atom 1.0 feed document. The feed's <updated> is the
+// newest entry's activity (epoch when there are no entries — deterministic, never
+// wall clock); every text/attribute value is XML-escaped.
+func renderSiteFeed(entries []siteFeedEntry, head siteFeedHead) []byte {
+	esc := siteXMLEscaper.Replace
+	rfc3339 := func(ts int64) string { return time.Unix(ts, 0).UTC().Format(time.RFC3339) }
+	var newest int64
+	for _, e := range entries {
+		if e.updated > newest {
+			newest = e.updated
+		}
+	}
+	var b strings.Builder
+	b.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<feed xmlns=\"http://www.w3.org/2005/Atom\">\n")
+	b.WriteString("<id>" + esc(head.id) + "</id>\n")
+	b.WriteString("<title>" + esc(head.title) + "</title>\n")
+	if head.subtitle != "" {
+		b.WriteString("<subtitle>" + esc(head.subtitle) + "</subtitle>\n")
+	}
+	b.WriteString("<updated>" + rfc3339(newest) + "</updated>\n")
+	b.WriteString("<link rel=\"self\" href=\"" + esc(head.self) + "\"/>\n")
+	b.WriteString("<link rel=\"alternate\" href=\"" + esc(head.alt) + "\"/>\n")
+	for _, e := range entries {
+		b.WriteString("<entry>\n")
+		b.WriteString("<title>" + esc(e.title) + "</title>\n")
+		b.WriteString("<id>" + esc(e.href) + "</id>\n")
+		b.WriteString("<link rel=\"alternate\" href=\"" + esc(e.href) + "\"/>\n")
+		b.WriteString("<updated>" + rfc3339(e.updated) + "</updated>\n")
+		b.WriteString("<published>" + rfc3339(e.published) + "</published>\n")
+		b.WriteString("<author><name>" + esc(e.author) + "</name></author>\n")
+		b.WriteString("<category term=\"" + esc(e.term) + "\"/>\n")
+		if e.content != "" {
+			// Escaped HTML inside escaped XML: the content is HTML markup whose
+			// text was already escaped, XML-escaped again as element chardata.
+			b.WriteString("<content type=\"html\">" + esc(e.content) + "</content>\n")
+		}
+		b.WriteString("</entry>\n")
+	}
+	b.WriteString("</feed>\n")
+	return []byte(b.String())
+}
+
+// putSiteFeed fetches the selected items' missing root bodies (a no-op on the
+// full-regen path where the corpus is already loaded, a few head-first GETs on
+// the metadata-only incremental path) and uploads one rendered feed document
+// (uncompressed, like the sitemap and robots).
+func putSiteFeed(client *Client, prefix, key string, items []*sitePageItem, head siteFeedHead, site sitePageSite) error {
+	if err := attachRootBodies(client, prefix, items); err != nil {
+		return fmt.Errorf("feed bodies %s: %w", key, err)
+	}
+	return putSiteText(client, prefix+key, "application/atom+xml; charset=utf-8", renderSiteFeed(buildSiteFeedEntries(items, site), head))
+}
+
+// writeSiteFeed writes the main Atom feed: the front page's item interleave
+// (memo excluded), identified as the site itself.
+func writeSiteFeed(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) error {
+	exts := make([]string, 0, len(sitePageLists))
+	for _, list := range sitePageLists {
+		if list.Ext != "memo" {
+			exts = append(exts, list.Ext)
+		}
+	}
+	head := siteFeedHead{id: site.URL, title: site.Title, subtitle: site.Description, self: site.URL + sitePagesFeedKey, alt: site.URL}
+	return putSiteFeed(client, prefix, sitePagesFeedKey, selectSiteFeedItems(roots, done, exts), head, site)
+}
+
+// siteTypeFeedKey is a type directory's feed bucket key.
+func siteTypeFeedKey(list sitePageList) string {
+	return list.Dir + "/" + sitePagesFeedKey
+}
+
+// siteTypeFeedTitle words a type feed's display title, distinct from the main
+// feed's so reader pickers tell them apart.
+func siteTypeFeedTitle(list sitePageList, site sitePageSite) string {
+	return list.Label + " · " + site.Title
+}
+
+// writeSiteTypeFeeds writes the per-type Atom feeds: every type directory's
+// feed mirrors its list page the way the main feed mirrors the front page
+// (memos included here — only the main feed's interleave excludes them). dirs
+// (nil = every dir) limits the incremental pass to the type directories whose
+// entries changed, matching writeSiteTypeLists' gating.
+func writeSiteTypeFeeds(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, dirs map[string]bool) error {
+	for _, list := range sitePageLists {
+		if dirs != nil && !dirs[list.Dir] {
+			continue
+		}
+		head := siteFeedHead{
+			id:    site.URL + siteTypeFeedKey(list),
+			title: siteTypeFeedTitle(list, site),
+			self:  site.URL + siteTypeFeedKey(list),
+			alt:   site.URL + list.Dir + "/index.html",
+		}
+		if err := putSiteFeed(client, prefix, siteTypeFeedKey(list), selectSiteFeedItems(roots, done, []string{list.Ext}), head, site); err != nil {
+			return err
+		}
+	}
+	return nil
 }

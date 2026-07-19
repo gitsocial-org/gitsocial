@@ -12,6 +12,8 @@
 //                           index.html; uploadSiteFiles owns the embedded shell
 //                           index.html only when it is not (dual-mode ownership).
 //   sitemap.xml robots.txt  crawl surface (sitemap-<n>.xml parts past ~40K URLs)
+//   feed.xml                Atom 1.0 feed of the newest top-level items
+//   <dir>/feed.xml          per-type Atom feeds mirroring each list page
 //
 // Pages are a projection of the push's own artifacts (the items metadata index
 // + bodies corpus, never a second git walk), enabled by the pushed guards
@@ -46,8 +48,9 @@ const (
 	// incomplete, and the list pagination state.
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; a manifest at any
-	// other version is treated as absent (full regen under budget).
-	sitePagesVersion = 1
+	// other version is treated as absent (full regen under budget). v2: the
+	// Atom feed (feed.xml) plus the absolute autodiscovery link in every head.
+	sitePagesVersion = 2
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFrontSize is the front page's entry count.
@@ -396,6 +399,12 @@ func generateSitePages(client *Client, prefix string, site sitePageSite, prior *
 	if err := writeSiteSitemap(client, prefix, roots, done, site); err != nil {
 		return false, err
 	}
+	if err := writeSiteFeed(client, prefix, roots, done, site); err != nil {
+		return false, err
+	}
+	if err := writeSiteTypeFeeds(client, prefix, roots, done, site, nil); err != nil {
+		return false, err
+	}
 	if err := writeSiteRobots(client, prefix, site); err != nil {
 		return false, err
 	}
@@ -474,6 +483,12 @@ func incrementalSitePages(client *Client, prefix string, site sitePageSite, prio
 	}
 	if len(affected) > 0 {
 		if err := writeSiteSitemap(client, prefix, roots, done, site); err != nil {
+			return false, err
+		}
+		if err := writeSiteFeed(client, prefix, roots, done, site); err != nil {
+			return false, err
+		}
+		if err := writeSiteTypeFeeds(client, prefix, roots, done, site, affectedDirs); err != nil {
 			return false, err
 		}
 	}
@@ -580,7 +595,7 @@ func deleteSitePages(client *Client, prefix string) (bool, error) {
 			remove(key)
 		}
 	}
-	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey} {
+	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
 		remove(prefix + key)
 	}
 	// Restore the embedded shell as index.html (the flip back). Best-effort: a
@@ -747,13 +762,16 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		d.OlderHref = strconv.Itoa(sealed) + ".html"
 	}
 	d.Chrome = sitePageChrome{
-		Title:       list.Label + " · " + site.Title,
-		Description: sitePageDescription(sitePageListDescription(list, site), ""),
-		OGTitle:     list.Label + " · " + site.Title,
-		SiteTitle:   site.Title,
-		Canonical:   site.URL + list.Dir + "/index.html",
-		Route:       list.Route,
-		Base:        "../",
+		Title:         list.Label + " · " + site.Title,
+		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
+		OGTitle:       list.Label + " · " + site.Title,
+		SiteTitle:     site.Title,
+		Canonical:     site.URL + list.Dir + "/index.html",
+		Route:         list.Route,
+		Base:          "../",
+		Feed:          site.URL + sitePagesFeedKey,
+		TypeFeed:      site.URL + siteTypeFeedKey(list),
+		TypeFeedTitle: siteTypeFeedTitle(list, site),
 	}
 	return d
 }
@@ -783,13 +801,16 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		d.OlderHref = strconv.Itoa(n-1) + ".html"
 	}
 	d.Chrome = sitePageChrome{
-		Title:       fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
-		Description: sitePageDescription(sitePageListDescription(list, site), ""),
-		OGTitle:     fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
-		SiteTitle:   site.Title,
-		Canonical:   site.URL + list.Dir + "/" + strconv.Itoa(n) + ".html",
-		Route:       list.Route,
-		Base:        "../",
+		Title:         fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
+		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
+		OGTitle:       fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
+		SiteTitle:     site.Title,
+		Canonical:     site.URL + list.Dir + "/" + strconv.Itoa(n) + ".html",
+		Route:         list.Route,
+		Base:          "../",
+		Feed:          site.URL + sitePagesFeedKey,
+		TypeFeed:      site.URL + siteTypeFeedKey(list),
+		TypeFeedTitle: siteTypeFeedTitle(list, site),
 	}
 	return d
 }
@@ -883,6 +904,7 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 		// the README the static page shows.
 		Route: "/",
 		Base:  "./",
+		Feed:  site.URL + sitePagesFeedKey,
 	}
 	page, err := renderSitePage("front", d)
 	if err != nil {

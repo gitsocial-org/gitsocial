@@ -353,32 +353,49 @@ func readSitePagesCorpus(client *Client, prefix, ext string, items *siteShardMan
 }
 
 // attachThreadBodies reads back the message bodies the affected threads render
-// (the resolved latest version of each root and reply), grouped per source
-// extension so each bodies corpus is scanned once, newest shards first, only
-// until every needed sha is found.
+// (the resolved latest version of each root and reply).
 func attachThreadBodies(client *Client, prefix string, affected []*sitePageItem) error {
+	var msgs []*sitePageMsg
+	for _, r := range affected {
+		msgs = append(msgs, r.Resolved)
+		for _, rep := range r.Replies {
+			msgs = append(msgs, rep.Resolved)
+		}
+	}
+	return attachMsgBodies(client, prefix, msgs)
+}
+
+// attachRootBodies reads back only the given roots' own resolved bodies
+// (replies skipped) — the feed's incremental path renders just the entry
+// items' content, never their threads.
+func attachRootBodies(client *Client, prefix string, items []*sitePageItem) error {
+	msgs := make([]*sitePageMsg, 0, len(items))
+	for _, it := range items {
+		msgs = append(msgs, it.Resolved)
+	}
+	return attachMsgBodies(client, prefix, msgs)
+}
+
+// attachMsgBodies fetches the still-missing bodies of the given messages,
+// grouped per source extension so each bodies corpus is scanned once, newest
+// shards first, only until every needed sha is found.
+func attachMsgBodies(client *Client, prefix string, msgs []*sitePageMsg) error {
 	need := map[string][]*sitePageMsg{}
-	add := func(m *sitePageMsg) {
+	for _, m := range msgs {
 		if m.Message == "" {
 			need[m.Ext] = append(need[m.Ext], m)
 		}
 	}
-	for _, r := range affected {
-		add(r.Resolved)
-		for _, rep := range r.Replies {
-			add(rep.Resolved)
-		}
-	}
-	for ext, msgs := range need {
-		shas := make(map[string]bool, len(msgs))
-		for _, m := range msgs {
+	for ext, group := range need {
+		shas := make(map[string]bool, len(group))
+		for _, m := range group {
 			shas[m.SHA] = true
 		}
 		bodies, err := readBodiesBySHAs(client, prefix, ext, shas)
 		if err != nil {
 			return err
 		}
-		for _, m := range msgs {
+		for _, m := range group {
 			m.Message = bodies[m.SHA]
 		}
 	}
