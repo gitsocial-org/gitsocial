@@ -73,6 +73,52 @@ async function main() {
   await wait(20);
   ok("a block in a missing grammar stays plain text (no token spans)", !hasTokenSpan(missParent), "spans=" + hasTokenSpan(missParent));
 
+  // ---- dependency-chained NEW grammar: tsx loads jsx first, then highlights ----
+  ok("tsx and its dep jsx are both unloaded before use", !P.languages.tsx && !P.languages.jsx, "tsx=" + !!P.languages.tsx + " jsx=" + !!P.languages.jsx);
+  ok("langForPath maps .tsx to the tsx grammar", GS.langForPath("App.tsx") === "tsx", "lang=" + GS.langForPath("App.tsx"));
+  const tsxOk = await GS.ensureGrammar("tsx");
+  ok("ensureGrammar(tsx) resolves true", tsxOk === true, "tsxOk=" + tsxOk);
+  ok("tsx's dependency jsx was loaded (dep-first) alongside tsx", !!P.languages.jsx && !!P.languages.tsx, "jsx=" + !!P.languages.jsx + " tsx=" + !!P.languages.tsx);
+  const tsxParent = el("code", {}, []);
+  GS.highlightTo(tsxParent, "const App = () => <div className=\"x\">{count}</div>;", GS.langForPath("App.tsx"));
+  await wait(20);
+  ok("a .tsx block highlights once the tsx->jsx chain is loaded", hasTokenSpan(tsxParent), "spans=" + hasTokenSpan(tsxParent));
+
+  // ---- plain new grammars (scss, hcl): extension detection + lazy highlight ----
+  for (const [path, lang, code] of [["style.scss", "scss", "$c: red;\n.a { color: $c; }\n"], ["main.tf", "hcl", "resource \"aws_s3_bucket\" \"b\" {\n  bucket = \"x\"\n}\n"]]) {
+    ok("langForPath maps " + path + " to " + lang, GS.langForPath(path) === lang, "lang=" + GS.langForPath(path));
+    const par = el("code", {}, []);
+    GS.highlightTo(par, code, GS.langForPath(path));
+    await GS.ensureGrammar(lang);
+    await wait(30);
+    ok("a " + lang + " block highlights after lazy load", hasTokenSpan(par), "spans=" + hasTokenSpan(par));
+  }
+
+  // ---- basename detection: extensionless Dockerfile / Makefile highlight ----
+  // The Dockerfile case pins the bug fix: docker was unreachable from file views
+  // when detection was extension-only.
+  ok("langForPath resolves Dockerfile via the basename map (docker)", GS.langForPath("Dockerfile") === "docker", "lang=" + GS.langForPath("Dockerfile"));
+  ok("langForPath resolves a nested build/Dockerfile", GS.langForPath("build/Dockerfile") === "docker", "lang=" + GS.langForPath("build/Dockerfile"));
+  const dockerParent = el("code", {}, []);
+  GS.highlightTo(dockerParent, "FROM alpine:3\nRUN echo hi\n", GS.langForPath("Dockerfile"));
+  await GS.ensureGrammar("docker");
+  await wait(30);
+  ok("a Dockerfile blob highlights (basename detection reaches the docker grammar)", hasTokenSpan(dockerParent), "spans=" + hasTokenSpan(dockerParent));
+  ok("langForPath resolves Makefile via the basename map (makefile)", GS.langForPath("Makefile") === "makefile", "lang=" + GS.langForPath("Makefile"));
+  const makeParent = el("code", {}, []);
+  GS.highlightTo(makeParent, "# build\nCC = gcc\nall:\n\techo hi\n", GS.langForPath("Makefile"));
+  await GS.ensureGrammar("makefile");
+  await wait(30);
+  ok("a Makefile blob highlights via basename detection", hasTokenSpan(makeParent), "spans=" + hasTokenSpan(makeParent));
+
+  // ---- vue/svelte fall back to markup (no official Prism grammar exists) ----
+  ok("langForPath maps .vue to markup (base grammar, no lazy load)", GS.langForPath("App.vue") === "markup", "lang=" + GS.langForPath("App.vue"));
+  ok("langForFence maps svelte to markup", GS.langForFence("svelte") === "markup", "lang=" + GS.langForFence("svelte"));
+  const vueParent = el("code", {}, []);
+  GS.highlightTo(vueParent, "<template><div>{{ x }}</div></template>", GS.langForPath("App.vue"));
+  await wait(20);
+  ok("a .vue block highlights immediately as markup (base grammar)", hasTokenSpan(vueParent), "spans=" + hasTokenSpan(vueParent));
+
   // ---- caching: a second ensureGrammar of a loaded grammar is instant/true ----
   const again = await GS.ensureGrammar("python");
   ok("re-requesting a loaded grammar resolves true from cache", again === true, "again=" + again);

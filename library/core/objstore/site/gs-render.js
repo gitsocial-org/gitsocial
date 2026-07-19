@@ -173,13 +173,36 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     kt: "kotlin", kts: "kotlin", swift: "swift",
     toml: "toml", php: "php", cs: "csharp",
     ini: "ini", proto: "protobuf", lua: "lua",
+    jsx: "jsx", tsx: "tsx", scss: "scss", less: "less",
+    m: "objectivec", mm: "objectivec",
+    groovy: "groovy", gradle: "groovy", scala: "scala", sbt: "scala",
+    dart: "dart", graphql: "graphql", gql: "graphql",
+    ps1: "powershell", psm1: "powershell", psd1: "powershell",
+    tf: "hcl", tfvars: "hcl", hcl: "hcl",
+    ex: "elixir", exs: "elixir", mk: "makefile", cmake: "cmake",
+    hs: "haskell", clj: "clojure", cljs: "clojure", cljc: "clojure", edn: "clojure",
+    erl: "erlang", hrl: "erlang", pl: "perl", pm: "perl",
+    r: "r", jl: "julia", ml: "ocaml", mli: "ocaml",
+    fs: "fsharp", fsi: "fsharp", fsx: "fsharp",
+    zig: "zig", nim: "nim", cr: "crystal", sol: "solidity",
+    tex: "latex", sty: "latex", bat: "batch", cmd: "batch",
+    vim: "vim", vue: "markup", svelte: "markup",
+  };
+  // BASENAME_LANG maps an exact filename (which EXT_LANG's extension lookup can't
+  // key on) to a Prism grammar, consulted before EXT_LANG in langForPath so files
+  // like Dockerfile/Makefile highlight (docker was otherwise unreachable here).
+  const BASENAME_LANG = {
+    Dockerfile: "docker", Makefile: "makefile", GNUmakefile: "makefile",
+    makefile: "makefile", "CMakeLists.txt": "cmake", Jenkinsfile: "groovy",
+    Gemfile: "ruby", Rakefile: "ruby", "nginx.conf": "nginx",
+    ".vimrc": "vim", vimrc: "vim",
   };
   // Markdown fence tag (and its common aliases) → Prism grammar name. Non-base
   // grammars are lazy-loaded on first use (see ensureGrammar / EXT_LANG).
   const FENCE_LANG = {
     go: "go", golang: "go", js: "javascript", javascript: "javascript",
-    mjs: "javascript", jsx: "javascript", ts: "typescript", typescript: "typescript",
-    tsx: "typescript", json: "json", yaml: "yaml", yml: "yaml", sh: "bash",
+    mjs: "javascript", jsx: "jsx", ts: "typescript", typescript: "typescript",
+    tsx: "tsx", json: "json", yaml: "yaml", yml: "yaml", sh: "bash",
     bash: "bash", shell: "bash", zsh: "bash", console: "bash", md: "markdown",
     markdown: "markdown", html: "markup", htm: "markup", xml: "markup", css: "css", diff: "diff",
     py: "python", python: "python", rs: "rust", rust: "rust",
@@ -189,6 +212,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     toml: "toml", php: "php", cs: "csharp", csharp: "csharp", "c#": "csharp",
     ini: "ini", proto: "protobuf", protobuf: "protobuf", lua: "lua",
     docker: "docker", dockerfile: "docker",
+    scss: "scss", less: "less", dart: "dart",
+    objc: "objectivec", objectivec: "objectivec",
+    groovy: "groovy", gradle: "groovy", scala: "scala",
+    graphql: "graphql", gql: "graphql", hcl: "hcl", terraform: "hcl",
+    powershell: "powershell", ps1: "powershell", elixir: "elixir",
+    make: "makefile", makefile: "makefile", cmake: "cmake",
+    haskell: "haskell", hs: "haskell", clojure: "clojure", clj: "clojure",
+    erlang: "erlang", erl: "erlang", perl: "perl", pl: "perl",
+    r: "r", julia: "julia", jl: "julia", ocaml: "ocaml", fsharp: "fsharp",
+    zig: "zig", nim: "nim", crystal: "crystal",
+    solidity: "solidity", sol: "solidity", nginx: "nginx",
+    latex: "latex", tex: "latex", matlab: "matlab",
+    batch: "batch", bat: "batch", cmd: "batch", vim: "vim",
+    vue: "markup", svelte: "markup",
   };
 
   // BASE_GRAMMARS are the grammars already bundled in prism.js (and its clike
@@ -203,7 +240,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // already in prism.js) have no entry. Ported from prismGrammars in the retired
   // site_prism.go. A grammar not listed here has no lazy-load dependencies.
   const GRAMMAR_DEPS = {
-    cpp: ["c"],
+    cpp: ["c"], tsx: ["jsx"], objectivec: ["c"], scala: ["java"], crystal: ["ruby"],
   };
 
   // grammarBase is the bucket base URL (trailing slash) grammar files are fetched
@@ -282,11 +319,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
-  // langForPath returns the Prism grammar name for a file path, or null.
+  // langForPath returns the Prism grammar name for a file path, or null. An exact
+  // basename match (BASENAME_LANG, e.g. Dockerfile/Makefile) wins over the
+  // extension lookup so extensionless-but-known files still highlight.
   function langForPath(path) {
-    const dot = (path || "").lastIndexOf(".");
+    const p = path || "";
+    const base = p.slice(p.lastIndexOf("/") + 1);
+    if (BASENAME_LANG[base]) return BASENAME_LANG[base];
+    const dot = p.lastIndexOf(".");
     if (dot < 0) return null;
-    return EXT_LANG[path.slice(dot + 1).toLowerCase()] || null;
+    return EXT_LANG[p.slice(dot + 1).toLowerCase()] || null;
   }
 
   // langForFence maps a Markdown fence's info string to a Prism grammar name.
@@ -4405,6 +4447,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();
