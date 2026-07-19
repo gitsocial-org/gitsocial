@@ -37,6 +37,7 @@ function pageLocs(xml) {
   ok("front carries the README text after the entries", front.text.indexOf("Showcase fixture.") > front.text.indexOf("</ol>"), "idx=" + front.text.indexOf("Showcase fixture."));
   ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
   ok("front carries the CSP meta", /Content-Security-Policy/.test(front.text));
+  ok("front CSP script-src permits eval (lazy grammar loader)", /script-src[^"]*'unsafe-eval'/.test(front.text));
   ok("front canonical points at the site root", front.text.includes('<link rel="canonical" href="' + cfg.url + '">'));
   ok("front carries no 'open in app' link", !/open in app/.test(front.text));
   ok("gs-upgrade.js is served", (await get(TD + "gs-upgrade.js")).status === 200);
@@ -68,6 +69,7 @@ function pageLocs(xml) {
   ok("every item page references gs-upgrade.js (defer)", pages.every((p) => /<script defer src="\.\.\/gs-upgrade\.js">/.test(p)), "some item page missing the upgrade script");
   ok("no item page carries an 'open in app' link", pages.every((p) => !/open in app/.test(p)), "an item page still links 'open in app'");
   ok("every item page carries the CSP meta", pages.every((p) => /Content-Security-Policy/.test(p)));
+  ok("every item page CSP permits eval (lazy grammar loader)", pages.every((p) => /script-src[^"]*'unsafe-eval'/.test(p)));
 
   console.log("\n--- Item pages: threads, edits, feedback ---");
   const thread = pages.find((p) => p.includes("Shipping the S3 static site reader this week."));

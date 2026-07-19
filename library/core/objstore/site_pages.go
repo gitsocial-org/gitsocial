@@ -50,7 +50,10 @@ const (
 	// sitePagesVersion is the page layer's schema version; a manifest at any
 	// other version is treated as absent (full regen under budget). v2: the
 	// Atom feed (feed.xml) plus the absolute autodiscovery link in every head.
-	sitePagesVersion = 2
+	// v3: script-src gains 'unsafe-eval' in every page's CSP meta (without it
+	// the booted app's lazy grammar loader is blocked and only base-bundle
+	// languages highlight).
+	sitePagesVersion = 3
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFrontSize is the front page's entry count.

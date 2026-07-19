@@ -10,8 +10,13 @@
      sanitizer's absolute-badge parity) plus blob:/data: (in-bucket image object
      URLs); connect-src allows https: so the ?base=/?repo= cross-bucket override
      keeps working. object-src/base-uri/form-action are locked down.
-     frame-ancestors/report-uri are omitted (ignored in a meta CSP). -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'">
+     frame-ancestors/report-uri are omitted (ignored in a meta CSP).
+     script-src carries 'unsafe-eval' for exactly one sink: the lazy grammar
+     loader (gs-render.js evalGrammar) runs vendored prism components fetched
+     from the bucket via new Function — a <script src> load would break the
+     cross-bucket override (script-src has no https:), while connect-src allows
+     the fetch. Bucket contents are the trust boundary regardless. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>gitsocial</title>
 <!-- Favicon: the gitsocial mark (same path as the sidebar/footer logo) inlined as
      a data: URI so the bucket serves no extra object and it works offline. Stroked
