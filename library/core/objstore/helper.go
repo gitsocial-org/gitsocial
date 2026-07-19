@@ -147,10 +147,16 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 	if region == "" {
 		region = "us-east-1"
 	}
+	// Credentials resolve per endpoint host (env pair > credentials file >
+	// AWS_* pair; see resolveCredentials), so a multi-remote push signs each
+	// provider with its own keys in one invocation.
+	access, secret := resolveCredentials(endpointHost)
 	client, err := NewClient(Config{
 		Endpoint:  endpoint,
 		Region:    region,
 		Bucket:    bucket,
+		AccessKey: access,
+		SecretKey: secret,
 		PathStyle: pathStyle,
 	})
 	if err != nil {

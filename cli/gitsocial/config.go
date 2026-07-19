@@ -30,8 +30,10 @@ func NewExtConfigCmd(ext string) *cobra.Command {
 	)
 	// The core config carries the static-site customization (title/accent/
 	// favicon) under a `site` sub-object; expose it as `config site ...`.
+	// Per-endpoint S3 credentials live beside it as `config credentials ...`.
 	if ext == coreExt {
 		cmd.AddCommand(newSiteConfigCmd())
+		cmd.AddCommand(newCredentialsConfigCmd())
 	}
 	return cmd
 }

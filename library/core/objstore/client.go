@@ -52,7 +52,7 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("objstore: bucket required")
 	}
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
-		return nil, fmt.Errorf("objstore: credentials required (GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
+		return nil, fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
 	}
 	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second, Transport: newTransport()}}, nil
 }
