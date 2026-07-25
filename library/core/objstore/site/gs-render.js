@@ -1039,6 +1039,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
   function imageMime(path) { const e = imageExt(path); return e ? IMG_MIME[e] : null; }
 
+  // Video extensions this reader can play inline (README demo links), mapped to
+  // their MIME type; anything else stays on the binary path.
+  const VIDEO_MIME = { mp4: "video/mp4", webm: "video/webm" };
+  function videoMime(path) {
+    const d = (path || "").lastIndexOf(".");
+    const ext = d >= 0 ? path.slice(d + 1).toLowerCase() : "";
+    return VIDEO_MIME[ext] || null;
+  }
+
   // Object URLs built for the current view; revoked wholesale on the next
   // route() so image blobs do not leak across navigations.
   let liveObjectUrls = [];
@@ -1854,7 +1863,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // blobView renders a file. A known-image extension displays the blob as an
   // <img> (object URL) BEFORE the NUL-sniff, so images do not fall into the
-  // binary path. Otherwise binary blobs get a note, large blobs truncate, and
+  // binary path; a known-video extension plays inline the same way. Otherwise
+  // binary blobs get a note, large blobs truncate, and
   // text renders monospace with a fullscreen affordance. A .md file gets a
   // Rendered|Raw toggle (Rendered default; Raw is the line-numbered view, so
   // line permalinks apply there).
@@ -1867,6 +1877,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const u = bytesObjectUrl(bytes, path);
       if (u) wrap.append(el("div", { class: "blob-img" }, [el("img", { src: u, alt: path }, [])]));
       else wrap.append(el("div", { class: "notice" }, ["Image too large to display (over " + humanSize(IMG_BLOB_CAP) + ")."]));
+      return [wrap];
+    }
+    const vmime = videoMime(path);
+    if (vmime) {
+      if (bytes.length <= IMG_BLOB_CAP) {
+        const u = URL.createObjectURL(new Blob([bytes], { type: vmime }));
+        trackObjectUrl(u);
+        wrap.append(el("div", { class: "blob-img" }, [el("video", { src: u, controls: "", style: "max-width:100%" }, [])]));
+      } else {
+        wrap.append(el("div", { class: "notice" }, ["Video too large to play inline (over " + humanSize(IMG_BLOB_CAP) + ")."]));
+      }
       return [wrap];
     }
     if (isBinary(bytes)) {
