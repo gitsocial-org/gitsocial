@@ -66,25 +66,45 @@ func SyncWorkspaceToCache(workdir string) error {
 	}
 	_, _ = cache.MarkCommitsStale(repoURL, branch, liveHashes)
 
+	var editKeys []cache.EditKey
 	for _, gc := range commits {
 		msg := protocol.ParseMessage(gc.Message)
 		processReleaseCommit(gc, msg, repoURL, branch)
+		if isReleaseEdit(msg) {
+			editKeys = append(editKeys, cache.EditKey{RepoURL: repoURL, Hash: gc.Hash, Branch: branch})
+		}
 	}
+	// Re-propagate after the whole batch: commits arrive newest-first, so a
+	// canonical's raw row is inserted after its edit was applied, clobbering
+	// the propagated fields.
+	cache.SyncEditExtensionFields(editKeys)
 	lastSyncedTip.Store(key, tip)
 	_ = cache.SetSyncTip(key, tip)
 	return nil
 }
 
+// isReleaseEdit reports whether a parsed message is a release edit commit.
+func isReleaseEdit(msg *protocol.Message) bool {
+	return msg != nil && msg.Header.Ext == "release" && msg.Header.Fields["edits"] != ""
+}
+
 // ProcessWorkspaceBatch processes pre-fetched commits for release extension items.
 // Used by the unified workspace sync to avoid redundant git log calls.
 func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
+	var editKeys []cache.EditKey
 	for _, gc := range commits {
 		if fetch.CleanRefname(gc.Refname) != branch {
 			continue
 		}
 		msg := protocol.ParseMessage(gc.Message)
 		processReleaseCommit(gc, msg, repoURL, branch)
+		if isReleaseEdit(msg) {
+			editKeys = append(editKeys, cache.EditKey{RepoURL: repoURL, Hash: gc.Hash, Branch: branch})
+		}
 	}
+	// See SyncWorkspaceToCache: re-propagate after the batch so processing
+	// order can't leave a canonical with its raw (pre-edit) fields.
+	cache.SyncEditExtensionFields(editKeys)
 }
 
 // processReleaseCommit handles a single commit for release extension processing.

@@ -336,3 +336,32 @@ func queryReleaseItem(t *testing.T, repoURL, hash, branch string) ReleaseItem {
 	}
 	return item
 }
+
+func TestSyncWorkspaceToCache_editSurvivesResync(t *testing.T) {
+	setupTestDB(t)
+	workdir := initTestRepo(t)
+	if res := CreateRelease(workdir, "v3.0.0", "", CreateReleaseOptions{Tag: "v3.0.0", Version: "3.0.0"}); !res.Success {
+		t.Fatalf("CreateRelease: %s", res.Error.Message)
+	}
+	item, err := GetReleaseItemByTagOrVersion("3.0.0")
+	if err != nil {
+		t.Fatalf("lookup canonical: %v", err)
+	}
+	url := "https://cdn.example.com/3.0.0"
+	ref := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
+	if res := EditRelease(workdir, ref, EditReleaseOptions{ArtifactURL: &url}); !res.Success {
+		t.Fatalf("EditRelease: %s", res.Error.Message)
+	}
+	// A fresh sync re-processes the branch newest-first (edit before its
+	// canonical); the canonical's propagated fields must survive it.
+	if err := SyncWorkspaceToCache(workdir); err != nil {
+		t.Fatalf("SyncWorkspaceToCache: %v", err)
+	}
+	resynced, err := GetReleaseItemByTagOrVersion("3.0.0")
+	if err != nil {
+		t.Fatalf("lookup after resync: %v", err)
+	}
+	if resynced.ArtifactURL.String != url {
+		t.Fatalf("artifact-url after resync = %q, want %q (edit clobbered by resync)", resynced.ArtifactURL.String, url)
+	}
+}
