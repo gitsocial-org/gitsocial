@@ -4,6 +4,8 @@ package release
 import (
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 const lfsThreshold = 1 << 20 // 1MB
@@ -56,11 +59,20 @@ func AddArtifacts(workdir, version string, filePaths []string) Result[ArtifactRe
 	return result.Ok(ArtifactResult{Version: version, Files: infos})
 }
 
-// ListArtifacts returns artifact info from the artifact ref.
+// ListArtifacts returns artifact info from the artifact ref, falling back to
+// the release record's artifacts field for externally hosted releases
+// (artifact-url set, GITRELEASE.md §3.2).
 func ListArtifacts(workdir, version string) Result[[]ArtifactInfo] {
 	ref := "refs/gitmsg/release/" + version + "/artifacts"
 	res, err := git.ExecGit(workdir, []string{"ls-tree", ref})
 	if err != nil {
+		if names := externalArtifactNames(version); len(names) > 0 {
+			infos := make([]ArtifactInfo, 0, len(names))
+			for _, name := range names {
+				infos = append(infos, ArtifactInfo{Filename: name})
+			}
+			return result.Ok(infos)
+		}
 		return result.Err[[]ArtifactInfo]("NOT_FOUND", fmt.Sprintf("no artifacts for version %s", version))
 	}
 	checksums := readChecksums(workdir, ref)
@@ -94,11 +106,17 @@ type checksumEntry struct {
 }
 
 // ExportArtifact reads an artifact from the release ref and writes it to destPath.
-// It resolves LFS pointers locally first, then falls back to remote fetch via the Batch API.
+// It resolves LFS pointers locally first, then falls back to remote fetch via the
+// Batch API. When the ref has no such file but the release record carries an
+// artifact-url (GITRELEASE.md §3.2), the artifact is downloaded from
+// `<artifact-url>/<filename>` instead.
 func ExportArtifact(repoDir, repoURL, version, filename, destPath string) Result[string] {
 	ref := "refs/gitmsg/release/" + version + "/artifacts"
 	content, err := git.GetFileContent(repoDir, ref, filename)
 	if err != nil {
+		if baseURL := externalArtifactURL(version); baseURL != "" {
+			return exportExternalArtifact(baseURL, filename, destPath)
+		}
 		return result.Err[string]("NOT_FOUND", fmt.Sprintf("artifact %s not found in %s: %s", filename, version, err))
 	}
 	data := []byte(content)
@@ -115,6 +133,49 @@ func ExportArtifact(repoDir, repoURL, version, filename, destPath string) Result
 		} else {
 			return result.Err[string]("LFS_UNAVAILABLE", fmt.Sprintf("artifact %s is stored in LFS but not available locally", filename))
 		}
+	}
+	destPath = uniquePath(destPath)
+	if err := os.WriteFile(destPath, data, 0o644); err != nil {
+		return result.Err[string]("WRITE_FAILED", fmt.Sprintf("write artifact: %s", err))
+	}
+	return result.Ok(destPath)
+}
+
+// externalArtifactURL returns the release record's artifact-url for a version
+// ("" when there is no record or no URL).
+func externalArtifactURL(version string) string {
+	item := findReleaseRecord(version)
+	if item == nil {
+		return ""
+	}
+	return item.ArtifactURL.String
+}
+
+// externalArtifactNames returns the release record's artifact filenames for an
+// externally hosted version (nil when there is no record or no artifact-url).
+func externalArtifactNames(version string) []string {
+	item := findReleaseRecord(version)
+	if item == nil || item.ArtifactURL.String == "" {
+		return nil
+	}
+	return text.SplitCSV(item.Artifacts.String)
+}
+
+// exportExternalArtifact downloads `<artifact-url>/<filename>` over HTTP and
+// writes it to destPath (GITRELEASE.md §3.2 external storage).
+func exportExternalArtifact(baseURL, filename, destPath string) Result[string] {
+	fullURL := strings.TrimSuffix(baseURL, "/") + "/" + filename
+	resp, err := http.Get(fullURL)
+	if err != nil {
+		return result.Err[string]("DOWNLOAD_FAILED", fmt.Sprintf("download %s: %s", fullURL, err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return result.Err[string]("DOWNLOAD_FAILED", fmt.Sprintf("download %s: HTTP %d", fullURL, resp.StatusCode))
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return result.Err[string]("DOWNLOAD_FAILED", fmt.Sprintf("download %s: %s", fullURL, err))
 	}
 	destPath = uniquePath(destPath)
 	if err := os.WriteFile(destPath, data, 0o644); err != nil {

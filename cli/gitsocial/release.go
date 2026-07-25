@@ -435,6 +435,7 @@ func newReleaseArtifactsCmd() *cobra.Command {
 		newReleaseArtifactsAddCmd(),
 		newReleaseArtifactsListCmd(),
 		newReleaseArtifactsExportCmd(),
+		newReleaseArtifactsPushCmd(),
 	)
 	return cmd
 }
@@ -478,6 +479,9 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
+			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "release", "error", err)
+			}
 			result := release.ListArtifacts(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -491,6 +495,12 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 					return
 				}
 				for _, f := range result.Data {
+					if f.SHA256 == "" {
+						// Externally hosted artifact (artifact-url fallback): the
+						// record carries only filenames.
+						fmt.Println(f.Filename)
+						continue
+					}
 					sha := f.SHA256
 					if len(sha) > 12 {
 						sha = sha[:12]
@@ -512,6 +522,9 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
+			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "ext", "release", "error", err)
+			}
 			version := args[0]
 			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 			destDir := git.DownloadsDir()

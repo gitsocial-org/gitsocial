@@ -22,10 +22,27 @@ const (
 // cacheControlForKey classifies a bucket key by mutability and returns the
 // Cache-Control value it must be stored (and served) with.
 func cacheControlForKey(key string) string {
-	if isLooseObjectKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) {
+	if isLooseObjectKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) || isArtifactVersionKey(key) {
 		return cacheControlImmutable
 	}
 	return cacheControlRevalidate
+}
+
+// isArtifactVersionKey reports whether a key is a release artifact object
+// (`artifacts/<version>/<file>`) at a path boundary — a version's artifacts are
+// written once (a re-push of the same version re-uploads identical bytes), so
+// they cache as immutable. The sibling `artifacts/latest.txt` sits directly
+// under artifacts/ (no version directory) and stays no-cache, as does any ref
+// key for a branch that happens to be named artifacts/… (`refs/` precedes it).
+func isArtifactVersionKey(key string) bool {
+	i := strings.Index(key, ArtifactsPrefix)
+	if i < 0 || (i > 0 && key[i-1] != '/') {
+		return false
+	}
+	if j := strings.Index(key, "refs/"); j >= 0 && j < i {
+		return false
+	}
+	return strings.Contains(key[i+len(ArtifactsPrefix):], "/")
 }
 
 // isSealedSitemapPartKey reports whether a key is a sealed (full, immutable)

@@ -26,8 +26,10 @@
 // bucket carries pages → best-effort deletion, manifest last).
 //
 // The page root keys are reserved alongside the repo data layout (HEAD,
-// objects/, refs/, .gitsocial/) and the shell files (index.html, gs-*.js,
-// icons.js, prism.js, grammars/) — all disjoint by construction.
+// objects/, refs/, .gitsocial/), the shell files (index.html, gs-*.js,
+// icons.js, prism.js, grammars/), and the release artifact objects
+// (artifacts/, owned by `release artifacts push` — see artifacts.go) — all
+// disjoint by construction.
 
 package objstore
 

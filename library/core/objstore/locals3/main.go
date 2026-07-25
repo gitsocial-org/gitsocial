@@ -55,10 +55,12 @@ func readEnc(path string) string {
 // upload (see objstore/cache_control.go): content-addressed loose objects
 // (`objects/<xx>/<38-hex>`), sealed shards of either corpus
 // (`.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json`, content-hashed and
-// written once), sealed HTML list pages (`<type>/<n>.html`) and sealed sitemap
-// parts (`sitemap-<n>.xml`) are immutable, everything else revalidates. Derived
-// from the key rather than persisted, since all are pattern-identifiable and
-// locals3 stays dependency-free.
+// written once), sealed HTML list pages (`<type>/<n>.html`), sealed sitemap
+// parts (`sitemap-<n>.xml`), and release artifact objects
+// (`artifacts/<version>/<file>`; the sibling artifacts/latest.txt stays
+// mutable) are immutable, everything else revalidates. Derived from the key
+// rather than persisted, since all are pattern-identifiable and locals3 stays
+// dependency-free.
 func cacheControlFor(key string) string {
 	i := strings.Index(key, "objects/")
 	if i >= 0 && (i == 0 || key[i-1] == '/') {
@@ -83,6 +85,11 @@ func cacheControlFor(key string) string {
 	}
 	if rest, ok := strings.CutPrefix(file, "sitemap-"); ok {
 		if n, ok := strings.CutSuffix(rest, ".xml"); ok && isDigits(n) {
+			return "public, max-age=31536000, immutable"
+		}
+	}
+	if j := strings.Index(key, "artifacts/"); j >= 0 && (j == 0 || key[j-1] == '/') {
+		if r := strings.Index(key, "refs/"); (r < 0 || r > j) && strings.Contains(key[j+len("artifacts/"):], "/") {
 			return "public, max-age=31536000, immutable"
 		}
 	}
