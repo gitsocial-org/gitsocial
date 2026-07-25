@@ -143,7 +143,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   └── tui/                   # TUI views — thin client
 ├── documentation/             # Protocol + architecture docs
 ├── docs/                      # Project website (GitHub Pages)
-├── scripts/                   # Build/release scripts (mirror.sh, release.sh)
+├── scripts/                   # Build/release scripts (mirror.sh, release.sh, install.sh)
 └── specs/                     # Protocol specifications
 ```
 

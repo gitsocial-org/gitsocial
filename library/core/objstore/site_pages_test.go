@@ -1096,3 +1096,58 @@ func TestPostPushMaintenance_PublishGuard(t *testing.T) {
 		}
 	}
 }
+
+// TestSitePages_ForeignRootKeysSurvive pins the foreign-root-key guarantee:
+// every site maintenance sweep is name-listed (or scoped to a reserved page
+// namespace), so deployment-owned root objects — an installer script, release
+// artifact objects under artifacts/ — survive a full push including a pages
+// regen AND a pages-disable cleanup cycle, byte-identical.
+func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
+	client, _ := testClient(t)
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "first post"}, {msg: "second post"}})
+	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
+		t.Fatal(err)
+	}
+	foreign := map[string]string{
+		"install.sh":                    "#!/bin/sh\necho foreign installer\n",
+		"artifacts/v0.0.1/dummy.tar.gz": "dummy artifact bytes \x00\x01\x02\xff",
+	}
+	for key, body := range foreign {
+		if err := client.Put(key, []byte(body)); err != nil {
+			t.Fatalf("seed foreign key %s: %v", key, err)
+		}
+	}
+	assertForeignIntact := func(stage string) {
+		t.Helper()
+		for key, want := range foreign {
+			got, err := client.Get(key)
+			if err != nil {
+				t.Errorf("%s: foreign key %s deleted: %v", stage, key, err)
+				continue
+			}
+			if string(got) != want {
+				t.Errorf("%s: foreign key %s modified: got %q, want %q", stage, key, got, want)
+			}
+		}
+	}
+
+	// Full push with the page layer on: shell upload, items index, pages regen.
+	seedPagesConfig(t, client, pagesTestSite())
+	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+		t.Fatalf("pushSite pages-on: %v", err)
+	}
+	if !keyExists(client, sitePagesManifestKey) {
+		t.Fatal("pages regen did not run (no pages manifest)")
+	}
+	assertForeignIntact("pages regen")
+
+	// Pages-disable cleanup cycle: the sweep deletes the whole page layer.
+	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
+	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+		t.Fatalf("pushSite disable: %v", err)
+	}
+	if keyExists(client, sitePagesManifestKey) {
+		t.Fatal("disable sweep incomplete (pages manifest survived)")
+	}
+	assertForeignIntact("pages-disable cleanup")
+}
