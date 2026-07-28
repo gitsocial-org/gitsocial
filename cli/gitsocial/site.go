@@ -19,7 +19,63 @@ func newSiteCmd() *cobra.Command {
 		Use:   "site",
 		Short: "Manage the static browser read-surface on s3 remotes",
 	}
-	cmd.AddCommand(newSitePushCmd())
+	cmd.AddCommand(newSitePushCmd(), newSitePutCmd())
+	return cmd
+}
+
+// newSitePutCmd uploads a single local file as a plain object to an s3 remote's
+// bucket. It publishes foreign objects that live alongside the repo data but
+// aren't part of the generated site (e.g. install.sh at the bucket root), which
+// the release driver keeps current with each release. Site maintenance never
+// deletes unrecognized root keys, so such objects are safe.
+func newSitePutCmd() *cobra.Command {
+	var remote string
+	var contentType string
+	cmd := &cobra.Command{
+		Use:   "put <key> <file>",
+		Short: "Upload a single local file as a plain object to an s3 remote's bucket",
+		Long: `Upload <file> to the s3 remote's bucket at <key> (under the remote's prefix)
+as a plain object, overwriting any existing object at that key. Remote defaults
+to the gitsocial push remote. Used by the release driver to publish foreign
+objects such as install.sh at the bucket root. The Cache-Control header follows
+the key's mutability, so a root key like install.sh is stored no-cache.`,
+		Args: cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			if !EnsureGitRepo(cmd) {
+				os.Exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			key, file := args[0], args[1]
+			if remote == "" {
+				remote = git.PushRemote(cfg.WorkDir)
+			}
+			remoteURL := git.RemoteURL(cfg.WorkDir, remote)
+			if remoteURL == "" {
+				PrintError(cmd, fmt.Sprintf("remote %q is not configured", remote))
+				os.Exit(ExitError)
+			}
+			if !strings.HasPrefix(remoteURL, "s3://") {
+				PrintError(cmd, fmt.Sprintf("remote %q (%s) is not an s3 remote", remote, remoteURL))
+				os.Exit(ExitError)
+			}
+			data, err := os.ReadFile(file)
+			if err != nil {
+				PrintError(cmd, fmt.Sprintf("read %s: %v", file, err))
+				os.Exit(ExitError)
+			}
+			if err := objstore.PutObjectToRemote(remoteURL, objstore.HelperEnvFromOS(), key, data, contentType); err != nil {
+				PrintError(cmd, fmt.Sprintf("upload %s: %v", key, err))
+				os.Exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				PrintJSON(map[string]any{"remote": remote, "key": key, "size": len(data)})
+				return
+			}
+			PrintSuccess(cmd, fmt.Sprintf("Uploaded %s (%d bytes) to %s", key, len(data), remote))
+		},
+	}
+	cmd.Flags().StringVar(&remote, "remote", "", "Target remote (default: the push remote)")
+	cmd.Flags().StringVar(&contentType, "content-type", "", "Content-Type for the uploaded object")
 	return cmd
 }
 
