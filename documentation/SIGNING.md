@@ -9,13 +9,13 @@ Darwin release binaries (`darwin_amd64` + `darwin_arm64`) are signed with an App
 | Sign the binary | `.goreleaser.yaml` → `builds.darwin.hooks.post` | `rcodesign sign --p12-file=/tmp/cert.p12 --p12-password=… --code-signature-flags=runtime <binary>` runs during the build phase, before archiving, so the `.zip` wraps a signed binary |
 | Archive | `.goreleaser.yaml` → `archives.darwin` | Each signed binary is wrapped in `.zip` (Apple's notary won't accept `.tar.gz`) |
 | Publish | `goreleaser release` | Uploads archives + SBOMs + checksums to the GitHub release for the tag |
-| Notarize | `.github/workflows/release.yml` → `Notarize macOS archives` | `rcodesign notary-submit --wait` runs against each `dist/*_darwin_*.zip` after goreleaser publishes. Apple registers the cdhash centrally; the archive itself is unchanged |
+| Notarize | `scripts/release.sh` step 3 (build) | `rcodesign notary-submit --wait` runs against each `dist/*_darwin_*.zip` after goreleaser publishes. Apple registers the cdhash centrally; the archive itself is unchanged |
 
-Signing uses [`rcodesign`](https://github.com/indygreg/apple-platform-rs) — a Linux-compatible signer/notarizer pinned to v0.29.0 in the workflow. CI runs on `ubuntu-latest`; no macOS runner needed.
+Signing uses [`rcodesign`](https://github.com/indygreg/apple-platform-rs) — a Linux-compatible signer/notarizer pinned to v0.29.0. Because `rcodesign` needs no Apple tooling, signing and notarization run on the release machine regardless of its OS; no macOS host is required.
 
-## GitHub repo secrets
+## Signing credentials
 
-Set under Settings → Secrets and variables → Actions:
+The release driver (`scripts/release.sh`) reads these from the environment on the release machine (full credential set documented in the driver header):
 
 | Secret | Value |
 | --- | --- |
@@ -31,7 +31,7 @@ Apple Developer ID Application certificates expire after one year. Renewal:
 
 1. **Generate a new cert** — Xcode → Settings → Accounts → Manage Certificates → "+" → *Developer ID Application*. Xcode creates the cert and private key in your login keychain.
 2. **Export** — Keychain Access → right-click *Developer ID Application: …* → Export as `.p12`, set a password.
-3. **Update secrets** — overwrite `APPLE_CERT_P12` (base64) and `APPLE_CERT_PASSWORD`.
+3. **Update the release machine's environment** — refresh `APPLE_CERT_P12` (base64) and `APPLE_CERT_PASSWORD`.
 4. **Verify on the next tagged release** — confirm `codesign -dv` on a downloaded archive shows the new certificate's serial number.
 5. **Don't revoke the old cert** until the new one has shipped one successful release. Apple lets up to two Developer ID Application certs coexist on the account.
 
@@ -41,7 +41,7 @@ The `.p8` API key never expires, but rotate after any suspected exposure (e.g. a
 
 1. **Generate** — appstoreconnect.apple.com → Users and Access → Integrations → Team Keys → "+". Role: **Developer**. Download the `.p8` (one-time download).
 2. **Record** Key ID and Issuer ID from the same page.
-3. **Update secrets** — overwrite `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`.
+3. **Update the release machine's environment** — refresh `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER_ID`.
 4. **Revoke the old key** in App Store Connect once the new key has been used to notarize one successful release.
 
 ## Verifying a downloaded release
@@ -49,7 +49,10 @@ The `.p8` API key never expires, but rotate after any suspected exposure (e.g. a
 Anyone — user, fork operator, auditor — can confirm a release archive's signature and notarization status from a Mac:
 
 ```bash
-curl -fsSLO https://github.com/gitsocial-org/gitsocial/releases/download/v<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm64.zip
+# primary: the gitsocial.org bucket (the D9 install path)
+curl -fsSLO https://gitsocial.org/artifacts/<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm64.zip
+# mirror: GitHub Releases
+# curl -fsSLO https://github.com/gitsocial-org/gitsocial/releases/download/v<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm64.zip
 unzip gitsocial_<X.Y.Z>_darwin_arm64.zip
 
 # signature check (what Gatekeeper runs)
@@ -65,7 +68,7 @@ For notarization status, run `spctl --assess --type install --verbose ./gitsocia
 
 ## Why a build hook, not `signs:` / `binary_signs:`
 
-The natural goreleaser pattern for code signing is one of those blocks with `signature: "${artifact}"` to indicate in-place signing. Don't reach for it here. With that pattern, goreleaser registers the artifact a second time as a signature pointing at the same path; the GitHub release upload then POSTs each darwin archive twice and the second attempt fails with `422 already_exists`. The CI release fails at the publish step even though signing itself succeeded. The current config dodges this by signing in `builds.darwin.hooks.post` (no artifact-list registration) and doing notarization as a separate post-goreleaser CI step (`Notarize macOS archives` in `release.yml`).
+The natural goreleaser pattern for code signing is one of those blocks with `signature: "${artifact}"` to indicate in-place signing. Don't reach for it here. With that pattern, goreleaser registers the artifact a second time as a signature pointing at the same path; the GitHub release upload then POSTs each darwin archive twice and the second attempt fails with `422 already_exists`. The release fails at the publish step even though signing itself succeeded. The current config dodges this by signing in `builds.darwin.hooks.post` (no artifact-list registration) and doing notarization as a separate post-goreleaser step in the release driver (`scripts/release.sh` step 3).
 
 ## Troubleshooting
 
@@ -75,7 +78,7 @@ Open the notary log URL printed by `rcodesign notary-submit`. Common causes:
 - Wrong Authority chain → cert is wrong type (use *Developer ID Application*, not *Apple Development* or *Mac Developer*)
 - Cert expired → rotate (see above)
 
-**CI passes but `brew install` still warns about an unverified developer**
+**The release succeeds but `brew install` still warns about an unverified developer**
 The cask in `homebrew-tap` may be pointing at an older release. Check the cask: `gh api repos/gitsocial-org/homebrew-tap/contents/Casks/gitsocial.rb --jq '.content' | base64 -d | grep version`. If goreleaser didn't update it, the `GORELEASER_HOMEBREW_CASK_GITHUB_TOKEN` secret may have insufficient scope (needs `repo` write on `homebrew-tap`).
 
 **`brew install` says "Refusing to load cask from untrusted tap"**
