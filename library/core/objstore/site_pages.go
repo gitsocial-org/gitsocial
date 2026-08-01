@@ -55,7 +55,10 @@ const (
 	// v3: script-src gains 'unsafe-eval' in every page's CSP meta (without it
 	// the booted app's lazy grammar loader is blocked and only base-bundle
 	// languages highlight).
-	sitePagesVersion = 3
+	// v4: CSP gains media-src 'self' blob: so the booted app's file view can
+	// play in-bucket mp4/webm blobs as inline <video> (without it <video src=blob:>
+	// falls back to default-src 'self' and the browser rejects the format).
+	sitePagesVersion = 4
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFrontSize is the front page's entry count.
