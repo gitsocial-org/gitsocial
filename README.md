@@ -5,21 +5,17 @@
 
   *Git-native collaboration platform*
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![GitMsg Protocol](https://img.shields.io/badge/GitMsg-v0.1.0-blue)](specs/GITMSG.md)
-  [![CI](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml/badge.svg)](https://github.com/gitsocial-org/gitsocial/actions/workflows/ci.yml)
-
 [About](#about) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
 </div>
 
 ## About
 
-GitSocial stores your collaboration data (issues, pull requests, etc) in your repository as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md). 
+GitSocial is a CLI/TUI Go binary that stores everything in git:
 
-Any S3-compatible bucket can be a git remote via the built-in [`s3://` backend](documentation/S3.md) and can serve a [complete static site](documentation/STATIC-SITE.md) of the repo straight from the bucket.
-
-GitSocial builds your timeline from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
+- Saves issues, PRs, etc., in the repository itself, as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md).
+- Needs only an S3-compatible bucket to host the repository via the built-in [`s3://` backend](documentation/S3.md) and to serve a [complete static site](documentation/STATIC-SITE.md) of it straight from the bucket, like [gitsocial.org](https://gitsocial.org).
+- Builds a timeline from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
 
 [Watch TUI demo →](documentation/demo/demo.mp4)
 
@@ -56,16 +52,18 @@ Or download a binary from [Releases](https://github.com/gitsocial-org/gitsocial/
 Clone your project from GitHub or any host, then from your project directory:
 
 ```bash
-gitsocial import         # imports issues, PRs, releases, discussions
-gitsocial tui            # explore in the terminal
+gitsocial import     # import issues, PRs, etc
+gitsocial tui        # explore in the terminal
 ```
 
 Works for S3-compatible buckets too:
 
 ```bash
 gitsocial clone s3://s3.example.com/mybucket/myrepo
+
+# or push to a bucket and publish a static site
 gitsocial remote add s3://s3.example.com/mybucket/myrepo
-gitsocial push               # publish repo data + a browsable website to the bucket
+gitsocial push
 ```
 
 ## Documentation
@@ -139,4 +137,4 @@ For quick questions or discussion, use the [Matrix room](https://matrix.to/#/!uZ
 
 ## License
 
-MIT
+[MIT](LICENSE)
