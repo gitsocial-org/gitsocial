@@ -163,6 +163,25 @@
     });
   }
 
+  // loadStylesheet appends a base-relative stylesheet <link> and resolves with it
+  // once it is LIVE (onload), so the boot can gate a style-destructive step on the
+  // new sheet actually governing the page. Rejects on error or after a watchdog
+  // timeout (onload/onerror wedged), so a failed CSS fetch aborts the takeover
+  // before any style is stripped — the visitor stays on the readable, styled
+  // static page (inert failure), never on a blanked/unstyled one.
+  function loadStylesheet(href) {
+    return new Promise(function (resolve, reject) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      var settled = false;
+      var timer = setTimeout(function () { if (settled) return; settled = true; reject(new Error("timeout " + href)); }, 10000);
+      link.onload = function () { if (settled) return; settled = true; clearTimeout(timer); resolve(link); };
+      link.onerror = function () { if (settled) return; settled = true; clearTimeout(timer); reject(new Error("load " + href)); };
+      document.head.appendChild(link);
+    });
+  }
+
   // Route↔page-URL mapping. Routes with a real bucket page get a clean URL after
   // boot (pushState/replaceState so reloads hit the object); app-only surfaces
   // (search, board, analytics, code, compare, branches, graph, tags, lists,
@@ -344,22 +363,24 @@
     try { await loadScript(base + "prism.js"); } catch (e) { /* prism optional */ }
     await loadScript(base + "gs-core.js");
     await loadScript(base + "gs-render.js");
-    // The reader is loaded: take over. Inject the full app CSS + chrome, seed the
-    // route on the hash, then load gs-app.js LAST — its init() auto-runs into the
-    // now-present chrome. gs-app.js is the smallest, last, most-reliable asset, so
-    // the window where a load failure could leave a blanked page is minimal.
-    // Drop the static page's own styling layer (the inline base <style> and its
-    // pages.css link) at takeover: it is scoped to the pre-upgrade document and
-    // constrains <body> (max-width/margin/padding), which pages-app.css never
-    // resets — leaving it squeezes the injected app to the reading column and
-    // turns the width toggle into a visual no-op.
+    // The reader is loaded: take over. Load the app CSS FIRST and wait until it is
+    // live, so at no instant is the page without an author stylesheet. Only once
+    // pages-app.css governs the page do we drop the static page's own styling layer
+    // (the inline base <style> and its pages.css link) and swap in the app chrome:
+    // that static styling is scoped to the pre-upgrade document and constrains
+    // <body> (max-width/margin/padding), which pages-app.css never resets — leaving
+    // it squeezes the injected app to the reading column and turns the width toggle
+    // into a visual no-op. Loading first (not stripping first) closes the FOUC
+    // window: pages-app.css's :root defaults track prefers-color-scheme and match
+    // the static page's theme, so the gated swap never flashes the README logo at
+    // intrinsic size, nor light-on-dark, before wireChrome stamps the body class.
+    // If pages-app.css fails or wedges, loadStylesheet rejects and boot throws HERE
+    // — before any style is removed or the body replaced — leaving the readable,
+    // styled static page fully intact (inert failure).
+    var appCSS = await loadStylesheet(base + "pages-app.css");
     try {
-      document.querySelectorAll('head style, head link[rel="stylesheet"]').forEach(function (n) { n.remove(); });
+      document.querySelectorAll('head style, head link[rel="stylesheet"]').forEach(function (n) { if (n !== appCSS) n.remove(); });
     } catch (e) { /* shimmed DOM — nothing to remove */ }
-    var css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = base + "pages-app.css";
-    document.head.appendChild(css);
     document.body.innerHTML = CHROME;
     wireChrome();
     // Seed the route: a bare route (no "#") becomes the hash the app reads. A
