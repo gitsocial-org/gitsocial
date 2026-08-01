@@ -48,6 +48,10 @@
 #
 # Optional env:
 #   GITSOCIAL_SITE_REMOTE  the s3 bucket remote name (default: site)
+#   GITSOCIAL_ARTIFACT_BASE  base URL for the release record's artifact-url
+#                          (default: the bucket remote's effective site url;
+#                          set to https://gitsocial.org when the configured
+#                          url is a temporary/soak domain)
 #   GITSOCIAL_BINARY       gitsocial binary to drive the release (default: a
 #                          fresh build of the current tree into bin/gitsocial,
 #                          so the current CLI — including `site put` — is used)
@@ -267,8 +271,13 @@ create_record() {
 
   # Artifact base URL = the bucket remote's effective site url + artifacts/<ver>
   # (same value `release artifacts push` derives), so the record is born with it.
+  # GITSOCIAL_ARTIFACT_BASE overrides the base when the configured site url is
+  # temporary (e.g. a soak domain) but the durable record should carry the
+  # canonical one.
   local site_url artifact_url
-  if $DRY_RUN; then
+  if [ -n "${GITSOCIAL_ARTIFACT_BASE:-}" ]; then
+    site_url="$GITSOCIAL_ARTIFACT_BASE"
+  elif $DRY_RUN; then
     site_url="$("$GS" config site get url --remote "$SITE_REMOTE" 2>/dev/null || echo 'https://gitsocial.org/')"
   else
     site_url="$("$GS" config site get url --remote "$SITE_REMOTE")" \
