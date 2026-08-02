@@ -354,6 +354,10 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	if err := putSiteManifest(client, prefix, refs); err != nil {
 		return err
 	}
+	// The explicit site refresh re-derives the read surface from the bucket's
+	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)
+	// in step with it so `gitsocial site push` also heals a stale/absent listing.
+	logDumbTransportInfo(client, prefix, refs)
 	if err := writeSitePMConfig(client, prefix, refs); err != nil {
 		return err
 	}

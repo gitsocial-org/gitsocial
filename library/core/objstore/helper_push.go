@@ -154,19 +154,26 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	if !refsMoved {
 		return
 	}
+	// The refs the bucket now carries drive both the dumb-HTTP transport surface
+	// and the site read artifacts; read them once. Best-effort — a read failure
+	// only skips this push's maintenance, never the git push itself.
+	refs := h.remoteRefs
+	if refs == nil {
+		var err error
+		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: post-push maintenance: %v\n", err)
+			return
+		}
+	}
+	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
+	// independent of the site.publish gate below, so a bucket-served repo clones
+	// and fetches with stock git over plain HTTPS even when the static site is off.
+	logDumbTransportInfo(h.client, h.prefix, refs)
 	// The static site is gated on the PUSHED site.publish guard (the `site`
 	// sub-object of refs/gitmsg/core/config), the only enabler: without it a
 	// plain s3:// git remote stays clean, and a bucket whose site predates the
 	// guard is left untouched with a one-line hint. Best-effort throughout — a
 	// read failure only skips this push's maintenance, never the git push itself.
-	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site maintenance: %v\n", err)
-			return
-		}
-	}
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)

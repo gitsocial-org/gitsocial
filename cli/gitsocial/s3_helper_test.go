@@ -55,6 +55,13 @@ func etagFor(data []byte) string {
 
 func (f *s3Fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
+	// Anonymous GET/HEAD = a public bucket read (stock git's dumb-HTTP transport
+	// sends no SigV4 auth). Serve the stored object straight, so `git clone
+	// http://.../<prefix>` works off the same fixture the helper pushes to.
+	if auth == "" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		f.serveAnonymous(w, r)
+		return
+	}
 	if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=") || !strings.Contains(auth, "SignedHeaders=host;x-amz-content-sha256;x-amz-date") {
 		http.Error(w, "missing or malformed SigV4 authorization", http.StatusForbidden)
 		return
@@ -140,6 +147,25 @@ func (f *s3Fixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("ETag", etagFor(data))
+	_, _ = w.Write(data)
+}
+
+// serveAnonymous answers an unauthenticated GET/HEAD as a plain public-bucket
+// read (the dumb-HTTP transport git uses): the stored bytes at the request key,
+// or 404. Content-Type is nominal — stock git's dumb walker ignores it.
+func (f *s3Fixture) serveAnonymous(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/"+f.bucket)
+	path = strings.TrimPrefix(path, "/")
+	data, ok := f.object(path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	_, _ = w.Write(data)
 }
 
@@ -374,6 +400,93 @@ func TestS3Helper_pushRoundTrip(t *testing.T) {
 	gitIn(t, src, env, "push", remote, ":refs/gitmsg/core/forks/cafe0001")
 	if _, ok := fixture.object("myrepo/refs/gitmsg/core/forks/cafe0001"); ok {
 		t.Error("deleted ref key still present in bucket")
+	}
+}
+
+// TestS3Helper_dumbHTTPClone is the money test: a bucket pushed by the s3 helper
+// clones with STOCK git over plain HTTP (no helper, no gitsocial env) via the
+// dumb-HTTP transport, and a stock `git fetch` picks up a later push — proving
+// info/refs is written on every data-only push (site disabled) and refreshed.
+func TestS3Helper_dumbHTTPClone(t *testing.T) {
+	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
+	commitEnv := []string{"-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test"}
+	// A clean repo with a real root tree (no empty-tree root commit, which stock
+	// git's dumb walker leaves unmaterialized and `fsck --strict` then flags):
+	// two content commits on main, a lightweight + an annotated tag (peel line),
+	// and a gitmsg data branch (an extra ref class stock git clients ignore).
+	src := t.TempDir()
+	gitIn(t, src, baseEnv, "init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(src, "README.md"), []byte("clone me over http\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, src, baseEnv, "add", "README.md")
+	gitIn(t, src, baseEnv, append(commitEnv, "commit", "-m", "first")...)
+	gitIn(t, src, baseEnv, "tag", "light")
+	if err := os.WriteFile(filepath.Join(src, "CHANGES.md"), []byte("v2\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, src, baseEnv, "add", "CHANGES.md")
+	gitIn(t, src, baseEnv, append(commitEnv, "commit", "-m", "second")...)
+	gitIn(t, src, baseEnv, append(commitEnv, "tag", "-a", "v1.0.0", "-m", "release v1.0.0")...)
+	gitIn(t, src, baseEnv, "branch", "gitmsg/social", "main")
+	mainSHA := strings.TrimSpace(gitIn(t, src, baseEnv, "rev-parse", "main"))
+	wantLog := gitIn(t, src, baseEnv, "log", "--format=%H %s", "main")
+
+	fixture := &s3Fixture{bucket: "dumb-bucket", objects: map[string][]byte{}}
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+	env := s3HelperEnv(t, server.URL, baseEnv)
+	remote := s3FixtureRemote(server.URL, "dumb-bucket/myrepo")
+
+	// Push via the s3 helper with the site DISABLED (default). info/refs +
+	// objects/info/packs must still be written, or the dumb clone goes stale.
+	gitIn(t, src, env, "push", remote, "main", "gitmsg/social", "light", "v1.0.0")
+	if _, ok := fixture.object("myrepo/info/refs"); !ok {
+		t.Fatal("info/refs not written by a data-only push (site disabled)")
+	}
+	if _, ok := fixture.object("myrepo/objects/info/packs"); !ok {
+		t.Fatal("objects/info/packs not written by a data-only push")
+	}
+
+	// The money shot: STOCK git — no helper alias, no GITSOCIAL_* env — a plain
+	// dumb-HTTP clone over the bucket's public URL.
+	stockEnv := append(append([]string(nil), baseEnv...), "GIT_TERMINAL_PROMPT=0")
+	workdir := t.TempDir()
+	cloneURL := server.URL + "/dumb-bucket/myrepo"
+	gitIn(t, workdir, stockEnv, "clone", cloneURL, "clone")
+	clone := filepath.Join(workdir, "clone")
+
+	if got := strings.TrimSpace(gitIn(t, clone, stockEnv, "rev-parse", "HEAD")); got != mainSHA {
+		t.Errorf("cloned HEAD = %s, want %s", got, mainSHA)
+	}
+	if got := gitIn(t, clone, stockEnv, "log", "--format=%H %s", "HEAD"); got != wantLog {
+		t.Errorf("cloned log mismatch:\n got: %s\nwant: %s", got, wantLog)
+	}
+	if readme, err := os.ReadFile(filepath.Join(clone, "README.md")); err != nil || string(readme) != "clone me over http\n" {
+		t.Errorf("checked-out README = %q (err %v)", readme, err)
+	}
+	if changes, err := os.ReadFile(filepath.Join(clone, "CHANGES.md")); err != nil || string(changes) != "v2\n" {
+		t.Errorf("checked-out CHANGES = %q (err %v)", changes, err)
+	}
+	// The annotated tag resolves through info/refs' peel line to its commit.
+	if got := strings.TrimSpace(gitIn(t, clone, stockEnv, "rev-parse", "v1.0.0^{commit}")); got != mainSHA {
+		t.Errorf("cloned annotated tag v1.0.0 → %s, want commit %s", got, mainSHA)
+	}
+	gitIn(t, clone, stockEnv, "fsck", "--strict")
+
+	// Second push moves main; a stock `git fetch` in the clone must pick it up,
+	// proving the incremental push refreshed info/refs.
+	if err := os.WriteFile(filepath.Join(src, "THIRD.md"), []byte("v3\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, src, env, "add", "THIRD.md")
+	gitIn(t, src, env, append(commitEnv, "commit", "-m", "third")...)
+	newSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
+	gitIn(t, src, env, "push", remote, "main")
+
+	gitIn(t, clone, stockEnv, "fetch", "origin")
+	if got := strings.TrimSpace(gitIn(t, clone, stockEnv, "rev-parse", "refs/remotes/origin/main")); got != newSHA {
+		t.Errorf("after refresh origin/main = %s, want %s (info/refs not refreshed?)", got, newSHA)
 	}
 }
 

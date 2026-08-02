@@ -1130,6 +1130,17 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 			}
 		}
 	}
+	// The dumb-HTTP transport keys (info/refs, objects/info/packs) live in the
+	// reserved info/ and objects/info/ namespaces; site maintenance writes them
+	// but no sweep may delete them, or a bucket-served repo goes uncloneable.
+	assertDumbTransportPresent := func(stage string) {
+		t.Helper()
+		for _, key := range []string{infoRefsKey, packsKey} {
+			if !keyExists(client, key) {
+				t.Errorf("%s: dumb-http transport key %s missing (a sweep deleted it?)", stage, key)
+			}
+		}
+	}
 
 	// Full push with the page layer on: shell upload, items index, pages regen.
 	seedPagesConfig(t, client, pagesTestSite())
@@ -1140,6 +1151,7 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 		t.Fatal("pages regen did not run (no pages manifest)")
 	}
 	assertForeignIntact("pages regen")
+	assertDumbTransportPresent("pages regen")
 
 	// Pages-disable cleanup cycle: the sweep deletes the whole page layer.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
@@ -1150,4 +1162,5 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 		t.Fatal("disable sweep incomplete (pages manifest survived)")
 	}
 	assertForeignIntact("pages-disable cleanup")
+	assertDumbTransportPresent("pages-disable cleanup")
 }
