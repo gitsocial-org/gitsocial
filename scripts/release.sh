@@ -216,7 +216,9 @@ build_and_publish() {
     decode_apple
     # goreleaser inherits GITHUB_TOKEN, the tap tokens, and APPLE_CERT_PASSWORD
     # (the build sign hook) from the environment — all verified in preflight.
-    run goreleaser release --clean
+    # Ambient tokens for other forges are stripped: goreleaser publishes to
+    # GitHub only, and refuses to run when multiple forge tokens are present.
+    run env -u GITLAB_TOKEN -u GITEA_TOKEN goreleaser release --clean
   fi
 
   log "Notarize darwin archives"
