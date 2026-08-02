@@ -177,9 +177,20 @@ do_tag() {
   log "Tag: $TAG"
   if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
     skip "tag $TAG already exists"
-    return
+  else
+    run git tag -a "$TAG" -m "$TAG"
   fi
-  run git tag -a "$TAG" -m "$TAG"
+  # Push the annotated tag to GitHub before goreleaser runs: goreleaser
+  # otherwise creates a lightweight tag with the release, and the later mirror
+  # push is rejected (same commit, different ref value). Idempotent: re-pushing
+  # the identical tag is a no-op.
+  local github_url="https://x-access-token:${GITHUB_TOKEN:-}@github.com/${GITHUB_REPO}.git"
+  if $DRY_RUN; then
+    printf '    [dry-run] git push <GitHub> refs/tags/%s\n' "$TAG"
+  else
+    printf '    + git push <GitHub> refs/tags/%s\n' "$TAG"
+    git push "$github_url" "refs/tags/$TAG" || die "tag push to GitHub failed"
+  fi
 }
 
 # ============================================================================
