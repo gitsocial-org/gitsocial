@@ -184,7 +184,7 @@
      column). The leading glyph drops its own inline margin — the flex gap spaces
      it — so subject text and any wrapped chips share one left edge. */
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.4rem; }
-  .card-head .subject { flex: 0 1 auto; }
+  .card-head .subject { flex: 1 1 0; min-width: 0; }
   .card-head .type-glyph { margin-right: 0; }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: 0.3rem; }
   .card .body.dim { color: var(--muted); }
