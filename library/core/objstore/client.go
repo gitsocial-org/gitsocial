@@ -154,44 +154,60 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 	if query != nil {
 		u.RawQuery = query.Encode()
 	}
-	var reader io.Reader
 	payloadHash := emptyPayloadSHA256
 	if body != nil {
-		reader = bytes.NewReader(body)
 		payloadHash = hexSHA256(body)
 	}
-	req, err := http.NewRequest(method, u.String(), reader)
-	if err != nil {
-		return nil, err
-	}
-	req.ContentLength = int64(len(body))
-	for name, value := range headers {
-		req.Header.Set(name, value)
-	}
-	// Stamp every upload with its cache policy (immutable loose objects vs
-	// always-revalidate mutable state) at this single chokepoint, so both the
-	// git-push and site-push write paths get it. Cache-Control is not a signed
-	// header, so this never affects SigV4.
-	if method == http.MethodPut && req.Header.Get("Cache-Control") == "" {
-		req.Header.Set("Cache-Control", cacheControlForKey(key))
-	}
-	signRequest(req, c.cfg.AccessKey, c.cfg.SecretKey, c.cfg.Region, "s3", payloadHash, time.Now())
 	debug := os.Getenv("GITSOCIAL_S3_DEBUG") == "1"
-	if debug {
-		fmt.Fprintf(os.Stderr, "objstore> %s %s\n", method, u.String())
-		for name, values := range req.Header {
-			if name == "Authorization" {
-				values = []string{"<redacted>"}
-			}
-			fmt.Fprintf(os.Stderr, "objstore>   %s: %s\n", name, strings.Join(values, ", "))
+	// Transport failures (a stale keep-alive the server closed mid-stream,
+	// reset, broken pipe) surface as errors from Do with no response. The body
+	// is an in-memory slice and every S3 call here is idempotent, so the
+	// request is rebuilt, re-signed, and retried a couple of times.
+	var resp *http.Response
+	for attempt := 1; ; attempt++ {
+		var reader io.Reader
+		if body != nil {
+			reader = bytes.NewReader(body)
 		}
-	}
-	resp, err := c.http.Do(req)
-	if debug && resp != nil {
-		fmt.Fprintf(os.Stderr, "objstore< %d request-id=%s\n", resp.StatusCode, resp.Header.Get("x-amz-request-id"))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("objstore: %s %s: %w", method, key, err)
+		req, err := http.NewRequest(method, u.String(), reader)
+		if err != nil {
+			return nil, err
+		}
+		req.ContentLength = int64(len(body))
+		for name, value := range headers {
+			req.Header.Set(name, value)
+		}
+		// Stamp every upload with its cache policy (immutable loose objects vs
+		// always-revalidate mutable state) at this single chokepoint, so both the
+		// git-push and site-push write paths get it. Cache-Control is not a signed
+		// header, so this never affects SigV4.
+		if method == http.MethodPut && req.Header.Get("Cache-Control") == "" {
+			req.Header.Set("Cache-Control", cacheControlForKey(key))
+		}
+		signRequest(req, c.cfg.AccessKey, c.cfg.SecretKey, c.cfg.Region, "s3", payloadHash, time.Now())
+		if debug {
+			fmt.Fprintf(os.Stderr, "objstore> %s %s\n", method, u.String())
+			for name, values := range req.Header {
+				if name == "Authorization" {
+					values = []string{"<redacted>"}
+				}
+				fmt.Fprintf(os.Stderr, "objstore>   %s: %s\n", name, strings.Join(values, ", "))
+			}
+		}
+		resp, err = c.http.Do(req)
+		if debug && resp != nil {
+			fmt.Fprintf(os.Stderr, "objstore< %d request-id=%s\n", resp.StatusCode, resp.Header.Get("x-amz-request-id"))
+		}
+		if err == nil {
+			break
+		}
+		if attempt == 3 {
+			return nil, fmt.Errorf("objstore: %s %s: %w", method, key, err)
+		}
+		if debug {
+			fmt.Fprintf(os.Stderr, "objstore! transport error, retrying (%d/3): %v\n", attempt, err)
+		}
+		time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
