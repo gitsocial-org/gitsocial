@@ -1,6 +1,6 @@
-  /* Palette adopted from docs/style.css. Base tokens (bg/text/link) follow the
-     project site; derived tokens (muted/line/panel/chip) are computed off the
-     base with color-mix so they track the active theme without restating.
+  /* Base tokens (bg/text/link) define the palette; derived tokens
+     (muted/line/panel/chip) are computed off the base with color-mix so they
+     track the active theme without restating.
      Derived tokens live on body, not :root: the toggle overrides the base
      tokens via a body class, and a var() inside a custom property resolves
      where the property is declared, so :root-level derivations would never
@@ -204,7 +204,7 @@
     font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
   }
   .body-clamp-toggle:hover { color: var(--text); }
-  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-left: 1.75rem}
   .hash { font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); }
   /* Type glyphs carry one consistent semantic scheme across every view (timeline,
      search, lists, board, milestones, detail): a state-bearing glyph (issue,
@@ -400,7 +400,7 @@
   }
   .markdown pre.codeblock {
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 0.7rem 0.9rem; overflow: auto; margin: 0.7rem 0;
+    padding: 0.7rem 0.9rem; overflow: auto; margin: 0.7rem 0; line-height: 1;
   }
   .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
   .markdown img { max-width: 100%; height: auto; }

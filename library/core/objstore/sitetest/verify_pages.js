@@ -25,7 +25,7 @@ const dirEntry = (name, s) => ({ mode: "40000", name, sha: sha(s), type: "tree" 
 function treeBytes(entries) { const parts = []; for (const e of entries) parts.push(Buffer.from(e.mode + " " + e.name + "\0", "utf8"), Buffer.from(e.sha, "hex")); return new Uint8Array(Buffer.concat(parts)); }
 const HTML = fs.readFileSync(require("path").join(__dirname, "../site/index.html"), "utf8");
 // The shell's full CSS was extracted from index.html's inline <style> into
-// pages-app.css (shared with the upgraded pages since the M8 entry flip); CSS
+// pages-app.css (shared with the upgraded pages since the entry flip); CSS
 // rule assertions read it, markup/JS assertions still read index.html.
 const CSS = fs.readFileSync(require("path").join(__dirname, "../site/pages-app.css"), "utf8");
 const APP = fs.readFileSync(require("path").join(__dirname, "../site/gs-app.js"), "utf8");

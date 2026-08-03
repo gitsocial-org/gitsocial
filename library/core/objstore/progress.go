@@ -60,7 +60,7 @@ func (t *throttle) ready(done, total int) bool {
 // progressWriter renders Progress calls as human-readable lines on an
 // io.Writer (the helper's stderr, or the CLI's). On a TTY it rewrites a single
 // line in place with a carriage return; otherwise it emits newline-terminated
-// lines at a much lower rate so non-interactive logs (CI) don't explode. It is
+// lines at a much lower rate so piped logs don't explode. It is
 // safe for concurrent phase updates.
 type progressWriter struct {
 	mu       sync.Mutex
@@ -74,8 +74,8 @@ type progressWriter struct {
 // ttyProgressInterval throttles interactive single-line refreshes (~1s).
 const ttyProgressInterval = time.Second
 
-// pipeProgressInterval throttles non-interactive newline lines (~10s) so CI
-// logs stay small.
+// pipeProgressInterval throttles non-interactive newline lines (~10s) so
+// piped logs stay small.
 const pipeProgressInterval = 10 * time.Second
 
 // newProgressWriter builds a progressWriter. tty selects carriage-return

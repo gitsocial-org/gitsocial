@@ -172,7 +172,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | — | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | — | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/objstore`<br>S3 remote backend (see [S3 Remote Backend](#s3-remote-backend)) | `Client`, `Config`, `Provider`, `Capability`, `HelperEnv` | `NewClient`, `ResolveProvider`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS` |
+| `core/objstore`<br>S3 remote backend (see [S3 Remote Backend](#s3-remote-backend)) | `Client`, `Config`, `Capability`, `HelperEnv` | `NewClient`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `PushSite`, `PushArtifactObjects`, `PutObjectToRemote` |
 | `core/fetch`<br>Fetch orchestration | — | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | — | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | — | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |

@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, setGrammarBase, graphView, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -173,8 +173,6 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       } else if (r.type === "file") {
         setView(await treeOrBlob(ctx, r.path, r.branch, r.line, r.lineEnd));
         if (r.anchor) scrollToAnchor(r.anchor, 10);
-      } else if (r.type === "reserved") {
-        setView(comingSoon(r));
       } else {
         setView([el("div", { class: "empty" }, ["Not found."])]);
       }
@@ -360,7 +358,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     run();
   }
 
-  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon, setDocTitle });
+  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();
 if (typeof document !== "undefined") (typeof globalThis !== "undefined" ? globalThis : this).GS.init();

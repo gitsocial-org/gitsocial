@@ -2431,17 +2431,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
   }
 
-  // comingSoon renders the placeholder for reserved routes (branch/tag/file/
-  // list, and the friendly /tree and /code tabs) that are not available yet.
-  // It still echoes the parsed target so the ref is legible.
-  function comingSoon(r) {
-    const labels = { branch: "Branch view", tag: "Tag view", file: "File view", list: "List view" };
-    const name = r.type === "reserved" ? (r.what === "code" ? "Code browser" : "Tree browser") : (labels[r.type] || "This view");
-    const target = r.name || r.path || r.id || "";
-    const text = name + " is not available yet." + (target ? " (" + target + ")" : "");
-    return [el("div", { class: "empty" }, [text])];
-  }
-
   // ---- PM rendering (browser only) ----
 
   const RELEASE_ASSET_KEYS = ["artifacts", "artifact-url", "checksums", "sbom", "signed-by"];
@@ -2766,11 +2755,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return filteredListView(g.issues, card, "issues", ISSUE_STATES, "No issues in this repository.");
   }
 
-  // issuesView renders the milestones/sprints subsections above a state-filtered
-  // issue list.
-  function issuesView(pmItems) {
-    return [el("div", {}, issuesBody(pmItems))];
-  }
   // versionKey extracts a milestone's leading dotted-number version ("1.4.0" ->
   // [1,4,0], "1.0 Public Release" -> [1,0]); null when the subject carries none.
   function versionKey(item) {
@@ -4468,6 +4452,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, analyticsAuthors, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, detailBackHref, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, comingSoon, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, fullscreenBtn, highlightNav, homeView, hrefOk, icon, iconEl, imageExt, issuesBody, issuesView, milestonesBody, sprintsBody, itemDetail, joinPath, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, preciseTime, releaseCard, renderCommitBody, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeHtml, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

@@ -27,8 +27,9 @@
 # --dry-run prints every step (with the real commands) and touches nothing: no
 # tag, no build, no publish, no upload. Working tree and git state stay clean.
 #
-# Required credentials/env (derived from .github/workflows/release.yml,
-# mirror.yml and .goreleaser.yaml — this driver replaces that CI):
+# Required credentials/env — supplied by the operator environment, typically
+# sourced from the untracked repo-root .env (the set matches .goreleaser.yaml;
+# this driver replaced the retired CI workflows, see git history):
 #   Apple signing + notarization (SIGNING.md):
 #     APPLE_CERT_P12        base64 of the Developer ID Application .p12
 #     APPLE_CERT_PASSWORD   password for that .p12
@@ -57,7 +58,7 @@
 #                          so the current CLI — including `site put` — is used)
 set -euo pipefail
 
-# --- mirror targets (match mirror.yml / .goreleaser.yaml) ---
+# --- mirror targets (GITHUB_REPO matches .goreleaser.yaml's release target) ---
 GITHUB_REPO="gitsocial-org/gitsocial"
 GITLAB_URL_PATH="gitlab.com/gitsocial-org/gitsocial.git"
 CODEBERG_URL_PATH="codeberg.org/GitSocial/GitSocial.git"
@@ -69,7 +70,7 @@ TAG=""
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=true ;;
-    -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
+    -h|--help) awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$0"; exit 0 ;;
     v*)        TAG="$arg" ;;
     *)         echo "error: unexpected argument: $arg" >&2; exit 2 ;;
   esac
@@ -148,7 +149,9 @@ preflight() {
   # Clean working tree.
   [ -z "$(git status --porcelain)" ] || fail "working tree is not clean (commit or stash first)"
 
-  # On up-to-date main (skip the network fetch under --dry-run).
+  # On up-to-date main (skip the network fetch under --dry-run). origin is the
+  # GitHub mirror: requiring main == origin/main guarantees the mirror already
+  # carries the released commit before anything ships.
   branch="$(git rev-parse --abbrev-ref HEAD)"
   [ "$branch" = "main" ] || fail "not on main (on $branch)"
   if $DRY_RUN; then
@@ -205,8 +208,8 @@ gh_release_exists() {
 }
 
 # decode_apple materializes the Apple credential files goreleaser's sign hook
-# (/tmp/cert.p12) and the notary step (/tmp/api-key.json) expect, mirroring
-# release.yml's "Decode Apple credentials" step.
+# (/tmp/cert.p12) and the notary step (/tmp/api-key.json) expect from the
+# base64/PEM env vars.
 decode_apple() {
   if $DRY_RUN; then
     printf '    [dry-run] decode Apple credentials → /tmp/cert.p12, /tmp/api-key.json\n'

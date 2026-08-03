@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="documentation/images/gitsocial-icon.png" width="120" height="120">
+  <img src="documentation/images/gitsocial-icon.svg" width="120" height="120">
   <h1>GitSocial</h1>
 
   *Git-native collaboration platform*
@@ -45,7 +45,7 @@ scoop install gitsocial
 go install github.com/gitsocial-org/gitsocial/cli/gitsocial@latest
 ```
 
-Or download a binary from [Releases](https://github.com/gitsocial-org/gitsocial/releases/latest).
+Or download a binary from [releases](https://gitsocial.org/releases/index.html).
 
 ## Quick Start
 

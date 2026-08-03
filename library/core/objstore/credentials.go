@@ -30,9 +30,9 @@ type Credential struct {
 	SecretKey string `json:"secretKey"`
 }
 
-// CredentialsPath returns the credentials file location under the user-config
+// credentialsPath returns the credentials file location under the user-config
 // directory ($XDG_CONFIG_HOME, else ~/.config), next to settings.json.
-func CredentialsPath() (string, error) {
+func credentialsPath() (string, error) {
 	dir, err := settings.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve config dir: %w", err)
@@ -44,7 +44,7 @@ func CredentialsPath() (string, error) {
 // map (no error); a malformed file is an error the caller decides how to
 // handle (the hot-path resolver warns and falls through, the CLI surfaces it).
 func ReadCredentialsFile() (map[string]Credential, error) {
-	path, err := CredentialsPath()
+	path, err := credentialsPath()
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func ReadCredentialsFile() (map[string]Credential, error) {
 // creating the parent directory when needed. An empty map still writes a file
 // (an explicit "no entries" state after the last remove).
 func WriteCredentialsFile(creds map[string]Credential) error {
-	path, err := CredentialsPath()
+	path, err := credentialsPath()
 	if err != nil {
 		return err
 	}

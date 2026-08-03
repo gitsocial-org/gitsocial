@@ -28,7 +28,7 @@ function pageLocs(xml) {
   ok("site-config carries the guards + url", cfg.publish === "true" && cfg.pages === "true" && /^http:\/\/127\.0\.0\.1:\d+\/thread-demo\/$/.test(cfg.url), JSON.stringify(cfg));
   const toServed = (loc) => TD + loc.slice(cfg.url.length);
 
-  console.log("\n--- Front page (index.html: the M8 entry flip) ---");
+  console.log("\n--- Front page (index.html: the entry flip) ---");
   const front = await get(TD + "index.html");
   ok("index.html served", front.status === 200);
   ok("index.html is the GENERATED front page", /id="gs-page"/.test(front.text) && /name="gs-route" content="\/"/.test(front.text));

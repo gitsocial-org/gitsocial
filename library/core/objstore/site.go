@@ -14,10 +14,10 @@ import (
 	"strings"
 )
 
-// SiteFiles holds the browser-only read surface uploaded alongside a bucket-hosted repo.
+// siteFiles holds the browser-only read surface uploaded alongside a bucket-hosted repo.
 //
 //go:embed site
-var SiteFiles embed.FS
+var siteFiles embed.FS
 
 // Site state keys under the dot-prefixed namespace no git ref can collide with.
 const (
@@ -36,10 +36,10 @@ const (
 // siteFileNames lists the embedded site files in upload order, walking
 // subdirectories (e.g. site/grammars/) so nested assets ship too. Names are
 // returned relative to site/ (e.g. "grammars/prism-python.js"), the same shape
-// SiteFiles.ReadFile and the upload key expect.
+// siteFiles.ReadFile and the upload key expect.
 func siteFileNames() ([]string, error) {
 	var names []string
-	err := fs.WalkDir(SiteFiles, "site", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(siteFiles, "site", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ func siteVersion() (string, error) {
 	}
 	h := sha256.New()
 	for _, name := range names {
-		data, err := SiteFiles.ReadFile("site/" + name)
+		data, err := siteFiles.ReadFile("site/" + name)
 		if err != nil {
 			return "", fmt.Errorf("read embedded %s: %w", name, err)
 		}
@@ -103,7 +103,7 @@ func siteVersion() (string, error) {
 // uploadShellFile puts one embedded site file (by its site/-relative name) with
 // its Content-Type, brotli-compressing the text assets like uploadSiteFiles.
 func uploadShellFile(client *Client, prefix, name string) error {
-	data, err := SiteFiles.ReadFile("site/" + name)
+	data, err := siteFiles.ReadFile("site/" + name)
 	if err != nil {
 		return fmt.Errorf("read embedded %s: %w", name, err)
 	}

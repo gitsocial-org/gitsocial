@@ -7,7 +7,7 @@
 //                           immutable sealed <n>.html, chained "older →")
 //   pages.css               the pages' shared stylesheet (their only subresource)
 //   index.html              the generated front page (README + timeline + PE
-//                           hooks + gs-upgrade.js) — the M8 entry flip: when the
+//                           hooks + gs-upgrade.js) — the entry flip: when the
 //                           page layer is effective the pages maintainer OWNS
 //                           index.html; uploadSiteFiles owns the embedded shell
 //                           index.html only when it is not (dual-mode ownership).
@@ -249,7 +249,7 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	switch {
 	case manifest != nil && manifest.Cursor == nil && sitePagesTipsCurrent(manifest, tips):
 		// Nothing any page derives from moved: the page set is current. But the
-		// front page IS index.html since the M8 flip, and this same push's
+		// front page IS index.html since the entry flip, and this same push's
 		// uploadSiteFiles/ensureSiteShell may have just (re)uploaded the embedded
 		// shell over it (a shell-version bump, or any non-pages ref move that
 		// un-skips maintenance). Reclaim index.html deterministically — the pages
@@ -265,7 +265,7 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 		return pending, "", err
 	}
 	// The legacy pre-flip front page (timeline.html) is retired; sweep it best-
-	// effort on every effective push so a bucket first pushed by a pre-M8 binary
+	// effort on every effective push so a bucket first pushed by an older binary
 	// stops serving a stale duplicate front page.
 	_ = client.Delete(prefix + sitePagesLegacyFrontKey)
 	return false, sitePagesStateOn, nil

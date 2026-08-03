@@ -25,7 +25,7 @@ import (
 const (
 	// sitePagesCSSKey is the pages' shared stylesheet, their only subresource.
 	sitePagesCSSKey = "pages.css"
-	// sitePagesFrontKey is the front page's bucket key. Since the M8 entry flip
+	// sitePagesFrontKey is the front page's bucket key. Since the entry flip
 	// the generated front page (README + timeline + PE hooks + gs-upgrade.js) IS
 	// index.html — the pages maintainer owns index.html whenever the page layer
 	// is effective, and uploadSiteFiles owns the embedded shell index.html only
@@ -33,7 +33,7 @@ const (
 	// deployed to production, so URLs-are-forever does not bind).
 	sitePagesFrontKey = "index.html"
 	// sitePagesLegacyFrontKey is the pre-flip front-page key, swept on every push
-	// so a bucket first pushed by a pre-M8 binary (which wrote timeline.html) does
+	// so a bucket first pushed by an older binary (which wrote timeline.html) does
 	// not keep serving a stale duplicate front page.
 	sitePagesLegacyFrontKey = "timeline.html"
 	// sitePagesUpgradeKey is the shell's page-entry boot asset (gs-upgrade.js),
@@ -118,7 +118,8 @@ footer{margin-top:2.2rem;border-top:1px solid #d8cbaa;padding-top:.8rem}
 
 // sitePageTemplateText is the full template set. The shared "head" stamps the
 // common metadata plus the PE hooks (gs-route meta, the #gs-page mount div with
-// its data-base attribute) — inert in v1, adopted by the M7 upgrade boot. The
+// its data-base attribute) — inert plain HTML until the gs-upgrade.js boot
+// adopts them. The
 // @BASE@ placeholder is spliced with the inline CSS constant before parsing so
 // both layers emit from this file's constants.
 const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>

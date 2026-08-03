@@ -34,8 +34,9 @@ type HelperEnv struct {
 }
 
 // HelperEnvFromOS reads helper configuration from the process environment:
-// standard AWS credential env vars plus GITSOCIAL_S3_ENDPOINT /
-// GITSOCIAL_S3_REGION / GITSOCIAL_S3_PATH_STYLE.
+// GIT_DIR plus GITSOCIAL_S3_ENDPOINT / GITSOCIAL_S3_REGION /
+// GITSOCIAL_S3_PATH_STYLE. Credentials are not carried here; they resolve per
+// endpoint host when the client is built (credentials.go).
 func HelperEnvFromOS() HelperEnv {
 	return HelperEnv{
 		GitDir:    os.Getenv("GIT_DIR"),
