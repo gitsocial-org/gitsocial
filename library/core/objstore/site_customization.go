@@ -22,16 +22,16 @@ import (
 // siteCustomizationKey is the site customization the static site reads.
 const siteCustomizationKey = ".gitsocial/site/site-config.json"
 
-// SiteConfigMaxTitle bounds a customization title (defensive: the reader only
+// siteConfigMaxTitle bounds a customization title (defensive: the reader only
 // uses textContent, but a runaway title serves no one).
-const SiteConfigMaxTitle = 200
+const siteConfigMaxTitle = 200
 
 // SiteFaviconMaxBytes caps the favicon data URI so the no-cache artifact stays
 // small (the whole reason it is a data URI: no extra bucket object).
 const SiteFaviconMaxBytes = 32 * 1024
 
-// SiteConfigMaxURL bounds the site base URL (site.url), after normalization.
-const SiteConfigMaxURL = 500
+// siteConfigMaxURL bounds the site base URL (site.url), after normalization.
+const siteConfigMaxURL = 500
 
 // SiteConfigMaxDescription bounds the site description (site.description).
 const SiteConfigMaxDescription = 300
@@ -157,7 +157,7 @@ func NormalizeSiteURL(v string) (string, bool) {
 	if !strings.HasSuffix(v, "/") {
 		v += "/"
 	}
-	if len(v) > SiteConfigMaxURL {
+	if len(v) > siteConfigMaxURL {
 		return "", false
 	}
 	return v, true
@@ -171,8 +171,8 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	var c siteCustomization
 	if s, ok := raw["title"].(string); ok {
 		s = strings.TrimSpace(s)
-		if len(s) > SiteConfigMaxTitle {
-			s = s[:SiteConfigMaxTitle]
+		if len(s) > siteConfigMaxTitle {
+			s = s[:siteConfigMaxTitle]
 		}
 		c.Title = s
 	}

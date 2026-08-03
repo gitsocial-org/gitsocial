@@ -16,8 +16,8 @@ func codeTipsOf(refs map[string]string, defaultBranch string) []codeTip {
 }
 
 // mustUpdateCode runs updateSiteCodeIndex over the current code tips (default
-// branch = "main") and fails on any error (the code corpus's M2 contract: with a
-// manifest present no state may error).
+// branch = "main") and fails on any error (the code corpus's repair contract:
+// with a manifest present no state may error).
 func mustUpdateCode(t *testing.T, client *Client, refs map[string]string, defaultBranch string) {
 	t.Helper()
 	// defaultBranch is threaded from the caller so the attribution tests can vary

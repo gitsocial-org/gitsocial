@@ -87,6 +87,8 @@ else
 fi
 chmod +x "${TMPDIR}/${BINARY}"
 
+mkdir -p "$INSTALL_DIR" 2>/dev/null || true
+
 if [ -w "$INSTALL_DIR" ]; then
   mv "${TMPDIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
 else

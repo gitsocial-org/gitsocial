@@ -11,7 +11,7 @@ Darwin release binaries (`darwin_amd64` + `darwin_arm64`) are signed with an App
 | Publish | `goreleaser release` | Uploads archives + SBOMs + checksums to the GitHub release for the tag |
 | Notarize | `scripts/release.sh` step 3 (build) | `rcodesign notary-submit --wait` runs against each `dist/*_darwin_*.zip` after goreleaser publishes. Apple registers the cdhash centrally; the archive itself is unchanged |
 
-Signing uses [`rcodesign`](https://github.com/indygreg/apple-platform-rs) — a Linux-compatible signer/notarizer pinned to v0.29.0. Because `rcodesign` needs no Apple tooling, signing and notarization run on the release machine regardless of its OS; no macOS host is required.
+Signing uses [`rcodesign`](https://github.com/indygreg/apple-platform-rs) — a Linux-compatible signer/notarizer installed on the release machine (v0.29.x tested; the release driver only checks it is present on PATH). Because `rcodesign` needs no Apple tooling, signing and notarization run on the release machine regardless of its OS; no macOS host is required.
 
 ## Signing credentials
 
@@ -49,7 +49,7 @@ The `.p8` API key never expires, but rotate after any suspected exposure (e.g. a
 Anyone — user, fork operator, auditor — can confirm a release archive's signature and notarization status from a Mac:
 
 ```bash
-# primary: the gitsocial.org bucket (the D9 install path)
+# primary: the gitsocial.org bucket
 curl -fsSLO https://gitsocial.org/artifacts/<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm64.zip
 # mirror: GitHub Releases
 # curl -fsSLO https://github.com/gitsocial-org/gitsocial/releases/download/v<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm64.zip

@@ -19,9 +19,9 @@ import (
 const (
 	// ArtifactsPrefix is the reserved root prefix for release artifact objects.
 	ArtifactsPrefix = "artifacts/"
-	// ArtifactsLatestKey holds the newest non-prerelease version pushed (bare
+	// artifactsLatestKey holds the newest non-prerelease version pushed (bare
 	// semver, trailing newline).
-	ArtifactsLatestKey = ArtifactsPrefix + "latest.txt"
+	artifactsLatestKey = ArtifactsPrefix + "latest.txt"
 )
 
 // PushArtifactObjects uploads each named file as a plain object at
@@ -48,16 +48,16 @@ func PushArtifactObjects(remoteURL string, env HelperEnv, version string, files 
 		}
 		resp.Body.Close()
 	}
-	current, err := client.Get(prefix + ArtifactsLatestKey)
+	current, err := client.Get(prefix + artifactsLatestKey)
 	if err != nil && !errors.Is(err, ErrNotFound) {
-		return false, fmt.Errorf("read %s: %w", ArtifactsLatestKey, err)
+		return false, fmt.Errorf("read %s: %w", artifactsLatestKey, err)
 	}
 	if !advance(strings.TrimSpace(string(current))) {
 		return false, nil
 	}
-	resp, err := client.do(http.MethodPut, prefix+ArtifactsLatestKey, nil, []byte(version+"\n"), map[string]string{"Content-Type": "text/plain; charset=utf-8"})
+	resp, err := client.do(http.MethodPut, prefix+artifactsLatestKey, nil, []byte(version+"\n"), map[string]string{"Content-Type": "text/plain; charset=utf-8"})
 	if err != nil {
-		return false, fmt.Errorf("upload %s: %w", ArtifactsLatestKey, err)
+		return false, fmt.Errorf("upload %s: %w", artifactsLatestKey, err)
 	}
 	resp.Body.Close()
 	return true, nil

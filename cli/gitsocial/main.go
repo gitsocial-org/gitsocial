@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"runtime/trace"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +16,18 @@ import (
 )
 
 var version = "dev"
+
+// resolveVersion falls back to the module version recorded by `go install`
+// when the goreleaser ldflags stamp is absent.
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return strings.TrimPrefix(info.Main.Version, "v")
+	}
+	return version
+}
 
 // startProfiling wires CPU/memory/trace profiling controlled by GITSOCIAL_PPROF.
 // Modes: "cpu" (default file /tmp/gitsocial-cpu.pprof), "mem" (heap snapshot at
@@ -86,6 +100,7 @@ func main() {
 	stop := startProfiling()
 	defer stop()
 
+	version = resolveVersion()
 	rootCmd := newRootCmd()
 
 	// Core commands

@@ -190,8 +190,8 @@ func assertLockstepState(t *testing.T, client *Client, ext string, wantShas []st
 	}
 }
 
-// mustUpdate runs updateSiteItemsIndex and fails the test on any error (the M2
-// contract: with a manifest present no state may error).
+// mustUpdate runs updateSiteItemsIndex and fails the test on any error (the
+// repair contract: with a manifest present no state may error).
 func mustUpdate(t *testing.T, client *Client, ext, tip string) {
 	t.Helper()
 	if err := updateSiteItemsIndex(client, "", ext, tip, nil); err != nil {

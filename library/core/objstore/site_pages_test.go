@@ -202,7 +202,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	}
 
 	// Both guards + url: the page layer appears and index.html BECOMES the
-	// generated front page (the M8 entry flip), overwriting the embedded shell.
+	// generated front page (the entry flip), overwriting the embedded shell.
 	seedPagesConfig(t, client, pagesTestSite())
 	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("pushSite pages-on: %v", err)

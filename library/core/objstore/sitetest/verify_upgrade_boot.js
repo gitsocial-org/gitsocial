@@ -1,4 +1,4 @@
-// verify_upgrade_boot.js - the M7/M8 page-entry boot contract (gs-upgrade.js):
+// verify_upgrade_boot.js - the page-entry boot contract (gs-upgrade.js):
 // the generated pages ARE the site and the app is the enhancement layer. This
 // suite pins the boot contract WITHOUT a real browser (the shim has no script
 // loader), by combining two levels:

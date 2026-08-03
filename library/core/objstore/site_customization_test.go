@@ -59,8 +59,8 @@ func TestValidateSiteCustomization(t *testing.T) {
 	})
 
 	t.Run("long title truncated", func(t *testing.T) {
-		c, ok := validateSiteCustomization(map[string]interface{}{"title": strings.Repeat("x", SiteConfigMaxTitle+50)})
-		if !ok || len(c.Title) != SiteConfigMaxTitle {
+		c, ok := validateSiteCustomization(map[string]interface{}{"title": strings.Repeat("x", siteConfigMaxTitle+50)})
+		if !ok || len(c.Title) != siteConfigMaxTitle {
 			t.Fatalf("title truncation failed: len=%d ok=%v", len(c.Title), ok)
 		}
 	})

@@ -72,8 +72,8 @@ func newCloneCmd() *cobra.Command {
 }
 
 // cloneDir derives the target directory from the remote URL. For s3 URLs the
-// name comes from the bucket/prefix (git's own guess would include the query
-// params); otherwise it mirrors git's humanish rule (last segment, .git off).
+// name comes from the prefix, falling back to the bucket name when the prefix
+// is empty; otherwise it mirrors git's humanish rule (last segment, .git off).
 func cloneDir(remoteURL string) (string, error) {
 	if strings.HasPrefix(remoteURL, "s3://") {
 		_, bucket, prefix, err := objstore.ParseS3URL(remoteURL)

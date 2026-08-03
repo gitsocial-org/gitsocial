@@ -55,7 +55,7 @@ homebrew_casks:
       owner: gitsocial-org
       name: homebrew-tap
       token: "{{ .Env.GORELEASER_HOMEBREW_CASK_GITHUB_TOKEN }}"
-    homepage: https://github.com/gitsocial-org/gitsocial
+    homepage: https://gitsocial.org
     description: "Git-native collaboration — posts, issues, PRs, releases, all in your repo"
     license: MIT
 
@@ -64,6 +64,6 @@ scoops:
       owner: gitsocial-org
       name: scoop-bucket
       token: "{{ .Env.GORELEASER_SCOOP_GITHUB_TOKEN }}"
-    homepage: https://github.com/gitsocial-org/gitsocial
+    homepage: https://gitsocial.org
     description: "Git-native collaboration — posts, issues, PRs, releases, all in your repo"
     license: MIT
