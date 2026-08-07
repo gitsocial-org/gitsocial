@@ -135,8 +135,11 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <meta property="og:description" content="{{.Description}}">
 <meta property="og:site_name" content="{{.SiteTitle}}">
 <meta property="og:url" content="{{.Canonical}}">
-<meta name="twitter:card" content="summary">
-<link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="{{.Feed}}">
+{{if .Image}}<meta property="og:image" content="{{.Image}}">
+<meta name="twitter:image" content="{{.Image}}">
+<meta name="twitter:card" content="summary_large_image">
+{{else}}<meta name="twitter:card" content="summary">
+{{end}}<link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="{{.Feed}}">
 {{if .TypeFeed}}<link rel="alternate" type="application/atom+xml" title="{{.TypeFeedTitle}}" href="{{.TypeFeed}}">
 {{end}}<meta name="gs-route" content="{{.Route}}">
 <style>@BASE@</style>
@@ -195,6 +198,7 @@ type sitePageChrome struct {
 	Canonical     string // absolute self URL from site.url
 	Route         string // gs-route content, in the shell's parseRoute grammar
 	Base          string // relative path from this page to the site root ("./" or "../")
+	Image         string // absolute og:image/twitter:image URL ("" = no card, twitter:card stays "summary")
 	Feed          string // absolute feed.xml URL for the autodiscovery link (a relative href breaks after gs-upgrade.js hash-rewrites the location)
 	TypeFeed      string // absolute <dir>/feed.xml URL — a second autodiscovery link on a type's list pages ("" elsewhere)
 	TypeFeedTitle string // the type feed link's distinct display title ("<label> · <site title>")
@@ -266,6 +270,7 @@ type sitePageSite struct {
 	Title       string
 	URL         string // normalized site.url (trailing slash)
 	Description string
+	Image       string // absolute og:image URL ("" = no social card)
 }
 
 // sitePageList describes one type directory: source extension, bucket dir,
@@ -571,6 +576,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 		Canonical:   site.URL + "i/" + it.Msg.Short + ".html",
 		Route:       route,
 		Base:        "../",
+		Image:       site.Image,
 		Feed:        site.URL + sitePagesFeedKey,
 	}
 	if pageItemType(it) == "release" {
@@ -690,6 +696,29 @@ func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]i
 	return append([]siteSitemapEntry{{loc: site.URL, lastmod: sitePageDate(newest)}}, items...)
 }
 
+// buildSiteSitemapListEntries collects the type-list index pages' sitemap
+// entries with <lastmod> = the type's latest item activity ("" for an empty
+// type). These stay out of buildSiteSitemapEntries: their positions would shift
+// as items append, so they ride the rewritten head part (or the single urlset),
+// never a sealed one.
+func buildSiteSitemapListEntries(roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) []siteSitemapEntry {
+	entries := make([]siteSitemapEntry, 0, len(sitePageLists))
+	for _, list := range sitePageLists {
+		var newest int64
+		for _, it := range roots[list.Ext][:done[list.Ext]] {
+			if t := sitePageLastActivity(it); t > newest {
+				newest = t
+			}
+		}
+		lastmod := ""
+		if newest > 0 {
+			lastmod = sitePageDate(newest)
+		}
+		entries = append(entries, siteSitemapEntry{loc: site.URL + list.Dir + "/index.html", lastmod: lastmod})
+	}
+	return entries
+}
+
 // sitePageLastActivity returns an item's latest activity time: its creation,
 // its resolved edit, or its newest reply.
 func sitePageLastActivity(it *sitePageItem) int64 {
@@ -738,11 +767,14 @@ func renderSiteSitemapIndex(parts []siteSitemapEntry) []byte {
 // writeSiteSitemap writes the crawl map for the generated pages: a single
 // sitemap.xml until the URL count exceeds one part, then a sitemap index over
 // sealed numbered parts (full, immutable, long-cached — appends only ever grow
-// the tail) plus the rewritten sitemap-head.xml newest part.
+// the tail) plus the rewritten sitemap-head.xml newest part. The type-list
+// index pages ride the single urlset / head part only (see
+// buildSiteSitemapListEntries); the part math runs on root + items alone.
 func writeSiteSitemap(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) error {
 	entries := buildSiteSitemapEntries(roots, done, site)
+	lists := buildSiteSitemapListEntries(roots, done, site)
 	if len(entries) <= siteSitemapPartSize {
-		return putSiteText(client, prefix+sitePagesSitemapKey, "application/xml", renderSiteURLSet(entries))
+		return putSiteText(client, prefix+sitePagesSitemapKey, "application/xml", renderSiteURLSet(append(entries, lists...)))
 	}
 	sealed := (len(entries) - 1) / siteSitemapPartSize
 	index := make([]siteSitemapEntry, 0, sealed+1)
@@ -754,7 +786,7 @@ func writeSiteSitemap(client *Client, prefix string, roots map[string][]*sitePag
 		}
 		index = append(index, siteSitemapEntry{loc: site.URL + key, lastmod: newestLastmod(part)})
 	}
-	head := entries[sealed*siteSitemapPartSize:]
+	head := append(entries[sealed*siteSitemapPartSize:], lists...)
 	if err := putSiteText(client, prefix+sitePagesSitemapHeadKey, "application/xml", renderSiteURLSet(head)); err != nil {
 		return err
 	}

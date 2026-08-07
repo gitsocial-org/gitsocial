@@ -19,15 +19,16 @@ const coreConfigSiteKey = "site"
 
 // SiteCustomization is the workspace-editable site customization: a title, a
 // light accent and optional dark accent (both #rgb/#rrggbb hex), an optional
-// favicon data URI, the site's canonical base URL, a description, and the two
-// publish guards ("true"/"false"; both default off). Empty fields are omitted
-// on write (and drop the artifact when all are empty), mirroring the push-time
-// validation.
+// favicon data URI, an optional social-card image (og:image), the site's
+// canonical base URL, a description, and the two publish guards
+// ("true"/"false"; both default off). Empty fields are omitted on write (and
+// drop the artifact when all are empty), mirroring the push-time validation.
 type SiteCustomization struct {
 	Title       string `json:"title,omitempty"`
 	Accent      string `json:"accent,omitempty"`
 	AccentDark  string `json:"accentDark,omitempty"`
 	Favicon     string `json:"favicon,omitempty"`
+	Image       string `json:"image,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Description string `json:"description,omitempty"`
 	Publish     string `json:"publish,omitempty"`
@@ -71,6 +72,9 @@ func WriteWorkspaceSiteCustomization(workdir string, c SiteCustomization) error 
 	}
 	if c.Favicon != "" {
 		site["favicon"] = c.Favicon
+	}
+	if c.Image != "" {
+		site["image"] = c.Image
 	}
 	if c.URL != "" {
 		site["url"] = c.URL

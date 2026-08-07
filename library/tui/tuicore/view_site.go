@@ -31,6 +31,7 @@ var siteFields = []siteField{
 	{"accent", "hex color, e.g. #0a7", func(c *objstore.SiteCustomization) *string { return &c.Accent }},
 	{"accentDark", "hex color for dark mode", func(c *objstore.SiteCustomization) *string { return &c.AccentDark }},
 	{"favicon", "data:image/png|webp|svg+xml URI", func(c *objstore.SiteCustomization) *string { return &c.Favicon }},
+	{"image", "og:image social card: bucket key (og-card.png) or https:// URL", func(c *objstore.SiteCustomization) *string { return &c.Image }},
 	{"url", "absolute https:// base URL, e.g. https://example.com/", func(c *objstore.SiteCustomization) *string { return &c.URL }},
 	{"description", "plain text, 300 chars max", func(c *objstore.SiteCustomization) *string { return &c.Description }},
 	{"publish", "true/false: master switch for the static site (default false)", func(c *objstore.SiteCustomization) *string { return &c.Publish }},
@@ -210,6 +211,10 @@ func validateSiteField(label, value string) string {
 	case "favicon":
 		if !objstore.ValidSiteFavicon(value) {
 			return "invalid favicon (data:image/png|webp|svg+xml URI, max 32KB)"
+		}
+	case "image":
+		if _, ok := objstore.NormalizeSiteImage(value); !ok {
+			return "invalid image (relative bucket key or absolute https:// URL)"
 		}
 	case "url":
 		if _, ok := objstore.NormalizeSiteURL(value); !ok {

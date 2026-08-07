@@ -613,12 +613,17 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	if strings.Contains(sitemap, "a&b") || !strings.Contains(sitemap, "a&amp;b") {
 		t.Error("sitemap locs must be XML-escaped")
 	}
-	if got := strings.Count(sitemap, "<url>"); got != 6 {
-		t.Errorf("sitemap has %d urls, want 6 (root + 5 pages)", got)
+	if got := strings.Count(sitemap, "<url>"); got != 11 {
+		t.Errorf("sitemap has %d urls, want 11 (root + 5 pages + 5 lists)", got)
 	}
 	for _, sha := range shas {
 		if !strings.Contains(sitemap, "/i/"+sha[:12]+".html</loc>") {
 			t.Errorf("sitemap must cover i/%s.html", sha[:12])
+		}
+	}
+	for _, dir := range []string{"issues", "prs", "posts", "releases", "memos"} {
+		if !strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
+			t.Errorf("sitemap must cover %s/index.html", dir)
 		}
 	}
 	if !strings.Contains(sitemap, "<lastmod>1970-01-01</lastmod>") {
@@ -646,8 +651,13 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml", sitePagesSitemapHeadKey} {
 		urls += strings.Count(getKey(t, client, part), "<url>")
 	}
-	if urls != 6 {
-		t.Errorf("parts cover %d urls, want 6", urls)
+	if urls != 11 {
+		t.Errorf("parts cover %d urls, want 11", urls)
+	}
+	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml"} {
+		if strings.Contains(getKey(t, client, part), "index.html</loc>") {
+			t.Errorf("list pages must never land in sealed part %s", part)
+		}
 	}
 	if cacheControlForKey("sitemap-1.xml") != cacheControlImmutable {
 		t.Error("sealed sitemap parts must be immutable-cached")

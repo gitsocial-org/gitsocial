@@ -159,9 +159,14 @@ func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 	return NormalizeSiteURL(cfg.URL)
 }
 
-// sitePageSiteFor assembles the site identity every page stamps.
+// sitePageSiteFor assembles the site identity every page stamps. A relative
+// site.image key resolves against the effective base URL here, so every
+// consumer sees the absolute og:image URL.
 func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageSite {
-	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description}
+	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description, Image: cfg.Image}
+	if site.Image != "" && !strings.Contains(site.Image, "://") {
+		site.Image = url + site.Image
+	}
 	if site.Title == "" {
 		site.Title = sitePageDefaultTitle(prefix)
 	}
@@ -169,9 +174,10 @@ func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageS
 }
 
 // sitePageSiteHash fingerprints the site identity baked into every rendered
-// page (title, canonical base, description); a change regenerates everything.
+// page (title, canonical base, description, og:image); a change regenerates
+// everything.
 func sitePageSiteHash(site sitePageSite) string {
-	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description))
+	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image))
 	return hex.EncodeToString(h[:])[:12]
 }
 
@@ -777,6 +783,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		Canonical:     site.URL + list.Dir + "/index.html",
 		Route:         list.Route,
 		Base:          "../",
+		Image:         site.Image,
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
@@ -816,6 +823,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		Canonical:     site.URL + list.Dir + "/" + strconv.Itoa(n) + ".html",
 		Route:         list.Route,
 		Base:          "../",
+		Image:         site.Image,
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
@@ -912,6 +920,7 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 		// the README the static page shows.
 		Route: "/",
 		Base:  "./",
+		Image: site.Image,
 		Feed:  site.URL + sitePagesFeedKey,
 	}
 	page, err := renderSitePage("front", d)
