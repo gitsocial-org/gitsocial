@@ -2,7 +2,7 @@
 //
 // The repo's site customization lives at refs/gitmsg/core/config as a commit
 // whose message is the core config JSON with a `site` sub-object (title, accent,
-// accentDark, favicon, url, description, publish, pages). This resolves that sub-object at push time, validates it
+// accentDark, favicon, image, url, description, publish, pages). This resolves that sub-object at push time, validates it
 // strictly, and emits it as .gitsocial/site/site-config.json alongside the other
 // mutable site artifacts. The reader loads it (no-cache, refreshed on every push)
 // and applies the overrides; an absent or malformed config deletes the artifact
@@ -43,6 +43,10 @@ var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 // siteFaviconRe matches an allowed favicon data URI prefix (png/webp/svg+xml).
 // Kept in sync with the reader's favicon guard in gs-app.js.
 var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
+
+// siteImageKeyRe matches a relative bucket key for site.image: plain path
+// segments, no scheme, no leading slash, no traversal.
+var siteImageKeyRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 
 // Per-remote site-override git config keys, stored on the remote definition
 // (remote.<name>.<suffix>) as machine-local deployment state. Only the
@@ -95,14 +99,16 @@ func applySiteOverride(c siteCustomization, ok bool, ov SiteOverride) (siteCusto
 }
 
 // siteCustomization is the validated customization the reader consumes: a title,
-// an accent (light) and optional accentDark, an optional favicon data URI, the
-// site's canonical base URL, a description, and the two publish guards. Only the
-// fields that survive validation are emitted; empties are omitted.
+// an accent (light) and optional accentDark, an optional favicon data URI, an
+// optional social-card image (og:image), the site's canonical base URL, a
+// description, and the two publish guards. Only the fields that survive
+// validation are emitted; empties are omitted.
 type siteCustomization struct {
 	Title       string `json:"title,omitempty"`
 	Accent      string `json:"accent,omitempty"`
 	AccentDark  string `json:"accentDark,omitempty"`
 	Favicon     string `json:"favicon,omitempty"`
+	Image       string `json:"image,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Description string `json:"description,omitempty"`
 	Publish     string `json:"publish,omitempty"` // "true" enables the static site (default off)
@@ -133,6 +139,37 @@ func ValidSiteAccent(v string) bool { return siteHexRe.MatchString(v) }
 // svg+xml) within the size cap.
 func ValidSiteFavicon(v string) bool {
 	return len(v) <= SiteFaviconMaxBytes && siteFaviconRe.MatchString(v)
+}
+
+// NormalizeSiteImage validates a site.image value — the social-card image the
+// pages stamp as og:image. Either an absolute URL (same scheme rules as
+// site.url) or a relative bucket key resolved against the effective site.url at
+// render time. Returns ok=false when invalid.
+func NormalizeSiteImage(v string) (string, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" || len(v) > siteConfigMaxURL {
+		return "", false
+	}
+	if strings.Contains(v, "://") {
+		u, err := url.Parse(v)
+		if err != nil || u.Host == "" {
+			return "", false
+		}
+		switch u.Scheme {
+		case "https":
+		case "http":
+			if h := u.Hostname(); h != "localhost" && h != "127.0.0.1" {
+				return "", false
+			}
+		default:
+			return "", false
+		}
+		return v, true
+	}
+	if !siteImageKeyRe.MatchString(v) {
+		return "", false
+	}
+	return v, true
 }
 
 // NormalizeSiteURL validates and normalizes a site base URL: absolute https
@@ -184,6 +221,11 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	}
 	if s, ok := raw["favicon"].(string); ok && ValidSiteFavicon(s) {
 		c.Favicon = s
+	}
+	if s, ok := raw["image"].(string); ok {
+		if norm, valid := NormalizeSiteImage(s); valid {
+			c.Image = norm
+		}
 	}
 	if s, ok := raw["url"].(string); ok {
 		if norm, valid := NormalizeSiteURL(s); valid {

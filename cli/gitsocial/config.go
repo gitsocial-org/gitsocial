@@ -116,7 +116,7 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 
 // siteConfigKeys are the customization fields settable under the core config's
 // `site` sub-object, published as the static site's site-config.json artifact.
-var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "url": true, "description": true, "publish": true, "pages": true}
+var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "image": true, "url": true, "description": true, "publish": true, "pages": true}
 
 // siteOverrideKeys maps the per-remote-overridable deployment keys to their git
 // config suffix (remote.<name>.<suffix>). Only these three deployment keys are
@@ -178,6 +178,9 @@ Keys:
   accentDark   optional accent color for dark mode (same hex form)
   favicon      an image path (@path/to/icon.png) or a data: URI; png/webp/svg,
                32KB max
+  image        social-card image (og:image) stamped on every HTML page: a
+               bucket key relative to the site root (e.g. og-card.png) or an
+               absolute https:// URL
   url          the site's public base URL, absolute https:// (http:// only for
                localhost), no query/fragment; normalized to a trailing slash
   description  plain text description of the site, 300 chars max
@@ -250,7 +253,7 @@ func newSiteConfigListCmd() *cobra.Command {
 				fmt.Println("No site customization set")
 				return
 			}
-			for _, k := range []string{"title", "accent", "accentDark", "favicon", "url", "description", "publish", "pages"} {
+			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages"} {
 				if v, ok := site[k].(string); ok && v != "" {
 					fmt.Printf("%s = %s\n", k, siteConfigDisplay(k, v))
 				}
@@ -275,11 +278,15 @@ func newSiteConfigSetCmd() *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "Set a site customization value",
 		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon,
-url, description, publish, pages.
+image, url, description, publish, pages.
 
   accent / accentDark  strict #rgb or #rrggbb hex (e.g. #0a7 or #00dddd)
   favicon              @path/to/icon.png to read+encode a raw image (png/webp/
                        svg), or a data: URI directly; 32KB max
+  image                social-card image (og:image) for the HTML pages: a
+                       bucket key relative to the site root (e.g. og-card.png,
+                       upload it with ` + "`gitsocial site put`" + `) or an
+                       absolute https:// URL
   url                  absolute https:// URL (http:// only for localhost), no
                        query/fragment; normalized to a trailing slash
   description          plain text, 300 chars max
@@ -303,7 +310,7 @@ publish, and pages are overridable per-remote; identity keys travel with the rep
 				return
 			}
 			if !siteConfigKeys[key] {
-				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, url, description, publish, pages)", key))
+				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, image, url, description, publish, pages)", key))
 				os.Exit(ExitError)
 			}
 			resolved, err := resolveSiteConfigValue(key, value)
@@ -380,6 +387,12 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 		return value, nil
 	case "favicon":
 		return resolveFaviconValue(value)
+	case "image":
+		norm, ok := objstore.NormalizeSiteImage(value)
+		if !ok {
+			return "", fmt.Errorf("image must be a relative bucket key (e.g. og-card.png) or an absolute https:// URL, got %q", value)
+		}
+		return norm, nil
 	case "url":
 		norm, ok := objstore.NormalizeSiteURL(value)
 		if !ok {

@@ -39,7 +39,7 @@ Effective only when all three hold: `publish=true`, `pages=true`, and a valid `u
 - `issues/ prs/ posts/ releases/ memos/` — per-type list pages: a mutable `index.html` head plus immutable sealed `<n>.html` pages (100 entries each), chained "older →". Milestones and sprints fold into `issues`.
 - `index.html` — the **generated front page** (the newest items interleaved with code commits — code links into the app, so object count scales with items, never history — then the default branch's README as escaped text, ~8 KB cap). Since the entry flip, the pages maintainer OWNS `index.html` while the page layer is effective; when the page layer is off, `index.html` is the embedded SPA shell instead (see [Progressive enhancement](#progressive-enhancement-the-pages-are-the-site)). The pre-flip `timeline.html` key is retired and swept on every push.
 - `pages.css` — the shared stylesheet; each page also inlines a tiny base style so a saved or curl'ed copy reads decently on its own.
-- `sitemap.xml` + `robots.txt` — the site root plus every item page with `<lastmod>` from its latest activity; past ~40K URLs the sitemap becomes an index over immutable `sitemap-<n>.xml` parts plus a rewritten `sitemap-head.xml`.
+- `sitemap.xml` + `robots.txt` — the site root, every item page, and the five type-list index pages with `<lastmod>` from their latest activity; past ~40K URLs the sitemap becomes an index over immutable `sitemap-<n>.xml` parts plus a rewritten `sitemap-head.xml` (the list pages always ride the head part — their positions would shift as items append).
 - `feed.xml` — an Atom 1.0 feed of the newest ~50 non-retracted top-level items (memo excluded, code commits absent — same interleave as the front page): title, canonical link, author, type category, created/updated times, plus the item's own body (subject stripped, replies excluded, ~4 KB cap) as escaped-HTML content. Every generated page's `<head>` carries the autodiscovery `<link rel="alternate" type="application/atom+xml">`. Each type directory additionally gets its own `<dir>/feed.xml` mirroring its list page (memos included), advertised by a second autodiscovery link on that type's list pages.
 
 Pages are a projection of the push's own index artifacts (never a second git walk), rendered as escaped plain text — no markdown or highlighting; the SPA remains the rich surface. Maintenance is incremental: a reply regenerates only its thread's page, the affected list heads, the front page, the sitemap and the feed. First-time generation is budgeted (~5000 pages per push, `GITSOCIAL_SITE_PAGES_BUDGET` override) and resumes across pushes — a partial set is a valid newest-first prefix, and list pages and the sitemap claim only what exists. Setting `pages false` (or removing `url`) deletes the whole page layer on the next push and **restores the embedded SPA shell at `index.html`** (index.html is dual-owned, never deleted). Machine state lives at `.gitsocial/site/pages.json`; the page keys are part of the [reserved root namespace](S3.md#bucket-layout).
@@ -59,6 +59,7 @@ gitsocial config site set title "My Project"
 gitsocial config site set accent "#0a7"                # strict #rgb / #rrggbb hex
 gitsocial config site set accentDark "#0dd"            # optional dark-mode accent
 gitsocial config site set favicon @path/to/icon.png    # or a data: URI directly
+gitsocial config site set image og-card.png            # og:image social card (upload with `gitsocial site put`)
 gitsocial config site list
 ```
 
@@ -67,6 +68,7 @@ gitsocial config site list
 | `title` | plain string, trimmed, ≤ 200 chars |
 | `accent`, `accentDark` | strict `#rgb` / `#rrggbb` hex |
 | `favicon` | `data:image/png|webp|svg+xml` URI, ≤ 32 KB (the CLI converts an `@path` for you) |
+| `image` | social-card image every HTML page stamps as `og:image`/`twitter:image` (card style flips to `summary_large_image`): a bucket key relative to the site root or an absolute `https://` URL, ≤ 500 chars |
 | `url` | absolute `https://` base URL (`http://` only for localhost), no query/fragment, trailing slash normalized, ≤ 500 chars |
 | `description` | plain string, trimmed, ≤ 300 chars (front-page meta/OG description) |
 | `publish`, `pages` | `true` / `false`, both default false — the [site](#publish) and [HTML page](#html-pages) guards |
@@ -84,7 +86,7 @@ gitsocial config site get url --remote r2                            # effective
 gitsocial config site list --remote r2                              # effective merged view
 ```
 
-Only the deployment keys are overridable; identity keys (`title`, `description`, `accent`, `favicon`) travel with the repo in the config ref and are never per-remote. The override is applied over the config ref's `site` sub-object at a single resolution boundary (`readSiteCustomization`), so every consumer agrees on the effective value: the publish/pages guards, the absolute-URL page artifacts (canonicals, OG, sitemap, the Atom feed), the page-set `siteHash`, and the `site-config.json` artifact the SPA reads. An overridden `url` goes through the same `NormalizeSiteURL` validation as the shared key. Since a changed override is invisible to the bucket refs, it is folded into the push-state skip digest, so setting or changing an override triggers a full regen of exactly that bucket on the next push. The git remote helper reads the same keys from git config, so a plain `git push <remote>` honors the override too; an anonymous-URL invocation (no remote name) gets no overrides.
+Only the deployment keys are overridable; identity keys (`title`, `description`, `accent`, `favicon`, `image`) travel with the repo in the config ref and are never per-remote (a relative `image` key resolves against each remote's effective `url`, so per-bucket cards need no override — each bucket serves its own copy). The override is applied over the config ref's `site` sub-object at a single resolution boundary (`readSiteCustomization`), so every consumer agrees on the effective value: the publish/pages guards, the absolute-URL page artifacts (canonicals, OG, sitemap, the Atom feed), the page-set `siteHash`, and the `site-config.json` artifact the SPA reads. An overridden `url` goes through the same `NormalizeSiteURL` validation as the shared key. Since a changed override is invisible to the bucket refs, it is folded into the push-state skip digest, so setting or changing an override triggers a full regen of exactly that bucket on the next push. The git remote helper reads the same keys from git config, so a plain `git push <remote>` honors the override too; an anonymous-URL invocation (no remote name) gets no overrides.
 
 ## How it works
 
