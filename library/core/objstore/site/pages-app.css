@@ -1,3 +1,44 @@
+  /* Webfonts (SIL OFL 1.1), shipped in the shell under fonts/ — the same
+     relative URLs work from pages.css, which serves from the same directory
+     and declares the identical faces. EB Garamond is one variable file; IBM
+     Plex Mono is four static weights, and a browser only downloads the
+     weights a page actually renders. */
+  @font-face {
+    font-family: 'EB Garamond';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('fonts/eb-garamond.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/ibm-plex-mono.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/ibm-plex-mono-medium.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/ibm-plex-mono-semibold.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'IBM Plex Mono';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/ibm-plex-mono-bold.woff2') format('woff2');
+  }
+
   /* Base tokens (bg/text/link) define the palette; derived tokens
      (muted/line/panel/chip) are computed off the base with color-mix so they
      track the active theme without restating.

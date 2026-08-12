@@ -5,7 +5,8 @@
 //   issues/ prs/ posts/ releases/ memos/
 //                           per-type list pages (mutable index.html head +
 //                           immutable sealed <n>.html, chained "older →")
-//   pages.css               the pages' shared stylesheet (their only subresource)
+//   pages.css               the pages' shared stylesheet (their only subresource,
+//                           plus the EB Garamond woff2 it pulls from the shell)
 //   index.html              the generated front page (the app's home landing +
 //                           PE hooks + gs-upgrade.js) — the entry flip: when the
 //                           page layer is effective the pages maintainer OWNS

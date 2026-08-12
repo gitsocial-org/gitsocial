@@ -128,9 +128,11 @@ func siteSitemapPartSizeFromEnv() int {
 // --nav-gap 1.5rem, 20px/1.4 body, the 720px breakpoint) are mirrored here so the
 // content column lands at the same width and the same x, and the page's own nav
 // occupies the sidebar's column rather than a placeholder standing in for it.
-// EB Garamond is declared by the app but never delivered (no @font-face, no font
-// file in the shell), so both sides resolve to Georgia and only the size and
-// leading had to be matched.
+// EB Garamond ships in the shell (fonts/eb-garamond.woff2) and both pages.css
+// and pages-app.css declare the same face, so the two sides load the same font;
+// the inline base names only Georgia because it must read decently when
+// pages.css (and with it the @font-face) never arrives, so size and leading are
+// matched against the shared fallback.
 //
 // Nav and content are siblings under #gs-page (there is no wrapper element to
 // make them two columns of a grid), so the sidebar column is RESERVED as left
@@ -183,10 +185,23 @@ const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`setTimeout(u,10000);w.addEventListener("load",u)})(document,window)</script>`
 
 // sitePagesCSS is the full look (chips, sections, thread styling, lists, nav,
-// pre), served once as pages.css and shared by every page.
-const sitePagesCSS = `h1{font-size:1.45rem;line-height:1.25;margin:.3rem 0 .2rem}
+// pre), served once as pages.css and shared by every page. It also delivers the
+// webfonts (SIL OFL 1.1) — EB Garamond as one variable file, IBM Plex Mono as
+// four static weights a browser downloads only when a page renders them: the
+// @font-face rules and the families live here rather than in the inline base so
+// a page whose pages.css fetch fails keeps reading in the system fallbacks, and
+// the shell's pages-app.css declares the identical faces — both sheets serve
+// from the prefix root, so one relative URL names one font object and the
+// browser fetches it once.
+const sitePagesCSS = `@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('fonts/eb-garamond.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/ibm-plex-mono.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/ibm-plex-mono-medium.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/ibm-plex-mono-semibold.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/ibm-plex-mono-bold.woff2') format('woff2')}
+body{font-family:'EB Garamond',Georgia,serif}
+h1{font-size:1.45rem;line-height:1.25;margin:.3rem 0 .2rem}
 h2{font-size:1.1rem;line-height:1.25;margin:.2rem 0 .4rem}
-nav,.meta,.chip,pre,code,footer{font-family:'SF Mono',Consolas,monospace}
+nav,.meta,.chip,pre,code,footer{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace}
 nav,footer{font-size:.72rem}
 nav a,nav b,footer a{margin-right:.9rem}
 #gs-page>nav a,#gs-page>nav b{margin-right:0}
@@ -206,13 +221,13 @@ p{margin:.7rem 0}
 pre{font-size:.72rem;line-height:1.45;overflow-x:auto;background:#f2e5c6;padding:.7rem;border:1px solid #d8cbaa}
 ol.items{list-style:none;padding:0;margin:1rem 0}
 ol.items li{border-top:1px solid #d8cbaa;padding:.55rem 0}
-ul.files{list-style:none;padding:0;margin:1rem 0;font-family:'SF Mono',Consolas,monospace;font-size:.8rem}
+ul.files{list-style:none;padding:0;margin:1rem 0;font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;font-size:.8rem}
 ul.files li{border-top:1px solid #d8cbaa;padding:.4rem 0}
 .card{border:1px solid #d8cbaa;border-radius:8px;padding:.55rem .7rem;margin:.6rem 0}
 .card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .45rem}
 .card-head .subject{flex:1 1 0;min-width:0;font-weight:600}
 .card .meta{display:block;margin-top:.25rem;margin-left:1.75rem}
-.type-glyph{font-family:'SF Mono',Consolas,monospace;font-size:.8rem;width:1.1em;text-align:center;color:#6f6552}
+.type-glyph{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;font-size:.8rem;width:1.1em;text-align:center;color:#6f6552}
 .type-glyph.tg-open{color:#1f9d55}
 .type-glyph.tg-closed{color:#8957e5}
 .type-glyph.tg-merged{color:#8250df}

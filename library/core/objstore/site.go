@@ -67,6 +67,8 @@ func siteContentType(name string) string {
 		return "application/json"
 	case strings.HasSuffix(name, ".css"):
 		return "text/css; charset=utf-8"
+	case strings.HasSuffix(name, ".woff2"):
+		return "font/woff2"
 	default:
 		return "application/octet-stream"
 	}
