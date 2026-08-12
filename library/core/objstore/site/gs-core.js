@@ -65,6 +65,15 @@
   }
 
   // fetchText GETs a key and returns trimmed text; null on 404.
+  // keyExists answers whether a key is there without paying for its body. Only a
+  // 404 counts as absent: a 403, a 5xx or anything else is "do not conclude
+  // absence from this", so the caller falls through to the real read and its
+  // error handling rather than caching a transient failure as a fact.
+  async function keyExists(base, key) {
+    const res = await fetch(base + key, { method: "HEAD" });
+    return res.status !== 404;
+  }
+
   async function fetchText(base, key) {
     const bytes = await fetchBytes(base, key);
     if (bytes === null) return null;
@@ -99,31 +108,56 @@
     return "objects/" + sha.slice(0, 2) + "/" + sha.slice(2);
   }
 
-  // getObject fetches, inflates, and caches one git object. A bucket may store
-  // an object loose or inside a packfile (never both, see documentation/S3.md),
-  // so both are tried; once a packed read has succeeded the pack path goes
-  // first, which is what keeps a pack-only bucket from paying a 404 per object.
-  async function getObject(ctx, sha) {
+  // getObject fetches, inflates, and caches one git object. A bucket stores an
+  // object loose or inside a packfile, never both (see documentation/S3.md), and
+  // objects/info/packs — fetched on the pack path anyway — says which shape the
+  // bucket is in BEFORE the first read, so a packed bucket never pays a 404 to
+  // discover itself. That listing only ORDERS the two lookups, though: it is
+  // rewritten best-effort on every push, so an empty one is not proof the bucket
+  // is loose — a miss on the shape it named still tries the other, and a bucket
+  // whose pack listing failed to publish still renders off its pack map.
+  // `content` is an optional hint that the caller already knows the sha names a
+  // tree or a blob (see getContentObject); it only reorders the lookup and is
+  // never required for correctness.
+  async function getObject(ctx, sha, content) {
     if (ctx.objects.has(sha)) return ctx.objects.get(sha);
     // The cache holds the in-flight PROMISE, not the resolved object: hydration
     // runs CONCURRENCY workers, and two of them asking for the same sha before
     // either resolves would otherwise both fetch it. Costlier now that a miss
     // can mean a pack map shard plus a range read rather than one GET.
     const pending = (async () => {
-      let obj = null;
-      if (ctx.packs.preferred) obj = await getPackedObject(ctx, sha);
-      if (obj === null) {
-        const compressed = await fetchBytes(ctx.base, objectKey(sha));
-        if (compressed !== null) obj = parseLooseObject(await inflate(compressed));
+      if (await bucketIsPacked(ctx)) {
+        const packed = await getPackedObject(ctx, sha, content);
+        // State refs (config, lists, forks) stay loose by design on an otherwise
+        // packed bucket, so a miss in every pack still has a loose key to read.
+        return packed !== null ? packed : getLooseObject(ctx, sha);
       }
-      if (obj === null && !ctx.packs.preferred) {
-        obj = await getPackedObject(ctx, sha);
-        if (obj !== null) ctx.packs.preferred = true;
-      }
-      return obj;
+      const loose = await getLooseObject(ctx, sha);
+      return loose !== null ? loose : getPackedObject(ctx, sha, content);
     })();
     ctx.objects.set(sha, pending);
+    // A rejection is never kept: a transient 500 on one blob would otherwise
+    // break that sha in every view for the rest of the session, with no network
+    // activity left to recover from.
+    pending.catch(() => { if (ctx.objects.get(sha) === pending) ctx.objects.delete(sha); });
     return pending;
+  }
+
+  // getContentObject fetches a sha the caller already knows is a tree or a blob,
+  // because it came from a tree entry's mode or a commit's tree field. The pack
+  // map indexes commits and tags only, so consulting it for content is a
+  // guaranteed miss — and the map is sparse (a shard exists only where a mapped
+  // object shares its sha prefix), so that miss can cost a whole 404 body rather
+  // than nothing. Skipping it drops the request outright.
+  function getContentObject(ctx, sha) {
+    return getObject(ctx, sha, true);
+  }
+
+  // getLooseObject fetches and inflates one loose object, or null when the bucket
+  // carries no loose key for it.
+  async function getLooseObject(ctx, sha) {
+    const compressed = await fetchBytes(ctx.base, objectKey(sha));
+    return compressed === null ? null : parseLooseObject(await inflate(compressed));
   }
 
   // ---- Packfile reader ----
@@ -133,10 +167,19 @@
   // prefix): the shard carries the exact byte range, so the read is one Range
   // GET of a self-contained zlib stream — the commits pack is written with
   // --depth=0, so a commit body never resolves a delta chain. Trees and blobs
-  // (file views, diffs) have no map and go through the pack index: fetch the
-  // .idx, binary-search the sha, then Range GET and resolve OFS_DELTA /
-  // REF_DELTA bases. Both artifacts are cached on the context, so a session
-  // pays for each at most once.
+  // (file views, diffs) have no map and go through the pack index, which is
+  // range-read rather than downloaded: the v2 index opens with a 256-entry
+  // fanout that bounds a sha to one 1/256th slice of the sorted sha table, so a
+  // lookup reads the head, that slice, and the offset table instead of the whole
+  // .idx. Every artifact is cached on the context, so a session pays for each at
+  // most once.
+  //
+  // The map deliberately stops at commits and tags. Extending it to trees and
+  // blobs would remove the index from the last hot path, but a shard holds
+  // 1/256th of every packed object: a repo with a million of them would grow
+  // each shard past the size of the ranged index reads it replaced, and every
+  // push re-reads and rewrites all 256. The index path scales with log(objects)
+  // where the map scales with objects, so the map stays scoped to history.
 
   // fetchRange GETs a byte range of a bucket key, returning the bytes and the
   // object's total size. end is exclusive; null means "to the end of the
@@ -168,6 +211,20 @@
     return names;
   }
 
+  // bucketIsPacked resolves once per context: a non-empty pack listing means the
+  // bucket keeps its objects in packfiles, so a read starts there instead of
+  // paying a 404 to find out. Held as a promise, so the concurrent readers of a
+  // first hydration batch all wait on the one listing rather than each probing a
+  // loose key that is not there.
+  function bucketIsPacked(ctx) {
+    if (!ctx.packs.packed) {
+      const pending = packNames(ctx).then((names) => names.length > 0);
+      pending.catch(() => { if (ctx.packs.packed === pending) ctx.packs.packed = null; });
+      ctx.packs.packed = pending;
+    }
+    return ctx.packs.packed;
+  }
+
   // packMapShard loads the pack map shard covering a sha (null when absent or
   // written by another schema version), cached per context.
   async function packMapShard(ctx, sha) {
@@ -185,50 +242,126 @@
     return promise;
   }
 
-  // parsePackIdx parses a v2 pack index into the sorted sha table plus each
-  // object's offset, and the offsets sorted ascending so an entry's end (and so
-  // its exact byte range) is the next entry's start.
-  function parsePackIdx(bytes) {
+  // IDX_HEAD_BYTES is the leading slice a pack index is opened with: the magic,
+  // the version and the 256-entry fanout need 1032 bytes, and reading a little
+  // more costs nothing while delivering a small pack's index whole in the same
+  // request, so a bucket of tiny packs still pays exactly one fetch per pack.
+  const IDX_HEAD_BYTES = 4096;
+  // IDX_SHA_START is where a v2 index's sorted sha table begins (magic, version,
+  // fanout). The CRC table follows it, then the 4-byte offsets and their
+  // large-offset overflow.
+  const IDX_SHA_START = 8 + 256 * 4;
+
+  // parsePackIdxHead reads a v2 index's fixed head: the 256-entry fanout, whose
+  // entry b is the number of objects whose first sha byte is <= b, so a sha's
+  // whole search space is one slice of the sorted sha table.
+  function parsePackIdxHead(bytes, total) {
+    if (bytes.length < IDX_SHA_START) throw new Error("pack index: truncated head");
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (dv.getUint32(0) !== 0xff744f63 || dv.getUint32(4) !== 2) throw new Error("pack index: not a v2 index");
-    const count = dv.getUint32(8 + 255 * 4);
-    const shaStart = 8 + 256 * 4;
-    const ofsStart = shaStart + count * 20 + count * 4;
-    const bigStart = ofsStart + count * 4;
-    const offsets = new Array(count);
-    for (let i = 0; i < count; i++) {
-      const raw = dv.getUint32(ofsStart + i * 4);
-      offsets[i] = (raw & 0x80000000) ? Number(dv.getBigUint64(bigStart + (raw & 0x7fffffff) * 8)) : raw;
-    }
-    const sorted = offsets.slice().sort((a, b) => a - b);
-    return { count, shas: bytes.subarray(shaStart, shaStart + count * 20), offsets, sorted };
+    const fanout = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) fanout[i] = dv.getUint32(8 + i * 4);
+    const count = fanout[255];
+    return { count, fanout, total, ofsStart: IDX_SHA_START + count * 24, shas: null, offsets: null, sorted: null, tail: null, slices: new Map() };
   }
 
-  // packIdxFind returns the offset of a sha in a parsed index, or -1. The index
-  // is sorted by sha, so this is a binary search over its 20-byte sha table.
-  function packIdxFind(idx, sha) {
+  // setPackIdxOffsets decodes the offset table (and the 8-byte large-offset
+  // overflow behind it) from the index tail starting at ofsStart, and keeps the
+  // offsets sorted ascending so an entry's end is the next entry's start.
+  function setPackIdxOffsets(idx, tail) {
+    const dv = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
+    const bigStart = idx.count * 4;
+    const offsets = new Array(idx.count);
+    for (let i = 0; i < idx.count; i++) {
+      const raw = dv.getUint32(i * 4);
+      offsets[i] = (raw & 0x80000000) ? Number(dv.getBigUint64(bigStart + (raw & 0x7fffffff) * 8)) : raw;
+    }
+    idx.offsets = offsets;
+    idx.sorted = offsets.slice().sort((a, b) => a - b);
+  }
+
+  // packIdxOpen reads a pack index's head, cached per context. An index that
+  // fits in the head request arrives whole and is adopted as such, so every
+  // later lookup into that pack is local.
+  async function packIdxOpen(ctx, name) {
+    if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
+    const promise = (async () => {
+      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", 0, IDX_HEAD_BYTES);
+      if (got === null) return null;
+      const idx = parsePackIdxHead(got.bytes, got.total || got.bytes.length);
+      if (got.bytes.length >= idx.total && idx.total >= idx.ofsStart + idx.count * 4) {
+        idx.shas = got.bytes.subarray(IDX_SHA_START, IDX_SHA_START + idx.count * 20);
+        setPackIdxOffsets(idx, got.bytes.subarray(idx.ofsStart));
+      }
+      return idx;
+    })();
+    ctx.packs.idx.set(name, promise);
+    return promise;
+  }
+
+  // packIdxOffsets makes sure a pack index's offset table is resident, reading
+  // it in one range from ofsStart to the end of the index. It is fetched only
+  // once a lookup has HIT the pack: a probe that misses never pays for it.
+  async function packIdxOffsets(ctx, name) {
+    const idx = await packIdxOpen(ctx, name);
+    if (!idx || idx.offsets) return idx;
+    if (!idx.tail) {
+      idx.tail = (async () => {
+        const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", idx.ofsStart, null);
+        if (got) setPackIdxOffsets(idx, got.bytes);
+      })();
+    }
+    await idx.tail;
+    return idx.offsets ? idx : null;
+  }
+
+  // packIdxSlice returns the slice of the sorted sha table holding every object
+  // whose first sha byte is `first`, one small Range GET cached per first byte.
+  async function packIdxSlice(ctx, idx, name, first, lo, hi) {
+    if (idx.shas) return idx.shas.subarray(lo * 20, hi * 20);
+    if (idx.slices.has(first)) return idx.slices.get(first);
+    const promise = (async () => {
+      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", IDX_SHA_START + lo * 20, IDX_SHA_START + hi * 20);
+      return got === null ? null : got.bytes;
+    })();
+    idx.slices.set(first, promise);
+    return promise;
+  }
+
+  // packIdxFind binary-searches a 20-byte-per-entry sha table slice, returning
+  // the sha's position within the slice, or -1.
+  function packIdxFind(shas, count, sha) {
     const want = new Uint8Array(20);
     for (let i = 0; i < 20; i++) want[i] = parseInt(sha.slice(i * 2, i * 2 + 2), 16);
-    let lo = 0, hi = idx.count - 1;
+    let lo = 0, hi = count - 1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
       let cmp = 0;
-      for (let i = 0; i < 20 && cmp === 0; i++) cmp = idx.shas[mid * 20 + i] - want[i];
-      if (cmp === 0) return idx.offsets[mid];
+      for (let i = 0; i < 20 && cmp === 0; i++) cmp = shas[mid * 20 + i] - want[i];
+      if (cmp === 0) return mid;
       if (cmp < 0) lo = mid + 1; else hi = mid - 1;
     }
     return -1;
   }
 
-  // packIdx fetches and parses one pack's index, cached per context.
-  async function packIdx(ctx, name) {
-    if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
-    const promise = (async () => {
-      const bytes = await fetchBytes(ctx.base, "objects/pack/" + name + ".idx");
-      return bytes === null ? null : parsePackIdx(bytes);
-    })();
-    ctx.packs.idx.set(name, promise);
-    return promise;
+  // packIdxLookup locates a sha in one pack and returns its entry's byte range,
+  // or null when the pack does not carry it. The fanout alone rules most misses
+  // out with no further fetch at all.
+  async function packIdxLookup(ctx, name, sha) {
+    const opened = await packIdxOpen(ctx, name);
+    if (!opened) return null;
+    const first = parseInt(sha.slice(0, 2), 16);
+    const lo = first === 0 ? 0 : opened.fanout[first - 1];
+    const hi = opened.fanout[first];
+    if (lo >= hi) return null;
+    const shas = await packIdxSlice(ctx, opened, name, first, lo, hi);
+    if (shas === null) return null;
+    const at = packIdxFind(shas, hi - lo, sha);
+    if (at < 0) return null;
+    const idx = await packIdxOffsets(ctx, name);
+    if (!idx) return null;
+    const offset = idx.offsets[lo + at];
+    return { offset, end: packEntryEnd(idx, offset) };
   }
 
   // packEntryEnd returns the exclusive end offset of the entry at offset,
@@ -273,7 +406,7 @@
       let back = b & 0x7f;
       while (b & 0x80) { b = raw[i++]; back = ((back + 1) << 7) | (b & 0x7f); }
       const baseOffset = offset - back;
-      const idx = await packIdx(ctx, name);
+      const idx = await packIdxOffsets(ctx, name);
       const base = idx && await readPackEntry(ctx, name, baseOffset, packEntryEnd(idx, baseOffset));
       if (!base) return null;
       return { type: base.type, body: applyDelta(base.body, await inflate(raw.subarray(i))) };
@@ -332,9 +465,11 @@
 
   // getPackedObject resolves one object out of the bucket's packfiles: the pack
   // map first (commits and tags, one Range GET), then each pack's index for
-  // everything else. null when no pack carries the sha.
-  async function getPackedObject(ctx, sha) {
-    const map = await packMapShard(ctx, sha);
+  // everything else. null when no pack carries the sha. `content` skips the map
+  // for a sha the caller already knows is a tree or a blob, which the map never
+  // indexes.
+  async function getPackedObject(ctx, sha, content) {
+    const map = content ? null : await packMapShard(ctx, sha);
     const at = map && map.offsets[sha];
     if (at) {
       const name = map.packs[at[0]];
@@ -342,19 +477,16 @@
     }
     // Trees and blobs have no map entry, so the packs are probed by index. Try
     // the pack that answered last first: content reads cluster (a file view walks
-    // one commit's tree), and every other pack probed costs a whole .idx download
-    // before it can be ruled out. Sealing rounds accumulate packs over a bucket's
-    // life, so the probe order is what keeps a cold file view from paying for all
-    // of them.
+    // one commit's tree), and a pack ruled out still costs its index head.
+    // Sealing rounds accumulate packs over a bucket's life, so the probe order is
+    // what keeps a cold file view from opening all of them.
     const names = await packNames(ctx);
     const ordered = ctx.packs.lastHit ? [ctx.packs.lastHit, ...names.filter((n) => n !== ctx.packs.lastHit)] : names;
     for (const name of ordered) {
-      const idx = await packIdx(ctx, name);
-      if (!idx) continue;
-      const offset = packIdxFind(idx, sha);
-      if (offset < 0) continue;
+      const found = await packIdxLookup(ctx, name, sha);
+      if (found === null) continue;
       ctx.packs.lastHit = name;
-      return readPackEntry(ctx, name, offset, packEntryEnd(idx, offset));
+      return readPackEntry(ctx, name, found.offset, found.end);
     }
     return null;
   }
@@ -462,6 +594,19 @@
       return { branch, sha: await resolveRef(base, branch) };
     }
     return /^[0-9a-f]{40}$/.test(text) ? { branch: null, sha: text } : null;
+  }
+
+  // headFor memoizes resolveHead per context. HEAD plus its ref tip are two
+  // fetches, and a route that both renders the default branch and enumerates
+  // branches (home, analytics) resolved it twice, paying them twice for a value
+  // that cannot change mid-render. Same lifetime and staleness contract as the
+  // ctx.manifest / ctx.refMode memos: one page session, with the freshness watch
+  // surfacing a push that moved anything.
+  // The memo holds the in-flight PROMISE, so concurrent first callers share the
+  // one resolution instead of each paying for HEAD and its ref key.
+  function headFor(ctx) {
+    if (ctx.head === undefined) ctx.head = resolveHead(ctx.base);
+    return ctx.head;
   }
 
   // A resumable history walk. startWalk seeds a walk state at a tip; walkStep
@@ -697,25 +842,61 @@
     return await fetchText(base, ".gitsocial/ref-mode");
   }
 
-  // loadManifest fetches the push-maintained refs manifest
-  // (.gitsocial/site/refs.json, refname → sha); null when the bucket
-  // predates it.
-  async function loadManifest(base) {
-    const text = await fetchText(base, ".gitsocial/site/refs.json");
-    if (!text) return null;
-    try { return JSON.parse(text); } catch { return null; }
+  // MANIFEST_KEY is the push-maintained refs manifest (refname → sha), written
+  // from the bucket's full ref list on every push.
+  const MANIFEST_KEY = ".gitsocial/site/refs.json";
+
+  // manifestFor memoizes the refs manifest per context, keeping the raw body
+  // beside the parsed map: every caller shared the memo already, and the
+  // freshness watch re-fetched the same key seconds after boot only to
+  // establish a baseline the context was already holding. Same lifetime and
+  // staleness contract as the ctx.head / ctx.refMode memos. null when the
+  // bucket predates the manifest or serves an unparseable one. The memo holds
+  // the in-flight PROMISE, so the concurrent first callers of a route (two
+  // branches both descending to refTip) share one GET of a no-cache key.
+  function manifestFor(ctx) {
+    if (ctx.manifest === undefined) {
+      ctx.manifest = (async () => {
+        ctx.manifestText = await fetchText(ctx.base, MANIFEST_KEY);
+        if (!ctx.manifestText) return null;
+        try { return JSON.parse(ctx.manifestText); } catch { return null; }
+      })();
+    }
+    return ctx.manifest;
   }
 
-  // refTip resolves a ref tip: the live plain key first (authoritative in
-  // etag mode, absent in generation mode), then the manifest — the only
-  // source for generation-mode refs, and the discovery index for everything
-  // beyond the well-known names.
+  // refTip resolves a ref tip. The manifest is the fast path, not proof of
+  // absence: it is written best-effort by whichever pusher last succeeded, so a
+  // refname it omits is PROBABLY absent but may simply have missed a failed or
+  // skipped manifest write, and treating its silence as authoritative would make
+  // a whole extension branch read as empty forever with no error anywhere. So an
+  // omitted refname is probed live exactly once per session and the miss is
+  // remembered — the well-known extension branches are asked for on every route,
+  // and a repo with no gitmsg/social used to pay a full 404 body per route to be
+  // told so. When the manifest does carry the ref the live plain key still wins
+  // (authoritative in etag mode, absent in generation mode); a bucket with no
+  // manifest at all keeps probing, since nothing else lists its refs.
   async function refTip(ctx, refName) {
+    const manifest = await manifestFor(ctx);
+    const listed = manifest ? manifest[refName] : null;
+    if (manifest && !listed) {
+      if (ctx.refMisses.has(refName)) return null;
+      // Existence first, and by HEAD: the probe only needs one bit, and a 404
+      // from an object store is a full error document (R2 serves ~27 KB of it).
+      // A repo missing two of the well-known extension branches was paying ~54 KB
+      // per session to be told they are still missing, on a page whose own
+      // transfer is ~18 KB. The GET below is reached only when the ref turns out
+      // to exist, which is the case this probe is here for: the manifest write
+      // failed or was skipped and the branch is real.
+      if (!(await keyExists(ctx.base, refName))) {
+        ctx.refMisses.add(refName);
+        return null;
+      }
+    }
     const live = await resolveRef(ctx.base, refName);
     if (live) return live;
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
-    const sha = ctx.manifest && ctx.manifest[refName];
-    return sha && /^[0-9a-f]{40}$/.test(sha) ? sha : null;
+    if (manifest && !listed) ctx.refMisses.add(refName);
+    return listed && /^[0-9a-f]{40}$/.test(listed) ? listed : null;
   }
 
   // walkStateFor returns the resumable walk cached on ctx under `key`, seeded at
@@ -1513,10 +1694,13 @@
     // walks caches resumable history walks per ext/branch (see walkStateFor) so
     // "Load more" and deep lookups accumulate across a session, not per view.
     // packs caches the bucket's packfile reader state (the objects/info/packs
-    // listing, pack map shards, parsed indexes, and each pack's size) so a
-    // session pays for each artifact at most once; preferred flips once a packed
-    // read has succeeded, so a pack-only bucket stops trying the loose key first.
-    return { base, objects: new Map(), treeExpanded: new Set(), walks: {}, packs: { names: null, maps: new Map(), idx: new Map(), size: new Map(), preferred: false, lastHit: null } };
+    // listing, whether that listing made this a packed bucket, pack map shards,
+    // opened index heads with their fetched slices, and each pack's size) so a
+    // session pays for each artifact at most once.
+    // refMisses remembers the refnames the manifest omits AND a live probe found
+    // absent (see refTip), so the fallback probe the manifest's best-effort
+    // writes make necessary costs one 404 per refname per session, not per route.
+    return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, maps: new Map(), idx: new Map(), size: new Map(), lastHit: null } };
   }
 
   // ---- Trees, paths, branches (DOM-free, testable) ----
@@ -1550,7 +1734,7 @@
 
   // getTree fetches a tree object and returns its parsed entries, or null.
   async function getTree(ctx, sha) {
-    const obj = await getObject(ctx, sha);
+    const obj = await getContentObject(ctx, sha);
     if (!obj || obj.type !== "tree") return null;
     return parseTree(obj.body);
   }
@@ -1585,12 +1769,12 @@
   // present, else the well-known extension branches plus HEAD's branch. The
   // default branch is HEAD's symref target.
   async function listBranches(ctx) {
-    const head = await resolveHead(ctx.base);
+    const head = await headFor(ctx);
     const defaultBranch = headBranchName(head);
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
+    const manifest = await manifestFor(ctx);
     const names = new Set();
-    if (ctx.manifest) {
-      for (const ref of Object.keys(ctx.manifest)) {
+    if (manifest) {
+      for (const ref of Object.keys(manifest)) {
         if (ref.startsWith("refs/heads/")) names.add(ref.slice(11));
       }
     } else {
@@ -1653,12 +1837,12 @@
   // commit on demand by the tag detail view). Empty when the manifest is absent
   // or carries no tags (tags weren't pushed).
   async function listTags(ctx) {
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
+    const manifest = await manifestFor(ctx);
     const tags = [];
-    if (ctx.manifest) {
-      for (const ref of Object.keys(ctx.manifest)) {
+    if (manifest) {
+      for (const ref of Object.keys(manifest)) {
         if (!ref.startsWith("refs/tags/")) continue;
-        const sha = ctx.manifest[ref];
+        const sha = manifest[ref];
         if (!/^[0-9a-f]{40}$/.test(sha || "")) continue;
         tags.push({ name: ref.slice(10), ref, sha });
       }
@@ -2204,8 +2388,8 @@
   // lazy: callers invoke this only when a file is expanded. `force` bypasses
   // both size caps (the "Diff anyway" opt-in); binary stays binary.
   async function fileDiff(ctx, entry, force) {
-    const aObj = entry.shaA ? await getObject(ctx, entry.shaA) : null;
-    const bObj = entry.shaB ? await getObject(ctx, entry.shaB) : null;
+    const aObj = entry.shaA ? await getContentObject(ctx, entry.shaA) : null;
+    const bObj = entry.shaB ? await getContentObject(ctx, entry.shaB) : null;
     const aBytes = aObj ? aObj.body : new Uint8Array(0);
     const bBytes = bObj ? bObj.body : new Uint8Array(0);
     if (isBinary(aBytes) || isBinary(bBytes)) return { binary: true };
@@ -2267,6 +2451,19 @@
       // #/compare:<base>...<head> — each side URL-encoded, so no unencoded "/"
       // survives to be mis-split by the tab parser. Parse it off the full
       // fragment before the "/"-split path grammar.
+      // #/commits[/<n>][:<anchor>] — the commits list, whose ROWS have anchors of
+      // their own (`c-<sha12>`) because each is a citable place on a real page.
+      // The anchor is a first-class suffix in the grammar, like file:…:slug, so
+      // the citable URL a generated commits page hands out survives the upgrade
+      // instead of being dropped as an unroutable fragment. Parsed off the full
+      // fragment before the "/"-split path grammar, which would mis-split "/commits:…".
+      if (frag === "/commits" || frag.startsWith("/commits/") || frag.startsWith("/commits:")) {
+        const cm = /^\/commits(?:\/(\d+))?(?::([A-Za-z0-9][\w.-]*))?$/.exec(frag);
+        if (!cm) return { type: "notfound" };
+        const route = { type: "commits", page: cm[1] ? parseInt(cm[1], 10) : 0 };
+        if (cm[2]) route.anchor = cm[2];
+        return route;
+      }
       if (frag.startsWith("/compare:")) {
         const value = frag.slice("/compare:".length);
         const dots = value.indexOf("...");
@@ -2689,6 +2886,103 @@
     });
   }
 
+  // COMMITS_PAGE_SIZE is one commits list page's row count, mirroring the page
+  // layer's sitePagesListSize. Both sides must agree exactly: the generated
+  // commits page and this route render the same rows, or the page-entry upgrade
+  // swaps one list for another.
+  const COMMITS_PAGE_SIZE = 100;
+
+  // SITE_PAGES_KEY is the HTML page layer's manifest, which publishes the commits
+  // list's pagination (see loadCommitsLayout).
+  const SITE_PAGES_KEY = ".gitsocial/site/pages.json";
+
+  // loadCommitsLayout reads the commits list's PUBLISHED partition — how many
+  // pages are sealed and which commit is the sealing boundary — from the page
+  // layer's manifest. The writer decides that partition (it is what makes a
+  // sealed page immutable), so reading it rather than re-deriving it is what
+  // makes the static page and this route agree by construction rather than by
+  // two implementations happening to compute the same thing. In particular it is
+  // the only way to agree while either corpus is still bootstrapping, when the
+  // pages deliberately seal nothing.
+  //
+  // It is a FAST PATH, never proof: a bucket with no page layer, a manifest whose
+  // write failed, and a layout the corpus no longer matches all fall back to
+  // deriving the partition from the whole list (loadCommitsPage), which is
+  // costlier and always correct.
+  async function loadCommitsLayout(ctx) {
+    if (ctx.commitsLayout !== undefined) return ctx.commitsLayout;
+    let layout = null;
+    try {
+      const text = await fetchText(ctx.base, SITE_PAGES_KEY);
+      const doc = text ? JSON.parse(text) : null;
+      const c = doc && doc.commits;
+      if (c) layout = { sealed: Math.max(0, c.sealed | 0), frontier: String(c.frontier || ""), total: Math.max(0, c.total | 0) };
+    } catch (e) { layout = null; }
+    ctx.commitsLayout = layout;
+    return layout;
+  }
+
+  // loadCommitsPage returns one page of the default branch's commit list
+  // (page 0 = the mutable head, 1..sealed = the sealed pages, 1 being the
+  // oldest), sourced from the same code items index the generated pages are
+  // projected from and filtered to the commits that index attributes to the
+  // default branch.
+  //
+  // Depth is bounded by what the page needs: the head drains only as far as the
+  // published frontier (usually already in the eager set), page n only as far as
+  // its oldest row — the same "older →" cost the static chain has. Only the
+  // fallback, when there is no usable published layout, drains the corpus.
+  async function loadCommitsPage(ctx, page) {
+    const { defaultBranch } = await listBranches(ctx);
+    const size = COMMITS_PAGE_SIZE;
+    const w = await codeIndexWalkState(ctx);
+    if (!w) {
+      // Pre-index bucket: the bounded loose walk the timeline falls back to. No
+      // corpus means no sealed chain, so this is the head and nothing else.
+      const r = await resolveCodeItems(ctx, size);
+      const rows = r.items.filter((it) => (it._branch || "") === defaultBranch).map((it) => it.commit).slice(0, size);
+      return { branch: defaultBranch, rows, page: 0, sealed: 0, total: rows.length };
+    }
+    const drain = (enough) => withWalkLock(w, async () => {
+      const pick = () => w.items.filter((c) => (c._branch || "") === defaultBranch);
+      let rows = pick();
+      let guard = (w.older || []).length, stall = 0;
+      while (!enough(rows) && w.older && w.older.length) {
+        await loadNextCodeShard(ctx, w);
+        rows = pick();
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      return rows;
+    });
+    const layout = await loadCommitsLayout(ctx);
+    let sealed = layout ? layout.sealed : 0;
+    let total = layout ? layout.total : 0;
+    const frontier = layout && /^[0-9a-f]{12}$/.test(layout.frontier) ? layout.frontier : "";
+    let rows = [], head = -1;
+    if (sealed > 0 && frontier) {
+      rows = await drain((rs) => rs.some((c) => c.short === frontier));
+      head = rows.findIndex((c) => c.short === frontier);
+      if (head >= 0 && page > 0) {
+        const want = head + (sealed - page + 1) * size;
+        rows = await drain((rs) => rs.length >= want);
+        head = rows.findIndex((c) => c.short === frontier);
+      }
+    }
+    if (head < 0) {
+      rows = await drain(() => false);
+      total = rows.length;
+      sealed = total > 0 ? Math.floor((total - 1) / size) : 0;
+      head = total - sealed * size;
+    }
+    if (!layout || page > sealed) total = Math.max(total, rows.length);
+    if (page > sealed) return { branch: defaultBranch, rows: [], page, sealed, total, missing: page > 0 };
+    const from = page > 0 ? head + (sealed - page) * size : 0;
+    const to = page > 0 ? from + size : head;
+    return { branch: defaultBranch, rows: rows.slice(from, to), page, sealed, total };
+  }
+
   // loadTimelineWindow is the bounded, autoscroll-paged merged timeline. It grows
   // a `shown` cursor by TIMELINE_WINDOW per extend, merges every data branch's
   // resolved metadata (newest-first, NO body fetches) by effective time, takes the
@@ -2724,6 +3018,78 @@
     const windowItems = merged.slice(0, need);
     await hydrateItems(ctx, windowItems);
     return { items: windowItems, truncated: more || merged.length > need };
+  }
+
+  // HOME_ACTIVITY_LIMIT caps the home view's recent-activity rows, mirroring the
+  // page layer's sitePagesHomeActivity so the static front page and this render
+  // show the same rows. Ten: a round number short enough that the section reads
+  // as a summary below the README rather than a scrolling log. There is no
+  // per-type quota — the newest ten entries are whatever they are, so a repo that
+  // commits daily can legitimately show ten code commits.
+  const HOME_ACTIVITY_LIMIT = 10;
+
+  // HOME_ACTIVITY_NEED is how deep each branch is surfaced before the merge.
+  // resolveExtItems counts COMMITS, and replies and edits are commits too, so
+  // asking for exactly HOME_ACTIVITY_LIMIT could surface fewer than that many
+  // top-level items on a comment-heavy branch and drop a row the static page
+  // lists. Over-requesting fixes that for free: an index-seeded branch already
+  // holds far more than this in its eager set (head + newest sealed shard), and
+  // a branch shorter than this is exhausted either way — neither case fetches
+  // more than the LIMIT would.
+  const HOME_ACTIVITY_NEED = HOME_ACTIVITY_LIMIT * 4;
+
+  // HOME_ACTIVITY_SPECS lists the data branches that section merges, with the
+  // item type each branch's entries carry when their header names none. Mirrors
+  // the page layer's sitePageLists and sitePageDefaultTypes; memo is excluded on
+  // both sides (a distinct extension with its own view, as in the timeline).
+  const HOME_ACTIVITY_SPECS = [
+    { ext: "pm", branch: "gitmsg/pm", type: "issue" },
+    { ext: "review", branch: "gitmsg/review", type: "pull-request" },
+    { ext: "social", branch: "gitmsg/social", type: "post" },
+    { ext: "release", branch: "gitmsg/release", type: "release" },
+  ];
+
+  // homeActivityRoot mirrors the page layer's thread rule (site_pages_thread.go
+  // pageReplyRootRef): a social comment and a review feedback are replies, which
+  // get no page of their own, so neither side lists them; everything else is a
+  // top-level item.
+  function homeActivityRoot(ext, type) {
+    if (ext === "social" && type === "comment") return false;
+    if (ext === "review" && type === "feedback") return false;
+    return true;
+  }
+
+  // loadHomeActivity returns the newest top-level items across the data branches
+  // for the home view's recent-activity section. Metadata ONLY: subject, type,
+  // author and time all come from the items index, so unlike the timeline this
+  // hydrates no bodies and reads no objects. It is the same projection the push
+  // writes into the static front page (buildSiteFrontActivity) — same branches,
+  // same reply rule, same cap, same order (effective time then sha, descending)
+  // — so the page-entry upgrade re-renders the rows the page already shows.
+  async function loadHomeActivity(ctx) {
+    const merged = [];
+    for (const spec of HOME_ACTIVITY_SPECS) {
+      const r = await resolveExtItems(ctx, spec.ext, HOME_ACTIVITY_NEED);
+      for (const it of r.items) {
+        const type = (it.header && it.header.type) || spec.type;
+        if (!homeActivityRoot(spec.ext, type)) continue;
+        it._ext = spec.ext; it._branch = spec.branch; it._type = type;
+        merged.push(it);
+      }
+    }
+    // Plain code commits interleave, as they do in the timeline: on a repo whose
+    // gitmsg corpus is mostly releases, items alone would advertise a months-old
+    // release list as "recent activity" while the daily commits stayed invisible.
+    // INDEXED only (never the loose walk this route must not pay): the push reads
+    // its code rows from the same corpus, so a bucket without a code index shows
+    // no code rows on either surface.
+    const code = await resolveCodeItemsIndexed(ctx, HOME_ACTIVITY_NEED);
+    for (const it of (code ? code.items : [])) { it._ext = "code"; it._type = "commit"; merged.push(it); }
+    merged.sort((a, b) => {
+      if (a.effectiveTime !== b.effectiveTime) return b.effectiveTime - a.effectiveTime;
+      return a.commit.hash < b.commit.hash ? 1 : (a.commit.hash > b.commit.hash ? -1 : 0);
+    });
+    return merged.slice(0, HOME_ACTIVITY_LIMIT);
   }
 
   // embeddedRefs returns the cross-repo context an item embeds for its own
@@ -3777,8 +4143,7 @@
   // member count (count is the item-ref count, no per-member fetch). Empty when
   // the bucket has no manifest or no list refs.
   async function loadListsSummary(ctx) {
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
-    const lists = enumerateLists(ctx.manifest);
+    const lists = enumerateLists(await manifestFor(ctx));
     const out = [];
     for (const l of lists) out.push({ ext: l.ext, name: l.name, id: l.id, meta: await loadListMeta(ctx, l), count: l.itemRefs.length });
     return out;
@@ -3787,8 +4152,7 @@
   // loadListDetail resolves one list by id (`<ext>/<name>`) with its resolved
   // members; null when no such list exists.
   async function loadListDetail(ctx, id) {
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
-    const l = enumerateLists(ctx.manifest).find((x) => x.id === id);
+    const l = enumerateLists(await manifestFor(ctx)).find((x) => x.id === id);
     if (!l) return null;
     return { ext: l.ext, name: l.name, id: l.id, meta: await loadListMeta(ctx, l), members: await loadListMembers(ctx, l) };
   }
@@ -3831,11 +4195,11 @@
   // no manifest or no fork refs. The commit-count / last-fetch columns the TUI
   // shows are cache-derived and unavailable to a browser reader.
   async function loadForks(ctx) {
-    if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
-    const refs = forkRefNames(ctx.manifest);
+    const manifest = await manifestFor(ctx);
+    const refs = forkRefNames(manifest);
     const out = [];
     for (const ref of refs) {
-      const sha = ctx.manifest[ref];
+      const sha = manifest[ref];
       const obj = await getObject(ctx, sha);
       if (!obj || obj.type !== "commit") continue;
       const c = parseCommit(sha, obj.body);
@@ -4177,20 +4541,21 @@
 
   const core = {
     deriveBase, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
-    getObject, getPackedObject, packNames, packMapShard, packIdx, packIdxFind, parsePackIdx, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
+    getObject, getContentObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
     feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
-    loadManifest, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
+    loadTimelineItems, loadTimelineWindow, loadHomeActivity, HOME_ACTIVITY_LIMIT, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
+    loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
+    manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    parseRefs, refRepoUrl, releaseAssets, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary,

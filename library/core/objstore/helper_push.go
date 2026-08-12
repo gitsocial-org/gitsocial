@@ -392,8 +392,8 @@ func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string) (ok bool) {
 	}
 	src := newLocalCommitSource(h.gitDir, "")
 	defer src.close()
-	readme := readSiteFrontReadme(src, readSiteDefaultBranch(h.client, h.prefix))
-	if err := reclaimSiteFrontPage(h.client, h.prefix, site, manifests, readme); err != nil {
+	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(h.client, h.prefix))
+	if err := reclaimSiteFrontPage(h.client, h.prefix, site, manifests, home); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: reclaim front page: %v\n", err)
 		return false
 	}

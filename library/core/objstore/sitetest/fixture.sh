@@ -16,25 +16,44 @@ repo=$(cd "$here/../../../.." && pwd)
 out="${1:-$here/.fixture}"
 served="$out/served"
 marker="$served/thread-demo/.gitsocial/site/refs.json"
+stampfile="$out/.stamp"
 HOST=fake.example.com
 
-if [ -f "$marker" ] && [ -d "$served/interrupted-demo" ] && [ -d "$served/extended-demo" ] && [ -d "$served/sparse-demo" ] && [ -d "$served/merged-demo" ] && [ -d "$served/packed-demo/objects/pack" ]; then
+# fixture_stamp identifies the sources the fixture's served bytes are generated
+# from: the embedded site assets, every site generator file, and this builder
+# script (which decides what the buckets contain). Reusing a fixture is only
+# sound while that stamp is unchanged — otherwise the suites validate HTML a
+# previous binary wrote, and a negative assertion ("activity excludes replies",
+# "no state is the static content") passes against content nothing under test
+# produced. sitePagesVersion moving 7 → 8 is exactly that.
+fixture_stamp() {
+	(
+		cd "$repo/library/core/objstore"
+		find site -type f | sort | xargs git hash-object
+		find . -maxdepth 1 -name 'site_*.go' ! -name '*_test.go' | sort | xargs git hash-object
+		git hash-object "$here/fixture.sh"
+	) | git hash-object --stdin
+}
+stamp=$(fixture_stamp)
+
+if [ -f "$marker" ] && [ "$(cat "$stampfile" 2>/dev/null)" = "$stamp" ] && [ -d "$served/interrupted-demo" ] && [ -d "$served/extended-demo" ] && [ -d "$served/sparse-demo" ] && [ -d "$served/merged-demo" ] && [ -d "$served/packed-demo/objects/pack" ] && [ -d "$served/refdelta-demo/objects/pack" ]; then
 	echo "fixture present: $served"
 	exit 0
 fi
+# Everything under <out> is regenerated below, so it all goes: a per-workspace
+# list drifts as buckets are added (a leftover workspace re-inits, its commit
+# finds nothing to commit, and the build dies half-built).
+rm -rf "${out:?}"/* "$stampfile"
+mkdir -p "$served" "$out/xdg"
 
+# Always rebuilt, never reused: the stamp above says which sources this fixture
+# is meant to have been built from, and only a binary built from them now makes
+# that true.
 bin="$repo/bin/gitsocial"
-if [ ! -x "$bin" ]; then
-	echo "building bin/gitsocial ..."
-	(cd "$repo" && go build -o bin/gitsocial ./cli/gitsocial)
-fi
+echo "building bin/gitsocial ..."
+(cd "$repo" && go build -o bin/gitsocial ./cli/gitsocial)
 locals3bin="$out/locals3bin"
 go build -o "$locals3bin" "$here/../locals3"
-
-rm -rf "$out/xdg" "$out/cache" "$served" "$out/locals3.log" \
-	"$out/thread-demo" "$out/other-demo" "$out/interrupted-demo" "$out/healed-demo" \
-	"$out/partial-demo" "$out/extended-demo" "$out/merged-demo" "$out/packed-demo"
-mkdir -p "$served" "$out/xdg"
 export XDG_CONFIG_HOME="$out/xdg"
 cache="$out/cache"
 
@@ -89,7 +108,11 @@ W="$out/thread-demo"
 mkdir -p "$W"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
-printf '# thread-demo\n\nShowcase fixture.\n' >"$W/README.md"
+# The README carries the shape a real one has — a hero div, a badge image, a
+# heading, a list, an in-page anchor — because the front page PRE-RENDERS it
+# (site_markdown.go) and verify_upgrade_boot.js asserts the served structure
+# against what the app's home view renders from the same blob.
+printf '<div align="center">\n  <img src="https://img.example.com/badge.svg" alt="build badge">\n  <h1>thread-demo</h1>\n</div>\n\nShowcase fixture.\n\n## About\n\n- rendered on the served page\n- and again in the app\n\n[About](#about)\n' >"$W/README.md"
 git -C "$W" add -A && git -C "$W" commit -qm "Initial commit: README"
 printf 'one\ntwo\n' >"$W/notes.txt"
 git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
@@ -114,7 +137,15 @@ gg social post "Docs update landed for the ref grammar." >/dev/null
 C1=$(gg --json social comment "$P1" "Congrats, this is huge!" | idof)
 gg social comment "$P1" "What about generation-mode buckets?" >/dev/null
 gg social comment "$P1" "Looking forward to trying it." >/dev/null
+# A thread page flattens replies into timestamp order (site_pages_thread.go),
+# with the sha as the tiebreak. Commit shas change every build, so a reply
+# created in the same second as the one it answers lands either side of it at
+# random, and the ordering assertion in verify_html_pages.js is then a coin
+# flip. Second-granularity timestamps are the constraint, so put a second
+# between the nested replies and the comment they answer.
+sleep 1
 R1=$(gg --json social comment "$C1" "Thanks, appreciate it!" | idof)
+sleep 1
 gg social comment "$R1" "Seconded, well earned." >/dev/null
 
 # social: markdown + multi-line posts (richer render coverage).
@@ -353,22 +384,42 @@ gg site push >/dev/null
 # design, so config/list/fork reads are unchanged.
 #
 # notes.txt is generated at a size that git actually deltifies. A two-line file
-# is stored whole in both revisions, which would leave the reader's OFS_DELTA /
-# REF_DELTA resolution untested while looking covered; a few KB with an appended
-# tail makes the older revision a real delta against the newer. The invariant is
-# asserted below, not assumed, and verify_packfiles.js re-checks it bucket-side.
-notes_lines() {
-	awk -v n="$1" 'BEGIN{for(i=1;i<=n;i++) printf "notes line %04d: packed content for the browser pack reader\n", i}'
+# is stored whole in every revision, which would leave the reader's OFS_DELTA /
+# REF_DELTA resolution untested while looking covered. Size alone is not enough
+# either: revisions that all differ from each other by the same amount get
+# deltified against one common base, leaving every chain at depth 1 and the
+# reader's chain walk untested. Each revision therefore rewrites a further
+# seventh of the lines, so a revision's nearest base is the one before it and the
+# pack builds a real chain. Both invariants are asserted below, not assumed, and
+# verify_packfiles.js re-checks them bucket-side.
+#
+# The data/ directory exists to push the content pack's index past the reader's
+# index-head request, so a tree or blob read there takes the fanout-bounded
+# RANGE path rather than receiving the whole index in the head. A fixture of a
+# handful of objects would only ever exercise the small-index shortcut.
+notes_seed() {
+	awk 'BEGIN{for(i=1;i<=350;i++) printf "notes line %04d: packed content for the browser pack reader\n", i}'
+}
+notes_revise() {
+	awk -v r="$1" 'NR % 7 == r % 7 { printf "notes line %04d: rewritten by revision %d\n", NR, r; next } { print }' "$2"
 }
 W="$out/packed-demo"
-mkdir -p "$W"
+mkdir -p "$W/data"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
 printf '# packed-demo\n\nEvery git object here lives in a packfile.\n' >"$W/README.md"
+for i in $(seq 1 800); do
+	printf 'sample record %03d for the packed content corpus\n' "$i" >"$W/data/record-$i.txt"
+done
 git -C "$W" add -A && git -C "$W" commit -qm "Initial commit: README"
-notes_lines 120 >"$W/notes.txt"
+notes_seed >"$W/notes.txt"
 git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
-{ notes_lines 120; printf 'gamma tail appended by the second revision\n'; } >"$W/notes.txt"
+notes_revise 2 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
+git -C "$W" add -A && git -C "$W" commit -qm "Amend notes"
+notes_revise 3 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
+git -C "$W" add -A && git -C "$W" commit -qm "Revise notes"
+notes_revise 4 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
+printf 'gamma tail appended by the final revision\n' >>"$W/notes.txt"
 git -C "$W" add -A && git -C "$W" commit -qm "Extend notes"
 gg social init >/dev/null
 gg pm init >/dev/null
@@ -386,14 +437,54 @@ unset GITSOCIAL_S3_PACK_THRESHOLD
 
 # The delta-resolution tests are vacuous unless a pack really carries a delta,
 # and whether git deltifies depends on content size. Fail the build here rather
-# than let the suite pass green on packs of whole objects.
+# than let the suite pass green on packs of whole objects. Depth matters too: at
+# depth 1 the reader never walks a chain, so the deepest chain is asserted as
+# well. verify-pack -v prints "<sha> <type> <size> <packed> <offset> <depth>
+# <base>" for a deltified entry.
 deltas=0
+depth=0
 for idx in "$served"/packed-demo/objects/pack/*.idx; do
 	[ -e "$idx" ] || continue
 	n=$(git verify-pack -v "$idx" | awk 'NF>=7 && ($2=="blob" || $2=="tree")' | wc -l)
+	d=$(git verify-pack -v "$idx" | awk 'NF>=7 {if ($6+0 > m) m = $6+0} END{print m+0}')
 	deltas=$((deltas + n))
+	[ "$d" -gt "$depth" ] && depth=$d
 done
 [ "$deltas" -gt 0 ] || { echo "packed-demo carries no deltified objects; the pack reader's delta path would go untested" >&2; exit 1; }
+[ "$depth" -gt 1 ] || { echo "packed-demo's deepest delta chain is $depth; the reader's chain walk would go untested" >&2; exit 1; }
+idxbytes=$(wc -c <"$(ls -S "$served"/packed-demo/objects/pack/*.idx | head -1)")
+[ "$idxbytes" -gt 16384 ] || { echo "packed-demo's largest pack index is $idxbytes bytes; too small to show the reader's ranged index path beating a whole download" >&2; exit 1; }
+
+# ---- refdelta-demo: the same objects in a REF_DELTA pack.
+# gitsocial always packs with --delta-base-offset, so its own buckets only ever
+# carry OFS_DELTA. A reader that got REF_DELTA wrong would still pass every test
+# above, so one bucket is built by hand from `git pack-objects` with the
+# delta-base-offset extension turned OFF, so bases are named by sha. The setting
+# is passed EXPLICITLY rather than relied on being unset: pack.useDeltaBaseOffset
+# defaults to true in git, and any of the config files in scope could set it, in
+# which case this bucket would silently be a second OFS_DELTA fixture. Objects
+# only — no refs and no site artifacts — since the suite addresses it by sha.
+R="$served/refdelta-demo"
+mkdir -p "$R/objects/pack" "$R/objects/info" "$out/refdelta"
+git -C "$W" rev-list --objects --all | awk '{print $1}' |
+	git -C "$W" -c pack.useDeltaBaseOffset=false pack-objects -q --depth=50 --window=50 "$out/refdelta/pack" >/dev/null
+refname=$(basename "$(ls "$out/refdelta"/pack-*.pack)" .pack)
+cp "$out/refdelta/$refname.pack" "$out/refdelta/$refname.idx" "$R/objects/pack/"
+printf 'P %s.pack\n\n' "$refname" >"$R/objects/info/packs"
+# Count the entries that are REF_DELTA (pack entry type 7), not merely
+# deltified: `git verify-pack -v` prints the same columns for both encodings, so
+# a pack of OFS_DELTAs would satisfy a delta count while testing nothing new.
+# The type nibble is the high nibble of the first byte at the entry's offset.
+refdeltas=0
+otherdeltas=0
+for off in $(git verify-pack -v "$R/objects/pack/$refname.idx" | awk 'NF>=7 {print $5}'); do
+	byte=$(dd if="$R/objects/pack/$refname.pack" bs=1 skip="$off" count=1 2>/dev/null | od -An -tu1 | tr -d ' ')
+	if [ $(((byte >> 4) & 7)) -eq 7 ]; then refdeltas=$((refdeltas + 1)); else otherdeltas=$((otherdeltas + 1)); fi
+done
+[ "$refdeltas" -gt 0 ] && [ "$otherdeltas" -eq 0 ] || { echo "refdelta-demo carries $refdeltas REF_DELTA and $otherdeltas other delta entries; the reader's REF_DELTA path would go untested" >&2; exit 1; }
+
+# Written last, so only a fixture that built all the way through is reusable.
+printf '%s\n' "$stamp" >"$stampfile"
 
 echo "fixture built: $served"
-echo "  buckets: thread-demo, other-demo, interrupted-demo, healed-demo, partial-demo, extended-demo, sparse-demo, merged-demo, packed-demo"
+echo "  buckets: thread-demo, other-demo, interrupted-demo, healed-demo, partial-demo, extended-demo, sparse-demo, merged-demo, packed-demo, refdelta-demo"

@@ -45,7 +45,13 @@ function mkEl(tag) {
     querySelectorAll(sel) { const out = []; collect(this, sel, out); return out; },
     set textContent(v) { this._children = [{ nodeType: 3, nodeValue: String(v) }]; },
     get textContent() { return textOf(this); },
-    set innerHTML(v) { this._html = String(v); },
+    // firstChild/removeChild and a PARSING innerHTML. The page-entry boot builds
+    // its chrome by assigning innerHTML to a detached holder and draining
+    // firstChild into the body, and drops the static content with removeChild, so
+    // a stub setter would leave it with nothing to stage and nothing to remove.
+    get firstChild() { return this._children[0] || null; },
+    removeChild(c) { const i = this._children.indexOf(c); if (i >= 0) { this._children.splice(i, 1); if (c && typeof c === "object") c._parent = null; } return c; },
+    set innerHTML(v) { this._children = parseHTML(String(v))._children; for (const c of this._children) { if (c && typeof c === "object") c._parent = this; } },
   };
 }
 function norm(c) { return (typeof c === "string" || typeof c === "number") ? { nodeType: 3, nodeValue: String(c) } : c; }

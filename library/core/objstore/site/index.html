@@ -13,11 +13,12 @@
      the ?base=/?repo= cross-bucket override keeps working.
      object-src/base-uri/form-action are locked down.
      frame-ancestors/report-uri are omitted (ignored in a meta CSP).
-     script-src carries 'unsafe-eval' for exactly one sink: the lazy grammar
-     loader (gs-render.js evalGrammar) runs vendored prism components fetched
-     from the bucket via new Function — a <script src> load would break the
-     cross-bucket override (script-src has no https:), while connect-src allows
-     the fetch. Bucket contents are the trust boundary regardless. -->
+     script-src carries 'unsafe-eval' for exactly one sink: the lazy highlighter
+     loader (gs-render.js ensurePrism/evalGrammar) runs vendored prism.js and its
+     grammar components, fetched from the bucket, via new Function — a <script
+     src> load would break the cross-bucket override (script-src has no https:),
+     while connect-src allows the fetch. Bucket contents are the trust boundary
+     regardless. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>gitsocial</title>
 <!-- Favicon: the gitsocial mark (same path as the sidebar/footer logo) inlined as
@@ -93,6 +94,7 @@
              compact repo file tree nested under Code, sharing the content tree's
              expansion state. Empty (and display:none) on every other route. -->
         <div id="nav-tree-slot" class="nav-tree-slot"></div>
+        <a href="#/commits" data-nav="commits"><span class="nav-icon">≡</span>Commits</a>
         <a href="#/branches" data-nav="branches"><span class="nav-icon">⎇</span>Branches</a>
         <a href="#/graph" data-nav="graph"><span class="nav-icon">⑃</span>Graph</a>
         <a href="#/tags" data-nav="tags"><span class="nav-icon">⌗</span>Tags</a>
@@ -199,20 +201,13 @@
     if (nav) nav.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('a[href^="#"]')) setOpen(false); });
   })();
 </script>
-<script>
-  // Configure Prism before it loads so it never auto-highlights the page: the
-  // reader drives it explicitly via Prism.tokenize. prism.js is a relative
-  // same-origin asset (self-contained constraint holds); when it is absent the
-  // reader falls back to plain text nodes.
-  window.Prism = window.Prism || {};
-  window.Prism.manual = true;
-</script>
-<script src="prism.js"></script>
-<!-- Non-base grammars (python/rust/c/...) are not bundled here: the reader
-     lazy-loads grammars/prism-<lang>.js on first use (gs-render.js ensureGrammar)
-     and upgrades the plain text in place, so the shell stays small and a repo
-     pays only for the languages a visitor opens. A missing grammar file stays
-     plain text (a clean fallback). -->
+<!-- prism.js is NOT loaded here. It is 12 kB of tokenizer that most routes never
+     use, so the reader fetches it on the first render that actually highlights
+     something (gs-render.js ensurePrism, which sets Prism.manual before
+     evaluating it so it never auto-highlights the page) and upgrades the plain
+     text in place. Non-base grammars (python/rust/c/...) load the same way, one
+     grammars/prism-<lang>.js at a time on first use, so a repo pays only for the
+     languages a visitor opens. Either file missing stays plain text. -->
 <script src="icons.js"></script>
 <script src="gs-core.js"></script>
 <script src="gs-render.js"></script>

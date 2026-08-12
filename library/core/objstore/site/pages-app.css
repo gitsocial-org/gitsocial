@@ -238,6 +238,19 @@
   .chip.canceled { background: #6e7681; }
   .chip.unknown { background: #6e7681; }
   .empty, .loading { color: var(--muted); padding: 2.5rem 0; text-align: center; }
+  /* Page-entry boot, second half (gs-upgrade.js). The boot reveals the chrome as
+     soon as THIS sheet governs the page, well before the first view's data has
+     been read, so the visitor gets the site's frame for most of the wait instead
+     of a blank page. `gs-loading` on <html> is what makes that safe: it holds the
+     content slot on the same loading treatment as `.loading` above and hides
+     whatever the app has rendered into it, so the slot goes from loading to the
+     finished view exactly once rather than assembling itself in view. The boot
+     removes the class at that transition; the plain shell never sets it. */
+  html.gs-loading #view > * { display: none; }
+  html.gs-loading #view::before {
+    content: "Loading…"; display: block;
+    color: var(--muted); padding: 2.5rem 0; text-align: center;
+  }
   .err {
     color: var(--danger); border: 1px solid var(--danger); border-radius: 8px;
     padding: 0.75rem 0.9rem; background: color-mix(in srgb, var(--danger) 8%, transparent);
@@ -294,6 +307,12 @@
   .show-more:hover { color: var(--text); }
   .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
   .show-more-label { font-size: var(--fs-small); }
+  /* Home's recent-activity heading, above the metadata-only item rows that close
+     the landing (the static front page carries the same section). */
+  .home-activity-head {
+    font-size: var(--fs-h2); margin: 1.5rem 0 0.5rem;
+    border-bottom: 1px solid var(--line); padding-bottom: 0.25rem;
+  }
   .tree-icon { width: 1.1rem; text-align: center; opacity: 0.85; }
   /* File-type icons (vendored @pierre/vscode-icons, monochrome currentColor, so
      they read on both themes via the inherited --muted color). Cloned from

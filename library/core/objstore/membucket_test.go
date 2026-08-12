@@ -112,6 +112,14 @@ func (m *memBucket) putCount(key string) int {
 	return m.puts[key]
 }
 
+// encOf returns the Content-Encoding a key (bucket-relative) was stored with
+// ("" when it carries none, matching a key that was never written).
+func (m *memBucket) encOf(key string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.objs[key].enc
+}
+
 // getCount returns how many non-list GETs a key (bucket-relative) received.
 func (m *memBucket) getCount(key string) int {
 	m.mu.Lock()

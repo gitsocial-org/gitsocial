@@ -7,7 +7,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, flattenThread, getObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the in-app route types a detail page's "back" may return to
   // (a list/board/search the user came from). Detail routes (commit/tag) are
@@ -155,6 +155,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
 
   // ---- Syntax highlighting via Prism (browser only, no innerHTML) ----
+  //
+  // Prism is off the boot path entirely: prism.js is fetched the first time a
+  // render actually asks for highlighting (see ensurePrism), so the many routes
+  // with no code on them — every list, the board, search, analytics, config —
+  // never pay for the tokenizer. Everything below therefore has to work with
+  // Prism absent and upgrade in place when it arrives, which is the same shape
+  // the lazy grammars already had.
 
   // File-extension → Prism grammar name. The base grammars (go/js/ts/json/yaml/
   // bash/markdown/markup/css/diff) ship in prism.js; the rest (python/rust/c/...)
@@ -229,7 +236,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   };
 
   // BASE_GRAMMARS are the grammars already bundled in prism.js (and its clike
-  // base), so they are highlighted synchronously and never lazy-loaded.
+  // base), so once prism.js is in they are highlighted synchronously and never
+  // fetched as a separate grammar file.
   const BASE_GRAMMARS = {
     markup: 1, css: 1, clike: 1, javascript: 1, typescript: 1, json: 1,
     yaml: 1, bash: 1, go: 1, markdown: 1, diff: 1,
@@ -254,16 +262,121 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // grammar file is fetched at most once and concurrent requests share it.
   const grammarState = new Map();
 
-  // fetchGrammarText GETs grammars/prism-<name>.js relative to grammarBase and
-  // returns its source text, or null on any failure (404, network, no fetch/base)
-  // — every one a quiet fallback to plain text, never an error.
-  async function fetchGrammarText(name) {
+  // fetchAsset GETs a shell asset relative to grammarBase and returns its source
+  // text, or null on any failure (404, network, no fetch/base) — every one a
+  // quiet fallback to plain text, never an error.
+  async function fetchAsset(rel) {
     if (!grammarBase || typeof fetch !== "function") return null;
     try {
-      const res = await fetch(grammarBase + "grammars/prism-" + name + ".js");
+      const res = await fetch(grammarBase + rel);
       if (!res || !res.ok) return null;
       return await res.text();
     } catch (e) { return null; }
+  }
+
+  // fetchGrammarText GETs grammars/prism-<name>.js relative to grammarBase.
+  function fetchGrammarText(name) { return fetchAsset("grammars/prism-" + name + ".js"); }
+
+  // prismState caches the one-shot prism.js load. prism.js is NOT part of the
+  // boot: it is 12 kB of tokenizer that most routes (every list, board, search,
+  // analytics, config) never use, so it is fetched the first time something
+  // actually asks to be highlighted and shared from here after that.
+  let prismState = null;
+
+  // ensurePrism loads prism.js into the page on demand and resolves whether a
+  // tokenizer is available. It is fetched-and-evaluated rather than appended as
+  // a <script src>, for the same reason the grammar components are: the shell's
+  // CSP allows connect-src https: but not script-src https:, so a <script> tag
+  // would break under the ?base=/?repo= cross-bucket override while a fetch does
+  // not. Manual mode is set BEFORE evaluation (prism-core reads window.Prism.manual
+  // as it initializes) so prism's tail can never run an unmanaged highlightAll()
+  // over a page the reader has not replaced yet. Any failure resolves false and
+  // the reader keeps plain text.
+  function ensurePrism() {
+    if (getPrism()) return Promise.resolve(true);
+    if (prismState) return prismState;
+    prismState = (async () => {
+      const src = await fetchAsset("prism.js");
+      if (src === null) return false;
+      try {
+        if (typeof window !== "undefined") {
+          window.Prism = window.Prism || {};
+          window.Prism.manual = true;
+        }
+        // eslint-disable-next-line no-new-func
+        new Function(src)();
+      } catch (e) { return false; }
+      return !!getPrism();
+    })();
+    return prismState;
+  }
+
+  // prismPending holds the in-flight highlight upgrades that are waiting on
+  // prism.js ITSELF (never a lazy grammar): a page entry's reveal handshake
+  // awaits them so the visitor still gets ONE finished view instead of plain code
+  // that highlights a beat later. Grammar-only upgrades stay off this list —
+  // they were always progressive, and holding a reveal for one would make a file
+  // view in a lazy language slower to appear for no gain.
+  const prismPending = new Set();
+
+  // PRISM_DEADLINE_MS bounds how long anything may wait on the tokenizer. prism.js
+  // is an optional enhancement whose every consumer already renders plain text and
+  // upgrades in place, so a stalled fetch must degrade to plain text rather than
+  // hold a reveal (where the boot watchdog would discard a working app over it) or
+  // a file route open indefinitely.
+  const PRISM_DEADLINE_MS = 2000;
+
+  // withPrismDeadline resolves when `p` settles or the deadline passes, whichever
+  // comes first, and never rejects.
+  function withPrismDeadline(p) {
+    const done = Promise.resolve(p).then(() => undefined, () => undefined);
+    if (typeof setTimeout !== "function") return done;
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, PRISM_DEADLINE_MS);
+      done.then(() => { clearTimeout(timer); resolve(); });
+    });
+  }
+
+  // highlightsSettled resolves once every prism-driven upgrade started so far has
+  // re-rendered, or the deadline passes. Read by the boot handshake (gs-app
+  // signalFirstView).
+  function highlightsSettled() {
+    if (!prismPending.size) return Promise.resolve();
+    return withPrismDeadline(Promise.all(Array.from(prismPending)));
+  }
+
+  // prismUpgrade resolves true when the highlighting available for `lang` has
+  // IMPROVED on what the caller's synchronous render already had, so the caller
+  // knows to re-render: it loads prism.js when absent, then the grammar when that
+  // is the missing piece. False means nothing changed and the plain text stands.
+  async function prismUpgrade(lang) {
+    if (!lang) return false;
+    const had = !!getPrism();
+    if (!had && !(await ensurePrism())) return false;
+    const P = getPrism();
+    if (!P) return false;
+    const loaded = () => !!(P.languages && P.languages[lang]);
+    // Prism just arrived: a base grammar came with it, so the plain render is now
+    // stale even though no grammar file was fetched.
+    if (loaded()) return !had;
+    // A base grammar that is somehow not registered has no file to fetch.
+    if (BASE_GRAMMARS[lang]) return false;
+    return await ensureGrammar(lang);
+  }
+
+  // trackUpgrade runs a prismUpgrade→re-render pair, registering it on
+  // prismPending while prism itself is the thing being waited for. For a base
+  // grammar the whole chain IS the prism phase, so the re-render is what gets
+  // registered; a lazy grammar continues into a second serial round trip that was
+  // always progressive, so only the prism.js load is, and the reveal is not held
+  // for the grammar fetch.
+  function trackUpgrade(lang, rerender) {
+    const tracked = !getPrism();
+    const done = prismUpgrade(lang).then((ok) => { if (ok) rerender(); }).catch(() => {});
+    if (!tracked) return;
+    const phase = (!lang || BASE_GRAMMARS[lang]) ? done : ensurePrism().then(() => undefined, () => undefined);
+    prismPending.add(phase);
+    phase.then(() => prismPending.delete(phase));
   }
 
   // evalGrammar runs a fetched grammar component with Prism in scope, so its
@@ -305,18 +418,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // lazyHighlight renders `lang`-highlighted content into a freshly-emptied
-  // parent NOW (synchronously) via `render`, then — when the grammar is not yet
-  // loaded but is lazy-loadable — kicks off ensureGrammar and, on success,
-  // re-renders in place so the plain text upgrades to highlighted without ever
-  // blocking. A no-op re-render when the grammar fails to load (parent keeps its
-  // plain text). Used by every highlight entry point so lazy loading is uniform.
+  // parent NOW (synchronously) via `render`, then — when prism.js or the grammar
+  // is not loaded yet — kicks off the load and, on success, re-renders in place
+  // so the plain text upgrades to highlighted without ever blocking. A no-op
+  // re-render when nothing loadable is missing (parent keeps its plain text).
+  // Used by every highlight entry point so lazy loading is uniform.
   function lazyHighlight(parent, lang, render) {
     render();
-    const P = getPrism();
-    if (!P || !lang || !parent || (P.languages && P.languages[lang]) || BASE_GRAMMARS[lang]) return;
-    ensureGrammar(lang).then((ok) => {
-      if (ok && parent) { parent.replaceChildren(); render(); }
-    });
+    if (!lang || !parent) return;
+    trackUpgrade(lang, () => { parent.replaceChildren(); render(); });
   }
 
   // langForPath returns the Prism grammar name for a file path, or null. An exact
@@ -787,34 +897,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // source extension, so each entry keeps its native shape (issue / PR / release
   // / post) while interleaving by effective time.
   function timelineCard(item, counts) {
-    if (item._ext === "code") return commitTimelineCard(item);
+    if (item._ext === "code") return commitCard(item.commit, item._branch || "", { chip: true });
     if (item._ext === "pm") return issueCard(item, 0, counts);
     if (item._ext === "review") return prCard(item, counts);
     if (item._ext === "release") return releaseCard(item);
     return socialCard(item, counts);
-  }
-
-  // commitTimelineCard renders a plain code commit in the merged timeline: a
-  // "commit" glyph, the subject, and the author/time/hash meta linking to the
-  // commit detail under the branch it was reached via. It carries no GitMsg
-  // header, so no state/enrichment chips and no interaction counts — reusing the
-  // branch-log commit-card shape (subject + meta) for visual parity.
-  function commitTimelineCard(item) {
-    const c = item.commit;
-    const branch = item._branch || "";
-    const card = el("div", { class: "card" }, []);
-    const head = el("div", { class: "card-head" }, [
-      el("a", { class: "subject", href: commitRef(c.hash, branch) }, [subjectBody(c.content)[0] || "(no message)"]),
-    ]);
-    head.prepend(el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]));
-    card.append(head);
-    const meta = el("span", { class: "meta" }, [
-      commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ",
-      el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]),
-    ]);
-    if (branch) meta.append(el("span", { class: "chip" }, [branch]));
-    card.append(meta);
-    return cardNav(card, c.hash, branch);
   }
 
   // versionLabel names a version by its position in the canonical-first list:
@@ -1088,7 +1175,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!node || node.type !== "blob") return null;
     const mime = imageMime(path);
     if (!mime) return null;
-    const obj = await getObject(ctx, node.sha);
+    const obj = await getContentObject(ctx, node.sha);
     if (!obj || obj.body.length > IMG_BLOB_CAP) return null;
     const u = URL.createObjectURL(new Blob([obj.body], { type: mime }));
     trackObjectUrl(u);
@@ -1854,10 +1941,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       });
     };
     build();
-    const P = getPrism();
-    if (P && lang && !(P.languages && P.languages[lang]) && !BASE_GRAMMARS[lang]) {
-      ensureGrammar(lang).then((ok) => { if (ok) build(); });
-    }
+    trackUpgrade(lang, build);
     return { code, firstHl };
   }
 
@@ -3506,7 +3590,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // top authors by item count. Worst-case fan-out: one full walk per data branch,
   // free on an index-seeded bucket (the frontier is already exhausted).
   async function analyticsView(ctx) {
-    const head = await resolveHead(ctx.base);
+    const head = await headFor(ctx);
     const branch = headBranchName(head);
     const { branches } = await listBranches(ctx);
     const wrap = el("div", { class: "detail analytics-view" }, []);
@@ -3965,17 +4049,68 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // branchLogCard renders one commit row for the branch log (subject + author/
-  // time meta + hash link), whole-card navigable to the commit detail.
-  function branchLogCard(c, name) {
-    const card = el("div", { class: "card" }, []);
-    card.append(el("div", { class: "subject" }, [subjectBody(c.content)[0] || "(no message)"]));
+  // commitCard renders a code commit as the app's card: the commit glyph, the
+  // subject linking to the commit detail, and the author/time/hash meta, whole-
+  // card navigable. This is the one code-commit card in the app — the merged
+  // timeline, the branch log and the commits list all render through it, so a
+  // commit reads the same wherever it appears. It carries no GitMsg header, so
+  // no state chips and no interaction counts.
+  //
+  // Options are the deviations the surfaces genuinely need: chip appends the
+  // branch (the timeline mixes branches, the other two are already scoped to
+  // one), and the commits list takes all three of the rest — id gives the row
+  // the citable anchor its generated page gives it, time carries that page's
+  // absolute date so the two renders read the same row for row, and refSha keeps
+  // the links on the sha12 the page links.
+  function commitCard(c, name, opts) {
+    const o = opts || {};
+    const ref = commitRef(o.refSha || c.hash, name);
+    const card = el("div", o.id ? { class: "card", id: o.id } : { class: "card" }, []);
+    card.append(el("div", { class: "card-head" }, [
+      el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]),
+      el("a", { class: "subject", href: ref }, [subjectBody(c.content)[0] || "(no message)"]),
+    ]));
     const meta = el("span", { class: "meta" }, [
-      commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ",
+      commitAuthorEl(c), " · ", o.time || timeEl(c.authorTime), " · ",
+      el("a", { class: "hash", href: ref }, [c.short]),
     ]);
-    meta.append(el("a", { class: "hash", href: commitRef(c.hash, name) }, [c.short]));
+    if (o.chip && name) meta.append(el("span", { class: "chip" }, [name]));
     card.append(meta);
     return cardNav(card, c.hash, name);
+  }
+
+  // utcDate formats a unix time as the page layer's date form (UTC YYYY-MM-DD,
+  // sitePageDate), the form the generated commits page carries.
+  function utcDate(unixSeconds) {
+    if (!unixSeconds) return "";
+    const d = new Date(unixSeconds * 1000);
+    return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  }
+
+  // commitsView renders one page of the default branch's commit list
+  // (#/commits, #/commits/<n>) — the app's half of the crawlable commits pages.
+  // Same rows, same order, same count, same chain as the generated page for the
+  // same route, because both project the same code index through the same
+  // published partition.
+  async function commitsView(ctx, page) {
+    const r = await loadCommitsPage(ctx, page);
+    const wrap = el("div", { class: "detail" }, []);
+    wrap.append(el("div", { class: "subject" }, ["commits"]));
+    const bits = r.page > 0
+      ? [r.rows.length + " commits", r.branch, "older page " + r.page]
+      : [r.total + " commits", r.branch, "newest first"];
+    wrap.append(el("div", { class: "meta" }, [bits.filter(Boolean).join(" · ")]));
+    if (!r.rows.length) {
+      wrap.append(el("div", { class: "empty" }, [r.missing ? "No such commits page." : "No commits on the default branch."]));
+      return [wrap];
+    }
+    for (const c of r.rows) wrap.append(commitCard(c, r.branch, { id: "c-" + c.short, time: utcDate(c.authorTime), refSha: c.short }));
+    const links = [];
+    if (r.page > 0) links.push(el("a", { class: "action-link", href: r.page === r.sealed ? "#/commits" : "#/commits/" + (r.page + 1) }, ["← newer"]));
+    const older = r.page > 0 ? r.page - 1 : r.sealed;
+    if (older > 0) links.push(el("a", { class: "action-link", href: "#/commits/" + older }, ["older →"]));
+    if (links.length) wrap.append(el("div", { class: "page-actions" }, links));
+    return [wrap];
   }
 
   // branchLogView renders a branch's commit log, paged: the first WALK_CAP window
@@ -3995,7 +4130,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(actions);
     if (!first.items.length) { wrap.append(el("div", { class: "empty" }, ["No commits on this branch."])); return [wrap]; }
     for (const n of pagedListView(first,
-      (commits, box) => box.replaceChildren(...commits.map((c) => branchLogCard(c, name))),
+      (commits, box) => box.replaceChildren(...commits.map((c) => commitCard(c, name))),
       () => loadBranchLogWindow(ctx, name, true))) wrap.append(n);
     return [wrap];
   }
@@ -4076,7 +4211,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     commitsWrap.append(el("div", { class: "diff-head" }, [el("span", { class: "subject" }, ["Commits"])]));
     if (!first.items.length) commitsWrap.append(el("div", { class: "empty" }, ["No commits on head that base lacks (head is behind or level with base)."]));
     else for (const n of pagedListView(first,
-      (commits, box) => box.replaceChildren(...commits.map((c) => branchLogCard(c, headR.kind === "branch" ? headName : ""))),
+      (commits, box) => box.replaceChildren(...commits.map((c) => commitCard(c, headR.kind === "branch" ? headName : ""))),
       () => loadCompareCommitsWindow(ctx, excludeFrom, headR.sha, true))) commitsWrap.append(n);
     wrap.append(commitsWrap);
     const entries = await diffTrees(ctx, leftTree, headTree);
@@ -4252,14 +4387,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const entries = await getTree(ctx, node.sha);
       return treeView(ctx, entries || [], path, branch);
     }
-    const obj = await getObject(ctx, node.sha);
+    // A file view is a whole screen of code, the one surface where upgrading
+    // plain text after the fact is worth avoiding. The path already says whether
+    // it highlights, so the tokenizer's fetch starts HERE and is awaited just
+    // before the pane is built: it rides alongside the blob's own fetch and the
+    // pane renders highlighted the first time. Everywhere else keeps the
+    // render-now/upgrade-in-place path, which costs nothing to start. The wait is
+    // bounded because the pane has that path too (rawBlobPane tracks its own
+    // upgrade), so a stalled tokenizer costs a late highlight, never the file.
+    const prismReady = langForPath(path) ? ensurePrism() : null;
+    const obj = await getContentObject(ctx, node.sha);
     if (!obj) return [el("div", { class: "err" }, ["Object not found."])];
+    if (prismReady) await withPrismDeadline(prismReady);
     return blobView(obj.body, path, branch, line, lineEnd, ctx);
   }
 
   // codeView renders the root tree of the default branch.
   async function codeView(ctx) {
-    const head = await resolveHead(ctx.base);
+    const head = await headFor(ctx);
     const branch = headBranchName(head);
     if (!branch || !head.sha) return [el("div", { class: "err" }, ["No default branch to browse."])];
     const entries = await getTree(ctx, (await resolvePath(ctx, head.sha, "")).sha);
@@ -4369,12 +4514,55 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
+  // homeActivityRow renders one recent-activity row as the same card the rest of
+  // the app uses: the leading type glyph, the subject linking to the item detail,
+  // and the author/time meta. Every field comes from the metadata index (no body
+  // is hydrated), and the row mirrors the static front page's own row
+  // (site_pages_html.go sitePageActivityRow) down to the glyph character, which
+  // the page layer can carry because the glyphs are plain text.
+  //
+  // A code row takes the commit glyph and its short sha and NO type chip: the
+  // glyph is already titled "commit", so a chip reading "commit" beside it said
+  // the same thing twice, and dropping it leaves the commit card this section
+  // shows everywhere else. Item rows keep the chip, whose label carries what
+  // their glyph does not (an issue and a milestone share a tint).
+  function homeActivityRow(item) {
+    const branch = item._branch || "";
+    const code = item._ext === "code";
+    const card = el("div", { class: "card" }, []);
+    const head = el("div", { class: "card-head" }, [
+      el("a", { class: "subject", href: commitRef(item.commit.hash, branch) }, [itemSubject(item)]),
+    ]);
+    if (!code) head.prepend(el("span", { class: "chip" }, [homeActivityLabel(item._type)]));
+    if (code) head.prepend(el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]));
+    else prependGlyph(head, item, item._ext);
+    card.append(head);
+    const meta = el("span", { class: "meta" }, [item.author || "", " · ", timeEl(item.effectiveTime)]);
+    if (code) meta.append(" · ", el("a", { class: "hash", href: commitRef(item.commit.hash, branch) }, [item.commit.short]));
+    card.append(meta);
+    return cardNav(card, item.commit.hash, branch);
+  }
+
+  // homeActivityLabel words a row's type chip; only the hyphenated PR type reads
+  // wrong as a label. Mirrors the page layer's sitePageTypeLabel.
+  function homeActivityLabel(type) { return type === "pull-request" ? "pull request" : type; }
+
+  // homeActivityMore is the section's trailing link to the full timeline, built
+  // as the same centered chevron control the root file listing's "Show all N"
+  // uses. The static front page carries the same label over its own crawlable
+  // destination (the posts archive, which IS the page for /timeline).
+  function homeActivityMore() {
+    const glyph = el("span", { class: "show-more-icon" }, [chevronEl("down") || document.createTextNode("⌄")]);
+    return el("a", { class: "show-more", href: "#/timeline" }, [glyph, el("span", { class: "show-more-label" }, ["See more"])]);
+  }
+
   // homeView is the GitHub-familiar repo landing: a metadata strip (branch,
-  // branch count, latest commit), the root file listing (directories first), and
-  // the rendered README below it when present. The commit-count/contributor
-  // summary lives on its own Analytics page (analyticsView), not here.
+  // branch count, latest commit), the root file listing (directories first), the
+  // rendered README below it when present, and the newest items as a recent-
+  // activity section. The commit-count/contributor summary lives on its own
+  // Analytics page (analyticsView), not here.
   async function homeView(ctx) {
-    const head = await resolveHead(ctx.base);
+    const head = await headFor(ctx);
     const branch = headBranchName(head);
     const wrap = el("div", { class: "detail" }, []);
     const { branches } = await listBranches(ctx);
@@ -4398,9 +4586,31 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(strip);
     if (entries.length) wrap.append(homeFileList(entries, branch));
     if (readme) {
-      const obj = await getObject(ctx, readme.sha);
+      const obj = await getContentObject(ctx, readme.sha);
       if (obj) wrap.append(renderMarkdown(new TextDecoder().decode(obj.body), { ctx, branch, dir: "" }));
     }
+    // Recent activity closes the landing, below the README on both surfaces: the
+    // static front page carries the same rows, so the upgrade re-renders them
+    // rather than swapping content in. It is metadata-only (no body hydration),
+    // which is what keeps home off the timeline's per-item object reads. Filled
+    // in AFTER the view is returned, so the strip/files/README in the viewport
+    // paint on the landing's own fetches and the section lands a beat later,
+    // below the fold — never delaying first paint behind the index reads.
+    const activity = el("div", { class: "home-activity" }, []);
+    wrap.append(activity);
+    // NOT published as the view's settle promise. It was, back when a page entry
+    // held the static page on screen: the rows were already visible there, so
+    // waiting for them cost nothing and avoided a gap after the swap. A page
+    // entry now shows a loading state instead, so waiting buys nothing visible
+    // and costs the section's index reads, roughly two thirds of home's fetches
+    // and about 1.9s of the boot. The landing paints on its own fetches and the
+    // section lands below the fold a beat later, exactly as in the plain shell.
+    loadHomeActivity(ctx).then((items) => {
+      if (!items.length) return;
+      activity.append(el("h2", { class: "home-activity-head" }, ["Recent activity"]));
+      for (const it of items) activity.append(homeActivityRow(it));
+      activity.append(homeActivityMore());
+    }).catch(() => { /* the landing stands on its own */ });
     return [wrap];
   }
 
@@ -4429,7 +4639,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const target = codeSidebarTarget(r);
     if (!target) { slot.replaceChildren(); return; }
     try {
-      const head = await resolveHead(ctx.base);
+      const head = await headFor(ctx);
       const branch = target.branch || headBranchName(head);
       if (!branch) { slot.replaceChildren(); return; }
       const tip = await refTip(ctx, "refs/heads/" + branch);
@@ -4452,6 +4662,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, branchLogView, branchesView, compareView, ensureGrammar, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

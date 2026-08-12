@@ -81,8 +81,17 @@ func siteCompressible(name string) bool {
 		strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".css")
 }
 
-// siteVersion hashes the embedded site files (names + content) so a bucket's
-// copy can be compared against what this binary ships.
+// siteVersion hashes everything this binary ships to a bucket — the embedded
+// site files (names + content) plus the page layer's generated stylesheet — so a
+// bucket's copy can be compared against it. The stylesheet is not an embedded
+// file but a Go constant, and leaving it out of this hash meant a push carrying
+// ONLY a CSS change computed the previous version, matched the bucket's push-
+// state marker, and skipped site maintenance entirely: the new rules never
+// shipped. Anything the binary can put on the bucket belongs in this hash.
+//
+// It hashes the RAW bytes, never what putSiteAsset stores: the version means
+// "which content is on the bucket", so a change in compression settings must
+// never masquerade as a content change (nor mask one).
 func siteVersion() (string, error) {
 	names, err := siteFileNames()
 	if err != nil {
@@ -97,18 +106,20 @@ func siteVersion() (string, error) {
 		fmt.Fprintf(h, "%s %d\n", name, len(data))
 		h.Write(data)
 	}
+	fmt.Fprintf(h, "%s %d\n", sitePagesCSSKey, len(sitePagesCSS))
+	h.Write([]byte(sitePagesCSS))
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-// uploadShellFile puts one embedded site file (by its site/-relative name) with
-// its Content-Type, brotli-compressing the text assets like uploadSiteFiles.
-func uploadShellFile(client *Client, prefix, name string) error {
-	data, err := siteFiles.ReadFile("site/" + name)
-	if err != nil {
-		return fmt.Errorf("read embedded %s: %w", name, err)
-	}
+// putSiteAsset puts one browser-facing site asset at key, deriving its
+// Content-Type from name and brotli-storing the text ones (`Content-Encoding:
+// br`). A bucket never negotiates, so the stored encoding is what every client
+// gets: only assets no non-browser client fetches belong here — the embedded
+// shell (a JS app's own subresources) and the page layer's stylesheet. The
+// scraper-facing documents go through putSiteText and stay plain.
+func putSiteAsset(client *Client, key, name string, data []byte) error {
 	headers := map[string]string{"Content-Type": siteContentType(name)}
-	// Shell assets ship once per version, so pay full-quality brotli once.
+	// Assets ship once per shell version, so pay full-quality brotli once.
 	if siteCompressible(name) {
 		compressed, err := brotliCompress(data, brotliQualityShard)
 		if err != nil {
@@ -117,12 +128,21 @@ func uploadShellFile(client *Client, prefix, name string) error {
 		data = compressed
 		headers["Content-Encoding"] = "br"
 	}
-	resp, err := client.do(http.MethodPut, prefix+name, nil, data, headers)
+	resp, err := client.do(http.MethodPut, key, nil, data, headers)
 	if err != nil {
-		return fmt.Errorf("upload %s: %w", name, err)
+		return fmt.Errorf("upload %s: %w", key, err)
 	}
 	resp.Body.Close()
 	return nil
+}
+
+// uploadShellFile puts one embedded site file (by its site/-relative name).
+func uploadShellFile(client *Client, prefix, name string) error {
+	data, err := siteFiles.ReadFile("site/" + name)
+	if err != nil {
+		return fmt.Errorf("read embedded %s: %w", name, err)
+	}
+	return putSiteAsset(client, prefix+name, name, data)
 }
 
 // uploadShellIndexHTML puts just the embedded shell index.html — the flip back

@@ -10,9 +10,12 @@ package objstore
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -133,14 +136,28 @@ func buildPages(t *testing.T, client *Client) (pending bool, state string) {
 	return pending, state
 }
 
-// getKey fetches a bucket key as a string, failing the test when absent.
+// getKey fetches a bucket key as a string, decoding a stored brotli encoding
+// (Go's transport auto-decodes gzip only, so a br object arrives compressed) so
+// assertions read what a browser renders. Fails the test when absent.
 func getKey(t *testing.T, client *Client, key string) string {
 	t.Helper()
-	data, err := client.Get(key)
+	resp, err := client.do(http.MethodGet, key, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("get %s: %v", key, err)
 	}
-	return string(data)
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", key, err)
+	}
+	if resp.Header.Get("Content-Encoding") != "br" {
+		return string(data)
+	}
+	raw, err := brotliDecompress(data)
+	if err != nil {
+		t.Fatalf("decode %s: %v", key, err)
+	}
+	return string(raw)
 }
 
 // keyExists reports whether a bucket key is present.
@@ -398,8 +415,14 @@ func TestSitePages_HostileEscaping(t *testing.T) {
 	if pending, _ := buildPages(t, client); pending {
 		t.Fatal("unexpected pending")
 	}
+	// The front page surfaces hostile subjects too (its recent-activity rows), so
+	// it is escaped alongside the item page and the type list.
 	for _, key := range []string{"i/" + shas[0][:12] + ".html", "posts/index.html", sitePagesFrontKey} {
-		page := getKey(t, client, key)
+		// Drop the layer's own boot script first: it is a constant of this file,
+		// never content, and it is the only bare "<script>" a page carries (the
+		// upgrade tag has attributes). What this check is for is a script tag
+		// CONSTRUCTED from hostile input.
+		page := strings.Replace(getKey(t, client, key), sitePagesBootScript, "", 1)
 		if strings.Contains(page, "<script>") || strings.Contains(page, "</title><") {
 			t.Errorf("%s carries unescaped hostile input", key)
 		}
@@ -505,6 +528,79 @@ func TestSitePages_ThreadCapTruncation(t *testing.T) {
 	}
 }
 
+// TestSitePages_StylesheetShipsOnEveryPass pins the fix for a bug that shipped:
+// pages.css was written only by the full-regen pass, so a bucket whose page set
+// was already current kept serving an older binary's stylesheet forever, and
+// rules added for new page elements never arrived (the elements rendered
+// unstyled). Every maintenance pass — full, incremental and the no-op reclaim —
+// must put the current stylesheet.
+func TestSitePages_StylesheetShipsOnEveryPass(t *testing.T) {
+	client, bucket := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "first post", ts: 1000}})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+		t.Fatal("full regen must write the current stylesheet")
+	}
+	// Stale stylesheet (what an older binary left behind) + an incremental pass.
+	stale := []byte("/* stale */")
+	mustPutStale := func() {
+		if err := putSiteText(client, sitePagesCSSKey, "text/css; charset=utf-8", stale); err != nil {
+			t.Fatalf("seed stale css: %v", err)
+		}
+	}
+	mustPutStale()
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "second post", ts: 1001}})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+		t.Error("an incremental pass must refresh the stylesheet")
+	}
+	// And the cheapest path of all: nothing moved, so the pass only reclaims the
+	// front page. It must still ship the stylesheet.
+	mustPutStale()
+	puts := bucket.putCount(sitePagesCSSKey)
+	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
+		t.Fatalf("no-op pass pending=%v state=%q", pending, state)
+	}
+	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+		t.Error("a no-op (reclaim) pass must refresh the stylesheet")
+	}
+	if bucket.putCount(sitePagesCSSKey) != puts+1 {
+		t.Error("the stylesheet must be written exactly once per pass")
+	}
+}
+
+// TestSiteVersion_CoversTheGeneratedStylesheet pins the other half of that bug:
+// a push whose ONLY change is the stylesheet must not be skipped as up to date.
+// The shell version is the skip key, so the generated stylesheet has to be part
+// of it — the embedded files alone left a CSS-only change invisible.
+func TestSiteVersion_CoversTheGeneratedStylesheet(t *testing.T) {
+	before, err := siteVersion()
+	if err != nil {
+		t.Fatalf("siteVersion: %v", err)
+	}
+	h := sha256.New()
+	names, err := siteFileNames()
+	if err != nil {
+		t.Fatalf("siteFileNames: %v", err)
+	}
+	for _, name := range names {
+		data, err := siteFiles.ReadFile("site/" + name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		fmt.Fprintf(h, "%s %d\n", name, len(data))
+		h.Write(data)
+	}
+	if before == fmt.Sprintf("%x", h.Sum(nil)) {
+		t.Error("siteVersion must fold in the generated stylesheet, not just the embedded files")
+	}
+}
+
 func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 	client, bucket := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
@@ -545,7 +641,7 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 		t.Error("the new top-level post must get its own page")
 	}
 	if !strings.Contains(getKey(t, client, sitePagesFrontKey), "New root post") {
-		t.Error("the front page must show the new root")
+		t.Error("the front page's recent activity must show the new root")
 	}
 	manifest, _ := readSitePagesManifest(client, "")
 	tip := strings.TrimSpace(getKey(t, client, "refs/heads/gitmsg/social"))
@@ -613,15 +709,15 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	if strings.Contains(sitemap, "a&b") || !strings.Contains(sitemap, "a&amp;b") {
 		t.Error("sitemap locs must be XML-escaped")
 	}
-	if got := strings.Count(sitemap, "<url>"); got != 11 {
-		t.Errorf("sitemap has %d urls, want 11 (root + 5 pages + 5 lists)", got)
+	if got := strings.Count(sitemap, "<url>"); got != 12 {
+		t.Errorf("sitemap has %d urls, want 12 (root + 5 pages + 5 lists + commits)", got)
 	}
 	for _, sha := range shas {
 		if !strings.Contains(sitemap, "/i/"+sha[:12]+".html</loc>") {
 			t.Errorf("sitemap must cover i/%s.html", sha[:12])
 		}
 	}
-	for _, dir := range []string{"issues", "prs", "posts", "releases", "memos"} {
+	for _, dir := range []string{"issues", "prs", "posts", "releases", "memos", siteCommitsDir} {
 		if !strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
 			t.Errorf("sitemap must cover %s/index.html", dir)
 		}
@@ -651,8 +747,8 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml", sitePagesSitemapHeadKey} {
 		urls += strings.Count(getKey(t, client, part), "<url>")
 	}
-	if urls != 11 {
-		t.Errorf("parts cover %d urls, want 11", urls)
+	if urls != 12 {
+		t.Errorf("parts cover %d urls, want 12", urls)
 	}
 	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml"} {
 		if strings.Contains(getKey(t, client, part), "index.html</loc>") {
@@ -704,30 +800,70 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	}
 }
 
-func TestSitePages_FrontReadme(t *testing.T) {
+// pagesFrontReadme is the fixture README: the shape a real one has (a hero div
+// with a logo and a badge row, headings, a list, a relative link, a fence) plus
+// a pasted <script>, so the generated front page can be asserted against all of
+// it at once.
+const pagesFrontReadme = `<div align="center">
+  <img src="docs/logo.svg" width="120" alt="Project logo">
+  <img src="https://img.example.com/badge.svg" alt="build badge">
+  <h1>Readme Title</h1>
+</div>
+
+## Section One
+
+readme paragraph text with **strong** and ` + "`code`" + `.
+
+- first item
+- second item with a [relative link](docs/GUIDE.md) and an [anchor](#section-one)
+
+<script>alert('xss')</script>
+`
+
+// pagesFrontRepo builds a one-commit repo carrying a root README and returns
+// its directory with the sha of that commit: the local odb the front page reads
+// its file listing and README out of, and the sha a bucket ref must name for
+// those reads to happen at all.
+func pagesFrontRepo(t *testing.T) (dir, head string) {
+	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
-	dir := t.TempDir()
-	run := func(args ...string) {
+	dir = t.TempDir()
+	run := func(args ...string) string {
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "HOME="+dir)
-		if out, err := cmd.CombinedOutput(); err != nil {
+		out, err := cmd.CombinedOutput()
+		if err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
+		return strings.TrimSpace(string(out))
 	}
 	run("init", "-q", "-b", "main")
 	run("config", "user.name", "T")
 	run("config", "user.email", "t@example.com")
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Readme Title\n\nreadme paragraph text\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(pagesFrontReadme), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	run("add", "README.md")
 	run("commit", "-q", "-m", "readme")
+	return dir, run("rev-parse", "HEAD")
+}
+
+// TestSitePages_FrontHome pins the front page as the app's home landing, in the
+// order the booted home render repaints it: the default-branch strip, the root
+// file listing, the README, then the recent-activity rows. The bucket carries
+// the default branch at the local commit, so both sources agree and the body is
+// the one the app renders.
+func TestSitePages_FrontHome(t *testing.T) {
+	dir, head := pagesFrontRepo(t)
 
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
 	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "readme fixture post"}})
+	if err := client.Put("refs/heads/main", []byte(head+"\n")); err != nil {
+		t.Fatal(err)
+	}
 	refs := pagesRefs(client, t)
 	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
 		t.Fatal(err)
@@ -739,13 +875,117 @@ func TestSitePages_FrontReadme(t *testing.T) {
 	}
 	front := getKey(t, client, sitePagesFrontKey)
 	if !strings.Contains(front, "README") || !strings.Contains(front, "readme paragraph text") {
-		t.Error("front page must carry the README section after the entries")
+		t.Error("front page must carry the README section")
 	}
 	if strings.Contains(front, "truncated") {
 		t.Error("a small README must not be marked truncated")
 	}
-	if i, j := strings.Index(front, "readme fixture post"), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
-		t.Error("README must render after the timeline entries")
+	if !strings.Contains(front, `<span class="chip">main</span>`) {
+		t.Error("front page must carry the default-branch strip")
+	}
+	if i, j := strings.Index(front, `<ul class="files">`), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
+		t.Error("the README must render after the root file listing")
+	}
+	if i, j := strings.Index(front, "readme paragraph text"), strings.Index(front, "readme fixture post"); i < 0 || j < 0 || j < i {
+		t.Error("recent activity must render after the README")
+	}
+}
+
+// TestSitePages_FrontReadmeRendered: the front page serves the README as
+// RENDERED HTML, not as its own source. This is what a crawler indexes and what
+// a no-JS reader gets, and before pre-rendering the first indexable content on
+// the front page was literally `&lt;div align=&#34;center&#34;&gt;` and `## Section One`.
+func TestSitePages_FrontReadmeRendered(t *testing.T) {
+	dir, head := pagesFrontRepo(t)
+
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "readme fixture post"}})
+	if err := client.Put("refs/heads/main", []byte(head+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	refs := pagesRefs(client, t)
+	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
+		t.Fatal(err)
+	}
+	src := newLocalCommitSource("", dir)
+	defer src.close()
+	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, SiteOverride{}); err != nil || pending {
+		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
+	}
+	// Asserted on the README SECTION, not the whole page: the page's own boot
+	// hooks are script tags, and this case is about what the README turned into.
+	front := getKey(t, client, sitePagesFrontKey)
+	start := strings.Index(front, `<p class="meta">README</p>`)
+	if start < 0 {
+		t.Fatal("front page carries no README section")
+	}
+	readme := front[start : start+strings.Index(front[start:], "</section>")]
+	for _, want := range []string{
+		`<div align="center">`,                     // the hero survives the allowlist
+		"<h1>Readme Title</h1>",                    // its raw <h1> too
+		`<h2 id="md-section-one">Section One</h2>`, // an ATX heading, addressable
+		"<strong>strong</strong>", "<code>code</code>",
+		"<li>first item</li>",
+		`<img src="https://img.example.com/badge.svg" alt="build badge">`, // absolute badge stays an image
+		"Project logo", // the repo-relative logo degrades to its alt text
+		`<a href="https://example.com/index.html#file:docs/GUIDE.md@main">relative link</a>`,
+		`<a href="#md-section-one">anchor</a>`, // the README's own anchor resolves with no script running
+	} {
+		if !strings.Contains(readme, want) {
+			t.Errorf("rendered README must carry %q", want)
+		}
+	}
+	for _, absent := range []string{
+		"&lt;div align=", "## Section One", "**strong**", "- first item", // no raw markup as text
+		"docs/logo.svg", // no src a bucket cannot serve
+		"<script", "alert(",
+	} {
+		if strings.Contains(readme, absent) {
+			t.Errorf("rendered README must not carry %q", absent)
+		}
+	}
+}
+
+// TestSitePages_FrontHomeIgnoresLocalBranch: the file listing and the README
+// come from the BUCKET's tip for the default branch, never from the local ref of
+// the same name. The local repo here carries main with a README; the bucket does
+// not carry the branch at all, so the page must thin out rather than advertise
+// files and a README behind app links that resolve against a tree the bucket
+// cannot serve (`gitsocial site push` pushes no data of its own, so a local
+// branch ahead of the bucket is the ordinary case).
+func TestSitePages_FrontHomeIgnoresLocalBranch(t *testing.T) {
+	dir, _ := pagesFrontRepo(t)
+
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "readme fixture post"}})
+	refs := pagesRefs(client, t)
+	if _, ok := refs["refs/heads/main"]; ok {
+		t.Fatal("the bucket must not carry the default branch for this case")
+	}
+	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
+		t.Fatal(err)
+	}
+	src := newLocalCommitSource("", dir)
+	defer src.close()
+	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, SiteOverride{}); err != nil || pending {
+		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
+	}
+	front := getKey(t, client, sitePagesFrontKey)
+	if strings.Contains(front, `<ul class="files">`) {
+		t.Error("the front page listed files the bucket has no tip for; the listing must come from the bucket tip, not the local ref")
+	}
+	if strings.Contains(front, "readme paragraph text") {
+		t.Error("the front page carried a README the bucket has no tip for")
+	}
+	// The rest of the page still stands: the strip names the branch, and the
+	// activity section is sourced from the bucket's own item indexes.
+	if !strings.Contains(front, `<span class="chip">main</span>`) {
+		t.Error("front page must still carry the default-branch strip")
+	}
+	if !strings.Contains(front, "readme fixture post") {
+		t.Error("front page must still carry the recent-activity rows")
 	}
 }
 
@@ -964,8 +1204,8 @@ func TestSitePages_AtomFeed(t *testing.T) {
 func TestSitePages_AtomFeedCap(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
-	specs := make([]pageMsgSpec, 0, sitePagesFrontSize+5)
-	for i := 0; i < sitePagesFrontSize+5; i++ {
+	specs := make([]pageMsgSpec, 0, sitePagesFeedSize+5)
+	for i := 0; i < sitePagesFeedSize+5; i++ {
 		specs = append(specs, pageMsgSpec{msg: fmt.Sprintf("feed post %03d", i), ts: int64(1000 + i)})
 	}
 	seedSocialMessages(t, client, "", specs)
@@ -976,11 +1216,11 @@ func TestSitePages_AtomFeedCap(t *testing.T) {
 	if err := xml.Unmarshal([]byte(getKey(t, client, sitePagesFeedKey)), &f); err != nil {
 		t.Fatalf("feed not well-formed: %v", err)
 	}
-	if len(f.Entries) != sitePagesFrontSize {
-		t.Fatalf("feed has %d entries, want the cap %d", len(f.Entries), sitePagesFrontSize)
+	if len(f.Entries) != sitePagesFeedSize {
+		t.Fatalf("feed has %d entries, want the cap %d", len(f.Entries), sitePagesFeedSize)
 	}
 	// Newest-first: the cap keeps the newest, drops the oldest five.
-	newest := fmt.Sprintf("feed post %03d", sitePagesFrontSize+4)
+	newest := fmt.Sprintf("feed post %03d", sitePagesFeedSize+4)
 	if f.Entries[0].Title != newest {
 		t.Errorf("first entry = %q, want newest %q", f.Entries[0].Title, newest)
 	}
@@ -1173,4 +1413,71 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 	}
 	assertForeignIntact("pages-disable cleanup")
 	assertDumbTransportPresent("pages-disable cleanup")
+}
+
+// TestSitePageIcon: every generated page must declare an icon, and that icon
+// must resolve without a bucket key. A page with no <link rel="icon"> makes the
+// browser request /favicon.ico at the ORIGIN root, which under a bucket prefix
+// is outside the site entirely — a 404 no push can ever heal, and on R2 a 27 KB
+// error body on every page view.
+func TestSitePageIcon(t *testing.T) {
+	shell, err := siteFiles.ReadFile("site/index.html")
+	if err != nil {
+		t.Fatalf("read embedded shell: %v", err)
+	}
+	// The default is lifted from the shell itself, so the SPA and the generated
+	// pages cannot drift apart. If the shell's icon link is ever reshaped, this
+	// is what catches it rather than a silently icon-less page set.
+	if sitePagesDefaultIcon == "" {
+		t.Fatal("no icon href extracted from the embedded shell")
+	}
+	if !strings.Contains(string(shell), string(sitePagesDefaultIcon)) {
+		t.Error("the pages' default icon is not the shell's own icon")
+	}
+	if !strings.HasPrefix(string(sitePagesDefaultIcon), "data:image/") {
+		t.Errorf("the default icon needs a bucket key: %.40s", sitePagesDefaultIcon)
+	}
+
+	small := "data:image/png;base64,iVBORw0KGgo="
+	if got := sitePageIcon(small); string(got) != small {
+		t.Errorf("a configured favicon is not stamped: %.40s", got)
+	}
+	oversized := "data:image/png;base64," + strings.Repeat("A", sitePagesInlineIconMax)
+	if got := sitePageIcon(oversized); got != sitePagesDefaultIcon {
+		t.Error("an oversized favicon is inlined into every page instead of falling back")
+	}
+	if got := sitePageIcon("data:text/html,<script>"); got != sitePagesDefaultIcon {
+		t.Error("an invalid favicon is stamped instead of falling back")
+	}
+	if got := sitePageIcon(""); got != sitePagesDefaultIcon {
+		t.Error("an unset favicon leaves the page with no icon")
+	}
+}
+
+// TestSitePageIconRendered: the head template actually emits the icon link, and
+// html/template does not rewrite the data: URI to its failsafe (it does exactly
+// that for a plain string in a URL attribute, which is why the field is typed).
+func TestSitePageIconRendered(t *testing.T) {
+	site := sitePageSiteFor("demo", siteCustomization{Title: "Demo", Favicon: "data:image/png;base64,iVBORw0KGgo="}, "https://example.com/")
+	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: site.Icon, Base: "../"}})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	want := `<link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">`
+	if !strings.Contains(string(page), want) {
+		t.Errorf("rendered page missing %s\n%.400s", want, page)
+	}
+	// The default is an svg+xml data URI full of quotes and percent escapes;
+	// html/template rewrites a plain string here to "#ZgotmplZ", which would ship
+	// an icon link that resolves to the page itself.
+	def, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: sitePagesDefaultIcon, Base: "../"}})
+	if err != nil {
+		t.Fatalf("render default: %v", err)
+	}
+	if strings.Contains(string(def), "ZgotmplZ") {
+		t.Error("the default icon was rewritten to the template failsafe")
+	}
+	if !strings.Contains(string(def), `<link rel="icon" href="data:image/svg`) {
+		t.Errorf("rendered default icon link missing\n%.400s", def)
+	}
 }

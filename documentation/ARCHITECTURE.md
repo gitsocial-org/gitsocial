@@ -48,6 +48,8 @@ golangci-lint run --fix ./...    # Lint & fix code
 scripts/test.sh                  # Streams per-test progress; wraps `go test -json` (accepts the same args, e.g. `scripts/test.sh -race ./...`)
 
 go test ./library/tui/test/...   # Headless TUI suite (smoke/display/golden/nav/sequence; see TUI-TESTS.md)
+
+go test -tags sitetest -timeout 30m ./library/core/objstore/   # Static-site browser suites (wraps scripts/site-test.sh; needs node; see STATIC-SITE.md)
 ```
 
 ### Code Rules
@@ -142,7 +144,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   ├── rpc/                   # JSON-RPC server (stdio) — thin-client surface
 │   └── tui/                   # TUI views — thin client
 ├── documentation/             # Protocol + architecture docs
-├── scripts/                   # Build/release scripts (mirror.sh, release.sh, install.sh)
+├── scripts/                   # Build/release/test scripts (release.sh, install.sh, test.sh, site-test.sh)
 └── specs/                     # Protocol specifications
 ```
 

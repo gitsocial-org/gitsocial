@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, loadManifest, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, compareView, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -24,12 +24,58 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // stall, never a slow-but-progressing load).
   const WATCHDOG_MS = 30000;
 
+  // firstViewSignalled guards the page-entry boot handshake. gs-upgrade.js puts
+  // the app's chrome on screen as soon as it can be styled and holds the content
+  // slot on a loading treatment, then installs window.__gsOnFirstView; calling it
+  // drops that treatment, so the finished view appears in a frame the visitor is
+  // already looking at. It runs exactly once, after the first route has
+  // settled, INCLUDING any deferred section a view chooses to publish as
+  // ctx.viewSettled. No view publishes one today: home's recent activity did
+  // until the boot stopped holding the static page, at which point waiting for
+  // a below-the-fold section bought nothing visible and cost most of the boot.
+  // The hook stays for a view whose deferred content is ABOVE the fold, where
+  // revealing without it would show a half-built page. Called on every route exit,
+  // painted or errored: a failed route must reveal its own error surface, never
+  // strand the visitor on a page whose upgrade silently stopped.
+  let firstViewSignalled = false;
+
+  // signalFirstView performs that handshake; a no-op in the plain shell, which
+  // installs no callback (its chrome is the served document).
+  async function signalFirstView(ctx) {
+    if (firstViewSignalled) return;
+    firstViewSignalled = true;
+    try { await (ctx && ctx.viewSettled); } catch (e) { /* a failed section never holds the reveal */ }
+    // prism.js is no longer part of the boot, so a first view WITH code in it
+    // starts a highlight upgrade of its own. Wait for that too: the reveal's
+    // whole promise is that the app is finished at the instant it appears, and
+    // revealing plain code that highlights a beat later is the second transition
+    // this handshake exists to avoid. Only prism-driven upgrades are waited on
+    // (highlightsSettled), never the lazy grammars, which were always progressive,
+    // and that wait is deadline-bounded: an optional tokenizer that stalls must
+    // never be what strands the reveal (and with it a rendered app) behind a
+    // give-up watchdog.
+    try { await highlightsSettled(); } catch (e) { /* a failed load never holds the reveal */ }
+    const reveal = (typeof window !== "undefined") ? window.__gsOnFirstView : null;
+    if (typeof reveal !== "function") return;
+    window.__gsOnFirstView = null;
+    try { reveal(); } catch (e) { /* the app rendered either way */ }
+  }
+
   // scrollToAnchor scrolls to a rendered markdown heading (md- slugged id),
   // retrying briefly because markdown panes can fill in after the view mounts.
   function scrollToAnchor(slug, tries) {
     const t = document.getElementById("md-" + mdSlug(slug));
     if (t && t.scrollIntoView) { t.scrollIntoView(); return; }
     if (tries > 0 && typeof setTimeout === "function") setTimeout(() => scrollToAnchor(slug, tries - 1), 200);
+  }
+
+  // scrollToId scrolls to a rendered element by its literal id — the commits
+  // list's `c-<sha12>` rows, which carry the id the generated page gives them so
+  // a citable row URL still lands on the row once the app has taken the page
+  // over. Unlike scrollToAnchor it does no slugging: the id IS the anchor.
+  function scrollToId(id) {
+    const t = document.getElementById(id);
+    if (t && t.scrollIntoView) t.scrollIntoView();
   }
 
   async function route(ctx) {
@@ -58,6 +104,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     else if (r.type === "commit" && COMMIT_VIEW[r.branch]) activeTab = COMMIT_VIEW[r.branch].tab;
     else if (r.type === "home") activeTab = "home";
     else if (r.type === "code" || r.type === "file") activeTab = "code";
+    else if (r.type === "commits") activeTab = "commits";
     else if (r.type === "branches" || r.type === "branch" || r.type === "compare") activeTab = "branches";
     else if (r.type === "graph") activeTab = "graph";
     else if (r.type === "tags" || r.type === "tag") activeTab = "tags";
@@ -90,8 +137,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     try {
       if (ctx.refMode === undefined) ctx.refMode = await readRefMode(ctx.base);
       if (ctx.refMode && ctx.refMode !== "etag") {
-        if (ctx.manifest === undefined) ctx.manifest = await loadManifest(ctx.base);
-        if (!ctx.manifest) {
+        if (!(await manifestFor(ctx))) {
           setView([el("div", { class: "err" }, [
             "This bucket uses \"" + ctx.refMode + "\" ref mode, whose refs the static " +
             "reader can only resolve through the refs manifest — and this bucket has " +
@@ -156,6 +202,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         setView(await listDetailView(ctx, r.id));
       } else if (r.type === "config") {
         setView(await configView(ctx));
+      } else if (r.type === "commits") {
+        setView(await commitsView(ctx, r.page));
+        if (r.anchor) scrollToId(r.anchor);
       } else if (r.type === "branches") {
         setView(await branchesView(ctx));
       } else if (r.type === "branch") {
@@ -194,8 +243,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     } finally {
       // Any exit from the render block (a real view, a handled error, an early
       // return, or a thrown+caught error) means the route resolved: clear the
-      // watchdog so it can never fire over a page that already painted.
+      // watchdog so it can never fire over a page that already painted, and let
+      // a page-entry boot reveal the app it has been holding behind the static page.
       routeSettled();
+      signalFirstView(ctx);
     }
     // Record this hash as the "came from" for the NEXT navigation's back link.
     // Detail routes are excluded so back never bounces detail→detail.
@@ -315,7 +366,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // until a manual reload. On return to the tab (focus / visibility), refs.json
   // is re-read (a no-cache key: a cheap 304 when unchanged) and any change —
   // every push moves a ref — surfaces a reload pill instead of silent
-  // staleness. The baseline loads shortly after boot, off the critical path.
+  // staleness. The baseline is the body the route already loaded (ctx.manifestText),
+  // so establishing it costs nothing; only a bucket the route never read one from
+  // pays a fetch, shortly after boot and off the critical path.
   function startFreshnessWatch(ctx) {
     let baseline = null, lastCheck = 0, pill = null;
     const showPill = () => {
@@ -325,8 +378,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       document.body.append(pill);
     };
     const check = async () => {
+      if (pill) return;
+      if (baseline === null && typeof ctx.manifestText === "string") { baseline = ctx.manifestText; return; }
       const now = Date.now();
-      if (pill || now - lastCheck < 30000) return;
+      if (now - lastCheck < 30000) return;
       lastCheck = now;
       let cur = null;
       try { cur = await NS.fetchText(ctx.base, ".gitsocial/site/refs.json"); } catch { return; }

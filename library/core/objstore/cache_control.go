@@ -76,6 +76,13 @@ func isSealedSitemapPartKey(key string) bool {
 // path boundary. Everything else the page layer writes (item pages, the
 // mutable index.html type-list heads, the generated front page index.html,
 // pages.css) stays no-cache: those keys rewrite in place on later pushes.
+//
+// `commits/<n>.html` is deliberately NOT in this class even though it is sealed
+// the same way. A gitmsg data branch is append-only by protocol, so a sealed
+// item list can never stop being true; the default branch can be rebased or
+// force-pushed, and the commits layer's ancestry guard exists precisely to
+// re-derive the pages when it is. A year-long immutable copy in a visitor's
+// browser would outlive that repair, so those pages revalidate.
 func isSealedListPageKey(key string) bool {
 	slash := strings.LastIndex(key, "/")
 	if slash < 0 {
