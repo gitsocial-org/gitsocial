@@ -38,6 +38,7 @@ const DEFAULT = [
   "verify_sparse_repo.js",
   "verify_merged_diff.js",
   "verify_route_supersede.js",
+  "verify_packfiles.js",
   "verify_request_budget.js",
 ];
 

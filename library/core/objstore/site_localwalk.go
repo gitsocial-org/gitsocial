@@ -100,50 +100,57 @@ func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
 // a type mismatch. A hard IO/protocol error retires the process (every later
 // read then misses) rather than failing the caller.
 func (s *localCommitSource) object(name, wantType string) (body []byte, ok bool) {
+	objType, body, ok := s.typed(name)
+	return body, ok && objType == wantType
+}
+
+// typed reads one object's type and raw body by name, for callers that take
+// whatever type the odb holds (the helper's fetch walk, which needs a packed
+// object's children). ok is false — never an error — on a miss.
+func (s *localCommitSource) typed(name string) (objType string, body []byte, ok bool) {
 	if s == nil {
-		return nil, false
+		return "", nil, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.broken {
-		return nil, false
+		return "", nil, false
 	}
 	if _, err := io.WriteString(s.stdin, name+"\n"); err != nil {
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
 	header, err := s.stdout.ReadString('\n')
 	if err != nil {
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
 	fields := strings.Fields(strings.TrimSpace(header))
 	// "<name> missing" — absent locally (shallow clone, gc race) or an
 	// unresolvable rev-spec; a clean miss.
 	if len(fields) == 2 && fields[1] == "missing" {
-		return nil, false
+		return "", nil, false
 	}
 	if len(fields) != 3 {
 		// Malformed: don't try to consume a body we can't size.
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
 	var size int64
 	if _, err := fmt.Sscanf(fields[2], "%d", &size); err != nil {
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
 	content := make([]byte, size)
 	if _, err := io.ReadFull(s.stdout, content); err != nil {
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
 	if _, err := s.stdout.Discard(1); err != nil { // trailing newline
 		s.broken = true
-		return nil, false
+		return "", nil, false
 	}
-	// The stream is consumed either way; a wrong type is just a miss.
-	return content, fields[1] == wantType
+	return fields[1], content, true
 }
 
 // getCommit returns one commit for the walk, preferring the local odb and

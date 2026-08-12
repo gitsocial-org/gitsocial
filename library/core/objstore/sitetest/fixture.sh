@@ -18,7 +18,7 @@ served="$out/served"
 marker="$served/thread-demo/.gitsocial/site/refs.json"
 HOST=fake.example.com
 
-if [ -f "$marker" ] && [ -d "$served/interrupted-demo" ] && [ -d "$served/extended-demo" ] && [ -d "$served/sparse-demo" ] && [ -d "$served/merged-demo" ]; then
+if [ -f "$marker" ] && [ -d "$served/interrupted-demo" ] && [ -d "$served/extended-demo" ] && [ -d "$served/sparse-demo" ] && [ -d "$served/merged-demo" ] && [ -d "$served/packed-demo/objects/pack" ]; then
 	echo "fixture present: $served"
 	exit 0
 fi
@@ -33,7 +33,7 @@ go build -o "$locals3bin" "$here/../locals3"
 
 rm -rf "$out/xdg" "$out/cache" "$served" "$out/locals3.log" \
 	"$out/thread-demo" "$out/other-demo" "$out/interrupted-demo" "$out/healed-demo" \
-	"$out/partial-demo" "$out/extended-demo" "$out/merged-demo"
+	"$out/partial-demo" "$out/extended-demo" "$out/merged-demo" "$out/packed-demo"
 mkdir -p "$served" "$out/xdg"
 export XDG_CONFIG_HOME="$out/xdg"
 cache="$out/cache"
@@ -345,5 +345,55 @@ git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
 gg site push >/dev/null
 
+# ---- packed-demo: a bucket whose git objects live in PACKFILES, not loose keys.
+# The pack threshold is lowered to 1 so every push packs (production packs only
+# from 1000 objects up), which is the shape the browser's pack reader has to
+# serve: commit bodies from the pack map's byte ranges, trees and blobs through
+# the pack index with delta resolution. State refs (refs/gitmsg/*) stay loose by
+# design, so config/list/fork reads are unchanged.
+#
+# notes.txt is generated at a size that git actually deltifies. A two-line file
+# is stored whole in both revisions, which would leave the reader's OFS_DELTA /
+# REF_DELTA resolution untested while looking covered; a few KB with an appended
+# tail makes the older revision a real delta against the newer. The invariant is
+# asserted below, not assumed, and verify_packfiles.js re-checks it bucket-side.
+notes_lines() {
+	awk -v n="$1" 'BEGIN{for(i=1;i<=n;i++) printf "notes line %04d: packed content for the browser pack reader\n", i}'
+}
+W="$out/packed-demo"
+mkdir -p "$W"
+git init -q -b main "$W"
+ident "Ada Lovelace" "ada@example.com"
+printf '# packed-demo\n\nEvery git object here lives in a packfile.\n' >"$W/README.md"
+git -C "$W" add -A && git -C "$W" commit -qm "Initial commit: README"
+notes_lines 120 >"$W/notes.txt"
+git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
+{ notes_lines 120; printf 'gamma tail appended by the second revision\n'; } >"$W/notes.txt"
+git -C "$W" add -A && git -C "$W" commit -qm "Extend notes"
+gg social init >/dev/null
+gg pm init >/dev/null
+gg social post "Commit bodies read straight out of a packfile." >/dev/null
+gg social post "Trees and blobs resolve through the pack index." >/dev/null
+gg pm issue create "Packed bucket: verify the browser reader" -l "kind/task" >/dev/null
+gg remote add "s3://$HOST/packed-demo" >/dev/null
+gg config site set publish true >/dev/null
+export GITSOCIAL_S3_PACK_THRESHOLD=1
+git -C "$W" push -q origin main
+git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
+git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
+gg site push >/dev/null
+unset GITSOCIAL_S3_PACK_THRESHOLD
+
+# The delta-resolution tests are vacuous unless a pack really carries a delta,
+# and whether git deltifies depends on content size. Fail the build here rather
+# than let the suite pass green on packs of whole objects.
+deltas=0
+for idx in "$served"/packed-demo/objects/pack/*.idx; do
+	[ -e "$idx" ] || continue
+	n=$(git verify-pack -v "$idx" | awk 'NF>=7 && ($2=="blob" || $2=="tree")' | wc -l)
+	deltas=$((deltas + n))
+done
+[ "$deltas" -gt 0 ] || { echo "packed-demo carries no deltified objects; the pack reader's delta path would go untested" >&2; exit 1; }
+
 echo "fixture built: $served"
-echo "  buckets: thread-demo, other-demo, interrupted-demo, healed-demo, partial-demo, extended-demo, sparse-demo, merged-demo"
+echo "  buckets: thread-demo, other-demo, interrupted-demo, healed-demo, partial-demo, extended-demo, sparse-demo, merged-demo, packed-demo"

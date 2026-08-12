@@ -8,15 +8,17 @@ const path = require("path");
 const crypto = require("crypto");
 
 // cacheControlFor mirrors the upload-time classification (objstore/cache_control.go):
-// content-addressed loose objects (objects/<xx>/<38-hex>), sealed shards of
-// either corpus (.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json,
-// content-hashed and written once), sealed HTML list pages (<type>/<n>.html),
-// sealed sitemap parts (sitemap-<n>.xml), and release artifact objects
-// (artifacts/<version>/<file>; the sibling artifacts/latest.txt stays mutable)
-// are immutable, every other served key revalidates. Derived from the URL so
-// the served bucket behaves like a real one at 127.0.0.1.
+// content-addressed loose objects (objects/<xx>/<38-hex>), packfiles and their
+// indexes (objects/pack/pack-<hash>.{pack,idx}), sealed shards of either corpus
+// (.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json, content-hashed and
+// written once), sealed HTML list pages (<type>/<n>.html), sealed sitemap parts
+// (sitemap-<n>.xml), and release artifact objects (artifacts/<version>/<file>;
+// the sibling artifacts/latest.txt stays mutable) are immutable, every other
+// served key revalidates. Derived from the URL so the served bucket behaves
+// like a real one at 127.0.0.1.
 function cacheControlFor(rel) {
-  const loose = /(?:^|\/)objects\/[0-9a-fA-F]{2}\/[0-9a-fA-F]{38}$/.test(rel);
+  const loose = /(?:^|\/)objects\/[0-9a-fA-F]{2}\/[0-9a-fA-F]{38}$/.test(rel)
+    || /(?:^|\/)objects\/pack\/pack-[0-9a-f]+\.(?:pack|idx)$/.test(rel);
   const shard = /\.gitsocial\/site\/(?:bodies|items)\/[^/]+\/shard-[0-9a-f]+\.json$/.test(rel);
   const sealedList = /(?:^|\/)(?:issues|prs|posts|releases|memos)\/\d+\.html$/.test(rel);
   const sealedSitemap = /(?:^|\/)sitemap-\d+\.xml$/.test(rel);
@@ -62,6 +64,19 @@ function createServer(root) {
       // Conditional GET: an unchanged object revalidates to 304, matching a real
       // bucket and exercising the reader's no-cache revalidation path.
       if (req.headers["if-none-match"] === etag) { res.writeHead(304, headers); res.end(); return; }
+      // Range GET: the reader pulls a packed object as one byte range of a
+      // packfile, so this must answer 206 with Content-Range like a real bucket.
+      const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers["range"] || "");
+      if (m) {
+        const start = Number(m[1]);
+        const end = m[2] === "" ? data.length : Math.min(Number(m[2]) + 1, data.length);
+        if (start < data.length && end > start) {
+          headers["Content-Range"] = "bytes " + start + "-" + (end - 1) + "/" + data.length;
+          res.writeHead(206, headers);
+          res.end(data.subarray(start, end));
+          return;
+        }
+      }
       res.writeHead(200, headers);
       res.end(data);
     });

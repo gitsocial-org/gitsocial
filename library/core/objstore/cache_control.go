@@ -22,10 +22,23 @@ const (
 // cacheControlForKey classifies a bucket key by mutability and returns the
 // Cache-Control value it must be stored (and served) with.
 func cacheControlForKey(key string) string {
-	if isLooseObjectKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) || isArtifactVersionKey(key) {
+	if isLooseObjectKey(key) || isPackKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) || isArtifactVersionKey(key) {
 		return cacheControlImmutable
 	}
 	return cacheControlRevalidate
+}
+
+// isPackKey reports whether a key is a packfile or its index
+// (`objects/pack/pack-<hash>.{pack,idx}`), matched at a path boundary. Packs are
+// named after their content and never rewritten, so they cache like loose
+// objects; the sibling `objects/info/packs` listing stays mutable.
+func isPackKey(key string) bool {
+	i := strings.Index(key, packKeyPrefix)
+	if i < 0 || (i > 0 && key[i-1] != '/') {
+		return false
+	}
+	name := key[i+len(packKeyPrefix):]
+	return strings.HasPrefix(name, "pack-") && (strings.HasSuffix(name, ".pack") || strings.HasSuffix(name, ".idx")) && !strings.Contains(name, "/")
 }
 
 // isArtifactVersionKey reports whether a key is a release artifact object

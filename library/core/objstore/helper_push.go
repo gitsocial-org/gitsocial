@@ -1,8 +1,9 @@
 // helper_push.go - push side of the s3:// remote helper
 //
-// Objects are uploaded loose (not packed): it keeps the bucket uniform with
-// the read path, uploads stay verbatim content-addressed copies, and gitmsg
-// pushes are small. Pack strategy is future work alongside repack.
+// A push either uploads its whole object delta as loose content-addressed keys
+// (small pushes, where a pack would cost the dumb walker more than it saves) or
+// as two packfiles (see pack.go). The two never mix for the same object: git's
+// dumb walker prefers loose and only falls back to objects/info/packs on a 404.
 //
 // Git invocations here use os/exec directly rather than core/git: the helper
 // runs as a child of git with GIT_DIR in its environment (no worktree path to
@@ -168,7 +169,17 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
 	// independent of the site.publish gate below, so a bucket-served repo clones
 	// and fetches with stock git over plain HTTPS even when the static site is off.
-	logDumbTransportInfo(h.client, h.prefix, refs)
+	// The local odb peels an annotated tag whose bucket copy is packed.
+	transportSrc := newLocalCommitSource(h.gitDir, "")
+	logDumbTransportInfo(h.client, h.prefix, transportSrc, refs)
+	transportSrc.close()
+	// Now that the bucket's refs are known, a HEAD left pointing at a ref the
+	// bucket does not carry can be repaired (ensureRemoteHEAD above cannot: it
+	// keeps any HEAD that is not a gitmsg branch).
+	h.repairDanglingHEAD(refs, head, branchPushed)
+	// Sealing packs already-loose history and, after a grace period, deletes the
+	// loose copies. Best-effort and self-rate-limited, like everything here.
+	h.maintainPacks(refs)
 	// The static site is gated on the PUSHED site.publish guard (the `site`
 	// sub-object of refs/gitmsg/core/config), the only enabler: without it a
 	// plain s3:// git remote stays clean, and a bucket whose site predates the
@@ -200,6 +211,9 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion, h.override)
 	}
 	shellUploaded := false
+	// manifestOK gates the marker below: the manifest is the read surface's only
+	// listing, and the marker is what decides whether a later push rewrites it.
+	manifestOK := true
 	if !upToDate {
 		// Shell first (creation on a guard-enabled bucket, or the self-refresh to
 		// this binary's embedded version), so a reader never sees data artifacts
@@ -208,7 +222,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 		if shellUploaded, err = ensureSiteShell(h.client, h.prefix); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
 		}
-		h.writeSiteManifest()
+		manifestOK = h.writeSiteManifest()
 		h.writeSitePMConfig()
 		h.writeSiteCustomization()
 	}
@@ -234,8 +248,12 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// runs — a stamped marker would make the next site pass skip it. Also withheld
 	// when a shell-upload reclaim of index.html FAILED: sitePagesState inspects the
 	// manifest/tips, not index.html's content, so a stamped marker would let the
-	// next push skip and leave index.html stranded as the embedded shell.
-	if !upToDate && reclaimOK {
+	// next push skip and leave index.html stranded as the embedded shell. And
+	// withheld when the refs manifest did not land, for the same reason: the
+	// marker is keyed on the refs digest, so stamping it would make every later
+	// push with these refs skip the rewrite and leave the site's only listing
+	// describing an older ref set.
+	if !upToDate && reclaimOK && manifestOK {
 		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override)
 		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
 			writeSitePushState(h.client, h.prefix, shellVersion, digest, pagesState)
@@ -244,21 +262,33 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 }
 
 // writeSiteManifest publishes refname → sha as the site refs manifest after
-// every push, so the static read surface discovers refs without bucket
-// listing (public domains don't expose it) and resolves generation-mode refs.
-// Best-effort: a stale manifest only degrades the site until the next push.
-func (h *remoteHelper) writeSiteManifest() {
+// every push, so the static read surface discovers refs without bucket listing
+// (public domains don't expose it) and resolves generation-mode refs. It reports
+// whether the manifest on the bucket now describes these refs.
+//
+// The caller must withhold the skip marker when it does not. The write itself is
+// still best-effort (a failed manifest never fails a push), but it does NOT
+// degrade only "until the next push": the marker is keyed on the refs digest, so
+// stamping it after a failed write makes every later push with the same refs
+// skip this block entirely, and the manifest stays stale until refs happen to
+// move again. On a quiet repo that is indefinite, and the symptom is silent — a
+// refname the manifest omits reads as an empty extension branch, which is why
+// the browser probes an omitted refname rather than trusting the omission
+// (gs-core.js refTip).
+func (h *remoteHelper) writeSiteManifest() bool {
 	refs := h.remoteRefs
 	if refs == nil {
 		var err error
 		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
-			return
+			return false
 		}
 	}
 	if err := putSiteManifest(h.client, h.prefix, refs); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
+		return false
 	}
+	return true
 }
 
 // writeSitePMConfig publishes the resolved PM board config after every push, so
@@ -680,6 +710,9 @@ func (h *remoteHelper) refModeFromCapability() (string, error) {
 		if capability, err = h.probeCapability(); err != nil {
 			return "", err
 		}
+		// Keep what the probe learned: the document rewrites on this push read
+		// it to decide whether a conditional update is worth attempting.
+		h.capability = capability
 	} else if err := h.probeCreateCAS(); err != nil {
 		// Declared capabilities still get the cheap create-CAS sanity check:
 		// a bucket that ignores conditional headers must be rejected loudly.
@@ -781,6 +814,36 @@ func (h *remoteHelper) ensureRemoteHEAD(branch string) {
 	_ = h.client.Put(h.prefix+"HEAD", []byte("ref: "+branch+"\n"))
 }
 
+// repairDanglingHEAD repoints a bucket HEAD whose target ref the bucket does not
+// carry, preferring the first candidate it does carry. A first push made from a
+// feature branch publishes that branch as HEAD, and when the branch itself is
+// never pushed the symref dangles: the browser reports no default branch, and
+// every route that resolves one falls back to a full history walk (measured at
+// 34x the fetches). Nothing repaired this before, since ensureRemoteHEAD keeps
+// any HEAD that is not a gitmsg branch, so the bucket stayed broken permanently.
+func (h *remoteHelper) repairDanglingHEAD(refs map[string]string, candidates ...string) {
+	cur, err := h.client.Get(h.prefix + "HEAD")
+	if err != nil {
+		return
+	}
+	target := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(cur)), "ref:"))
+	if target == "" || refs[target] != "" {
+		return
+	}
+	for _, candidate := range candidates {
+		// Never trade one dangling symref for another.
+		if candidate == "" || refs[candidate] == "" {
+			continue
+		}
+		if err := h.client.Put(h.prefix+"HEAD", []byte("ref: "+candidate+"\n")); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: repair HEAD: %v\n", err)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "gitsocial s3: HEAD pointed at %s, which this bucket does not carry; repointed to %s\n", target, candidate)
+		return
+	}
+}
+
 // localDefaultBranchRef returns the pushing repo's default branch ref (its HEAD
 // symref, e.g. "refs/heads/master") so the bucket advertises the real default —
 // not an assumed "main". Empty when HEAD is detached or unreadable.
@@ -832,7 +895,101 @@ func (h *remoteHelper) uploadMissingObjects(srcs []string) error {
 			add(line[:40])
 		}
 	}
-	return h.uploadObjects(shas)
+	stateShas, err := stateRefObjects(srcs)
+	if err != nil {
+		return err
+	}
+	return h.uploadDelta(shas, stateShas)
+}
+
+// stateRefObjects returns the objects reachable from the pushed state refs
+// (refs/gitmsg/*: the per-extension configs, list elements, fork and decline
+// markers). They stay loose even when the rest of the delta packs — site
+// maintenance and the browser read them straight off the bucket as loose keys,
+// and a state ref is only ever a handful of tiny objects. nil when the push
+// moves no state ref.
+func stateRefObjects(srcs []string) (map[string]bool, error) {
+	var stateSrcs []string
+	for _, src := range srcs {
+		if strings.HasPrefix(src, "refs/gitmsg/") {
+			stateSrcs = append(stateSrcs, src)
+		}
+	}
+	if len(stateSrcs) == 0 {
+		return nil, nil
+	}
+	out, err := gitOutput(append([]string{"rev-list", "--objects"}, stateSrcs...)...)
+	if err != nil {
+		return nil, fmt.Errorf("rev-list state refs: %w", err)
+	}
+	shas := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		if len(line) >= 40 {
+			shas[line[:40]] = true
+		}
+	}
+	return shas, nil
+}
+
+// uploadDelta uploads a push's object delta: packed once it is large enough to
+// pay for a pack (see pack.go), loose below that. State-ref objects always go
+// loose, so the packed and loose sets stay disjoint.
+func (h *remoteHelper) uploadDelta(shas []string, stateShas map[string]bool) error {
+	if len(shas) < resolvePackThreshold() {
+		for _, sha := range shas {
+			if !stateShas[sha] {
+				h.looseUploaded++
+			}
+		}
+		return h.uploadObjects(shas)
+	}
+	packable, loose := shas[:0:0], []string{}
+	for _, sha := range shas {
+		if stateShas[sha] {
+			loose = append(loose, sha)
+		} else {
+			packable = append(packable, sha)
+		}
+	}
+	if err := h.uploadPacked(packable); err != nil {
+		return err
+	}
+	return h.uploadObjects(loose)
+}
+
+// uploadPacked builds and uploads the two packs — commits and tags without
+// deltas (so a reader resolves a commit body from one byte range), trees and
+// blobs at git's default depth — publishes the commit byte ranges as the pack
+// map, and records every sha as present for this session. A pack past the
+// single-PUT ceiling falls back to loose objects rather than failing the push.
+func (h *remoteHelper) uploadPacked(shas []string) error {
+	if len(shas) == 0 {
+		return nil
+	}
+	h.progress.call("packing", 0, len(shas))
+	packs, err := buildDeltaPacks(shas)
+	if err != nil {
+		return err
+	}
+	// Size-check every pack BEFORE uploading any, so the fallback never leaves
+	// one half of the delta packed and the other half loose.
+	for _, built := range packs {
+		if len(built.pack) > maxPackUploadBytes {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: %s is %d bytes, past the single-PUT ceiling; uploading loose objects instead\n", built.name, len(built.pack))
+			h.looseUploaded += len(shas)
+			return h.uploadObjects(shas)
+		}
+	}
+	for i, built := range packs {
+		if err := publishPack(h.client, h.capability, h.prefix, built, resolveUploadConcurrency()); err != nil {
+			return err
+		}
+		h.progress.call("packs", i+1, len(packs))
+	}
+	for _, sha := range shas {
+		h.fetched[sha] = true
+	}
+	return nil
 }
 
 // remoteTipsPresentLocally resolves the remote's ref values and keeps those

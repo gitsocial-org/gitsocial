@@ -127,7 +127,7 @@ func TestWriteDumbTransportInfo_UpdateServerInfoParity(t *testing.T) {
 
 	client, _ := testClient(t)
 	refs := uploadRepoObjectsAndRefs(t, client, "", dir)
-	if err := writeDumbTransportInfo(client, "", refs); err != nil {
+	if err := writeDumbTransportInfo(client, "", nil, refs); err != nil {
 		t.Fatalf("writeDumbTransportInfo: %v", err)
 	}
 

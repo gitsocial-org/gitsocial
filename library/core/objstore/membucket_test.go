@@ -36,8 +36,15 @@ type memBucket struct {
 	lists     int             // ListObjectsV2 request count
 	failPuts  map[string]bool // keys whose PUT returns 500 (simulated hard error)
 	flakyPuts map[string]int  // keys whose next N PUTs return 500, then succeed
-	failGets  map[string]int  // keys whose GETs return 500 forever (>0 = armed)
-	flakyGets map[string]int  // keys whose next N GETs return 500, then succeed
+
+	// rejectIfMatch models a create-only provider (Ceph RGW, DO Spaces): every
+	// If-Match is refused with a 412 even when the ETag matches, while
+	// If-None-Match: * creates are still enforced. ifMatchTries counts every
+	// If-Match write the bucket saw, honored or not.
+	rejectIfMatch bool
+	ifMatchTries  int
+	failGets      map[string]int // keys whose GETs return 500 forever (>0 = armed)
+	flakyGets     map[string]int // keys whose next N GETs return 500, then succeed
 }
 
 // newMemBucket returns an empty in-memory bucket.
@@ -50,6 +57,14 @@ func (m *memBucket) failPut(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.failPuts[key] = true
+}
+
+// clearFailPut lets a key's PUTs succeed again, so a test can assert what the
+// pass AFTER a failure does.
+func (m *memBucket) clearFailPut(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.failPuts, key)
 }
 
 // flakyPut marks a bucket-relative key so its next n PUTs return HTTP 500,
@@ -74,6 +89,20 @@ func (m *memBucket) flakyGet(key string, n int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.flakyGets[key] = n
+}
+
+// rejectIfMatchWrites makes the bucket behave like a create-only provider.
+func (m *memBucket) rejectIfMatchWrites() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rejectIfMatch = true
+}
+
+// ifMatchCount returns how many If-Match writes the bucket saw.
+func (m *memBucket) ifMatchCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ifMatchTries
 }
 
 // putCount returns how many times a key (bucket-relative) was PUT.
@@ -185,9 +214,12 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(412)
 			return
 		}
-		if match := r.Header.Get("If-Match"); match != "" && (!exists || etag(existing.body) != match) {
-			w.WriteHeader(412)
-			return
+		if match := r.Header.Get("If-Match"); match != "" {
+			m.ifMatchTries++
+			if m.rejectIfMatch || !exists || etag(existing.body) != match {
+				w.WriteHeader(412)
+				return
+			}
 		}
 		m.objs[key] = memObject{body: body, enc: r.Header.Get("Content-Encoding")}
 		m.puts[key]++

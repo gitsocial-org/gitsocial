@@ -3,9 +3,11 @@
 // Implements the gitremote-helpers(7) line protocol with the `fetch`
 // capability (object-graph level, dumb-transport shape): `list` reads one key
 // per ref plus HEAD, `fetch` walks the commit graph from the wanted tips and
-// downloads missing loose objects straight into GIT_DIR/objects. Objects are
-// stored in the bucket exactly as git loose objects (zlib, same 2/38 fan-out),
-// so downloads are verbatim copies and SHAs are never rewritten.
+// downloads missing objects straight into GIT_DIR/objects. Loose objects are
+// stored in the bucket exactly as git writes them (zlib, same 2/38 fan-out), so
+// downloads are verbatim copies and SHAs are never rewritten; a bucket whose
+// bulk history is packed instead has its packfiles pulled and indexed locally
+// once per session (see pack.go).
 package objstore
 
 import (
@@ -103,16 +105,20 @@ func hostAddressKind(authority string) (ipLiteral, loopback bool) {
 
 // remoteHelper holds the state for one helper invocation.
 type remoteHelper struct {
-	client     *Client
-	prefix     string
-	gitDir     string
-	fetched    map[string]bool   // object SHAs confirmed present this session
-	capability Capability        // provider's declared conditional-write support
-	refMode    string            // resolved lazily on first push (refModeETag/refModeGeneration)
-	remoteRefs map[string]string // ref state from list, kept current by push for the site manifest
-	leases     map[string]string // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
-	progress   Progress          // stderr progress hook (nil = silent)
-	override   SiteOverride      // per-remote site deployment overrides (read from git config)
+	client        *Client
+	prefix        string
+	gitDir        string
+	fetched       map[string]bool    // object SHAs confirmed present this session
+	capability    Capability         // provider's declared conditional-write support
+	refMode       string             // resolved lazily on first push (refModeETag/refModeGeneration)
+	remoteRefs    map[string]string  // ref state from list, kept current by push for the site manifest
+	leases        map[string]string  // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
+	progress      Progress           // stderr progress hook (nil = silent)
+	override      SiteOverride       // per-remote site deployment overrides (read from git config)
+	packsPulled   bool               // the bucket's packfiles were pulled into GIT_DIR this session
+	packObjects   map[string]bool    // object SHAs the pulled packfiles carry
+	looseUploaded int                // non-state objects THIS push uploaded loose (drives the seal trigger)
+	local         *localCommitSource // lazily-started local odb reader (packed-object bodies)
 }
 
 // clientForRemote builds the S3 client, key prefix, and provider capability
@@ -188,6 +194,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	}
 	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
 	defer pw.finish()
+	defer func() { h.local.close() }()
 
 	w := bufio.NewWriter(out)
 	defer w.Flush()
@@ -297,6 +304,12 @@ func (h *remoteHelper) list(w io.Writer) error {
 // fetch downloads the object graphs reachable from each requested tip.
 // Batch lines look like "fetch <sha> <refname>".
 func (h *remoteHelper) fetch(batch []string) error {
+	// A packed bucket serves bulk history as packfiles rather than loose keys,
+	// so pull them once up front: the walk then resolves those objects out of
+	// the local odb instead of 404ing on every one.
+	if err := h.ensurePacksLocal(); err != nil {
+		return err
+	}
 	for _, line := range batch {
 		parts := strings.Fields(line)
 		if len(parts) < 2 {
@@ -309,8 +322,92 @@ func (h *remoteHelper) fetch(batch []string) error {
 	return nil
 }
 
+// ensurePacksLocal downloads every packfile the bucket lists that GIT_DIR does
+// not already carry, indexes it with `git index-pack`, and records which objects
+// each contains. Handing the pack to git is the cheap way to read a packed
+// bucket from this side — git resolves the delta chains, unlike the browser
+// reader, which has to do it itself. Runs at most once per helper session.
+func (h *remoteHelper) ensurePacksLocal() error {
+	if h.packsPulled {
+		return nil
+	}
+	h.packsPulled = true
+	body, err := h.client.Get(h.prefix + packsKey)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", packsKey, err)
+	}
+	names := parseInfoPacks(body)
+	if len(names) == 0 {
+		return nil
+	}
+	dir := filepath.Join(h.gitDir, "objects", "pack")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	h.packObjects = map[string]bool{}
+	for _, name := range names {
+		idxPath := filepath.Join(dir, name+".idx")
+		if _, statErr := os.Stat(idxPath); statErr != nil {
+			if err := h.downloadPack(dir, name); err != nil {
+				return err
+			}
+		}
+		idx, err := os.ReadFile(idxPath)
+		if err != nil {
+			return fmt.Errorf("read pack index %s: %w", name, err)
+		}
+		entries, err := parsePackIdx(idx)
+		if err != nil {
+			return fmt.Errorf("pack %s: %w", name, err)
+		}
+		for _, entry := range entries {
+			h.packObjects[entry.sha] = true
+		}
+	}
+	return nil
+}
+
+// packSidecarSuffixes are the files `git index-pack` produces beside a pack:
+// the index it always writes, and the reverse index newer git versions add.
+var packSidecarSuffixes = []string{".pack", ".idx", ".rev"}
+
+// downloadPack fetches one packfile into GIT_DIR/objects/pack and builds its
+// index locally. It lands under a temporary name and is renamed into place only
+// once indexed, so an interrupted download never leaves git a pack it cannot
+// read, and no tmp-* leftover for `git fsck` to warn about.
+func (h *remoteHelper) downloadPack(dir, name string) error {
+	data, err := h.client.GetRetry(h.prefix + packKeyPrefix + name + ".pack")
+	if err != nil {
+		return fmt.Errorf("download %s: %w", name, err)
+	}
+	tmp := filepath.Join(dir, "tmp-gitsocial-"+name)
+	if err := os.WriteFile(tmp+".pack", data, 0644); err != nil {
+		return err
+	}
+	defer func() {
+		for _, suffix := range packSidecarSuffixes {
+			os.Remove(tmp + suffix)
+		}
+	}()
+	if _, err := gitOutput("index-pack", tmp+".pack"); err != nil {
+		return fmt.Errorf("index %s: %w", name, err)
+	}
+	for _, suffix := range packSidecarSuffixes {
+		if _, statErr := os.Stat(tmp + suffix); statErr != nil {
+			continue // .rev only exists on git versions that write one
+		}
+		if err := os.Rename(tmp+suffix, filepath.Join(dir, name+suffix)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // walkObject ensures the object and everything it references exist locally,
-// downloading missing loose objects from the bucket. Iterative DFS.
+// downloading missing objects from the bucket. Iterative DFS.
 func (h *remoteHelper) walkObject(sha string) error {
 	stack := []string{sha}
 	for len(stack) > 0 {
@@ -320,7 +417,7 @@ func (h *remoteHelper) walkObject(sha string) error {
 			continue
 		}
 		h.fetched[cur] = true
-		compressed, present, err := h.ensureObject(cur)
+		objType, body, present, err := h.ensureObject(cur)
 		if err != nil {
 			return err
 		}
@@ -329,7 +426,7 @@ func (h *remoteHelper) walkObject(sha string) error {
 			// assumed complete (same assumption git makes for haves).
 			continue
 		}
-		children, err := objectChildren(compressed, cur)
+		children, err := objectChildren(objType, body, cur)
 		if err != nil {
 			return err
 		}
@@ -338,69 +435,92 @@ func (h *remoteHelper) walkObject(sha string) error {
 	return nil
 }
 
-// ensureObject makes the loose object available in GIT_DIR/objects. Returns
-// the compressed bytes when it was downloaded, or present=true when the
-// object already existed locally.
-func (h *remoteHelper) ensureObject(sha string) (compressed []byte, present bool, err error) {
+// ensureObject makes the object available in GIT_DIR/objects and returns its
+// type and raw body when this session brought it in. present=true (with no
+// body) means the object was already in the local odb before this fetch, so its
+// graph is assumed complete.
+//
+// An object the bucket carries in a packfile is deliberately NOT "present": the
+// packs were pulled whole, but a pack need not close over its own references (an
+// older, smaller push may have left them loose), so the walk descends through it.
+func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, present bool, err error) {
 	if len(sha) != 40 {
-		return nil, false, fmt.Errorf("malformed object id %q", sha)
+		return "", nil, false, fmt.Errorf("malformed object id %q", sha)
 	}
 	rel := filepath.Join("objects", sha[:2], sha[2:])
 	local := filepath.Join(h.gitDir, rel)
 	if _, statErr := os.Stat(local); statErr == nil {
-		return nil, true, nil
+		return "", nil, true, nil
+	}
+	if h.packObjects[sha] {
+		if packedType, packedBody, ok := h.localOdb().typed(sha); ok {
+			return packedType, packedBody, false, nil
+		}
 	}
 	key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
 	data, err := h.client.Get(key)
 	if errors.Is(err, ErrNotFound) {
-		// The bucket is loose-object-only by design (the helper is its only
-		// writer); a missing object means a foreign or packed write.
-		return nil, false, fmt.Errorf("object %s missing from bucket: the s3 backend stores loose objects only — was the bucket written or repacked by a non-gitsocial tool?", sha)
+		return "", nil, false, fmt.Errorf("object %s missing from bucket: neither a loose key nor any packfile in objects/info/packs carries it — was the bucket written or repacked by a non-gitsocial tool?", sha)
 	}
 	if err != nil {
-		return nil, false, fmt.Errorf("download object %s: %w", sha, err)
+		return "", nil, false, fmt.Errorf("download object %s: %w", sha, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(local), 0755); err != nil {
-		return nil, false, err
+		return "", nil, false, err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(local), "obj-*")
 	if err != nil {
-		return nil, false, err
+		return "", nil, false, err
 	}
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
-		return nil, false, err
+		return "", nil, false, err
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmp.Name())
-		return nil, false, err
+		return "", nil, false, err
 	}
 	if err := os.Rename(tmp.Name(), local); err != nil {
 		os.Remove(tmp.Name())
-		return nil, false, err
+		return "", nil, false, err
 	}
-	return data, false, nil
+	objType, body, err = inflateLooseObject(data, sha)
+	return objType, body, false, err
 }
 
-// objectChildren inflates a loose object and returns the SHAs it references
-// (commit → tree + parents, tree → entries, tag → object, blob → none).
-func objectChildren(compressed []byte, sha string) ([]string, error) {
+// localOdb returns the helper's lazily-started `git cat-file --batch` reader on
+// GIT_DIR, used to read objects that arrived inside a downloaded packfile.
+func (h *remoteHelper) localOdb() *localCommitSource {
+	if h.local == nil {
+		h.local = newLocalCommitSource(h.gitDir, "")
+	}
+	return h.local
+}
+
+// inflateLooseObject inflates a loose object and splits its "<type> <size>\0"
+// header from the raw body.
+func inflateLooseObject(compressed []byte, sha string) (objType string, body []byte, err error) {
 	zr, err := zlib.NewReader(bytes.NewReader(compressed))
 	if err != nil {
-		return nil, fmt.Errorf("object %s: inflate: %w", sha, err)
+		return "", nil, fmt.Errorf("object %s: inflate: %w", sha, err)
 	}
 	raw, err := io.ReadAll(zr)
 	zr.Close()
 	if err != nil {
-		return nil, fmt.Errorf("object %s: inflate: %w", sha, err)
+		return "", nil, fmt.Errorf("object %s: inflate: %w", sha, err)
 	}
 	nul := bytes.IndexByte(raw, 0)
 	if nul < 0 {
-		return nil, fmt.Errorf("object %s: missing header", sha)
+		return "", nil, fmt.Errorf("object %s: missing header", sha)
 	}
-	objType, _, _ := strings.Cut(string(raw[:nul]), " ")
-	body := raw[nul+1:]
+	objType, _, _ = strings.Cut(string(raw[:nul]), " ")
+	return objType, raw[nul+1:], nil
+}
+
+// objectChildren returns the SHAs an object references (commit → tree +
+// parents, tree → entries, tag → object, blob → none).
+func objectChildren(objType string, body []byte, sha string) ([]string, error) {
 	switch objType {
 	case "blob":
 		return nil, nil

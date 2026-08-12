@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -53,7 +54,8 @@ func readEnc(path string) string {
 
 // cacheControlFor classifies a request key the way real buckets are stamped on
 // upload (see objstore/cache_control.go): content-addressed loose objects
-// (`objects/<xx>/<38-hex>`), sealed shards of either corpus
+// (`objects/<xx>/<38-hex>`), packfiles and their indexes
+// (`objects/pack/pack-<hash>.{pack,idx}`), sealed shards of either corpus
 // (`.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json`, content-hashed and
 // written once), sealed HTML list pages (`<type>/<n>.html`), sealed sitemap
 // parts (`sitemap-<n>.xml`), and release artifact objects
@@ -70,6 +72,11 @@ func cacheControlFor(key string) string {
 		}
 	}
 	file := key[strings.LastIndexByte(key, '/')+1:]
+	if j := strings.Index(key, "objects/pack/"); j >= 0 && (j == 0 || key[j-1] == '/') {
+		if strings.HasPrefix(file, "pack-") && (strings.HasSuffix(file, ".pack") || strings.HasSuffix(file, ".idx")) {
+			return "public, max-age=31536000, immutable"
+		}
+	}
 	if strings.Contains(key, ".gitsocial/site/bodies/") || strings.Contains(key, ".gitsocial/site/items/") {
 		if strings.HasPrefix(file, "shard-") && strings.HasSuffix(file, ".json") {
 			return "public, max-age=31536000, immutable"
@@ -136,6 +143,35 @@ func isDigits(s string) bool {
 		}
 	}
 	return true
+}
+
+// parseRange parses a single "bytes=<start>-[<end>]" header against an object
+// of the given size, returning a half-open [start, end) byte range. ok is false
+// for an absent, multi-range, or unsatisfiable header, which is served whole.
+func parseRange(header string, size int) (start, end int, ok bool) {
+	spec, found := strings.CutPrefix(strings.TrimSpace(header), "bytes=")
+	if !found || strings.Contains(spec, ",") {
+		return 0, 0, false
+	}
+	from, to, found := strings.Cut(spec, "-")
+	if !found || from == "" {
+		return 0, 0, false // suffix ranges ("-500") are not used by the reader
+	}
+	start, err := strconv.Atoi(from)
+	if err != nil || start >= size {
+		return 0, 0, false
+	}
+	end = size
+	if to != "" {
+		last, err := strconv.Atoi(to)
+		if err != nil {
+			return 0, 0, false
+		}
+		if end = last + 1; end > size {
+			end = size
+		}
+	}
+	return start, end, end > start
 }
 
 // isHex reports whether s is non-empty and all hex digits.
@@ -222,6 +258,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		// cheap round-trip the reader's no-cache mutable keys rely on.
 		if r.Header.Get("If-None-Match") == etag {
 			w.WriteHeader(304)
+			return
+		}
+		// Range GET: the browser reads a packed object as one byte range of a
+		// packfile, so a bucket must answer 206 with Content-Range (core S3 API,
+		// supported by every provider).
+		if start, end, ok := parseRange(r.Header.Get("Range"), len(body)); ok {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, len(body)))
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", end-start))
+			w.WriteHeader(206)
+			_, _ = w.Write(body[start:end])
 			return
 		}
 		_, _ = w.Write(body)

@@ -99,14 +99,264 @@
     return "objects/" + sha.slice(0, 2) + "/" + sha.slice(2);
   }
 
-  // getObject fetches, inflates, and caches one git object.
+  // getObject fetches, inflates, and caches one git object. A bucket may store
+  // an object loose or inside a packfile (never both, see documentation/S3.md),
+  // so both are tried; once a packed read has succeeded the pack path goes
+  // first, which is what keeps a pack-only bucket from paying a 404 per object.
   async function getObject(ctx, sha) {
     if (ctx.objects.has(sha)) return ctx.objects.get(sha);
-    const compressed = await fetchBytes(ctx.base, objectKey(sha));
-    if (compressed === null) { ctx.objects.set(sha, null); return null; }
-    const obj = parseLooseObject(await inflate(compressed));
-    ctx.objects.set(sha, obj);
-    return obj;
+    // The cache holds the in-flight PROMISE, not the resolved object: hydration
+    // runs CONCURRENCY workers, and two of them asking for the same sha before
+    // either resolves would otherwise both fetch it. Costlier now that a miss
+    // can mean a pack map shard plus a range read rather than one GET.
+    const pending = (async () => {
+      let obj = null;
+      if (ctx.packs.preferred) obj = await getPackedObject(ctx, sha);
+      if (obj === null) {
+        const compressed = await fetchBytes(ctx.base, objectKey(sha));
+        if (compressed !== null) obj = parseLooseObject(await inflate(compressed));
+      }
+      if (obj === null && !ctx.packs.preferred) {
+        obj = await getPackedObject(ctx, sha);
+        if (obj !== null) ctx.packs.preferred = true;
+      }
+      return obj;
+    })();
+    ctx.objects.set(sha, pending);
+    return pending;
+  }
+
+  // ---- Packfile reader ----
+  //
+  // Two entry points into a pack, by cost. A packed commit or tag is located by
+  // the pack map (.gitsocial/packmap/<xx>.json, one shard per two-hex sha
+  // prefix): the shard carries the exact byte range, so the read is one Range
+  // GET of a self-contained zlib stream — the commits pack is written with
+  // --depth=0, so a commit body never resolves a delta chain. Trees and blobs
+  // (file views, diffs) have no map and go through the pack index: fetch the
+  // .idx, binary-search the sha, then Range GET and resolve OFS_DELTA /
+  // REF_DELTA bases. Both artifacts are cached on the context, so a session
+  // pays for each at most once.
+
+  // fetchRange GETs a byte range of a bucket key, returning the bytes and the
+  // object's total size. end is exclusive; null means "to the end of the
+  // object". A server that ignores Range answers 200 with the whole body, which
+  // is sliced locally so the reader stays correct either way.
+  async function fetchRange(base, key, start, end) {
+    const spec = "bytes=" + start + "-" + (end === null ? "" : end - 1);
+    const res = await fetch(base + key, { headers: { Range: spec } });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error("GET " + key + " " + spec + ": " + res.status);
+    const body = new Uint8Array(await res.arrayBuffer());
+    const range = res.headers.get("Content-Range") || "";
+    const total = Number(range.slice(range.indexOf("/") + 1)) || 0;
+    if (res.status === 206) return { bytes: body, total };
+    return { bytes: body.subarray(start, end === null ? body.length : end), total: body.length };
+  }
+
+  // packNames lists the bucket's packs from objects/info/packs (git's own
+  // update-server-info listing), cached per context. Empty on an all-loose bucket.
+  async function packNames(ctx) {
+    if (ctx.packs.names) return ctx.packs.names;
+    const text = await fetchText(ctx.base, "objects/info/packs");
+    const names = [];
+    for (const line of (text || "").split("\n")) {
+      const m = /^P (pack-[0-9a-f]+)\.pack$/.exec(line.trim());
+      if (m) names.push(m[1]);
+    }
+    ctx.packs.names = names;
+    return names;
+  }
+
+  // packMapShard loads the pack map shard covering a sha (null when absent or
+  // written by another schema version), cached per context.
+  async function packMapShard(ctx, sha) {
+    const name = sha.slice(0, 2);
+    if (ctx.packs.maps.has(name)) return ctx.packs.maps.get(name);
+    const promise = (async () => {
+      const bytes = await fetchBytes(ctx.base, ".gitsocial/packmap/" + name + ".json");
+      if (bytes === null) return null;
+      try {
+        const doc = JSON.parse(new TextDecoder().decode(bytes));
+        return doc && doc.version === 1 && doc.offsets ? doc : null;
+      } catch (_) { return null; }
+    })();
+    ctx.packs.maps.set(name, promise);
+    return promise;
+  }
+
+  // parsePackIdx parses a v2 pack index into the sorted sha table plus each
+  // object's offset, and the offsets sorted ascending so an entry's end (and so
+  // its exact byte range) is the next entry's start.
+  function parsePackIdx(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (dv.getUint32(0) !== 0xff744f63 || dv.getUint32(4) !== 2) throw new Error("pack index: not a v2 index");
+    const count = dv.getUint32(8 + 255 * 4);
+    const shaStart = 8 + 256 * 4;
+    const ofsStart = shaStart + count * 20 + count * 4;
+    const bigStart = ofsStart + count * 4;
+    const offsets = new Array(count);
+    for (let i = 0; i < count; i++) {
+      const raw = dv.getUint32(ofsStart + i * 4);
+      offsets[i] = (raw & 0x80000000) ? Number(dv.getBigUint64(bigStart + (raw & 0x7fffffff) * 8)) : raw;
+    }
+    const sorted = offsets.slice().sort((a, b) => a - b);
+    return { count, shas: bytes.subarray(shaStart, shaStart + count * 20), offsets, sorted };
+  }
+
+  // packIdxFind returns the offset of a sha in a parsed index, or -1. The index
+  // is sorted by sha, so this is a binary search over its 20-byte sha table.
+  function packIdxFind(idx, sha) {
+    const want = new Uint8Array(20);
+    for (let i = 0; i < 20; i++) want[i] = parseInt(sha.slice(i * 2, i * 2 + 2), 16);
+    let lo = 0, hi = idx.count - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      let cmp = 0;
+      for (let i = 0; i < 20 && cmp === 0; i++) cmp = idx.shas[mid * 20 + i] - want[i];
+      if (cmp === 0) return idx.offsets[mid];
+      if (cmp < 0) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+  }
+
+  // packIdx fetches and parses one pack's index, cached per context.
+  async function packIdx(ctx, name) {
+    if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
+    const promise = (async () => {
+      const bytes = await fetchBytes(ctx.base, "objects/pack/" + name + ".idx");
+      return bytes === null ? null : parsePackIdx(bytes);
+    })();
+    ctx.packs.idx.set(name, promise);
+    return promise;
+  }
+
+  // packEntryEnd returns the exclusive end offset of the entry at offset,
+  // which is the next entry's start, or null for the last entry (whose data
+  // runs to the pack's 20-byte trailing checksum).
+  function packEntryEnd(idx, offset) {
+    const s = idx.sorted;
+    let lo = 0, hi = s.length - 1, at = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (s[mid] === offset) { at = mid; break; }
+      if (s[mid] < offset) lo = mid + 1; else hi = mid - 1;
+    }
+    if (at < 0 || at + 1 >= s.length) return null;
+    return s[at + 1];
+  }
+
+  // PACK_TYPES maps a pack entry's 3-bit type code to a git object type;
+  // 6 (OFS_DELTA) and 7 (REF_DELTA) are deltas and resolve against a base.
+  const PACK_TYPES = { 1: "commit", 2: "tree", 3: "blob", 4: "tag" };
+
+  // readPackEntry reads one pack entry's raw bytes, parses its type/size header
+  // and returns the inflated object, resolving a delta chain against its base.
+  // end is exclusive, or null for the last entry in the pack; the pack's size,
+  // learned from the first Range response, is remembered so later reads of that
+  // last entry need no extra request.
+  async function readPackEntry(ctx, name, offset, end) {
+    const key = "objects/pack/" + name + ".pack";
+    const known = ctx.packs.size.get(name) || 0;
+    if (end === null && known) end = known - 20;
+    const got = await fetchRange(ctx.base, key, offset, end === null ? null : end);
+    if (got === null) return null;
+    if (got.total) ctx.packs.size.set(name, got.total);
+    let raw = got.bytes;
+    if (end === null) raw = raw.subarray(0, raw.length - 20); // trailing pack checksum
+    let i = 0;
+    let b = raw[i++];
+    const type = (b >> 4) & 7;
+    while (b & 0x80) b = raw[i++];
+    if (type === 6) { // OFS_DELTA: base is at a negative offset from this entry
+      b = raw[i++];
+      let back = b & 0x7f;
+      while (b & 0x80) { b = raw[i++]; back = ((back + 1) << 7) | (b & 0x7f); }
+      const baseOffset = offset - back;
+      const idx = await packIdx(ctx, name);
+      const base = idx && await readPackEntry(ctx, name, baseOffset, packEntryEnd(idx, baseOffset));
+      if (!base) return null;
+      return { type: base.type, body: applyDelta(base.body, await inflate(raw.subarray(i))) };
+    }
+    if (type === 7) { // REF_DELTA: base named by sha, resolved like any object
+      let baseSha = "";
+      for (let b2 = 0; b2 < 20; b2++) baseSha += raw[i + b2].toString(16).padStart(2, "0");
+      i += 20;
+      const base = await getObject(ctx, baseSha);
+      if (!base) return null;
+      return { type: base.type, body: applyDelta(base.body, await inflate(raw.subarray(i))) };
+    }
+    if (!PACK_TYPES[type]) throw new Error("pack entry: unknown type " + type);
+    return { type: PACK_TYPES[type], body: await inflate(raw.subarray(i)) };
+  }
+
+  // applyDelta reconstructs an object from a base and git's delta encoding:
+  // two varint sizes, then copy-from-base (0x80) and insert-literal instructions.
+  // Sizes and copy offsets are assembled with 32-bit shifts, so a base or target
+  // at or above 2 GB would overflow. Git never deltifies objects that large
+  // (core.bigFileThreshold stops at 512 MB by default), and a browser could not
+  // hold one anyway.
+  function applyDelta(base, delta) {
+    let i = 0;
+    const varint = () => {
+      let value = 0, shift = 0, b;
+      do { b = delta[i++]; value |= (b & 0x7f) << shift; shift += 7; } while (b & 0x80);
+      return value;
+    };
+    varint(); // base size, implied by the base we already hold
+    const out = new Uint8Array(varint());
+    let at = 0;
+    while (i < delta.length) {
+      const cmd = delta[i++];
+      if (cmd & 0x80) {
+        let offset = 0, size = 0;
+        for (let bit = 0; bit < 4; bit++) if (cmd & (1 << bit)) offset |= delta[i++] << (bit * 8);
+        for (let bit = 0; bit < 3; bit++) if (cmd & (1 << (4 + bit))) size |= delta[i++] << (bit * 8);
+        if (size === 0) size = 0x10000;
+        out.set(base.subarray(offset, offset + size), at);
+        at += size;
+      } else if (cmd) {
+        out.set(delta.subarray(i, i + cmd), at);
+        at += cmd;
+        i += cmd;
+      } else {
+        throw new Error("pack delta: reserved instruction 0");
+      }
+    }
+    // A short instruction stream would otherwise return a silently zero-padded
+    // object: the allocation comes from the delta's own target-size varint, so
+    // only this check ties the reconstruction back to it.
+    if (at !== out.length) throw new Error("pack delta: reconstructed " + at + " of " + out.length + " bytes");
+    return out;
+  }
+
+  // getPackedObject resolves one object out of the bucket's packfiles: the pack
+  // map first (commits and tags, one Range GET), then each pack's index for
+  // everything else. null when no pack carries the sha.
+  async function getPackedObject(ctx, sha) {
+    const map = await packMapShard(ctx, sha);
+    const at = map && map.offsets[sha];
+    if (at) {
+      const name = map.packs[at[0]];
+      if (name) return readPackEntry(ctx, name, at[1], at[1] + at[2]);
+    }
+    // Trees and blobs have no map entry, so the packs are probed by index. Try
+    // the pack that answered last first: content reads cluster (a file view walks
+    // one commit's tree), and every other pack probed costs a whole .idx download
+    // before it can be ruled out. Sealing rounds accumulate packs over a bucket's
+    // life, so the probe order is what keeps a cold file view from paying for all
+    // of them.
+    const names = await packNames(ctx);
+    const ordered = ctx.packs.lastHit ? [ctx.packs.lastHit, ...names.filter((n) => n !== ctx.packs.lastHit)] : names;
+    for (const name of ordered) {
+      const idx = await packIdx(ctx, name);
+      if (!idx) continue;
+      const offset = packIdxFind(idx, sha);
+      if (offset < 0) continue;
+      ctx.packs.lastHit = name;
+      return readPackEntry(ctx, name, offset, packEntryEnd(idx, offset));
+    }
+    return null;
   }
 
   // parseCommit turns a commit object into structured fields plus its clean
@@ -1262,7 +1512,11 @@
     // reflected in the other on the next render (both key by full repo path).
     // walks caches resumable history walks per ext/branch (see walkStateFor) so
     // "Load more" and deep lookups accumulate across a session, not per view.
-    return { base, objects: new Map(), treeExpanded: new Set(), walks: {} };
+    // packs caches the bucket's packfile reader state (the objects/info/packs
+    // listing, pack map shards, parsed indexes, and each pack's size) so a
+    // session pays for each artifact at most once; preferred flips once a packed
+    // read has succeeded, so a pack-only bucket stops trying the loose key first.
+    return { base, objects: new Map(), treeExpanded: new Set(), walks: {}, packs: { names: null, maps: new Map(), idx: new Map(), size: new Map(), preferred: false, lastHit: null } };
   }
 
   // ---- Trees, paths, branches (DOM-free, testable) ----
@@ -3922,8 +4176,8 @@
   function iconColorClass(key) { return ICON_COLOR[key] || ""; }
 
   const core = {
-    deriveBase, fetchBytes, fetchText, inflate, parseLooseObject, objectKey,
-    getObject, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
+    deriveBase, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
+    getObject, getPackedObject, packNames, packMapShard, packIdx, packIdxFind, parsePackIdx, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
     feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
