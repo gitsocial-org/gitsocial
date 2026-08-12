@@ -541,7 +541,7 @@ func TestSitePages_StylesheetShipsOnEveryPass(t *testing.T) {
 	if pending, _ := buildPages(t, client); pending {
 		t.Fatal("unexpected pending")
 	}
-	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
 		t.Fatal("full regen must write the current stylesheet")
 	}
 	// Stale stylesheet (what an older binary left behind) + an incremental pass.
@@ -556,7 +556,7 @@ func TestSitePages_StylesheetShipsOnEveryPass(t *testing.T) {
 	if pending, _ := buildPages(t, client); pending {
 		t.Fatal("unexpected pending")
 	}
-	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
 		t.Error("an incremental pass must refresh the stylesheet")
 	}
 	// And the cheapest path of all: nothing moved, so the pass only reclaims the
@@ -566,7 +566,7 @@ func TestSitePages_StylesheetShipsOnEveryPass(t *testing.T) {
 	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("no-op pass pending=%v state=%q", pending, state)
 	}
-	if got := getKey(t, client, sitePagesCSSKey); got != sitePagesCSS {
+	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
 		t.Error("a no-op (reclaim) pass must refresh the stylesheet")
 	}
 	if bucket.putCount(sitePagesCSSKey) != puts+1 {

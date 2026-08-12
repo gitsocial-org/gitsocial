@@ -108,10 +108,10 @@ func TestSiteCommits_SealedLayoutAndRows(t *testing.T) {
 	// The row shape IS the feature: a stable id per row, the subject linking into
 	// the app's commit view, and author/date/sha as indexable text.
 	newest := shas[229][:12]
-	if !strings.Contains(head, `<li id="c-`+newest+`">`) {
+	if !strings.Contains(head, `<div class="card" id="c-`+newest+`">`) {
 		t.Errorf("row must carry its citable anchor id c-%s", newest)
 	}
-	if !strings.Contains(head, `<a href="../index.html#commit:`+newest+`@main">commit 229</a>`) {
+	if !strings.Contains(head, `<a class="subject" href="../index.html#commit:`+newest+`@main">commit 229</a>`) {
 		t.Error("row subject must link into the app's commit view on the default branch")
 	}
 	if !strings.Contains(head, `<span class="meta">Test User · 1970-01-01 · `+newest+`</span>`) {

@@ -52,7 +52,7 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 	if err := uploadSiteFiles(client, "repo/"); err != nil {
 		t.Fatalf("uploadSiteFiles: %v", err)
 	}
-	if err := putSitePagesCSS(client, "repo/"); err != nil {
+	if err := putSitePagesCSS(client, "repo/", siteCustomization{}); err != nil {
 		t.Fatalf("putSitePagesCSS: %v", err)
 	}
 	names, err := siteFileNames()
@@ -76,7 +76,7 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 		}
 		assertStoredBrotli(t, client, bucket, key, raw)
 	}
-	assertStoredBrotli(t, client, bucket, "repo/"+sitePagesCSSKey, []byte(sitePagesCSS))
+	assertStoredBrotli(t, client, bucket, "repo/"+sitePagesCSSKey, sitePagesCSSFor(siteCustomization{}))
 
 	markerKey := "repo/" + siteVersionKey
 	if enc := bucket.encOf(markerKey); enc != "" {

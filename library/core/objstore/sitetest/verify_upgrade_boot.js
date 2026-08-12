@@ -796,7 +796,7 @@ async function main() {
     // the app's own timeline route once upgraded.
     const appMore = findClass(view, "show-more").filter((n) => /See more/.test(global.__shim.textOf(n)));
     ok("home view closes the section with a See more control", appMore.length === 1 && appMore[0].getAttribute("href") === "#/timeline", "n=" + appMore.length + " href=" + (appMore[0] && appMore[0].getAttribute("href")));
-    ok("front page closes the section with the same label over a crawlable page", /<p class="meta"><a href="\.\/posts\/index\.html">See more<\/a><\/p>/.test(section), "tail=" + section.slice(-220));
+    ok("front page closes the section with the same affordance over a crawlable page", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon">⌄<\/span><span class="show-more-label">See more<\/span><\/a>/.test(section), "tail=" + section.slice(-220));
     ok("that page is the one the app maps back to /timeline", UP.hashForPath(base, base + "posts/index.html") === "#/timeline");
   }
 
@@ -810,7 +810,7 @@ async function main() {
     const page = await get(base + "commits/index.html");
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(page.text));
-    const rows = [...page.text.matchAll(/<li id="(c-[0-9a-f]{12})"><a href="([^"]+)">([\s\S]*?)<\/a><br>\s*<span class="meta">([^<]*)<\/span><\/li>/g)]
+    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([^<]*)<\/span><\/div>/g)]
       .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4]) }));
     ok("commits page lists rows", rows.length > 0, "rows=" + rows.length);
     // Every row is a citable place: an id a URL can name, and a subject linking

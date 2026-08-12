@@ -24,7 +24,10 @@
 //     (sitePageParas) — do not route them through here without redoing that
 //     threat model.
 //
-// The visual spec is the prototype set in .local/lite/.
+// The visual spec is the app's own sheet, site/pages-app.css (plus the
+// doctrines in its comments): the generated pages converge toward the app's
+// treatment, never the other way. (The .local/lite/ prototypes this layer
+// started from are superseded — see .local/lite/DEPRECATED.md.)
 
 package objstore
 
@@ -148,6 +151,12 @@ func siteSitemapPartSizeFromEnv() int {
 // would bound the content box and the reserved gutter would be added outside it,
 // leaving the served page 284px wider than the app's shell and therefore
 // centered 142px to its left, with the text wrapping at a different measure.
+//
+// A configured accent and a stored theme choice never reach this layer: it
+// keeps the stock teal and the system palette on purpose. pages.css — which
+// carries the baked-in accent and the stored-theme gates — overrides both on
+// load, so the hardcoded values here are the documented degraded state a page
+// falls back to only when that stylesheet never arrives.
 const sitePagesInlineCSS = `*{box-sizing:border-box}body{margin:0;background:#f8eed5;color:#1a1a1a;font:20px/1.4 Georgia,serif}a{color:#008787}#gs-page{position:relative;max-width:1012px;margin:0 auto;padding:1.25rem 1.25rem 2rem calc(1.25rem + 220px + 1.5rem)}#gs-page>nav{position:absolute;left:1.25rem;top:1.25rem;width:220px;display:flex;flex-direction:column;align-items:flex-start;gap:.35rem}html.gs-boot #gs-page{display:none}html.gs-boot body::before{content:"Loading…";display:block;padding:2.5rem 0;text-align:center;color:#6f6552}@media (max-width:720px){#gs-page{padding:.75rem}#gs-page>nav{position:static;width:auto;flex-direction:row;flex-wrap:wrap;gap:.9rem;margin-bottom:.6rem}}@media (prefers-color-scheme:dark){body{background:#02041b;color:#c9d1d9}a{color:#00d7d7}html.gs-boot body::before{color:#7d8590}}`
 
 // sitePagesBootScript is the one inline script every page carries. It runs
@@ -177,74 +186,143 @@ const sitePagesInlineCSS = `*{box-sizing:border-box}body{margin:0;background:#f8
 // this script. The fragment test mirrors the route grammar's two shapes (a path
 // route past "/", or a <reftype>:<value> route) rather than restating parseRoute:
 // anything else is a bare anchor, which rides along on the page's own route.
+//
+// It also stamps the app's stored theme choice on <html> before first paint:
+// the shell's theme toggle persists localStorage "theme" as "light-mode"/
+// "dark-mode" (site/index.html, gs-upgrade.js), and pages.css gates its dark
+// palette on exactly these classes with prefers-color-scheme as the no-choice
+// fallback — so a visitor who picked a theme in the app gets the pages in that
+// theme with no flip at boot, and a no-JS client keeps the system theme.
 const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
+	`try{var t=w.localStorage.getItem("theme");if(t==="dark-mode"||t==="light-mode")e.classList.add(t)}catch(x){}` +
 	`var m=d.querySelector('meta[name="gs-route"]');var r=m?m.getAttribute("content"):"";` +
 	`var h=w.location.hash||"";var deep=/^#\/.+/.test(h)||/^#[a-z][a-z-]*:/.test(h);` +
 	`if(r!=="/"||deep)e.classList.add("gs-boot");` +
 	`function u(){if(!w.__gsBooting)e.classList.remove("gs-boot")}` +
 	`setTimeout(u,10000);w.addEventListener("load",u)})(document,window)</script>`
 
-// sitePagesCSS is the full look (chips, sections, thread styling, lists, nav,
-// pre), served once as pages.css and shared by every page. It also delivers the
-// webfonts (SIL OFL 1.1) — EB Garamond as one variable file, IBM Plex Mono as
-// four static weights a browser downloads only when a page renders them: the
-// @font-face rules and the families live here rather than in the inline base so
-// a page whose pages.css fetch fails keeps reading in the system fallbacks, and
-// the shell's pages-app.css declares the identical faces — both sheets serve
-// from the prefix root, so one relative URL names one font object and the
-// browser fetches it once.
-const sitePagesCSS = `@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('fonts/eb-garamond.woff2') format('woff2')}
+// sitePagesDarkPalette is the pages' dark token set, stated once and spliced
+// into BOTH dark gates below (the stored-choice class and the media fallback)
+// so no value is maintained twice. The @ACCENT_DARK@ placeholder is the dark
+// accent slot sitePagesCSSFor fills.
+const sitePagesDarkPalette = `--bg:#02041b;--text:#c9d1d9;--link:@ACCENT_DARK@;--muted:#7d8590;--line:#1e2445;--panel:#080a21;--pre-bg:#0a0d26`
+
+// sitePagesCSSTemplate is the full look (chips, sections, thread styling,
+// lists, nav, pre), served once as pages.css and shared by every page. It also
+// delivers the webfonts (SIL OFL 1.1) — EB Garamond as one variable file, IBM
+// Plex Mono as four static weights a browser downloads only when a page renders
+// them: the @font-face rules and the families live here rather than in the
+// inline base so a page whose pages.css fetch fails keeps reading in the system
+// fallbacks, and the shell's pages-app.css declares the identical faces — both
+// sheets serve from the prefix root, so one relative URL names one font object
+// and the browser fetches it once.
+//
+// The palette resolves through custom properties on :root so one token set
+// carries three concerns at once: the configured accent is baked into --link at
+// push time (sitePagesCSSFor), the dark palette exists once (@DARK@ splices
+// sitePagesDarkPalette into both gates), and every derived tint follows via
+// color-mix exactly as the app's tokens do. Dark is gated the way the app's own
+// choice works: the boot script stamps the stored theme (localStorage "theme")
+// on <html>, html.dark-mode forces dark, html.light-mode forces light, and
+// prefers-color-scheme decides only when no choice is stamped
+// (html:not(.light-mode)) — the no-JS fallback.
+//
+// The chip classes are the app's own vocabulary (pages-app.css): .chip.state
+// fills, the milestone/sprint lifecycle fills (WCAG-AA solid hexes, per the
+// app's comment), .chip.reviewer-chip verdict tints, .chip.chip-retracted —
+// the builders below emit these, never a pages-only class.
+const sitePagesCSSTemplate = `@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('fonts/eb-garamond.woff2') format('woff2')}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/ibm-plex-mono.woff2') format('woff2')}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/ibm-plex-mono-medium.woff2') format('woff2')}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/ibm-plex-mono-semibold.woff2') format('woff2')}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/ibm-plex-mono-bold.woff2') format('woff2')}
-body{font-family:'EB Garamond',Georgia,serif}
-h1{font-size:1.45rem;line-height:1.25;margin:.3rem 0 .2rem}
+:root{--bg:#f8eed5;--text:#1a1a1a;--link:@ACCENT@;--muted:#6f6552;--line:#d8cbaa;--panel:#f1e8cf;--pre-bg:#f2e5c6;--open:#1f9d55;--closed:#8957e5;--merged:#8250df;--warn:#bf8700;--danger:#cf222e;--chip:color-mix(in srgb,var(--text) 9%,transparent);--card-line:color-mix(in srgb,var(--text) 18%,transparent)}
+html.dark-mode{@DARK@}
+@media (prefers-color-scheme:dark){html:not(.light-mode){@DARK@}}
+body{font-family:'EB Garamond',Georgia,serif;background:var(--bg);color:var(--text)}
+a{color:var(--link)}
+h1{font-size:1.6rem;line-height:1.25;margin:.3rem 0 .2rem}
 h2{font-size:1.1rem;line-height:1.25;margin:.2rem 0 .4rem}
-nav,.meta,.chip,pre,code,footer{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace}
+nav,.chip,pre,code,footer,.show-more{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace}
 nav,footer{font-size:.72rem}
 nav a,nav b,footer a{margin-right:.9rem}
 #gs-page>nav a,#gs-page>nav b{margin-right:0}
 @media (max-width:720px){#gs-page>nav a,#gs-page>nav b{margin-right:.9rem}}
-.meta{font-size:.75rem;color:#6f6552}
-.chip{font-size:.7rem;padding:0 .35rem;border:1px solid;border-radius:9px;white-space:nowrap}
-.open{color:#1f9d55}
-.closed{color:#8957e5}
-.merged{color:#8250df}
-.prerel{color:#bf8700}
-.code,.draft{color:#6f6552}
-.approve{color:#1f9d55}
-.changes{color:#cf222e}
-.tomb{color:#6f6552;font-style:italic}
-section{border-top:1px solid #d8cbaa;margin-top:1.4rem;padding-top:.9rem}
+.meta{font-size:.8rem;color:var(--muted)}
+.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:.05rem .5rem;font-size:.8rem;font-weight:500;color:var(--muted);white-space:nowrap}
+.chip.state{color:#fff}
+.chip.open{background:var(--open)}
+.chip.closed{background:var(--closed)}
+.chip.merged{background:var(--merged)}
+.chip.pre{background:var(--warn)}
+.chip.active{background:#1f6feb}
+.chip.completed{background:var(--open)}
+.chip.planned{background:#6b7280}
+.chip.canceled,.chip.unknown{background:#6e7681}
+.chip.reviewer-chip{color:var(--text)}
+.chip.reviewer-chip.fb-approved{background:color-mix(in srgb,var(--open) 20%,transparent)}
+.chip.reviewer-chip.fb-changes-requested{background:color-mix(in srgb,var(--danger) 20%,transparent)}
+.chip.chip-retracted{background:color-mix(in srgb,var(--danger) 20%,transparent);color:var(--text)}
+.tomb{color:var(--muted);font-style:italic}
+section{border-top:1px solid var(--line);margin-top:1.4rem;padding-top:.9rem}
 p{margin:.7rem 0}
-pre{font-size:.72rem;line-height:1.45;overflow-x:auto;background:#f2e5c6;padding:.7rem;border:1px solid #d8cbaa}
-ol.items{list-style:none;padding:0;margin:1rem 0}
-ol.items li{border-top:1px solid #d8cbaa;padding:.55rem 0}
+pre{font-size:.72rem;line-height:1.45;overflow-x:auto;background:var(--pre-bg);padding:.7rem;border:1px solid var(--line)}
 ul.files{list-style:none;padding:0;margin:1rem 0;font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;font-size:.8rem}
-ul.files li{border-top:1px solid #d8cbaa;padding:.4rem 0}
-.card{border:1px solid #d8cbaa;border-radius:8px;padding:.55rem .7rem;margin:.6rem 0}
-.card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .45rem}
+ul.files li{border-top:1px solid var(--line);padding:.4rem 0}
+.card{background:var(--panel);border:1px solid var(--card-line);border-radius:10px;padding:.75rem .9rem;margin:0 0 .7rem;transition:border-color .12s ease,background .12s ease}
+.card:hover{border-color:color-mix(in srgb,var(--link) 45%,var(--card-line));background:var(--chip)}
+.card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .4rem}
 .card-head .subject{flex:1 1 0;min-width:0;font-weight:600}
 .card .meta{display:block;margin-top:.25rem;margin-left:1.75rem}
-.type-glyph{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;font-size:.8rem;width:1.1em;text-align:center;color:#6f6552}
-.type-glyph.tg-open{color:#1f9d55}
-.type-glyph.tg-closed{color:#8957e5}
-.type-glyph.tg-merged{color:#8250df}
-footer{margin-top:2.2rem;border-top:1px solid #d8cbaa;padding-top:.8rem}
+.show-more{display:flex;flex-direction:column;align-items:center;gap:.1rem;width:100%;margin-top:.5rem;padding:.35rem;font-size:.8rem;color:var(--muted);text-decoration:none}
+.show-more:hover{color:var(--text);text-decoration:none}
+.type-glyph{display:inline-block;width:1.1em;text-align:center;line-height:1;vertical-align:middle;font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;color:var(--muted)}
+.type-glyph.tg-open{color:var(--open)}
+.type-glyph.tg-closed{color:var(--closed)}
+.type-glyph.tg-merged{color:var(--merged)}
+footer{margin-top:2.2rem;border-top:1px solid var(--line);padding-top:.8rem}
 .markdown{word-break:break-word}
 .markdown h1,.markdown h2,.markdown h3,.markdown h4{margin:1rem 0 .5rem;line-height:1.2}
 .markdown ul,.markdown ol{margin:.6rem 0 .6rem 1.4rem;padding:0}
 .markdown li{margin:.2rem 0}
 .markdown li.task{list-style:none;margin-left:-1.1rem}
 .markdown img{max-width:100%;height:auto}
-.markdown hr{border:0;border-top:1px solid #d8cbaa}
-.markdown blockquote{margin:.6rem 0;padding:0 .8rem;border-left:3px solid #d8cbaa;color:#6f6552}
+.markdown hr{border:0;border-top:1px solid var(--line)}
+.markdown blockquote{margin:.6rem 0;padding:0 .8rem;border-left:3px solid var(--line);color:var(--muted)}
 .markdown table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%;margin:.8rem 0;font-size:.85rem}
-.markdown th,.markdown td{border:1px solid #d8cbaa;padding:.3rem .6rem;text-align:left}
+.markdown th,.markdown td{border:1px solid var(--line);padding:.3rem .6rem;text-align:left}
 .markdown div[align=center],.markdown center{text-align:center}
-@media (prefers-color-scheme:dark){.meta,.code,.draft,.tomb,.type-glyph,.markdown blockquote{color:#7d8590}pre{background:#0a0d26;border-color:#1e2445}section,ol.items li,ul.files li,.card,footer,.markdown hr,.markdown blockquote,.markdown th,.markdown td{border-color:#1e2445}}
 `
+
+// sitePagesCSS is the pages' stylesheet template with the dark palette spliced
+// (still carrying the @ACCENT@/@ACCENT_DARK@ slots): the layer's stable
+// identity, which is what the shell version hash covers — the accent is site
+// DATA, filled per push by sitePagesCSSFor, never part of the binary identity.
+var sitePagesCSS = strings.ReplaceAll(sitePagesCSSTemplate, "@DARK@", sitePagesDarkPalette)
+
+// sitePagesAccent / sitePagesAccentDark are the pages' stock teal accents (the
+// app's own :root/--link values), standing in when the site config sets none.
+const (
+	sitePagesAccent     = "#008787"
+	sitePagesAccentDark = "#00d7d7"
+)
+
+// sitePagesCSSFor renders pages.css with the configured accent baked in at push
+// time, mirroring the app's applyAccent (gs-app.js) exactly: a configured
+// accent tints both themes, accentDark — when set — tints the dark theme
+// separately, and no configuration leaves the stock teals. cfg's fields are
+// already validated (readSiteCustomization drops malformed values), so the
+// spliced strings are strict hex colors, never free text.
+func sitePagesCSSFor(cfg siteCustomization) []byte {
+	light, dark := sitePagesAccent, sitePagesAccentDark
+	if cfg.Accent != "" {
+		light, dark = cfg.Accent, cfg.Accent
+	}
+	if cfg.AccentDark != "" {
+		dark = cfg.AccentDark
+	}
+	return []byte(strings.NewReplacer("@ACCENT@", light, "@ACCENT_DARK@", dark).Replace(sitePagesCSS))
+}
 
 // sitePageTemplateText is the full template set. The shared "head" stamps the
 // common metadata plus the PE hooks (gs-route meta, the #gs-page mount div with
@@ -283,12 +361,10 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{define "foot"}}</div>
 </body>
 </html>
-{{end}}{{define "metaline"}}<p class="meta">{{if .Chip}}<span class="chip {{.Chip.Class}}">{{.Chip.Label}}</span> {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{define "entries"}}<ol class="items">
-{{range .}}<li{{if .ID}} id="{{.ID}}"{{end}}>{{if .Chip}}<span class="chip {{.Chip.Class}}">{{.Chip.Label}}</span> {{end}}<a href="{{.Href}}">{{.Title}}</a><br>
-<span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></li>
-{{end}}</ol>
-{{end}}{{define "item"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a></nav>
+{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a></div>
+<span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
+{{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a></nav>
 
 <h1>{{.Subject}}</h1>
 {{template "metaline" .}}
@@ -298,7 +374,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{else}}{{template "metaline" .}}
 {{if .Pre}}<pre>{{.Pre}}</pre>
 {{end}}{{template "paras" .Paras}}{{end}}</section>
-{{end}}{{if .Omitted}}<section><p class="meta">{{.Omitted}} more replies in the thread</p></section>
+{{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}index.html">home</a>{{range .Nav}} {{if .Current}}<b>{{.Label}}</b>{{else}}<a href="{{.Href}}">{{.Label}}</a>{{end}}{{end}}</nav>
 
@@ -321,7 +397,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{end}}{{if .Activity}}<section><h2>Recent activity</h2>
 {{range .Activity}}<div class="card"><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Type}}<span class="chip">{{.Type}}</span> {{end}}<a class="subject" href="{{.Href}}">{{.Subject}}</a></div>
 <span class="meta">{{.Author}} · {{.Date}}{{if .Sha}} · {{.Sha}}{{end}}</span></div>
-{{end}}{{if .ActivityMoreHref}}<p class="meta"><a href="{{.ActivityMoreHref}}">{{.ActivityMoreLabel}}</a></p>
+{{end}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon">⌄</span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
 {{end}}</section>
 {{end}}<footer>{{range .Nav}}<a href="{{.Href}}">{{.Label}}</a> {{end}}</footer>
 {{template "foot"}}{{end}}`
@@ -700,31 +776,43 @@ func sitePageStateClass(state string) string {
 	}
 }
 
+// sitePageChipStateClass maps a workflow state to the app's solid-fill chip
+// class, mirroring gs-render.js stateChip's map exactly (every known state gets
+// a fill so the white .chip.state text stays legible; anything else falls to
+// the slate "unknown" fill). A cancel state is matched by prefix for the same
+// misspell-linter reason as sitePageStateClass.
+func sitePageChipStateClass(state string) string {
+	if strings.HasPrefix(state, "cancel") {
+		return "canceled"
+	}
+	switch state {
+	case "open", "closed", "merged", "completed", "active", "planned":
+		return state
+	}
+	return "unknown"
+}
+
 // sitePageItemChip returns an item's leading state chip (nil when its type
-// carries none), matching the prototype chip vocabulary.
+// carries none), in the app's chip class vocabulary (gs-render.js stateChip and
+// the release/retracted chips), which sitePagesCSS styles to the app's
+// treatment. A draft PR is the app's plain unclassed chip.
 func sitePageItemChip(it *sitePageItem) *sitePageChip {
 	if it.Retracted {
-		return &sitePageChip{Class: "code", Label: "retracted"}
+		return &sitePageChip{Class: "chip-retracted", Label: "retracted"}
 	}
 	switch pageItemType(it) {
-	case "issue", "milestone", "sprint":
-		state := pageItemField(it, "state")
-		if state == "" {
-			state = "open"
-		}
-		return &sitePageChip{Class: sitePageStateClass(state), Label: state}
-	case "pull-request":
-		if pageItemField(it, "draft") == "true" {
-			return &sitePageChip{Class: "draft", Label: "draft"}
+	case "issue", "milestone", "sprint", "pull-request":
+		if pageItemType(it) == "pull-request" && pageItemField(it, "draft") == "true" {
+			return &sitePageChip{Label: "draft"}
 		}
 		state := pageItemField(it, "state")
 		if state == "" {
 			state = "open"
 		}
-		return &sitePageChip{Class: sitePageStateClass(state), Label: state}
+		return &sitePageChip{Class: "state " + sitePageChipStateClass(state), Label: state}
 	case "release":
 		if pageItemField(it, "prerelease") == "true" {
-			return &sitePageChip{Class: "prerel", Label: "pre-release"}
+			return &sitePageChip{Class: "pre state", Label: "prerelease"}
 		}
 	}
 	return nil
@@ -796,13 +884,16 @@ func siteItemPageMeta(it *sitePageItem) []string {
 }
 
 // sitePageFeedbackChip returns a feedback reply's review-state chip (nil for a
-// plain comment).
+// plain comment). The classes are the app's reviewer-chip verdict vocabulary
+// (.chip.reviewer-chip.fb-*) — its closest equivalent: the app has no bare
+// approved/changes chip of its own (verdicts ride reviewer chips and .fb-card
+// borders), so the pages borrow the reviewer-chip tint for the same states.
 func sitePageFeedbackChip(r *sitePageItem) *sitePageChip {
 	switch pageItemField(r, "review-state") {
 	case "approved":
-		return &sitePageChip{Class: "approve", Label: "approved"}
+		return &sitePageChip{Class: "reviewer-chip fb-approved", Label: "approved"}
 	case "changes-requested":
-		return &sitePageChip{Class: "changes", Label: "changes requested"}
+		return &sitePageChip{Class: "reviewer-chip fb-changes-requested", Label: "changes requested"}
 	}
 	return nil
 }

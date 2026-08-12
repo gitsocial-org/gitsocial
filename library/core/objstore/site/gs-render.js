@@ -2474,8 +2474,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const strip = el("div", { class: "review-summary-line" }, [
       el("span", { class: "meta" }, [summary.approved + " approved · " + summary.changesRequested + " changes requested · " + summary.pending + " pending"]),
     ]);
-    if (summary.isApproved) strip.append(el("span", { class: "chip state open" }, ["Ready to merge"]));
-    else if (summary.isBlocked) strip.append(el("span", { class: "chip state closed" }, ["Changes requested"]));
+    if (summary.isApproved) strip.append(el("span", { class: "chip state open" }, ["ready to merge"]));
+    else if (summary.isBlocked) strip.append(el("span", { class: "chip state closed" }, ["changes requested"]));
     wrap.append(strip);
     if (summary.reviewers.length) {
       const chips = el("div", { class: "review-chips" }, []);
@@ -4238,10 +4238,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // GRAPH_LANE_W / GRAPH_ROW_H / GRAPH_DOT_R set the graph gutter geometry: lane
   // horizontal pitch, per-row height, and the commit dot radius.
   const GRAPH_LANE_W = 18, GRAPH_ROW_H = 40, GRAPH_DOT_R = 4;
-  // GRAPH_LANE_COLORS cycles per-lane colors (theme-agnostic hues legible on both
-  // parchment and dark backgrounds); lane index mod length picks the color.
-  const GRAPH_LANE_COLORS = ["#008787", "#8957e5", "#1f9d55", "#bf8700", "#cf222e", "#1a85d4", "#d5512f", "#693acf"];
-  function graphLaneColor(lane) { return GRAPH_LANE_COLORS[lane % GRAPH_LANE_COLORS.length]; }
+  // GRAPH_LANE_VARS names the lane palette as the sheet's own tokens: each lane
+  // resolves from the computed custom properties at render time, so the gutter
+  // re-tints with the active theme (dark mode gets the dark --i-* hues) and with
+  // a configured accent (--link). The paired literals are the light-theme
+  // values, the fallback when resolution fails (headless DOM, no stylesheet).
+  const GRAPH_LANE_VARS = [
+    ["--link", "#008787"], ["--closed", "#8957e5"], ["--open", "#1f9d55"],
+    ["--warn", "#bf8700"], ["--danger", "#cf222e"], ["--i-blue", "#1a85d4"],
+    ["--i-vermilion", "#d5512f"], ["--i-indigo", "#693acf"],
+  ];
+  // graphLaneColors resolves the lane palette once per gutter render, off body
+  // (where the theme classes land, so the per-theme token values are in effect).
+  function graphLaneColors() {
+    let cs = null;
+    try {
+      if (typeof getComputedStyle === "function" && typeof document !== "undefined" && document.body) cs = getComputedStyle(document.body);
+    } catch (e) { cs = null; }
+    return GRAPH_LANE_VARS.map(([name, fallback]) => {
+      let v = "";
+      if (cs) { try { v = String(cs.getPropertyValue(name) || "").trim(); } catch (e) { v = ""; } }
+      return v || fallback;
+    });
+  }
 
   // buildGraphGutter draws the lane gutter for the assigned rows as one inline
   // SVG: a colored dot per commit at its lane, and a line from each commit down to
@@ -4249,6 +4268,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // elbow when it moves — a fork/merge). Edges to unloaded parents (past the
   // window) are omitted (the lane simply ends). Returns the <svg>.
   function buildGraphGutter(rows, laneCount) {
+    const laneColors = graphLaneColors();
+    const graphLaneColor = (lane) => laneColors[lane % laneColors.length];
     const width = Math.max(1, laneCount) * GRAPH_LANE_W;
     const height = rows.length * GRAPH_ROW_H;
     const svg = svgEl("svg", { class: "graph-gutter", width: String(width), height: String(height), viewBox: "0 0 " + width + " " + height, "aria-hidden": "true" }, []);

@@ -96,7 +96,22 @@ const (
 	// every page's head: item pages and sealed list pages are never rewritten
 	// outside a full regen, so without the bump a bucket would serve two
 	// different layouts depending on when each page was written.
-	sitePagesVersion = 10
+	// v11: a retracted item's chip class is its own `retracted` (the app's
+	// danger-tinted treatment) instead of reusing `code`, which read as a muted
+	// grey commit chip. Item pages and sealed list pages are never rewritten
+	// outside a full regen, so a v10 bucket would keep serving grey retracted
+	// chips forever without the bump.
+	// v12: the pages adopt the app's visual vocabulary in the frozen per-page
+	// layer: the boot script stamps the app's stored theme choice (localStorage
+	// "theme") on <html> so pages.css can hold a chosen theme with no flip at
+	// boot; list rows (type lists + commits) render the app's .card markup
+	// instead of bare ol.items li; chips carry the app's classes (.chip.state
+	// fills, .chip.reviewer-chip verdicts, .chip.chip-retracted, "prerelease");
+	// and the thread truncation marker takes the shared "… truncated" wording.
+	// All of it lives in heads and rows that item pages and sealed list pages
+	// keep forever without the bump, serving pre-app markup a pages.css that no
+	// longer styles it.
+	sitePagesVersion = 12
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -203,13 +218,15 @@ func putSitePage(client *Client, key string, page []byte) error {
 	return putSiteText(client, key, "text/html; charset=utf-8", page)
 }
 
-// putSitePagesCSS uploads the shared stylesheet, written before any page so no
+// putSitePagesCSS uploads the shared stylesheet — rendered with the pushed
+// config's accent baked in (sitePagesCSSFor) — written before any page so no
 // page ever references a missing subresource. Brotli-stored like the shell's own
 // stylesheet (putSiteAsset): a <link> subresource is fetched only by a browser
 // rendering the page, never by the scrapers the pages themselves must stay
-// plain for.
-func putSitePagesCSS(client *Client, prefix string) error {
-	return putSiteAsset(client, prefix+sitePagesCSSKey, sitePagesCSSKey, []byte(sitePagesCSS))
+// plain for. An accent change needs no page regen: this PUT happens on every
+// effective pass and pages.css is a no-cache key.
+func putSitePagesCSS(client *Client, prefix string, cfg siteCustomization) error {
+	return putSiteAsset(client, prefix+sitePagesCSSKey, sitePagesCSSKey, sitePagesCSSFor(cfg))
 }
 
 // sitePagesEffective resolves the HTML page layer's enablement from the
@@ -321,7 +338,7 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	// whose page set was already current kept serving the previous binary's CSS
 	// indefinitely, so a rule added for a new page element never arrived and its
 	// markup rendered unstyled. Cheap and unconditional beats correct-in-theory.
-	if err := putSitePagesCSS(client, prefix); err != nil {
+	if err := putSitePagesCSS(client, prefix, cfg); err != nil {
 		return false, "", err
 	}
 	home := readSiteFrontHome(src, site, refs, defaultBranch)

@@ -154,10 +154,10 @@ async function main() {
   // ---- H: polish round 14 — font-size token scale + breadcrumb tail icon ----
   // Token scale is defined on :root and rules resolve through it (source grep,
   // not computed style). At least nav/tree/chip/code rules must reference a token.
-  ok("H --fs-* token scale defined on :root", /--fs-ui:\s*0\.8rem/.test(HTML) && /--fs-code:\s*0\.8rem/.test(HTML) && /--fs-small:/.test(HTML) && /--fs-body:/.test(HTML) && /--fs-dense:/.test(HTML));
+  ok("H --fs-* token scale defined on :root", /--fs-ui:\s*0\.8rem/.test(HTML) && /--fs-code:\s*0\.8rem/.test(HTML) && /--fs-body:/.test(HTML) && /--fs-dense:/.test(HTML));
   ok("H nav rule references a --fs token", /#nav a[^}]*font-size:\s*var\(--fs-ui\)/.test(HTML));
   ok("H tree-row rule references a --fs token", /\.tree-row\s*\{[^}]*font-size:\s*var\(--fs-code\)/.test(HTML));
-  ok("H chip rule references a --fs token", /\.chip\s*\{[^}]*font-size:\s*var\(--fs-small\)/.test(HTML));
+  ok("H chip rule references a --fs token", /\.chip\s*\{[^}]*font-size:\s*var\(--fs-ui\)/.test(HTML));
   ok("H code/blob rule references a --fs token", /\.blob\s*\{[^}]*font-size:\s*var\(--fs-code\)/.test(HTML));
   ok("H raw-body styled as a code block (mono code scale + border + panel)", /\.raw-body\s*\{[^}]*font-size:\s*var\(--fs-code\)[^}]*border:\s*1px solid var\(--line\)/.test(HTML));
   // Every remaining literal font-size must be an intentional inline `em` survivor

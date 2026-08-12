@@ -45,19 +45,29 @@
      Derived tokens live on body, not :root: the toggle overrides the base
      tokens via a body class, and a var() inside a custom property resolves
      where the property is declared, so :root-level derivations would never
-     see the override. */
+     see the override.
+     Each palette literal exists exactly once: the light set as --pl-*, the
+     dark set as --pd-*, both declared here. The four theme blocks (media
+     default, body.dark-mode, body.light-mode) only remap the active tokens
+     onto one set or the other — the toggle mechanism itself is unchanged. */
   :root {
-    --bg: #f8eed5; --text: #1a1a1a; --link: #008787;
+    --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #008787;
+    --pd-bg: #02041b; --pd-text: #c9d1d9; --pd-link: #00d7d7;
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
     --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
-    --pre: #bf8700; --danger: #cf222e;
+    --warn: #bf8700; --danger: #cf222e;
     --serif: 'EB Garamond', Georgia, serif;
     --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
     /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
-       shade 600 for the light parchment, shade 400 (below) for the dark
-       background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so it
-       stays legible on the cream background (the only per-theme tuning). */
-    --i-cyan: #17a5af; --i-yellow: #a67c00; --i-orange: #d47628; --i-indigo: #693acf;
-    --i-green: #199f43; --i-blue: #1a85d4; --i-red: #d52c36; --i-vermilion: #d5512f;
+       shade 600 (--pl-*) for the light parchment, shade 400 (--pd-*) for the
+       dark background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so
+       it stays legible on the cream background (the only per-theme tuning). */
+    --pl-i-cyan: #17a5af; --pl-i-yellow: #a67c00; --pl-i-orange: #d47628; --pl-i-indigo: #693acf;
+    --pl-i-green: #199f43; --pl-i-blue: #1a85d4; --pl-i-red: #d52c36; --pl-i-vermilion: #d5512f;
+    --pd-i-cyan: #64d1db; --pd-i-yellow: #ffd452; --pd-i-orange: #ffa359; --pd-i-indigo: #9d6afb;
+    --pd-i-green: #5ecc71; --pd-i-blue: #69b1ff; --pd-i-red: #ff6762; --pd-i-vermilion: #ff8c5b;
+    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
+    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
     /* Font-size scale. Every font-size in this sheet resolves through one of
        these tokens, so a size tweak is a single edit. Two families share the
        same value on purpose (--fs-ui / --fs-code both 0.8rem: mono chrome vs
@@ -66,25 +76,38 @@
        0.7-0.76) collapse onto the nearest token. Inline `.markdown code`/`kbd`
        stay in `em` (they scale with surrounding text, not this global scale). */
     --fs-h1: 1.6rem; --fs-h2: 1.35rem; --fs-h3: 1.2rem; --fs-h4: 1.05rem;
-    --fs-body: 20px; --fs-lg: 0.95rem;
-    --fs-ui: 0.8rem; --fs-code: 0.8rem; --fs-small: 0.79rem; --fs-dense: 0.72rem;
+    --fs-body: 20px; --fs-md: 0.95rem;
+    --fs-ui: 0.8rem; --fs-code: 0.8rem; --fs-dense: 0.72rem;
+    /* Radius tiers: pill (chips, round controls), panel (bordered surfaces),
+       control (buttons, inputs). Ink-detail radii stay literal below the
+       control tier (≤4px highlight marks, swatches, bar caps, the 50% circle):
+       they are marks on content, not control surfaces. */
+    --r-pill: 999px; --r-panel: 10px; --r-ctl: 6px;
+    /* Surface padding pairs shared by comparable components: panel bodies,
+       rows inside panels, bordered controls. One-off layout paddings (dense
+       tree rows, the big load-more pill) stay local, as do margins/gaps. */
+    --pad-panel: 0.75rem 0.9rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
+    /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
+       span exactly the sidebar's width and sit at its horizontal position
+       without hardcoding. */
+    --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #02041b; --text: #c9d1d9; --link: #00d7d7;
-      --i-cyan: #64d1db; --i-yellow: #ffd452; --i-orange: #ffa359; --i-indigo: #9d6afb;
-      --i-green: #5ecc71; --i-blue: #69b1ff; --i-red: #ff6762; --i-vermilion: #ff8c5b;
+      --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+      --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
+      --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
     }
   }
   body.dark-mode {
-    --bg: #02041b; --text: #c9d1d9; --link: #00d7d7;
-    --i-cyan: #64d1db; --i-yellow: #ffd452; --i-orange: #ffa359; --i-indigo: #9d6afb;
-    --i-green: #5ecc71; --i-blue: #69b1ff; --i-red: #ff6762; --i-vermilion: #ff8c5b;
+    --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+    --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
+    --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
   }
   body.light-mode {
-    --bg: #f8eed5; --text: #1a1a1a; --link: #008787;
-    --i-cyan: #17a5af; --i-yellow: #a67c00; --i-orange: #d47628; --i-indigo: #693acf;
-    --i-green: #199f43; --i-blue: #1a85d4; --i-red: #d52c36; --i-vermilion: #d5512f;
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
+    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
+    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -96,17 +119,75 @@
     /* Subtle button surface: a slight shift off the page background so a normal
        (border + transparent) button reads as a control, not flat page. */
     --btn: color-mix(in srgb, var(--text) 5%, var(--bg));
+    /* Tint scale: three transparent-mix steps per hue (weak / mid / strong),
+       the fills every hue-tinted background resolves through. Mixes against
+       something other than transparent (hover borders, focus rings, Prism
+       hues) are relationships, not fills, and stay local. */
+    --link-t1: color-mix(in srgb, var(--link) 6%, transparent);
+    --link-t2: color-mix(in srgb, var(--link) 14%, transparent);
+    --link-t3: color-mix(in srgb, var(--link) 22%, transparent);
+    --danger-t1: color-mix(in srgb, var(--danger) 13%, transparent);
+    --danger-t2: color-mix(in srgb, var(--danger) 20%, transparent);
+    --danger-t3: color-mix(in srgb, var(--danger) 32%, transparent);
+    --open-t1: color-mix(in srgb, var(--open) 14%, transparent);
+    --open-t2: color-mix(in srgb, var(--open) 20%, transparent);
+    --open-t3: color-mix(in srgb, var(--open) 34%, transparent);
+    --warn-t1: color-mix(in srgb, var(--warn) 16%, transparent);
+    --warn-t2: color-mix(in srgb, var(--warn) 20%, transparent);
+    --warn-t3: color-mix(in srgb, var(--warn) 34%, transparent);
     min-height: 100vh; display: flex; flex-direction: column;
     background: var(--bg); color: var(--text);
     font: var(--fs-body)/1.4 var(--serif);
   }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  /* One shared keyboard-focus ring for native controls. The component :focus
+     rules keep their border-color shifts but no longer suppress the outline.
+     (Browsers treat a focused text input as :focus-visible, so inputs show the
+     ring on click-focus too — accepted.) */
+  :is(button, input):focus-visible { outline: 2px solid color-mix(in srgb, var(--link) 60%, transparent); outline-offset: 1px; }
+  /* Button system: three bases — bordered control, pill, and bare text — each
+     stated once; a component's own later rule carries only its deviations
+     (layout, a link color, an intentional size). */
+  .diff-btn, .version-diff-btn, .gran-btn, .pref-btn, .share-link, .fs-btn {
+    background: var(--btn); border: 1px solid var(--line); border-radius: var(--r-ctl);
+    padding: var(--pad-ctl); cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-ui); color: var(--muted); line-height: 1.2;
+  }
+  .diff-btn:hover, .version-diff-btn:hover, .gran-btn:hover, .pref-btn:hover,
+  .share-link:hover, .fs-btn:hover { color: var(--text); background: var(--chip); }
+  .pref-btn:hover, .share-link:hover { border-color: var(--link); }
+  /* .facet-chip rides the pill base for the shared recipe (border, radius,
+     cursor, mono voice) and keeps only its deviations at its own rule below
+     (flex layout for the count, chip fill, tighter padding, text color). */
+  .filter-chip, .load-more, .board-lane-jump, .facet-chip {
+    background: var(--btn); border: 1px solid var(--line); border-radius: var(--r-pill);
+    padding: 0.15rem 0.7rem; cursor: pointer; font-family: var(--mono);
+    font-size: var(--fs-ui); color: var(--muted); line-height: 1.2;
+  }
+  .filter-chip:hover, .load-more:hover, .board-lane-jump:hover { color: var(--text); background: var(--chip); }
+  .load-more:hover, .board-lane-jump:hover { border-color: var(--link); }
+  .view-toggle, .board-col-toggle, .board-col-hide, .show-more, .body-clamp-toggle,
+  .board-more, .facet-more {
+    background: transparent; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+  }
+  .view-toggle:hover, .board-col-toggle:hover, .board-col-hide:hover,
+  .show-more:hover, .body-clamp-toggle:hover { color: var(--text); }
+  /* One input recipe (in-page search, tree filter, contributor filter): mono at
+     the UI scale on the panel surface, one shared link-tinted focus shift. */
+  .search-input, .tree-search, .contrib-filter {
+    border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--panel);
+    color: var(--text); font-family: var(--mono); font-size: var(--fs-ui);
+  }
+  .search-input::placeholder, .tree-search::placeholder, .contrib-filter::placeholder { color: var(--muted); }
+  .search-input:focus, .tree-search:focus, .contrib-filter:focus { border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
+  /* Callout base: one bordered, rounded message box. .err is the danger
+     variant; .notice is neutral-informational (muted) — a notice that really
+     warns takes .notice-warn explicitly. */
+  .err, .notice { border: 1px solid var(--line); border-radius: var(--r-panel); }
   /* Two-panel shell echoing the TUI nav + content split. No header bar: the
-     theme control and the brand credit both live in the sidebar. Layout metrics
-     are tokenized so the fixed sidebar footer (below) can span exactly the
-     sidebar's width and sit at its horizontal position without hardcoding. */
-  :root { --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem; }
+     theme control and the brand credit both live in the sidebar. */
   .shell {
     flex: 1; width: 100%; max-width: var(--shell-max); margin: 0 auto;
     display: grid; grid-template-columns: var(--nav-w) 1fr; gap: var(--nav-gap);
@@ -142,11 +223,11 @@
   }
   .theme-icon:hover, .nav-collapse:hover { color: var(--text); }
   .theme-icon svg { width: 13px; height: 13px; display: block; }
-  .nav-collapse { font-family: var(--mono); font-size: var(--fs-lg); }
+  .nav-collapse { font-family: var(--mono); font-size: var(--fs-md); }
   .nav-handle {
     display: none; position: fixed; top: 0.75rem; left: 0.75rem; z-index: 6;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--muted); font-family: var(--mono); font-size: var(--fs-lg);
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-ctl);
+    color: var(--muted); font-family: var(--mono); font-size: var(--fs-md);
     padding: 0.25rem 0.5rem; cursor: pointer;
   }
   .nav-handle:hover { color: var(--text); background: var(--chip); }
@@ -172,16 +253,16 @@
   /* Nav items reuse the tree-row hover feel: a soft rounded chip tint. The
      active item is signaled by a stronger link-tinted fill + bolder text (the
      trees.software list style), NOT a left-border indicator. The whole sidebar
-     shares one voice: IBM Plex Mono at 0.8rem (repo title, nav links, glyphs,
-     footer), with the file tree kept a touch denser. */
+     shares one voice: IBM Plex Mono at 0.8rem (repo title, nav links, glyphs),
+     with the file tree and footer kept denser. */
   #nav a, #nav .nav-disabled {
-    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: 6px;
+    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: var(--r-ctl);
     font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
   }
   #nav a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
   #nav a.active {
     color: var(--text); font-weight: 600;
-    background: color-mix(in srgb, var(--link) 14%, transparent);
+    background: var(--link-t2);
   }
   /* Nav item icons mirror the TUI nav panel's per-item glyphs. Muted like the
      file-type icons, inheriting the item's hover/active color; a fixed box so
@@ -206,10 +287,17 @@
     margin-left: 0.4rem; opacity: 0.8;
   }
   .content { min-width: 0; }
+  /* Panel surface: the one bordered, rounded, panel-filled box every list-like
+     component shares; a component's own rule below carries only its deviations
+     (overflow mode, padding, margins). */
+  .tree-list, .blob, .blob-img, .diff-file, .asset-list, .contrib-list, .version-node {
+    border: 1px solid var(--line); border-radius: var(--r-panel);
+    overflow: hidden; background: var(--panel);
+  }
   /* Cards / items. */
   .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 0.75rem 0.9rem; margin: 0 0 0.7rem;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
+    padding: var(--pad-panel); margin: 0 0 0.7rem;
   }
   /* Whole-card navigation: the card links to its item detail, so it takes a
      pointer cursor and a tree-row-like hover (chip tint + link-tinted border).
@@ -219,7 +307,13 @@
     border-color: color-mix(in srgb, var(--link) 45%, var(--line));
     background: var(--chip);
   }
-  .card .subject { font-weight: 600; }
+  /* Subject scale: one semantic element, always weight 600, sized by context —
+     card = body size, detail = --fs-h1 (it is the page title), diff-head =
+     --fs-h4, board-card = --fs-ui. The size tiers live on the context rules
+     (.detail/.card here, diff-head and board-card at their own rules below);
+     cards nest inside .detail views, so the card tier is stated after the
+     detail tier to win the body size back. */
+  .subject { font-weight: 600; }
   /* Card head: glyph + state chip + subject + trailing chips on one baseline row,
      with a small gap so chips never touch (and the chip row aligns to the subject
      column). The leading glyph drops its own inline margin — the flex gap spaces
@@ -239,14 +333,9 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
     mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
   }
-  .body-clamp-toggle {
-    display: block; margin-top: 0.2rem; padding: 0.15rem 0;
-    background: transparent; border: none; cursor: pointer;
-    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
-  }
-  .body-clamp-toggle:hover { color: var(--text); }
-  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-left: 1.75rem}
-  .hash { font-family: var(--mono); font-size: var(--fs-small); color: var(--muted); }
+  .body-clamp-toggle { display: block; margin-top: 0.2rem; padding: 0.15rem 0; }
+  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-left: 1.75rem; }
+  .hash { font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted); }
   /* Type glyphs carry one consistent semantic scheme across every view (timeline,
      search, lists, board, milestones, detail): a state-bearing glyph (issue,
      pull-request) is colored by state (open/closed/merged), and every neutral TYPE
@@ -258,15 +347,15 @@
   .type-glyph.tg-closed { color: var(--closed); }
   .type-glyph.tg-merged { color: var(--merged); }
   .chip {
-    display: inline-block; background: var(--chip); border-radius: 999px;
-    padding: 0.05rem 0.5rem; font-size: var(--fs-small); color: var(--muted);
+    display: inline-block; background: var(--chip); border-radius: var(--r-pill);
+    padding: 0.05rem 0.5rem; font-size: var(--fs-ui); color: var(--muted);
     font-family: var(--mono); font-weight: 500;
   }
   .chip.state { color: #fff; }
   .chip.open { background: var(--open); }
   .chip.closed { background: var(--closed); }
   .chip.merged { background: var(--merged); }
-  .chip.pre { background: var(--pre); }
+  .chip.pre { background: var(--warn); }
   /* Milestone/sprint lifecycle state chips. Every state carries a solid fill so
      the white .chip.state text stays legible (an unmapped state would fall back
      to the translucent --chip background and vanish). Colors are chosen for
@@ -276,8 +365,7 @@
   .chip.active { background: #1f6feb; }
   .chip.completed { background: var(--open); }
   .chip.planned { background: #6b7280; }
-  .chip.canceled { background: #6e7681; }
-  .chip.unknown { background: #6e7681; }
+  .chip.canceled, .chip.unknown { background: #6e7681; }
   .empty, .loading { color: var(--muted); padding: 2.5rem 0; text-align: center; }
   /* Page-entry boot, second half (gs-upgrade.js). The boot reveals the chrome as
      soon as THIS sheet governs the page, well before the first view's data has
@@ -293,35 +381,29 @@
     color: var(--muted); padding: 2.5rem 0; text-align: center;
   }
   .err {
-    color: var(--danger); border: 1px solid var(--danger); border-radius: 8px;
-    padding: 0.75rem 0.9rem; background: color-mix(in srgb, var(--danger) 8%, transparent);
+    color: var(--danger); border-color: var(--danger);
+    padding: var(--pad-panel); background: var(--danger-t1);
   }
   .detail dl { margin: 0.6rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.9rem; }
   .detail dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
   .detail dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
-  .detail .subject { font-size: var(--fs-h3); margin-bottom: 0.3rem; }
+  .detail .subject { font-size: var(--fs-h1); margin-bottom: 0.3rem; }
+  .detail .card .subject, .card .subject { font-size: var(--fs-body); }
   .back { display: inline-block; margin-bottom: 0.8rem; color: var(--muted); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the copy-link/share control on the
      right, on one row so the share affordance never disturbs the meta line. */
   .detail-topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
   .detail-topbar .back { margin-bottom: 0.8rem; }
   .share-link {
-    flex: 0 0 auto; background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
-    padding: 0.15rem 0.6rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted); max-width: 100%; overflow: hidden;
+    flex: 0 0 auto; max-width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
-  .share-link:hover { color: var(--text); background: var(--chip); border-color: var(--link); }
   a.repo-title { color: var(--muted); }
   a.repo-title:hover { color: var(--text); text-decoration: none; }
   .mono { font-family: var(--mono); }
   /* File browser: breadcrumb, tree listing, blob view. */
   .breadcrumb { font-size: var(--fs-ui); margin-bottom: 0.8rem; word-break: break-all; }
   .breadcrumb a { color: var(--link); }
-  .tree-list {
-    border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
-    background: var(--panel);
-  }
   /* Rows use the code-block mono at the blob scale, no inter-row separators
      (the outer .tree-list border stays), so the browser reads like the blob.
      Compact vertical rhythm (trees.software density): ~1.6em line boxes. */
@@ -343,11 +425,9 @@
   .show-more {
     display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
     width: 100%; margin-top: 0.5rem; padding: 0.35rem;
-    background: transparent; border: none; cursor: pointer; color: var(--muted);
   }
-  .show-more:hover { color: var(--text); }
   .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
-  .show-more-label { font-size: var(--fs-small); }
+  .show-more-label { font-size: var(--fs-ui); }
   /* Home's recent-activity heading, above the metadata-only item rows that close
      the landing (the static front page carries the same section). */
   .home-activity-head {
@@ -397,20 +477,14 @@
      matching the visual language. Matches highlight with the mark tint; a
      truncation notice reuses the .notice look. */
   .tree-search-wrap { margin-bottom: 0.6rem; }
-  .tree-search {
-    width: 100%; padding: 0.35rem 0.6rem; border: 1px solid var(--line);
-    border-radius: 8px; background: var(--panel); color: var(--text);
-    font-family: var(--mono); font-size: var(--fs-ui);
-  }
-  .tree-search::placeholder { color: var(--muted); }
-  .tree-search:focus { outline: none; border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
+  .tree-search { width: 100%; padding: 0.35rem 0.6rem; }
   .tree-row mark.tree-mark {
-    background: color-mix(in srgb, var(--pre) 30%, transparent);
+    background: var(--warn-t3);
     color: inherit; border-radius: 2px; padding: 0 1px;
   }
   /* Active row tint (current file/dir in the sidebar tree), matching the nav
      active fill — a link-tinted background, no left border. */
-  .tree-active, .tree-active:hover { background: color-mix(in srgb, var(--link) 14%, transparent); }
+  .tree-active, .tree-active:hover { background: var(--link-t2); }
   /* Code-context sidebar file tree: a compact repo tree nested under the Code
      nav item so files stay navigable while the content pane shows a blob.
      Smaller than the content tree to fit the 220px column; long names ellipsize
@@ -419,7 +493,7 @@
   .nav-tree-slot { margin: 0.1rem 0 0.2rem 0.35rem; overflow-x: hidden; }
   .nav-tree-slot:empty { display: none; }
   .nav-tree-list { border: none; background: transparent; }
-  .nav-tree-list .tree-row { padding: 0.06rem 0.3rem; line-height: 1.4; font-size: var(--fs-small); border-radius: 5px; }
+  .nav-tree-list .tree-row { padding: 0.06rem 0.3rem; line-height: 1.4; font-size: var(--fs-ui); border-radius: var(--r-ctl); }
   .nav-tree-list .tree-row .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bc-icon { margin-left: 0.3rem; width: 0.95rem; height: 0.95rem; }
   .diff-file-icon { width: 0.95rem; height: 0.95rem; }
@@ -428,22 +502,27 @@
   .blob-head .breadcrumb { flex: 1 1 auto; margin-bottom: 0; }
   .blob-head .view-modes, .blob-head .blob-meta { margin-bottom: 0; flex: 0 0 auto; }
   .notice {
-    color: var(--pre); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--muted);
     padding: 0.4rem 0.7rem; margin-bottom: 0.6rem; font-size: var(--fs-ui);
   }
+  .notice.notice-warn { color: var(--warn); }
+  /* Code leading, three deliberate tiers: fenced blocks, .raw-body and the
+     diff surfaces share the diff standard 1.45; the blob viewer reads at 1.5
+     (a whole screen of code earns the extra air); .tree-row sits at 1.6 (its
+     line box IS the row rhythm). Anything else is a bug, not a fourth tier. */
   .blob {
-    border: 1px solid var(--line); border-radius: 10px; overflow: auto;
-    background: var(--panel); font-size: var(--fs-code); line-height: 1.5;
+    overflow: auto;
+    font-family: var(--mono); font-size: var(--fs-code); line-height: 1.5;
   }
   .blob-row { display: flex; }
-  .blob-row.hl { background: color-mix(in srgb, var(--pre) 16%, transparent); }
+  .blob-row.hl { background: var(--warn-t1); }
   .blob-row .ln {
     flex: 0 0 auto; min-width: 3rem; text-align: right; padding: 0 0.7rem;
     color: var(--muted); user-select: none; border-right: 1px solid var(--line);
   }
   .blob-row .ln:hover { color: var(--text); text-decoration: none; }
   .blob-row .lc { white-space: pre; padding: 0 0.7rem; }
-  .blob-img { border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem; background: var(--panel); text-align: center; }
+  .blob-img { padding: 0.9rem; text-align: center; }
   .blob-img img { max-width: 100%; height: auto; }
   /* README / Markdown. */
   .markdown { margin-top: 1rem; word-break: break-word; }
@@ -459,8 +538,8 @@
     padding: 0.05rem 0.3rem; border-radius: 4px;
   }
   .markdown pre.codeblock {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 0.7rem 0.9rem; overflow: auto; margin: 0.7rem 0; line-height: 1;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
+    padding: var(--pad-panel); overflow: auto; margin: 0.7rem 0; line-height: 1.45;
   }
   .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
   .markdown img { max-width: 100%; height: auto; }
@@ -481,7 +560,7 @@
   .markdown li.task input { margin-right: 0.4rem; }
   .markdown ul ul, .markdown ol ol, .markdown ul ol, .markdown ol ul { margin: 0.2rem 0 0.2rem 1.2rem; }
   /* Rendered|Raw toggle for .md blob views, reusing the diff-mode toggle look. */
-  .view-modes { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-bottom: 0.6rem; }
+  .view-modes { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-ctl); overflow: hidden; margin-bottom: 0.6rem; }
   .body-modes { margin: 0.6rem 0 0.2rem; }
   /* Raw commit-message pane: the verbatim message (subject + body + GitMsg
      trailer block) reads as a code block — mono at the code scale, panel
@@ -491,24 +570,16 @@
      sideways (overflow-x stays as a safety valve for anything unbreakable). */
   .raw-body {
     white-space: pre-wrap; word-break: break-word; overflow-x: auto;
-    font-family: var(--mono); font-size: var(--fs-code);
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 0.7rem 0.9rem;
+    font-family: var(--mono); font-size: var(--fs-code); line-height: 1.45;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
+    padding: var(--pad-panel);
   }
-  .view-toggle {
-    background: transparent; border: none; padding: 0.2rem 0.7rem; cursor: pointer;
-    font-family: var(--mono); font-size: var(--fs-small); color: var(--muted);
-  }
-  .view-toggle:hover { color: var(--text); background: var(--chip); }
+  .view-toggle { padding: 0.2rem 0.7rem; }
+  .view-toggle:hover { background: var(--chip); }
   .view-toggle.active { color: var(--text); background: var(--chip); font-weight: 600; }
   /* Fullscreen affordance: expand button on code/diff/fenced blocks, and the
      full-viewport overlay it opens. */
-  .fs-btn {
-    background: transparent; border: 1px solid var(--line); border-radius: 5px;
-    color: var(--muted); cursor: pointer; font-size: var(--fs-small); line-height: 1;
-    padding: 0.15rem 0.35rem;
-  }
-  .fs-btn:hover { color: var(--text); background: var(--chip); }
+  .fs-btn { padding: 0.15rem 0.35rem; line-height: 1; }
   .fs-wrap { position: relative; }
   .fs-wrap > .fs-btn { position: absolute; top: 0.35rem; right: 0.35rem; z-index: 2; }
   .fs-overlay { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
@@ -522,7 +593,7 @@
     width: 2rem; height: 2rem; border-radius: 50%; border: none; padding: 0;
     display: flex; align-items: center; justify-content: center;
     background: color-mix(in srgb, var(--text) 12%, transparent);
-    color: var(--text); cursor: pointer; font-size: var(--fs-lg); line-height: 1;
+    color: var(--text); cursor: pointer; font-size: var(--fs-md); line-height: 1;
     opacity: 0.6; backdrop-filter: blur(2px);
     transition: opacity 0.12s ease;
   }
@@ -537,43 +608,37 @@
     padding-bottom: 0.5rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
   }
   .diff-head .subject { font-size: var(--fs-h4); }
-  .chip.caveat { background: color-mix(in srgb, var(--pre) 22%, transparent); color: var(--text); }
+  .chip.caveat { background: var(--warn-t2); color: var(--text); }
   /* Diff bulk-control row: the expand/collapse toggle, the unified|split mode
      toggle (one button each, label = the action a click performs), and
      fullscreen cluster at the row's right edge. */
   .diff-controls { margin-left: auto; display: inline-flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-  .diff-btn {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
-    padding: 0.2rem 0.6rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted); line-height: 1.2;
-  }
-  .diff-btn:hover { color: var(--text); background: var(--chip); }
-  .diff-file { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 0.7rem; background: var(--panel); }
+  .diff-file { margin-bottom: 0.7rem; }
   .diff-file-head {
-    display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.75rem;
+    display: flex; align-items: center; gap: 0.6rem; padding: var(--pad-row);
     cursor: pointer; font-size: var(--fs-ui);
   }
   .diff-file-head:hover { background: var(--chip); }
   .diff-status {
     flex: 0 0 auto; width: 1.1rem; text-align: center; font-family: var(--mono);
-    font-size: var(--fs-small); font-weight: 700; border-radius: 4px; color: #fff;
+    font-size: var(--fs-ui); font-weight: 700; border-radius: 4px; color: #fff;
   }
   .diff-status.s-added { background: var(--open); }
   .diff-status.s-deleted { background: var(--danger); }
-  .diff-status.s-modified { background: var(--pre); }
-  .diff-path { flex: 1 1 auto; word-break: break-all; font-size: var(--fs-code); }
-  .diff-counts { flex: 0 0 auto; display: inline-flex; gap: 0.5rem; font-size: var(--fs-small); }
+  .diff-status.s-modified { background: var(--warn); }
+  .diff-path { flex: 1 1 auto; word-break: break-all; font-family: var(--mono); font-size: var(--fs-code); }
+  .diff-counts { flex: 0 0 auto; display: inline-flex; gap: 0.5rem; font-size: var(--fs-ui); }
   .cnt-add { color: var(--open); }
   .cnt-del { color: var(--danger); }
   .diff-file-body { border-top: 1px solid var(--line); overflow: auto; }
   .diff-hunk-head {
-    font-size: var(--fs-small); color: var(--muted);
-    background: color-mix(in srgb, var(--link) 8%, transparent);
+    font-size: var(--fs-ui); color: var(--muted);
+    background: var(--link-t1);
     padding: 0.15rem 0.7rem;
   }
-  .diff-line { display: flex; font-size: var(--fs-small); line-height: 1.45; }
-  .diff-line.add { background: color-mix(in srgb, var(--open) 14%, transparent); }
-  .diff-line.del { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+  .diff-line { display: flex; font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.45; }
+  .diff-line.add { background: var(--open-t1); }
+  .diff-line.del { background: var(--danger-t1); }
   .dl-num {
     flex: 0 0 auto; min-width: 2.6rem; text-align: right; padding: 0 0.5rem;
     color: var(--muted); user-select: none; font-size: var(--fs-dense);
@@ -588,36 +653,36 @@
   .ds-full { grid-column: 1 / -1; }
   .ds-num {
     text-align: right; padding: 0 0.5rem; color: var(--muted); user-select: none;
-    font-size: var(--fs-dense); line-height: 1.45;
+    font-family: var(--mono); font-size: var(--fs-dense); line-height: 1.45;
   }
   .ds-code {
     white-space: pre-wrap; word-break: break-word; padding: 0 0.6rem;
-    font-size: var(--fs-small); line-height: 1.45;
+    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.45;
   }
   .ds-code.ds-left { border-right: 1px solid var(--line); }
-  .ds-num.add, .ds-code.add { background: color-mix(in srgb, var(--open) 14%, transparent); }
-  .ds-num.del, .ds-code.del { background: color-mix(in srgb, var(--danger) 13%, transparent); }
+  .ds-num.add, .ds-code.add { background: var(--open-t1); }
+  .ds-num.del, .ds-code.del { background: var(--danger-t1); }
   .ds-empty { background: color-mix(in srgb, var(--text) 4%, transparent); }
   /* Word-level intra-line marks: stronger tint over the row's base add/del tint. */
   mark.dw, mark.aw { color: inherit; border-radius: 2px; padding: 0 1px; }
-  mark.dw { background: color-mix(in srgb, var(--danger) 32%, transparent); }
-  mark.aw { background: color-mix(in srgb, var(--open) 34%, transparent); }
+  mark.dw { background: var(--danger-t3); }
+  mark.aw { background: var(--open-t3); }
   /* Collapsed-context divider between hunks (spans all split columns via grid). */
   .diff-expand {
     display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
-    grid-column: 1 / -1; font-size: var(--fs-small); color: var(--link);
-    background: color-mix(in srgb, var(--link) 6%, transparent); padding: 0.15rem 0.7rem;
+    grid-column: 1 / -1; font-size: var(--fs-ui); color: var(--link);
+    background: var(--link-t1); padding: 0.15rem 0.7rem;
   }
-  .diff-expand:hover { background: color-mix(in srgb, var(--link) 12%, transparent); }
+  .diff-expand:hover { background: var(--link-t2); }
   .diff-expand-icon { opacity: 0.8; }
   /* Prism tokens mapped onto the existing palette (subtle; this is a read
-     surface). Both themes inherit through the --link/--pre/--text tokens. */
+     surface). Both themes inherit through the --link/--warn/--text tokens. */
   .token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--muted); font-style: italic; }
   .token.punctuation, .token.operator { color: color-mix(in srgb, var(--text) 75%, var(--bg)); }
   .token.keyword, .token.tag, .token.selector, .token.atrule, .token.important, .token.builtin { color: var(--link); }
   .token.function, .token.class-name, .token.attr-name, .token.property { color: color-mix(in srgb, var(--link) 78%, var(--text)); }
-  .token.string, .token.char, .token.attr-value, .token.regex, .token.url { color: var(--pre); }
-  .token.number, .token.boolean, .token.constant, .token.symbol { color: color-mix(in srgb, var(--pre) 65%, var(--text)); }
+  .token.string, .token.char, .token.attr-value, .token.regex, .token.url { color: var(--warn); }
+  .token.number, .token.boolean, .token.constant, .token.symbol { color: color-mix(in srgb, var(--warn) 65%, var(--text)); }
   .token.deleted { color: var(--danger); }
   .token.inserted { color: var(--open); }
   .token.bold { font-weight: 600; }
@@ -626,38 +691,42 @@
   /* M3: release assets, filters, threads, embedded context, pm groups, contributors. */
   .selectable { user-select: all; }
   .assets { margin-top: 1rem; }
+  /* Section-label voice, stated once for every uppercase in-content label; the
+     margins stay contextual on each label's own rule (heads take the 0.9/0.5
+     rhythm, flex-row labels take none). The sidebar's #nav .nav-section keeps
+     its own denser voice. */
+  .assets-head, .thread-head, .contrib-head, .version-history-head,
+  .review-summary-head, .fb-offscreen-head, .pm-members-head, .pm-subissues-head,
+  .pm-rel-label, .board-col-head, .board-groupby-label, .board-lane-head,
+  .facet-label, .search-group-head, .config-head, .view-count {
+    font-size: var(--fs-ui); color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  /* Page total-count line (branches/tags/releases); hidden while a count that
+     fills in asynchronously (releases) is not yet known. */
+  .view-count { margin: 0.1rem 0 0.7rem; }
+  .view-count:empty { display: none; }
   .assets-head, .thread-head, .contrib-head,
   .version-history-head, .review-summary-head, .fb-offscreen-head {
-    font-size: var(--fs-small); color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.05em; margin: 0.9rem 0 0.5rem;
+    margin: 0.9rem 0 0.5rem;
   }
-  .asset-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); margin-bottom: 0.6rem; }
+  .asset-list { margin-bottom: 0.6rem; }
   .asset-row {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.75rem;
+    display: flex; align-items: center; gap: 0.5rem; padding: var(--pad-row);
     font-size: var(--fs-ui); color: var(--text); border-top: 1px solid var(--line); word-break: break-all;
   }
   .asset-list .asset-row:first-child { border-top: none; }
   a.asset-row:hover { background: var(--chip); text-decoration: none; }
   .asset-signed { font-size: var(--fs-ui); margin-top: 0.3rem; }
   .filter-bar { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
-  .filter-chip {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 999px;
-    padding: 0.15rem 0.7rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted);
-  }
-  .filter-chip:hover { color: var(--text); background: var(--chip); }
   .filter-chip.active { color: var(--text); background: var(--chip); border-color: var(--link); font-weight: 600; }
   /* Load-more continuation control for walk-backed lists (timeline/issues/PRs/
      releases/memos/branch log): a centered pill that walks the next history
      window and appends its resolved items. */
   .load-more-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; margin: 1rem 0 0.4rem; }
   .search-tier-note { max-width: 34rem; margin: 0 auto; text-align: center; line-height: 1.5; color: var(--muted); font-size: var(--fs-ui); }
-  .load-more {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 999px;
-    padding: 0.3rem 1.1rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted);
-  }
-  .load-more:hover { color: var(--text); background: var(--chip); border-color: var(--link); }
+  /* The list continuation keeps a deliberately larger hit area than the base pill. */
+  .load-more { padding: 0.3rem 1.1rem; }
   .load-more:disabled { cursor: default; opacity: 0.6; }
   .thread { margin-top: 1.2rem; }
   .card.comment { background: var(--panel); }
@@ -677,64 +746,62 @@
   /* Detail meta line: author/time on the left, the small Rendered|Raw toggle
      right-aligned on the same line (the blob-head pattern). */
   .detail-meta { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.1rem 0; }
-  .detail-meta .meta { flex: 1 1 auto; }
+  /* The global .meta indent (1.75rem) exists to clear a card's glyph column;
+     no glyph precedes the detail meta line, so the author name aligns flush
+     with the content edge here. */
+  .detail-meta .meta { flex: 1 1 auto; margin-left: 0; }
   .detail-meta .view-modes { margin: 0; flex: 0 0 auto; }
   .embedded {
     margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-left: 2px solid var(--line);
-    background: var(--chip); border-radius: 0 6px 6px 0;
+    background: var(--chip); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
   }
   .embedded-from { font-style: italic; }
   .embedded-quote { white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: 0.25rem 0; font-size: var(--fs-ui); }
-  .card.pm-group .pm-member { margin-top: 0.35rem; font-size: var(--fs-lg); padding-left: 0.2rem; }
   /* PM detail extras (milestone/sprint members, sub-issues, relations),
      progress bars, the kanban board, and the in-bucket item search. */
   /* Member rows: flex so the leading state chip sits in a fixed-width slot and
      the subjects line up vertically no matter the chip label's width. */
-  .pm-member { margin-top: 0.35rem; font-size: var(--fs-lg); padding-left: 0.2rem; display: flex; align-items: baseline; gap: 0.5rem; }
-  .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; box-sizing: border-box; }
-  .pm-members-head, .pm-subissues-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0.9rem 0 0.4rem; }
+  .pm-member { margin-top: 0.35rem; font-size: var(--fs-md); padding-left: 0.2rem; display: flex; align-items: baseline; gap: 0.5rem; }
+  .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; }
+  .pm-members-head, .pm-subissues-head { margin: 0.9rem 0 0.4rem; }
   .pm-members, .pm-subissues { margin-top: 0.6rem; }
   /* Progress bar: a slim track with a link-tinted fill + "n closed of m" label. */
   .pm-progress { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0 0.5rem; }
-  .pm-bar { flex: 1 1 auto; height: 0.5rem; max-width: 16rem; background: var(--chip); border-radius: 999px; overflow: hidden; }
-  .pm-bar-fill { height: 100%; background: var(--open); border-radius: 999px; }
-  .pm-progress-label { font-size: var(--fs-small); color: var(--muted); flex: 0 0 auto; }
+  .pm-bar { flex: 1 1 auto; height: 0.5rem; max-width: 16rem; background: var(--chip); border-radius: var(--r-pill); overflow: hidden; }
+  .pm-bar-fill { height: 100%; background: var(--open); border-radius: var(--r-pill); }
+  .pm-progress-label { font-size: var(--fs-ui); color: var(--muted); flex: 0 0 auto; }
   /* Issue detail relationship links (parent / milestone / sprint). */
   .pm-rels { margin: 0.6rem 0; display: flex; flex-direction: column; gap: 0.3rem; }
   .pm-rel { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: var(--fs-ui); }
-  .pm-rel-label { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; min-width: 4.5rem; }
-  .chip.pm-sub-chip { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--text); }
+  .pm-rel-label { min-width: 4.5rem; }
+  .chip.pm-sub-chip { background: var(--link-t2); color: var(--text); }
   /* Card enrichment chips (labels/assignees/priority/retracted) on issue/PR list
      cards: a wrapping row below the meta, mirroring the TUI card stats. */
   .card-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.35rem; }
   .chip.chip-label { background: var(--chip); color: var(--muted); }
-  .chip.chip-assignee { background: color-mix(in srgb, var(--link) 12%, transparent); color: var(--text); }
+  .chip.chip-assignee { background: var(--link-t2); color: var(--text); }
   .chip.chip-priority { color: var(--text); background: var(--chip); }
-  .chip.chip-priority.prio-critical { background: color-mix(in srgb, var(--danger) 26%, transparent); }
-  .chip.chip-priority.prio-high { background: color-mix(in srgb, var(--danger) 16%, transparent); }
-  .chip.chip-priority.prio-medium { background: color-mix(in srgb, var(--pre) 20%, transparent); }
+  .chip.chip-priority.prio-critical { background: var(--danger-t3); }
+  .chip.chip-priority.prio-high { background: var(--danger-t2); }
+  .chip.chip-priority.prio-medium { background: var(--warn-t2); }
   .chip.chip-priority.prio-low { background: var(--chip); }
-  .chip.chip-retracted { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--text); }
-  .chip.chip-origin { background: color-mix(in srgb, var(--link) 14%, transparent); color: var(--text); }
-  .chip.chip-due { background: color-mix(in srgb, var(--pre) 18%, transparent); color: var(--text); }
+  .chip.chip-retracted { background: var(--danger-t2); color: var(--text); }
+  .chip.chip-origin { background: var(--link-t2); color: var(--text); }
+  .chip.chip-due { background: var(--warn-t2); color: var(--text); }
   .chip.chip-count { background: var(--chip); color: var(--muted); }
   .chip.chip-review { background: var(--chip); color: var(--text); }
   .chip.chip-review .review-ok { color: var(--open); font-weight: 600; }
   .chip.chip-review .review-no { color: var(--danger); font-weight: 600; }
   /* Kanban board: horizontally scrolling columns, each a header + issue cards. */
   .board { display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 0.5rem; align-items: flex-start; }
-  .board-col { flex: 0 0 15rem; min-width: 15rem; background: var(--chip); border-radius: 10px; padding: 0.5rem; }
+  .board-col { flex: 0 0 15rem; min-width: 15rem; background: var(--chip); border-radius: var(--r-panel); padding: 0.5rem; }
   /* A collapsed column shows only its slim header, so it stops taking a full lane
      of horizontal space while remaining a visible, re-expandable stub. */
   .board-col.board-col-collapsed { flex: 0 0 auto; min-width: 0; }
-  .board-col-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+  .board-col-head { margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
   .board-col-name { flex: 1 1 auto; white-space: nowrap; }
-  .board-col-toggle, .board-col-hide {
-    flex: 0 0 auto; background: none; border: none; cursor: pointer; color: var(--muted);
-    font-family: var(--mono); font-size: var(--fs-small); line-height: 1; padding: 0 0.1rem;
-  }
-  .board-col-toggle:hover, .board-col-hide:hover { color: var(--text); }
-  .board-empty { color: var(--muted); text-align: center; padding: 0.6rem 0; font-size: var(--fs-small); }
+  .board-col-toggle, .board-col-hide { flex: 0 0 auto; line-height: 1; padding: 0 0.1rem; }
+  .board-empty { color: var(--muted); text-align: center; padding: 0.6rem 0; font-size: var(--fs-ui); }
   .card.board-card { margin-bottom: 0.5rem; padding: 0.5rem 0.6rem; }
   .card.board-card .subject { font-size: var(--fs-ui); }
   /* Board card title line: glyph + subject as ONE flex child so a long subject
@@ -744,100 +811,78 @@
   .board-card-title .type-glyph { margin-right: 0.3em; }
   .board-more {
     display: inline-block; margin-top: 0.15rem; font-size: var(--fs-dense);
-    background: none; border: none; color: var(--link); cursor: pointer; font-family: var(--mono); padding: 0.1rem 0.2rem;
+    color: var(--link); padding: 0.1rem 0.2rem;
   }
   .board-card-labels { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
-  .chip.board-wip-over { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--text); }
+  .chip.board-wip-over { background: var(--danger-t2); color: var(--text); }
   /* Board group-by (swimlane) control + lane bands. The control is a labeled
      chip row; each lane band carries a header and its own columns×issues grid. */
   .board-controls { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
   .board-col-restore { border-style: dashed; }
-  .board-groupby-label { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .board-groupby-indicator { font-size: var(--fs-small); color: var(--muted); margin: 0.2rem 0 0.5rem; }
+  .board-groupby-indicator { font-size: var(--fs-ui); color: var(--muted); margin: 0.2rem 0 0.5rem; }
   /* Lane index: a compact wrap of clickable lane labels that scroll to a lane, so
      long lanes don't bury the ones after them. */
   .board-lane-index { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0 0 0.7rem; }
-  .board-lane-jump {
-    font-size: var(--fs-dense); font-family: var(--mono); color: var(--muted); cursor: pointer;
-    background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.55rem;
-  }
-  .board-lane-jump:hover { color: var(--text); border-color: var(--link); }
   .board-lane { margin-bottom: 1rem; scroll-margin-top: 0.5rem; }
   .board-lane-head {
-    font-size: var(--fs-small); color: var(--text); text-transform: uppercase; letter-spacing: 0.05em;
     padding: 0.25rem 0.1rem; margin-bottom: 0.4rem; border-bottom: 1px solid var(--line);
     cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
     position: sticky; top: 0; z-index: 2; background: var(--bg);
   }
   .board-lane-caret { flex: 0 0 auto; font-family: var(--mono); }
   /* In-bucket item search (#/search): input, grouped results, highlighted marks. */
-  .search-input {
-    width: 100%; padding: 0.5rem 0.8rem; border: 1px solid var(--line); border-radius: 8px;
-    background: var(--panel); color: var(--text); font-family: var(--mono); font-size: var(--fs-ui);
-    margin-bottom: 0.5rem; box-sizing: border-box;
-  }
-  .search-input::placeholder { color: var(--muted); }
-  .search-input:focus { outline: none; border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
+  .search-input { width: 100%; padding: 0.5rem 0.8rem; margin-bottom: 0.5rem; }
   .search-status { margin-bottom: 0.6rem; }
   .search-facets { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.1rem 0 0.9rem; }
   .facet-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem; }
   .search-sort { margin: 0 0 0.7rem; }
   /* Freshness pill: fixed and unobtrusive; a click reloads for the new push. */
-  .update-pill { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; font-family: var(--mono); font-size: var(--fs-small); color: var(--bg); background: var(--link); border: none; border-radius: 999px; padding: 0.45rem 0.9rem; cursor: pointer; box-shadow: 0 2px 10px color-mix(in srgb, var(--link) 40%, transparent); }
-  .facet-label { flex: 0 0 auto; min-width: 4.2rem; font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .facet-chip { display: inline-flex; align-items: baseline; gap: 0.35rem; font-family: var(--mono); font-size: var(--fs-small); color: var(--text); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.55rem; cursor: pointer; }
+  .update-pill { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; font-family: var(--mono); font-size: var(--fs-ui); color: var(--bg); background: var(--link); border: none; border-radius: var(--r-pill); padding: 0.45rem 0.9rem; cursor: pointer; box-shadow: 0 2px 10px color-mix(in srgb, var(--link) 40%, transparent); }
+  .facet-label { flex: 0 0 auto; min-width: 4.2rem; }
+  .facet-chip { display: inline-flex; align-items: baseline; gap: 0.35rem; color: var(--text); background: var(--chip); padding: 0.1rem 0.55rem; }
   .facet-chip:hover { border-color: var(--link); }
-  .facet-chip.selected { background: color-mix(in srgb, var(--link) 22%, transparent); border-color: var(--link); }
+  .facet-chip.selected { background: var(--link-t3); border-color: var(--link); }
   .facet-count { color: var(--muted); font-variant-numeric: tabular-nums; }
   .facet-chip.selected .facet-count { color: var(--text); }
-  .facet-more { font-family: var(--mono); font-size: var(--fs-small); color: var(--link); background: none; border: none; cursor: pointer; padding: 0.1rem 0.3rem; }
-  .search-group-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0.9rem 0 0.5rem; }
+  .facet-more { color: var(--link); padding: 0.1rem 0.3rem; }
+  .search-group-head { margin: 0.9rem 0 0.5rem; }
   .search-snippet { margin-top: 0.3rem; white-space: normal; }
   .search-help { text-align: left; padding: 1.5rem 0; }
-  .search-help-scope { margin-top: 0.6rem; font-size: var(--fs-small); color: var(--muted); }
-  mark.search-mark { background: color-mix(in srgb, var(--pre) 34%, transparent); color: var(--text); border-radius: 2px; padding: 0 0.1em; }
+  .search-help-scope { margin-top: 0.6rem; font-size: var(--fs-ui); color: var(--muted); }
+  mark.search-mark { background: var(--warn-t3); color: var(--text); border-radius: 2px; padding: 0 0.1em; }
   .contrib { margin: 0.6rem 0 1rem; }
-  .contrib-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
   .contrib-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.35rem 0.75rem; font-size: var(--fs-ui); border-top: 1px solid var(--line);
+    padding: var(--pad-row); font-size: var(--fs-ui); border-top: 1px solid var(--line);
   }
   .contrib-list .contrib-row:first-child { border-top: none; }
   .contrib-name { word-break: break-word; }
   .contrib-meta { display: inline-flex; gap: 0.5rem; align-items: center; }
-  .contrib-pct { color: var(--muted); font-size: var(--fs-small); font-family: var(--mono); }
+  .contrib-pct { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
   /* Top-authors heading row: label on the left, a live filter input on the same
      line; the list scrolls once it grows past a few rows and reveals more on
      scroll (infinite autoscroll window). */
   .contrib-head {
     display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
   }
-  .contrib-filter {
-    font: inherit; font-size: var(--fs-small); color: var(--text); background: var(--panel);
-    border: 1px solid var(--line); border-radius: 8px; padding: 0.2rem 0.5rem; min-width: 8rem; max-width: 14rem;
-  }
-  .contrib-filter:focus { outline: none; border-color: var(--muted); }
+  .contrib-filter { padding: 0.2rem 0.5rem; min-width: 8rem; max-width: 14rem; }
   .contrib-scroll { max-height: 22rem; overflow-y: auto; }
   /* Item version history picker (detail pages, N>1 versions). A compact list of
      version rows; selecting one repaints the body pane, and a per-row "diff to
      previous" toggle reveals a unified message-body diff. */
   .version-history { margin: 1rem 0; }
-  .version-node { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 0.4rem; background: var(--panel); overflow: hidden; }
+  .version-node { margin-bottom: 0.4rem; }
   .version-row {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.7rem;
+    display: flex; align-items: center; gap: 0.5rem; padding: var(--pad-row);
     cursor: pointer; font-size: var(--fs-ui);
   }
   .version-row:hover { background: var(--chip); }
-  .version-row.active { border-left: 3px solid var(--link); background: var(--chip); }
+  /* Selection follows the active-state doctrine (#nav): link-tinted fill +
+     bolder text, no left-border indicator (which also shifted the row 3px). */
+  .version-row.active { background: var(--link-t2); font-weight: 600; }
   .version-row-meta { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; color: var(--muted); flex: 1 1 auto; }
   .chip.version-label { background: var(--chip); color: var(--text); font-family: var(--mono); }
   .version-diff-ctl { margin-left: auto; }
-  .version-diff-btn {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
-    padding: 0.1rem 0.5rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted); line-height: 1.2;
-  }
-  .version-diff-btn:hover { color: var(--text); background: var(--chip); }
   .version-diff-pane:not(:empty) { border-top: 1px solid var(--line); }
   .version-diff { overflow: auto; }
   /* PR review summary strip: count line + status chip, per-reviewer chips, and
@@ -846,13 +891,19 @@
   .review-summary-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
   .review-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
   .chip.reviewer-chip { color: var(--text); }
-  .chip.reviewer-chip.fb-approved { background: color-mix(in srgb, var(--open) 20%, transparent); }
-  .chip.reviewer-chip.fb-changes-requested { background: color-mix(in srgb, var(--danger) 20%, transparent); }
+  .chip.reviewer-chip.fb-approved { background: var(--open-t2); }
+  .chip.reviewer-chip.fb-changes-requested { background: var(--danger-t2); }
   .chip.reviewer-chip.fb-commented { background: var(--chip); }
+  /* The signed-tag chip is a positive verdict: the approved reviewer-chip
+     treatment (open t2 tint, tinted text), not the bare base chip. */
+  .chip.chip-signed { background: var(--open-t2); color: var(--text); }
   /* Inline PR feedback cards on the diff (and offscreen block). */
-  .diff-feedback { grid-column: 1 / -1; padding: 0.3rem 0.6rem 0.3rem 2.4rem; background: color-mix(in srgb, var(--link) 5%, transparent); border-top: 1px dashed var(--line); }
+  .diff-feedback { grid-column: 1 / -1; padding: 0.3rem 0.6rem 0.3rem 2.4rem; background: var(--link-t1); border-top: 1px dashed var(--line); }
+  /* The left border here (and on .embedded) is a KIND marker — the feedback's
+     verdict, a quote's rail — never selection, which signals by fill + weight
+     per the active-state doctrine. */
   .fb-card {
-    border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 6px;
+    border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: var(--r-ctl);
     background: var(--panel); padding: 0.4rem 0.6rem; font-size: var(--fs-ui); margin: 0.2rem 0;
   }
   .fb-card.fb-approved { border-left-color: var(--open); }
@@ -862,28 +913,24 @@
   .fb-author { font-weight: 600; }
   .fb-card.fb-approved .fb-icon { color: var(--open); }
   .fb-card.fb-changes-requested .fb-icon { color: var(--danger); }
-  .chip.fb-count { background: color-mix(in srgb, var(--link) 16%, transparent); color: var(--text); }
+  .chip.fb-count { background: var(--link-t2); color: var(--text); }
   .suggestion { margin-top: 0.3rem; }
-  .suggestion-head { font-size: var(--fs-small); color: var(--muted); margin-bottom: 0.2rem; }
-  pre.suggestion-code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem 0.7rem; overflow: auto; }
+  .suggestion-head { font-size: var(--fs-ui); color: var(--muted); margin-bottom: 0.2rem; }
+  pre.suggestion-code { background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0.5rem 0.7rem; overflow: auto; }
   pre.suggestion-code code { font-family: var(--mono); font-size: var(--fs-code); }
   .fb-offscreen { border-top: 1px solid var(--line); padding: 0.4rem 0.7rem; }
   .fb-offscreen-item { display: flex; align-items: flex-start; gap: 0.4rem; margin-top: 0.3rem; }
   .fb-offscreen-item > .meta { flex: 0 0 auto; padding-top: 0.5rem; }
   .fb-offscreen-item > .fb-card { flex: 1 1 auto; min-width: 0; }
-  /* Sidebar footer: the brand credit pinned to the bottom of the sidebar
-     viewport (position:sticky bottom:0) so it stays put while the nav links
-     scroll beneath it. margin-top:auto still shoves it below the links when the
-     nav is short. An opaque background + top border hide links scrolling under
-     it. Small bottom inset only (the sidebar column owns the outer gap now).
-     Shares the sidebar voice: IBM Plex Mono at 0.8rem. */
   /* Sidebar footer: fixed to the viewport bottom, spanning exactly the sidebar's
      width (--nav-w) at the sidebar's horizontal position. The shell is centered
      (max-width --shell-max, margin auto) with --shell-pad inset, so the sidebar's
      left edge from the viewport is the centering margin plus the pad; max() clamps
      the margin to 0 when the viewport is narrower than the shell. Opaque bg over
      the scrolling nav; the nav reserves matching bottom padding so links clear it.
-     Sits above the content (z-index) but the content column never underlaps it. */
+     Sits above the content (z-index) but the content column never underlaps it.
+     The mono uppercase treatment comes from the shared #nav .nav-section rule;
+     the 0.5rem here overrides its --fs-dense so the credit stays tiny. */
   .nav-footer {
     position: fixed; bottom: 0; z-index: 6;
     left: calc(max(0px, (100vw - var(--shell-max)) / 2) + var(--shell-pad));
@@ -908,11 +955,11 @@
   .stat-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
   .stat-cell {
     flex: 1 1 6rem; min-width: 6rem; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 8px; padding: 0.5rem 0.6rem; text-align: center;
+    border-radius: var(--r-panel); padding: 0.5rem 0.6rem; text-align: center;
   }
   .stat-value { font-size: var(--fs-h3); font-weight: 600; }
   .stat-value-text { font-size: var(--fs-ui); font-weight: 600; padding-top: 0.35rem; }
-  .stat-label { font-size: var(--fs-small); color: var(--muted); margin-top: 0.1rem; }
+  .stat-label { font-size: var(--fs-ui); color: var(--muted); margin-top: 0.1rem; }
   .activity-plot { display: flex; align-items: flex-start; gap: 0.35rem; }
   .activity-plot .activity-chart { flex: 1 1 0; min-width: 0; }
   .activity-yaxis {
@@ -923,7 +970,7 @@
   .activity-ytick { line-height: 1; }
   .activity-chart {
     display: flex; align-items: flex-end; gap: 3px; height: 192px;
-    border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--panel);
     padding: 0.5rem 0.6rem 0.3rem; overflow-x: auto;
   }
   /* Fixed ~12-periods-per-view: columns grow to fill when few, but never shrink
@@ -942,37 +989,27 @@
   .akind-posts { background: var(--link); }
   .akind-issues { background: var(--open); }
   .akind-prs { background: var(--merged); }
-  .akind-releases { background: var(--pre); }
-  .akind-memos { background: color-mix(in srgb, var(--link) 45%, var(--pre)); }
+  .akind-releases { background: var(--warn); }
+  .akind-memos { background: color-mix(in srgb, var(--link) 45%, var(--warn)); }
   .akind-commits { background: color-mix(in srgb, var(--text) 45%, var(--bg)); }
   .chart-filter { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0.6rem; }
   .chart-filter .filter-chip { display: inline-flex; align-items: center; gap: 0.35rem; }
   .legend-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }
   .gran-toggle { display: inline-flex; gap: 0.25rem; }
-  .gran-btn {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
-    padding: 0.1rem 0.55rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--muted); line-height: 1.4; text-transform: capitalize;
-  }
-  .gran-btn:hover { color: var(--text); background: var(--chip); }
+  .gran-btn { text-transform: capitalize; }
   .gran-btn.active { color: var(--text); background: var(--chip); border-color: var(--link); }
   /* Author names carry an email tooltip on hover (title attr). */
   .author[title] { cursor: help; }
   /* Configuration page: reader-preference control rows + read-only ext configs. */
   .config-section { margin: 1.2rem 0; }
-  .config-head { font-size: var(--fs-small); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+  .config-head { margin-bottom: 0.6rem; }
   .pref-row {
     display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
-    padding: 0.4rem 0.6rem; border: 1px solid var(--line); border-radius: 8px;
+    padding: var(--pad-row); border: 1px solid var(--line); border-radius: var(--r-panel);
     background: var(--panel); margin-bottom: 0.4rem;
   }
   .pref-label { font-size: var(--fs-ui); }
-  .pref-btn {
-    background: var(--btn); border: 1px solid var(--line); border-radius: 6px;
-    padding: 0.2rem 0.7rem; cursor: pointer; font-family: var(--mono);
-    font-size: var(--fs-small); color: var(--text); min-width: 6rem;
-  }
-  .pref-btn:hover { background: var(--chip); border-color: var(--link); }
+  .pref-btn { color: var(--text); min-width: 6rem; }
   .config-ext { margin-bottom: 0.6rem; }
   .config-ext-head { font-weight: 600; margin-bottom: 0.3rem; }
   /* Site config section: an accent color swatch and the favicon preview. */
@@ -1036,20 +1073,17 @@
     /* The desktop floating handle is never the mobile mechanism. */
     .nav-handle { display: none !important; }
     #nav { flex-direction: column; }
-    .nav-tree-slot { display: block; }
-    /* The graph gutter is the one wide element; let it scroll on its own. */
-    .graph-scroll { overflow-x: auto; }
   }
 
   /* Page-level actions above a list (compare links, "browse files"). */
   .page-actions { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; align-items: baseline; margin: 0.2rem 0 0.8rem; }
-  .action-link { font-size: var(--fs-sm); color: var(--link); }
-  .compare-link { margin-left: 0.5rem; font-size: var(--fs-sm); }
+  .action-link { font-size: var(--fs-ui); color: var(--link); }
+  .compare-link { margin-left: 0.5rem; font-size: var(--fs-ui); }
 
   /* Compare page: base/head pickers, then a PR-style commits + files diff. */
   .compare-pickers { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 0.8rem; margin: 0.4rem 0 1rem; }
   .compare-field { display: flex; flex-direction: column; gap: 0.15rem; }
-  .compare-select { padding: 0.25rem 0.4rem; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; }
+  .compare-select { padding: 0.25rem 0.4rem; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-ctl); }
   .compare-dots { align-self: center; padding-bottom: 0.3rem; }
   .compare-commits { margin: 1rem 0; }
 
@@ -1067,11 +1101,15 @@
      and chips shrink to a readable stub before they crush the subject (the
      full name rides the title tooltip; a crowded row ends in a +N chip). */
   .graph-row-text .chip { flex: 0 1 auto; min-width: 3.5rem; max-width: 14rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Tag chips are exempt from the stub cap: tag names are short version labels
+     (and links to their tag page), so they render in full. */
+  .graph-row-text .chip.tag-tip { flex: 0 0 auto; min-width: 0; max-width: none; }
   .graph-meta { flex: 0 0 auto; }
-  .branch-tip { background: color-mix(in srgb, var(--link) 18%, transparent); color: var(--link); }
-  .branch-tip.default { background: var(--link); color: var(--bg); }
-  /* Tags get a solid border, no fill: filled chips are reserved for branches. */
-  .tag-tip { background: transparent; border: 1px solid color-mix(in srgb, var(--open) 60%, transparent); color: var(--open); }
+  .chip.branch-tip { background: var(--link-t3); color: var(--link); }
+  .chip.branch-tip.default { background: var(--link); color: var(--bg); }
+  /* Tags get a solid border, no fill: filled chips are reserved for branches.
+     Rendered as links to the tag page; no underline, like .chip.merged-branch. */
+  .chip.tag-tip { background: transparent; border: 1px solid color-mix(in srgb, var(--open) 60%, transparent); color: var(--open); text-decoration: none; }
   /* A merged-PR head branch is historical (the ref may be deleted): dashed
      outline + dimmed, so it never reads as a live ref. */
   .chip.merged-branch {

@@ -65,13 +65,20 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("activity interleaves code commits (app-linked, commit glyph, no chip)", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="[^"]*index\.html#commit:[0-9a-f]+@/.test(front.text));
   ok("code activity rows carry the short sha in their meta", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject"[^>]*>[^<]*<\/a><\/div>\s*<span class="meta">[^<]* · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span>/.test(front.text));
   // The section closes with a crawlable link on to the social posts archive (the
-  // served page for the app's /timeline route).
-  ok("activity closes with a crawlable See more link", /<p class="meta"><a href="\.\/posts\/index\.html">See more<\/a><\/p>/.test(front.text));
+  // served page for the app's /timeline route), carrying the app's own
+  // chevron-and-label show-more affordance.
+  ok("activity closes with a crawlable See more link", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon">⌄<\/span><span class="show-more-label">See more<\/span><\/a>/.test(front.text));
   // The stylesheet is a bucket object like any other: a rule that exists only in
   // the binary is a rule the page renders without (this shipped once, unnoticed).
   const css = await get(TD + "pages.css");
   ok("pages.css is served", css.status === 200);
-  ok("pages.css carries the rules the front page's own markup needs", /ul\.files\{/.test(css.text) && /ol\.items\{/.test(css.text) && /h2\{/.test(css.text) && /\.card\{/.test(css.text) && /\.card-head\{/.test(css.text) && /\.type-glyph\{/.test(css.text), "len=" + css.text.length);
+  ok("pages.css carries the rules the front page's own markup needs", /ul\.files\{/.test(css.text) && /h2\{/.test(css.text) && /\.card\{/.test(css.text) && /\.card-head\{/.test(css.text) && /\.type-glyph\{/.test(css.text) && /\.show-more\{/.test(css.text), "len=" + css.text.length);
+  // The chip vocabulary is the app's own (.chip.state fills, reviewer-chip
+  // verdicts, chip-retracted), and the palette is token-driven with the dark set
+  // gated on the boot-stamped theme class (media fallback for the no-choice case).
+  ok("pages.css styles the app's chip classes", /\.chip\.state\{/.test(css.text) && /\.chip\.reviewer-chip\.fb-approved\{/.test(css.text) && /\.chip\.chip-retracted\{/.test(css.text));
+  ok("pages.css gates dark on the stored-theme class with a media fallback", /html\.dark-mode\{--bg:/.test(css.text) && /@media \(prefers-color-scheme:dark\)\{html:not\(\.light-mode\)\{--bg:/.test(css.text));
+  ok("pages.css carries no pages-only chip vocabulary", !/\.chip\.prerel\b/.test(css.text) && !/\.chip\.approve\b/.test(css.text) && !/ol\.items\{/.test(css.text));
   ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
   ok("front carries the CSP meta", /Content-Security-Policy/.test(front.text));
   ok("front CSP script-src permits eval (lazy grammar loader)", /script-src[^"]*'unsafe-eval'/.test(front.text));
@@ -118,12 +125,12 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("nested reply carries its reply-to attribution", !!thread && /reply to /.test(thread));
   const edited = pages.find((p) => p.includes("Improve onboarding and setup docs"));
   ok("edited issue renders the resolved version", !!edited);
-  ok("edited issue carries closed chip + edited marker", !!edited && /class="chip closed">closed/.test(edited) && / edited /.test(edited.replace(/·/g, " ")));
+  ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && / edited /.test(edited.replace(/·/g, " ")));
   const pr = pages.find((p) => p.includes("Expand notes with more lines"));
   ok("PR page exists", !!pr);
   ok("PR page inlines line-anchored feedback", !!pr && pr.includes("This wording is clearer, nice.") && pr.includes("notes.txt:2"));
   ok("PR page shows range anchors + suggestion bit", !!pr && pr.includes("notes.txt:4-5") && pr.includes("suggestion"));
-  ok("PR page shows review-state chips", !!pr && /class="chip approve">approved/.test(pr) && /class="chip changes">changes requested/.test(pr));
+  ok("PR page shows review-state chips (the app's reviewer-chip classes)", !!pr && /class="chip reviewer-chip fb-approved">approved/.test(pr) && /class="chip reviewer-chip fb-changes-requested">changes requested/.test(pr));
   ok("PR page shows head → base", !!pr && pr.includes("feature/notes-expand → main"));
   const issue = pages.find((p) => p.includes("Static site: thread view needs live fixture"));
   ok("issue page inlines cross-extension social comments", !!issue && issue.includes("I can build the fixture this week.") && issue.includes("Great, assign it to me."));
@@ -154,8 +161,8 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // page, and the href is just a link back to the app.
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
-  ok("commits page reads without JS (heading + rows)", /<h1>commits<\/h1>/.test(commits.text) && /<ol class="items">/.test(commits.text));
-  ok("commits rows carry a citable anchor, an app link and indexable meta", /<li id="c-[0-9a-f]{12}"><a href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><br>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/li>/.test(commits.text), commits.text.slice(commits.text.indexOf("<ol"), commits.text.indexOf("<ol") + 300));
+  ok("commits page reads without JS (heading + card rows)", /<h1>commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
+  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.

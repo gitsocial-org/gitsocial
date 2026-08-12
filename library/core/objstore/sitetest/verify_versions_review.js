@@ -82,7 +82,7 @@ async function main() {
   ok("2 review summary strip present", !!rsum);
   const rline = findClass(view, "review-summary-line")[0];
   ok("2 summary counts 1 approved / 1 changes requested / 0 pending", rline && /1 approved.*1 changes requested.*0 pending/.test(textOf(rline)), rline && textOf(rline));
-  ok("2 status chip 'Changes requested'", rline && textOf(rline).includes("Changes requested"), rline && textOf(rline));
+  ok("2 status chip 'changes requested' (lowercase data-voice)", rline && findClass(rline, "state").some((n) => textOf(n) === "changes requested"), rline && textOf(rline));
   const rchips = findClass(view, "reviewer-chip").map(textOf);
   ok("2 two reviewer chips (bob approved, carol changes-requested)", rchips.length === 2 && rchips.some(t=>/approved/.test(t)) && rchips.some(t=>/changes-requested/.test(t)), rchips.join(" | "));
   // file card comment count chip
