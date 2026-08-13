@@ -1649,8 +1649,8 @@
   // that lane and any additional parents (a merge) open/claim further lanes.
   // Returns { rows, laneCount } where each row is { commit, lane, parents:
   // [{ sha, lane }], present } — `present` flags a parent that is within the
-  // loaded window (an edge is only drawn to a loaded parent; an edge to an
-  // unloaded parent is a lane that simply ends). Deterministic and DOM-free.
+  // loaded window (an edge is only drawn to a loaded parent; an unloaded
+  // parent claims no lane at all). Deterministic and DOM-free.
   function assignGraphLanes(commits) {
     const index = new Map();
     commits.forEach((c, i) => index.set(c.hash, i));
@@ -1673,10 +1673,23 @@
       lanes[lane] = null;
       const parents = [];
       c.parents.forEach((p, pi) => {
-        const present = index.has(p);
+        // Drawable only when the parent is emitted BELOW this row: an absent
+        // parent never appears, and a time-skewed parent already emitted above
+        // has no downward edge. Claiming a lane for either would leave that
+        // lane waiting forever; record them on the child's lane with
+        // present=false so no edge is drawn and no lane is held.
+        const present = index.has(p) && index.get(p) > rows.length;
         let pl;
-        if (pi === 0) { lanes[lane] = p; pl = lane; }
-        else pl = claim(p);
+        if (!present) pl = lane;
+        else if (pi === 0) {
+          // If another child already left a lane waiting for this parent,
+          // merge into it instead of double-booking a second lane — the parent
+          // emits in its unique waiting lane, so every edge ends at its dot.
+          let waiting = -1;
+          for (let i = 0; i < lanes.length; i++) if (lanes[i] === p) { waiting = i; break; }
+          if (waiting >= 0) pl = waiting;
+          else { lanes[lane] = p; pl = lane; }
+        } else pl = claim(p);
         parents.push({ sha: p, lane: pl, present });
       });
       rows.push({ commit: c, lane, parents });

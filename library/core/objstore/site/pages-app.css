@@ -1092,7 +1092,9 @@
   .graph-body { display: flex; align-items: flex-start; gap: 0.6rem; }
   .graph-gutter-wrap { flex: 0 0 auto; }
   .graph-gutter { display: block; }
-  .graph-text-col { flex: 1 1 auto; min-width: 0; }
+  /* The text column keeps a readable floor: a branchy window widens the gutter,
+     and the row must overflow into .graph-scroll instead of crushing the text. */
+  .graph-text-col { flex: 1 1 auto; min-width: 22rem; }
   .graph-line { display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
   .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 0.5rem; min-width: 0; width: 100%; }
   .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
