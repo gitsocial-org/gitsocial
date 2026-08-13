@@ -276,6 +276,23 @@ async function main() {
   await wait(700);
   ok("the file view renders a packed blob", /gamma/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
 
+  // ---- a sha12 commit route resolves a PACKED code commit ----
+  // The static pages (front-page activity rows, the commits lists) link code
+  // commits by sha12, and getObject alone cannot answer one: a short sha builds
+  // a malformed loose key, and the packed path looks up exact full shas (pack
+  // map offsets, pack index binary search). The route must resolve the prefix
+  // through the code items index first. Pinned against a NON-TIP commit so a
+  // tip-only shortcut can't fake it; the rendered detail carries the FULL sha,
+  // which is the resolution this guards.
+  const parentSha = (headObj && GS.parseCommit(head, headObj.body).parents[0]) || head;
+  ctxRoute = GS.newContext(BASE);
+  setHash("commit:" + parentSha.slice(0, 12) + "@main");
+  await GS.route(ctxRoute);
+  await wait(700);
+  ok("a sha12 commit route renders the packed commit's detail (full sha resolved)",
+    !/Commit not found/.test(textOf(viewNode)) && textOf(viewNode).indexOf(parentSha) !== -1,
+    textOf(viewNode).slice(0, 100));
+
   // ---- the request ceiling: packing must not cost the detail route extra ----
   // A cold detail route on a packed bucket pays one pack map shard plus one
   // range read where a loose bucket paid one object GET, so the same ceiling

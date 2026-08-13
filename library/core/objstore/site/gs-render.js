@@ -1077,10 +1077,34 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  async function commitDetail(ctx, hash) {
-    const obj = await getObject(ctx, hash);
+  // resolveCommitRouteSha expands a short route sha to the full sha getObject
+  // addresses. The static pages (front-page activity, commits lists) and shared
+  // links carry sha12, but getObject has no short-sha path on ANY bucket shape:
+  // a short sha builds a malformed loose key (objects/<2>/<38> needs 40 hex) and
+  // the packed path does exact-key lookups (pack map offsets are keyed by full
+  // sha; the pack index binary-searches 20 exact bytes). So: an exact 40-hex sha
+  // passes through, then the code items index answers (complete on index-seeded
+  // buckets, packed or loose — the same resolver PR tips use), then a bounded
+  // walk from the route's branch tip covers index-absent buckets. Null when
+  // nothing matches.
+  async function resolveCommitRouteSha(ctx, hash, branch) {
+    if (/^[0-9a-f]{40}$/.test(hash)) return hash;
+    const indexed = await resolveShortShaFromIndex(ctx, hash);
+    if (indexed) return indexed;
+    const name = branch || headBranchName(await headFor(ctx));
+    if (!name) return null;
+    const live = await refTip(ctx, "refs/heads/" + name);
+    if (!live) return null;
+    if (live.startsWith(hash)) return live;
+    const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
+    return (commits.find((c) => c.hash.startsWith(hash)) || {}).hash || null;
+  }
+
+  async function commitDetail(ctx, hash, branch) {
+    const sha = await resolveCommitRouteSha(ctx, hash, branch);
+    const obj = sha ? await getObject(ctx, sha) : null;
     if (!obj || obj.type !== "commit") return [el("div", { class: "err" }, ["Commit not found: " + hash])];
-    const c = parseCommit(hash, obj.body);
+    const c = parseCommit(sha, obj.body);
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/timeline") }, ["← back"]));
     wrap.append(el("div", { class: "subject" }, [subjectBody(c.content)[0]]));
@@ -3894,11 +3918,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
+  // countHead renders a view's total-count line ("42 branches") in the shared
+  // section-label voice, one treatment across the branches/tags/releases pages.
+  function countHead(n, singular, plural) {
+    return el("div", { class: "view-count" }, [n + " " + (n === 1 ? singular : plural || singular + "s")]);
+  }
+
   // branchesView lists the repo's branches with the default marked.
   async function branchesView(ctx) {
     const { branches, defaultBranch } = await listBranches(ctx);
     if (!branches.length) return [el("div", { class: "empty" }, ["No branches in this repository."])];
-    const nodes = [];
+    const nodes = [countHead(branches.length, "branch", "branches")];
     // A page-level compare affordance opens the compare picker (default branch as
     // the base) so the user reaches it without hand-writing a route.
     if (defaultBranch) nodes.push(el("div", { class: "page-actions" }, [
@@ -3925,7 +3955,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   async function tagsView(ctx) {
     const tags = await listTags(ctx);
     if (!tags.length) return [el("div", { class: "empty" }, ["No tags in this repository."])];
-    return tags.map((t) => {
+    return [countHead(tags.length, "tag")].concat(tags.map((t) => {
       const card = el("div", { class: "card" }, []);
       const head = el("div", { class: "card-head" }, [
         el("a", { class: "subject mono", href: "#tag:" + t.name }, [t.name]),
@@ -3933,7 +3963,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       ]);
       card.append(head);
       return cardTagNav(card, t.name);
-    });
+    }));
   }
 
   // cardTagNav makes a whole tag card navigate to its #tag:<name> route on a
@@ -4319,7 +4349,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const push = (name, node) => chips.push({ name, node });
     const live = decor.tips[hash] || [];
     for (const name of live) push(name, el("span", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : ""), title: name }, [name]));
-    for (const name of decor.tags[hash] || []) push(name, el("span", { class: "chip tag-tip", title: name }, [name]));
+    for (const name of decor.tags[hash] || []) push(name, el("a", { class: "chip tag-tip", href: "#tag:" + name, title: name }, [name]));
     for (const m of decor.merged || []) {
       if (!hash.startsWith(m.short) || live.includes(m.name)) continue;
       push(m.name, m.prSha
@@ -4334,13 +4364,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // graphRowText builds the text column for one graph row: ref decoration chips
   // (branch tips / tags / merged-PR branches), short hash (commit link),
-  // subject, author, date.
+  // subject (also a commit link), author, date.
   function graphRowText(r, decor) {
     const c = r.commit;
     const row = el("div", { class: "graph-row-text" }, []);
     for (const chip of graphRefChips(c.hash, decor)) row.append(chip);
     row.append(el("a", { class: "hash mono", href: commitRef(c.hash, "") }, [c.short]));
-    row.append(el("span", { class: "graph-subject" }, [subjectBody(c.content)[0] || "(no message)"]));
+    row.append(el("a", { class: "graph-subject", href: commitRef(c.hash, "") }, [subjectBody(c.content)[0] || "(no message)"]));
     row.append(el("span", { class: "meta graph-meta" }, [
       commitAuthorEl(c), " · ", timeEl(c.authorTime),
     ]));
@@ -4683,6 +4713,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

@@ -182,11 +182,19 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       } else if (r.type === "index" && r.tab === "releases") {
         const relsOf = (items) => items.filter((i) => (i.header.type || "") === "release");
         const first = await loadExtItemsWindow(ctx, "release", false);
-        setView(pagedListView(first,
+        // The total-count line (the branches/tags treatment) fills in once the
+        // full metadata index is resident; the windowed list never waits on it,
+        // and the drained shards are the same ones "Load more" would fetch.
+        const count = el("div", { class: "view-count" }, []);
+        loadExtItemsAll(ctx, "release").then((all) => {
+          const n = relsOf(all).length;
+          if (n) count.textContent = n + (n === 1 ? " release" : " releases");
+        }).catch(() => {});
+        setView([count, ...pagedListView(first,
           (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, "No releases in this repository.")),
-          () => loadExtItemsWindow(ctx, "release", true)));
+          () => loadExtItemsWindow(ctx, "release", true))]);
       } else if (r.type === "commit") {
-        setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch) : await commitDetail(ctx, r.hash));
+        setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch) : await commitDetail(ctx, r.hash, r.branch));
       } else if (r.type === "home") {
         setView(await homeView(ctx));
         if (r.anchor) scrollToAnchor(r.anchor, 10);
