@@ -927,7 +927,7 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 		`<h2 id="md-section-one">Section One</h2>`, // an ATX heading, addressable
 		"<strong>strong</strong>", "<code>code</code>",
 		"<li>first item</li>",
-		`<img src="https://img.example.com/badge.svg" alt="build badge">`, // absolute badge stays an image
+		`<img src="https://img.example.com/badge.svg" alt="build badge" loading="lazy">`, // absolute badge stays an image
 		"Project logo", // the repo-relative logo degrades to its alt text
 		`<a href="https://example.com/index.html#file:docs/GUIDE.md@main">relative link</a>`,
 		`<a href="#md-section-one">anchor</a>`, // the README's own anchor resolves with no script running

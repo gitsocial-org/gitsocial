@@ -703,6 +703,11 @@ func siteMDHref(raw string, ctx siteMarkdownContext) string {
 // rather than emitting a src that would 404 or reach off-site. The booted app
 // re-renders the same README and resolves those images from the object store,
 // which is the one remaining thing the upgrade adds to this section.
+// Every emitted image is loading="lazy": on a deep-link entry the boot hides
+// this content within milliseconds, and lazy images inside a display:none
+// subtree are never fetched — without it the preload scanner pulled a README
+// hero image (often hundreds of KB, third-party) on every route, competing
+// with the shell batch; a no-JS reader still gets the image on scroll.
 func siteMDImageHTML(src, alt, extraAttrs string) string {
 	if !strings.HasPrefix(strings.ToLower(src), "https://") {
 		return html.EscapeString(alt)
@@ -711,7 +716,7 @@ func siteMDImageHTML(src, alt, extraAttrs string) string {
 	if alt != "" {
 		out += ` alt="` + html.EscapeString(alt) + `"`
 	}
-	return out + extraAttrs + ">"
+	return out + extraAttrs + ` loading="lazy">`
 }
 
 // ---- Raw HTML: lex, then rebuild against the allowlist ----

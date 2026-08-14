@@ -234,13 +234,15 @@ async function main() {
   const graphAuthors = findClass(viewNode, "graph-meta").map(textOf).join(" ");
   ok("graph rows render an author name (Ada authored the fixture commits)", /Ada/.test(graphAuthors), graphAuthors.slice(0, 80));
 
-  // ---- forks section caps at 10 with a "Show all" expand + filter ----
+  // ---- forks section caps at 10 with a lazy "Load all" expand + filter ----
   await route("#/config", true);
-  const forkToggle = findClass(viewNode, "load-more").find((b) => /Show all \d+ forks/.test(textOf(b)));
-  ok("forks section shows a 'Show all N forks' expand (fixture has >10 forks)", !!forkToggle, forkToggle && textOf(forkToggle));
+  const forkToggle = findClass(viewNode, "load-more").find((b) => /Load all \d+ forks/.test(textOf(b)));
+  ok("forks section shows a 'Load all N forks' control (fixture has >10 forks)", !!forkToggle, forkToggle && textOf(forkToggle));
   const forkRowsCollapsed = findClass(viewNode, "config-section").flatMap((s) => findClass(s, "tree-row")).filter((r) => /fork-/.test(textOf(r)));
-  ok("forks section renders the top 10 by default (capped)", forkRowsCollapsed.length === 10, "rows=" + forkRowsCollapsed.length);
-  if (forkToggle) { fire(forkToggle, "click"); await wait(30); }
+  ok("forks section renders 10 forks by default (only the cap is hydrated)", forkRowsCollapsed.length === 10, "rows=" + forkRowsCollapsed.length);
+  if (forkToggle) { fire(forkToggle, "click"); await wait(150); }
+  const forkRowsExpanded = findClass(viewNode, "config-section").flatMap((s) => findClass(s, "tree-row")).filter((r) => /fork-/.test(textOf(r)));
+  ok("loading all hydrates and reveals every fork", forkRowsExpanded.length > 10, "rows=" + forkRowsExpanded.length);
   const filterInput = findClass(viewNode, "contrib-filter").find((i) => (i.getAttribute("placeholder") || "").indexOf("fork") !== -1 || (i.getAttribute("aria-label") || "").indexOf("fork") !== -1);
   ok("expanding reveals a filter input", !!filterInput, filterInput && (filterInput.getAttribute("aria-label")));
 

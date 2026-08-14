@@ -135,7 +135,18 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // every render exit (success, handled error, or the catch below).
     const routeSettled = () => { settled = true; if (watchdog && typeof clearTimeout === "function") clearTimeout(watchdog); };
     try {
-      if (ctx.refMode === undefined) ctx.refMode = await readRefMode(ctx.base);
+      if (ctx.refMode === undefined) {
+        // Virtually every route consults the refs manifest right after this
+        // (refTip's fast path), and the two are independent no-cache GETs — so
+        // start the manifest fetch alongside the ref-mode read instead of after
+        // it. manifestFor memoizes the in-flight promise, so this only moves
+        // the request earlier; ref-mode authority order is unchanged. The no-op
+        // catch keeps a failing prefetch (e.g. a 403 bucket) from surfacing as
+        // an unhandled rejection — real consumers await the same memo and get
+        // the real error through the route's own handling.
+        manifestFor(ctx).catch(() => {});
+        ctx.refMode = await readRefMode(ctx.base);
+      }
       if (ctx.refMode && ctx.refMode !== "etag") {
         if (!(await manifestFor(ctx))) {
           setView([el("div", { class: "err" }, [

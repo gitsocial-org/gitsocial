@@ -7,7 +7,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the in-app route types a detail page's "back" may return to
   // (a list/board/search the user came from). Detail routes (commit/tag) are
@@ -2475,7 +2475,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const caveats = [];
     // Deep merge-base budget so a deep or stacked PR still gets a true three-dot
     // diff instead of falling back to the raw two-tip diff where reachable.
-    const mb = await mergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
+    const mb = await resolveMergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
     let leftTree = baseTree;
     if (mb) { leftTree = await commitTree(ctx, mb) || baseTree; }
     else caveats.push("raw two-tip diff");
@@ -3384,7 +3384,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     function renderDeeper() {
       if (deeperWrap) { deeperWrap.remove(); deeperWrap = null; }
-      if (!corpus) return;
+      // While lanes are still resolving the coverage flags are not final, so
+      // the tier affordances wait for the settled corpus.
+      if (!corpus || corpus.loading) return;
       const kids = [];
       // One affordance loads everything the current corpus is missing: the bodies
       // corpus fetches every shard (whole-history full text) for indexed
@@ -3406,18 +3408,38 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       deeperWrap = el("div", { class: "load-more-wrap" }, kids);
       wrap.append(deeperWrap);
     }
+    // hydrateMatches back-fills the bodies of the top matched results — the
+    // light tier matches on metadata, so a hollow hit renders subject-only —
+    // and redraws once so snippets appear. Bounded to the results a reader
+    // actually sees first, and a no-op once they are full; the token drops a
+    // stale completion when a newer draw superseded it.
+    const HYDRATE_MATCHES = 25;
+    let hydrateToken = 0;
+    function hydrateMatches(res) {
+      const targets = (res.flat || []).slice(0, HYDRATE_MATCHES).map((f) => f.item).filter((it) => it.commit && it.commit.hollow);
+      if (!targets.length) return;
+      const token = ++hydrateToken;
+      hydrateItems(ctx, targets).then(() => { if (token === hydrateToken) draw(); }).catch(() => {});
+    }
+    // laneProgress is the "searching N of M" suffix while corpus lanes are
+    // still resolving, so a cold search shows life (and partial results)
+    // instead of a bare loading placeholder.
+    function laneProgress() {
+      if (!corpus || !corpus.loading) return "";
+      return " · searching " + corpus.loading.done + " of " + corpus.loading.total + " sections…";
+    }
     function draw() {
       if (!corpus) { results.replaceChildren(el("div", { class: "loading" }, ["Loading…"])); return; }
       const res = searchItemsFaceted(input.value || "", corpus.perExt, filters);
       // No query, no typed filter, no chip: idle → the scope help, no facets.
       if (!Object.keys(res.facets).length) {
-        status.textContent = "";
+        status.textContent = laneProgress().replace(/^ · /, "");
         results.replaceChildren(searchHelp(corpus));
         renderDeeper();
         return;
       }
       const partial = corpus.truncated || corpus.light || corpus.hasOlder;
-      status.textContent = res.total + (res.total === 1 ? " result" : " results") + (partial && !corpus.full ? " in loaded items" : "");
+      status.textContent = res.total + (res.total === 1 ? " result" : " results") + (partial && !corpus.full && !corpus.loading ? " in loaded items" : "") + laneProgress();
       const nodes = [];
       const facetBox = renderFacets(res);
       if (facetBox) nodes.push(facetBox);
@@ -3429,11 +3451,23 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       for (const n of searchResults(res, res.terms, grouped)) nodes.push(n);
       results.replaceChildren(...nodes);
       renderDeeper();
+      hydrateMatches(res);
     }
     input.addEventListener("input", () => { if (debounce) clearTimeout(debounce); debounce = setTimeout(draw, 150); });
     input.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { input.value = ""; draw(); } });
     draw();
-    (async () => { try { corpus = await loadSearchWindow(ctx, false); } catch (e) { corpus = { perExt: {}, truncated: false, light: false, full: false }; } draw(); })();
+    // The corpus loads lane by lane: each resolved extension redraws over the
+    // shared, growing perExt (metadata-first, so results appear as soon as any
+    // lane holds a hit), and the final await settles the coverage flags.
+    (async () => {
+      try {
+        corpus = await loadSearchWindow(ctx, false, false, false, (perExt, done, total) => {
+          corpus = { perExt, truncated: false, light: true, hasOlder: false, partial: false, full: false, loading: { done, total } };
+          draw();
+        });
+      } catch (e) { corpus = { perExt: {}, truncated: false, light: false, full: false }; }
+      draw();
+    })();
     if (input.focus) setTimeout(() => input.focus(), 0);
     return [wrap];
   }
@@ -3852,10 +3886,19 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const FORKS_CAP = 10;
 
   async function forksSection(ctx) {
-    const forks = await loadForks(ctx);
+    // The COUNT comes from the manifest's fork refs alone; only the displayed
+    // cap is hydrated up front. Each fork's URL lives in its ref's commit, so
+    // "all forks before anything renders" meant one object read per fork —
+    // on a bucket with thousands of registered forks the config page never
+    // painted. The capped subset is the manifest's (refname-hash) order —
+    // recency ordering over the whole set would need every commit, the exact
+    // cost the cap avoids — sorted most-recently-updated within itself.
+    const total = forkRefNames(await manifestFor(ctx)).length;
+    if (!total) return null;
+    let forks = await loadForks(ctx, FORKS_CAP);
     if (!forks.length) return null;
     const wrap = el("div", { class: "config-section" }, []);
-    const head = el("div", { class: "config-head mono" }, ["Forks (" + forks.length + ")"]);
+    const head = el("div", { class: "config-head mono" }, ["Forks (" + total + ")"]);
     wrap.append(head);
     const forkRow = (f) => {
       const row = el("div", { class: "tree-row" }, []);
@@ -3865,20 +3908,28 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return row;
     };
     // Under the cap: the plain list, no controls (the common case).
-    if (forks.length <= FORKS_CAP) {
+    if (total <= FORKS_CAP) {
       const list = el("div", { class: "tree-list" }, []);
       for (const f of forks) list.append(forkRow(f));
       wrap.append(list);
       return wrap;
     }
-    // Over the cap: show the top FORKS_CAP (most recently updated) with a "Show
-    // all N" toggle; expanding reveals a filter input over a scrollable list,
-    // consistent with the analytics top-authors surface.
-    let expanded = false;
+    // Over the cap: the FORKS_CAP loaded forks with a "Load all N" control.
+    // The first expand hydrates the remaining fork commits on demand (bounded
+    // concurrency, ctx-cached, so a RETRY only refetches what failed) and
+    // reveals a filter input over a scrollable list, consistent with the
+    // analytics top-authors surface. Honesty rule: the expanded state is
+    // entered only when the bulk load completed IN FULL — a failed or partial
+    // load keeps the capped list, says so in a note, and keeps the "Load all"
+    // affordance for another attempt, so a 10-row list is never presented as
+    // the full set.
+    let expanded = false, loaded = false;
     const list = el("div", { class: "tree-list contrib-scroll" }, []);
     const filter = el("input", { class: "contrib-filter", type: "text", placeholder: "Filter forks…", "aria-label": "Filter forks", autocomplete: "off", spellcheck: "false" }, []);
     filter.style.display = "none";
-    const toggle = el("button", { class: "load-more" }, ["Show all " + forks.length + " forks"]);
+    const toggle = el("button", { class: "load-more" }, ["Load all " + total + " forks"]);
+    const note = el("div", { class: "meta" }, []);
+    note.style.display = "none";
     const draw = () => {
       const q = (filter.value || "").trim().toLowerCase();
       const base = expanded ? forks : forks.slice(0, FORKS_CAP);
@@ -3887,7 +3938,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (!rows.length) { list.append(el("div", { class: "empty" }, ["No forks match “" + filter.value + "”."])); return; }
       for (const f of rows) list.append(forkRow(f));
     };
-    toggle.addEventListener("click", () => {
+    toggle.addEventListener("click", async () => {
+      note.style.display = "none";
+      if (!loaded) {
+        toggle.disabled = true;
+        toggle.textContent = "Loading " + total + " forks…";
+        let all = null;
+        try { all = await loadForks(ctx); } catch (e) { all = null; }
+        toggle.disabled = false;
+        if (all && all.length > forks.length) forks = all;
+        if (!all || all.failed) {
+          // Failed or partial: stay capped and honest, keep the retry.
+          toggle.textContent = "Load all " + total + " forks";
+          note.textContent = all
+            ? "Could not load " + all.failed + " of " + total + " forks (the host may be rate limiting). Try again to fetch the rest."
+            : "Loading the fork list failed (the host may be rate limiting). Try again.";
+          note.style.display = "";
+          draw();
+          return;
+        }
+        loaded = true;
+      }
       expanded = !expanded;
       toggle.textContent = expanded ? "Show top " + FORKS_CAP : "Show all " + forks.length + " forks";
       filter.style.display = expanded ? "" : "none";
@@ -3895,8 +3966,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (!expanded) filter.value = "";
       draw();
     });
-    wrap.append(filter, list, toggle);
-    // Start collapsed: no scroll region, no filter, just the top FORKS_CAP.
+    filter.addEventListener("input", draw);
+    wrap.append(filter, list, note, toggle);
+    // Start collapsed: no scroll region, no filter, just the loaded cap.
     list.classList.remove("contrib-scroll");
     draw();
     return wrap;
@@ -3905,16 +3977,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // configView renders the #/config page: the client-side reader preferences
   // (a second surface over the header toggles), the registered forks (when any),
   // and the read-only repository configuration (each extension's in-bucket config
-  // JSON).
+  // JSON). The async sections load CONCURRENTLY and fail independently: the
+  // serial await chain let one stuck or failed section (the forks hydration,
+  // the one with per-object fan-out against a possibly rate-limited host) hold
+  // every later section hostage — the repository-config fetches were never
+  // even issued and the stall watchdog fired over a view that could have
+  // drawn. A failed section renders a small note in its place; a 403 still
+  // rejects the whole view (a private bucket is a page-level condition).
   async function configView(ctx) {
     const wrap = el("div", { class: "detail config-view" }, []);
     wrap.append(el("div", { class: "subject" }, ["Configuration"]));
     wrap.append(readerPrefsSection());
-    const site = await siteConfigSection(ctx);
+    const guard = (p) => p.catch((e) => {
+      if (e && e.forbidden) throw e;
+      return el("div", { class: "config-section" }, [el("div", { class: "meta" }, ["This section failed to load."])]);
+    });
+    const [site, forks, repo] = await Promise.all([
+      guard(siteConfigSection(ctx)),
+      guard(forksSection(ctx)),
+      guard(repoConfigSection(ctx)),
+    ]);
     if (site) wrap.append(site);
-    const forks = await forksSection(ctx);
     if (forks) wrap.append(forks);
-    wrap.append(await repoConfigSection(ctx));
+    wrap.append(repo);
     return [wrap];
   }
 
@@ -4035,7 +4120,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // Skipped for the oldest tag (nothing to diff against) and for a previous
     // tag on the same commit (empty by definition).
     if (prevCommit && prevCommit !== peeled.commit) {
-      const mb = await mergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
+      const mb = await resolveMergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
       const headTree = await commitTree(ctx, peeled.commit);
       const baseTree = await commitTree(ctx, mb || prevCommit);
       if (headTree && baseTree) {
@@ -4225,7 +4310,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     // Three-dot semantics: diff the merge-base against head. No common ancestor
     // (unrelated histories) falls back to a raw two-dot diff with a caveat.
-    const mb = await mergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
+    const mb = await resolveMergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
     const headTree = await commitTree(ctx, headR.sha);
     const baseTree = await commitTree(ctx, baseR.sha);
     if (!headTree || !baseTree) { wrap.append(el("div", { class: "err" }, ["A ref's commit objects are missing from this bucket."])); return [wrap]; }

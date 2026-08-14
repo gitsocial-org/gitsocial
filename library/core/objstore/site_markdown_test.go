@@ -109,12 +109,12 @@ func TestSiteMarkdown_Grammar(t *testing.T) {
 		{
 			name: "absolute https image keeps its src and attributes",
 			src:  `<img src="https://img.example.com/badge.svg" alt="badge" width="120">` + "\n",
-			want: []string{`<img src="https://img.example.com/badge.svg" alt="badge" width="120">`},
+			want: []string{`<img src="https://img.example.com/badge.svg" alt="badge" width="120" loading="lazy">`},
 		},
 		{
 			name:   "markdown image, absolute",
 			src:    "![alt text](https://img.example.com/a.png)\n",
-			want:   []string{`<img src="https://img.example.com/a.png" alt="alt text">`},
+			want:   []string{`<img src="https://img.example.com/a.png" alt="alt text" loading="lazy">`},
 			absent: []string{"![alt text]"},
 		},
 		{
@@ -210,7 +210,7 @@ func TestSiteMarkdown_Hostile(t *testing.T) {
 			name:   "event handlers are not in the attribute allowlist",
 			src:    `<img src="https://e.com/a.png" onerror="alert(1)" alt="a">` + "\n",
 			absent: []string{"onerror", "alert(1)"},
-			want:   []string{`<img src="https://e.com/a.png" alt="a">`},
+			want:   []string{`<img src="https://e.com/a.png" alt="a" loading="lazy">`},
 		},
 		{
 			name:   "event handler on an allowed container is dropped",
