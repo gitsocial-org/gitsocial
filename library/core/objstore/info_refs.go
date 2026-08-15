@@ -29,6 +29,15 @@ const (
 	packsKey    = "objects/info/packs"
 )
 
+// alternatesKeys are published as EMPTY objects so git's dumb walker gets a
+// valid "no alternates" answer instead of a 404. This is not cosmetic: on a
+// loose-object miss the walker calls fetch_alternates from inside a completion
+// callback, and a 404 there can livelock it in unbounded reentrancy
+// (process_object_response → fetch_alternates → step_active_slots → …, observed
+// at 99% CPU against a Cloudflare-proxied bucket over HTTP/2, 2026-08-15). An
+// empty 200 resolves the probe once and the walker never re-enters it.
+var alternatesKeys = []string{"objects/info/http-alternates", "objects/info/alternates"}
+
 // maxTagPeelDepth bounds tag-of-tag dereferencing so a malformed or cyclic tag
 // chain can never spin.
 const maxTagPeelDepth = 10
@@ -53,6 +62,11 @@ func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSourc
 	}
 	if err := putText(client, prefix+packsKey, buildInfoPacks(packs)); err != nil {
 		return fmt.Errorf("write %s: %w", packsKey, err)
+	}
+	for _, key := range alternatesKeys {
+		if err := putText(client, prefix+key, nil); err != nil {
+			return fmt.Errorf("write %s: %w", key, err)
+		}
 	}
 	return nil
 }
