@@ -92,8 +92,10 @@ async function main() {
   ok("objects/info/packs lists the bucket's packs", names.length >= 2, "listed " + names.length);
   ok("the pack listing is what makes the reader treat the bucket as packed",
     (await GS.bucketIsPacked(GS.newContext(BASE))) === true);
+  // other-demo, not thread-demo: the seal's 64-object minimum packs thread-demo
+  // now, while other-demo's handful of objects stays under it for good.
   ok("a bucket with no packs is not treated as packed",
-    (await GS.bucketIsPacked(GS.newContext(ORIGIN + "/thread-demo/"))) === false);
+    (await GS.bucketIsPacked(GS.newContext(ORIGIN + "/other-demo/"))) === false);
 
   const ctx = GS.newContext(BASE);
   const items = await GS.loadExtItemsAll(ctx, "social");
