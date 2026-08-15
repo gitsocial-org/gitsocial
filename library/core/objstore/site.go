@@ -380,10 +380,10 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)
 	// in step with it so `gitsocial site push` also heals a stale/absent listing.
 	logDumbTransportInfo(client, prefix, src, refs)
-	if err := writeSitePMConfig(client, prefix, refs); err != nil {
+	if err := writeSitePMConfig(client, prefix, refs, src); err != nil {
 		return err
 	}
-	if err := writeSiteCustomization(client, prefix, refs, ov); err != nil {
+	if err := writeSiteCustomization(client, prefix, refs, ov, src); err != nil {
 		return err
 	}
 	defaultBranch := readSiteDefaultBranch(client, prefix)
@@ -400,7 +400,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 		if pagesPending, pagesState, err = rebuildSitePages(client, prefix, refs, defaultBranch, src, progress, ov); err != nil {
 			return err
 		}
-	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov); err == nil {
+	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src); err == nil {
 		if _, on := sitePagesEffective(cfg, ok); on {
 			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial site push`)", 1, 1)
 		}

@@ -159,20 +159,20 @@
   // is loose — a miss on the shape it named still tries the other, and a bucket
   // whose pack listing failed to publish still renders off its pack map.
   // `content` is an optional hint that the caller already knows the sha names a
-  // tree or a blob (see getContentObject); `state` that the sha comes from a
-  // state ref (see getStateObject). Both only reorder the lookup and are never
-  // required for correctness.
-  async function getObject(ctx, sha, content, state) {
+  // tree or a blob (see getContentObject); it only reorders the lookup and is
+  // never required for correctness.
+  async function getObject(ctx, sha, content) {
     if (ctx.objects.has(sha)) return ctx.objects.get(sha);
     // The cache holds the in-flight PROMISE, not the resolved object: hydration
     // runs CONCURRENCY workers, and two of them asking for the same sha before
     // either resolves would otherwise both fetch it. Costlier now that a miss
     // can mean a pack map shard plus a range read rather than one GET.
     const pending = (async () => {
-      if (!state && await bucketIsPacked(ctx)) {
+      if (await bucketIsPacked(ctx)) {
         const packed = await getPackedObject(ctx, sha, content);
-        // State refs (config, lists, forks) stay loose by design on an otherwise
-        // packed bucket, so a miss in every pack still has a loose key to read.
+        // A miss in every pack still has a loose key to try: a bucket may carry
+        // objects loose until its next seal (a small push, or history a state
+        // ref reaches that predates state objects packing).
         return packed !== null ? packed : getLooseObject(ctx, sha);
       }
       const loose = await getLooseObject(ctx, sha);
@@ -197,12 +197,13 @@
   }
 
   // getStateObject fetches a sha a state ref points at (config, lists, forks).
-  // Those objects stay loose by design even on an otherwise packed bucket, so
-  // the loose key is read FIRST: the packed-first order charges a pack-map miss
-  // plus per-pack index probes per object before falling back, which a bucket
-  // with thousands of fork refs pays thousands of times.
+  // State objects pack and seal like every other object now, so the lookup is
+  // plain getObject in the same packed-first order — a state commit resolves
+  // off the pack map in one range read, and the loose fallback covers a bucket
+  // that still carries them loose (not yet sealed by a current binary). The
+  // name is kept for what it documents at the call sites.
   function getStateObject(ctx, sha) {
-    return getObject(ctx, sha, false, true);
+    return getObject(ctx, sha);
   }
 
   // getLooseObject fetches and inflates one loose object, or null when the bucket

@@ -136,8 +136,7 @@ func backdatePendingRounds(t *testing.T, client *Client) {
 // loose object to the bucket WITHOUT giving it a local ref: the shape a shared
 // bucket normally has, where a state ref another clone published names a
 // refname this clone does not carry (which used to abort sealing) over an
-// object it does (which naively ignoring the refname would then let sealing
-// pack and delete).
+// object it does (whose tip therefore still resolves and seals).
 func orphanStateObject(t *testing.T, client *Client, dir, message string) string {
 	t.Helper()
 	sha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", message)
@@ -257,7 +256,7 @@ func TestUploadPacked_TypeSplitAndPackMap(t *testing.T) {
 		if kind != "commit" && kind != "tag" {
 			continue
 		}
-		doc, err := readPackMapShard(client, packMapShardName(sha))
+		doc, err := readPackMapShard(client, "", packMapShardName(sha))
 		if err != nil {
 			t.Fatalf("read pack map shard for %s: %v", sha, err)
 		}
@@ -325,10 +324,11 @@ func TestUploadDelta_ThresholdKeepsSmallPushesLoose(t *testing.T) {
 	}
 }
 
-// TestUploadPacked_StateRefObjectsStayLoose: refs/gitmsg/* objects are read
-// straight off the bucket as plain keys by site maintenance and the browser, so
-// a packed push must leave them loose (and out of the packs).
-func TestUploadPacked_StateRefObjectsStayLoose(t *testing.T) {
+// TestUploadPacked_StateRefObjectsPack: refs/gitmsg/* objects join the packs —
+// every loose-key reader has a pack fallback now (getBucketCommit reads the
+// pack map, the browser probes both shapes) — so a packed push writes no loose
+// keys at all and the state commit resolves through the pack map.
+func TestUploadPacked_StateRefObjectsPack(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 4)
 	stateSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "rev-parse", "HEAD^{tree}"), "-m", "config")
@@ -340,25 +340,20 @@ func TestUploadPacked_StateRefObjectsStayLoose(t *testing.T) {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 
-	loose := looseObjectKeys(t, client)
-	if len(loose) == 0 {
-		t.Fatal("state-ref objects must stay loose, found none")
+	if got := looseObjectKeys(t, client); len(got) != 0 {
+		t.Errorf("packed push wrote %d loose objects; the whole delta, state refs included, must pack", len(got))
 	}
-	found := false
-	for _, sha := range loose {
-		if sha == stateSha {
-			found = true
-		}
+	if !packedSet(t, client)[stateSha] {
+		t.Errorf("state-ref commit %s is in no pack", stateSha)
 	}
-	if !found {
-		t.Errorf("state-ref commit %s is not loose on the bucket (loose set: %v)", stateSha, loose)
+	// The push-time config readers resolve the packed-only commit off the pack
+	// map: one range read, no loose key, no local source.
+	c, err := getBucketCommit(client, "", stateSha)
+	if err != nil {
+		t.Fatalf("getBucketCommit over a packed-only state commit: %v", err)
 	}
-	for _, name := range bucketPackNames(t, client) {
-		for _, sha := range packedShas(t, client, name) {
-			if sha == stateSha {
-				t.Errorf("state-ref commit %s was packed as well as stored loose", sha)
-			}
-		}
+	if strings.TrimSpace(c.item.Message) != "config" {
+		t.Errorf("packed state commit message = %q, want %q", c.item.Message, "config")
 	}
 }
 
@@ -501,7 +496,7 @@ func TestSealLooseObjects_PacksThenDeletesAfterGrace(t *testing.T) {
 	// The sealed history must still be readable: every commit keeps a pack map
 	// byte range even though its loose key is gone.
 	for _, sha := range strings.Fields(gitRun(t, dir, "rev-list", "main")) {
-		doc, err := readPackMapShard(client, packMapShardName(sha))
+		doc, err := readPackMapShard(client, "", packMapShardName(sha))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -712,11 +707,13 @@ func TestSealLooseObjects_BucketStateRefMissingLocally(t *testing.T) {
 	}
 }
 
-// TestSealLooseObjects_StateRefObjectsNeverPackedOrDeleted: objects a state ref
-// reaches are read straight off the bucket as loose keys (site maintenance has
-// no pack fallback), so sealing must neither pack nor delete them — whether the
-// state ref resolves in the pushing clone or, as on a shared bucket, does not.
-func TestSealLooseObjects_StateRefObjectsNeverPackedOrDeleted(t *testing.T) {
+// TestSealLooseObjects_StateRefObjectsPackAndDelete: objects a state ref
+// reaches pack and seal like everything else now (every loose-key reader has a
+// pack fallback), so sealing packs them and deletes their loose copies once the
+// grace runs out — whether the state ref's refname resolves in the pushing
+// clone or, as on a shared bucket, does not. A tip whose OBJECT this clone does
+// not carry still contributes nothing: it stays loose, untouched.
+func TestSealLooseObjects_StateRefObjectsPackAndDelete(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 6)
 	stateSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", "config")
@@ -726,24 +723,35 @@ func TestSealLooseObjects_StateRefObjectsNeverPackedOrDeleted(t *testing.T) {
 	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/gitmsg/core/config"}); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
-	orphan := orphanStateObject(t, client, dir, "unresolvable")
+	// A state object present locally whose refname only the bucket has: packs.
+	orphan := orphanStateObject(t, client, dir, "artifacts")
+	// An object this clone does NOT carry: an unresolvable tip contributes
+	// nothing, so its loose key must survive the whole pass.
+	foreignSha, foreignLoose := makeLooseCommit(t, "", "a foreign clone's config", 1000)
+	if err := client.Put("objects/"+foreignSha[:2]+"/"+foreignSha[2:], foreignLoose); err != nil {
+		t.Fatalf("upload foreign object: %v", err)
+	}
 	refs := map[string]string{
 		"refs/heads/main":                     gitRun(t, dir, "rev-parse", "HEAD"),
 		"refs/gitmsg/core/config":             stateSha,
 		"refs/gitmsg/release/2.0.0/artifacts": orphan,
+		"refs/gitmsg/social/lists/team/_meta": foreignSha,
 	}
 
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
 	h.maintainPacks(refs)
 	packed := packedSet(t, client)
 	for _, sha := range []string{stateSha, orphan} {
-		if packed[sha] {
-			t.Errorf("state-ref object %s was packed", sha)
+		if !packed[sha] {
+			t.Errorf("state-ref object %s was not packed", sha)
 		}
 	}
+	if packed[foreignSha] {
+		t.Errorf("locally-absent object %s was packed", foreignSha)
+	}
 
-	// Run the whole grace out; the state-ref objects must outlive the deletion
-	// that collects everything else.
+	// Run the whole grace out; the sealed state objects' loose copies go with
+	// everything else, the unresolvable tip's object stays.
 	for i := 0; i < packDeleteGrace; i++ {
 		backdatePendingRounds(t, client)
 		h.maintainPacks(refs)
@@ -753,19 +761,68 @@ func TestSealLooseObjects_StateRefObjectsNeverPackedOrDeleted(t *testing.T) {
 		loose[sha] = true
 	}
 	for _, sha := range []string{stateSha, orphan} {
-		if !loose[sha] {
-			t.Errorf("state-ref object %s was deleted; site maintenance reads it as a loose key and has no pack fallback", sha)
+		if loose[sha] {
+			t.Errorf("sealed state-ref object %s still has its loose copy after the grace", sha)
 		}
 	}
-	// The pass must actually have deleted something, or the survivors prove
-	// nothing.
-	for sha := range loose {
-		if packed[sha] {
-			t.Errorf("packed object %s still has its loose copy after the grace", sha)
-		}
+	if !loose[foreignSha] {
+		t.Error("locally-absent object was deleted; an unresolvable tip must contribute nothing")
 	}
 	if len(packed) == 0 {
 		t.Error("sealing packed nothing, so the deletion above never ran")
+	}
+	// The sealed state commits stay readable through the pack fallback the
+	// push-time config readers use.
+	for _, sha := range []string{stateSha, orphan} {
+		c, err := getBucketCommit(client, "", sha)
+		if err != nil {
+			t.Errorf("getBucketCommit(%s) after seal + delete: %v", sha, err)
+		} else if c.item.SHA != sha {
+			t.Errorf("getBucketCommit(%s) returned sha %s", sha, c.item.SHA)
+		}
+	}
+}
+
+// TestReadSiteConfigs_PackedOnlyAndLocal: the push-time config readers succeed
+// against a bucket whose config commits exist ONLY inside packs (the pack-map
+// fallback), and resolve purely from the local odb when a source is available
+// (asserted against an empty bucket, where only the local path can answer).
+func TestReadSiteConfigs_PackedOnlyAndLocal(t *testing.T) {
+	client, _ := testClient(t)
+	dir := packTestRepo(t, 4)
+	pmSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", `{"framework":"scrum"}`)
+	gitRun(t, dir, "update-ref", "refs/gitmsg/pm/config", pmSha)
+	coreSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", `{"version":1,"site":{"title":"Packed"}}`)
+	gitRun(t, dir, "update-ref", "refs/gitmsg/core/config", coreSha)
+	h := pushHelper(t, client, dir)
+	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
+	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/gitmsg/pm/config", "refs/gitmsg/core/config"}); err != nil {
+		t.Fatalf("uploadMissingObjects: %v", err)
+	}
+	if got := looseObjectKeys(t, client); len(got) != 0 {
+		t.Fatalf("fixture is not packed-only: %d loose keys", len(got))
+	}
+	refs := map[string]string{"refs/gitmsg/pm/config": pmSha, "refs/gitmsg/core/config": coreSha}
+
+	cfg, ok, err := readSitePMConfig(client, "", refs, nil)
+	if err != nil || !ok || cfg.Framework != "scrum" {
+		t.Errorf("readSitePMConfig over a packed-only bucket = %+v ok=%v err=%v", cfg, ok, err)
+	}
+	custom, ok, err := readSiteBaseCustomization(client, "", refs, nil)
+	if err != nil || !ok || custom.Title != "Packed" {
+		t.Errorf("readSiteBaseCustomization over a packed-only bucket = %+v ok=%v err=%v", custom, ok, err)
+	}
+
+	src := newLocalCommitSource(filepath.Join(dir, ".git"), "")
+	defer src.close()
+	emptyClient, _ := testClient(t)
+	cfg, ok, err = readSitePMConfig(emptyClient, "", refs, src)
+	if err != nil || !ok || cfg.Framework != "scrum" {
+		t.Errorf("readSitePMConfig via the local odb = %+v ok=%v err=%v", cfg, ok, err)
+	}
+	custom, ok, err = readSiteBaseCustomization(emptyClient, "", refs, src)
+	if err != nil || !ok || custom.Title != "Packed" {
+		t.Errorf("readSiteBaseCustomization via the local odb = %+v ok=%v err=%v", custom, ok, err)
 	}
 }
 
@@ -1186,7 +1243,7 @@ func TestWritePackMapShard_MergesConcurrentPacks(t *testing.T) {
 		t.Fatalf("updateCompressedJSON: %v", err)
 	}
 
-	doc, err := readPackMapShard(client, shard)
+	doc, err := readPackMapShard(client, "", shard)
 	if err != nil {
 		t.Fatalf("readPackMapShard: %v", err)
 	}
@@ -1244,7 +1301,7 @@ func TestUpdateCompressedJSON_CreateOnlyProviderSkipsTheDoomedUpdate(t *testing.
 		t.Errorf("updating under CapabilityFull attempted %d If-Match writes, want %d", got, maxCASRetries)
 	}
 
-	doc, err := readPackMapShard(client, "aa")
+	doc, err := readPackMapShard(client, "", "aa")
 	if err != nil {
 		t.Fatalf("readPackMapShard: %v", err)
 	}

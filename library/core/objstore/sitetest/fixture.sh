@@ -380,8 +380,8 @@ gg site push >/dev/null
 # The pack threshold is lowered to 1 so every push packs (production packs only
 # from 1000 objects up), which is the shape the browser's pack reader has to
 # serve: commit bodies from the pack map's byte ranges, trees and blobs through
-# the pack index with delta resolution. State refs (refs/gitmsg/*) stay loose by
-# design, so config/list/fork reads are unchanged.
+# the pack index with delta resolution. State refs (refs/gitmsg/*) pack like
+# everything else, so config/list/fork reads resolve out of the packs too.
 #
 # notes.txt is generated at a size that git actually deltifies. A two-line file
 # is stored whole in every revision, which would leave the reader's OFS_DELTA /

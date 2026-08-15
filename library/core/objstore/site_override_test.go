@@ -65,7 +65,7 @@ func TestReadSiteCustomization_override(t *testing.T) {
 	sha := seedCoreConfigCommit(t, client, `{"version":1,"site":{"title":"Demo","url":"https://primary.example/","publish":"true"}}`)
 	refs := map[string]string{"refs/gitmsg/core/config": sha}
 
-	got, ok, err := readSiteCustomization(client, "", refs, SiteOverride{URL: "https://r2.example"})
+	got, ok, err := readSiteCustomization(client, "", refs, SiteOverride{URL: "https://r2.example"}, nil)
 	if err != nil || !ok {
 		t.Fatalf("readSiteCustomization: ok=%v err=%v", ok, err)
 	}
@@ -82,7 +82,7 @@ func TestWriteSiteCustomization_overrideStamped(t *testing.T) {
 	sha := seedCoreConfigCommit(t, client, `{"version":1,"site":{"title":"Demo","url":"https://primary.example/","publish":"true"}}`)
 	refs := map[string]string{"refs/gitmsg/core/config": sha}
 
-	if err := writeSiteCustomization(client, "", refs, SiteOverride{URL: "https://r2.example"}); err != nil {
+	if err := writeSiteCustomization(client, "", refs, SiteOverride{URL: "https://r2.example"}, nil); err != nil {
 		t.Fatalf("writeSiteCustomization: %v", err)
 	}
 	data, err := client.Get(siteCustomizationKey)

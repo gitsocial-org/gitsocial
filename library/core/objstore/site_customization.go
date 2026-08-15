@@ -255,8 +255,8 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 // the per-remote deployment overrides (ov) at this single boundary, so every
 // consumer sees effective values. See readSiteBaseCustomization for the base
 // resolution and applySiteOverride for the override rules.
-func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride) (siteCustomization, bool, error) {
-	base, ok, err := readSiteBaseCustomization(client, prefix, refs)
+func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) (siteCustomization, bool, error) {
+	base, ok, err := readSiteBaseCustomization(client, prefix, refs, src)
 	if err != nil {
 		return siteCustomization{}, false, err
 	}
@@ -264,18 +264,20 @@ func readSiteCustomization(client *Client, prefix string, refs map[string]string
 	return c, ok, nil
 }
 
-// readSiteBaseCustomization resolves refs/gitmsg/core/config from the bucket's
-// objects and extracts its validated `site` sub-object (no per-remote overrides
-// applied). Returns ok=false (no error) when the ref is absent, the object is
+// readSiteBaseCustomization resolves refs/gitmsg/core/config and extracts its
+// validated `site` sub-object (no per-remote overrides applied), reading the
+// commit from the local odb when src is available (nil = bucket-only) and
+// otherwise from the bucket — loose key or, on a sealed bucket, the pack map.
+// Returns ok=false (no error) when the ref is absent, the object is
 // missing/not a commit, the message is not valid config JSON, or nothing in
 // `site` survives validation — the caller then deletes the artifact (reader
 // falls back to its defaults).
-func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string) (siteCustomization, bool, error) {
+func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string, src *localCommitSource) (siteCustomization, bool, error) {
 	sha, present := refs["refs/gitmsg/core/config"]
 	if !present || len(sha) != 40 {
 		return siteCustomization{}, false, nil
 	}
-	c, err := getBucketCommit(client, prefix, sha)
+	c, err := getCommit(src, client, prefix, sha)
 	if err != nil {
 		return siteCustomization{}, false, err
 	}
@@ -296,8 +298,8 @@ func readSiteBaseCustomization(client *Client, prefix string, refs map[string]st
 // the repo's refs/gitmsg/core/config `site` sub-object. Absent/malformed config
 // deletes the artifact (reader falls back to its defaults). Best-effort by
 // contract; written on the same refs-moved path that maintains refs.json.
-func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride) error {
-	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov)
+func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) error {
+	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
 		return err
 	}

@@ -166,13 +166,16 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 			return
 		}
 	}
+	// One local commit source serves the whole maintenance pass: the transport
+	// rewrite (the local odb peels an annotated tag whose bucket copy is packed)
+	// and every config-commit read below, which prefers the local odb over a
+	// bucket GET (the helper runs as a git child, so the pushed configs are here).
+	src := newLocalCommitSource(h.gitDir, "")
+	defer src.close()
 	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
 	// independent of the site.publish gate below, so a bucket-served repo clones
 	// and fetches with stock git over plain HTTPS even when the static site is off.
-	// The local odb peels an annotated tag whose bucket copy is packed.
-	transportSrc := newLocalCommitSource(h.gitDir, "")
-	logDumbTransportInfo(h.client, h.prefix, transportSrc, refs)
-	transportSrc.close()
+	logDumbTransportInfo(h.client, h.prefix, src, refs)
 	// Now that the bucket's refs are known, a HEAD left pointing at a ref the
 	// bucket does not carry can be repaired (ensureRemoteHEAD above cannot: it
 	// keeps any HEAD that is not a gitmsg branch).
@@ -185,7 +188,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// plain s3:// git remote stays clean, and a bucket whose site predates the
 	// guard is left untouched with a one-line hint. Best-effort throughout — a
 	// read failure only skips this push's maintenance, never the git push itself.
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override)
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)
 		return
@@ -223,8 +226,8 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
 		}
 		manifestOK = h.writeSiteManifest()
-		h.writeSitePMConfig()
-		h.writeSiteCustomization()
+		h.writeSitePMConfig(src)
+		h.writeSiteCustomization(src)
 	}
 	h.updateSiteItems(extPushed)
 	// index.html is dual-owned: the generated front page while the page layer is
@@ -237,7 +240,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// rebuilds pages (and reclaims index.html) — no reclaim needed here.
 	reclaimOK := true
 	if shellUploaded {
-		reclaimOK = h.reclaimSitePagesFront(refs)
+		reclaimOK = h.reclaimSitePagesFront(refs, src)
 	}
 	// Stamp the marker after the refs-derived writes so a later push against this
 	// same ref state can skip them. Best-effort: a wrong/missing marker only costs
@@ -254,7 +257,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// push with these refs skip the rewrite and leave the site's only listing
 	// describing an older ref set.
 	if !upToDate && reclaimOK && manifestOK {
-		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override)
+		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override, src)
 		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
 			writeSitePushState(h.client, h.prefix, shellVersion, digest, pagesState)
 		}
@@ -295,7 +298,7 @@ func (h *remoteHelper) writeSiteManifest() bool {
 // the static site's board honors the repo's refs/gitmsg/pm/config. Best-effort,
 // same contract as the manifest: a failure only leaves the board on the kanban
 // default until the next push.
-func (h *remoteHelper) writeSitePMConfig() {
+func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 	refs := h.remoteRefs
 	if refs == nil {
 		var err error
@@ -304,7 +307,7 @@ func (h *remoteHelper) writeSitePMConfig() {
 			return
 		}
 	}
-	if err := writeSitePMConfig(h.client, h.prefix, refs); err != nil {
+	if err := writeSitePMConfig(h.client, h.prefix, refs, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
 	}
 }
@@ -313,7 +316,7 @@ func (h *remoteHelper) writeSitePMConfig() {
 // push, so the static site honors the repo's refs/gitmsg/core/config `site`
 // sub-object. Best-effort, same contract as the manifest: a failure only leaves
 // the site on its built-in defaults until the next push.
-func (h *remoteHelper) writeSiteCustomization() {
+func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
 	refs := h.remoteRefs
 	if refs == nil {
 		var err error
@@ -322,7 +325,7 @@ func (h *remoteHelper) writeSiteCustomization() {
 			return
 		}
 	}
-	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override); err != nil {
+	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
 	}
 }
@@ -366,8 +369,8 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 // this returns ok=true. It returns ok=FALSE only when a reclaim it should have
 // done FAILED, so the caller withholds the marker (a stamped marker would let the
 // next push skip and strand index.html as the shell).
-func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string) (ok bool) {
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override)
+func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localCommitSource) (ok bool) {
+	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
 		return false // can't tell if a reclaim was needed: withhold the marker
 	}
@@ -390,8 +393,6 @@ func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string) (ok bool) {
 	if !sitePagesTipsCurrent(manifest, tips) {
 		return true // tips moved: pending, a site push rebuilds+reclaims
 	}
-	src := newLocalCommitSource(h.gitDir, "")
-	defer src.close()
 	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(h.client, h.prefix))
 	if err := reclaimSiteFrontPage(h.client, h.prefix, site, manifests, home); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: reclaim front page: %v\n", err)
@@ -895,66 +896,20 @@ func (h *remoteHelper) uploadMissingObjects(srcs []string) error {
 			add(line[:40])
 		}
 	}
-	stateShas, err := stateRefObjects(srcs)
-	if err != nil {
-		return err
-	}
-	return h.uploadDelta(shas, stateShas)
-}
-
-// stateRefObjects returns the objects reachable from the pushed state refs
-// (refs/gitmsg/*: the per-extension configs, list elements, fork and decline
-// markers). They stay loose even when the rest of the delta packs — site
-// maintenance and the browser read them straight off the bucket as loose keys,
-// and a state ref is only ever a handful of tiny objects. nil when the push
-// moves no state ref.
-func stateRefObjects(srcs []string) (map[string]bool, error) {
-	var stateSrcs []string
-	for _, src := range srcs {
-		if strings.HasPrefix(src, "refs/gitmsg/") {
-			stateSrcs = append(stateSrcs, src)
-		}
-	}
-	if len(stateSrcs) == 0 {
-		return nil, nil
-	}
-	out, err := gitOutput(append([]string{"rev-list", "--objects"}, stateSrcs...)...)
-	if err != nil {
-		return nil, fmt.Errorf("rev-list state refs: %w", err)
-	}
-	shas := map[string]bool{}
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) >= 40 {
-			shas[line[:40]] = true
-		}
-	}
-	return shas, nil
+	return h.uploadDelta(shas)
 }
 
 // uploadDelta uploads a push's object delta: packed once it is large enough to
-// pay for a pack (see pack.go), loose below that. State-ref objects always go
-// loose, so the packed and loose sets stay disjoint.
-func (h *remoteHelper) uploadDelta(shas []string, stateShas map[string]bool) error {
+// pay for a pack (see pack.go), loose below that. State-ref objects
+// (refs/gitmsg/*) pack with everything else — every loose-key reader has a pack
+// fallback (getBucketCommit reads the pack map, the browser's getObject probes
+// both shapes).
+func (h *remoteHelper) uploadDelta(shas []string) error {
 	if len(shas) < resolvePackThreshold() {
-		for _, sha := range shas {
-			if !stateShas[sha] {
-				h.looseUploaded++
-			}
-		}
+		h.looseUploaded += len(shas)
 		return h.uploadObjects(shas)
 	}
-	packable, loose := shas[:0:0], []string{}
-	for _, sha := range shas {
-		if stateShas[sha] {
-			loose = append(loose, sha)
-		} else {
-			packable = append(packable, sha)
-		}
-	}
-	if err := h.uploadPacked(packable); err != nil {
-		return err
-	}
-	return h.uploadObjects(loose)
+	return h.uploadPacked(shas)
 }
 
 // uploadPacked builds and uploads the two packs — commits and tags without

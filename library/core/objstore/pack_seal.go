@@ -82,8 +82,8 @@ type packState struct {
 	// next push retries instead of hiding the failure for packSealInterval
 	// pushes.
 	LastSeal int `json:"lastSeal"`
-	// LooseSinceSeal counts non-state objects pushes have uploaded loose since
-	// the last sealing attempt; crossing packSealLooseThreshold seals early.
+	// LooseSinceSeal counts objects pushes have uploaded loose since the last
+	// sealing attempt; crossing packSealLooseThreshold seals early.
 	// Additive under the concurrent replay, and a binary predating the field
 	// drops it on rewrite, which only defers the early trigger to the
 	// packSealInterval backstop. After an attempt it is SET to what the
@@ -113,7 +113,7 @@ type packStateUpdate struct {
 	sealed        *packRound      // the round this pass published, if any
 	sealAttempted bool
 	sealErr       string // empty when the attempt succeeded
-	looseUploaded int    // non-state objects this push uploaded loose
+	looseUploaded int    // objects this push uploaded loose
 	// looseAfterSeal is the measured loose-since-seal count after a sealing
 	// attempt: what the attempt's sealable set left unpacked (0 on a full
 	// success, the size-skipped half on a partial, the whole sealable set on a
@@ -317,31 +317,24 @@ func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound
 }
 
 // sealableObjects derives what this clone may pack out of the bucket's loose
-// keys, positively: reachable from a bucket ref that is NOT a state ref, minus
-// everything a state ref reaches (those stay loose — site maintenance reads them
-// as plain keys and has no pack fallback), minus whatever the local odb lacks.
+// keys, positively: reachable from a bucket ref tip (state refs included —
+// every loose-key reader has a pack fallback now), minus whatever the local odb
+// lacks.
 //
 // Positive derivation is what makes a bucket ref this clone never had harmless.
 // The bucket carries refs from every pusher, so resolving its refnames against
-// the local repo is wrong twice over: it fails outright on a refname that is not
-// there (which used to abort every seal), and making that failure tolerable
-// would instead let a state ref's objects fall out of the exclusion set and be
-// packed. Deriving from the tips this clone resolves does neither: an
-// unresolvable state ref subtracts nothing AND its objects are unreachable from
-// any non-state tip, so they are never sealed in the first place.
+// the local repo would fail outright on a refname that is not there (which used
+// to abort every seal). Deriving from the tips this clone resolves instead means
+// an unresolvable tip simply contributes nothing: its objects stay loose until a
+// clone that carries them seals.
 func sealableObjects(loose []string, refs map[string]string) ([]string, error) {
-	stateTips, contentTips := bucketRefTips(refs)
-	packable, err := reachableObjects(contentTips)
-	if err != nil {
-		return nil, err
-	}
-	stateShas, err := reachableObjects(stateTips)
+	packable, err := reachableObjects(bucketRefTips(refs))
 	if err != nil {
 		return nil, err
 	}
 	var candidates []string
 	for _, sha := range loose {
-		if packable[sha] && !stateShas[sha] {
+		if packable[sha] {
 			candidates = append(candidates, sha)
 		}
 	}
@@ -355,29 +348,23 @@ func sealableObjects(loose []string, refs map[string]string) ([]string, error) {
 	return append(commitLike, content...), nil
 }
 
-// bucketRefTips splits a bucket ref listing into the state-ref tips
-// (refs/gitmsg/*, whose objects stay loose) and every other tip, keeping only
-// the shas the local odb actually carries. Tips, not refnames: the bucket's
-// refs come from every clone that ever pushed, and only their object values
-// mean anything in this repo.
-func bucketRefTips(refs map[string]string) (stateTips, contentTips []string) {
-	for name, sha := range refs {
+// bucketRefTips returns every bucket ref tip whose object the local odb
+// actually carries. Tips, not refnames: the bucket's refs come from every clone
+// that ever pushed, and only their object values mean anything in this repo.
+func bucketRefTips(refs map[string]string) []string {
+	var tips []string
+	for _, sha := range refs {
 		if len(sha) != 40 || !isHexString(sha) {
 			continue
 		}
 		if _, err := gitOutput("cat-file", "-e", sha+"^{object}"); err != nil {
 			continue
 		}
-		if strings.HasPrefix(name, "refs/gitmsg/") {
-			stateTips = append(stateTips, sha)
-		} else {
-			contentTips = append(contentTips, sha)
-		}
+		tips = append(tips, sha)
 	}
 	// Sorted so the rev-list below is a deterministic command for a given bucket.
-	sort.Strings(stateTips)
-	sort.Strings(contentTips)
-	return stateTips, contentTips
+	sort.Strings(tips)
+	return tips
 }
 
 // reachableObjects returns every object reachable from tips, the tips included:

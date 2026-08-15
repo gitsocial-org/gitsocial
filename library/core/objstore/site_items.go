@@ -371,12 +371,24 @@ type bucketCommit struct {
 	parents []string
 }
 
-// getBucketCommit fetches and parses one commit object from the bucket. The GET
-// retries transient faults (a 503 mid-walk, a dropped connection): a long
-// bootstrap walk over thousands of commits must survive one provider hiccup
-// rather than lose the whole pass.
+// getBucketCommit fetches and parses one commit object from the bucket: the
+// loose key first, then — on a clean miss — the pack map (a packed commit is
+// one Range GET of a self-contained zlib stream, exactly how the browser reads
+// it; see getPackedBucketCommit). The GETs retry transient faults (a 503
+// mid-walk, a dropped connection): a long bootstrap walk over thousands of
+// commits must survive one provider hiccup rather than lose the whole pass. A
+// commit found in neither shape returns the loose miss.
 func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
 	compressed, err := client.GetRetry(prefix + "objects/" + sha[:2] + "/" + sha[2:])
+	if errors.Is(err, ErrNotFound) {
+		c, ok, packErr := getPackedBucketCommit(client, prefix, sha)
+		if packErr != nil {
+			return bucketCommit{}, packErr
+		}
+		if ok {
+			return c, nil
+		}
+	}
 	if err != nil {
 		return bucketCommit{}, fmt.Errorf("get object %s: %w", sha, err)
 	}
@@ -394,6 +406,41 @@ func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
 		return bucketCommit{}, fmt.Errorf("object %s: not a commit", sha)
 	}
 	return parseBucketCommit(sha, raw[nul+1:])
+}
+
+// getPackedBucketCommit resolves one commit out of the bucket's packfiles via
+// the pack map shard covering its sha: the shard names the pack and the exact
+// byte range, so the read is one Range GET and no .idx. ok is false (no error)
+// when the map has no usable entry or the named pack is gone — the caller then
+// surfaces its loose miss.
+func getPackedBucketCommit(client *Client, prefix, sha string) (bucketCommit, bool, error) {
+	doc, err := readPackMapShard(client, prefix, packMapShardName(sha))
+	if err != nil {
+		return bucketCommit{}, false, err
+	}
+	at, found := doc.Offsets[sha]
+	if !found || len(at) != 3 || at[0] < 0 || at[0] >= int64(len(doc.Packs)) {
+		return bucketCommit{}, false, nil
+	}
+	raw, err := client.GetRangeRetry(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
+	if errors.Is(err, ErrNotFound) {
+		return bucketCommit{}, false, nil
+	}
+	if err != nil {
+		return bucketCommit{}, false, fmt.Errorf("read packed object %s: %w", sha, err)
+	}
+	objType, body, err := inflatePackEntry(raw)
+	if err != nil {
+		return bucketCommit{}, false, fmt.Errorf("packed object %s: %w", sha, err)
+	}
+	if objType != "commit" {
+		return bucketCommit{}, false, fmt.Errorf("object %s: not a commit", sha)
+	}
+	c, err := parseBucketCommit(sha, body)
+	if err != nil {
+		return bucketCommit{}, false, err
+	}
+	return c, true, nil
 }
 
 // parseBucketCommit extracts parents, author identity/time, the verbatim

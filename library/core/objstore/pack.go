@@ -16,10 +16,13 @@
 package objstore
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -352,9 +355,9 @@ func writePackMapShard(client *Client, capability Capability, prefix, shard, pac
 
 // readPackMapShard fetches one pack map shard, returning an empty document when
 // it is absent, unparseable, or written by another schema version.
-func readPackMapShard(client *Client, shard string) (*packMapDoc, error) {
+func readPackMapShard(client *Client, prefix, shard string) (*packMapDoc, error) {
 	var doc packMapDoc
-	found, err := readCompressedJSON(client, packMapKeyPrefix+shard+".json", &doc)
+	found, err := readCompressedJSON(client, prefix+packMapKeyPrefix+shard+".json", &doc)
 	if err != nil {
 		return nil, fmt.Errorf("read pack map shard %s: %w", shard, err)
 	}
@@ -363,6 +366,45 @@ func readPackMapShard(client *Client, shard string) (*packMapDoc, error) {
 	}
 	doc.Version = packMapVersion
 	return &doc, nil
+}
+
+// packObjectTypes maps a pack entry's 3-bit type code to the git object type
+// name (whole objects only; 6/7 are the delta codes).
+var packObjectTypes = map[byte]string{1: "commit", 2: "tree", 3: "blob", 4: "tag"}
+
+// inflatePackEntry decodes one NON-DELTA pack entry out of its exact byte range
+// (a pack map range): the type/size varint header, then one self-contained zlib
+// stream — the shape the commits pack guarantees, since it is written with
+// --depth=0. A delta entry is an error here, not a fallback: the pack map only
+// indexes the commits pack.
+func inflatePackEntry(raw []byte) (objType string, body []byte, err error) {
+	if len(raw) == 0 {
+		return "", nil, fmt.Errorf("pack entry: empty range")
+	}
+	i := 0
+	b := raw[i]
+	i++
+	code := (b >> 4) & 7
+	for b&0x80 != 0 {
+		if i >= len(raw) {
+			return "", nil, fmt.Errorf("pack entry: truncated header")
+		}
+		b = raw[i]
+		i++
+	}
+	objType, ok := packObjectTypes[code]
+	if !ok {
+		return "", nil, fmt.Errorf("pack entry: type %d is a delta, but a mapped entry is always whole", code)
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(raw[i:]))
+	if err != nil {
+		return "", nil, fmt.Errorf("pack entry: inflate: %w", err)
+	}
+	defer zr.Close()
+	if body, err = io.ReadAll(zr); err != nil {
+		return "", nil, fmt.Errorf("pack entry: inflate: %w", err)
+	}
+	return objType, body, nil
 }
 
 // listBucketPacks returns the pack names ("pack-<hash>") the bucket carries,

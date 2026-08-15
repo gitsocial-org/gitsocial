@@ -117,7 +117,7 @@ type remoteHelper struct {
 	override      SiteOverride       // per-remote site deployment overrides (read from git config)
 	packsPulled   bool               // the bucket's packfiles were pulled into GIT_DIR this session
 	packObjects   map[string]bool    // object SHAs the pulled packfiles carry
-	looseUploaded int                // non-state objects THIS push uploaded loose (drives the seal trigger)
+	looseUploaded int                // objects THIS push uploaded loose (drives the seal trigger)
 	local         *localCommitSource // lazily-started local odb reader (packed-object bodies)
 }
 

@@ -243,6 +243,38 @@ func (c *Client) Get(key string) ([]byte, error) {
 	return data, nil
 }
 
+// GetRange downloads one byte range of an object (end exclusive), mirroring
+// the browser's fetchRange: a server that ignores Range answers 200 with the
+// whole body, which is sliced locally so the caller sees the requested range
+// either way.
+func (c *Client) GetRange(key string, start, end int64) ([]byte, error) {
+	headers := map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", start, end-1)}
+	resp, err := c.do(http.MethodGet, key, nil, nil, headers)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("objstore: read %s: %w", key, err)
+	}
+	if resp.StatusCode == http.StatusPartialContent {
+		return data, nil
+	}
+	if start >= int64(len(data)) {
+		return nil, fmt.Errorf("objstore: range %d-%d of %s: object is %d bytes", start, end, key, len(data))
+	}
+	if end > int64(len(data)) {
+		end = int64(len(data))
+	}
+	return data[start:end], nil
+}
+
+// GetRangeRetry is GetRange with transient-fault retry (see withReadRetry).
+func (c *Client) GetRangeRetry(key string, start, end int64) ([]byte, error) {
+	return withReadRetry(context.TODO(), func() ([]byte, error) { return c.GetRange(key, start, end) })
+}
+
 // retryBackoff paces read/PUT retries; len+1 = total attempts. A var so tests
 // can shrink the waits (shared by putObjectWithRetry and the read retries).
 var retryBackoff = []time.Duration{500 * time.Millisecond, 2 * time.Second}

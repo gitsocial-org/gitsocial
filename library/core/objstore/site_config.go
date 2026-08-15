@@ -96,16 +96,18 @@ func resolveSiteBoard(cfg sitePMConfig) siteResolvedBoard {
 	return siteResolvedBoard{Name: "Board", Columns: siteFrameworkBoards["kanban"]}
 }
 
-// readSitePMConfig resolves refs/gitmsg/pm/config from the bucket's objects and
-// parses its PMConfig JSON. Returns ok=false (no error) when the ref is absent,
+// readSitePMConfig resolves refs/gitmsg/pm/config and parses its PMConfig
+// JSON, reading the commit from the local odb when src is available (nil =
+// bucket-only) and otherwise from the bucket — loose key or, on a sealed
+// bucket, the pack map. Returns ok=false (no error) when the ref is absent,
 // the object is missing/not a commit, or the message is not valid config JSON —
 // the caller then omits the artifact (reader falls back to the kanban default).
-func readSitePMConfig(client *Client, prefix string, refs map[string]string) (sitePMConfig, bool, error) {
+func readSitePMConfig(client *Client, prefix string, refs map[string]string, src *localCommitSource) (sitePMConfig, bool, error) {
 	sha, present := refs["refs/gitmsg/pm/config"]
 	if !present || len(sha) != 40 {
 		return sitePMConfig{}, false, nil
 	}
-	c, err := getBucketCommit(client, prefix, sha)
+	c, err := getCommit(src, client, prefix, sha)
 	if err != nil {
 		return sitePMConfig{}, false, err
 	}
@@ -120,8 +122,8 @@ func readSitePMConfig(client *Client, prefix string, refs map[string]string) (si
 // after every push, so the static board honors the repo's config. Absent config
 // deletes the artifact (reader falls back to the kanban default). Best-effort by
 // contract; written on the same refs-moved path that maintains refs.json.
-func writeSitePMConfig(client *Client, prefix string, refs map[string]string) error {
-	cfg, ok, err := readSitePMConfig(client, prefix, refs)
+func writeSitePMConfig(client *Client, prefix string, refs map[string]string, src *localCommitSource) error {
+	cfg, ok, err := readSitePMConfig(client, prefix, refs, src)
 	if err != nil {
 		return err
 	}

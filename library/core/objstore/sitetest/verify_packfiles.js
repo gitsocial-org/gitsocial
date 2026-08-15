@@ -1,13 +1,14 @@
 // verify_packfiles.js - the browser pack reader against packed-demo, a bucket
-// whose git objects live in packfiles (only the state refs stay loose, by
-// design), and refdelta-demo, a hand-built REF_DELTA pack of the same objects.
+// whose git objects — state-ref objects included — live in packfiles, and
+// refdelta-demo, a hand-built REF_DELTA pack of the same objects.
 //
 // Three read paths have to work there, and the split is the whole point of the
 // design: a commit or tag is located by the pack map (one Range GET, no index,
 // no delta chain, because the commits pack is written with --depth=0), a tree or
 // blob goes through the pack index — range-read via its fanout, never
-// downloaded whole — and may resolve OFS_DELTA / REF_DELTA bases, and a loose
-// state-ref object still reads loose from the same bucket.
+// downloaded whole — and may resolve OFS_DELTA / REF_DELTA bases, and a
+// state-ref commit resolves out of the same packs (state objects pack like
+// everything else; the loose fallback only covers not-yet-sealed buckets).
 //
 // Every reconstructed object is checked CONTENT-ADDRESSED: the sha-1 of
 // "<type> <len>\0" + body must equal the sha that was asked for. A delta reader
@@ -249,11 +250,11 @@ async function main() {
   ok("the older revisions are stored as delta entries (OFS_DELTA)",
     olderTypes.filter((t) => t === 6).length >= 2, "pack entry types " + olderTypes.join(","));
 
-  // ---- mixed bucket: state refs stay loose next to the packs ----
+  // ---- state refs pack like everything else ----
   const configSha = await GS.resolveRef(BASE, "refs/gitmsg/social/config");
-  ok("the bucket carries a loose state-ref object", !!configSha && (await GS.fetchBytes(BASE, GS.objectKey(configSha))) !== null,
+  ok("the state-ref object lives in a pack (no loose key)", !!configSha && (await GS.fetchBytes(BASE, GS.objectKey(configSha))) === null,
     "config sha " + configSha);
-  if (configSha) await readsBack(GS.newContext(BASE), configSha, "a loose state-ref object on a packed bucket");
+  if (configSha) await readsBack(GS.newContext(BASE), configSha, "a packed state-ref object");
 
   // ---- REF_DELTA: the same objects, packed with sha-named delta bases ----
   const rdCtx = GS.newContext(REFDELTA);
