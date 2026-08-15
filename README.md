@@ -5,19 +5,21 @@
 
   *Git-native collaboration platform*
 
-[About](#about) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
+[About](#about) · [Installation](#installation) · [Quick Start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
 
 </div>
 
 ## About
 
-GitSocial is a CLI/TUI Go binary that stores everything in git:
+GitSocial is a CLI/TUI Go binary that stores issues, PRs, and other collaboration in git itself, as commits with [structured trailers](specs/GITMSG.md) on `gitmsg/*` branches.
 
-- Saves issues, PRs, etc., in the repository itself, as commits on `gitmsg/*` branches with [structured trailers](specs/GITMSG.md).
-- Needs only an S3-compatible bucket to host the repository via the built-in [`s3://` backend](documentation/S3.md) and to serve a [complete static site](documentation/STATIC-SITE.md) of it straight from the bucket, like [gitsocial.org](https://gitsocial.org).
-- Builds a timeline from repositories added to [lists](specs/GITMSG.md#2-lists) or registered as [forks](documentation/REVIEW.md#forks).
+A single idempotent command mirrors a project from GitHub or other hosts to an S3-compatible bucket you own; the bucket serves a [complete static site](documentation/STATIC-SITE.md) of the project (code, timeline, issues, releases, etc.), and doubles as a plain `git clone` source:
 
-[Watch TUI demo →](documentation/demo/demo.mp4)
+```bash
+gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
+```
+
+[GitSocial.org](https://gitsocial.org) is served this way. The forge becomes optional: issues, PRs, releases, and posts can be created with the CLI/TUI ([demo](documentation/demo/demo.mp4)) and pushed like any other commits, and other repositories followed through a [timeline](documentation/SOCIAL.md).
 
 ## Installation
 
@@ -49,22 +51,32 @@ Or download a binary from [releases](https://gitsocial.org/releases/index.html).
 
 ## Quick Start
 
-Clone your project from GitHub or any host, then from your project directory:
+#### Mirror a project
+
+```bash
+gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix> --url https://your-domain/
+```
+
+`--url` is the site's public address. `mirror` asks for the bucket credentials on first run; public access and the domain are one-time provider-dashboard steps. On a large repository try `-n 100` first ([all flags](documentation/CLI.md#gitsocial-mirror)).
+
+#### Explore a repository in the terminal
+
+Clone it from GitHub or any host, then from the project directory:
 
 ```bash
 gitsocial import     # import issues, PRs, etc
 gitsocial tui        # explore in the terminal
 ```
 
-Works for S3-compatible buckets too:
+#### Host your own repository on a bucket
 
 ```bash
-gitsocial clone s3://s3.example.com/mybucket/myrepo
-
-# or push to a bucket and publish a static site
-gitsocial remote add s3://s3.example.com/mybucket/myrepo
+gitsocial config credentials set s3.example.com    # paste the access + secret key
+gitsocial remote add s3://s3.example.com/mybucket/myrepo --default --site
 gitsocial push
 ```
+
+Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myrepo`, or with plain `git clone` from the bucket's public URL.
 
 ## Documentation
 
