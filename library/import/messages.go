@@ -16,12 +16,17 @@ var (
 	socialFieldOrder    = []string{"reply-to", "original"}
 )
 
+// joinTitleBody joins a subject line and body into commit message content.
+func joinTitleBody(title, body string) string {
+	if body == "" {
+		return title
+	}
+	return title + "\n\n" + body
+}
+
 // buildMilestoneMessage constructs a milestone commit message matching pm.buildMilestoneContent.
 func buildMilestoneMessage(title, body, state string, due *time.Time, editsRef string, origin *protocol.Origin) string {
-	content := title
-	if body != "" {
-		content += "\n\n" + body
-	}
+	content := joinTitleBody(title, body)
 	fields := map[string]string{
 		"type":  "milestone",
 		"state": state,
@@ -39,10 +44,7 @@ func buildMilestoneMessage(title, body, state string, due *time.Time, editsRef s
 
 // buildIssueMessage constructs an issue commit message matching pm.buildIssueContentWithEdits.
 func buildIssueMessage(subject, body, state string, assignees []string, due *time.Time, milestone, labels string, editsRef string, origin *protocol.Origin) string {
-	content := subject
-	if body != "" {
-		content += "\n\n" + body
-	}
+	content := joinTitleBody(subject, body)
 	if state == "" {
 		state = "open"
 	}
@@ -72,10 +74,7 @@ func buildIssueMessage(subject, body, state string, assignees []string, due *tim
 
 // buildReleaseMessage constructs a release commit message matching release.buildReleaseContent.
 func buildReleaseMessage(rel ImportRelease, editsRef string, origin *protocol.Origin) string {
-	content := rel.Name
-	if rel.Body != "" {
-		content += "\n\n" + rel.Body
-	}
+	content := joinTitleBody(rel.Name, rel.Body)
 	fields := map[string]string{
 		"type": "release",
 	}
@@ -113,10 +112,7 @@ func buildReleaseMessage(rel ImportRelease, editsRef string, origin *protocol.Or
 
 // buildPRMessage constructs a pull request commit message matching review.buildPRContentWithState.
 func buildPRMessage(subject, body, state string, draft bool, base, baseTip, head, headTip string, reviewers, labels []string, mergeBase, mergeHead, editsRef string, origin *protocol.Origin) string {
-	content := subject
-	if body != "" {
-		content += "\n\n" + body
-	}
+	content := joinTitleBody(subject, body)
 	if state == "" {
 		state = "open"
 	}

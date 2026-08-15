@@ -549,6 +549,9 @@ func formatExtStats(ext string, stats importpkg.Stats) string {
 		if stats.Issues > 0 {
 			parts = append(parts, fmt.Sprintf("%d issues", stats.Issues))
 		}
+		if stats.Comments > 0 {
+			parts = append(parts, fmt.Sprintf("%d comments", stats.Comments))
+		}
 		updated := stats.UpdatedIssues + stats.UpdatedMilestones
 		if updated > 0 {
 			parts = append(parts, fmt.Sprintf("%d updated", updated))
@@ -566,6 +569,9 @@ func formatExtStats(ext string, stats importpkg.Stats) string {
 		}
 		if stats.PRs > 0 {
 			parts = append(parts, fmt.Sprintf("%d pull requests", stats.PRs))
+		}
+		if stats.Comments > 0 {
+			parts = append(parts, fmt.Sprintf("%d comments", stats.Comments))
 		}
 		if stats.UpdatedPRs > 0 {
 			parts = append(parts, fmt.Sprintf("%d updated", stats.UpdatedPRs))

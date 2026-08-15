@@ -165,3 +165,32 @@ func TestResolveMappingPath_Default(t *testing.T) {
 		t.Errorf("ResolveMappingPath(default) = %q, want %q", got, want)
 	}
 }
+
+func TestReverseMapOriginURL(t *testing.T) {
+	cases := []struct {
+		url      string
+		wantType string
+		wantID   string
+	}{
+		{"https://github.com/user/repo/issues/42", "issue", "42"},
+		{"https://github.com/user/repo/issues/42#issuecomment-123456", "issue-comment", "123456"},
+		{"https://github.com/user/repo/pull/7", "pr", "7"},
+		{"https://github.com/user/repo/pull/7#issuecomment-987", "pr-comment", "987"},
+		{"https://github.com/user/repo/discussions/5", "post", "5"},
+		{"https://github.com/user/repo/discussions/5#discussioncomment-5-20240101T120000", "comment", "5-20240101T120000"},
+		{"https://github.com/user/repo/milestone/3", "milestone", "3"},
+		{"https://github.com/user/repo/releases/tag/v1.0.0", "release", "v1.0.0"},
+		{"https://gitlab.com/user/repo/-/issues/9", "issue", "9"},
+		{"https://gitlab.com/user/repo/-/issues/9#note_555", "issue-comment", "555"},
+		{"https://gitlab.com/user/repo/-/merge_requests/4", "pr", "4"},
+		{"https://gitlab.com/user/repo/-/merge_requests/4#note_777", "pr-comment", "777"},
+		{"https://github.com/user/repo", "", ""},
+		{"not-a-url", "", ""},
+	}
+	for _, c := range cases {
+		gotType, gotID := reverseMapOriginURL(c.url)
+		if gotType != c.wantType || gotID != c.wantID {
+			t.Errorf("reverseMapOriginURL(%q) = (%q, %q), want (%q, %q)", c.url, gotType, gotID, c.wantType, c.wantID)
+		}
+	}
+}

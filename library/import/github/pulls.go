@@ -49,7 +49,7 @@ type ghRepoOwner struct {
 	Login string `json:"login"`
 }
 
-// FetchReview fetches pull requests from GitHub, detecting forks.
+// FetchReview fetches pull requests and their conversations from GitHub, detecting forks.
 func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPlan, error) {
 	limit := opts.Limit
 	if limit <= 0 {
@@ -176,7 +176,12 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	for url := range forkSet {
 		forks = append(forks, url)
 	}
-	return &importpkg.ReviewPlan{Forks: forks, PRs: prs, Filtered: filtered}, nil
+	numbers := make([]int, 0, len(prs))
+	for _, pr := range prs {
+		numbers = append(numbers, pr.Number)
+	}
+	comments := a.fetchItemComments("pullRequest", "pr-comment", numbers, opts)
+	return &importpkg.ReviewPlan{Forks: forks, PRs: prs, Comments: comments, Filtered: filtered}, nil
 }
 
 // batchPRClosedBy fetches closed_by info for multiple PRs via GraphQL in batches of 50.

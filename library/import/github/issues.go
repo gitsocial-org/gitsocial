@@ -51,7 +51,7 @@ type ghUser struct {
 	Login string `json:"login"`
 }
 
-// FetchPM fetches milestones and issues from GitHub.
+// FetchPM fetches milestones, issues, and issue conversations from GitHub.
 func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error) {
 	milestones, err := a.fetchMilestones(opts)
 	if err != nil {
@@ -61,7 +61,12 @@ func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error
 	if err != nil {
 		return nil, fmt.Errorf("fetch issues: %w", err)
 	}
-	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Filtered: filtered}, nil
+	numbers := make([]int, 0, len(issues))
+	for _, issue := range issues {
+		numbers = append(numbers, issue.Number)
+	}
+	comments := a.fetchItemComments("issue", "issue-comment", numbers, opts)
+	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Comments: comments, Filtered: filtered}, nil
 }
 
 func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.ImportMilestone, error) {

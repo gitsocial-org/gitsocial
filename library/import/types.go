@@ -87,7 +87,8 @@ func formatCountWithLabel(n int, singular, plural string) string {
 type PMPlan struct {
 	Milestones []ImportMilestone
 	Issues     []ImportIssue
-	Filtered   int // issues filtered by --since/--skip-bots
+	Comments   []ImportComment // conversation comments on issues (PostID = issue ExternalID)
+	Filtered   int             // issues filtered by --since/--skip-bots
 }
 
 type ReleasePlan struct {
@@ -98,6 +99,7 @@ type ReleasePlan struct {
 type ReviewPlan struct {
 	Forks    []string
 	PRs      []ImportPR
+	Comments []ImportComment // conversation comments on PRs (PostID = PR ExternalID)
 	Filtered int
 }
 

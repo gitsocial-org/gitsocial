@@ -243,11 +243,11 @@ func reverseMapOriginURL(originURL string) (itemType, externalID string) {
 	case strings.HasPrefix(path, "milestone/"):
 		return "milestone", strings.TrimPrefix(path, "milestone/")
 	case strings.HasPrefix(path, "issues/"):
-		return "issue", strings.TrimPrefix(path, "issues/")
+		return splitCommentFragment("issue", strings.TrimPrefix(path, "issues/"), "#issuecomment-")
 	case strings.HasPrefix(path, "releases/tag/"):
 		return "release", strings.TrimPrefix(path, "releases/tag/")
 	case strings.HasPrefix(path, "pull/"):
-		return "pr", strings.TrimPrefix(path, "pull/")
+		return splitCommentFragment("pr", strings.TrimPrefix(path, "pull/"), "#issuecomment-")
 	case strings.HasPrefix(path, "discussions/"):
 		suffix := strings.TrimPrefix(path, "discussions/")
 		if fragIdx := strings.Index(suffix, "#discussioncomment-"); fragIdx != -1 {
@@ -258,13 +258,22 @@ func reverseMapOriginURL(originURL string) (itemType, externalID string) {
 	case strings.HasPrefix(path, "-/milestones/"):
 		return "milestone", strings.TrimPrefix(path, "-/milestones/")
 	case strings.HasPrefix(path, "-/issues/"):
-		return "issue", strings.TrimPrefix(path, "-/issues/")
+		return splitCommentFragment("issue", strings.TrimPrefix(path, "-/issues/"), "#note_")
 	case strings.HasPrefix(path, "-/releases/"):
 		return "release", strings.TrimPrefix(path, "-/releases/")
 	case strings.HasPrefix(path, "-/merge_requests/"):
-		return "pr", strings.TrimPrefix(path, "-/merge_requests/")
+		return splitCommentFragment("pr", strings.TrimPrefix(path, "-/merge_requests/"), "#note_")
 	}
 	return "", ""
+}
+
+// splitCommentFragment maps an item path suffix to either the item itself or,
+// when the given comment fragment is present, its conversation comment.
+func splitCommentFragment(itemType, suffix, fragment string) (string, string) {
+	if fragIdx := strings.Index(suffix, fragment); fragIdx != -1 {
+		return itemType + "-comment", suffix[fragIdx+len(fragment):]
+	}
+	return itemType, suffix
 }
 
 // MappedExternalIDs extracts external IDs by type from the mapping for a given platform.

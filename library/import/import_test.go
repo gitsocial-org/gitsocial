@@ -269,6 +269,73 @@ func TestDetectStackEdges_Empty(t *testing.T) {
 	}
 }
 
+func TestPlatformCommentFragment(t *testing.T) {
+	cases := []struct{ platform, commentID, want string }{
+		{"github", "123456", "#issuecomment-123456"},
+		{"gitlab", "555", "#note_555"},
+		{"gitea", "42", "#issuecomment-42"},
+	}
+	for _, c := range cases {
+		got := platformCommentFragment(c.platform, c.commentID)
+		if got != c.want {
+			t.Errorf("platformCommentFragment(%q, %q) = %q, want %q", c.platform, c.commentID, got, c.want)
+		}
+	}
+}
+
+func TestSortByItemAndTime(t *testing.T) {
+	t1 := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
+	t3 := t1.Add(2 * time.Hour)
+	comments := []ImportComment{
+		{ExternalID: "c", PostID: "2", CreatedAt: t3},
+		{ExternalID: "a", PostID: "1", CreatedAt: t2},
+		{ExternalID: "b", PostID: "2", CreatedAt: t1},
+		{ExternalID: "d", PostID: "1", CreatedAt: t1},
+	}
+	got := sortByItemAndTime(comments)
+	wantOrder := []string{"d", "a", "b", "c"}
+	for i, want := range wantOrder {
+		if got[i].ExternalID != want {
+			t.Errorf("sorted[%d] = %q, want %q", i, got[i].ExternalID, want)
+		}
+	}
+	// Input must be untouched
+	if comments[0].ExternalID != "c" {
+		t.Errorf("input slice was mutated: %+v", comments)
+	}
+}
+
+func TestExecuteItemComments_DryRun(t *testing.T) {
+	mapping := &MappingFile{Source: "github", Items: map[string]MappedItem{
+		"github:issue:1":           {Hash: "aaa111222333", Branch: "gitmsg/pm", Type: "issue"},
+		"github:issue-comment:900": {Hash: "bbb444555666", Branch: "gitmsg/social", Type: "issue-comment"},
+	}}
+	comments := []ImportComment{
+		{ExternalID: "900", PostID: "1", Content: "already imported"},
+		{ExternalID: "901", PostID: "1", Content: "new comment on mapped issue"},
+		{ExternalID: "902", PostID: "2", Content: "comment on issue in plan"},
+		{ExternalID: "903", PostID: "3", Content: "comment on unknown issue"},
+	}
+	parentContent := map[string]string{"2": "Issue two\n\nBody"}
+	stats := executeItemComments(Options{DryRun: true}, comments, mapping, "issue", "issue-comment", "pm", "issue", parentContent)
+	if stats.Comments != 2 {
+		t.Errorf("Comments = %d, want 2", stats.Comments)
+	}
+	if stats.Skipped != 2 {
+		t.Errorf("Skipped = %d, want 2", stats.Skipped)
+	}
+}
+
+func TestJoinTitleBody(t *testing.T) {
+	if got := joinTitleBody("Title", "Body"); got != "Title\n\nBody" {
+		t.Errorf("joinTitleBody = %q", got)
+	}
+	if got := joinTitleBody("Title", ""); got != "Title" {
+		t.Errorf("joinTitleBody empty body = %q", got)
+	}
+}
+
 func TestDetectStackEdges_NoMatch(t *testing.T) {
 	// Two PRs targeting main independently — no stack relationship.
 	prs := []ImportPR{

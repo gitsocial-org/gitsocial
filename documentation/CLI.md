@@ -58,9 +58,9 @@ When no URL is provided, the origin remote of the current repository is used. Wh
 ```
 gitsocial import [url]                  # Import all from URL or origin remote
 gitsocial import all [url]              # Everything in dependency order (pm → release → review → social)
-gitsocial import pm [url]               # Milestones + issues
+gitsocial import pm [url]               # Milestones + issues + issue conversations (comments: GitHub only)
 gitsocial import release [url]          # Releases + artifact metadata
-gitsocial import review [url]           # Fork registrations + pull/merge requests
+gitsocial import review [url]           # Fork registrations + pull/merge requests + PR conversations (comments: GitHub only)
 gitsocial import social [url]           # Discussions/posts + comments (GitHub only)
 ```
 

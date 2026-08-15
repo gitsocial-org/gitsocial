@@ -142,6 +142,7 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 			s := executePM(opts, plan, mapping)
 			stats.Milestones += s.Milestones
 			stats.Issues += s.Issues
+			stats.Comments += s.Comments
 			stats.Skipped += s.Skipped
 			stats.Errors = append(stats.Errors, s.Errors...)
 			if opts.Update {
@@ -194,6 +195,7 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 			s := executeReview(opts, plan, mapping)
 			stats.Forks += s.Forks
 			stats.PRs += s.PRs
+			stats.Comments += s.Comments
 			stats.Skipped += s.Skipped
 			stats.Errors = append(stats.Errors, s.Errors...)
 			if opts.Update {
@@ -264,6 +266,9 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 				stats.Issues++
 			}
 		}
+		cs := executeItemComments(opts, plan.Comments, mapping, "issue", "issue-comment", "pm", "issue", issueContentByID(plan.Issues))
+		stats.Comments += cs.Comments
+		stats.Skipped += cs.Skipped
 		return stats
 	}
 	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
@@ -510,6 +515,11 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 			}
 		}
 	}
+	// Comment phase: conversation comments ride their parent issues
+	cs := executeItemComments(opts, plan.Comments, mapping, "issue", "issue-comment", "pm", "issue", issueContentByID(plan.Issues))
+	stats.Comments += cs.Comments
+	stats.Skipped += cs.Skipped
+	stats.Errors = append(stats.Errors, cs.Errors...)
 	return stats
 }
 
@@ -622,6 +632,9 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 				stats.PRs++
 			}
 		}
+		cs := executeItemComments(opts, plan.Comments, mapping, "pr", "pr-comment", "review", "pull-request", prContentByID(plan.PRs))
+		stats.Comments += cs.Comments
+		stats.Skipped += cs.Skipped
 		return stats
 	}
 	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
@@ -719,7 +732,14 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		})
 		prMessages = append(prMessages, msg)
 	}
+	commentPhase := func() {
+		cs := executeItemComments(opts, plan.Comments, mapping, "pr", "pr-comment", "review", "pull-request", prContentByID(plan.PRs))
+		stats.Comments += cs.Comments
+		stats.Skipped += cs.Skipped
+		stats.Errors = append(stats.Errors, cs.Errors...)
+	}
 	if len(prMessages) == 0 {
+		commentPhase()
 		return stats
 	}
 	prHashes, err := git.FastImportCommits(opts.WorkDir, branch, prMessages)
@@ -836,6 +856,8 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 			}
 		}
 	}
+	// Comment phase: conversation comments ride their parent PRs
+	commentPhase()
 	return stats
 }
 
@@ -1104,6 +1126,150 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			mapping.Record(key, hash, "gitmsg/social", "comment")
 			stats.Comments++
 		}
+	}
+	return stats
+}
+
+// issueContentByID maps issue external IDs to their full content for ref quoting.
+func issueContentByID(issues []ImportIssue) map[string]string {
+	m := make(map[string]string, len(issues))
+	for _, issue := range issues {
+		m[issue.ExternalID] = joinTitleBody(issue.Title, issue.Body)
+	}
+	return m
+}
+
+// prContentByID maps PR external IDs to their full content for ref quoting.
+func prContentByID(prs []ImportPR) map[string]string {
+	m := make(map[string]string, len(prs))
+	for _, pr := range prs {
+		m[pr.ExternalID] = joinTitleBody(pr.Title, pr.Body)
+	}
+	return m
+}
+
+// platformCommentFragment returns the URL fragment anchoring a conversation comment.
+func platformCommentFragment(platform, commentID string) string {
+	if platform == "gitlab" {
+		return "#note_" + commentID
+	}
+	return "#issuecomment-" + commentID
+}
+
+// sortByItemAndTime returns comments ordered by original timestamp within each parent item.
+func sortByItemAndTime(comments []ImportComment) []ImportComment {
+	sorted := make([]ImportComment, len(comments))
+	copy(sorted, comments)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].PostID == sorted[j].PostID {
+			return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
+		}
+		return sorted[i].PostID < sorted[j].PostID
+	})
+	return sorted
+}
+
+// executeItemComments commits conversation comments as social comments on the
+// social branch, each referencing its parent extension item (issue or PR) by
+// canonical hash. Mirrors executeSocial's comment phase; parentContent maps
+// parent external IDs in the current plan to their content for ref quoting.
+func executeItemComments(opts Options, comments []ImportComment, mapping *MappingFile, parentKeyType, commentKeyType, parentExt, parentType string, parentContent map[string]string) Stats {
+	stats := Stats{}
+	if len(comments) == 0 {
+		return stats
+	}
+	platform := mapping.Source
+	if opts.DryRun {
+		for _, c := range comments {
+			_, parentInPlan := parentContent[c.PostID]
+			switch {
+			case mapping.IsMapped(MappingKey(platform, commentKeyType, c.ExternalID)):
+				stats.Skipped++
+			case !parentInPlan && mapping.GetHash(MappingKey(platform, parentKeyType, c.PostID)) == "":
+				stats.Skipped++
+			default:
+				stats.Comments++
+			}
+		}
+		return stats
+	}
+	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
+	branch := gitmsg.GetExtBranch(opts.WorkDir, "social")
+	parentBranch := gitmsg.GetExtBranch(opts.WorkDir, parentExt)
+	authorName, authorEmail, err := git.GetAuthorIdentity(opts.WorkDir)
+	if err != nil {
+		stats.Errors = append(stats.Errors, ImportError{Type: commentKeyType, Message: "get author: " + err.Error()})
+		return stats
+	}
+	now := time.Now()
+	type commentEntry struct {
+		item       ImportComment
+		message    string
+		parentHash string
+	}
+	var entries []commentEntry
+	var messages []string
+	for _, c := range sortByItemAndTime(comments) {
+		if mapping.IsMapped(MappingKey(platform, commentKeyType, c.ExternalID)) {
+			stats.Skipped++
+			continue
+		}
+		parentHash := mapping.GetHash(MappingKey(platform, parentKeyType, c.PostID))
+		if parentHash == "" {
+			stats.Skipped++
+			continue
+		}
+		if opts.Verbose {
+			fmt.Printf("  %s  comment: %s\n", parentExt, truncate(c.Content, 60))
+		}
+		originalRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", parentBranch)
+		// Build GitMsg-Ref section for the parent item
+		var ref *protocol.Ref
+		if content, ok := parentContent[c.PostID]; ok {
+			r := protocol.Ref{
+				Ext: parentExt, Author: authorName, Email: authorEmail,
+				Time: now.Format(time.RFC3339), Ref: originalRef, V: "0.1.0",
+				Fields:   map[string]string{"type": parentType},
+				Metadata: protocol.QuoteContent(content),
+			}
+			ref = &r
+		}
+		commentPath := platformPath(platform, parentKeyType, c.PostID) + platformCommentFragment(platform, c.ExternalID)
+		origin := buildOrigin(c.AuthorName, c.AuthorEmail, c.CreatedAt, platform, opts.RepoURL, commentPath)
+		msg := buildCommentMessage(c.Content, originalRef, ref, origin)
+		entries = append(entries, commentEntry{item: c, message: msg, parentHash: parentHash})
+		messages = append(messages, msg)
+	}
+	if len(messages) == 0 {
+		return stats
+	}
+	hashes, err := git.FastImportCommits(opts.WorkDir, branch, messages)
+	if err != nil {
+		stats.Errors = append(stats.Errors, ImportError{Type: commentKeyType, Message: "fast-import: " + err.Error()})
+		return stats
+	}
+	for i, entry := range entries {
+		hash := hashes[i]
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: hash, RepoURL: repoURL, Branch: branch,
+			AuthorName: authorName, AuthorEmail: authorEmail,
+			Message: entry.message, Timestamp: importTime(entry.item.CreatedAt, now),
+		}}); err != nil {
+			stats.Errors = append(stats.Errors, ImportError{Type: commentKeyType, Message: "cache: " + err.Error()})
+			continue
+		}
+		if err := social.InsertSocialItem(social.SocialItem{
+			RepoURL: repoURL, Hash: hash, Branch: branch,
+			Type:            "comment",
+			OriginalRepoURL: sql.NullString{String: repoURL, Valid: true},
+			OriginalHash:    sql.NullString{String: entry.parentHash, Valid: true},
+			OriginalBranch:  sql.NullString{String: parentBranch, Valid: true},
+		}); err != nil {
+			stats.Errors = append(stats.Errors, ImportError{Type: commentKeyType, Message: "cache: " + err.Error()})
+			continue
+		}
+		mapping.Record(MappingKey(platform, commentKeyType, entry.item.ExternalID), hash, branch, commentKeyType)
+		stats.Comments++
 	}
 	return stats
 }
