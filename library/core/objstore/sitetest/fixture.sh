@@ -52,6 +52,11 @@ mkdir -p "$served" "$out/xdg"
 bin="$repo/bin/gitsocial"
 echo "building bin/gitsocial ..."
 (cd "$repo" && go build -o bin/gitsocial ./cli/gitsocial)
+# Plain `git push` resolves the s3 remote through the repo-local alias
+# `!gitsocial __git-remote-s3`, which looks the binary up in PATH — without
+# this, an installed gitsocial (a release, or another branch) would serve the
+# fixture's push surface instead of the binary just built from these sources.
+export PATH="$repo/bin:$PATH"
 locals3bin="$out/locals3bin"
 go build -o "$locals3bin" "$here/../locals3"
 export XDG_CONFIG_HOME="$out/xdg"
