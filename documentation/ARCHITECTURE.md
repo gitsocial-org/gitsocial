@@ -311,7 +311,7 @@ Examples already in the codebase: `social.GetThread` (recursive CTE on `social_i
 
 ## S3 Remote Backend
 
-Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote via the `s3://` remote helper in `core/objstore` (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)). The only stored URL shape is `s3://<endpoint>/<bucket>/<prefix>`. `gitsocial site push` also uploads a browser-only static site alongside the repo, served straight from the bucket layout.
+Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote via the `s3://` remote helper in `core/objstore` (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)). The only stored URL shape is `s3://<endpoint>/<bucket>/<prefix>`. `gitsocial push` (or an explicit `gitsocial push --site-only`) also uploads a browser-only static site alongside the repo, served straight from the bucket layout.
 
 Two docs split by surface:
 

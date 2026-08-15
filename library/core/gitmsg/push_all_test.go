@@ -1,4 +1,4 @@
-// push_all_test.go - Tests for --all (wholesale branch publish) and empty-remote
+// push_all_test.go - Tests for --all-branches (publish every local branch) and empty-remote
 // (first-publish bootstrap) detection.
 package gitmsg
 
@@ -30,8 +30,8 @@ func setupWorkWithRemote(t *testing.T) (work, remote string) {
 	return work, remote
 }
 
-// TestGetPushPreview_allListsExtraBranches: with --all, every local non-gitmsg
-// branch beyond the reason-based code set appears in preview.All. Without --all
+// TestGetPushPreview_allListsExtraBranches: with --all-branches, every local non-gitmsg
+// branch beyond the reason-based code set appears in preview.All. Without --all-branches
 // it stays empty.
 func TestGetPushPreview_allListsExtraBranches(t *testing.T) {
 	work, _ := setupWorkWithRemote(t)
@@ -44,15 +44,15 @@ func TestGetPushPreview_allListsExtraBranches(t *testing.T) {
 
 	preview, err := GetPushPreview(work, nil, "origin", false)
 	if err != nil {
-		t.Fatalf("preview (no --all): %v", err)
+		t.Fatalf("preview (no --all-branches): %v", err)
 	}
 	if len(preview.All) != 0 {
-		t.Errorf("preview.All without --all = %v, want empty", preview.All)
+		t.Errorf("preview.All without --all-branches = %v, want empty", preview.All)
 	}
 
 	preview, err = GetPushPreview(work, nil, "origin", true)
 	if err != nil {
-		t.Fatalf("preview (--all): %v", err)
+		t.Fatalf("preview (--all-branches): %v", err)
 	}
 	got := map[string]bool{}
 	for _, b := range preview.All {
@@ -84,7 +84,7 @@ func TestGetPushPreview_allExcludesCodeBranches(t *testing.T) {
 	}
 }
 
-// TestPush_allPushesExtraBranches: --all publishes WIP branches that a normal
+// TestPush_allPushesExtraBranches: --all-branches publishes WIP branches that a normal
 // push (reason-based) would never touch, and reports the count.
 func TestPush_allPushesExtraBranches(t *testing.T) {
 	work, remote := setupWorkWithRemote(t)
@@ -95,7 +95,7 @@ func TestPush_allPushesExtraBranches(t *testing.T) {
 	}
 
 	// Establish the remote (a tags-only push to a truly empty bare remote errors
-	// in git), then a normal push (no --all, no code branches) must NOT publish
+	// in git), then a normal push (no --all-branches, no code branches) must NOT publish
 	// the WIP branches.
 	git.ExecGit(work, []string{"push", "origin", "main"})
 	if _, err := Push(work, false, nil, "origin", false); err != nil {
@@ -105,17 +105,17 @@ func TestPush_allPushesExtraBranches(t *testing.T) {
 		t.Errorf("normal push published wip/experiment (%q), want it skipped", tip)
 	}
 
-	// --all publishes every local branch.
+	// --all-branches publishes every local branch.
 	result, err := Push(work, false, nil, "origin", true)
 	if err != nil {
-		t.Fatalf("--all push: %v", err)
+		t.Fatalf("--all-branches push: %v", err)
 	}
 	if result.AllBranches == 0 {
 		t.Errorf("result.AllBranches = 0, want > 0")
 	}
 	for _, b := range []string{"main", "wip/experiment", "feature/x"} {
 		if tip := remoteRef(t, remote, "refs/heads/"+b); tip == "" {
-			t.Errorf("--all did not publish %q", b)
+			t.Errorf("--all-branches did not publish %q", b)
 		}
 	}
 }

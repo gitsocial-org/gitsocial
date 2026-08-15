@@ -266,7 +266,7 @@ func putSiteManifest(client *Client, prefix string, refs map[string]string) erro
 // SetRemoteHead points the bucket's HEAD symref at the given branch, so git
 // clone and the browser code view use the repo's real default branch (e.g.
 // "master") rather than an assumed "main" or whatever branch happened to be
-// pushed first. Written authoritatively on `gitsocial site push`.
+// pushed first. Written authoritatively on `gitsocial push --site-only`.
 func SetRemoteHead(remoteURL string, env HelperEnv, branch string) error {
 	if branch == "" {
 		return nil
@@ -288,7 +288,7 @@ func SetRemoteHead(remoteURL string, env HelperEnv, branch string) error {
 // the browser read surface. It carries counts with no metadata index — the
 // default branch's regular commit count — that the pusher (which has the git
 // repo) computes cheaply and the browser reads in one fetch. Refreshed on
-// `gitsocial site push`; a plain git push leaves it until the next site push.
+// `gitsocial push --site-only`; a plain git push leaves it until the next site push.
 func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
@@ -378,7 +378,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	}
 	// The explicit site refresh re-derives the read surface from the bucket's
 	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)
-	// in step with it so `gitsocial site push` also heals a stale/absent listing.
+	// in step with it so `gitsocial push --site-only` also heals a stale/absent listing.
 	logDumbTransportInfo(client, prefix, src, refs)
 	if err := writeSitePMConfig(client, prefix, refs, src); err != nil {
 		return err
@@ -402,7 +402,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 		}
 	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src); err == nil {
 		if _, on := sitePagesEffective(cfg, ok); on {
-			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial site push`)", 1, 1)
+			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial push --site-only`)", 1, 1)
 		}
 	}
 	// Stamp the marker LAST, only after a fully successful pass, so an interrupted

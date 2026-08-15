@@ -47,7 +47,7 @@ Edits use the core versioning chain; the latest version wins in `release list`.
 gitsocial release list                       # newest first (filter via --json + jq if needed)
 gitsocial release show <ref>
 gitsocial release artifacts list <ref>       # list artifacts + their hosted URLs
-gitsocial release artifacts add <ref> ...    # attach more artifacts to an existing release
+gitsocial release artifacts record <ref> ... # record more artifacts on an existing release (no upload)
 gitsocial release artifacts export <ref>     # download artifacts to a local directory
 gitsocial release sbom <ref>                 # show parsed SBOM details
 ```

@@ -152,7 +152,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           setView([el("div", { class: "err" }, [
             "This bucket uses \"" + ctx.refMode + "\" ref mode, whose refs the static " +
             "reader can only resolve through the refs manifest — and this bucket has " +
-            "none yet. Push with a current gitsocial, or run `gitsocial site push`, " +
+            "none yet. Push with a current gitsocial, or run `gitsocial push --site-only`, " +
             "to publish it.",
           ])]);
           return;

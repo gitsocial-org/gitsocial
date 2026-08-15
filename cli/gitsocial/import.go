@@ -20,21 +20,22 @@ import (
 )
 
 type importFlags struct {
-	limit      int
-	since      string
-	dryRun     bool
-	update     bool
-	yes        bool
-	mapFile    string
-	labels     string
-	skipBots   bool
-	host       string
-	apiURL     string
-	token      string
-	verbose    bool
-	state      string
-	categories string
-	emailMap   string
+	limit       int
+	since       string
+	dryRun      bool
+	update      bool
+	yes         bool
+	mapFile     string
+	labels      string
+	skipBots    bool
+	host        string
+	apiURL      string
+	token       string
+	verbose     bool
+	state       string
+	categories  string
+	emailMap    string
+	allBranches bool
 }
 
 // addImportFlags registers all import flags on a command.
@@ -44,7 +45,7 @@ func addImportFlags(cmd *cobra.Command, f *importFlags, hasSocial bool, defaultL
 	cmd.Flags().StringVar(&f.since, "since", "", "Only import items created after date (YYYY-MM-DD)")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Print what would be imported without creating commits")
 	cmd.Flags().BoolVar(&f.update, "update", false, "Sync changes from platform for already-imported items")
-	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "Skip confirmation and first-run prompts")
 	cmd.Flags().StringVar(&f.mapFile, "map-file", "", "Path to ID mapping file (default: ~/.cache/gitsocial/import/<repo>.json)")
 	cmd.Flags().StringVar(&f.labels, "labels", "auto", "Label mapping: auto, raw, skip")
 	cmd.Flags().BoolVar(&f.skipBots, "skip-bots", true, "Skip items authored by bots")
@@ -54,6 +55,7 @@ func addImportFlags(cmd *cobra.Command, f *importFlags, hasSocial bool, defaultL
 	cmd.Flags().BoolVarP(&f.verbose, "verbose", "v", false, "Print each item as it's imported")
 	cmd.Flags().StringVar(&f.state, "state", "all", "Filter by state: open, closed, merged, all")
 	cmd.Flags().StringVar(&f.emailMap, "email-map", "", "Path to username=email mapping file for author email overrides")
+	cmd.Flags().BoolVar(&f.allBranches, "all-branches", false, "First-run fetch mode: track all upstream branches (skips the prompt)")
 	if hasSocial {
 		cmd.Flags().StringVar(&f.categories, "categories", "", "Discussion category slugs to import (comma-separated, default: all)")
 	}
@@ -221,7 +223,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	if !cfg.JSONOutput {
 		fmt.Printf("Fetching latest updates...\n")
 	}
-	runFullFetch(cfg, nil)
+	runFullFetch(cfg, nil, f.yes, f.allBranches)
 	// Count items and show confirmation prompt
 	if !cfg.JSONOutput {
 		fmt.Printf("Counting items...\n")
@@ -293,7 +295,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		if !cfg.JSONOutput {
 			fmt.Printf("\nFetching latest updates...\n")
 		}
-		runFullFetch(cfg, nil)
+		runFullFetch(cfg, nil, f.yes, f.allBranches)
 	}
 	mapPath := importpkg.ResolveMappingPath(cfg.CacheDir, repoURL, f.mapFile)
 	if cfg.JSONOutput {

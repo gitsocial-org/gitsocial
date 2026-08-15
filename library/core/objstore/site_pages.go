@@ -483,8 +483,9 @@ func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 // with the same content rather than a different page.
 //
 // Every part of the body reads from ONE source of truth: the BUCKET's tip for
-// the default branch. The local ref of the same name is not it — `gitsocial site
-// push` pushes no data of its own, so a local branch ahead of the bucket would
+// the default branch. The local ref of the same name is not it — `gitsocial push
+// --site-only` pushes no data of its own, so a local branch ahead of the bucket
+// would
 // list files the bucket cannot serve behind app links that resolve to nothing,
 // and a bucket HEAD naming a branch this checkout lacks would drop the listing
 // even though the bucket carries it. The local odb is only the reader for that

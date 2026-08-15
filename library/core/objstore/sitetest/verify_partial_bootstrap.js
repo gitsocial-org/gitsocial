@@ -6,7 +6,7 @@
 //     present, the timeline + recent (light) search still work from the eager
 //     set, and the "search older items" affordance reports the coverage is
 //     limited to the bootstrapped prefix (corpus.partial).
-//   - extended-demo: same start, then one more `site push` whose backfill
+//   - extended-demo: same start, then one more `push --site-only` whose backfill
 //     prepends the next older segment, so its manifest lists strictly more shards
 //     / covers strictly more commits than partial-demo, still newest-first valid.
 const GS = require("../site/gs-core.js");

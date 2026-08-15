@@ -100,13 +100,13 @@ git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
 gg social init >/dev/null
 UP=$(gg --json social post "Original upstream idea: loose-object readers over dumb HTTP." | idof)
 gg remote add "s3://$HOST/other-demo" >/dev/null
-# The site is guard-gated (default off): enable publish locally so `site push`
+# The site is guard-gated (default off): enable publish locally so `push --site-only`
 # runs. The config ref is deliberately NOT pushed and pages stay off, so
 # other-demo doubles as the guards-off page fixture (zero page keys).
 gg config site set publish true >/dev/null
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
-gg site push >/dev/null
+gg push --site-only >/dev/null
 
 # ---- main workspace: thread-demo (Ada Lovelace) ----
 W="$out/thread-demo"
@@ -264,7 +264,7 @@ gg config site set publish true >/dev/null
 gg config site set pages true >/dev/null
 gg config site set url "http://127.0.0.1:$port/thread-demo/" >/dev/null
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
-gg site push >/dev/null
+gg push --site-only >/dev/null
 
 # ---- interrupted-push buckets (repair coverage) ----
 # Both are built, then their items manifest is removed, simulating a push
@@ -283,13 +283,13 @@ for B in interrupted-demo healed-demo; do
 	gg social post "First post before the interruption." >/dev/null
 	gg social post "Second post before the interruption." >/dev/null
 	gg remote add "s3://$HOST/$B" >/dev/null
-	# publish guard: locally for `site push`, and pushed (refs/gitmsg/*) so
+	# publish guard: locally for `push --site-only`, and pushed (refs/gitmsg/*) so
 	# healed-demo's later plain heal push runs the helper's maintenance.
 	gg config site set publish true >/dev/null
 	git -C "$W" push -q origin main
 	git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 	git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
-	gg site push >/dev/null
+	gg push --site-only >/dev/null
 	rm -f "$served/$B/.gitsocial/site/items/social/manifest.json" \
 		"$served/$B/.gitsocial/site/items/social/manifest.json.gsenc"
 done
@@ -304,7 +304,7 @@ git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 #     (light) search must work from the servable newest prefix, and the
 #     "search older items" affordance must report the coverage is limited to the
 #     bootstrapped prefix.
-#   - extended-demo takes one more `site push`, whose backfill prepends the next
+#   - extended-demo takes one more `push --site-only`, whose backfill prepends the next
 #     older segment, so its manifest covers strictly more history than partial's.
 # The budget override is scoped to this block so the other fixtures (all below
 # the budget) keep single-push, complete indexes. Unset in production.
@@ -325,11 +325,11 @@ for B in partial-demo extended-demo; do
 	gg config site set publish true >/dev/null
 	git -C "$W" push -q origin main
 	git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
-	gg site push >/dev/null
+	gg push --site-only >/dev/null
 done
 # extended-demo gets one more push, advancing its bootstrap by one segment.
 W="$out/extended-demo"
-gg site push >/dev/null
+gg push --site-only >/dev/null
 unset GITSOCIAL_SITE_WALK_BUDGET
 
 # ---- sparse-demo: a repo with PM issues but NO social/review/release/memo corpus
@@ -350,7 +350,7 @@ gg config site set publish true >/dev/null
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
-gg site push >/dev/null
+gg push --site-only >/dev/null
 
 # ---- merged-demo: a MERGED PR whose head branch is deleted and never published,
 # so its head tip survives only as the merge commit's SECOND parent on main. The
@@ -379,7 +379,7 @@ git -C "$W" branch -q -D feature/changelog
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
-gg site push >/dev/null
+gg push --site-only >/dev/null
 
 # ---- packed-demo: a bucket whose git objects live in PACKFILES, not loose keys.
 # The pack threshold is lowered to 1 so every push packs (production packs only
@@ -437,7 +437,7 @@ export GITSOCIAL_S3_PACK_THRESHOLD=1
 git -C "$W" push -q origin main
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
-gg site push >/dev/null
+gg push --site-only >/dev/null
 unset GITSOCIAL_S3_PACK_THRESHOLD
 
 # The delta-resolution tests are vacuous unless a pack really carries a delta,

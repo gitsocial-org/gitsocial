@@ -952,7 +952,7 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 // the same name. The local repo here carries main with a README; the bucket does
 // not carry the branch at all, so the page must thin out rather than advertise
 // files and a README behind app links that resolve against a tree the bucket
-// cannot serve (`gitsocial site push` pushes no data of its own, so a local
+// cannot serve (`gitsocial push --site-only` pushes no data of its own, so a local
 // branch ahead of the bucket is the ordinary case).
 func TestSitePages_FrontHomeIgnoresLocalBranch(t *testing.T) {
 	dir, _ := pagesFrontRepo(t)

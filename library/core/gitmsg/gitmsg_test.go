@@ -111,6 +111,44 @@ func TestWriteExtConfig_existingVersion(t *testing.T) {
 	}
 }
 
+func TestWriteExtConfig_identicalContentSkipsCommit(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+
+	config := map[string]interface{}{"branch": "gitmsg/social"}
+	if err := WriteExtConfig(dir, "social", config); err != nil {
+		t.Fatalf("WriteExtConfig() error = %v", err)
+	}
+	first, err := git.ReadRef(dir, "refs/gitmsg/social/config")
+	if err != nil {
+		t.Fatalf("ReadRef() error = %v", err)
+	}
+
+	// Rewriting identical content must not move the ref (no new commit).
+	if err := WriteExtConfig(dir, "social", map[string]interface{}{"branch": "gitmsg/social"}); err != nil {
+		t.Fatalf("WriteExtConfig() rewrite error = %v", err)
+	}
+	second, err := git.ReadRef(dir, "refs/gitmsg/social/config")
+	if err != nil {
+		t.Fatalf("ReadRef() error = %v", err)
+	}
+	if second != first {
+		t.Errorf("identical rewrite moved the config ref: %s -> %s", first, second)
+	}
+
+	// A real change still commits.
+	if err := WriteExtConfig(dir, "social", map[string]interface{}{"branch": "gitmsg/other"}); err != nil {
+		t.Fatalf("WriteExtConfig() change error = %v", err)
+	}
+	third, err := git.ReadRef(dir, "refs/gitmsg/social/config")
+	if err != nil {
+		t.Fatalf("ReadRef() error = %v", err)
+	}
+	if third == first {
+		t.Error("changed content did not move the config ref")
+	}
+}
+
 func TestReadExtConfig_noRef(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)

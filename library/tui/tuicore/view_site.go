@@ -40,7 +40,7 @@ var siteFields = []siteField{
 
 // SiteView displays and edits the workspace's site customization (title, accent,
 // accentDark, favicon, url, description). Values live in the core config's `site` sub-object, which
-// `gitsocial site push` publishes as the static site's site-config.json.
+// `gitsocial push --site-only` publishes as the static site's site-config.json.
 type SiteView struct {
 	config       objstore.SiteCustomization
 	cursor       int
@@ -280,7 +280,7 @@ func (v *SiteView) Render(state *State) string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(Dim.Render("Saved to the core config; publish with 'p' or `gitsocial site push`."))
+	b.WriteString(Dim.Render("Saved to the core config; publish with 'p' or `gitsocial push --site-only`."))
 	b.WriteString("\n")
 
 	if v.err != "" {

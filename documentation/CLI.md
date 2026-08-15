@@ -91,6 +91,8 @@ gitsocial import [url]
       --state string       Filter by state: open, closed, merged, all (default: all)
       --email-map string   Path to username=email mapping file
   -v, --verbose            Print each item as it's imported
+  -y, --yes                Skip confirmation and first-run prompts
+      --all-branches       First-run fetch mode: track all upstream branches (skips the prompt)
 ```
 
 ### Examples
@@ -163,6 +165,9 @@ gitsocial fetch --since 2024-01-01           # Since date
 - `--since` - Fetch posts since date (YYYY-MM-DD, default: 30 days ago)
 - `--before` - Fetch posts before date (YYYY-MM-DD, default: today)
 - `--parallel, -p` - Number of concurrent fetches (default: 4)
+- `--all-branches` - First-run fetch mode: track all upstream branches (skips the prompt)
+
+The first fetch in a workspace asks whether to track the default branch only or all upstream branches. `--all-branches` answers with all branches; `--json`, `-y` (on import), or a non-interactive stdin answers with the default. The answer is saved per workspace; none of these flags overwrite a saved choice.
 
 Reports unread notification count after completion (e.g., "You have 3 new notifications").
 
@@ -170,10 +175,14 @@ Reports unread notification count after completion (e.g., "You have 3 new notifi
 
 Push local changes to remote: `gitmsg/*` extension branches (auto-merged on divergence), `refs/gitmsg/*` state refs, and workspace code branches — the default branch when it's ahead of origin, plus heads of open PRs (plain push, never auto-merged or forced) — so others can fetch the code your published data points at. Other feature branches stay local until a PR references them.
 
+For s3 remotes with `site.publish` enabled, the push also maintains the browsable static site. `--site-only` is the explicit site refresh: it re-derives the site without pushing data, and — unlike a plain push, which silently skips the site when the guard is off — fails loudly when `site.publish` is off or the remote is not an s3 remote. See [S3.md](S3.md#push-behavior) and [STATIC-SITE.md](STATIC-SITE.md).
+
 ```
 gitsocial push
 gitsocial push --dry-run     # Preview what would be pushed
 gitsocial push --no-code     # Skip code branches (default branch + PR heads)
+gitsocial push --no-site     # Skip the browser static site
+gitsocial push --site-only   # Refresh only the browser site, no data push
 ```
 
 ### gitsocial config
@@ -202,7 +211,7 @@ Manage the personal bare repo that holds your synced preferences (and, where app
 
 ```
 gitsocial personal init [--remote <url>]
-gitsocial personal sync [--push | --fetch]
+gitsocial personal sync [--push-only | --fetch-only]
 gitsocial personal status
 ```
 
@@ -371,20 +380,24 @@ Add a git remote. When the URL points at an S3 bucket it is normalized to the ca
 
 A self-hosted S3 endpoint (host no preset recognizes) must use the `s3://` scheme explicitly; any other URL is added as an ordinary git remote unchanged.
 
+Two flags finish the publish setup in the same command: `--default` appends the remote to the default push targets (the multi-valued `git config gitsocial.pushRemote`, same as `gitsocial remote default`), and `--site` enables site publishing for the repo (`site.publish true` in the core config). Both are idempotent — re-running them changes nothing.
+
 ```
-gitsocial remote add [name] <url>
+gitsocial remote add [name] <url> [--default] [--site]
 gitsocial remote add s3://s3.us-east-1.amazonaws.com/mybucket/repo
 gitsocial remote add https://<account>.r2.cloudflarestorage.com/mybucket
 gitsocial remote add https://us-east-1.console.aws.amazon.com/s3/buckets/mybucket
 gitsocial remote add upstream s3://s3.us-east-1.amazonaws.com/mybucket/repo
+gitsocial remote add s3 s3://s3.us-east-1.amazonaws.com/mybucket/repo --default --site
 ```
 
-### gitsocial site push
+### gitsocial remote put
 
-Upload the embedded static site to an s3 remote's bucket, alongside the repo data, and seed the refs manifest (`.gitsocial/site/refs.json`) that every subsequent push keeps current. Anyone can then browse the repo's timeline, issues, PRs, and releases from the bucket's public domain with no gitsocial install. The page reads the bucket directly, so it stays current with every push. Remote defaults to `origin`; requires public read on the bucket's serving domain (e.g. r2.dev or a custom domain on Cloudflare R2). Generation-mode buckets (DigitalOcean) render through the manifest, so they need at least one push by a current gitsocial (or this command).
+Upload a single local file as a plain object to an s3 remote's bucket, at a caller-chosen key under the remote's prefix (overwriting any existing object there). This publishes foreign objects that live alongside the repo data but aren't part of the generated site — e.g. the release driver keeps `install.sh` current at the bucket root. Site maintenance never deletes unrecognized root keys, so such objects are safe. Remote defaults to the push remote.
 
 ```
-gitsocial site push [remote]
+gitsocial remote put <key> <file> [--remote <name>] [--content-type <type>]
+gitsocial remote put install.sh scripts/install.sh --content-type text/plain
 ```
 
 ### gitsocial tui

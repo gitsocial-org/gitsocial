@@ -20,6 +20,8 @@
 package clientpush
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -36,6 +38,7 @@ type Options struct {
 	DryRun      bool   // preview only, touch nothing
 	NoCode      bool   // skip code branches (default branch + open-PR heads)
 	NoSite      bool   // skip the site step (overrides config)
+	SiteOnly    bool   // publish only the site, no data push (explicit refresh; fails loudly)
 	AllBranches bool   // publish every local branch (refs/heads/*), not just reasoned
 }
 
@@ -71,8 +74,8 @@ func ResolveRemote(workdir, remote string) string {
 // ResolveSiteOverride reads a remote's per-remote site deployment overrides from
 // git config (remote.<name>.gitsocial-site-{url,publish,pages}). Empty struct
 // when the remote name is empty or no keys are set. Shared so the CLI, the
-// `gitsocial push` site step, and `gitsocial site push` all resolve the same
-// values the git remote helper reads bucket-side.
+// `gitsocial push` site step, and `gitsocial push --site-only` all resolve the
+// same values the git remote helper reads bucket-side.
 func ResolveSiteOverride(workdir, remote string) objstore.SiteOverride {
 	if remote == "" {
 		return objstore.SiteOverride{}
@@ -92,7 +95,7 @@ func ResolveSiteOverride(workdir, remote string) objstore.SiteOverride {
 }
 
 // Preview returns the offline push preview for the resolved remote, including
-// --all extras when requested. Used by dry-run and the TUI prompt.
+// --all-branches extras when requested. Used by dry-run and the TUI prompt.
 func Preview(workdir string, opts Options) (*gitmsg.PushPreview, string, error) {
 	remote := ResolveRemote(workdir, opts.Remote)
 	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
@@ -118,6 +121,9 @@ func resolveCodeBranches(workdir string, noCode bool, remote string) map[string]
 // after a good data push lands in Result.Site.Err (the push still succeeded).
 func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
 	remote := ResolveRemote(workdir, opts.Remote)
+	if opts.SiteOnly {
+		return publishSiteOnly(workdir, remote, opts, siteProgress)
+	}
 	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
 
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
@@ -137,6 +143,35 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 	res.Push = pushResult
 
 	res.Site = publishSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
+	return res, nil
+}
+
+// publishSiteOnly runs only the site step (the explicit site refresh, `gitsocial
+// push --site-only`), pushing no data. Unlike a full publish — where the site is
+// a best-effort tail on the data push — an explicit site request fails loudly: a
+// missing or non-s3 remote, the site.publish guard being off, and any upload
+// failure are all errors. A dry run stays offline and reports the site skipped.
+func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Progress) (*Result, error) {
+	remoteURL := git.RemoteURL(workdir, remote)
+	if remoteURL == "" {
+		return nil, fmt.Errorf("remote %q is not configured", remote)
+	}
+	res := &Result{Push: &gitmsg.PushResult{Remote: remote, RemoteURL: remoteURL}}
+	if opts.DryRun {
+		res.Site = SiteOutcome{Skipped: "dry-run"}
+		return res, nil
+	}
+	if !strings.HasPrefix(remoteURL, "s3://") {
+		return nil, fmt.Errorf("remote %q is not an s3 remote: %s", remote, remoteURL)
+	}
+	published, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	if err != nil {
+		return nil, fmt.Errorf("push site to %s: %w", remoteURL, err)
+	}
+	if !published {
+		return nil, errors.New("site publishing is disabled for this repo; enable with `gitsocial config site set publish true`")
+	}
+	res.Site = SiteOutcome{Published: true}
 	return res, nil
 }
 
@@ -172,7 +207,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 // bucket HEAD + push-time stats. override carries the target remote's per-remote
 // deployment overrides (url/publish/pages) so the site stamps this bucket's own
 // values. Shared by `gitsocial push` (via Publish) and the explicit
-// `gitsocial site push` so their site wiring can't drift.
+// `gitsocial push --site-only` so their site wiring can't drift.
 // published is false (no error) when the workspace's site.publish guard is not
 // enabled — the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the site push.

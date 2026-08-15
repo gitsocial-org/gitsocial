@@ -55,7 +55,7 @@
 #                          url is a temporary/soak domain)
 #   GITSOCIAL_BINARY       gitsocial binary to drive the release (default: a
 #                          fresh build of the current tree into bin/gitsocial,
-#                          so the current CLI — including `site put` — is used)
+#                          so the current CLI — including `remote put` — is used)
 set -euo pipefail
 
 # --- mirror targets (GITHUB_REPO matches .goreleaser.yaml's release target) ---
@@ -379,7 +379,7 @@ push_mirror() {
 # ============================================================================
 upload_installer() {
   log "Upload install.sh to the bucket root (no-cache)"
-  run "$GS" site put install.sh scripts/install.sh \
+  run "$GS" remote put install.sh scripts/install.sh \
     --remote "$SITE_REMOTE" --content-type text/plain
 }
 
@@ -390,7 +390,7 @@ main() {
   $DRY_RUN && log "DRY RUN — no tag, build, publish, or upload will happen"
 
   # Build the driver's gitsocial from the current tree (unless overridden), so
-  # the current CLI (including `site put`) is used. bin/ is gitignored, so this
+  # the current CLI (including `remote put`) is used. bin/ is gitignored, so this
   # never dirties the working tree. In dry-run, use whatever is on PATH for the
   # (skipped) read-only checks and command display.
   if [ -n "${GITSOCIAL_BINARY:-}" ]; then

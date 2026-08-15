@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/clientfetch"
@@ -28,6 +29,7 @@ func newFetchCmd() *cobra.Command {
 	var since string
 	var before string
 	var parallel int
+	var allBranches bool
 
 	cmd := &cobra.Command{
 		Use:   "fetch [url]",
@@ -92,7 +94,7 @@ For extension-specific options, use the extension's fetch command directly:
 				Since:    since,
 				Before:   before,
 				Parallel: parallel,
-			})
+			}, false, allBranches)
 			if !cfg.JSONOutput && forkStats.Items > 0 {
 				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Forks)
 			}
@@ -126,12 +128,15 @@ For extension-specific options, use the extension's fetch command directly:
 	cmd.Flags().StringVar(&since, "since", "", "Fetch posts since date (YYYY-MM-DD, default: 30 days ago)")
 	cmd.Flags().StringVar(&before, "before", "", "Fetch posts before date (YYYY-MM-DD, default: today)")
 	cmd.Flags().IntVarP(&parallel, "parallel", "p", 4, "Number of concurrent fetches")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "First-run fetch mode: track all upstream branches (skips the prompt)")
 
 	return cmd
 }
 
 // resolveWorkspaceMode checks the saved workspace fetch mode and prompts on first use.
-func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
+// A saved mode always wins. On first use, allBranches selects all-branch mode explicitly;
+// assumeYes, JSON output, or a non-interactive stdin selects the default without prompting.
+func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches bool) bool {
 	originURL := protocol.NormalizeURL(git.GetOriginURL(workdir))
 	if originURL == "" {
 		return false
@@ -140,7 +145,13 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 	if mode != "" {
 		return mode == "*"
 	}
-	if jsonOutput {
+	if allBranches {
+		if err := settings.WriteWorkspaceMode(originURL, "*"); err != nil {
+			slog.Warn("save workspace mode", "error", err)
+		}
+		return true
+	}
+	if jsonOutput || assumeYes || !isatty.IsTerminal(os.Stdin.Fd()) {
 		if err := settings.WriteWorkspaceMode(originURL, "default"); err != nil {
 			slog.Warn("save workspace mode", "error", err)
 		}
@@ -174,11 +185,11 @@ func resolveWorkspaceMode(workdir string, jsonOutput bool) bool {
 // runFullFetch performs a full workspace fetch: subscribed repos, forks, and workspace sync.
 // If opts is nil, defaults are used. The caller can pre-populate opts with CLI-specific fields
 // (ListID, Since, Before, Parallel); this function fills in processors and branch mode.
-func runFullFetch(cfg *Config, opts *social.FetchOptions) (fetch.Result, fetch.FetchForkStats) {
+func runFullFetch(cfg *Config, opts *social.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.FetchForkStats) {
 	if opts == nil {
 		opts = &social.FetchOptions{}
 	}
-	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput)
+	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
 	opts.ExtraProcessors = clientfetch.ExtraProcessors()
 	opts.ExtraHooks = review.PostFetchHooks()
 	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)

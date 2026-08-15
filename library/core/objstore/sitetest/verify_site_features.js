@@ -346,7 +346,7 @@ async function main() {
   ok("windowed timeline code count matches un-windowed set", w2.items.filter((i) => i._ext === "code").length === code.length, "w2=" + w2.items.filter((i) => i._ext === "code").length + " full=" + code.length);
 
   // ---- code commits are sourced from the push-maintained code items index ----
-  // thread-demo's `site push` builds .gitsocial/site/items/code/ (metadata-only,
+  // thread-demo's `push --site-only` builds .gitsocial/site/items/code/ (metadata-only,
   // no bodies), so the timeline surfaces code commits from index JSON with NO
   // per-commit loose-object GET — the ~fetches-per-first-visit win. Assert the
   // artifact is present, carries NO code bodies corpus, and that resolving the

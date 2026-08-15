@@ -1,7 +1,7 @@
 // personal.go - Top-level personal-repo management: init and sync.
 // The personal bare repo holds user-scoped state that travels with the user
-// across machines — settings prefs under refs/gitmsg/core/config today, with
-// the memo personal tier expected to share the same repo once memo lands.
+// across machines — settings prefs under refs/gitmsg/core/config and the memo
+// personal tier (gitmsg/memo) share the same repo.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 )
 
 // newPersonalCmd builds the `personal` command group.
@@ -74,7 +75,8 @@ func newPersonalSyncCmd() *cobra.Command {
 Per-branch handling: each refs/heads/gitmsg/* branch is fetched/pushed via the
 auto-merge helper — empty-tree append-only branches reconcile divergent
 histories without conflicts. State refs under refs/gitmsg/* (settings config,
-list metadata, etc.) sync as a single bulk refspec.`,
+list metadata, etc.) sync as a single bulk refspec. After a fetch, personal-tier
+memos are re-indexed into the cache so "gitsocial memo list" reflects them.`,
 		Run: func(cmd *cobra.Command, _ []string) {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {
@@ -104,6 +106,10 @@ list metadata, etc.) sync as a single bulk refspec.`,
 					"fetch", "origin", "refs/gitmsg/*:refs/gitmsg/*",
 				}); err != nil {
 					PrintError(cmd, fmt.Sprintf("fetch gitmsg refs: %s", err))
+					os.Exit(ExitError)
+				}
+				if err := memo.SyncTierRepoToCache(path); err != nil {
+					PrintError(cmd, fmt.Sprintf("sync memo cache: %s", err))
 					os.Exit(ExitError)
 				}
 			}
@@ -136,8 +142,8 @@ list metadata, etc.) sync as a single bulk refspec.`,
 			}
 		},
 	}
-	cmd.Flags().BoolVar(&pushOnly, "push", false, "Push only (skip fetch)")
-	cmd.Flags().BoolVar(&fetchOnly, "fetch", false, "Fetch only (skip push)")
+	cmd.Flags().BoolVar(&pushOnly, "push-only", false, "Push only (skip fetch)")
+	cmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "Fetch only (skip push)")
 	return cmd
 }
 

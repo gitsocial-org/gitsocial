@@ -58,7 +58,10 @@ func InvalidateExtConfig(workdir, ext string) {
 	extConfigCache.Delete(workdir + "\x00" + ext)
 }
 
-// WriteExtConfig writes an extension's configuration to git ref.
+// WriteExtConfig writes an extension's configuration to git ref. Writing
+// content identical to what the ref already holds is a no-op: without that
+// guard every repeated set (e.g. under a cron) would grow the config ref by
+// one commit forever.
 func WriteExtConfig(workdir, ext string, config map[string]interface{}) error {
 	if config["version"] == nil {
 		config["version"] = configVersion
@@ -73,6 +76,9 @@ func WriteExtConfig(workdir, ext string, config map[string]interface{}) error {
 	var parent string
 	if existingHash, err := git.ReadRef(workdir, ref); err == nil {
 		parent = existingHash
+		if msg, err := git.GetCommitMessage(workdir, existingHash); err == nil && strings.TrimSpace(msg) == string(content) {
+			return nil
+		}
 	}
 
 	commitHash, err := git.CreateCommitTree(workdir, string(content), parent)

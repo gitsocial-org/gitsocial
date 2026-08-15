@@ -236,7 +236,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// already complete-and-current (the narrow case where updateSiteItems moved no
 	// tip, so the marker below would NOT be withheld and the next site push would
 	// skip), reclaim the generated front page now. When tips DID move, the page
-	// layer is pending and the marker is withheld, so the next `site push`
+	// layer is pending and the marker is withheld, so the next site-publishing push
 	// rebuilds pages (and reclaims index.html) — no reclaim needed here.
 	reclaimOK := true
 	if shellUploaded {
@@ -365,7 +365,7 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 // bump on a plain push leaves the marker stampable (no tip moved), so the next
 // site push would skip and index.html would stay the shell. When the page set is
 // pending/absent/stale, or the layer is off, there is nothing to reclaim (the
-// marker is withheld anyway, so the next `site push` rebuilds/reclaims), and
+// marker is withheld anyway, so the next site-publishing push rebuilds/reclaims), and
 // this returns ok=true. It returns ok=FALSE only when a reclaim it should have
 // done FAILED, so the caller withholds the marker (a stamped marker would let the
 // next push skip and strand index.html as the shell).

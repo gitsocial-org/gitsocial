@@ -110,7 +110,6 @@ func main() {
 		newFetchCmd(),
 		newPushCmd(),
 		newRemoteCmd(),
-		newSiteCmd(),
 		NewExtConfigCmd(coreExt),
 		newSettingsCmd(),
 		newLogCmd(),

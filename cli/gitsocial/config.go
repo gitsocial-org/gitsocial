@@ -170,7 +170,7 @@ func newSiteConfigCmd() *cobra.Command {
 		Long: `Set the static browser site's title, accent color, and favicon. Values are
 stored under the "site" sub-object of the core config (refs/gitmsg/core/config)
 and published to the bucket as .gitsocial/site/site-config.json on the next
-` + "`gitsocial site push`" + ` (or any push to a site-enabled bucket).
+` + "`gitsocial push`" + ` (or an explicit ` + "`gitsocial push --site-only`" + `).
 
 Keys:
   title        plain text shown in the tab title and header
@@ -191,6 +191,23 @@ Keys:
 	}
 	cmd.AddCommand(newSiteConfigGetCmd(), newSiteConfigSetCmd(), newSiteConfigListCmd())
 	return cmd
+}
+
+// writeSiteConfigValue stores one already-validated site customization value
+// under the core config's `site` sub-object. WriteExtConfig skips the commit
+// when the stored content is unchanged, so repeated sets are no-ops.
+func writeSiteConfigValue(workdir, key, resolved string) error {
+	full, _ := gitmsg.ReadExtConfig(workdir, coreExt)
+	if full == nil {
+		full = map[string]interface{}{}
+	}
+	site, _ := full["site"].(map[string]interface{})
+	if site == nil {
+		site = map[string]interface{}{}
+	}
+	site[key] = resolved
+	full["site"] = site
+	return gitmsg.WriteExtConfig(workdir, coreExt, full)
 }
 
 // readSiteConfigMap returns the core config's `site` sub-object (never nil).
@@ -285,7 +302,7 @@ image, url, description, publish, pages.
                        svg), or a data: URI directly; 32KB max
   image                social-card image (og:image) for the HTML pages: a
                        bucket key relative to the site root (e.g. og-card.png,
-                       upload it with ` + "`gitsocial site put`" + `) or an
+                       upload it with ` + "`gitsocial remote put`" + `) or an
                        absolute https:// URL
   url                  absolute https:// URL (http:// only for localhost), no
                        query/fragment; normalized to a trailing slash
@@ -318,17 +335,7 @@ publish, and pages are overridable per-remote; identity keys travel with the rep
 				PrintError(cmd, err.Error())
 				os.Exit(ExitError)
 			}
-			full, _ := gitmsg.ReadExtConfig(cfg.WorkDir, coreExt)
-			if full == nil {
-				full = map[string]interface{}{}
-			}
-			site, _ := full["site"].(map[string]interface{})
-			if site == nil {
-				site = map[string]interface{}{}
-			}
-			site[key] = resolved
-			full["site"] = site
-			if err := gitmsg.WriteExtConfig(cfg.WorkDir, coreExt, full); err != nil {
+			if err := writeSiteConfigValue(cfg.WorkDir, key, resolved); err != nil {
 				PrintError(cmd, err.Error())
 				os.Exit(ExitError)
 			}

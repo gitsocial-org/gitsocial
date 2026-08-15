@@ -39,9 +39,9 @@ type PushResult struct {
 type PushPreview struct {
 	Branches []BranchPushCount `json:"branches"`
 	Code     []BranchPushCount `json:"code,omitempty"`
-	// All lists local non-gitmsg branches that --all publishes beyond the
+	// All lists local non-gitmsg branches that --all-branches publishes beyond the
 	// reason-based set (default/PR-head branches already in Code). Empty unless
-	// --all was requested. Surfaced so dry-run and the TUI prompt name them.
+	// --all-branches was requested. Surfaced so dry-run and the TUI prompt name them.
 	All  []string `json:"all,omitempty"`
 	Refs int      `json:"refs"`
 }
@@ -133,7 +133,7 @@ func GetPushPreview(workdir string, codeBranches map[string]int, remote string, 
 	return preview, nil
 }
 
-// extraAllBranches returns local non-gitmsg branches that --all publishes beyond
+// extraAllBranches returns local non-gitmsg branches that --all-branches publishes beyond
 // the reason-based code set (already covered by codeBranches). Sorted for a
 // stable preview.
 func extraAllBranches(workdir string, codeBranches map[string]int) []string {
@@ -211,7 +211,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		}
 	}
 
-	// --all: publish every remaining local branch. Plain push, no auto-merge —
+	// --all-branches: publish every remaining local branch. Plain push, no auto-merge —
 	// a non-FF here is reported per-branch (rebased/diverged branch), same rule
 	// as code branches; the user reconciles explicitly.
 	for _, branch := range preview.All {

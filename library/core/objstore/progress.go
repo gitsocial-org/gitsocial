@@ -91,7 +91,7 @@ func newProgressWriter(w io.Writer, tty bool) *progressWriter {
 // StderrProgress returns a Progress hook that renders throttled progress to
 // stderr, plus a done() to call when all phases finish (closes any pending
 // in-place TTY line). It uses the same TTY-vs-pipe policy as the git-spawned
-// helper, so `gitsocial site push` and a plain `git push` show identical
+// helper, so `gitsocial push --site-only` and a plain `git push` show identical
 // progress. The hook is nil-safe to call after done().
 func StderrProgress() (Progress, func()) {
 	pw := newProgressWriter(os.Stderr, stderrIsTTY())

@@ -14,6 +14,14 @@ func PutObjectToRemote(remoteURL string, env HelperEnv, key string, data []byte,
 	if err != nil {
 		return err
 	}
+	return putObject(client, prefix, key, data, contentType)
+}
+
+// putObject uploads data to prefix+key as a plain object on an already-resolved
+// client, setting Content-Type when non-empty. The single PUT primitive under
+// PutObjectToRemote and the artifact uploads, so callers that upload several
+// objects resolve the client once.
+func putObject(client *Client, prefix, key string, data []byte, contentType string) error {
 	headers := map[string]string{}
 	if contentType != "" {
 		headers["Content-Type"] = contentType

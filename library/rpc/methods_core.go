@@ -341,11 +341,11 @@ func corePush(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		// extensions param accepted for API compatibility; push always pushes all initialized extensions
 		p, rpcErr := decodeParams[struct {
-			Extensions []string `json:"extensions"`
-			Remote     string   `json:"remote"`
-			All        bool     `json:"all"`
-			NoSite     bool     `json:"noSite"`
-			NoCode     bool     `json:"noCode"`
+			Extensions  []string `json:"extensions"`
+			Remote      string   `json:"remote"`
+			AllBranches bool     `json:"allBranches"`
+			NoSite      bool     `json:"noSite"`
+			NoCode      bool     `json:"noCode"`
 		}](raw)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -354,7 +354,7 @@ func corePush(s *Server) HandlerFunc {
 			Remote:      p.Remote,
 			NoCode:      p.NoCode,
 			NoSite:      p.NoSite,
-			AllBranches: p.All,
+			AllBranches: p.AllBranches,
 		}
 		result, err := clientpush.Publish(s.session.Workdir, opts, nil, nil)
 		if err != nil {

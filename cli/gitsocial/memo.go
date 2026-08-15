@@ -172,30 +172,6 @@ func newMemoPersonalCmd() *cobra.Command {
 			PrintSuccess(cmd, "personal tier initialized at "+res.Data)
 		},
 	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "push",
-		Short: "Push personal memos to the configured remote",
-		Run: func(cmd *cobra.Command, args []string) {
-			res := memo.PushPersonal()
-			if !res.Success {
-				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
-			}
-			PrintSuccess(cmd, "pushed personal memos")
-		},
-	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "fetch",
-		Short: "Fetch personal memos from the configured remote",
-		Run: func(cmd *cobra.Command, args []string) {
-			res := memo.FetchPersonal()
-			if !res.Success {
-				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
-			}
-			PrintSuccess(cmd, "fetched personal memos")
-		},
-	})
 	return cmd
 }
 
@@ -262,32 +238,39 @@ func newMemoSessionCmd() *cobra.Command {
 			}
 		},
 	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "push <id>",
-		Short: "Push a session's memos to its remote (if configured)",
+	syncCmd := &cobra.Command{
+		Use:   "sync <id>",
+		Short: "Sync a session's memos with its remote (fetch then push)",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			res := memo.PushSession(args[0])
-			if !res.Success {
+	}
+	var pushOnly, fetchOnly bool
+	syncCmd.Flags().BoolVar(&pushOnly, "push-only", false, "push only (skip fetch)")
+	syncCmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "fetch only (skip push)")
+	syncCmd.Run = func(cmd *cobra.Command, args []string) {
+		doFetch := !pushOnly
+		doPush := !fetchOnly
+		if doFetch {
+			if res := memo.FetchSession(args[0]); !res.Success {
 				PrintError(cmd, res.Error.Message)
 				os.Exit(1)
 			}
-			PrintSuccess(cmd, "pushed session "+args[0])
-		},
-	})
-	cmd.AddCommand(&cobra.Command{
-		Use:   "fetch <id>",
-		Short: "Fetch a session's memos from its remote (if configured)",
-		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			res := memo.FetchSession(args[0])
-			if !res.Success {
+		}
+		if doPush {
+			if res := memo.PushSession(args[0]); !res.Success {
 				PrintError(cmd, res.Error.Message)
 				os.Exit(1)
 			}
+		}
+		switch {
+		case doFetch && doPush:
+			PrintSuccess(cmd, "synced session "+args[0])
+		case doFetch:
 			PrintSuccess(cmd, "fetched session "+args[0])
-		},
-	})
+		case doPush:
+			PrintSuccess(cmd, "pushed session "+args[0])
+		}
+	}
+	cmd.AddCommand(syncCmd)
 	gcCmd := &cobra.Command{
 		Use:   "gc [id]",
 		Short: "Delete a session, or sessions inactive past --older-than",

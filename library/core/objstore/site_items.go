@@ -1023,7 +1023,7 @@ func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedIte
 
 // rebuildSiteItems drives every extension data branch present in refs, plus the
 // single code items index across every code branch, through the same state
-// machine as a helper push (used by `gitsocial site push`). It is idempotent and
+// machine as a helper push (used by `gitsocial push --site-only`). It is idempotent and
 // budget-aware: a small branch (re)builds in one call exactly as before; a branch
 // past the budget starts (or advances) the resumable bootstrap instead of
 // erroring, reusing every already-sealed shard via skip-existing. defaultBranch is

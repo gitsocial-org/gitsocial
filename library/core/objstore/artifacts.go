@@ -11,7 +11,6 @@ package objstore
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 )
@@ -41,12 +40,10 @@ func PushArtifactObjects(remoteURL string, env HelperEnv, version string, files 
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		key := prefix + ArtifactsPrefix + version + "/" + name
-		resp, err := client.do(http.MethodPut, key, nil, files[name], map[string]string{"Content-Type": "application/octet-stream"})
-		if err != nil {
+		key := ArtifactsPrefix + version + "/" + name
+		if err := putObject(client, prefix, key, files[name], "application/octet-stream"); err != nil {
 			return false, fmt.Errorf("upload %s: %w", key, err)
 		}
-		resp.Body.Close()
 	}
 	current, err := client.Get(prefix + artifactsLatestKey)
 	if err != nil && !errors.Is(err, ErrNotFound) {
@@ -55,10 +52,8 @@ func PushArtifactObjects(remoteURL string, env HelperEnv, version string, files 
 	if !advance(strings.TrimSpace(string(current))) {
 		return false, nil
 	}
-	resp, err := client.do(http.MethodPut, prefix+artifactsLatestKey, nil, []byte(version+"\n"), map[string]string{"Content-Type": "text/plain; charset=utf-8"})
-	if err != nil {
+	if err := putObject(client, prefix, artifactsLatestKey, []byte(version+"\n"), "text/plain; charset=utf-8"); err != nil {
 		return false, fmt.Errorf("upload %s: %w", artifactsLatestKey, err)
 	}
-	resp.Body.Close()
 	return true, nil
 }

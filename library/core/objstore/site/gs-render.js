@@ -3669,7 +3669,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // reflect recent activity only — say so, in the search view's voice, rather
     // than presenting a partial total as complete.
     if (data.partial) wrap.append(el("div", { class: "search-tier-note" }, [
-      "Showing recent activity only: this bucket's item index is missing or still building, so analytics cover the most recent items rather than all history. Push with a current gitsocial (or run `gitsocial site push`) to index the full history.",
+      "Showing recent activity only: this bucket's item index is missing or still building, so analytics cover the most recent items rather than all history. Push with a current gitsocial (or run `gitsocial push --site-only`) to index the full history.",
     ]));
     if (!data.total) { wrap.append(el("div", { class: "empty" }, ["No activity to analyze yet."])); return [wrap]; }
     const authors = topItemAuthors(data.entries);

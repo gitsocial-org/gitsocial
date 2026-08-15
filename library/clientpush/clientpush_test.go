@@ -89,6 +89,56 @@ func TestPublish_noSiteOptOut(t *testing.T) {
 	}
 }
 
+// TestPublish_siteOnlyNonS3Errors: an explicit --site-only against a non-s3
+// remote fails loudly (a plain push would just skip the site), and pushes no
+// data even where a full publish would have.
+func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
+	remote := t.TempDir()
+	if err := git.EnsureBareRepo(remote); err != nil {
+		t.Fatalf("init remote: %v", err)
+	}
+	work := setupWork(t, remote)
+	git.ExecGit(work, []string{"push", "origin", "main"})
+	if _, err := git.CreateCommitOnBranch(work, "gitmsg/social", "a post"); err != nil {
+		t.Fatalf("commit on branch: %v", err)
+	}
+
+	if _, err := Publish(work, Options{SiteOnly: true}, nil, nil); err == nil {
+		t.Error("site-only publish to a non-s3 remote should error")
+	}
+	out, _ := git.ExecGit(remote, []string{"branch", "--list", "gitmsg/social"})
+	if out != nil && out.Stdout != "" {
+		t.Errorf("site-only publish pushed data: %q", out.Stdout)
+	}
+}
+
+// TestPublish_siteOnlyMissingRemoteErrors: --site-only names a remote that is
+// not configured — explicit request, loud failure.
+func TestPublish_siteOnlyMissingRemoteErrors(t *testing.T) {
+	work := setupWork(t, t.TempDir())
+	if _, err := Publish(work, Options{SiteOnly: true, Remote: "nosuch"}, nil, nil); err == nil {
+		t.Error("site-only publish to a missing remote should error")
+	}
+}
+
+// TestPublish_siteOnlyDryRun: a site-only dry run stays offline and reports the
+// site skipped rather than erroring.
+func TestPublish_siteOnlyDryRun(t *testing.T) {
+	remote := t.TempDir()
+	if err := git.EnsureBareRepo(remote); err != nil {
+		t.Fatalf("init remote: %v", err)
+	}
+	work := setupWork(t, remote)
+
+	res, err := Publish(work, Options{SiteOnly: true, DryRun: true}, nil, nil)
+	if err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if res.Site.Published || res.Site.Skipped != "dry-run" {
+		t.Errorf("Site = %+v, want skipped dry-run", res.Site)
+	}
+}
+
 // TestPublish_dryRunSkipsSite: a dry run touches nothing, including the site.
 func TestPublish_dryRunSkipsSite(t *testing.T) {
 	remote := t.TempDir()

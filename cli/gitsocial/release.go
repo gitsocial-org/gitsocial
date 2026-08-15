@@ -432,7 +432,7 @@ func newReleaseArtifactsCmd() *cobra.Command {
 		Short: "Manage release artifacts",
 	}
 	cmd.AddCommand(
-		newReleaseArtifactsAddCmd(),
+		newReleaseArtifactsRecordCmd(),
 		newReleaseArtifactsListCmd(),
 		newReleaseArtifactsExportCmd(),
 		newReleaseArtifactsPushCmd(),
@@ -440,11 +440,15 @@ func newReleaseArtifactsCmd() *cobra.Command {
 	return cmd
 }
 
-func newReleaseArtifactsAddCmd() *cobra.Command {
+func newReleaseArtifactsRecordCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <version> <file...>",
-		Short: "Add artifacts to a release",
-		Args:  cobra.MinimumNArgs(2),
+		Use:   "record <version> <file...>",
+		Short: "Record artifacts on a release's local artifact ref (no upload)",
+		Long: `Commit the given files and their SHA-256 checksums to the release's local
+artifact ref (refs/gitmsg/release/<version>/artifacts). Nothing is uploaded:
+"record" writes the release's artifact record, "release artifacts push"
+uploads the files to the s3 push remote's bucket.`,
+		Args: cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -460,7 +464,7 @@ func newReleaseArtifactsAddCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				PrintJSON(result.Data)
 			} else {
-				PrintSuccess(cmd, fmt.Sprintf("Added %d artifact(s) to %s", len(result.Data.Files), version))
+				PrintSuccess(cmd, fmt.Sprintf("Recorded %d artifact(s) on %s", len(result.Data.Files), version))
 				for _, f := range result.Data.Files {
 					fmt.Printf("  %s  %s  %d bytes\n", f.SHA256[:12], f.Filename, f.Size)
 				}

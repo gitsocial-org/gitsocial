@@ -32,17 +32,13 @@ gitsocial memo project init                          # project tier (workspace's
 gitsocial memo personal init                         # personal tier (~/.config/gitsocial/personal/)
 
 # Attach a remote so personal memos sync across machines. The personal repo is
-# shared with core settings, so `gitsocial personal init --remote <url>` is the
-# preferred path — it syncs settings AND memos in one shot.
+# shared with core settings, so one sync covers settings AND memos.
 gitsocial personal init --remote <url>               # one-time: attach origin
 gitsocial personal sync                              # push + fetch refs/heads/* and refs/gitmsg/*
-
-# Memo-only sync (when you don't want to touch settings):
-gitsocial memo personal push                         # push gitmsg/memo
-gitsocial memo personal fetch                        # fetch gitmsg/memo and re-sync cache
+gitsocial personal sync --push-only                  # or --fetch-only
 ```
 
-**Concurrent writes across machines:** when two machines push to the same personal repo between syncs, the histories diverge. `gitsocial memo personal push` and `fetch` (and the session equivalents) detect the divergence and auto-create an empty-tree merge commit with both tips as parents — the union of both sides' memos remains reachable. Merge commits have no `Ext: memo` header, so they don't appear as memos in `memo list`; only the underlying captures do.
+**Concurrent writes across machines:** when two machines push to the same personal repo between syncs, the histories diverge. `gitsocial personal sync` (and `memo session sync`) detects the divergence and auto-creates an empty-tree merge commit with both tips as parents — the union of both sides' memos remains reachable. Merge commits have no `Ext: memo` header, so they don't appear as memos in `memo list`; only the underlying captures do.
 
 ## Author and promote
 
@@ -82,8 +78,8 @@ Manage them:
 ```
 gitsocial memo session init [<id>]           # create or resume; prints resolved id
 gitsocial memo session list                  # list active sessions with ages
-gitsocial memo session push <id>             # push to remote (if configured)
-gitsocial memo session fetch <id>            # fetch from remote (if configured)
+gitsocial memo session sync <id>             # fetch + push its remote (if configured)
+gitsocial memo session sync <id> --push-only # or --fetch-only
 gitsocial memo session gc <id>               # delete a specific session
 gitsocial memo session gc --older-than 30d   # delete sessions inactive past N days
 ```
@@ -245,7 +241,7 @@ gitsocial personal sync
 gitsocial memo list --tier personal
 ```
 
-If both machines write between syncs, the second `push` (or `fetch`) auto-merges — the `gitmsg/memo` branch is empty-tree and append-only, so divergence has no conflict surface. Both sides' memos remain accessible from the merged tip.
+If both machines write between syncs, the second sync auto-merges — the `gitmsg/memo` branch is empty-tree and append-only, so divergence has no conflict surface. Both sides' memos remain accessible from the merged tip.
 
 ### AI agent: ephemeral sessions
 

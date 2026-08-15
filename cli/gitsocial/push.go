@@ -18,6 +18,7 @@ func newPushCmd() *cobra.Command {
 	var dryRun bool
 	var noCode bool
 	var noSite bool
+	var siteOnly bool
 	var allBranches bool
 
 	cmd := &cobra.Command{
@@ -48,14 +49,20 @@ This publishes:
     remotes skip this step silently.
 
 A first push to an empty remote bootstraps the whole bucket with no extra
-flags. Use --all to publish every local branch (wholesale mirror), not just
-the reason-based set.
+flags. Use --all-branches to publish every local branch, not just the default
+branch and open-PR heads.
+
+--site-only publishes only the browser site — the explicit site refresh, e.g.
+to catch an already-pushed repo up right after enabling site.publish, without
+pushing new data. Where a plain push silently skips the site for repos without
+the guard, an explicit --site-only fails loudly when site.publish is off or
+the remote is not an s3 remote.
 
 Divergent histories on gitmsg/* branches (when two clones write between syncs)
 are auto-merged — the empty-tree append-only shape of those branches makes the
 merge conflict-free and preserves every commit hash on both sides. Code
-branches (and --all branches) are never auto-merged; a diverged head (e.g.
-after a rebase) fails with a hint to force-push explicitly.
+branches (and --all-branches extras) are never auto-merged; a diverged head
+(e.g. after a rebase) fails with a hint to force-push explicitly.
 
 Examples:
   gitsocial push              # Publish to the resolved remote(s) (data + site)
@@ -64,7 +71,8 @@ Examples:
   gitsocial push --dry-run    # Preview what would be pushed
   gitsocial push --no-code    # Skip code branches (default branch + PR heads)
   gitsocial push --no-site    # Skip the browser site
-  gitsocial push --all        # Publish every local branch (wholesale mirror)`,
+  gitsocial push --site-only  # Refresh only the browser site, no data push
+  gitsocial push --all-branches   # Publish every local branch`,
 		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -105,6 +113,7 @@ Examples:
 					DryRun:      dryRun,
 					NoCode:      noCode,
 					NoSite:      noSite,
+					SiteOnly:    siteOnly,
 					AllBranches: allBranches,
 				}
 				if !cfg.JSONOutput && !dryRun {
@@ -148,7 +157,9 @@ Examples:
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without pushing")
 	cmd.Flags().BoolVar(&noCode, "no-code", false, "Skip code branches (default branch and open-PR heads)")
 	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the browser static site (s3 remotes)")
-	cmd.Flags().BoolVar(&allBranches, "all", false, "Publish every local branch (wholesale mirror), not just reasoned ones")
+	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Publish only the browser site, no data push (errors when site.publish is off)")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Publish every local branch, not just the default branch and open-PR heads")
+	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 
 	return cmd
 }
@@ -179,7 +190,7 @@ func printPushResult(result *clientpush.Result, dryRun bool) {
 		fmt.Printf("  Code commits: %d\n", p.CodeCommits)
 	}
 	if p.AllBranches > 0 {
-		fmt.Printf("  Branches (--all): %d\n", p.AllBranches)
+		fmt.Printf("  Branches (--all-branches): %d\n", p.AllBranches)
 	}
 	if p.Refs > 0 {
 		fmt.Printf("  Refs: %d\n", p.Refs)
