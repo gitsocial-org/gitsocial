@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -68,18 +69,26 @@ const (
 )
 
 // packState is the sealing pass's bucket state: the ref-moving push counter,
-// the counter value at the last successful sealing attempt, the rounds whose
-// loose objects are waiting out their grace period, and the last seal failure
-// (kept on the bucket because a remote helper's stderr scrolls past unread).
+// the counter value at the last sealing attempt, the rounds whose loose
+// objects are waiting out their grace period, and the last seal failure (kept
+// on the bucket because a remote helper's stderr scrolls past unread).
 type packState struct {
 	Version    int `json:"version"`
 	Generation int `json:"generation"`
-	LastSeal   int `json:"lastSeal"`
+	// LastSeal is the counter value at the last sealing ATTEMPT — a declined
+	// attempt (sealable set below the minimum) advances it exactly like a
+	// packing one, because what it rate-limits is the attempt's bucket LIST,
+	// which a decline pays in full. Only a FAILED attempt leaves it, so the
+	// next push retries instead of hiding the failure for packSealInterval
+	// pushes.
+	LastSeal int `json:"lastSeal"`
 	// LooseSinceSeal counts non-state objects pushes have uploaded loose since
-	// the last successful seal; crossing packSealLooseThreshold seals early.
+	// the last sealing attempt; crossing packSealLooseThreshold seals early.
 	// Additive under the concurrent replay, and a binary predating the field
 	// drops it on rewrite, which only defers the early trigger to the
-	// packSealInterval backstop.
+	// packSealInterval backstop. After an attempt it is SET to what the
+	// attempt's sealable set left unpacked (see applyPackStateUpdate), so a
+	// declined cohort stays counted instead of being zeroed away.
 	LooseSinceSeal int         `json:"looseSinceSeal,omitempty"`
 	Pending        []packRound `json:"pending,omitempty"`
 	LastError      string      `json:"lastError,omitempty"`
@@ -105,6 +114,11 @@ type packStateUpdate struct {
 	sealAttempted bool
 	sealErr       string // empty when the attempt succeeded
 	looseUploaded int    // non-state objects this push uploaded loose
+	// looseAfterSeal is the measured loose-since-seal count after a sealing
+	// attempt: what the attempt's sealable set left unpacked (0 on a full
+	// success, the size-skipped half on a partial, the whole sealable set on a
+	// decline). Negative means no measurement — keep the additive counting.
+	looseAfterSeal int
 }
 
 // maintainPacks advances the sealing state one push: it counts the push, runs
@@ -130,7 +144,7 @@ func (h *remoteHelper) maintainPacks(refs map[string]string) {
 	// The state read is a snapshot taken before this push was counted, so every
 	// decision below is judged against the generation this push takes.
 	generation := state.Generation + 1
-	update := packStateUpdate{deleted: map[string]bool{}, looseUploaded: h.looseUploaded}
+	update := packStateUpdate{deleted: map[string]bool{}, looseUploaded: h.looseUploaded, looseAfterSeal: -1}
 	// objects/info/packs is the only way either reader — stock git's dumb walker
 	// and the browser — discovers a pack, and it is rewritten from whole listing
 	// snapshots by concurrent pushers, so one pusher's snapshot can drop the line
@@ -166,13 +180,14 @@ func (h *remoteHelper) maintainPacks(refs map[string]string) {
 		// clone with full history still runs the pass on its own push.
 		fmt.Fprintf(os.Stderr, "gitsocial s3: skipping the sealing pass (%s); a clone carrying full history will run it\n", why)
 	} else if sealDue(state, generation, h.looseUploaded) {
-		round, err := h.sealLooseObjects(refs)
+		round, looseAfter, err := h.sealLooseObjects(refs)
 		// A round that published packs is recorded even alongside an error: those
 		// packs are on the bucket, so their loose copies must still be collected.
 		if len(round.Packs) > 0 {
 			update.sealed = &round
 		}
 		update.sealAttempted = true
+		update.looseAfterSeal = looseAfter
 		if err != nil {
 			update.sealErr = oneLine(err)
 			fmt.Fprintf(os.Stderr, "gitsocial s3: pack seal FAILED, bucket stays unpacked (retried on the next push): %v\n", err)
@@ -211,11 +226,36 @@ func unsealableClone() string {
 	return ""
 }
 
+// resolveSealThreshold returns the minimum object count a sealing attempt
+// packs, honoring the same GITSOCIAL_S3_PACK_THRESHOLD override the push path
+// takes (the test fixtures lower both together; unset in production). The
+// default is NOT the push path's 1000: that number keeps per-push tiny-pack
+// litter off the bucket, while a seal is rare, rate-limited, and consolidating
+// — packing a 600-object cohort is pure win. Aligning the minimum with the
+// drift trigger (packSealLooseThreshold) instead means a fired trigger can
+// never immediately decline, which used to strand mid-size loose cohorts (and
+// their clone latency) forever.
+func resolveSealThreshold() int {
+	if v := os.Getenv("GITSOCIAL_S3_PACK_THRESHOLD"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			return n
+		}
+	}
+	return packSealLooseThreshold
+}
+
 // sealLooseObjects packs whatever loose history this clone may seal (see
 // sealableObjects) and returns the round holding the packs that landed, so their
 // loose copies can be deleted once the grace period expires. The round is
 // returned alongside an error too: a pack that was published must still have its
-// loose copies collected.
+// loose copies collected. looseAfter is the measured leftover of the sealable
+// set — what this attempt left unpacked, the sealable count itself when it
+// declined below the seal minimum — or negative when the attempt failed before
+// measuring; it becomes the state's LooseSinceSeal (see applyPackStateUpdate).
+//
+// Each round writes NEW packs and never repacks what an earlier round packed,
+// so repeated seals accumulate pack files on the bucket; consolidating them is
+// a deliberate non-goal here.
 //
 // SealedAt is stamped when the pass RETURNS, not when it starts. The first seal
 // of a large all-loose history runs for a long time (a full-history
@@ -225,7 +265,8 @@ func unsealableClone() string {
 // still walking them, exactly what the window exists to prevent. Every return
 // path carrying packs is stamped, including the failed ones: those packs are on
 // the bucket, so their round is recorded and must carry a real window with it.
-func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound, err error) {
+func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound, looseAfter int, err error) {
+	looseAfter = -1
 	defer func() {
 		if len(round.Packs) > 0 {
 			round.SealedAt = time.Now().Unix()
@@ -233,43 +274,46 @@ func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound
 	}()
 	loose, err := listLooseObjects(h.client, h.prefix)
 	if err != nil {
-		return round, err
+		return round, looseAfter, err
 	}
-	if len(loose) < resolvePackThreshold() {
-		return round, nil
+	if len(loose) < resolveSealThreshold() {
+		return round, len(loose), nil
 	}
 	sealable, err := sealableObjects(loose, refs)
 	if err != nil {
-		return round, err
+		return round, looseAfter, err
 	}
-	if len(sealable) < resolvePackThreshold() {
-		return round, nil
+	if len(sealable) < resolveSealThreshold() {
+		return round, len(sealable), nil
 	}
 	packs, err := buildDeltaPacks(sealable)
 	if err != nil {
-		return round, err
+		return round, looseAfter, err
 	}
 	// Only the packs that actually landed enter the round, so a half of the
 	// split skipped for size keeps its loose objects (deletion is per round).
+	published := 0
 	for _, built := range packs {
 		if len(built.pack) > maxPackUploadBytes {
 			continue
 		}
 		if err := publishPack(h.client, h.capability, h.prefix, built, resolveUploadConcurrency()); err != nil {
-			return round, err
+			return round, looseAfter, err
 		}
 		round.Packs = append(round.Packs, built.name)
+		published += built.objects
 	}
+	looseAfter = len(sealable) - published
 	if len(round.Packs) == 0 {
-		return round, nil
+		return round, looseAfter, nil
 	}
 	// The new packs only become discoverable once they are listed, and the
 	// listing is what starts the grace clock for every reader.
 	listed, err := listBucketPacks(h.client, h.prefix)
 	if err != nil {
-		return round, err
+		return round, looseAfter, err
 	}
-	return round, putText(h.client, h.prefix+packsKey, buildInfoPacks(listed))
+	return round, looseAfter, putText(h.client, h.prefix+packsKey, buildInfoPacks(listed))
 }
 
 // sealableObjects derives what this clone may pack out of the bucket's loose
@@ -403,9 +447,11 @@ func roundAdvertised(round packRound, advertised map[string]bool) bool {
 
 // applyPackStateUpdate replays one maintenance pass onto a state document: it
 // counts the push, drops the rounds whose loose copies the pass deleted, records
-// the round it sealed, and stamps the seal outcome. LastSeal advances only on a
-// successful attempt, so a failed seal is retried by the next push instead of
-// being hidden for another packSealInterval pushes.
+// the round it sealed, and stamps the seal outcome. LastSeal advances on every
+// attempt that ran to a decision — a decline included, because it rate-limits
+// the attempt's bucket LIST and a decline paid that in full — but not on a
+// failed one, so a failed seal is retried by the next push instead of being
+// hidden for another packSealInterval pushes.
 func applyPackStateUpdate(state *packState, update packStateUpdate) {
 	state.Generation++
 	state.LooseSinceSeal += update.looseUploaded
@@ -430,10 +476,18 @@ func applyPackStateUpdate(state *packState, update packStateUpdate) {
 		return
 	}
 	state.LastSeal = state.Generation
-	// The seal packed the loose set its LIST saw; a concurrent push's objects
-	// that landed after that snapshot are undercounted until that pusher's own
-	// next push, which the interval backstop covers.
-	state.LooseSinceSeal = 0
+	// The attempt measured what its own LIST left unpacked, so SET the counter
+	// to that instead of the additive path above. Replayed onto a state a
+	// concurrent pusher moved, the set discards that pusher's increment — its
+	// objects landed after this attempt's LIST snapshot and are undercounted
+	// until that pusher's own next push, which the interval backstop covers,
+	// exactly the undercount the old reset-to-zero had. A declined attempt's
+	// measurement is the whole sealable set, which sits below the
+	// packSealLooseThreshold trigger by construction, so a decline cannot
+	// re-fire the early trigger on the very next push.
+	if update.looseAfterSeal >= 0 {
+		state.LooseSinceSeal = update.looseAfterSeal
+	}
 }
 
 // pendingRound reports whether a state already carries a round writing the same

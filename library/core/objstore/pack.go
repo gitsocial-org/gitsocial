@@ -77,12 +77,14 @@ type packMapEntry struct {
 }
 
 // builtPack is one packfile ready to upload: git's pack name ("pack-<hash>"),
-// the .pack and .idx bytes, and the per-object byte ranges the pack map
+// the .pack and .idx bytes, the object count it carries (the sealing pass's
+// leftover accounting reads it), and the per-object byte ranges the pack map
 // publishes (empty for the content pack, whose readers use the .idx).
 type builtPack struct {
 	name    string
 	pack    []byte
 	idx     []byte
+	objects int
 	entries []packMapEntry
 }
 
@@ -199,7 +201,7 @@ func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read pack index: %w", err)
 	}
-	built := &builtPack{name: name, pack: pack, idx: idx}
+	built := &builtPack{name: name, pack: pack, idx: idx, objects: len(shas)}
 	if withEntries {
 		if built.entries, err = packEntryRanges(idx, int64(len(pack))); err != nil {
 			return nil, err

@@ -511,6 +511,107 @@ func TestSealLooseObjects_PacksThenDeletesAfterGrace(t *testing.T) {
 	}
 }
 
+// TestSealLooseObjects_MidSizeCohortSeals: the seal minimum is the drift
+// trigger (packSealLooseThreshold), not the push path's 1,000-object litter
+// threshold, so a cohort between the two — the shape one tag-heavy push leaves
+// behind — is sealed instead of declined. Before the fix such a cohort was
+// declined forever and every stock clone paid one GET per loose object.
+func TestSealLooseObjects_MidSizeCohortSeals(t *testing.T) {
+	client, _ := testClient(t)
+	dir := packTestRepo(t, 25) // 75 objects: above the seal minimum, far below the push threshold
+	h := pushHelper(t, client, dir)
+	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+		t.Fatalf("uploadMissingObjects: %v", err)
+	}
+	loose := len(looseObjectKeys(t, client))
+	if loose < packSealLooseThreshold || loose >= defaultPackThreshold {
+		t.Fatalf("fixture has %d loose objects, want between %d and %d", loose, packSealLooseThreshold, defaultPackThreshold)
+	}
+	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
+
+	h.maintainPacks(refs)
+
+	if got := len(bucketPackNames(t, client)); got != 2 {
+		t.Fatalf("sealing a %d-object cohort wrote %d packs, want 2", loose, got)
+	}
+	state, err := readPackState(client, "")
+	if err != nil {
+		t.Fatalf("readPackState: %v", err)
+	}
+	if state.LastSeal != state.Generation {
+		t.Errorf("lastSeal %d, generation %d: the seal must advance the counter", state.LastSeal, state.Generation)
+	}
+	if state.LooseSinceSeal != 0 {
+		t.Errorf("looseSinceSeal %d after a full seal, want 0", state.LooseSinceSeal)
+	}
+	if state.LastError != "" {
+		t.Errorf("sealing recorded failure %q", state.LastError)
+	}
+}
+
+// TestMaintainPacks_DeclinedSealAdvancesLastSealAndMeasuresLoose: an attempt
+// whose sealable set is below the seal minimum must be recorded as what it is —
+// a decline, not a success. LastSeal still advances (the decline paid the
+// bucket LIST the counter rate-limits), but LooseSinceSeal keeps the measured
+// sealable count instead of being zeroed: zeroing it recorded the decline as a
+// completed seal, so a mid-size cohort re-tripped the trigger, re-declined, and
+// was re-zeroed on every push forever (the production pack-state showed
+// looseSinceSeal:7 beside ~620 loose objects). And with the counter advanced,
+// a push that uploads nothing loose must not re-attempt (no objects/ LIST)
+// until the interval expires.
+func TestMaintainPacks_DeclinedSealAdvancesLastSealAndMeasuresLoose(t *testing.T) {
+	client, bucket := testClient(t)
+	dir := packTestRepo(t, 6) // ~19 objects, below the seal minimum
+	h := pushHelper(t, client, dir)
+	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+		t.Fatalf("uploadMissingObjects: %v", err)
+	}
+	looseBefore := len(looseObjectKeys(t, client))
+	if looseBefore == 0 || looseBefore >= packSealLooseThreshold {
+		t.Fatalf("fixture has %d loose objects, want a non-empty cohort below %d", looseBefore, packSealLooseThreshold)
+	}
+	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
+
+	h.maintainPacks(refs) // never sealed, so the attempt is due; it declines
+
+	if got := len(bucketPackNames(t, client)); got != 0 {
+		t.Fatalf("a declined seal published %d packs, want none", got)
+	}
+	state, err := readPackState(client, "")
+	if err != nil {
+		t.Fatalf("readPackState: %v", err)
+	}
+	if state.LastSeal != state.Generation {
+		t.Errorf("lastSeal %d, generation %d: a declined attempt must advance the counter, it paid the LIST", state.LastSeal, state.Generation)
+	}
+	if state.LooseSinceSeal != looseBefore {
+		t.Errorf("looseSinceSeal %d after the decline, want the measured %d: zeroing it records the decline as a seal", state.LooseSinceSeal, looseBefore)
+	}
+	if state.LastError != "" {
+		t.Errorf("a decline is not a failure, but %q was recorded", state.LastError)
+	}
+	if len(state.Pending) != 0 {
+		t.Errorf("pack state has %d pending rounds after a decline, want none", len(state.Pending))
+	}
+
+	// The next push moves a ref without uploading anything loose: the measured
+	// count is below the trigger and the interval has not expired, so the pass
+	// must not pay another objects/ listing.
+	h.looseUploaded = 0
+	listsBefore := bucket.listCount()
+	h.maintainPacks(refs)
+	if got := bucket.listCount(); got != listsBefore {
+		t.Errorf("the push after a decline listed the bucket (%d listings, was %d); the interval must rate-limit the retry", got, listsBefore)
+	}
+	state, err = readPackState(client, "")
+	if err != nil {
+		t.Fatalf("readPackState: %v", err)
+	}
+	if state.LooseSinceSeal != looseBefore {
+		t.Errorf("looseSinceSeal %d after a no-upload push, want it kept at %d", state.LooseSinceSeal, looseBefore)
+	}
+}
+
 // TestParsePackIdx_MatchesGitShowIndex: the index parser agrees with git's own
 // reading of the same file, including the large-offset indirection's layout.
 func TestParsePackIdx_MatchesGitShowIndex(t *testing.T) {
@@ -999,7 +1100,7 @@ func TestSealLooseObjects_StampsSealedAtOnEveryPublishedRound(t *testing.T) {
 
 			t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
 			start := time.Now().Unix()
-			round, err := h.sealLooseObjects(refs)
+			round, _, err := h.sealLooseObjects(refs)
 			if tc.failListing == (err == nil) {
 				t.Fatalf("sealLooseObjects error = %v, wanted an error: %v", err, tc.failListing)
 			}
