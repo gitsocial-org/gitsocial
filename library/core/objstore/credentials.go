@@ -107,6 +107,14 @@ func warnLoosePermissions(path string) {
 	})
 }
 
+// HasCredentials reports whether a key pair resolves for an endpoint host via
+// the standard precedence (see resolveCredentials). A pure read for callers
+// that must fail or prompt before attempting a push.
+func HasCredentials(endpointHost string) bool {
+	access, secret := resolveCredentials(endpointHost)
+	return access != "" && secret != ""
+}
+
 // resolveCredentials returns the key pair to sign requests to an endpoint
 // host, by precedence: the GITSOCIAL_S3_* env pair (explicit override), the
 // credentials-file entry for the host, then the AWS_* env pair. Each tier

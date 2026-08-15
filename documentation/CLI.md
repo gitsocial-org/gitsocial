@@ -185,6 +185,42 @@ gitsocial push --no-site     # Skip the browser static site
 gitsocial push --site-only   # Refresh only the browser site, no data push
 ```
 
+### gitsocial mirror
+
+Mirror a forge-hosted project (GitHub, GitLab, ...) into an S3 bucket as a full, browsable GitSocial site. `mirror` is the sync loop — upstream forge → local workspace → bucket: it fetches from the forge and imports new issues, PRs, releases, and discussions before pushing data, code, and the browser site. `push` is one-directional (local → remote); that is why the no-argument form of `mirror` is not `push` — it refreshes from the forge first.
+
+Arity decides what happens; the two URLs are told apart by scheme, so their order is free. Anything that is neither an `https://` forge URL nor an `s3://` bucket URL is refused.
+
+```
+gitsocial mirror <forge-url> <s3-url>   # clone, import, push (cold start)
+gitsocial mirror <s3-url>               # in a workspace: attach the bucket, import, push
+gitsocial mirror                        # refresh an already-mirrored workspace (the cron form)
+```
+
+Re-running with the same URLs is the update path, not an error: every step derives its state from the repo — what to mirror from is the `origin` URL, where to is `gitsocial.pushRemote`, what is imported is the mapping file, what is pushed is the remote's refs — and checks before it acts. `mirror` records no state of its own, so it can run from cron and a crashed run resumes where it left off. An advisory lock (a PID file in the git dir) keeps overlapping runs from colliding; a stale lock is taken over.
+
+The workspace keeps the forge URL as `origin` — the bucket is a secondary remote, and every ref keeps its forge identity. All upstream branches are mirrored (fetched, materialized as fast-forward-only local branches, and pushed) unless `--default-branch-only`; the first-run fetch-mode prompt never fires on this path.
+
+Credentials resolve via `GITSOCIAL_S3_*`, then `~/.config/gitsocial/credentials.json` (per endpoint host), then `AWS_*`. When nothing resolves, `mirror` prompts on a TTY (unless `-y`) and otherwise fails printing the exact `gitsocial config credentials set <host>` command. Bucket creation, the public-read policy, and the public domain are provider dashboard steps `mirror` cannot automate; `--dry-run` prints that checklist plus the resolved plan without writing anything.
+
+**Flags:**
+- `--dir <path>` - Workspace directory for the cold start (default: `./<repo-name>`)
+- `--url <public-url>` - Public URL the bucket is served at; sets `site.url` and enables `site.pages` (crawlable pages, OG cards)
+- `--no-code` - Skip pushing code branches
+- `--default-branch-only` - Mirror only the default branch
+- `--no-import` - Skip the forge import step
+- `-n, --limit` - Max items per type to import (0 = unlimited)
+- `-y, --yes` - Never prompt (cron-safe); missing credentials fail with the setup command
+- `--no-site` - Skip the browser site entirely (also skips enabling `site.publish`)
+- `--dry-run` - Print the provider checklist and the resolved plan, write nothing
+
+```
+gitsocial mirror https://github.com/octocat/Hello-World s3://<endpoint>/<bucket>/hello
+gitsocial mirror s3://<endpoint>/<bucket>/hello    # inside an existing workspace
+gitsocial mirror                                   # cron refresh
+gitsocial mirror --url https://hello.example.org/  # enable crawlable pages + canonical links
+```
+
 ### gitsocial config
 
 Manage core protocol configuration (stored in `refs/gitmsg/core/config`).

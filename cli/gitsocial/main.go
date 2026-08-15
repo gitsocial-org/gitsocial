@@ -123,6 +123,7 @@ func main() {
 		newDocsCmd(),
 		newRPCCmd(),
 		newImportCmd(),
+		newMirrorCmd(),
 		newForkCmd(),
 		newIDCmd(),
 		newPersonalCmd(),
