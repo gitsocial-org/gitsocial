@@ -122,7 +122,10 @@ const (
 	// pages are never rewritten outside a full regen, so a v12 bucket would
 	// keep serving heads that link the retired pages.css and re-wrap at the
 	// boot swap forever without the bump.
-	sitePagesVersion = 13
+	// v14: --pad-panel returns to the shared 0.75rem 0.9rem pair (codeblocks
+	// carry their tighter padding directly); v13 heads hold the zero-top token
+	// that stripped card padding, and sealed heads keep it without the bump.
+	sitePagesVersion = 14
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.

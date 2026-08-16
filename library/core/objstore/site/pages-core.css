@@ -77,7 +77,7 @@
     /* Surface padding pairs shared by comparable components: panel bodies,
        rows inside panels, bordered controls. One-off layout paddings (dense
        tree rows, the big load-more pill) stay local, as do margins/gaps. */
-    --pad-panel: 0 0.9rem 0.5rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
+    --pad-panel: 0.75rem 0.9rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
     /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
        span exactly the sidebar's width and sit at its horizontal position
        without hardcoding — and so the pre-rendered pages' #gs-page shell below
