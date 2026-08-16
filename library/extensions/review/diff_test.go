@@ -2,10 +2,14 @@
 package review
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/storage"
 )
 
 func TestBranchValue_branchType(t *testing.T) {
@@ -110,6 +114,170 @@ func TestDiffContext(t *testing.T) {
 			t.Error("Error should report unfetchable remote refs")
 		}
 	})
+}
+
+// forkPRSetup builds the shape a cross-repo PR diff resolves against: a bare
+// upstream holding main, and a workspace whose feature branch carries a change
+// no other repo has. Returns the workspace, the upstream URL and a cache dir.
+func forkPRSetup(t *testing.T) (workdir, upstreamURL, cacheDir string) {
+	t.Helper()
+	workdir = initTestRepo(t)
+	upstreamURL = t.TempDir()
+	if _, err := git.ExecGit(upstreamURL, []string{"init", "--bare"}); err != nil {
+		t.Fatalf("init upstream: %v", err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"push", upstreamURL, "main"}); err != nil {
+		t.Fatalf("push upstream: %v", err)
+	}
+	// Advance upstream's main past the workspace, so the base side of the diff can
+	// only come from upstream and never from the borrowed workspace ODB.
+	git.ExecGit(upstreamURL, []string{"config", "user.email", "test@test.com"})
+	git.ExecGit(upstreamURL, []string{"config", "user.name", "Test User"})
+	pushed, err := git.ExecGit(upstreamURL, []string{"rev-parse", "main"})
+	if err != nil {
+		t.Fatalf("resolve upstream main: %v", err)
+	}
+	upstreamOnly, err := git.CreateCommit(upstreamURL, git.CommitOptions{Message: "upstream-only", Parent: strings.TrimSpace(pushed.Stdout)})
+	if err != nil {
+		t.Fatalf("commit upstream-only: %v", err)
+	}
+	if _, err := git.ExecGit(upstreamURL, []string{"update-ref", "refs/heads/main", upstreamOnly}); err != nil {
+		t.Fatalf("advance upstream main: %v", err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"checkout", "feature"}); err != nil {
+		t.Fatalf("checkout feature: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workdir, "borrowed.txt"), []byte("borrowed\n"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if _, err := git.CreateCommit(workdir, git.CommitOptions{Message: "workspace-only change"}); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	return workdir, upstreamURL, t.TempDir()
+}
+
+// forkRepoDir returns the fork network repo a cross-repo diff against upstreamURL uses.
+func forkRepoDir(t *testing.T, cacheDir, upstreamURL string) string {
+	t.Helper()
+	dir, err := storage.EnsureForkRepository(cacheDir, upstreamURL)
+	if err != nil {
+		t.Fatalf("EnsureForkRepository() error = %v", err)
+	}
+	return dir
+}
+
+func TestResolveDiffContext_borrowsWorkspaceObjects(t *testing.T) {
+	t.Parallel()
+	workdir, upstreamURL, cacheDir := forkPRSetup(t)
+
+	ctx := ResolveDiffContext(workdir, cacheDir, upstreamURL+"#branch:main", "#branch:feature")
+
+	if ctx.Error != "" {
+		t.Fatalf("cross-repo diff did not resolve: %s", ctx.Error)
+	}
+	forkDir := forkRepoDir(t, cacheDir, upstreamURL)
+	alternates := filepath.Join(forkDir, "objects", "info", "alternates")
+	content, err := os.ReadFile(alternates)
+	if err != nil {
+		t.Fatalf("read alternates: %v", err)
+	}
+	want := filepath.Join(workdir, ".git", "objects")
+	if got := strings.TrimSpace(string(content)); got != want {
+		t.Errorf("alternates = %q, want %q", got, want)
+	}
+	// The diff reads the workspace side's commit, tree and blob through the borrow.
+	diff, err := git.ExecGit(forkDir, []string{"diff", "--name-only", ctx.Base, ctx.Head})
+	if err != nil {
+		t.Fatalf("diff in fork repo: %v", err)
+	}
+	if !strings.Contains(diff.Stdout, "borrowed.txt") {
+		t.Errorf("diff = %q, want the workspace-only file", diff.Stdout)
+	}
+	// None of those objects are the fork repo's own: without the alternate they vanish.
+	tip, err := git.ExecGit(workdir, []string{"rev-parse", "feature"})
+	if err != nil {
+		t.Fatalf("resolve workspace tip: %v", err)
+	}
+	sha := strings.TrimSpace(tip.Stdout)
+	os.Remove(alternates)
+	if _, err := git.ExecGit(forkDir, []string{"cat-file", "-e", sha}); err == nil {
+		t.Error("fork repo copied the workspace's objects; it should only borrow them")
+	}
+}
+
+func TestResolveDiffContext_repairsPrunedForkRepo(t *testing.T) {
+	t.Parallel()
+	workdir, upstreamURL, cacheDir := forkPRSetup(t)
+
+	if ctx := ResolveDiffContext(workdir, cacheDir, upstreamURL+"#branch:main", "#branch:feature"); ctx.Error != "" {
+		t.Fatalf("first resolve failed: %s", ctx.Error)
+	}
+	// Prune the objects the fork repo resolved through, as a donor gc does, and
+	// mark the directory so the rebuild is observable.
+	forkDir := forkRepoDir(t, cacheDir, upstreamURL)
+	pruneObjects(t, forkDir)
+	marker := filepath.Join(forkDir, "marker")
+	if err := os.WriteFile(marker, []byte("x"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	ctx := ResolveDiffContext(workdir, cacheDir, upstreamURL+"#branch:main", "#branch:feature")
+
+	if ctx.Error != "" {
+		t.Fatalf("pruned fork repo surfaced as a user-visible failure: %s", ctx.Error)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Error("fork repo was not rebuilt")
+	}
+	if _, err := git.ExecGit(forkDir, []string{"diff", "--name-only", ctx.Base, ctx.Head}); err != nil {
+		t.Errorf("diff after repair: %v", err)
+	}
+}
+
+func TestResolveDiffContext_bloblessWorkspaceIsNotADonor(t *testing.T) {
+	t.Parallel()
+	workdir, upstreamURL, cacheDir := forkPRSetup(t)
+	// A blobless workspace cannot lend objects it fetches lazily.
+	if _, err := git.ExecGit(workdir, []string{"config", "remote.origin.partialclonefilter", "blob:none"}); err != nil {
+		t.Fatalf("set partialclonefilter: %v", err)
+	}
+
+	ctx := ResolveDiffContext(workdir, cacheDir, upstreamURL+"#branch:main", "#branch:feature")
+
+	if ctx.Error != "" {
+		t.Fatalf("blobless fallback did not resolve: %s", ctx.Error)
+	}
+	forkDir := forkRepoDir(t, cacheDir, upstreamURL)
+	if _, err := os.Stat(filepath.Join(forkDir, "objects", "info", "alternates")); !os.IsNotExist(err) {
+		t.Error("blobless workspace must not be borrowed from")
+	}
+	// The fallback fetch copied the workspace side in, so the diff still resolves.
+	diff, err := git.ExecGit(forkDir, []string{"diff", "--name-only", ctx.Base, ctx.Head})
+	if err != nil {
+		t.Fatalf("diff in fork repo: %v", err)
+	}
+	if !strings.Contains(diff.Stdout, "borrowed.txt") {
+		t.Errorf("diff = %q, want the workspace-only file", diff.Stdout)
+	}
+}
+
+// pruneObjects empties a repo's object database, leaving refs and config intact —
+// the state a borrower is left in when its donor gcs the objects it borrowed.
+func pruneObjects(t *testing.T, dir string) {
+	t.Helper()
+	objects := filepath.Join(dir, "objects")
+	entries, err := os.ReadDir(objects)
+	if err != nil {
+		t.Fatalf("read objects dir: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() == "info" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(objects, entry.Name())); err != nil {
+			t.Fatalf("prune objects: %v", err)
+		}
+	}
 }
 
 func TestFetchHelpers(t *testing.T) {

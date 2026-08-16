@@ -39,7 +39,27 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) FetchFor
 	if err != nil {
 		return FetchForkStats{Forks: len(forks), Errors: []FetchForkError{{ForkURL: wsURL, Error: err.Error()}}}
 	}
+	stats, missingObject := fetchForksInto(forkDir, forks, processors)
+	if !missingObject {
+		return stats
+	}
+	// The fork repo borrows the workspace's object database, so a donor that moved
+	// or gc'd leaves it naming objects nobody has. It is a disposable cache:
+	// rebuild it and fetch everything once more.
+	repaired, repairErr := storage.RepairForkRepository(cacheDir, wsURL)
+	if repairErr != nil {
+		log.Debug("fork repo repair failed", "dir", forkDir, "error", repairErr)
+		return stats
+	}
+	stats, _ = fetchForksInto(repaired, forks, processors)
+	return stats
+}
+
+// fetchForksInto fetches every fork into one bare repo, reporting whether any
+// failure named a missing or bad object.
+func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor) (FetchForkStats, bool) {
 	stats := FetchForkStats{Forks: len(forks)}
+	missingObject := false
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
@@ -54,6 +74,7 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) FetchFor
 			if fetchErr != nil {
 				log.Debug("fork fetch failed", "fork", url, "error", fetchErr)
 				stats.Errors = append(stats.Errors, FetchForkError{ForkURL: url, Error: fetchErr.Error()})
+				missingObject = missingObject || storage.IsMissingObjectError(fetchErr)
 			} else {
 				stats.Items += count
 			}
@@ -61,7 +82,7 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) FetchFor
 		}(forkURL)
 	}
 	wg.Wait()
-	return stats
+	return stats, missingObject
 }
 
 // fetchFork adds a remote for a fork URL in the shared bare repo and fetches all gitmsg data.
@@ -91,6 +112,11 @@ func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, erro
 		branch := ref[len(fmt.Sprintf("refs/forks/%s/", hash)):]
 		gitCommits, err := git.GetCommits(forkDir, &git.GetCommitsOptions{Branch: ref})
 		if err != nil {
+			// A ref whose objects are gone means the shared repo needs rebuilding,
+			// which only the caller can do — every other read failure is per-ref.
+			if storage.IsMissingObjectError(err) {
+				return 0, fmt.Errorf("read fork commits: %w", err)
+			}
 			log.Debug("get fork commits failed", "fork", forkURL, "ref", ref, "error", err)
 			continue
 		}

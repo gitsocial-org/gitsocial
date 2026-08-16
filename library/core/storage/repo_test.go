@@ -3,6 +3,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -909,6 +910,163 @@ func TestEnsureForkRepository_mkdirFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "create fork dir") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- SetAlternate / RepairForkRepository tests ---
+
+func TestSetAlternate_borrowsDonorObjects(t *testing.T) {
+	t.Parallel()
+	donor := initSourceRepo(t)
+	forkDir, err := EnsureForkRepository(t.TempDir(), "https://github.com/test/borrow")
+	if err != nil {
+		t.Fatalf("EnsureForkRepository() error = %v", err)
+	}
+
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("SetAlternate() error = %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(forkDir, "objects", "info", "alternates"))
+	if err != nil {
+		t.Fatalf("read alternates: %v", err)
+	}
+	want := filepath.Join(donor, ".git", "objects")
+	if got := strings.TrimSpace(string(content)); got != want {
+		t.Errorf("alternates = %q, want %q", got, want)
+	}
+	if !filepath.IsAbs(strings.TrimSpace(string(content))) {
+		t.Error("alternate must be an absolute path")
+	}
+
+	// The donor's tip is readable in the fork repo, and only through the borrow.
+	tip, err := git.ExecGit(donor, []string{"rev-parse", "main"})
+	if err != nil {
+		t.Fatalf("resolve donor tip: %v", err)
+	}
+	sha := strings.TrimSpace(tip.Stdout)
+	if _, err := git.ExecGit(forkDir, []string{"cat-file", "-e", sha}); err != nil {
+		t.Errorf("borrowed object not readable in fork repo: %v", err)
+	}
+	os.Remove(filepath.Join(forkDir, "objects", "info", "alternates"))
+	if _, err := git.ExecGit(forkDir, []string{"cat-file", "-e", sha}); err == nil {
+		t.Error("fork repo holds a copy of the donor's object; it should only borrow")
+	}
+}
+
+func TestSetAlternate_idempotent(t *testing.T) {
+	t.Parallel()
+	donor := initSourceRepo(t)
+	forkDir, _ := EnsureForkRepository(t.TempDir(), "https://github.com/test/borrow-twice")
+
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("first SetAlternate() error = %v", err)
+	}
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("second SetAlternate() error = %v", err)
+	}
+
+	if entries := readAlternates(forkDir); len(entries) != 1 {
+		t.Errorf("alternates = %v, want a single donor", entries)
+	}
+}
+
+func TestSetAlternate_bloblessDonorRemovesAlternate(t *testing.T) {
+	t.Parallel()
+	donor := initSourceRepo(t)
+	forkDir, _ := EnsureForkRepository(t.TempDir(), "https://github.com/test/blobless-donor")
+
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("SetAlternate() error = %v", err)
+	}
+	// The donor becomes blobless: it can no longer lend objects it fetches lazily.
+	git.ExecGit(donor, []string{"config", "remote.origin.partialclonefilter", "blob:none"})
+
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("SetAlternate(blobless) error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(forkDir, "objects", "info", "alternates")); !os.IsNotExist(err) {
+		t.Error("blobless donor must leave no alternate behind")
+	}
+}
+
+func TestSetAlternate_dropsMissingDonor(t *testing.T) {
+	t.Parallel()
+	donor := initSourceRepo(t)
+	forkDir, _ := EnsureForkRepository(t.TempDir(), "https://github.com/test/stale-donor")
+	os.MkdirAll(filepath.Join(forkDir, "objects", "info"), 0700)
+	os.WriteFile(filepath.Join(forkDir, "objects", "info", "alternates"), []byte("/nonexistent/objects\n"), 0600)
+
+	if err := SetAlternate(forkDir, donor); err != nil {
+		t.Fatalf("SetAlternate() error = %v", err)
+	}
+
+	entries := readAlternates(forkDir)
+	if len(entries) != 1 || entries[0] != filepath.Join(donor, ".git", "objects") {
+		t.Errorf("alternates = %v, want only the live donor", entries)
+	}
+}
+
+func TestIsPartialClone(t *testing.T) {
+	t.Parallel()
+	repo := initSourceRepo(t)
+	if IsPartialClone(repo) {
+		t.Error("full clone reported as partial")
+	}
+	git.ExecGit(repo, []string{"config", "remote.upstream.partialclonefilter", "blob:none"})
+	if !IsPartialClone(repo) {
+		t.Error("partialclonefilter not detected")
+	}
+}
+
+func TestRepairForkRepository_rebuilds(t *testing.T) {
+	t.Parallel()
+	cacheDir := t.TempDir()
+	repoURL := "https://github.com/test/fork-repair"
+
+	dir, err := EnsureForkRepository(cacheDir, repoURL)
+	if err != nil {
+		t.Fatalf("EnsureForkRepository() error = %v", err)
+	}
+	marker := filepath.Join(dir, "marker")
+	os.WriteFile(marker, []byte("x"), 0644)
+
+	repaired, err := RepairForkRepository(cacheDir, repoURL)
+	if err != nil {
+		t.Fatalf("RepairForkRepository() error = %v", err)
+	}
+	if repaired != dir {
+		t.Errorf("repaired dir = %q, want %q", repaired, dir)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Error("repair must delete the old fork repo")
+	}
+	if !git.IsRepository(repaired) {
+		t.Error("repaired fork dir is not a git repository")
+	}
+}
+
+func TestIsMissingObjectError(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"bad object", fmt.Errorf("git diff: fatal: bad object refs/workspace/main"), true},
+		{"nonexistent object", fmt.Errorf("git update-ref: fatal: trying to write ref with nonexistent object abc"), true},
+		{"broken alternate", fmt.Errorf("error: unable to normalize alternate object path: /gone/objects"), true},
+		{"unknown branch", fmt.Errorf("git fetch: fatal: couldn't find remote ref main"), false},
+		{"network", fmt.Errorf("git fetch: fatal: could not read from remote repository"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsMissingObjectError(tt.err); got != tt.want {
+				t.Errorf("IsMissingObjectError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
 	}
 }
 

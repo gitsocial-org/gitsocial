@@ -2,6 +2,7 @@
 package review
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -55,58 +56,109 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	if err != nil {
 		return DiffContext{Workdir: workdir, Base: baseBranch, Head: headBranch}
 	}
-	ctx := DiffContext{Workdir: forkDir}
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
+	// Populating and reading the fork repo, as a unit: a fork repo whose borrowed
+	// objects went missing is rebuilt and run through this a second time.
+	resolve := func(dir string) (DiffContext, bool) {
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if baseLocal {
+				errs[0] = lendWorkspaceBranch(dir, workdir, baseBranch)
+				if !headLocal {
+					// Best effort: an unreachable upstream just leaves the base
+					// resolving against the borrowed workspace branch.
+					errs[0] = errors.Join(errs[0], fetchFromUpstream(dir, wsURL, baseBranch))
+				}
+			} else {
+				errs[0] = fetchFromUpstream(dir, baseParsed.Repository, baseBranch)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if headLocal {
+				errs[1] = lendWorkspaceBranch(dir, workdir, headBranch)
+			} else {
+				errs[1] = fetchFromUpstream(dir, headParsed.Repository, headBranch)
+			}
+		}()
+		wg.Wait()
+		ctx := DiffContext{Workdir: dir}
+		broken := storage.IsMissingObjectError(errors.Join(errs...))
 		if baseLocal {
-			fetchFromWorkspace(forkDir, workdir, baseBranch)
+			ctx.Base = "refs/workspace/" + baseBranch
 			if !headLocal {
-				fetchFromUpstream(forkDir, wsURL, baseBranch)
+				upstreamRef := "refs/fork/" + urlHash(wsURL) + "/" + baseBranch
+				if _, err := git.ReadRef(dir, upstreamRef); err == nil {
+					ctx.Base = upstreamRef
+				}
 			}
 		} else {
-			fetchFromUpstream(forkDir, baseParsed.Repository, baseBranch)
+			ctx.Base = "refs/fork/" + urlHash(baseParsed.Repository) + "/" + baseBranch
 		}
-	}()
-	go func() {
-		defer wg.Done()
 		if headLocal {
-			fetchFromWorkspace(forkDir, workdir, headBranch)
+			ctx.Head = "refs/workspace/" + headBranch
 		} else {
-			fetchFromUpstream(forkDir, headParsed.Repository, headBranch)
+			ctx.Head = "refs/fork/" + urlHash(headParsed.Repository) + "/" + headBranch
 		}
-	}()
-	wg.Wait()
-	if baseLocal {
-		ctx.Base = "refs/workspace/" + baseBranch
-		if !headLocal {
-			upstreamRef := "refs/fork/" + urlHash(wsURL) + "/" + baseBranch
-			if _, err := git.ReadRef(forkDir, upstreamRef); err == nil {
-				ctx.Base = upstreamRef
-			}
+		var missing []string
+		if ok, objectMissing := refResolves(dir, ctx.Base); !ok {
+			missing = append(missing, fmt.Sprintf("base branch %q", baseBranch))
+			ctx.Base = ""
+			broken = broken || objectMissing
 		}
-	} else {
-		ctx.Base = "refs/fork/" + urlHash(baseParsed.Repository) + "/" + baseBranch
+		if ok, objectMissing := refResolves(dir, ctx.Head); !ok {
+			missing = append(missing, fmt.Sprintf("head branch %q", headBranch))
+			ctx.Head = ""
+			broken = broken || objectMissing
+		}
+		if len(missing) > 0 {
+			ctx.Error = "Could not fetch " + strings.Join(missing, " and ")
+		}
+		return ctx, broken
 	}
-	if headLocal {
-		ctx.Head = "refs/workspace/" + headBranch
-	} else {
-		ctx.Head = "refs/fork/" + urlHash(headParsed.Repository) + "/" + headBranch
+	ctx, broken := resolve(forkDir)
+	if !broken {
+		return ctx
 	}
-	var missing []string
-	if _, err := git.ReadRef(forkDir, ctx.Base); err != nil {
-		missing = append(missing, fmt.Sprintf("base branch %q", baseBranch))
-		ctx.Base = ""
+	// The borrowed workspace ODB moved or was gc'd, or the fork repo's own objects
+	// were pruned. The borrower is a disposable cache, so rebuild it and retry once.
+	repaired, repairErr := storage.RepairForkRepository(cacheDir, forkKey)
+	if repairErr != nil {
+		log.Debug("fork repo repair failed", "dir", forkDir, "error", repairErr)
+		return ctx
 	}
-	if _, err := git.ReadRef(forkDir, ctx.Head); err != nil {
-		missing = append(missing, fmt.Sprintf("head branch %q", headBranch))
-		ctx.Head = ""
-	}
-	if len(missing) > 0 {
-		ctx.Error = "Could not fetch " + strings.Join(missing, " and ")
-	}
+	forgetFetchedRefs(forkDir)
+	ctx, _ = resolve(repaired)
 	return ctx
+}
+
+// refResolves reports whether a ref names an object the repo can read. git
+// resolves a ref from its ref file alone, so an object a donor gc'd out from
+// under a borrowed alternate only surfaces on the object read — reported
+// separately so the caller can rebuild instead of blaming the branch.
+func refResolves(dir, ref string) (ok bool, objectMissing bool) {
+	sha, err := git.ReadRef(dir, ref)
+	if err != nil || sha == "" {
+		return false, false
+	}
+	if _, err := git.ExecGit(dir, []string{"cat-file", "-e", sha}); err != nil {
+		return false, true
+	}
+	return true, false
+}
+
+// forgetFetchedRefs drops the memoized fetches for a fork repo, so a rebuilt repo
+// is populated again instead of being considered already fetched.
+func forgetFetchedRefs(forkDir string) {
+	prefix := forkDir + "\x00"
+	fetchedRefs.Range(func(key, _ any) bool {
+		if name, ok := key.(string); ok && strings.HasPrefix(name, prefix) {
+			fetchedRefs.Delete(key)
+		}
+		return true
+	})
 }
 
 // resolveLocalRef verifies a branch name resolves as a git ref.
@@ -132,10 +184,10 @@ func branchValue(parsed protocol.ParsedRef, raw string) string {
 }
 
 // fetchFromUpstream fetches a branch from a remote URL into namespaced refs.
-func fetchFromUpstream(forkDir, repoURL, branch string) {
+func fetchFromUpstream(forkDir, repoURL, branch string) error {
 	key := forkDir + "\x00" + repoURL + "\x00" + branch
 	if _, ok := fetchedRefs.Load(key); ok {
-		return
+		return nil
 	}
 	hash := urlHash(repoURL)
 	remoteName := "remote-" + hash
@@ -143,29 +195,67 @@ func fetchFromUpstream(forkDir, repoURL, branch string) {
 		log.Debug("add fork remote (may already exist)", "remote", remoteName, "error", err)
 	}
 	refspec := fmt.Sprintf("+refs/heads/%s:refs/fork/%s/%s", branch, hash, branch)
-	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, "--no-tags"}); err == nil {
-		fetchedRefs.Store(key, true)
+	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, "--no-tags"}); err != nil {
+		return fmt.Errorf("fetch %s from %s: %w", branch, repoURL, err)
 	}
+	fetchedRefs.Store(key, true)
+	return nil
+}
+
+// lendWorkspaceBranch makes a workspace branch resolvable in the fork repo. A
+// full-clone workspace lends its whole object database through an alternate and
+// only the branch tip is written as a ref, so no objects are copied; a blobless
+// workspace cannot lend objects, so its branch is fetched as before.
+func lendWorkspaceBranch(forkDir, workdir, branch string) error {
+	if storage.IsPartialClone(workdir) {
+		return fetchFromWorkspace(forkDir, workdir, branch)
+	}
+	if err := storage.SetAlternate(forkDir, workdir); err != nil {
+		log.Debug("borrowing workspace objects failed, fetching instead", "workdir", workdir, "error", err)
+		return fetchFromWorkspace(forkDir, workdir, branch)
+	}
+	tip := workspaceTip(workdir, branch)
+	if tip == "" {
+		return fetchFromWorkspace(forkDir, workdir, branch)
+	}
+	if _, err := git.ExecGit(forkDir, []string{"update-ref", "refs/workspace/" + branch, tip}); err != nil {
+		return fmt.Errorf("write workspace ref %s: %w", branch, err)
+	}
+	return nil
+}
+
+// workspaceTip resolves a branch to a full sha in the workspace, falling back to
+// the origin tracking ref when the branch was never checked out locally.
+func workspaceTip(workdir, branch string) string {
+	for _, ref := range []string{"refs/heads/" + branch, "refs/remotes/origin/" + branch} {
+		result, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", ref})
+		if err == nil && strings.TrimSpace(result.Stdout) != "" {
+			return strings.TrimSpace(result.Stdout)
+		}
+	}
+	return ""
 }
 
 // fetchFromWorkspace fetches a branch from the local workspace into refs/workspace/.
 // Falls back to remote tracking ref (refs/remotes/origin/<branch>) when the local
 // branch doesn't exist, which is common when the branch was never checked out.
-func fetchFromWorkspace(forkDir, workdir, branch string) {
+func fetchFromWorkspace(forkDir, workdir, branch string) error {
 	key := forkDir + "\x00" + workdir + "\x00" + branch
 	if _, ok := fetchedRefs.Load(key); ok {
-		return
+		return nil
 	}
 	refspec := fmt.Sprintf("+refs/heads/%s:refs/workspace/%s", branch, branch)
 	if _, err := git.ExecGit(forkDir, []string{"fetch", workdir, refspec, "--no-tags"}); err == nil {
 		fetchedRefs.Store(key, true)
-		return
+		return nil
 	}
 	// Fallback: try remote tracking ref
 	refspec = fmt.Sprintf("+refs/remotes/origin/%s:refs/workspace/%s", branch, branch)
-	if _, err := git.ExecGit(forkDir, []string{"fetch", workdir, refspec, "--no-tags"}); err == nil {
-		fetchedRefs.Store(key, true)
+	if _, err := git.ExecGit(forkDir, []string{"fetch", workdir, refspec, "--no-tags"}); err != nil {
+		return fmt.Errorf("fetch %s from workspace: %w", branch, err)
 	}
+	fetchedRefs.Store(key, true)
+	return nil
 }
 
 // ResolvePRDiff resolves the full diff range for a pull request.
