@@ -42,18 +42,15 @@ func assertStoredBrotli(t *testing.T, client *Client, bucket *memBucket, key str
 	}
 }
 
-// TestShellAssetsStoredBrotli: every embedded shell asset, plus the page layer's
-// generated stylesheet, lands with `Content-Encoding: br` and round-trips to its
-// raw bytes. The push-state version marker beside them stays plain and keeps
-// naming the RAW content, so a compression change can never masquerade as a
-// content change (nor mask one).
+// TestShellAssetsStoredBrotli: every embedded shell asset (the two
+// stylesheets included) lands with `Content-Encoding: br` and round-trips to
+// its raw bytes. The push-state version marker beside them stays plain and
+// keeps naming the RAW content, so a compression change can never masquerade
+// as a content change (nor mask one).
 func TestShellAssetsStoredBrotli(t *testing.T) {
 	client, bucket := testClient(t)
 	if err := uploadSiteFiles(client, "repo/"); err != nil {
 		t.Fatalf("uploadSiteFiles: %v", err)
-	}
-	if err := putSitePagesCSS(client, "repo/", siteCustomization{}); err != nil {
-		t.Fatalf("putSitePagesCSS: %v", err)
 	}
 	names, err := siteFileNames()
 	if err != nil {
@@ -76,8 +73,6 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 		}
 		assertStoredBrotli(t, client, bucket, key, raw)
 	}
-	assertStoredBrotli(t, client, bucket, "repo/"+sitePagesCSSKey, sitePagesCSSFor(siteCustomization{}))
-
 	markerKey := "repo/" + siteVersionKey
 	if enc := bucket.encOf(markerKey); enc != "" {
 		t.Errorf("%s: version marker stored with Content-Encoding %q, want none", markerKey, enc)
@@ -91,8 +86,6 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 		fmt.Fprintf(h, "%s %d\n", name, len(raw))
 		h.Write(raw)
 	}
-	fmt.Fprintf(h, "%s %d\n", sitePagesCSSKey, len(sitePagesCSS))
-	h.Write([]byte(sitePagesCSS))
 	wantVersion := fmt.Sprintf("%x", h.Sum(nil))
 	if got := strings.TrimSpace(getKey(t, client, markerKey)); got != wantVersion {
 		t.Errorf("site version = %s, want the hash of the RAW assets %s", got, wantVersion)

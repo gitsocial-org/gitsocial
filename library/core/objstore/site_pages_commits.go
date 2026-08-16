@@ -228,6 +228,7 @@ func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntr
 func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePageChrome {
 	return sitePageChrome{
 		Title:       title,
+		AccentCSS:   site.AccentCSS,
 		Description: sitePageDescription(sitePageListDescription(siteCommitsList, site), ""),
 		OGTitle:     title,
 		SiteTitle:   site.Title,

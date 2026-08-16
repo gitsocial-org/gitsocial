@@ -84,12 +84,11 @@ func siteCompressible(name string) bool {
 }
 
 // siteVersion hashes everything this binary ships to a bucket — the embedded
-// site files (names + content) plus the page layer's generated stylesheet — so a
-// bucket's copy can be compared against it. The stylesheet is not an embedded
-// file but a Go constant, and leaving it out of this hash meant a push carrying
-// ONLY a CSS change computed the previous version, matched the bucket's push-
-// state marker, and skipped site maintenance entirely: the new rules never
-// shipped. Anything the binary can put on the bucket belongs in this hash.
+// site files (names + content) — so a bucket's copy can be compared against
+// it. Both stylesheets (pages-core.css, pages-full.css) are embedded files, so
+// a CSS-only change lands in this hash like any other asset edit and is never
+// skipped as up to date. Anything the binary can put on the bucket belongs in
+// this hash.
 //
 // It hashes the RAW bytes, never what putSiteAsset stores: the version means
 // "which content is on the bucket", so a change in compression settings must
@@ -108,8 +107,6 @@ func siteVersion() (string, error) {
 		fmt.Fprintf(h, "%s %d\n", name, len(data))
 		h.Write(data)
 	}
-	fmt.Fprintf(h, "%s %d\n", sitePagesCSSKey, len(sitePagesCSS))
-	h.Write([]byte(sitePagesCSS))
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 

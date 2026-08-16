@@ -1,7 +1,8 @@
 // site_pages_html.go - templates and styling for the static HTML pages: the
 // shared head (meta/OG/canonical/PE hooks), the item/list/front templates, the
-// two-layer CSS (tiny inline base + pages.css), and the presentation builders
-// (chips, meta lines, paragraphs, description extraction).
+// two-sheet CSS wiring (the inlined pages-core.css base + the pages-full.css
+// link), and the presentation builders (chips, meta lines, paragraphs,
+// description extraction).
 //
 // Everything renders through html/template so every subject/body/author/header
 // value — all attacker-controlled — is context-escaped. Exactly two values are
@@ -24,10 +25,10 @@
 //     (sitePageParas) — do not route them through here without redoing that
 //     threat model.
 //
-// The visual spec is the app's own sheet, site/pages-app.css (plus the
-// doctrines in its comments): the generated pages converge toward the app's
-// treatment, never the other way. (The .local/lite/ prototypes this layer
-// started from are superseded — see .local/lite/DEPRECATED.md.)
+// The visual spec is the app's own sheets: site/pages-core.css (the shared
+// base every page inlines — see sitePagesCoreCSS below) and
+// site/pages-full.css (the component vocabulary every page links). The
+// generated pages converge toward the app's treatment, never the other way.
 
 package objstore
 
@@ -46,8 +47,11 @@ import (
 )
 
 const (
-	// sitePagesCSSKey is the pages' shared stylesheet, their only subresource.
-	sitePagesCSSKey = "pages.css"
+	// sitePagesLegacyCSSKey is the retired generated stylesheet (pages.css),
+	// superseded by the core/full split: pages now inline pages-core.css and
+	// link the shell's pages-full.css. Kept only for the disable sweep; on live
+	// buckets the old key simply goes stale and unreferenced.
+	sitePagesLegacyCSSKey = "pages.css"
 	// sitePagesFrontKey is the front page's bucket key. Since the entry flip
 	// the generated front page (the app's home landing + PE hooks +
 	// gs-upgrade.js) IS index.html — the pages maintainer owns index.html
@@ -107,57 +111,69 @@ func siteSitemapPartSizeFromEnv() int {
 	return 40000
 }
 
-// sitePagesInlineCSS is the tiny per-page base layer (body width/margins, font
-// stack, light+dark palette, link color) inlined into every page so a saved or
-// curl'ed copy reads decently and a failed pages.css fetch degrades gracefully.
-// Kept deliberately tiny: changing it means a pagesVersion bump and full regen,
-// while a pages.css change is one PUT.
+// sitePagesCoreCSS is the shared style base every generated page inlines into
+// its head (a <style data-gs-core> element): the embedded site/pages-core.css
+// with its comments stripped, otherwise verbatim. The same file is linked by
+// the app shell (index.html), so identical rules govern the document before
+// and after the boot swap — the pages cannot drift from the app because there
+// is no second copy to drift. The sheet carries the design tokens, the theme
+// gates, the reset, the body/anchor base, the `.gs-boot` boot-state rules the
+// inline boot script below activates, and the #gs-page shell + structural
+// rules (scoped so they go inert once the swap replaces the mount); the
+// doctrines behind each live as comments in pages-core.css itself.
 //
-// The `.gs-boot` rules are the page's boot state, and NOTHING is hidden until a
-// script adds that class to <html> (sitePagesBootScript). Hidden-by-default
-// content revealed by script is cloaking and breaks the no-JS contract this
-// layer exists for, so the served document is complete and visible for a
-// crawler, a text browser, and anyone with scripting off. On a JS client the
-// class lands in the head, before the body is parsed, so the static content
-// never reaches a painted frame and the visitor sees only the loading line —
-// styled to match the app's own `.loading` (muted, centered, 2.5rem of air) so
-// the boot and the app that follows speak the same visual language.
+// It is inlined rather than linked for the same reasons the old inline base
+// was: a saved or curl'ed copy reads decently on its own, a failed stylesheet
+// fetch degrades to a font swap instead of an unstyled page, and the boot's
+// hide/loading rules must be in force before any external fetch resolves.
+// The inline base is also what lets pages-full.css load ASYNC (the preload +
+// onload-flip link, with a noscript fallback for no-JS readers): first paint
+// is the HTML plus these bytes — correct type, layout, palette — and full's
+// component styling (chips, cards, code panels) applies when it arrives. The
+// containment guards in core (table/img/pre) keep wide README content from
+// overflowing a phone viewport during that window.
+// pages-core.css contains no url() by construction (a drift test enforces
+// it): pages live at several directory depths, where a relative URL would
+// resolve against the page instead of the site root. Changing the core sheet
+// means a sitePagesVersion bump and full regen — every page's head carries
+// these bytes; pages-full.css remains the one-PUT-to-update side.
 //
-// The geometry is the app's, not a reading column of its own, and that is the
-// point: on the front page the served document stays on screen while the shell
-// downloads and is then swapped for the app's render of the same content, so any
-// metric the two disagree on becomes a visible jump at the swap. The shell's
-// numbers (pages-app.css: --nav-w 220px, --shell-max 1012px, --shell-pad 1.25rem,
-// --nav-gap 1.5rem, 20px/1.4 body, the 720px breakpoint) are mirrored here so the
-// content column lands at the same width and the same x, and the page's own nav
-// occupies the sidebar's column rather than a placeholder standing in for it.
-// EB Garamond ships in the shell (fonts/eb-garamond.woff2) and both pages.css
-// and pages-app.css declare the same face, so the two sides load the same font;
-// the inline base names only Georgia because it must read decently when
-// pages.css (and with it the @font-face) never arrives, so size and leading are
-// matched against the shared fallback.
-//
-// Nav and content are siblings under #gs-page (there is no wrapper element to
-// make them two columns of a grid), so the sidebar column is RESERVED as left
-// padding and the nav is positioned into it, out of flow. A grid was the obvious
-// shape and the wrong one: with the content's rows all implicit, `grid-row:1/-1`
-// on the nav resolves -1 against an explicit grid that has no rows, so the nav
-// stays in row one and makes that row as tall as the whole link stack, leaving a
-// tall gap under the first heading. Out of flow, the nav cannot size a row.
-//
-// border-box is not cosmetic here, it is what makes the shared 1012px mean the
-// same thing on both sides. pages-app.css resets it globally, so the shell's
-// max-width INCLUDES its padding; without the same reset the page's max-width
-// would bound the content box and the reserved gutter would be added outside it,
-// leaving the served page 284px wider than the app's shell and therefore
-// centered 142px to its left, with the text wrapping at a different measure.
-//
-// A configured accent and a stored theme choice never reach this layer: it
-// keeps the stock teal and the system palette on purpose. pages.css — which
-// carries the baked-in accent and the stored-theme gates — overrides both on
-// load, so the hardcoded values here are the documented degraded state a page
-// falls back to only when that stylesheet never arrives.
-const sitePagesInlineCSS = `*{box-sizing:border-box}body{margin:0;background:#f8eed5;color:#1a1a1a;font:20px/1.4 Georgia,serif}a{color:#008787}#gs-page{position:relative;max-width:1012px;margin:0 auto;padding:1.25rem 1.25rem 2rem calc(1.25rem + 220px + 1.5rem)}#gs-page>nav{position:absolute;left:1.25rem;top:1.25rem;width:220px;display:flex;flex-direction:column;align-items:flex-start;gap:.35rem}html.gs-boot #gs-page{display:none}html.gs-boot body::before{content:"Loading…";display:block;padding:2.5rem 0;text-align:center;color:#6f6552}@media (max-width:720px){#gs-page{padding:.75rem}#gs-page>nav{position:static;width:auto;flex-direction:row;flex-wrap:wrap;gap:.9rem;margin-bottom:.6rem}}@media (prefers-color-scheme:dark){body{background:#02041b;color:#c9d1d9}a{color:#00d7d7}html.gs-boot body::before{color:#7d8590}}`
+// A configured accent never reaches these bytes: it is site DATA, stamped per
+// push as a tiny :root override after the inlined core (sitePagesAccentCSS),
+// so the embedded sheet — and with it the shell version hash — stays the
+// binary's stable identity.
+var sitePagesCoreCSS = sitePagesReadCoreCSS()
+
+// sitePagesReadCoreCSS reads the embedded site/pages-core.css with its
+// comments stripped (they would otherwise ship in every page's head); a build
+// whose embed is broken cannot render pages at all, so it panics
+// (template.Must-style, as sitePagesShellIcon does).
+func sitePagesReadCoreCSS() string {
+	data, err := siteFiles.ReadFile("site/pages-core.css")
+	if err != nil {
+		panic("objstore: read embedded site/pages-core.css for the pages' inlined base: " + err.Error())
+	}
+	return strings.TrimSpace(sitePagesStripCSSComments(string(data)))
+}
+
+// sitePagesStripCSSComments removes /* … */ spans so the inlined copy carries
+// declarations only.
+func sitePagesStripCSSComments(css string) string {
+	var b strings.Builder
+	for {
+		i := strings.Index(css, "/*")
+		if i < 0 {
+			b.WriteString(css)
+			return b.String()
+		}
+		b.WriteString(css[:i])
+		j := strings.Index(css[i+2:], "*/")
+		if j < 0 {
+			return b.String()
+		}
+		css = css[i+2+j+2:]
+	}
+}
 
 // sitePagesBootScript is the one inline script every page carries. It runs
 // synchronously in the head — before the body is parsed, so before the browser
@@ -189,10 +205,11 @@ const sitePagesInlineCSS = `*{box-sizing:border-box}body{margin:0;background:#f8
 //
 // It also stamps the app's stored theme choice on <html> before first paint:
 // the shell's theme toggle persists localStorage "theme" as "light-mode"/
-// "dark-mode" (site/index.html, gs-upgrade.js), and pages.css gates its dark
-// palette on exactly these classes with prefers-color-scheme as the no-choice
-// fallback — so a visitor who picked a theme in the app gets the pages in that
-// theme with no flip at boot, and a no-JS client keeps the system theme.
+// "dark-mode" (site/index.html, gs-upgrade.js), and the inlined core sheet
+// gates its palette on exactly these classes (on <html> here, on <body> in the
+// app) with prefers-color-scheme as the no-choice fallback — so a visitor who
+// picked a theme in the app gets the pages in that theme with no flip at boot,
+// and a no-JS client keeps the system theme.
 const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`try{var t=w.localStorage.getItem("theme");if(t==="dark-mode"||t==="light-mode")e.classList.add(t)}catch(x){}` +
 	`var m=d.querySelector('meta[name="gs-route"]');var r=m?m.getAttribute("content"):"";` +
@@ -201,135 +218,46 @@ const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`function u(){if(!w.__gsBooting)e.classList.remove("gs-boot")}` +
 	`setTimeout(u,10000);w.addEventListener("load",u)})(document,window)</script>`
 
-// sitePagesDarkPalette is the pages' dark token set, stated once and spliced
-// into BOTH dark gates below (the stored-choice class and the media fallback)
-// so no value is maintained twice. The @ACCENT_DARK@ placeholder is the dark
-// accent slot sitePagesCSSFor fills.
-const sitePagesDarkPalette = `--bg:#02041b;--text:#c9d1d9;--link:@ACCENT_DARK@;--muted:#7d8590;--line:#1e2445;--panel:#080a21;--pre-bg:#0a0d26`
-
-// sitePagesCSSTemplate is the full look (chips, sections, thread styling,
-// lists, nav, pre), served once as pages.css and shared by every page. It also
-// delivers the webfonts (SIL OFL 1.1) — EB Garamond as one variable file, IBM
-// Plex Mono as four static weights a browser downloads only when a page renders
-// them: the @font-face rules and the families live here rather than in the
-// inline base so a page whose pages.css fetch fails keeps reading in the system
-// fallbacks, and the shell's pages-app.css declares the identical faces — both
-// sheets serve from the prefix root, so one relative URL names one font object
-// and the browser fetches it once.
-//
-// The palette resolves through custom properties on :root so one token set
-// carries three concerns at once: the configured accent is baked into --link at
-// push time (sitePagesCSSFor), the dark palette exists once (@DARK@ splices
-// sitePagesDarkPalette into both gates), and every derived tint follows via
-// color-mix exactly as the app's tokens do. Dark is gated the way the app's own
-// choice works: the boot script stamps the stored theme (localStorage "theme")
-// on <html>, html.dark-mode forces dark, html.light-mode forces light, and
-// prefers-color-scheme decides only when no choice is stamped
-// (html:not(.light-mode)) — the no-JS fallback.
-//
-// The chip classes are the app's own vocabulary (pages-app.css): .chip.state
-// fills, the milestone/sprint lifecycle fills (WCAG-AA solid hexes, per the
-// app's comment), .chip.reviewer-chip verdict tints, .chip.chip-retracted —
-// the builders below emit these, never a pages-only class.
-const sitePagesCSSTemplate = `@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400 800;font-display:swap;src:url('fonts/eb-garamond.woff2') format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/ibm-plex-mono.woff2') format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/ibm-plex-mono-medium.woff2') format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/ibm-plex-mono-semibold.woff2') format('woff2')}
-@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/ibm-plex-mono-bold.woff2') format('woff2')}
-:root{--bg:#f8eed5;--text:#1a1a1a;--link:@ACCENT@;--muted:#6f6552;--line:#d8cbaa;--panel:#f1e8cf;--pre-bg:#f2e5c6;--open:#1f9d55;--closed:#8957e5;--merged:#8250df;--warn:#bf8700;--danger:#cf222e;--chip:color-mix(in srgb,var(--text) 9%,transparent);--card-line:color-mix(in srgb,var(--text) 18%,transparent)}
-html.dark-mode{@DARK@}
-@media (prefers-color-scheme:dark){html:not(.light-mode){@DARK@}}
-body{font-family:'EB Garamond',Georgia,serif;background:var(--bg);color:var(--text)}
-a{color:var(--link)}
-h1{font-size:1.6rem;line-height:1.25;margin:.3rem 0 .2rem}
-h2{font-size:1.1rem;line-height:1.25;margin:.2rem 0 .4rem}
-nav,.chip,pre,code,footer,.show-more{font-family:'IBM Plex Mono','SF Mono',Consolas,monospace}
-nav,footer{font-size:.72rem}
-nav a,nav b,footer a{margin-right:.9rem}
-#gs-page>nav a,#gs-page>nav b{margin-right:0}
-@media (max-width:720px){#gs-page>nav a,#gs-page>nav b{margin-right:.9rem}}
-.meta{font-size:.8rem;color:var(--muted)}
-.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:.05rem .5rem;font-size:.8rem;font-weight:500;color:var(--muted);white-space:nowrap}
-.chip.state{color:#fff}
-.chip.open{background:var(--open)}
-.chip.closed{background:var(--closed)}
-.chip.merged{background:var(--merged)}
-.chip.pre{background:var(--warn)}
-.chip.active{background:#1f6feb}
-.chip.completed{background:var(--open)}
-.chip.planned{background:#6b7280}
-.chip.canceled,.chip.unknown{background:#6e7681}
-.chip.reviewer-chip{color:var(--text)}
-.chip.reviewer-chip.fb-approved{background:color-mix(in srgb,var(--open) 20%,transparent)}
-.chip.reviewer-chip.fb-changes-requested{background:color-mix(in srgb,var(--danger) 20%,transparent)}
-.chip.chip-retracted{background:color-mix(in srgb,var(--danger) 20%,transparent);color:var(--text)}
-.tomb{color:var(--muted);font-style:italic}
-section{border-top:1px solid var(--line);margin-top:1.4rem;padding-top:.9rem}
-p{margin:.7rem 0}
-pre{font-size:.72rem;line-height:1.45;overflow-x:auto;background:var(--pre-bg);padding:.7rem;border:1px solid var(--line)}
-ul.files{list-style:none;padding:0;margin:1rem 0;font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;font-size:.8rem}
-ul.files li{border-top:1px solid var(--line);padding:.4rem 0}
-.card{background:var(--panel);border:1px solid var(--card-line);border-radius:10px;padding:.75rem .9rem;margin:0 0 .7rem;transition:border-color .12s ease,background .12s ease}
-.card:hover{border-color:color-mix(in srgb,var(--link) 45%,var(--card-line));background:var(--chip)}
-.card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.3rem .4rem}
-.card-head .subject{flex:1 1 0;min-width:0;font-weight:600}
-.card .meta{display:block;margin-top:.25rem;margin-left:1.75rem}
-.show-more{display:flex;flex-direction:column;align-items:center;gap:.1rem;width:100%;margin-top:.5rem;padding:.35rem;font-size:.8rem;color:var(--muted);text-decoration:none}
-.show-more:hover{color:var(--text);text-decoration:none}
-.type-glyph{display:inline-block;width:1.1em;text-align:center;line-height:1;vertical-align:middle;font-family:'IBM Plex Mono','SF Mono',Consolas,monospace;color:var(--muted)}
-.type-glyph.tg-open{color:var(--open)}
-.type-glyph.tg-closed{color:var(--closed)}
-.type-glyph.tg-merged{color:var(--merged)}
-footer{margin-top:2.2rem;border-top:1px solid var(--line);padding-top:.8rem}
-.markdown{word-break:break-word}
-.markdown h1,.markdown h2,.markdown h3,.markdown h4{margin:1rem 0 .5rem;line-height:1.2}
-.markdown ul,.markdown ol{margin:.6rem 0 .6rem 1.4rem;padding:0}
-.markdown li{margin:.2rem 0}
-.markdown li.task{list-style:none;margin-left:-1.1rem}
-.markdown img{max-width:100%;height:auto}
-.markdown hr{border:0;border-top:1px solid var(--line)}
-.markdown blockquote{margin:.6rem 0;padding:0 .8rem;border-left:3px solid var(--line);color:var(--muted)}
-.markdown table{border-collapse:collapse;display:block;overflow-x:auto;max-width:100%;margin:.8rem 0;font-size:.85rem}
-.markdown th,.markdown td{border:1px solid var(--line);padding:.3rem .6rem;text-align:left}
-.markdown div[align=center],.markdown center{text-align:center}
-`
-
-// sitePagesCSS is the pages' stylesheet template with the dark palette spliced
-// (still carrying the @ACCENT@/@ACCENT_DARK@ slots): the layer's stable
-// identity, which is what the shell version hash covers — the accent is site
-// DATA, filled per push by sitePagesCSSFor, never part of the binary identity.
-var sitePagesCSS = strings.ReplaceAll(sitePagesCSSTemplate, "@DARK@", sitePagesDarkPalette)
-
-// sitePagesAccent / sitePagesAccentDark are the pages' stock teal accents (the
-// app's own :root/--link values), standing in when the site config sets none.
-const (
-	sitePagesAccent     = "#008787"
-	sitePagesAccentDark = "#00d7d7"
-)
-
-// sitePagesCSSFor renders pages.css with the configured accent baked in at push
-// time, mirroring the app's applyAccent (gs-app.js) exactly: a configured
-// accent tints both themes, accentDark — when set — tints the dark theme
-// separately, and no configuration leaves the stock teals. cfg's fields are
-// already validated (readSiteCustomization drops malformed values), so the
-// spliced strings are strict hex colors, never free text.
-func sitePagesCSSFor(cfg siteCustomization) []byte {
-	light, dark := sitePagesAccent, sitePagesAccentDark
+// sitePagesAccentCSS renders the per-push accent override a page's head stamps
+// right after the inlined core (in a second <style data-gs-core>, so the boot
+// swap keeps it live with the core). The stock teals are pages-core.css's own
+// --pl-link/--pd-link defaults, so nothing is emitted until the site config
+// sets an accent; the override then retargets exactly those tokens and every
+// derived tint follows through the core's var indirection. The mapping mirrors
+// the app's applyAccent (gs-app.js) and the retired pages.css baking exactly:
+// a configured accent tints both themes, accentDark — when set — tints the
+// dark theme separately. cfg's fields are already validated
+// (readSiteCustomization drops malformed values), so the spliced strings are
+// strict hex colors, never free text.
+func sitePagesAccentCSS(cfg siteCustomization) template.CSS {
+	light, dark := "", ""
 	if cfg.Accent != "" {
 		light, dark = cfg.Accent, cfg.Accent
 	}
 	if cfg.AccentDark != "" {
 		dark = cfg.AccentDark
 	}
-	return []byte(strings.NewReplacer("@ACCENT@", light, "@ACCENT_DARK@", dark).Replace(sitePagesCSS))
+	if light == "" && dark == "" {
+		return ""
+	}
+	var decls []string
+	if light != "" {
+		decls = append(decls, "--pl-link:"+light)
+	}
+	if dark != "" {
+		decls = append(decls, "--pd-link:"+dark)
+	}
+	return template.CSS(":root{" + strings.Join(decls, ";") + "}")
 }
 
 // sitePageTemplateText is the full template set. The shared "head" stamps the
 // common metadata plus the PE hooks (gs-route meta, the #gs-page mount div with
 // its data-base attribute) — inert plain HTML until the gs-upgrade.js boot
-// adopts them. The
-// @BASE@ placeholder is spliced with the inline CSS constant before parsing so
-// both layers emit from this file's constants.
+// adopts them. The @CORE@ placeholder is spliced with the embedded
+// pages-core.css before parsing; the data-gs-core attribute on that <style>
+// (and on the optional accent override after it) marks it as the shared base
+// the boot swap must leave live — everything else in the head is suspended
+// when the app takes over.
 const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -351,9 +279,11 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="{{.Feed}}">
 {{if .TypeFeed}}<link rel="alternate" type="application/atom+xml" title="{{.TypeFeedTitle}}" href="{{.TypeFeed}}">
 {{end}}<meta name="gs-route" content="{{.Route}}">
-<style>@BASE@</style>
-@BOOT@
-<link rel="stylesheet" href="{{.Base}}pages.css">
+<style data-gs-core>@CORE@</style>
+{{if .AccentCSS}}<style data-gs-core>{{.AccentCSS}}</style>
+{{end}}@BOOT@
+<link rel="preload" as="style" href="{{.Base}}pages-full.css" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="{{.Base}}pages-full.css"></noscript>
 <script defer src="{{.Base}}gs-upgrade.js"></script>
 </head>
 <body>
@@ -402,10 +332,10 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<footer>{{range .Nav}}<a href="{{.Href}}">{{.Label}}</a> {{end}}</footer>
 {{template "foot"}}{{end}}`
 
-// sitePageTemplates is the parsed page template set, with the inline base CSS
-// and the boot script spliced in (both constants, never user content).
+// sitePageTemplates is the parsed page template set, with the inlined core CSS
+// and the boot script spliced in (both embedded constants, never user content).
 var sitePageTemplates = template.Must(template.New("pages").Parse(
-	strings.NewReplacer("@BASE@", sitePagesInlineCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
+	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
 // sitePagesInlineIconMax bounds a configured favicon the page layer inlines.
 // The shell stamps its head once; the page layer stamps one head per page, so a
@@ -454,7 +384,8 @@ func sitePageIcon(favicon string) template.URL {
 
 // sitePageChrome is the shared head/shell data every page stamps.
 type sitePageChrome struct {
-	Title         string // full <title> (subject · site title)
+	Title         string       // full <title> (subject · site title)
+	AccentCSS     template.CSS // per-push accent override stamped after the inlined core ("" — the core's stock teals govern)
 	Icon          template.URL
 	Description   string // meta/OG description, whitespace-collapsed, ~160 chars
 	OGTitle       string // og:title (the bare subject)
@@ -610,6 +541,7 @@ type sitePageSite struct {
 	Description string
 	Image       string       // absolute og:image URL ("" = no social card)
 	Icon        template.URL // favicon href every page's head declares
+	AccentCSS   template.CSS // accent override every page's head inlines ("" = none configured)
 }
 
 // sitePageList describes one type directory: source extension, bucket dir,
@@ -794,7 +726,7 @@ func sitePageChipStateClass(state string) string {
 
 // sitePageItemChip returns an item's leading state chip (nil when its type
 // carries none), in the app's chip class vocabulary (gs-render.js stateChip and
-// the release/retracted chips), which sitePagesCSS styles to the app's
+// the release/retracted chips), which pages-full.css styles to the app's
 // treatment. A draft PR is the app's plain unclassed chip.
 func sitePageItemChip(it *sitePageItem) *sitePageChip {
 	if it.Retracted {
@@ -991,6 +923,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 	}
 	d.Chrome = sitePageChrome{
 		Title:       d.Subject + " · " + site.Title,
+		AccentCSS:   site.AccentCSS,
 		Description: sitePageDescription(body, d.Subject),
 		OGTitle:     d.Subject,
 		SiteTitle:   site.Title,

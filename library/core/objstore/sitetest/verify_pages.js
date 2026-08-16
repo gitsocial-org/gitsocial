@@ -24,10 +24,11 @@ const fileEntry = (name, s) => ({ mode: "100644", name, sha: sha(s), type: "blob
 const dirEntry = (name, s) => ({ mode: "40000", name, sha: sha(s), type: "tree" });
 function treeBytes(entries) { const parts = []; for (const e of entries) parts.push(Buffer.from(e.mode + " " + e.name + "\0", "utf8"), Buffer.from(e.sha, "hex")); return new Uint8Array(Buffer.concat(parts)); }
 const HTML = fs.readFileSync(require("path").join(__dirname, "../site/index.html"), "utf8");
-// The shell's full CSS was extracted from index.html's inline <style> into
-// pages-app.css (shared with the upgraded pages since the entry flip); CSS
-// rule assertions read it, markup/JS assertions still read index.html.
-const CSS = fs.readFileSync(require("path").join(__dirname, "../site/pages-app.css"), "utf8");
+// The shell's CSS is the two-sheet split: pages-core.css (tokens, theme gates,
+// base — also inlined into every generated page's head) plus pages-full.css
+// (the component vocabulary). CSS rule assertions read the pair in link order;
+// markup/JS assertions still read index.html.
+const CSS = fs.readFileSync(require("path").join(__dirname, "../site/pages-core.css"), "utf8") + "\n" + fs.readFileSync(require("path").join(__dirname, "../site/pages-full.css"), "utf8");
 const APP = fs.readFileSync(require("path").join(__dirname, "../site/gs-app.js"), "utf8");
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const TD = ORIGIN + "/" + (process.env.GS_SITE_BUCKET || "thread-demo") + "/";

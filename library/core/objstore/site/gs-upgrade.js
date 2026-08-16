@@ -19,7 +19,9 @@
 //
 // The takeover then reveals in TWO steps, because the two halves of the app
 // become available at very different times. The chrome (nav + layout) is a
-// constant in this file and pages-app.css lands in the parallel batch, so the
+// constant in this file and pages-full.css lands in the parallel batch (the
+// shared base, pages-core.css, is already live in the served page's own
+// head), so the
 // site's own frame can be on screen long before any data has been read; the
 // first view has to wait for the bucket. So revealChrome puts the frame up as
 // soon as the stylesheet governs the page, with the content slot holding a
@@ -57,7 +59,7 @@
 
   // LOADING_CLASS is the app's half of the same idea, and it is what makes the
   // early chrome safe. Added to <html> when the chrome takes the screen and
-  // removed when the first view has settled, it is the hook pages-app.css hangs
+  // removed when the first view has settled, it is the hook pages-full.css hangs
   // the content slot's loading treatment off: while it is set, #view paints one
   // loading line and hides whatever the app has rendered into it. gs-app fills
   // #view in pieces (a placeholder, then the view, then its highlights), and
@@ -643,14 +645,28 @@
       loadScript(base + "gs-core.js"),
       loadScript(base + "gs-render.js"),
     ]);
-    // The app stylesheet rides the same batch. It is still awaited (and still
-    // fetched inert) at the point below where the takeover is prepared — only its
-    // DOWNLOAD moves up here; its gating role at reveal is unchanged.
-    // A stylesheet failure can land while the scripts are still in flight, before
-    // there is an await on it; the no-op catch keeps that from surfacing as an
-    // unhandled rejection. The rejection itself is still delivered, below.
-    var cssLoad = loadStylesheet(base + "pages-app.css", "not all");
+    // The app stylesheet (pages-full.css — the same sheet the page already
+    // links, so this resolves from cache) rides the same batch. It is still
+    // awaited (and still fetched inert) at the point below where the takeover is
+    // prepared — only its DOWNLOAD moves up here; its gating role at reveal is
+    // unchanged. A stylesheet failure can land while the scripts are still in
+    // flight, before there is an await on it; the no-op catch keeps that from
+    // surfacing as an unhandled rejection. The rejection itself is still
+    // delivered, below.
+    var cssLoad = loadStylesheet(base + "pages-full.css", "not all");
     cssLoad.catch(function (e) { /* delivered at the await below */ });
+    // The shared base (pages-core.css) is normally already active: the page
+    // inlines it as its <style data-gs-core> head element, which the takeover
+    // leaves in place — identical bytes govern before and after the swap. A page
+    // WITHOUT that marker predates the core/full split (a long-cached sealed
+    // list page booting a newer shell), and pages-full.css alone would leave
+    // every var() dangling, so only then is the core sheet fetched alongside and
+    // flipped live with the rest at reveal.
+    var coreLoad = null;
+    try {
+      if (!document.querySelector("style[data-gs-core]")) coreLoad = loadStylesheet(base + "pages-core.css", "not all");
+    } catch (e) { /* shimmed DOM — the inlined core is the normal case */ }
+    if (coreLoad) coreLoad.catch(function (e) { /* delivered at the await below */ });
     preloadScript(base + "gs-app.js");
     await shellLoad;
     // Resolve the entry now and not earlier: entryFor asks gs-core's parseRoute
@@ -661,23 +677,25 @@
     var route = entryFor().route;
     // The reader is loaded: prepare the takeover WITHOUT changing anything on
     // screen. The app stylesheet was fetched inert (media "not all") — it must be
-    // ready before the swap, and a live pages-app.css would restyle the static
-    // page underneath (font stack, border-box reset), which is a reflow of the
-    // very content a failed boot has to hand back intact. If it fails or wedges,
-    // loadStylesheet rejects and boot throws HERE — before anything is staged —
-    // and the restore puts the readable, styled static page back untouched.
+    // ready before the swap, and the sheet going live restyles whatever the
+    // static layer still governs, which is a reflow of the very content a failed
+    // boot has to hand back intact. If it fails or wedges, loadStylesheet rejects
+    // and boot throws HERE — before anything is staged — and the restore puts the
+    // readable, styled static page back untouched.
     var appCSS = await cssLoad;
-    // What the reveal will suspend: the static page's styling layer (the inline
-    // base <style> and its pages.css link, with the media each was served with)
-    // and its content. Captured NOW, before gs-app.js runs, so the takeover
-    // touches exactly these and never a node the app added meanwhile (its accent
-    // <style>, a lazily loaded grammar, …). The static styling constrains <body>
-    // (max-width/margin/padding) and pages-app.css never resets it, so leaving it
-    // live would squeeze the app into the reading column.
+    var coreCSS = coreLoad ? await coreLoad : null;
+    // What the reveal will suspend: the static page's styling layer (its
+    // pages-full.css link, with the media it was served with) and its content.
+    // Captured NOW, before gs-app.js runs, so the takeover touches exactly these
+    // and never a node the app added meanwhile (its accent <style>, a lazily
+    // loaded grammar, …). The inlined shared base (and the page's accent
+    // override) carry data-gs-core and are deliberately EXEMPT: they are the
+    // tokens and body base the app's own sheet consumes, identical to what the
+    // shell links as pages-core.css, so they stay live across the swap.
     var staticStyles = [];
     try {
       document.querySelectorAll('head style, head link[rel="stylesheet"]').forEach(function (n) {
-        if (n !== appCSS) staticStyles.push({ node: n, media: n.media || "" });
+        if (n !== appCSS && n !== coreCSS && !n.hasAttribute("data-gs-core")) staticStyles.push({ node: n, media: n.media || "" });
       });
     } catch (e) { /* shimmed DOM — nothing to suspend */ }
     var staticBody = [];
@@ -694,13 +712,13 @@
     try { cloaked = document.documentElement.classList.contains(BOOT_CLASS); } catch (e) { /* shimmed DOM */ }
     // revealChrome is the first of the entry's two visual steps: the app's own
     // frame takes the screen while the first view is still loading. Everything it
-    // needs is in hand — the chrome is a constant in this file and pages-app.css
+    // needs is in hand — the chrome is a constant in this file and pages-full.css
     // has arrived — so the visitor gets the site's nav and layout for most of the
     // wait instead of a blank page with one line on it, and gets it at a size and
     // position the content will not disturb when it lands.
     //
     // It is gated on the stylesheet on purpose. Chrome painted before
-    // pages-app.css governs the page is an unstyled nav, which is a worse flash
+    // pages-full.css governs the page is an unstyled nav, which is a worse flash
     // than the blank page it replaces, so this runs only after the awaited
     // cssLoad above — the same gate the reveal has always used.
     //
@@ -720,11 +738,13 @@
         html.classList.add(LOADING_CLASS);
       } catch (e) { /* shimmed DOM */ }
       appCSS.media = "all";
+      if (coreCSS) coreCSS.media = "all";
       for (var i = 0; i < staticStyles.length; i++) staticStyles[i].node.media = "not all";
       for (var j = 0; j < staticBody.length; j++) staticBody[j].style.display = "none";
       for (var k = 0; k < chromeNodes.length; k++) chromeNodes[k].style.display = "";
       undoChrome = function () {
         appCSS.media = "not all";
+        if (coreCSS) coreCSS.media = "not all";
         for (var i2 = 0; i2 < staticStyles.length; i2++) staticStyles[i2].node.media = staticStyles[i2].media;
         for (var j2 = 0; j2 < staticBody.length; j2++) staticBody[j2].style.display = "";
         // Everything the takeover put in the body goes back off screen, and not

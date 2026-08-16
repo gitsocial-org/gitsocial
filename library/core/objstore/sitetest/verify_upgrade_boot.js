@@ -18,7 +18,7 @@
 //      ordering, not a pure function. A JS visitor never sees content that is
 //      about to change — the page's own head script hides the static content
 //      before the body paints — and the takeover then arrives in TWO steps: the
-//      app's chrome as soon as pages-app.css can style it, and the first view
+//      app's chrome as soon as pages-full.css can style it, and the first view
 //      into that chrome's content slot once it has settled. So an entry reads
 //      blank-loading → chrome → content, with the content transition still
 //      happening exactly once and the chrome not moving across it. Both steps are
@@ -158,7 +158,7 @@ const ASSET_MS = 5;
 // place. The suite models it as the visible text, which is what a reader sees.
 const LOADING = "Loading…";
 // CHROME marks the app's own frame being on screen — the nav and the two-panel
-// layout, revealed as soon as pages-app.css governs the page and long before the
+// layout, revealed as soon as pages-full.css governs the page and long before the
 // first view's data has been read. Its own text is fixed and says nothing about
 // how far the boot has got, so the suite models a chrome frame as this marker
 // plus the state of the content slot, which is the part that changes.
@@ -199,13 +199,20 @@ function mkPage(opts) {
   meta.setAttribute("name", "gs-route");
   meta.setAttribute("content", opts.metaRoute);
   const head = mk("head");
+  // The page's inlined shared base (<style data-gs-core>): the boot must leave
+  // it live across the swap — the app sheet consumes the tokens it declares.
+  const coreStyle = mk("style");
+  coreStyle.setAttribute("data-gs-core", "");
+  head._children.push(coreStyle);
+  coreStyle._parent = head;
+  // The page's own suspended styling layer (models its pages-full.css link).
   const pageStyle = mk("style");
   head._children.push(pageStyle);
   pageStyle._parent = head;
   // documentElement models <html> and its two class flags, which between them are
   // the whole hide mechanism. The page's inline head script adds "gs-boot" before
   // the body is parsed; gs-upgrade swaps it for "gs-loading" when the chrome
-  // takes the screen (pages-app.css hangs the content slot's loading treatment
+  // takes the screen (pages-full.css hangs the content slot's loading treatment
   // off that one), and drops "gs-loading" when the first view lands. A restore
   // clears both. Nothing else in the boot touches them.
   // opts.cloaked === false models the entry the conditional boot script now
@@ -293,11 +300,13 @@ function mkPage(opts) {
     createElement: (t) => mk(t),
     createTextNode: (v) => shimDoc.createTextNode(v),
     getElementById: (id) => (id === "gs-page" ? mount : shimDoc.getElementById(id)),
-    // Two selectors reach here from the boot: the gs-route meta, and the static
-    // styling layer reveal captures. wireChrome's ".nav" falls through to the
-    // shim document, whose null is the no-op that chrome wiring is built for.
-    querySelector: (sel) => (/gs-route/.test(sel) ? meta : shimDoc.querySelector(sel)),
-    querySelectorAll: (sel) => (/stylesheet/.test(sel) ? [pageStyle] : shimDoc.querySelectorAll(sel)),
+    // Three selectors reach here from the boot: the gs-route meta, the inlined
+    // core marker (present, so the boot never re-fetches pages-core.css), and
+    // the static styling layer reveal captures. wireChrome's ".nav" falls
+    // through to the shim document, whose null is the no-op that chrome wiring
+    // is built for.
+    querySelector: (sel) => (/gs-route/.test(sel) ? meta : (/data-gs-core/.test(sel) ? coreStyle : shimDoc.querySelector(sel))),
+    querySelectorAll: (sel) => (/stylesheet/.test(sel) ? [coreStyle, pageStyle] : shimDoc.querySelectorAll(sel)),
     addEventListener: () => {},
   };
   const win = { location: loc, addEventListener: () => {}, matchMedia: () => ({ matches: false }) };
@@ -321,12 +330,15 @@ function mkPage(opts) {
     fillView: (t) => { const v = viewNode(); if (v) v.textContent = t; return !!v; },
     // states is the deduped sequence of visible states: the measurement.
     states: () => samples.map((s) => s.visible).filter((v, i, a) => i === 0 || v !== a[i - 1]),
-    appCSS: () => head._children.find((n) => /pages-app\.css$/.test(String(n.href || ""))) || null,
+    appCSS: () => head._children.find((n) => /pages-full\.css$/.test(String(n.href || ""))) || null,
     // styledByPage: the served page's own sheet is GOVERNING. The reveal suspends
     // it by media rather than detaching it, because a boot that fails after the
     // chrome is up has to hand the page back exactly as served; only the final
     // reveal, once restoring is off the table, drops it from the head for good.
     styledByPage: () => head._children.indexOf(pageStyle) >= 0 && pageStyle.media !== "not all",
+    // coreKept: the inlined shared base is still live — the boot may never
+    // suspend or drop it, before, during or after the swap.
+    coreKept: () => head._children.indexOf(coreStyle) >= 0 && coreStyle.media !== "not all",
     activate: () => {
       global.document = doc; global.window = win;
       global.history = { replaceState: (_s, _t, u) => apply(u), pushState: (_s, _t, u) => apply(u) };
@@ -570,7 +582,7 @@ async function main() {
   // the mount carries no hiding attribute or inline style of its own.
   {
     const head = front.text.slice(0, front.text.indexOf("</head>"));
-    const hideRules = (head.match(/[^{}]*\{[^{}]*display:none[^{}]*\}/g) || []);
+    const hideRules = (head.match(/[^{}]*\{[^{}]*display:\s*none[^{}]*\}/g) || []);
     ok("every display:none rule in the page's own CSS is class-gated", hideRules.length > 0 && hideRules.every((r) => /html\.gs-boot\s/.test(r)), JSON.stringify(hideRules));
     ok("the mount is served plain (no hidden attribute, no inline display)", /<div id="gs-page" data-base="[^"]*">/.test(front.text) && !/id="gs-page"[^>]*(hidden|style=)/.test(front.text));
     ok("the served <html> carries no boot class of its own", /<html lang="en">/.test(front.text));
@@ -585,7 +597,7 @@ async function main() {
     ok("the script un-hides itself if the upgrade never takes ownership", !!bootScript && /__gsBooting/.test(bootScript[0]) && /addEventListener\("load"/.test(bootScript[0]) && /setTimeout\(u,\d+\)/.test(bootScript[0]), bootScript && bootScript[0]);
     // The loading line is the app's own treatment (muted, centered, generous
     // padding) so the boot and the app that follows read as one design.
-    ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\{content:"Loading…";[^}]*text-align:center/.test(head), "head=" + head.slice(head.indexOf("<style>"), head.indexOf("</style>")).slice(0, 400));
+    ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*content:\s*"Loading…"[^}]*text-align:\s*center/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
     // The whole point of the no-JS contract: the page still reads.
     ok("the served page is complete without JS (content in the body as served)", /<h1>/.test(front.text) && /Recent activity/.test(front.text));
 
@@ -615,70 +627,55 @@ async function main() {
     ok("a non-front page is cloaked however it is entered", cloakDecision("/issues", "") === true && cloakDecision("/commits", "#c-abcdef012345") === true && cloakDecision("", "") === true);
   }
 
-  console.log("\n--- The chrome-first reveal's other half lives in pages-app.css ---");
-  // The boot reveals the chrome as soon as pages-app.css governs the page and
+  console.log("\n--- The two-sheet split: core inlined into pages, full linked by both ---");
+  // The boot reveals the chrome as soon as pages-full.css governs the page and
   // marks <html> with `gs-loading`; that class does nothing on its own. The rules
   // that hold the content slot on a loading line — and hide whatever gs-app has
-  // already rendered into it — are in the app stylesheet, a different file, so a
-  // rename or a cleanup there would silently turn the split reveal into a slot
-  // that fills in while the visitor watches. Pin the pair together.
+  // already rendered into it — are in that sheet, a different file, so a rename
+  // or a cleanup there would silently turn the split reveal into a slot that
+  // fills in while the visitor watches. Pin the pair together.
   {
-    const css = await get(base + "pages-app.css");
-    ok("pages-app.css served", css.status === 200);
+    const css = await get(base + "pages-full.css");
+    ok("pages-full.css served", css.status === 200);
     ok("the class hides whatever the app rendered into the slot", /html\.gs-loading\s+#view\s*>\s*\*\s*\{[^}]*display:\s*none/.test(css.text), "css=" + css.text.slice(0, 120));
     ok("and paints the same loading treatment in its place", /html\.gs-loading\s+#view::before\s*\{[^}]*content:\s*"Loading…"/.test(css.text), "css=" + css.text.slice(0, 120));
     // It is scoped to the class, so the plain shell (which never sets it) and
     // every post-boot navigation are untouched: this is a boot state, not a style.
+    // No cloaking risk either: the served page links this sheet itself, but the
+    // class only ever comes from the boot script, so nothing hides without JS.
     ok("nothing hides #view unconditionally", !/(^|\n)\s*#view\s*>\s*\*\s*\{[^}]*display:\s*none/.test(css.text));
-    // No cloaking risk from this half: the served static page links pages.css,
-    // never pages-app.css, so these rules only exist once the boot has fetched
-    // the app stylesheet — which is script-gated by construction.
-    ok("the served page does not load the app stylesheet at all", !/pages-app\.css/.test(front.text));
 
-    // The front page is not hidden during the boot any more: it stays on screen
-    // while the shell downloads and is then swapped for the app's render of the
-    // SAME content. So every metric the two sheets disagree on is a visible jump
-    // at that swap — the column moving, or the text re-wrapping under a different
-    // size or leading. The pages' inlined base therefore mirrors the shell's
-    // numbers, and these assertions are what keep the two in step: change a token
-    // in pages-app.css and the page layer has to follow it here.
-    const headCSS = front.text.slice(front.text.indexOf("<style>"), front.text.indexOf("</style>"));
-    const token = (name) => (new RegExp("--" + name + ":\\s*([^;]+);").exec(css.text) || [])[1];
-    const metrics = [
-      ["nav column width", token("nav-w"), /#gs-page>nav\{[^}]*width:\s*([0-9.]+px)/.exec(headCSS)],
-      ["shell max width", token("shell-max"), /#gs-page\{[^}]*max-width:\s*([0-9.]+px)/.exec(headCSS)],
-      ["shell padding", token("shell-pad"), /#gs-page\{[^}]*padding:\s*([0-9.]+rem)/.exec(headCSS)],
-      ["column gap", token("nav-gap"), /#gs-page\{[^}]*padding:[^;}]*\+\s*([0-9.]+rem)\)/.exec(headCSS)],
-      ["body size", token("fs-body"), /body\{[^}]*font:\s*([0-9.]+px)\//.exec(headCSS)],
-    ];
-    for (const [label, appValue, pageMatch] of metrics) {
-      ok("the pages' " + label + " is the shell's (" + appValue + ")", !!appValue && !!pageMatch && pageMatch[1] === appValue.trim(), "app=" + appValue + " page=" + (pageMatch && pageMatch[1]));
-    }
-    // Leading is written into the same shorthand on both sides, so it is matched
-    // as a pair with the size rather than as a token.
-    const appLeading = /font:\s*var\(--fs-body\)\/([0-9.]+)/.exec(css.text);
-    const pageLeading = /body\{[^}]*font:\s*[0-9.]+px\/([0-9.]+)/.exec(headCSS);
-    ok("the pages' body leading is the shell's", !!appLeading && !!pageLeading && appLeading[1] === pageLeading[1], "app=" + (appLeading && appLeading[1]) + " page=" + (pageLeading && pageLeading[1]));
-    // And the single-column fallback flips at the same width, or a desktop fix
-    // just moves the jump to mobile.
+    // The front page stays on screen while the shell downloads and is then
+    // swapped for the app's render of the SAME content, so any base metric the
+    // two disagree on is a visible jump at that swap. The refactor makes that
+    // impossible by construction: the page's head inlines pages-core.css — the
+    // very file the shell links — so there is no second copy of the tokens to
+    // drift. Assert the construction, not the numbers.
+    const coreCSS = await get(base + "pages-core.css");
+    ok("pages-core.css served", coreCSS.status === 200);
+    const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "");
+    const styleStart = front.text.indexOf("<style data-gs-core>");
+    const headCSS = styleStart >= 0 ? front.text.slice(styleStart + "<style data-gs-core>".length, front.text.indexOf("</style>", styleStart)) : "";
+    ok("the served page inlines the shell's own core sheet (comments stripped)", styleStart >= 0 && headCSS === stripComments(coreCSS.text).trim(), "headCSS len=" + headCSS.length);
+    ok("and links the full sheet the app loads", /pages-full\.css/.test(front.text));
+    ok("the core declares the tokens the full sheet consumes", /--shell-max:/.test(headCSS) && /--fs-body:/.test(headCSS) && /--pl-link:/.test(headCSS));
+    // Inlined at every page depth, the core may reference no URL: a relative
+    // url() would resolve against the page's directory, not the site root.
+    ok("the core carries no url()", !/url\(/i.test(coreCSS.text));
+    // border-box is what makes the shared 1012px mean the same thing on both
+    // surfaces (max-width INCLUDES padding), and it now exists exactly once.
+    ok("the core resets the box model globally", /\*\s*\{\s*box-sizing:\s*border-box/.test(headCSS), headCSS.slice(0, 120));
+    ok("the full sheet no longer restates the reset or the tokens", !/box-sizing:\s*border-box/.test(css.text) && !/--pl-link:/.test(css.text));
+    // The one value stated twice (a media query cannot consume a custom
+    // property): both sheets must collapse at the same breakpoint.
     const appBP = /@media\s*\(max-width:\s*([0-9]+px)\)/.exec(css.text);
-    const pageBP = /@media\s*\(max-width:\s*([0-9]+px)\)\{#gs-page\{[^}]*\}#gs-page>nav\{position:static/.exec(headCSS);
-    ok("both collapse to one column at the same breakpoint", !!appBP && !!pageBP && appBP[1] === pageBP[1], "app=" + (appBP && appBP[1]) + " page=" + (pageBP && pageBP[1]));
-    // The nav is the sidebar's column rather than a spacer standing in for it,
-    // so nothing has to appear at the swap. It is positioned INTO a gutter the
-    // content reserves as padding, never laid out as a row of the content's own
-    // flow: a nav that participates in that flow sizes a row to the whole link
-    // stack and leaves a tall empty band under the first heading.
-    ok("the page's own nav occupies the sidebar gutter, out of flow", /#gs-page>nav\{position:absolute;left:1\.25rem/.test(headCSS) && /#gs-page\{[^}]*padding:[^;}]*calc\(/.test(headCSS), headCSS.slice(0, 240));
-    ok("the nav cannot size a row of the content flow", !/#gs-page>nav\{[^}]*grid-row/.test(headCSS), headCSS.slice(0, 240));
-    // Matching numbers are not enough: they have to be measured the same way.
-    // pages-app.css resets box-sizing globally, so the shell's max-width includes
-    // its padding. Without the same reset the page's identical 1012px would bound
-    // the CONTENT box, put the reserved gutter outside it, and leave the served
-    // page 284px wider and centered 142px to the app's left, with the text
-    // wrapping at a different measure. Same declarations, different box model.
-    ok("the app stylesheet resets the box model globally", /\*\s*\{[^}]*box-sizing:\s*border-box/.test(css.text));
-    ok("the pages' box model is the same reset", /\*\{box-sizing:border-box\}/.test(headCSS), headCSS.slice(0, 120));
+    const coreBP = /@media\s*\(max-width:\s*([0-9]+px)\)/.exec(coreCSS.text);
+    ok("both collapse to one column at the same breakpoint", !!appBP && !!coreBP && appBP[1] === coreBP[1], "full=" + (appBP && appBP[1]) + " core=" + (coreBP && coreBP[1]));
+    // The nav is the sidebar's column rather than a spacer standing in for it:
+    // positioned INTO a gutter the content reserves as padding, never a row of
+    // the content's own flow (which would size that row to the link stack).
+    ok("the page's own nav occupies the sidebar gutter, out of flow", /#gs-page\s*>\s*nav\s*\{[^}]*position:\s*absolute/.test(headCSS) && /#gs-page\s*\{[^}]*padding:[^;}]*calc\(/.test(headCSS), headCSS.slice(0, 240));
+    ok("the nav cannot size a row of the content flow", !/#gs-page\s*>\s*nav\s*\{[^}]*grid-row/.test(headCSS), headCSS.slice(0, 240));
   }
 
   // Discover a real item to address its page + route.
@@ -935,9 +932,9 @@ async function main() {
     const r = await runBoot(page);
     ok("matching route: the boot completed", !r.err, "err=" + (r.err && r.err.message));
     // The shell batch is fetched onto the page's own loading line: nothing can be
-    // styled until pages-app.css lands, so the chrome cannot precede it and every
+    // styled until pages-full.css lands, so the chrome cannot precede it and every
     // asset up to and including it settles onto a blank page.
-    ok("matching route: the whole shell batch loads on the page's own loading line", duringLoad(page).length === 6 && ["icons.js", "gs-core.js", "gs-render.js", "pages-app.css"].every((n) => shownAt(page, n)[0] === LOADING),
+    ok("matching route: the whole shell batch loads on the page's own loading line", duringLoad(page).length === 6 && ["icons.js", "gs-core.js", "gs-render.js", "pages-full.css"].every((n) => shownAt(page, n)[0] === LOADING),
       JSON.stringify(duringLoad(page)));
     // And the chrome is up for BOTH gs-app.js touches — the preload that lands in
     // the same batch and the script that actually runs it. That gap is the whole
@@ -962,8 +959,8 @@ async function main() {
       // The whole shell downloads while the finished page is on screen, which is
       // the entire point: on a slow link the visitor is reading, not waiting.
       ok("uncloaked: the whole shell batch loads with the page still readable",
-        ["icons.js", "gs-core.js", "gs-render.js", "pages-app.css", "gs-app.js"].every((n) => shownAt(plain, n).every((v) => v === HOST)),
-        JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-app.css", "gs-app.js"].map((n) => n + "=" + JSON.stringify(shownAt(plain, n)))));
+        ["icons.js", "gs-core.js", "gs-render.js", "pages-full.css", "gs-app.js"].every((n) => shownAt(plain, n).every((v) => v === HOST)),
+        JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-full.css", "gs-app.js"].map((n) => n + "=" + JSON.stringify(shownAt(plain, n)))));
       // Exactly one visual change, and it is the finished app arriving. No state
       // may show the chrome over a loading slot, and none may show the chrome
       // and the static content at once.
@@ -980,7 +977,7 @@ async function main() {
     const firstSettle = page.events.findIndex((e) => e.ev === "settle");
     ok("the whole shell is requested before the first byte of it arrives", firstSettle === 5 && page.events.slice(0, 5).every((e) => e.ev === "request"),
       "firstSettle=" + firstSettle + " head=" + JSON.stringify(page.events.slice(0, 6).map((e) => e.ev + ":" + e.name)));
-    ok("the batch is icons + the reader + the app stylesheet", JSON.stringify(reqs.slice(0, 4).map((e) => e.name)) === JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-app.css"]),
+    ok("the batch is icons + the reader + the app stylesheet", JSON.stringify(reqs.slice(0, 4).map((e) => e.name)) === JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-full.css"]),
       JSON.stringify(reqs.map((e) => e.name + (e.rel ? "(" + e.rel + ")" : ""))));
     // async=false is the whole trick: parallel download, insertion-order
     // execution, so gs-core still runs before gs-render with no serialization.
@@ -1117,14 +1114,14 @@ async function main() {
   // still in flight. Each one must abort the takeover BEFORE anything is staged —
   // the chrome reveal is gated on the whole batch, so none of these ever paints a
   // frame — and hand back the readable, styled static page exactly as served.
-  for (const dead of ["gs-core.js", "gs-render.js", "pages-app.css"]) {
+  for (const dead of ["gs-core.js", "gs-render.js", "pages-full.css"]) {
     const page = mkPage({ url: base + "index.html", metaRoute: "/", dataBase: "./", content: HOST, serves: { [dead]: false } });
     const r = await runBoot(page);
     ok("a failed " + dead + " restores the readable static page", !!r.err && page.visible() === HOST && !page.booting(), "err=" + (r.err && r.err.message) + " states=" + JSON.stringify(page.states()));
     ok("a failed " + dead + " never makes the app stylesheet live", page.styledByPage() && (!page.appCSS() || page.appCSS().media === "not all"), "media=" + (page.appCSS() && page.appCSS().media));
     // The gate: an unstyled nav is a worse flash than the blank page it would
     // replace, so the chrome must never reach the screen when the batch it is
-    // gated on did not complete. pages-app.css is the load-bearing member here.
+    // gated on did not complete. pages-full.css is the load-bearing member here.
     ok("a failed " + dead + " never puts the chrome on screen", !page.chromeUp() && !page.states().includes(CHROME_LOADING), "states=" + JSON.stringify(page.states()));
   }
   {

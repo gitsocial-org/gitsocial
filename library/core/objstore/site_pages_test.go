@@ -10,7 +10,6 @@ package objstore
 
 import (
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -196,7 +195,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if !keyExists(client, "index.html") || generatedFront() {
 		t.Error("guards off: index.html must be the embedded shell, not the generated front page")
 	}
-	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesManifestKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, "posts/index.html"} {
+	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesManifestKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, "posts/index.html"} {
 		if keyExists(client, key) {
 			t.Errorf("guards off: %s must not exist", key)
 		}
@@ -237,7 +236,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if keyExists(client, sitePagesLegacyFrontKey) {
 		t.Error("pages on: retired timeline.html must not exist")
 	}
-	for _, key := range []string{sitePagesManifestKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
+	for _, key := range []string{sitePagesManifestKey, "pages-core.css", "pages-full.css", sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
 		if !keyExists(client, key) {
 			t.Errorf("pages on: %s must exist", key)
 		}
@@ -264,7 +263,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("pushSite disable: %v", err)
 	}
-	gone := append([]string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
+	gone := append([]string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
 	for _, key := range gone {
 		if keyExists(client, key) {
 			t.Errorf("disable: %s must be deleted", key)
@@ -525,79 +524,6 @@ func TestSitePages_ThreadCapTruncation(t *testing.T) {
 	page = getKey(t, client, "i/"+root[:12]+".html")
 	if !strings.Contains(page, "more replies") {
 		t.Error("byte cap: expected a truncation marker")
-	}
-}
-
-// TestSitePages_StylesheetShipsOnEveryPass pins the fix for a bug that shipped:
-// pages.css was written only by the full-regen pass, so a bucket whose page set
-// was already current kept serving an older binary's stylesheet forever, and
-// rules added for new page elements never arrived (the elements rendered
-// unstyled). Every maintenance pass — full, incremental and the no-op reclaim —
-// must put the current stylesheet.
-func TestSitePages_StylesheetShipsOnEveryPass(t *testing.T) {
-	client, bucket := testClient(t)
-	seedPagesConfig(t, client, pagesTestSite())
-	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "first post", ts: 1000}})
-	if pending, _ := buildPages(t, client); pending {
-		t.Fatal("unexpected pending")
-	}
-	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
-		t.Fatal("full regen must write the current stylesheet")
-	}
-	// Stale stylesheet (what an older binary left behind) + an incremental pass.
-	stale := []byte("/* stale */")
-	mustPutStale := func() {
-		if err := putSiteText(client, sitePagesCSSKey, "text/css; charset=utf-8", stale); err != nil {
-			t.Fatalf("seed stale css: %v", err)
-		}
-	}
-	mustPutStale()
-	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "second post", ts: 1001}})
-	if pending, _ := buildPages(t, client); pending {
-		t.Fatal("unexpected pending")
-	}
-	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
-		t.Error("an incremental pass must refresh the stylesheet")
-	}
-	// And the cheapest path of all: nothing moved, so the pass only reclaims the
-	// front page. It must still ship the stylesheet.
-	mustPutStale()
-	puts := bucket.putCount(sitePagesCSSKey)
-	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
-		t.Fatalf("no-op pass pending=%v state=%q", pending, state)
-	}
-	if got := getKey(t, client, sitePagesCSSKey); got != string(sitePagesCSSFor(siteCustomization{})) {
-		t.Error("a no-op (reclaim) pass must refresh the stylesheet")
-	}
-	if bucket.putCount(sitePagesCSSKey) != puts+1 {
-		t.Error("the stylesheet must be written exactly once per pass")
-	}
-}
-
-// TestSiteVersion_CoversTheGeneratedStylesheet pins the other half of that bug:
-// a push whose ONLY change is the stylesheet must not be skipped as up to date.
-// The shell version is the skip key, so the generated stylesheet has to be part
-// of it — the embedded files alone left a CSS-only change invisible.
-func TestSiteVersion_CoversTheGeneratedStylesheet(t *testing.T) {
-	before, err := siteVersion()
-	if err != nil {
-		t.Fatalf("siteVersion: %v", err)
-	}
-	h := sha256.New()
-	names, err := siteFileNames()
-	if err != nil {
-		t.Fatalf("siteFileNames: %v", err)
-	}
-	for _, name := range names {
-		data, err := siteFiles.ReadFile("site/" + name)
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		fmt.Fprintf(h, "%s %d\n", name, len(data))
-		h.Write(data)
-	}
-	if before == fmt.Sprintf("%x", h.Sum(nil)) {
-		t.Error("siteVersion must fold in the generated stylesheet, not just the embedded files")
 	}
 }
 

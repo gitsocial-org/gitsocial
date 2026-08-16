@@ -74,8 +74,8 @@ func isSealedSitemapPartKey(key string) bool {
 // isSealedListPageKey reports whether a key is a sealed (immutable) HTML list
 // page — `<type>/<n>.html` under one of the five page type directories at a
 // path boundary. Everything else the page layer writes (item pages, the
-// mutable index.html type-list heads, the generated front page index.html,
-// pages.css) stays no-cache: those keys rewrite in place on later pushes.
+// mutable index.html type-list heads, the generated front page index.html)
+// stays no-cache: those keys rewrite in place on later pushes.
 //
 // `commits/<n>.html` is deliberately NOT in this class even though it is sealed
 // the same way. A gitmsg data branch is append-only by protocol, so a sealed

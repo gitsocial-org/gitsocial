@@ -1,0 +1,229 @@
+/* pages-core.css - the shared style base both site surfaces stand on: design
+   tokens (type, layout, palette), the theme gates, the global reset, the
+   body/anchor base, and the pre-rendered pages' own shell + structural rules.
+
+   The Go page layer (site_pages_html.go) inlines this file — comments
+   stripped, otherwise verbatim — into every generated page's <head>, and the
+   app shell (index.html) links it before pages-full.css. Identical rules
+   govern the document before and after the boot swap, so the swap cannot
+   shift base styles: the two sheets cannot drift because they are the same
+   bytes. pages-full.css carries everything else (webfonts, the app's
+   component and view vocabulary) and consumes the tokens declared here.
+
+   HARD RULE: no url() anywhere in this file. It is inlined into pages at
+   arbitrary directory depths (i/, issues/, commits/, …), where a relative URL
+   would resolve against the page's own directory, not the site root. Fonts —
+   the only url() consumers — live in pages-full.css, which is always fetched
+   from the root. Drift tests (site_pages_tokens_test.go) enforce this, the
+   shared 720px breakpoint, and that every var() either sheet consumes is
+   declared here.
+
+   The page-structural rules at the bottom are scoped to #gs-page (the
+   pre-rendered page mount). The boot swap replaces #gs-page wholesale, so
+   they go inert the moment the app owns the DOM and can never leak into the
+   post-swap render. Element rules use :where(#gs-page) so their specificity
+   stays that of the bare element — pages-full.css's classed rules (.markdown
+   headings, chips) override them exactly as they always have; the few classed
+   rules that must BEAT pages-full.css's same-named classes (.meta, .tomb)
+   keep the plain #gs-page prefix for its id weight. */
+
+  /* Base tokens (bg/text/link) define the palette; derived tokens
+     (muted/line/panel/chip) are computed off the base with color-mix so they
+     track the active theme without restating.
+     Derived tokens live on body, not :root: the theme gates override the base
+     tokens, and a var() inside a custom property resolves where the property
+     is declared, so :root-level derivations would never see a body-level
+     override.
+     Each palette literal exists exactly once: the light set as --pl-*, the
+     dark set as --pd-*, both declared here. The theme gates below only remap
+     the active tokens onto one set or the other. */
+  :root {
+    --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #008787;
+    --pd-bg: #02041b; --pd-text: #c9d1d9; --pd-link: #00d7d7;
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
+    --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
+    --warn: #bf8700; --danger: #cf222e;
+    --serif: 'EB Garamond', Georgia, serif;
+    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
+       shade 600 (--pl-*) for the light parchment, shade 400 (--pd-*) for the
+       dark background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so
+       it stays legible on the cream background (the only per-theme tuning). */
+    --pl-i-cyan: #17a5af; --pl-i-yellow: #a67c00; --pl-i-orange: #d47628; --pl-i-indigo: #693acf;
+    --pl-i-green: #199f43; --pl-i-blue: #1a85d4; --pl-i-red: #d52c36; --pl-i-vermilion: #d5512f;
+    --pd-i-cyan: #64d1db; --pd-i-yellow: #ffd452; --pd-i-orange: #ffa359; --pd-i-indigo: #9d6afb;
+    --pd-i-green: #5ecc71; --pd-i-blue: #69b1ff; --pd-i-red: #ff6762; --pd-i-vermilion: #ff8c5b;
+    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
+    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
+    /* Font-size scale. Every font-size in either sheet resolves through one of
+       these tokens, so a size tweak is a single edit. --fs-ui (mono chrome) and
+       --fs-code (code content) are separate tokens for exactly this reason and
+       have since diverged (0.8 vs 0.85rem). Headings keep a
+       token per hierarchy level; near-duplicate one-offs (0.78-0.85, 0.9-1.0,
+       0.7-0.76) collapse onto the nearest token. Inline `.markdown kbd` stays
+       in `em` (it scales with surrounding text, not this global scale).
+       Heading tokens are rem (root 16px), so they do NOT track --fs-body: the
+       36/32/28/24px steps are chosen to sit at or above the 24px serif body
+       (EB Garamond renders small for its size) — re-step them if it moves. */
+    --fs-h1: 2.25rem; --fs-h2: 2rem; --fs-h3: 1.75rem; --fs-h4: 1.5rem;
+    --fs-body: 24px; --fs-md: 0.95rem;
+    --lh-body: 1.1;
+    --fs-ui: 0.8rem; --fs-code: 0.85rem; --fs-dense: 0.72rem;
+    /* Radius tiers: pill (chips, round controls), panel (bordered surfaces),
+       control (buttons, inputs). Ink-detail radii stay literal below the
+       control tier (≤4px highlight marks, swatches, bar caps, the 50% circle):
+       they are marks on content, not control surfaces. */
+    --r-pill: 999px; --r-panel: 10px; --r-ctl: 6px;
+    /* Surface padding pairs shared by comparable components: panel bodies,
+       rows inside panels, bordered controls. One-off layout paddings (dense
+       tree rows, the big load-more pill) stay local, as do margins/gaps. */
+    --pad-panel: 0 0.9rem 0.5rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
+    /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
+       span exactly the sidebar's width and sit at its horizontal position
+       without hardcoding — and so the pre-rendered pages' #gs-page shell below
+       lands at the same width and x as the app's .shell by construction. */
+    --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem;
+  }
+  /* Theme gates. The system preference decides when no choice is stamped; a
+     stored choice wins. The pre-rendered pages' boot script stamps the choice
+     on <html> before first paint (site_pages_html.go), the app's toggle on
+     <body> (index.html / gs-upgrade.js), so both hosts gate here. A stamped
+     html.light-mode outranks the media :root rule (0,1,1 vs 0,1,0), which is
+     what holds a chosen light theme against a dark system with no flip at
+     boot; a body-level class wins over anything inherited from <html> simply
+     by being declared closer. */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+      --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
+      --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
+    }
+  }
+  html.dark-mode, body.dark-mode {
+    --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+    --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
+    --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
+  }
+  html.light-mode, body.light-mode {
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
+    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
+    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
+  }
+  /* border-box is not cosmetic: it is what makes the shared 1012px mean the
+     same thing on both surfaces — the shell's and #gs-page's max-width both
+     INCLUDE their padding, so the content column sits at the same x. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    --muted: color-mix(in srgb, var(--text) 68%, var(--bg));
+    --line: color-mix(in srgb, var(--text) 18%, transparent);
+    --panel: color-mix(in srgb, var(--text) 3%, var(--bg));
+    --chip: color-mix(in srgb, var(--text) 9%, transparent);
+    --code-bg: color-mix(in srgb, var(--text) 14%, transparent);
+    /* Subtle button surface: a slight shift off the page background so a normal
+       (border + transparent) button reads as a control, not flat page. */
+    --btn: color-mix(in srgb, var(--text) 5%, var(--bg));
+    /* Tint scale: three transparent-mix steps per hue (weak / mid / strong),
+       the fills every hue-tinted background resolves through. Mixes against
+       something other than transparent (hover borders, focus rings, Prism
+       hues) are relationships, not fills, and stay local. */
+    --link-t1: color-mix(in srgb, var(--link) 6%, transparent);
+    --link-t2: color-mix(in srgb, var(--link) 14%, transparent);
+    --link-t3: color-mix(in srgb, var(--link) 22%, transparent);
+    --danger-t1: color-mix(in srgb, var(--danger) 13%, transparent);
+    --danger-t2: color-mix(in srgb, var(--danger) 20%, transparent);
+    --danger-t3: color-mix(in srgb, var(--danger) 32%, transparent);
+    --open-t1: color-mix(in srgb, var(--open) 14%, transparent);
+    --open-t2: color-mix(in srgb, var(--open) 20%, transparent);
+    --open-t3: color-mix(in srgb, var(--open) 34%, transparent);
+    --warn-t1: color-mix(in srgb, var(--warn) 16%, transparent);
+    --warn-t2: color-mix(in srgb, var(--warn) 20%, transparent);
+    --warn-t3: color-mix(in srgb, var(--warn) 34%, transparent);
+    background: var(--bg); color: var(--text);
+    /* --serif leads with a webfont only pages-full.css delivers; a page whose
+       full sheet never arrives keeps reading in Georgia at the same size and
+       leading, so the degraded state is a font swap, never a reflow. */
+    font: var(--fs-body)/var(--lh-body) var(--serif);
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  /* The pre-rendered page shell. Nav and content are siblings under #gs-page
+     (there is no wrapper element to make them two columns of a grid), so the
+     sidebar column is RESERVED as left padding and the nav is positioned into
+     it, out of flow. A grid was the obvious shape and the wrong one: with the
+     content's rows all implicit, `grid-row:1/-1` on the nav resolves -1
+     against an explicit grid that has no rows, so the nav stays in row one and
+     makes that row as tall as the whole link stack, leaving a tall gap under
+     the first heading. Out of flow, the nav cannot size a row. */
+  #gs-page {
+    position: relative; max-width: var(--shell-max); margin: 0 auto;
+    padding: var(--shell-pad) var(--shell-pad) 2rem calc(var(--shell-pad) + var(--nav-w) + var(--nav-gap));
+    /* width:100% is load-bearing under pages-full's body flex frame: as a flex
+       item with auto cross-axis margins, #gs-page would otherwise shrink-to-fit
+       with a min-content floor — the widest code line — overflowing a phone
+       viewport to that line's width. A definite width re-enables the centered
+       max-width column and lets wide content scroll inside its own box; inert
+       when full (and its flex frame) never arrives. */
+    width: 100%;
+  }
+  #gs-page > nav {
+    position: absolute; left: var(--shell-pad); top: var(--shell-pad);
+    width: var(--nav-w); display: flex; flex-direction: column;
+    align-items: flex-start; gap: 0.35rem;
+  }
+  /* The page's boot state. NOTHING is hidden until a script adds .gs-boot to
+     <html> (the pages' inline boot script), so the served document stays
+     complete and visible for a crawler, a text browser, and anyone with
+     scripting off; on a JS client the class lands in the head, before the body
+     is parsed, so the static content never reaches a painted frame. The
+     loading line matches the app's own `.loading` treatment (muted, centered,
+     2.5rem of air) so the boot and the app speak the same visual language. */
+  html.gs-boot #gs-page { display: none; }
+  html.gs-boot body::before {
+    content: "Loading…"; display: block; padding: 2.5rem 0;
+    text-align: center; color: var(--muted);
+  }
+  /* Page-structural rules: the bare-element voice of the generated documents.
+     The class vocabulary the pages share with the app (.chip, .card,
+     .markdown, .show-more, …) deliberately is NOT restated here — it comes
+     from pages-full.css, so the pages render the app's own treatment by
+     construction. */
+  :where(#gs-page) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
+  :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: 0.2rem 0 0.4rem; }
+  :where(#gs-page) p { margin: 1rem 0; }
+  :where(#gs-page) nav, :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
+  :where(#gs-page) nav, :where(#gs-page) footer { font-size: var(--fs-dense); }
+  :where(#gs-page) nav a, :where(#gs-page) nav b, :where(#gs-page) footer a { margin-right: 0.9rem; }
+  #gs-page > nav a, #gs-page > nav b { margin-right: 0; }
+  :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: 0.9rem; }
+  :where(#gs-page) pre {
+    font-size: var(--fs-dense); line-height: 1; overflow-x: auto; margin: 1em 0;
+    background: var(--panel); padding: 0.7rem; border: 1px solid var(--line);
+  }
+  :where(#gs-page) footer { margin-top: 2.2rem; border-top: 1px solid var(--line); padding-top: 0.8rem; }
+  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: 1rem 0; font-family: var(--mono); font-size: var(--fs-ui); }
+  :where(#gs-page) ul.files li { border-top: 1px solid var(--line); padding: 0.4rem 0; }
+  /* Containment guards, duplicated from pages-full: that sheet loads async on
+     the pre-rendered pages, so during its load window wide README content must
+     already scroll inside its own box instead of widening the page past a phone
+     viewport. Full's richer versions (collapse, borders, spacing) win once it
+     lands. */
+  :where(#gs-page) table { display: block; overflow: auto; max-width: 100%; }
+  :where(#gs-page) img { max-width: 100%; height: auto; }
+  /* The pages' meta lines are static text joined with literal separators, not
+     the app's flex rows: block flow, flush left, with only a card's meta
+     keeping the app's glyph-column indent. The id weight is deliberate — it
+     must beat pages-full.css's .meta (inline-flex + 1.75rem indent). */
+  #gs-page .meta { font-size: var(--fs-ui); color: var(--muted); display: block; margin-left: 0; }
+  #gs-page .card .meta { margin-top: 0.25rem; margin-left: 1.75rem; }
+  #gs-page .tomb { color: var(--muted); font-style: italic; }
+  /* The pages' "See more" is an anchor where the app's is a button; keep the
+     anchor from underlining under the base a:hover rule. */
+  #gs-page .show-more, #gs-page .show-more:hover { text-decoration: none; }
+  @media (max-width: 720px) {
+    #gs-page { padding: 0.75rem; }
+    #gs-page > nav {
+      position: static; width: auto; flex-direction: row; flex-wrap: wrap;
+      gap: 0.9rem; margin-bottom: 0.6rem;
+    }
+    #gs-page > nav a, #gs-page > nav b { margin-right: 0.9rem; }
+  }

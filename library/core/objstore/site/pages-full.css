@@ -1,8 +1,18 @@
-  /* Webfonts (SIL OFL 1.1), shipped in the shell under fonts/ — the same
-     relative URLs work from pages.css, which serves from the same directory
-     and declares the identical faces. EB Garamond is one variable file; IBM
-     Plex Mono is four static weights, and a browser only downloads the
-     weights a page actually renders. */
+/* pages-full.css - everything above the shared base: the webfonts and the
+   app's whole component and view vocabulary. Loaded by the app shell
+   (index.html, and by gs-upgrade.js at page boot) and linked by every
+   pre-rendered page for the classes the two surfaces share (.chip, .card,
+   .markdown, …), so a generated page renders the app's own treatment by
+   construction. The design tokens, theme gates, reset and body/anchor base
+   live in pages-core.css — this sheet only consumes those vars and declares
+   none of its own. */
+
+  /* Webfonts (SIL OFL 1.1), shipped in the shell under fonts/. The ONLY
+     url() consumers in either sheet, and the reason they live here: this file
+     is always fetched from the prefix root, while pages-core.css is inlined
+     into pages at arbitrary depths where a relative URL would break. EB
+     Garamond is one variable file; IBM Plex Mono is four static weights, and
+     a browser only downloads the weights a page actually renders. */
   @font-face {
     font-family: 'EB Garamond';
     font-style: normal;
@@ -39,108 +49,11 @@
     src: url('fonts/ibm-plex-mono-bold.woff2') format('woff2');
   }
 
-  /* Base tokens (bg/text/link) define the palette; derived tokens
-     (muted/line/panel/chip) are computed off the base with color-mix so they
-     track the active theme without restating.
-     Derived tokens live on body, not :root: the toggle overrides the base
-     tokens via a body class, and a var() inside a custom property resolves
-     where the property is declared, so :root-level derivations would never
-     see the override.
-     Each palette literal exists exactly once: the light set as --pl-*, the
-     dark set as --pd-*, both declared here. The four theme blocks (media
-     default, body.dark-mode, body.light-mode) only remap the active tokens
-     onto one set or the other — the toggle mechanism itself is unchanged. */
-  :root {
-    --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #008787;
-    --pd-bg: #02041b; --pd-text: #c9d1d9; --pd-link: #00d7d7;
-    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
-    --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
-    --warn: #bf8700; --danger: #cf222e;
-    --serif: 'EB Garamond', Georgia, serif;
-    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
-    /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
-       shade 600 (--pl-*) for the light parchment, shade 400 (--pd-*) for the
-       dark background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so
-       it stays legible on the cream background (the only per-theme tuning). */
-    --pl-i-cyan: #17a5af; --pl-i-yellow: #a67c00; --pl-i-orange: #d47628; --pl-i-indigo: #693acf;
-    --pl-i-green: #199f43; --pl-i-blue: #1a85d4; --pl-i-red: #d52c36; --pl-i-vermilion: #d5512f;
-    --pd-i-cyan: #64d1db; --pd-i-yellow: #ffd452; --pd-i-orange: #ffa359; --pd-i-indigo: #9d6afb;
-    --pd-i-green: #5ecc71; --pd-i-blue: #69b1ff; --pd-i-red: #ff6762; --pd-i-vermilion: #ff8c5b;
-    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
-    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
-    /* Font-size scale. Every font-size in this sheet resolves through one of
-       these tokens, so a size tweak is a single edit. Two families share the
-       same value on purpose (--fs-ui / --fs-code both 0.8rem: mono chrome vs
-       code content) so they can diverge later without a hunt. Headings keep a
-       token per hierarchy level; near-duplicate one-offs (0.78-0.85, 0.9-1.0,
-       0.7-0.76) collapse onto the nearest token. Inline `.markdown code`/`kbd`
-       stay in `em` (they scale with surrounding text, not this global scale). */
-    --fs-h1: 1.6rem; --fs-h2: 1.35rem; --fs-h3: 1.2rem; --fs-h4: 1.05rem;
-    --fs-body: 20px; --fs-md: 0.95rem;
-    --fs-ui: 0.8rem; --fs-code: 0.8rem; --fs-dense: 0.72rem;
-    /* Radius tiers: pill (chips, round controls), panel (bordered surfaces),
-       control (buttons, inputs). Ink-detail radii stay literal below the
-       control tier (≤4px highlight marks, swatches, bar caps, the 50% circle):
-       they are marks on content, not control surfaces. */
-    --r-pill: 999px; --r-panel: 10px; --r-ctl: 6px;
-    /* Surface padding pairs shared by comparable components: panel bodies,
-       rows inside panels, bordered controls. One-off layout paddings (dense
-       tree rows, the big load-more pill) stay local, as do margins/gaps. */
-    --pad-panel: 0.75rem 0.9rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
-    /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
-       span exactly the sidebar's width and sit at its horizontal position
-       without hardcoding. */
-    --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
-      --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
-      --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
-    }
-  }
-  body.dark-mode {
-    --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
-    --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
-    --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
-  }
-  body.light-mode {
-    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
-    --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
-    --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    --muted: color-mix(in srgb, var(--text) 68%, var(--bg));
-    --line: color-mix(in srgb, var(--text) 18%, transparent);
-    --panel: color-mix(in srgb, var(--text) 3%, var(--bg));
-    --chip: color-mix(in srgb, var(--text) 9%, transparent);
-    --code-bg: color-mix(in srgb, var(--text) 14%, transparent);
-    /* Subtle button surface: a slight shift off the page background so a normal
-       (border + transparent) button reads as a control, not flat page. */
-    --btn: color-mix(in srgb, var(--text) 5%, var(--bg));
-    /* Tint scale: three transparent-mix steps per hue (weak / mid / strong),
-       the fills every hue-tinted background resolves through. Mixes against
-       something other than transparent (hover borders, focus rings, Prism
-       hues) are relationships, not fills, and stay local. */
-    --link-t1: color-mix(in srgb, var(--link) 6%, transparent);
-    --link-t2: color-mix(in srgb, var(--link) 14%, transparent);
-    --link-t3: color-mix(in srgb, var(--link) 22%, transparent);
-    --danger-t1: color-mix(in srgb, var(--danger) 13%, transparent);
-    --danger-t2: color-mix(in srgb, var(--danger) 20%, transparent);
-    --danger-t3: color-mix(in srgb, var(--danger) 32%, transparent);
-    --open-t1: color-mix(in srgb, var(--open) 14%, transparent);
-    --open-t2: color-mix(in srgb, var(--open) 20%, transparent);
-    --open-t3: color-mix(in srgb, var(--open) 34%, transparent);
-    --warn-t1: color-mix(in srgb, var(--warn) 16%, transparent);
-    --warn-t2: color-mix(in srgb, var(--warn) 20%, transparent);
-    --warn-t3: color-mix(in srgb, var(--warn) 34%, transparent);
-    min-height: 100vh; display: flex; flex-direction: column;
-    background: var(--bg); color: var(--text);
-    font: var(--fs-body)/1.4 var(--serif);
-  }
-  a { color: var(--link); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+  /* The tokens, theme gates, global reset and body/anchor base all live in
+     pages-core.css (shared with the pre-rendered pages, which inline it).
+     Only the app shell's flex frame is body-level styling of this sheet's
+     own. */
+  body { min-height: 100vh; display: flex; flex-direction: column; }
   /* One shared keyboard-focus ring for native controls. The component :focus
      rules keep their border-color shifts but no longer suppress the outline.
      (Browsers treat a focused text input as :focus-visible, so inputs show the
@@ -323,15 +236,15 @@
   .card-head .type-glyph { margin-right: 0; }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: 0.3rem; }
   .card .body.dim { color: var(--muted); }
-  /* List-card body clamp: long messages cap at ~10 rendered lines (body
-     line-height is 1.4, set in the base font shorthand) with a theme-independent
+  /* List-card body clamp: long messages cap at ~10 rendered lines (--lh-body
+     em-steps, matching the base font shorthand) with a theme-independent
      mask fade over the last ~2 lines; fixed-em gradient stops keep bodies
      shorter than the cap fully opaque. JS removes the class when the text fits
      and attaches the Show more toggle only when it overflows. */
   .body-clamp {
-    max-height: calc(10 * 1.4em); overflow: hidden;
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
-    mask-image: linear-gradient(to bottom, #000 calc(10 * 1.4em - 2.8em), transparent calc(10 * 1.4em));
+    max-height: calc(10 * var(--lh-body) * 1em); overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
+    mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
   }
   .body-clamp-toggle { display: block; margin-top: 0.2rem; padding: 0.15rem 0; }
   .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-left: 1.75rem; }
@@ -529,17 +442,17 @@
   .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 1rem 0 0.5rem; line-height: 1.2; }
   .markdown h1 { font-size: var(--fs-h1); border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
   .markdown h2 { font-size: var(--fs-h2); border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; }
-  .markdown p { margin: 0.6rem 0; }
+  .markdown p { margin: 1rem 0; }
   .markdown ul, .markdown ol { margin: 0.6rem 0 0.6rem 1.4rem; }
   .markdown li { margin: 0.2rem 0; }
   .markdown code {
-    font-family: var(--mono); font-size: 0.85em;
+    font-family: var(--mono); font-size: 1rem;
     background: var(--code-bg); border: 1px solid var(--line);
-    padding: 0.05rem 0.3rem; border-radius: 4px;
+    padding: 0 0.3rem; border-radius: 4px;
   }
   .markdown pre.codeblock {
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
-    padding: var(--pad-panel); overflow: auto; margin: 0.7rem 0; line-height: 1.45;
+    padding: var(--pad-panel); overflow: auto; margin: 0.7rem 0; line-height: 0.8;
   }
   .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
   .markdown img { max-width: 100%; height: auto; }

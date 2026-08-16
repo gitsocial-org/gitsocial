@@ -1159,14 +1159,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return VIDEO_MIME[ext] || null;
   }
 
-  // Object URLs built for the current view; revoked wholesale on the next
-  // route() so image blobs do not leak across navigations.
+  // Object URLs live on two lifetimes. Ephemeral ones (standalone image/video
+  // blob views, whose bytes are already in hand) go through trackObjectUrl and
+  // are revoked wholesale on the next route() so they do not leak across
+  // navigations. Markdown image URLs (blobObjectUrl) instead persist in
+  // imageUrlCache below, keyed by branch+path and revoked only when the branch
+  // tip moves — rebuilding them per route made the README logo visibly reload
+  // on every navigation.
   let liveObjectUrls = [];
   function trackObjectUrl(u) { liveObjectUrls.push(u); }
   function revokeObjectUrls() {
     for (const u of liveObjectUrls) { try { URL.revokeObjectURL(u); } catch (e) { /* noop */ } }
     liveObjectUrls = [];
   }
+
+  // Cached markdown-image object URLs: branch + "\0" + path → { tip, url }.
+  // `url` holds the in-flight PROMISE, not the resolved URL (mirrors
+  // ctx.objects): one render resolves several <img> markers concurrently, and
+  // two asking for the same path before either settles would otherwise both
+  // build a blob URL. A null resolution (missing path, not an image, over the
+  // cap) is cached too — it stays wrong until the tip moves anyway.
+  const imageUrlCache = new Map();
 
   // joinPath resolves a relative markdown/HTML path against the directory the
   // document lives in, honoring ./, ../, and a leading / (repo root).
@@ -1191,19 +1204,36 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // blobObjectUrl fetches an in-bucket blob and wraps it in a same-origin object
   // URL with an extension-derived MIME, capped at IMG_BLOB_CAP. Returns null when
-  // the path is missing, not an image, or over the cap.
-  async function blobObjectUrl(ctx, path, branch) {
-    const tip = await refTip(ctx, "refs/heads/" + branch);
+  // the path is missing, not an image, or over the cap. The URL is served from
+  // imageUrlCache while the branch tip is unchanged; on tip change the stale URL
+  // is revoked and the entry rebuilt. A caller that already resolved the branch
+  // tip to render its markdown passes it as `tip`: ref keys are no-cache, so the
+  // refTip fallback is a network round trip per image per render — the last
+  // visible repaint — and resolving at the render's own tip also keeps the image
+  // consistent with the text if a push lands mid-session.
+  async function blobObjectUrl(ctx, path, branch, tip) {
+    if (!tip) tip = await refTip(ctx, "refs/heads/" + branch);
     if (!tip) return null;
-    const node = await resolvePath(ctx, tip, path);
-    if (!node || node.type !== "blob") return null;
-    const mime = imageMime(path);
-    if (!mime) return null;
-    const obj = await getContentObject(ctx, node.sha);
-    if (!obj || obj.body.length > IMG_BLOB_CAP) return null;
-    const u = URL.createObjectURL(new Blob([obj.body], { type: mime }));
-    trackObjectUrl(u);
-    return u;
+    const key = branch + "\0" + path;
+    const cached = imageUrlCache.get(key);
+    if (cached) {
+      if (cached.tip === tip) return cached.url;
+      cached.url.then((u) => { if (u) { try { URL.revokeObjectURL(u); } catch (e) { /* noop */ } } }, () => { /* noop */ });
+    }
+    const url = (async () => {
+      const node = await resolvePath(ctx, tip, path);
+      if (!node || node.type !== "blob") return null;
+      const mime = imageMime(path);
+      if (!mime) return null;
+      const obj = await getContentObject(ctx, node.sha);
+      if (!obj || obj.body.length > IMG_BLOB_CAP) return null;
+      return URL.createObjectURL(new Blob([obj.body], { type: mime }));
+    })();
+    imageUrlCache.set(key, { tip, url });
+    // A rejection is never kept (same rule as ctx.objects): a transient fetch
+    // error would otherwise pin that image broken until the tip moves.
+    url.catch(() => { const e = imageUrlCache.get(key); if (e && e.url === url) imageUrlCache.delete(key); });
+    return url;
   }
 
   // bytesObjectUrl wraps already-inflated blob bytes in an object URL for the
@@ -1218,15 +1248,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // resolveImages resolves the relative <img data-gs-src> markers left by the
   // sanitizer / markdown image renderer into in-bucket object URLs. Absolute
-  // https images already carry their src. Fire-and-forget after render.
-  async function resolveImages(container, ctx) {
+  // https images already carry their src. Fire-and-forget after render. `tip`
+  // is the tip the surrounding markdown was rendered at, when the caller has
+  // one (see blobObjectUrl for why it should).
+  async function resolveImages(container, ctx, tip) {
     if (!ctx || !container || !container.querySelectorAll) return;
     for (const img of Array.from(container.querySelectorAll("img[data-gs-src]"))) {
       const src = img.getAttribute("data-gs-src");
       const branch = img.getAttribute("data-gs-branch") || "";
       const dir = img.getAttribute("data-gs-dir") || "";
       img.removeAttribute("data-gs-src");
-      try { const u = await blobObjectUrl(ctx, joinPath(dir, src), branch); if (u) img.setAttribute("src", u); }
+      try { const u = await blobObjectUrl(ctx, joinPath(dir, src), branch, tip); if (u) img.setAttribute("src", u); }
       catch (e) { /* leave alt text */ }
     }
   }
@@ -1506,13 +1538,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // renderMarkdown builds a sanitized DOM subtree from markdown text. mdctx
-  // carries { ctx, branch, dir } so relative images resolve to in-bucket blobs.
+  // carries { ctx, branch, dir } so relative images resolve to in-bucket blobs,
+  // plus { tip } — the tip the text was loaded at — so they resolve without a
+  // fresh refTip and at the same tip as the text (see blobObjectUrl).
   function renderMarkdown(text, mdctx) {
     mdctx = mdctx || {};
     if (!mdctx.slugs) mdctx.slugs = new Set();
     const root = el("div", { class: "markdown" }, []);
     renderBlocksInto(root, parseMarkdown(text), mdctx);
-    if (mdctx.ctx) resolveImages(root, mdctx.ctx);
+    if (mdctx.ctx) resolveImages(root, mdctx.ctx, mdctx.tip);
     wireInPageAnchors(root);
     return root;
   }
@@ -1976,7 +2010,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // text renders monospace with a fullscreen affordance. A .md file gets a
   // Rendered|Raw toggle (Rendered default; Raw is the line-numbered view, so
   // line permalinks apply there).
-  function blobView(bytes, path, branch, line, lineEnd, ctx) {
+  function blobView(bytes, path, branch, line, lineEnd, ctx, tip) {
     const wrap = el("div", { class: "detail" }, []);
     const blobMeta = el("div", { class: "meta blob-meta" }, [humanSize(bytes.length)]);
     const head = el("div", { class: "blob-head" }, [breadcrumb(path, branch), blobMeta]);
@@ -2015,7 +2049,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const dir = path.indexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/")) : "";
       const pane = el("div", {}, []);
       const btn = rawToggle(
-        () => pane.replaceChildren(renderMarkdown(textStr, { ctx, branch, dir })),
+        () => pane.replaceChildren(renderMarkdown(textStr, { ctx, branch, dir, tip })),
         () => pane.replaceChildren(renderRaw()),
         !!line);
       head.append(el("div", { class: "view-modes" }, [btn]));
@@ -4535,7 +4569,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const obj = await getContentObject(ctx, node.sha);
     if (!obj) return [el("div", { class: "err" }, ["Object not found."])];
     if (prismReady) await withPrismDeadline(prismReady);
-    return blobView(obj.body, path, branch, line, lineEnd, ctx);
+    return blobView(obj.body, path, branch, line, lineEnd, ctx, tip);
   }
 
   // codeView renders the root tree of the default branch.
@@ -4723,7 +4757,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (entries.length) wrap.append(homeFileList(entries, branch));
     if (readme) {
       const obj = await getContentObject(ctx, readme.sha);
-      if (obj) wrap.append(renderMarkdown(new TextDecoder().decode(obj.body), { ctx, branch, dir: "" }));
+      if (obj) wrap.append(renderMarkdown(new TextDecoder().decode(obj.body), { ctx, branch, dir: "", tip: head.sha }));
     }
     // Recent activity closes the landing, below the README on both surfaces: the
     // static front page carries the same rows, so the upgrade re-renders them

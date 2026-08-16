@@ -68,17 +68,21 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // served page for the app's /timeline route), carrying the app's own
   // chevron-and-label show-more affordance.
   ok("activity closes with a crawlable See more link", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon">⌄<\/span><span class="show-more-label">See more<\/span><\/a>/.test(front.text));
-  // The stylesheet is a bucket object like any other: a rule that exists only in
-  // the binary is a rule the page renders without (this shipped once, unnoticed).
-  const css = await get(TD + "pages.css");
-  ok("pages.css is served", css.status === 200);
-  ok("pages.css carries the rules the front page's own markup needs", /ul\.files\{/.test(css.text) && /h2\{/.test(css.text) && /\.card\{/.test(css.text) && /\.card-head\{/.test(css.text) && /\.type-glyph\{/.test(css.text) && /\.show-more\{/.test(css.text), "len=" + css.text.length);
+  // The pages' styling is the shell's own two sheets: the inlined core (tokens,
+  // theme gates, page-structural rules) plus the linked pages-full.css, which
+  // carries the class vocabulary — so a page rule that exists anywhere else is
+  // a rule the app would not agree with.
+  const css = await get(TD + "pages-full.css");
+  ok("pages-full.css is served", css.status === 200);
+  ok("pages-full.css carries the class vocabulary the front page's markup needs", /\.card\s*\{/.test(css.text) && /\.card-head\s*\{/.test(css.text) && /\.type-glyph\s*\{/.test(css.text) && /\.show-more/.test(css.text), "len=" + css.text.length);
   // The chip vocabulary is the app's own (.chip.state fills, reviewer-chip
-  // verdicts, chip-retracted), and the palette is token-driven with the dark set
-  // gated on the boot-stamped theme class (media fallback for the no-choice case).
-  ok("pages.css styles the app's chip classes", /\.chip\.state\{/.test(css.text) && /\.chip\.reviewer-chip\.fb-approved\{/.test(css.text) && /\.chip\.chip-retracted\{/.test(css.text));
-  ok("pages.css gates dark on the stored-theme class with a media fallback", /html\.dark-mode\{--bg:/.test(css.text) && /@media \(prefers-color-scheme:dark\)\{html:not\(\.light-mode\)\{--bg:/.test(css.text));
-  ok("pages.css carries no pages-only chip vocabulary", !/\.chip\.prerel\b/.test(css.text) && !/\.chip\.approve\b/.test(css.text) && !/ol\.items\{/.test(css.text));
+  // verdicts, chip-retracted).
+  ok("pages-full.css styles the app's chip classes", /\.chip\.state\s*\{/.test(css.text) && /\.chip\.reviewer-chip\.fb-approved\s*\{/.test(css.text) && /\.chip\.chip-retracted\s*\{/.test(css.text));
+  // The inlined core carries the page-structural rules (scoped to #gs-page) and
+  // gates dark on the boot-stamped theme class with a media fallback.
+  ok("front inlines the core sheet with the page-structural rules", /<style data-gs-core>/.test(front.text) && /:where\(#gs-page\) h2/.test(front.text) && /ul\.files/.test(front.text));
+  ok("the inlined core gates dark on the stored-theme class with a media fallback", /html\.dark-mode/.test(front.text) && /@media \(prefers-color-scheme: ?dark\)/.test(front.text) && /html\.light-mode/.test(front.text));
+  ok("front links pages-full.css, not the retired pages.css", /<link rel="stylesheet" href="\.\/pages-full\.css">/.test(front.text) && !/href="\.\/pages\.css"/.test(front.text));
   ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
   ok("front carries the CSP meta", /Content-Security-Policy/.test(front.text));
   ok("front CSP script-src permits eval (lazy grammar loader)", /script-src[^"]*'unsafe-eval'/.test(front.text));
@@ -86,7 +90,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("front canonical points at the site root", front.text.includes('<link rel="canonical" href="' + cfg.url + '">'));
   ok("front carries no 'open in app' link", !/open in app/.test(front.text));
   ok("gs-upgrade.js is served", (await get(TD + "gs-upgrade.js")).status === 200);
-  ok("pages-app.css is served", (await get(TD + "pages-app.css")).status === 200);
+  ok("pages-core.css is served", (await get(TD + "pages-core.css")).status === 200);
 
   console.log("\n--- timeline.html retired (the flip dropped it) ---");
   ok("timeline.html is gone (404)", (await get(TD + "timeline.html")).status === 404);

@@ -5,8 +5,11 @@
 //   issues/ prs/ posts/ releases/ memos/
 //                           per-type list pages (mutable index.html head +
 //                           immutable sealed <n>.html, chained "older →")
-//   pages.css               the pages' shared stylesheet (their only subresource,
-//                           plus the EB Garamond woff2 it pulls from the shell)
+//
+// Every page inlines the shared style base (site/pages-core.css, see
+// site_pages_html.go) and links the shell's pages-full.css — its only
+// subresource besides the woff2 fonts that sheet pulls in. The retired
+// generated pages.css is swept on disable and otherwise left to go stale.
 //   index.html              the generated front page (the app's home landing +
 //                           PE hooks + gs-upgrade.js) — the entry flip: when the
 //                           page layer is effective the pages maintainer OWNS
@@ -111,7 +114,15 @@ const (
 	// All of it lives in heads and rows that item pages and sealed list pages
 	// keep forever without the bump, serving pre-app markup a pages.css that no
 	// longer styles it.
-	sitePagesVersion = 12
+	// v13: the two-sheet head — the shared base (pages-core.css) inlined as
+	// <style data-gs-core> and pages-full.css loaded async (preload + onload
+	// flip, noscript fallback) — replacing the placeholder inline base and the
+	// generated pages.css link, plus the 24px/1.1 type scale those bytes carry.
+	// All of it lives in every page's frozen head; item pages and sealed list
+	// pages are never rewritten outside a full regen, so a v12 bucket would
+	// keep serving heads that link the retired pages.css and re-wrap at the
+	// boot swap forever without the bump.
+	sitePagesVersion = 13
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -218,17 +229,6 @@ func putSitePage(client *Client, key string, page []byte) error {
 	return putSiteText(client, key, "text/html; charset=utf-8", page)
 }
 
-// putSitePagesCSS uploads the shared stylesheet — rendered with the pushed
-// config's accent baked in (sitePagesCSSFor) — written before any page so no
-// page ever references a missing subresource. Brotli-stored like the shell's own
-// stylesheet (putSiteAsset): a <link> subresource is fetched only by a browser
-// rendering the page, never by the scrapers the pages themselves must stay
-// plain for. An accent change needs no page regen: this PUT happens on every
-// effective pass and pages.css is a no-cache key.
-func putSitePagesCSS(client *Client, prefix string, cfg siteCustomization) error {
-	return putSiteAsset(client, prefix+sitePagesCSSKey, sitePagesCSSKey, sitePagesCSSFor(cfg))
-}
-
 // sitePagesEffective resolves the HTML page layer's enablement from the
 // bucket's pushed site config: both guards on plus a valid site.url
 // (canonicals, OG and the sitemap need the absolute base). Returns the
@@ -244,7 +244,7 @@ func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 // site.image key resolves against the effective base URL here, so every
 // consumer sees the absolute og:image URL.
 func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageSite {
-	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon)}
+	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Image != "" && !strings.Contains(site.Image, "://") {
 		site.Image = url + site.Image
 	}
@@ -255,10 +255,10 @@ func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageS
 }
 
 // sitePageSiteHash fingerprints the site identity baked into every rendered
-// page (title, canonical base, description, og:image, favicon); a change
-// regenerates everything.
+// page (title, canonical base, description, og:image, favicon, and the accent
+// override each head inlines); a change regenerates everything.
 func sitePageSiteHash(site sitePageSite) string {
-	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + string(site.Icon)))
+	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + string(site.Icon) + "\x00" + string(site.AccentCSS)))
 	return hex.EncodeToString(h[:])[:12]
 }
 
@@ -330,15 +330,6 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	}
 	manifests, tips, err := readSitePagesManifests(client, prefix, refs)
 	if err != nil {
-		return false, "", err
-	}
-	// The stylesheet ships on EVERY effective pass, not just the full regen. It is
-	// one small idempotent PUT next to the index.html this pass writes anyway, and
-	// gating it behind the full-regen path made an edit to it invisible: a bucket
-	// whose page set was already current kept serving the previous binary's CSS
-	// indefinitely, so a rule added for a new page element never arrived and its
-	// markup rendered unstyled. Cheap and unconditional beats correct-in-theory.
-	if err := putSitePagesCSS(client, prefix, cfg); err != nil {
 		return false, "", err
 	}
 	home := readSiteFrontHome(src, site, refs, defaultBranch)
@@ -917,7 +908,7 @@ func deleteSitePages(client *Client, prefix string) (bool, error) {
 			remove(key)
 		}
 	}
-	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
+	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
 		remove(prefix + key)
 	}
 	// Restore the embedded shell as index.html (the flip back). Best-effort: a
@@ -1114,6 +1105,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 	d := siteChainedListPage(list.Dir, list.Label, entries, metaBits, 0, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         list.Label + " · " + site.Title,
+		AccentCSS:     site.AccentCSS,
 		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
 		OGTitle:       list.Label + " · " + site.Title,
 		SiteTitle:     site.Title,
@@ -1140,6 +1132,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 	d := siteChainedListPage(list.Dir, list.Label, entries, metaBits, n, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
+		AccentCSS:     site.AccentCSS,
 		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
 		OGTitle:       fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
 		SiteTitle:     site.Title,
@@ -1191,6 +1184,7 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 	}
 	d.Chrome = sitePageChrome{
 		Title:       site.Title,
+		AccentCSS:   site.AccentCSS,
 		Description: sitePageDescription(description, site.Title),
 		OGTitle:     site.Title,
 		SiteTitle:   site.Title,
