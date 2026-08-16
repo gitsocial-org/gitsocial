@@ -17,6 +17,7 @@ func newForkCmd() *cobra.Command {
 		Short: "Manage registered forks",
 	}
 	cmd.AddCommand(
+		newForkCreateCmd(),
 		newForkAddCmd(),
 		newForkRemoveCmd(),
 		newForkListCmd(),

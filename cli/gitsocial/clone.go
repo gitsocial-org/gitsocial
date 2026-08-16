@@ -53,22 +53,34 @@ func newCloneCmd() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
 			defer cancel()
-			if _, err := git.ExecGitContext(ctx, cfg.WorkDir, []string{"clone", remoteURL, dir}); err != nil {
+			if _, err := cloneRepo(ctx, cfg.WorkDir, remoteURL, dir); err != nil {
 				return err
-			}
-			repoDir := dir
-			if !filepath.IsAbs(repoDir) {
-				repoDir = filepath.Join(cfg.WorkDir, repoDir)
-			}
-			if strings.HasPrefix(remoteURL, "s3://") {
-				if err := ensureLocalS3Alias(repoDir); err != nil {
-					return err
-				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Cloned into '%s'\n", dir)
 			return nil
 		},
 	}
+}
+
+// cloneRepo clones remoteURL into dir (resolved against workdir) with any
+// extra clone arguments, records the s3 helper alias for an s3 remote, and
+// returns the absolute path of the new repository.
+func cloneRepo(ctx context.Context, workdir, remoteURL, dir string, extraArgs ...string) (string, error) {
+	args := append([]string{"clone"}, extraArgs...)
+	args = append(args, remoteURL, dir)
+	if _, err := git.ExecGitContext(ctx, workdir, args); err != nil {
+		return "", err
+	}
+	repoDir := dir
+	if !filepath.IsAbs(repoDir) {
+		repoDir = filepath.Join(workdir, repoDir)
+	}
+	if strings.HasPrefix(remoteURL, "s3://") {
+		if err := ensureLocalS3Alias(repoDir); err != nil {
+			return "", err
+		}
+	}
+	return repoDir, nil
 }
 
 // cloneDir derives the target directory from the remote URL. For s3 URLs the
