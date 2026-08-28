@@ -54,25 +54,19 @@ type Result = result.Result[Stats]
 // Extensions use this for post-fetch operations (e.g., follower detection, list caching).
 type PostFetchHook func(storageDir, repoURL, branch, workspaceURL string)
 
-// FetchAll fetches multiple repositories in parallel with commit processing and post-fetch hooks.
-// The caller provides the repo list — this function handles workspace sync, parallelism, and version reconciliation.
-func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, processors []CommitProcessor, hooks []PostFetchHook) result.Result[Stats] {
+// SyncWorkspaceOrigin refreshes the workspace from its own origin and ingests
+// its commits into the cache: the code branches, the gitmsg refs and their
+// tracking mirrors, and the workspace repository row. It is the part of a fetch
+// that concerns the workspace itself, split out so a caller that only needs its
+// own repo current (mirror's publish loop) can skip the rest of a full fetch —
+// registered forks, followed repos, identity backfill — which serve local
+// viewing rather than the workspace's own state. Returns the workspace's
+// origin URL ("" when it has no origin) and the stats it accumulated.
+func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProcessor, hooks []PostFetchHook) (string, Stats) {
 	if opts == nil {
 		opts = &Options{}
 	}
-	if opts.Parallel == 0 {
-		opts.Parallel = 4
-	}
-	if opts.Since == "" {
-		opts.Since = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
-	}
-
-	start := time.Now()
-	log.Info("fetch started", "since", opts.Since)
-
 	stats := Stats{}
-
-	// Sync workspace origin — workspace always uses all-branch logic
 	originURL := protocol.NormalizeURL(git.GetOriginURL(workdir))
 	if originURL != "" {
 		wsBranch := opts.WorkspaceBranch
@@ -130,6 +124,32 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 			stats.Repositories++
 		}
 	}
+
+	return originURL, stats
+}
+
+// FetchAll fetches multiple repositories in parallel with commit processing and post-fetch hooks.
+// The caller provides the repo list — this function handles workspace sync, parallelism, and version reconciliation.
+func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, processors []CommitProcessor, hooks []PostFetchHook) result.Result[Stats] {
+	if opts == nil {
+		opts = &Options{}
+	}
+	if opts.Parallel == 0 {
+		opts.Parallel = 4
+	}
+	if opts.Since == "" {
+		opts.Since = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	}
+
+	start := time.Now()
+	log.Info("fetch started", "since", opts.Since)
+
+	stats := Stats{}
+
+	// Sync workspace origin — workspace always uses all-branch logic
+	originURL, wsStats := SyncWorkspaceOrigin(workdir, opts, processors, hooks)
+	stats.Items += wsStats.Items
+	stats.Repositories += wsStats.Repositories
 
 	repos = DedupeRepos(repos)
 
