@@ -49,12 +49,26 @@ const maxTagPeelDepth = 10
 // Best-effort: it runs after the push report is flushed (like the rest of
 // post-push maintenance) and a failure only leaves the dumb surface stale until
 // the next push, never affecting the git push itself.
-func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string) error {
-	body := buildInfoRefs(refs, func(sha string) (string, bool) {
-		return peelBucketTag(client, prefix, src, sha)
-	})
-	if err := putText(client, prefix+infoRefsKey, body); err != nil {
-		return fmt.Errorf("write %s: %w", infoRefsKey, err)
+//
+// thin flips the ref advertisement off: a thin fork bucket (thin.go) carries an
+// incomplete history by design, so advertising refs a stock clone would then walk
+// into missing objects for is exactly the silent breakage that design refuses.
+// info/refs is a key we own and regenerate, so deleting it is safe, and
+// `gitsocial push --full` restores it. objects/info/packs is KEPT either way —
+// it is not only a dumb-HTTP key (ensurePacksLocal reads it to find the bucket's
+// packs), and without a ref advertisement it grants no cloneability.
+func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) error {
+	if thin {
+		if err := client.Delete(prefix + infoRefsKey); err != nil {
+			return fmt.Errorf("delete %s: %w", infoRefsKey, err)
+		}
+	} else {
+		body := buildInfoRefs(refs, func(sha string) (string, bool) {
+			return peelBucketTag(client, prefix, src, sha)
+		})
+		if err := putText(client, prefix+infoRefsKey, body); err != nil {
+			return fmt.Errorf("write %s: %w", infoRefsKey, err)
+		}
 	}
 	packs, err := listBucketPacks(client, prefix)
 	if err != nil {
@@ -194,8 +208,8 @@ func putText(client *Client, key string, body []byte) error {
 // logDumbTransportInfo runs writeDumbTransportInfo and reports any failure to
 // stderr without disturbing the caller — the shared best-effort maintenance
 // contract (a stale dumb surface self-heals on the next ref-moving push).
-func logDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string) {
-	if err := writeDumbTransportInfo(client, prefix, src, refs); err != nil {
+func logDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) {
+	if err := writeDumbTransportInfo(client, prefix, src, refs, thin); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: dumb-http info: %v\n", err)
 	}
 }

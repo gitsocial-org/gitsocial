@@ -40,6 +40,7 @@ type Options struct {
 	NoSite      bool   // skip the site step (overrides config)
 	SiteOnly    bool   // publish only the site, no data push (explicit refresh; fails loudly)
 	AllBranches bool   // publish every local branch (refs/heads/*), not just reasoned
+	Full        bool   // detach a thin fork relationship: upload everything the bucket lacks
 }
 
 // SiteOutcome is the site-publication result of a publish. Published is true
@@ -128,6 +129,14 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
 
+	// --full detaches a thin fork relationship. Clearing the config FIRST makes
+	// the push below upload its whole delta and rewrite the ref advertisement;
+	// objstore.PushFull afterwards carries what no push moves (the objects earlier
+	// thin pushes left to upstream, and the bucket's thin marker).
+	if opts.Full && !opts.DryRun {
+		clearThinRelationship(workdir, remote)
+	}
+
 	// Real push (not dry-run) against an s3 remote: reconcile the tracking refs
 	// to the bucket's actual state before counting, so a recreated/drifted bucket
 	// doesn't silently skip branches. Best-effort — a listing failure leaves the
@@ -142,8 +151,21 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 	}
 	res.Push = pushResult
 
+	if opts.Full && !opts.DryRun && strings.HasPrefix(pushResult.RemoteURL, "s3://") {
+		if err := objstore.PushFull(pushResult.RemoteURL, objstore.HelperEnvFromOS(), workdir, siteProgress); err != nil {
+			return nil, fmt.Errorf("detach thin fork %s: %w", pushResult.RemoteURL, err)
+		}
+	}
+
 	res.Site = publishSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
 	return res, nil
+}
+
+// clearThinRelationship removes the thin flag from a remote, so every later push
+// to it is a full one. The upstream URL is left recorded: it is history, not a
+// switch.
+func clearThinRelationship(workdir, remote string) {
+	_, _ = git.ExecGit(workdir, []string{"config", "--unset", "remote." + remote + "." + objstore.ThinConfigKey})
 }
 
 // publishSiteOnly runs only the site step (the explicit site refresh, `gitsocial
@@ -194,6 +216,11 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 		return SiteOutcome{Skipped: "dry-run"}
 	}
 	published, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	if errors.Is(err, objstore.ErrThinBucket) {
+		// A thin fork bucket has no site by design; that is a skip, not a failure
+		// (an explicit `--site-only` still fails loudly, see publishSiteOnly).
+		return SiteOutcome{Skipped: "thin fork bucket"}
+	}
 	if err != nil {
 		return SiteOutcome{Err: err, Error: err.Error()}
 	}

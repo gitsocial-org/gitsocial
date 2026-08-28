@@ -20,6 +20,7 @@ func newPushCmd() *cobra.Command {
 	var noSite bool
 	var siteOnly bool
 	var allBranches bool
+	var full bool
 
 	cmd := &cobra.Command{
 		Use:   "push [remote...]",
@@ -52,6 +53,12 @@ A first push to an empty remote bootstraps the whole bucket with no extra
 flags. Use --all-branches to publish every local branch, not just the default
 branch and open-PR heads.
 
+--full detaches a thin fork bucket (one pushed with
+` + "`remote.<name>.gitsocial-thin`" + ` set): it uploads every object the bucket
+left to its upstream, restores the stock-git ref advertisement, drops the
+` + "`.gitsocial/upstream`" + ` marker, and clears the thin flag — the escape hatch
+for an upstream that is going away. It is a no-op on a bucket that is not thin.
+
 --site-only publishes only the browser site — the explicit site refresh, e.g.
 to catch an already-pushed repo up right after enabling site.publish, without
 pushing new data. Where a plain push silently skips the site for repos without
@@ -72,7 +79,8 @@ Examples:
   gitsocial push --no-code    # Skip code branches (default branch + PR heads)
   gitsocial push --no-site    # Skip the browser site
   gitsocial push --site-only  # Refresh only the browser site, no data push
-  gitsocial push --all-branches   # Publish every local branch`,
+  gitsocial push --all-branches   # Publish every local branch
+  gitsocial push --full       # Detach a thin fork bucket (upload everything)`,
 		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -115,6 +123,7 @@ Examples:
 					NoSite:      noSite,
 					SiteOnly:    siteOnly,
 					AllBranches: allBranches,
+					Full:        full,
 				}
 				if !cfg.JSONOutput && !dryRun {
 					resolved := clientpush.ResolveRemote(cfg.WorkDir, remote)
@@ -159,6 +168,7 @@ Examples:
 	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the browser static site (s3 remotes)")
 	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Publish only the browser site, no data push (errors when site.publish is off)")
 	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Publish every local branch, not just the default branch and open-PR heads")
+	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket: upload every object it lacks and restore its stock-git ref advertisement")
 	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 
 	return cmd

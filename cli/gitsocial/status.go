@@ -4,19 +4,31 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 type statusData struct {
 	Repository string             `json:"repository"`
+	Thin       *thinStatus        `json:"thin,omitempty"`
 	Cache      *cacheStatus       `json:"cache,omitempty"`
 	Social     *social.StatusData `json:"social,omitempty"`
+}
+
+// thinStatus describes a thin fork push relationship: the bucket this repo
+// publishes to carries only its own objects, and reading its code needs the
+// upstream below.
+type thinStatus struct {
+	Remote   string `json:"remote"`
+	Upstream string `json:"upstream"`
+	Pins     int    `json:"pins"`
 }
 
 type cacheStatus struct {
@@ -52,6 +64,7 @@ func newStatusCmd() *cobra.Command {
 func getStatusData(cfg *Config) statusData {
 	status := statusData{
 		Repository: getRemoteURL(cfg.WorkDir),
+		Thin:       getThinStatus(cfg.WorkDir),
 	}
 
 	if cacheStats, err := cache.GetStatsLite(cfg.CacheDir); err == nil && cacheStats != nil {
@@ -82,9 +95,35 @@ func getRemoteURL(workdir string) string {
 	return result.Stdout
 }
 
+// getThinStatus reports the resolved push remote's thin fork relationship, so
+// status says out loud that the published bucket's history is incomplete without
+// upstream. nil when that remote is not thin. The pin count lives on the bucket
+// (one GET); a read failure only omits it.
+func getThinStatus(workdir string) *thinStatus {
+	remote := git.PushRemote(workdir)
+	if remote == "" {
+		return nil
+	}
+	switch git.GetGitConfig(workdir, "remote."+remote+"."+objstore.ThinConfigKey) {
+	case "true", "yes", "on", "1": // git's true spellings, as the helper reads them
+	default:
+		return nil
+	}
+	st := &thinStatus{Remote: remote, Upstream: git.GetGitConfig(workdir, "remote."+remote+"."+objstore.UpstreamConfigKey)}
+	if url := git.RemoteURL(workdir, remote); strings.HasPrefix(url, "s3://") {
+		if upstream, pins, err := objstore.ThinUpstream(url, objstore.HelperEnvFromOS()); err == nil && upstream != "" {
+			st.Upstream, st.Pins = upstream, pins
+		}
+	}
+	return st
+}
+
 // printStatus prints the status data to stdout.
 func printStatus(s statusData) {
 	fmt.Printf("Repository: %s\n", s.Repository)
+	if s.Thin != nil {
+		fmt.Printf("Thin fork of %s, pinned at %d tips\n", s.Thin.Upstream, s.Thin.Pins)
+	}
 
 	if s.Cache != nil {
 		fmt.Println()

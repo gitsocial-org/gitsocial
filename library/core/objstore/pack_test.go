@@ -77,6 +77,17 @@ func pushHelper(t *testing.T, client *Client, dir string) *remoteHelper {
 	return &remoteHelper{client: client, gitDir: gitDir, fetched: map[string]bool{}}
 }
 
+// pushCmds turns refnames into the push batch a plain `git push <refs>` sends
+// (src and dst are the same ref, which is what git generates for a matching
+// refspec).
+func pushCmds(refs ...string) []pushCommand {
+	cmds := make([]pushCommand, 0, len(refs))
+	for _, ref := range refs {
+		cmds = append(cmds, pushCommand{src: ref, dst: ref})
+	}
+	return cmds
+}
+
 // bucketPackNames returns the pack names the bucket carries.
 func bucketPackNames(t *testing.T, client *Client) []string {
 	t.Helper()
@@ -203,7 +214,7 @@ func TestUploadPacked_TypeSplitAndPackMap(t *testing.T) {
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
 
-	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/tags/v1"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main", "refs/tags/v1")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 
@@ -307,7 +318,7 @@ func TestUploadDelta_ThresholdKeepsSmallPushesLoose(t *testing.T) {
 			h := pushHelper(t, client, dir)
 			t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", tc.threshold)
 
-			if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+			if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 				t.Fatalf("uploadMissingObjects: %v", err)
 			}
 			if got := len(bucketPackNames(t, client)); got != tc.wantPacks {
@@ -336,7 +347,7 @@ func TestUploadPacked_StateRefObjectsPack(t *testing.T) {
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
 
-	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/gitmsg/core/config"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main", "refs/gitmsg/core/config")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 
@@ -365,11 +376,11 @@ func TestWriteDumbTransportInfo_ListsPacks(t *testing.T) {
 	dir := packTestRepo(t, 4)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
-	if err := writeDumbTransportInfo(client, "", nil, refs); err != nil {
+	if err := writeDumbTransportInfo(client, "", nil, refs, false); err != nil {
 		t.Fatalf("writeDumbTransportInfo: %v", err)
 	}
 
@@ -409,11 +420,11 @@ func TestFetch_PackOnlyBucket(t *testing.T) {
 	tip := gitRun(t, source, "rev-parse", "HEAD")
 	h := pushHelper(t, client, source)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	refs := map[string]string{"refs/heads/main": tip}
-	if err := writeDumbTransportInfo(client, "", nil, refs); err != nil {
+	if err := writeDumbTransportInfo(client, "", nil, refs, false); err != nil {
 		t.Fatalf("writeDumbTransportInfo: %v", err)
 	}
 
@@ -447,7 +458,7 @@ func TestSealLooseObjects_PacksThenDeletesAfterGrace(t *testing.T) {
 	dir := packTestRepo(t, 6)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	looseBefore := len(looseObjectKeys(t, client))
@@ -515,7 +526,7 @@ func TestSealLooseObjects_MidSizeCohortSeals(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 25) // 75 objects: above the seal minimum, far below the push threshold
 	h := pushHelper(t, client, dir)
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	loose := len(looseObjectKeys(t, client))
@@ -558,7 +569,7 @@ func TestMaintainPacks_DeclinedSealAdvancesLastSealAndMeasuresLoose(t *testing.T
 	client, bucket := testClient(t)
 	dir := packTestRepo(t, 6) // ~19 objects, below the seal minimum
 	h := pushHelper(t, client, dir)
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	looseBefore := len(looseObjectKeys(t, client))
@@ -673,7 +684,7 @@ func TestSealLooseObjects_BucketStateRefMissingLocally(t *testing.T) {
 	dir := packTestRepo(t, 6)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	if len(looseObjectKeys(t, client)) == 0 {
@@ -720,7 +731,7 @@ func TestSealLooseObjects_StateRefObjectsPackAndDelete(t *testing.T) {
 	gitRun(t, dir, "update-ref", "refs/gitmsg/core/config", stateSha)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/gitmsg/core/config"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main", "refs/gitmsg/core/config")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	// A state object present locally whose refname only the bucket has: packs.
@@ -796,7 +807,7 @@ func TestReadSiteConfigs_PackedOnlyAndLocal(t *testing.T) {
 	gitRun(t, dir, "update-ref", "refs/gitmsg/core/config", coreSha)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
-	if err := h.uploadMissingObjects([]string{"refs/heads/main", "refs/gitmsg/pm/config", "refs/gitmsg/core/config"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main", "refs/gitmsg/pm/config", "refs/gitmsg/core/config")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	if got := looseObjectKeys(t, client); len(got) != 0 {
@@ -1070,7 +1081,7 @@ func TestMaintainPacks_RoundNotAdvertisedKeepsItsLooseObjects(t *testing.T) {
 	dir := packTestRepo(t, 6)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
@@ -1147,7 +1158,7 @@ func TestSealLooseObjects_StampsSealedAtOnEveryPublishedRound(t *testing.T) {
 			dir := packTestRepo(t, 6)
 			h := pushHelper(t, client, dir)
 			t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-			if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+			if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 				t.Fatalf("uploadMissingObjects: %v", err)
 			}
 			refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
@@ -1185,7 +1196,7 @@ func TestMaintainPacks_FailedSealRetriesNextPush(t *testing.T) {
 	dir := packTestRepo(t, 6)
 	h := pushHelper(t, client, dir)
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1000") // push loose
-	if err := h.uploadMissingObjects([]string{"refs/heads/main"}); err != nil {
+	if err := h.uploadMissingObjects(pushCmds("refs/heads/main")); err != nil {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}

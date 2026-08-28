@@ -74,18 +74,10 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		failAll(err)
 		return nil
 	}
-	var srcs []string
-	for _, cmd := range cmds {
-		if cmd.src != "" {
-			srcs = append(srcs, cmd.src)
-		}
-	}
-	if len(srcs) > 0 {
-		if err := h.uploadMissingObjects(srcs); err != nil {
-			// Object transfer failed: no ref moved; fail every dst.
-			failAll(err)
-			return nil
-		}
+	if err := h.uploadMissingObjects(cmds); err != nil {
+		// Object transfer failed: no ref moved; fail every dst.
+		failAll(err)
+		return nil
 	}
 
 	branchPushed := ""
@@ -152,6 +144,12 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	if head != "" {
 		h.ensureRemoteHEAD(head)
 	}
+	// A thin push records the frontier it excluded against, so readers know where
+	// to resolve the missing objects and the next push can fall back to it.
+	thin, upstreamURL := h.thinPush()
+	if thin {
+		h.publishThinUpstream(upstreamURL)
+	}
 	if !refsMoved {
 		return
 	}
@@ -175,7 +173,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
 	// independent of the site.publish gate below, so a bucket-served repo clones
 	// and fetches with stock git over plain HTTPS even when the static site is off.
-	logDumbTransportInfo(h.client, h.prefix, src, refs)
+	logDumbTransportInfo(h.client, h.prefix, src, refs, thin)
 	// Now that the bucket's refs are known, a HEAD left pointing at a ref the
 	// bucket does not carry can be repaired (ensureRemoteHEAD above cannot: it
 	// keeps any HEAD that is not a gitmsg branch).
@@ -183,6 +181,15 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// Sealing packs already-loose history and, after a grace period, deletes the
 	// loose copies. Best-effort and self-rate-limited, like everything here.
 	h.maintainPacks(refs)
+	// A thin bucket is helper-only: it publishes no static site (the site reads a
+	// history the bucket does not carry). Sealing above still runs — it packs the
+	// fork's OWN loose objects, which is all a thin bucket has.
+	if thin {
+		if enabled, _, probeErr := siteEnabled(h.client, h.prefix); probeErr == nil && enabled {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: thin fork bucket; its existing site is no longer maintained (detach with `gitsocial push --full`)\n")
+		}
+		return
+	}
 	// The static site is gated on the PUSHED site.publish guard (the `site`
 	// sub-object of refs/gitmsg/core/config), the only enabler: without it a
 	// plain s3:// git remote stays clean, and a bucket whose site predates the
@@ -856,22 +863,36 @@ func localDefaultBranchRef() string {
 	return ref
 }
 
-// uploadMissingObjects uploads every object reachable from srcs that the
+// uploadMissingObjects uploads every object the pushed refs reach that the
 // remote doesn't already have, computed as `rev-list --objects <srcs> --not
 // <remote tips we have locally>`.
-func (h *remoteHelper) uploadMissingObjects(srcs []string) error {
+//
+// A thin push (thin.go) splits its sources by ref class and widens the negative
+// end for one of them, so the gitmsg-is-never-thinned invariant holds:
+//
+//	code:   rev-list --objects <code refs>   --not <bucket tips> <verified frontier>
+//	gitmsg: rev-list --objects <gitmsg refs> --not <bucket tips>
+//
+// The two sha lists are unioned and handed to uploadDelta unchanged.
+func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 	tips, err := h.remoteTipsPresentLocally()
 	if err != nil {
 		return err
 	}
-	args := append([]string{"rev-list", "--objects"}, srcs...)
-	if len(tips) > 0 {
-		args = append(args, "--not")
-		args = append(args, tips...)
+	var srcs, gitmsgSrcs, codeSrcs []string
+	for _, cmd := range cmds {
+		if cmd.src == "" {
+			continue // deletion: nothing to upload
+		}
+		srcs = append(srcs, cmd.src)
+		if isGitmsgRef(cmd.src) || isGitmsgRef(cmd.dst) {
+			gitmsgSrcs = append(gitmsgSrcs, cmd.src)
+		} else {
+			codeSrcs = append(codeSrcs, cmd.src)
+		}
 	}
-	out, err := gitOutput(args...)
-	if err != nil {
-		return fmt.Errorf("rev-list: %w", err)
+	if len(srcs) == 0 {
+		return nil
 	}
 	seen := map[string]bool{}
 	var shas []string
@@ -891,12 +912,46 @@ func (h *remoteHelper) uploadMissingObjects(srcs []string) error {
 			add(sha)
 		}
 	}
+	thin, upstreamURL := h.thinPush()
+	if !thin {
+		if err := revListObjects(h.workdir, srcs, tips, add); err != nil {
+			return err
+		}
+		return h.uploadDelta(shas)
+	}
+	frontier, pins := h.verifyUpstreamFrontier(upstreamURL)
+	h.thinPins = pins
+	if err := revListObjects(h.workdir, gitmsgSrcs, tips, add); err != nil {
+		return err
+	}
+	if err := revListObjects(h.workdir, codeSrcs, append(append([]string{}, tips...), frontier...), add); err != nil {
+		return err
+	}
+	return h.uploadDelta(shas)
+}
+
+// revListObjects feeds add() every object reachable from srcs but not from the
+// excluded tips. A source list that is empty (a push with no ref of that class)
+// contributes nothing rather than running a rev-list with no positive ref.
+func revListObjects(dir string, srcs, excluded []string, add func(string)) error {
+	if len(srcs) == 0 {
+		return nil
+	}
+	args := append([]string{"rev-list", "--objects"}, srcs...)
+	if len(excluded) > 0 {
+		args = append(args, "--not")
+		args = append(args, excluded...)
+	}
+	out, err := gitOutputIn(dir, args...)
+	if err != nil {
+		return fmt.Errorf("rev-list: %w", err)
+	}
 	for _, line := range strings.Split(out, "\n") {
 		if len(line) >= 40 {
 			add(line[:40])
 		}
 	}
-	return h.uploadDelta(shas)
+	return nil
 }
 
 // uploadDelta uploads a push's object delta: packed once it is large enough to
@@ -1034,7 +1089,7 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 	if len(shas) == 0 {
 		return nil
 	}
-	cmd := exec.Command("git", "cat-file", "--batch")
+	cmd := gitCmdIn(h.workdir, "cat-file", "--batch")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -1184,15 +1239,7 @@ func encodeLooseObject(objType string, content []byte) ([]byte, error) {
 // gitOutput runs a git command (repo located via the GIT_DIR env git gave the
 // helper) and returns trimmed stdout.
 func gitOutput(args ...string) (string, error) {
-	out, err := exec.Command("git", args...).Output()
-	if err != nil {
-		var stderr string
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			stderr = strings.TrimSpace(string(exitErr.Stderr))
-		}
-		return "", fmt.Errorf("git %s: %v %s", strings.Join(args, " "), err, stderr)
-	}
-	return strings.TrimSpace(string(out)), nil
+	return gitOutputIn("", args...)
 }
 
 // oneLine collapses an error message to a single line for status reporting.

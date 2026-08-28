@@ -103,7 +103,7 @@ func TestTransportKeysNeverEncoded(t *testing.T) {
 	if err := uploadEncodedObjects(client, "repo/", 2, 4, nil, produce); err != nil {
 		t.Fatalf("uploadEncodedObjects: %v", err)
 	}
-	if err := writeDumbTransportInfo(client, "repo/", nil, refs); err != nil {
+	if err := writeDumbTransportInfo(client, "repo/", nil, refs, false); err != nil {
 		t.Fatalf("writeDumbTransportInfo: %v", err)
 	}
 	if err := uploadSiteFiles(client, "repo/"); err != nil {

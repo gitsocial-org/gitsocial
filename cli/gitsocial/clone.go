@@ -53,8 +53,12 @@ func newCloneCmd() *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
 			defer cancel()
-			if _, err := cloneRepo(ctx, cfg.WorkDir, remoteURL, dir); err != nil {
+			repoDir, err := cloneRepo(ctx, cfg.WorkDir, remoteURL, dir)
+			if err != nil {
 				return err
+			}
+			if strings.HasPrefix(remoteURL, "s3://") {
+				ensureUpstreamRemote(repoDir, remoteURL)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Cloned into '%s'\n", dir)
 			return nil
@@ -121,6 +125,24 @@ func ensureLocalS3Alias(repoDir string) error {
 		return fmt.Errorf("set %s in %s: %w", s3AliasKey, repoDir, err)
 	}
 	return nil
+}
+
+// ensureUpstreamRemote registers the upstream a thin fork bucket names as a real
+// git remote in the fresh clone. Reading that clone REQUIRES upstream, so the
+// dependency belongs in the config where git (and the user) can see it, and the
+// refs it fetches stay reachable for gc. The helper writes this mid-clone too;
+// re-asserting here covers the case where that write does not stick. Best-effort:
+// a bucket that is not a thin fork has no upstream, and a failure only leaves the
+// remote unregistered (the overlay re-reads the bucket key on every fetch).
+func ensureUpstreamRemote(repoDir, remoteURL string) {
+	url, _, err := objstore.ThinUpstream(remoteURL, objstore.HelperEnvFromOS())
+	if err != nil || url == "" {
+		return
+	}
+	if _, err := git.ExecGit(repoDir, []string{"config", "--local", "--get", "remote.upstream.url"}); err == nil {
+		return
+	}
+	_, _ = git.ExecGit(repoDir, []string{"config", "--local", "remote.upstream.url", url})
 }
 
 // ensureWorkspaceS3Alias best-effort applies the local alias when the current

@@ -60,8 +60,13 @@ func newLocalCommitSource(gitDir, workdir string) *localCommitSource {
 	}
 	args = append(args, "cat-file", "--batch")
 	cmd := exec.Command("git", args...)
+	// A miss must stay a cheap local miss: every caller falls back to a bucket
+	// read, and in a partial clone (storage/ repos are blobless) cat-file would
+	// otherwise lazily fetch each missing object from the promisor remote — one
+	// nested fetch, through this very helper, per probe.
+	cmd.Env = append(cmd.Environ(), "GIT_NO_LAZY_FETCH=1")
 	if gitDir != "" {
-		cmd.Env = append(cmd.Environ(), "GIT_DIR="+gitDir)
+		cmd.Env = append(cmd.Env, "GIT_DIR="+gitDir)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

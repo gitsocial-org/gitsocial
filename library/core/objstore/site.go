@@ -329,6 +329,14 @@ func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, 
 	if err != nil {
 		return false, err
 	}
+	// A thin fork bucket is helper-only: its history is incomplete without
+	// upstream, so a site read straight from it would be broken. The marker is
+	// read from the BUCKET (not from per-clone config), so the refusal holds from
+	// any clone. An existing site is left in place, never deleted — maintenance
+	// only removes keys it generated for this purpose.
+	if doc, thinErr := readThinUpstream(client, prefix); thinErr == nil && doc != nil {
+		return false, fmt.Errorf("%w (upstream %s)", ErrThinBucket, doc.URL)
+	}
 	// The publish guard is effective (the per-remote override wins over the
 	// workspace value) so a remote configured with publish=false carries data
 	// but no site, and publish=true can render a bucket the repo hasn't opted in.
@@ -376,7 +384,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	// The explicit site refresh re-derives the read surface from the bucket's
 	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)
 	// in step with it so `gitsocial push --site-only` also heals a stale/absent listing.
-	logDumbTransportInfo(client, prefix, src, refs)
+	logDumbTransportInfo(client, prefix, src, refs, false)
 	if err := writeSitePMConfig(client, prefix, refs, src); err != nil {
 		return err
 	}

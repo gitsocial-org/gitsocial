@@ -177,12 +177,15 @@ Push local changes to remote: `gitmsg/*` extension branches (auto-merged on dive
 
 For s3 remotes with `site.publish` enabled, the push also maintains the browsable static site. `--site-only` is the explicit site refresh: it re-derives the site without pushing data, and — unlike a plain push, which silently skips the site when the guard is off — fails loudly when `site.publish` is off or the remote is not an s3 remote. See [S3.md](S3.md#push-behavior) and [STATIC-SITE.md](STATIC-SITE.md).
 
+`--full` detaches a [thin fork bucket](S3.md#thin-fork-buckets): it uploads every object the bucket left to its upstream, restores the stock-git ref advertisement, drops the `.gitsocial/upstream` marker, and clears `remote.<name>.gitsocial-thin` — the escape hatch for an upstream that is going away. A no-op on a bucket that is not thin.
+
 ```
 gitsocial push
 gitsocial push --dry-run     # Preview what would be pushed
 gitsocial push --no-code     # Skip code branches (default branch + PR heads)
 gitsocial push --no-site     # Skip the browser static site
 gitsocial push --site-only   # Refresh only the browser site, no data push
+gitsocial push --full        # Detach a thin fork bucket (upload everything it lacks)
 ```
 
 ### gitsocial mirror

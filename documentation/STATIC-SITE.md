@@ -22,6 +22,8 @@ gitsocial push                                           # publish repo data + t
 
 `gitsocial push --site-only [remote...]` is the **explicit site refresh**: it re-derives the whole site without pushing data, and is the "catch up now" command right after enabling the guards on an already-pushed repo — nothing is re-pushed, since every artifact derives from bucket + local state under the existing budgets. Because the request is explicit, it fails loudly when `site.publish` is off (a plain push skips quietly). It resolves its targets exactly like `gitsocial push` — positional remotes, else the multi-valued [push remote](S3.md#push-remote-resolution) defaults — so with several configured mirrors every bucket refreshes.
 
+**Thin fork buckets publish no site.** A [thin bucket](S3.md#thin-fork-buckets) carries only the fork's own objects, so a site read straight from it would be missing most of what it renders. `PushSite` and `gitsocial push --site-only` refuse against any bucket carrying the `.gitsocial/upstream` marker — read from the bucket, so the refusal holds from any clone — and post-push maintenance skips the site block with a one-line stderr hint. A site the bucket already carries is left in place (maintenance never deletes keys it did not generate for this purpose), just unmaintained; `gitsocial push --full` detaches the bucket and brings the site back.
+
 The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. Once the bucket carries the site, every subsequent push maintains the data artifacts it reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without a manual refresh.
 
 ## HTML pages

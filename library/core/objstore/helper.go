@@ -105,20 +105,27 @@ func hostAddressKind(authority string) (ipLiteral, loopback bool) {
 
 // remoteHelper holds the state for one helper invocation.
 type remoteHelper struct {
-	client        *Client
-	prefix        string
-	gitDir        string
-	fetched       map[string]bool    // object SHAs confirmed present this session
-	capability    Capability         // provider's declared conditional-write support
-	refMode       string             // resolved lazily on first push (refModeETag/refModeGeneration)
-	remoteRefs    map[string]string  // ref state from list, kept current by push for the site manifest
-	leases        map[string]string  // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
-	progress      Progress           // stderr progress hook (nil = silent)
-	override      SiteOverride       // per-remote site deployment overrides (read from git config)
-	packsPulled   bool               // the bucket's packfiles were pulled into GIT_DIR this session
-	packObjects   map[string]bool    // object SHAs the pulled packfiles carry
-	looseUploaded int                // objects THIS push uploaded loose (drives the seal trigger)
-	local         *localCommitSource // lazily-started local odb reader (packed-object bodies)
+	client         *Client
+	prefix         string
+	gitDir         string
+	remoteName     string             // the git remote git invoked the helper for ("" = anonymous URL)
+	workdir        string             // explicit repo for CLI-side entry points ("" = the GIT_DIR git handed us)
+	fetched        map[string]bool    // object SHAs confirmed present this session
+	capability     Capability         // provider's declared conditional-write support
+	refMode        string             // resolved lazily on first push (refModeETag/refModeGeneration)
+	remoteRefs     map[string]string  // ref state from list, kept current by push for the site manifest
+	leases         map[string]string  // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
+	progress       Progress           // stderr progress hook (nil = silent)
+	override       SiteOverride       // per-remote site deployment overrides (read from git config)
+	packsPulled    bool               // the bucket's packfiles were pulled into GIT_DIR this session
+	packObjects    map[string]bool    // object SHAs the pulled packfiles carry
+	looseUploaded  int                // objects THIS push uploaded loose (drives the seal trigger)
+	local          *localCommitSource // lazily-started local odb reader (packed-object bodies)
+	upstreamPulled bool               // the thin-fork read overlay ran this session
+	thinResolved   bool               // the push relationship (thin.go) was read from git config this session
+	thin           bool               // pushes to this remote exclude upstream objects
+	upstreamURL    string             // the upstream this relationship is thin against
+	thinPins       []ThinPin          // frontier this push excluded against (nil = none computed)
 }
 
 // clientForRemote builds the S3 client, key prefix, and provider capability
@@ -192,7 +199,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	if os.Getenv("GIT_QUIET") == "" {
 		pw = newProgressWriter(os.Stderr, stderrIsTTY())
 	}
-	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
+	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, remoteName: remoteName, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
 	defer pw.finish()
 	defer func() { h.local.close() }()
 
@@ -435,6 +442,13 @@ func (h *remoteHelper) walkObject(sha string) error {
 	return nil
 }
 
+// emptyTreeSHA is the one object git synthesizes in every repository: `cat-file`
+// answers for it whether or not the odb holds a copy. The odb presence probe
+// below must therefore skip it — reading it as present would stop the walk from
+// downloading the bucket's copy, and a clone's `git fsck` then reports it missing
+// (gitmsg data branches are all empty-tree commits, so this is the common case).
+const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 // ensureObject makes the object available in GIT_DIR/objects and returns its
 // type and raw body when this session brought it in. present=true (with no
 // body) means the object was already in the local odb before this fetch, so its
@@ -443,6 +457,10 @@ func (h *remoteHelper) walkObject(sha string) error {
 // An object the bucket carries in a packfile is deliberately NOT "present": the
 // packs were pulled whole, but a pack need not close over its own references (an
 // older, smaller push may have left them loose), so the walk descends through it.
+// An object the local odb holds that no bucket pack carries IS present: it
+// arrived through a real git transport (a previous fetch, or the thin-fork
+// upstream overlay), which guarantees closure — the same assumption the loose
+// path and git's haves negotiation already make.
 func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, present bool, err error) {
 	if len(sha) != 40 {
 		return "", nil, false, fmt.Errorf("malformed object id %q", sha)
@@ -456,10 +474,27 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 		if packedType, packedBody, ok := h.localOdb().typed(sha); ok {
 			return packedType, packedBody, false, nil
 		}
+	} else if sha != emptyTreeSHA {
+		if _, _, ok := h.localOdb().typed(sha); ok {
+			return "", nil, true, nil
+		}
 	}
 	key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
 	data, err := h.client.Get(key)
 	if errors.Is(err, ErrNotFound) {
+		// A thin fork bucket deliberately omits the objects it shares with its
+		// upstream, so the first miss is the trigger to overlay upstream into this
+		// repo (once per session) and retry the object exactly once.
+		ran, upErr := h.ensureUpstreamLocal()
+		if upErr != nil {
+			return "", nil, false, upErr
+		}
+		if ran {
+			if _, _, ok := h.localOdb().typed(sha); ok {
+				return "", nil, true, nil
+			}
+			return "", nil, false, fmt.Errorf("object %s is missing from this thin fork bucket AND from the upstream it names (%s): the fork excluded it as upstream's, and upstream no longer serves it", sha, h.upstreamURL)
+		}
 		return "", nil, false, fmt.Errorf("object %s missing from bucket: neither a loose key nor any packfile in objects/info/packs carries it — was the bucket written or repacked by a non-gitsocial tool?", sha)
 	}
 	if err != nil {
