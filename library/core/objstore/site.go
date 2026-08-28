@@ -127,12 +127,14 @@ func putSiteAsset(client *Client, key, name string, data []byte) error {
 		data = compressed
 		headers["Content-Encoding"] = "br"
 	}
-	resp, err := client.do(http.MethodPut, key, nil, data, headers)
-	if err != nil {
-		return fmt.Errorf("upload %s: %w", key, err)
-	}
-	resp.Body.Close()
-	return nil
+	return withRetry(func() error {
+		resp, err := client.do(http.MethodPut, key, nil, data, headers)
+		if err != nil {
+			return fmt.Errorf("upload %s: %w", key, err)
+		}
+		resp.Body.Close()
+		return nil
+	})
 }
 
 // uploadShellFile puts one embedded site file (by its site/-relative name).
@@ -156,10 +158,12 @@ func uploadSiteFiles(client *Client, prefix string) error {
 	if err != nil {
 		return err
 	}
-	for _, name := range names {
-		if err := uploadShellFile(client, prefix, name); err != nil {
-			return err
-		}
+	// The shell is ~60 small files (most of them Prism grammars) and every one is
+	// a round trip, so they upload through the pool rather than one at a time.
+	if err := firstError(runParallel(len(names), func(i int) error {
+		return uploadShellFile(client, prefix, names[i])
+	})); err != nil {
+		return err
 	}
 	// The shell now ships every Prism grammar under grammars/ and lazy-loads
 	// them, so the old push-published prism-extra.js bundle is obsolete. Delete
@@ -324,10 +328,10 @@ func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error
 // set instead): the items walk reads commits from that repo's odb rather than a
 // per-commit bucket GET, since every commit it visits is an ancestor of a bucket
 // ref tip and so present locally too. Empty (and no GIT_DIR) ⇒ bucket-only walk.
-func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, progress Progress) (published bool, err error) {
+func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, progress Progress) (published, complete bool, err error) {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	// A thin fork bucket is helper-only: its history is incomplete without
 	// upstream, so a site read straight from it would be broken. The marker is
@@ -335,7 +339,7 @@ func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, 
 	// any clone. An existing site is left in place, never deleted — maintenance
 	// only removes keys it generated for this purpose.
 	if doc, thinErr := readThinUpstream(client, prefix); thinErr == nil && doc != nil {
-		return false, fmt.Errorf("%w (upstream %s)", ErrThinBucket, doc.URL)
+		return false, false, fmt.Errorf("%w (upstream %s)", ErrThinBucket, doc.URL)
 	}
 	// The publish guard is effective (the per-remote override wins over the
 	// workspace value) so a remote configured with publish=false carries data
@@ -346,17 +350,20 @@ func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, 
 		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
 			progress.call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
 		}
-		return false, nil
+		return false, false, nil
 	}
 	src := newLocalCommitSource(env.GitDir, workdir)
 	defer src.close()
-	return true, pushSite(client, prefix, src, ov, progress)
+	complete, err = pushSite(client, prefix, src, ov, progress)
+	return true, complete, err
 }
 
 // pushSite is PushSite over a resolved client/prefix (the unit-testable core).
 // src (may be nil) is the local commit source for the items walk; ov carries
 // the per-remote deployment overrides applied at the site-config boundary.
-func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOverride, progress Progress) error {
+// complete is false when a bootstrap still owes work a later push must finish,
+// which the caller reports rather than leaving the bucket silently partial.
+func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOverride, progress Progress) (complete bool, err error) {
 	// Skip the whole expensive pass when nothing a site artifact derives from has
 	// changed since the last successful pass at this shell version — detected in
 	// ~2-3 round trips (refs/ list + HEAD + marker GET). The marker is only an
@@ -364,36 +371,36 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	// and skipDigest is "" when it couldn't be trusted (never a wrong skip).
 	shellVersion, err := siteVersion()
 	if err != nil {
-		return err
+		return false, err
 	}
 	upToDate, skipDigest := siteMaintenanceUpToDate(client, prefix, shellVersion, ov)
 	if upToDate {
 		progress.call("site up to date", 1, 1)
-		return nil
+		return true, nil
 	}
 	if err := uploadSiteFiles(client, prefix); err != nil {
-		return err
+		return false, err
 	}
 	refs, err := readRemoteRefsProgress(client, prefix, progress)
 	if err != nil {
-		return fmt.Errorf("read refs for site manifest: %w", err)
+		return false, fmt.Errorf("read refs for site manifest: %w", err)
 	}
 	if err := putSiteManifest(client, prefix, refs); err != nil {
-		return err
+		return false, err
 	}
 	// The explicit site refresh re-derives the read surface from the bucket's
 	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)
 	// in step with it so `gitsocial push --site-only` also heals a stale/absent listing.
 	logDumbTransportInfo(client, prefix, src, refs, false)
 	if err := writeSitePMConfig(client, prefix, refs, src); err != nil {
-		return err
+		return false, err
 	}
 	if err := writeSiteCustomization(client, prefix, refs, ov, src); err != nil {
-		return err
+		return false, err
 	}
 	defaultBranch := readSiteDefaultBranch(client, prefix)
 	if err := rebuildSiteItems(client, prefix, refs, defaultBranch, src, progress); err != nil {
-		return err
+		return false, err
 	}
 	// The HTML page layer projects the item artifacts written above, so it runs
 	// after them — but only once the items index is complete: one bootstrap at a
@@ -403,7 +410,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	if !itemsPending {
 		var err error
 		if pagesPending, pagesState, err = rebuildSitePages(client, prefix, refs, defaultBranch, src, progress, ov); err != nil {
-			return err
+			return false, err
 		}
 	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src); err == nil {
 		if _, on := sitePagesEffective(cfg, ok); on {
@@ -419,5 +426,5 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	if !itemsPending && !pagesPending {
 		writeSitePushState(client, prefix, shellVersion, skipDigest, pagesState)
 	}
-	return nil
+	return !itemsPending && !pagesPending, nil
 }

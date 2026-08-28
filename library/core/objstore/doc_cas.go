@@ -74,7 +74,7 @@ func putCompressedIfMatch(client *Client, key string, compressed []byte, etag st
 			resp.Body.Close()
 			return nil
 		}
-		if attempt >= len(retryBackoff) || !isTransientReadError(err) {
+		if attempt >= len(retryBackoff) || !isTransientFault(err) {
 			return err
 		}
 		time.Sleep(retryBackoff[attempt])

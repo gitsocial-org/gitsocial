@@ -210,6 +210,8 @@ func printPushResult(result *clientpush.Result, dryRun bool) {
 	}
 
 	switch {
+	case result.Site.Published && !result.Site.Complete:
+		fmt.Println("Site: published (incomplete — a bootstrap is still in progress; push again to finish)")
 	case result.Site.Published:
 		fmt.Println("Site: published")
 	case result.Site.Err != nil:

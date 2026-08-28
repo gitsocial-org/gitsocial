@@ -112,7 +112,7 @@ func TestSitePush_URLOverrideStamped(t *testing.T) {
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	if err := pushSite(client, "", nil, SiteOverride{URL: "https://r2.example"}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{URL: "https://r2.example"}, nil); err != nil {
 		t.Fatalf("pushSite: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestSitePush_PublishOverrideDisablesPagesOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	// First push (no override) builds the page set and stamps the skip marker.
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("pushSite build: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
@@ -156,7 +156,7 @@ func TestSitePush_PublishOverrideDisablesPagesOnly(t *testing.T) {
 	}
 	// A publish=false override, with the config ref and all branch tips unchanged,
 	// must still run a full pass (the folded digest differs) and delete the pages.
-	if err := pushSite(client, "", nil, SiteOverride{Publish: "false"}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{Publish: "false"}, nil); err != nil {
 		t.Fatalf("pushSite disable: %v", err)
 	}
 	for _, key := range []string{sitePagesManifestKey, sitePagesRobotsKey, sitePagesFeedKey} {

@@ -124,13 +124,13 @@ type httpStatusError struct {
 func (e *httpStatusError) Error() string { return e.err.Error() }
 func (e *httpStatusError) Unwrap() error { return e.err }
 
-// isTransientReadError reports whether a failed GET/HEAD/LIST is worth retrying:
+// isTransientFault reports whether a failed request is worth retrying:
 // a 5xx or 429 status (the provider is momentarily unavailable or throttling —
 // e.g. Cloudflare's transient 503) or a transport-level error with no status
 // (a dropped connection, a DNS/TLS blip). A 404/403/412 or any other 4xx is a
 // definite answer and never retried. GETs are idempotent, so a retry is always
 // safe.
-func isTransientReadError(err error) bool {
+func isTransientFault(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -286,11 +286,30 @@ var retryBackoff = []time.Duration{500 * time.Millisecond, 2 * time.Second}
 // 403, any other 4xx) returns immediately; a fault that persists past the
 // attempts surfaces the last error. ctx aborts the wait when a peer has already
 // failed a pooled operation (pass context.TODO() for an un-pooled read).
+// withRetry runs an idempotent request and retries it on a transient fault with
+// the same bounded backoff the reads use. A GET is idempotent by definition and
+// a PUT of the same key and bytes is too, so a retry either lands or fails
+// definitively. Both write paths need it: one throttled PUT out of thousands
+// would otherwise fail a whole publish, and a single 503 on a ref's
+// compare-and-swap would fail the push. A non-transient answer (404, 403, a CAS
+// precondition failure) returns at once rather than burning the backoff on an
+// error that cannot clear. withReadRetry is the variant to use where a pooled
+// operation needs ctx to abort the wait.
+func withRetry(fn func() error) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		if err = fn(); err == nil || attempt >= len(retryBackoff) || !isTransientFault(err) {
+			return err
+		}
+		time.Sleep(retryBackoff[attempt])
+	}
+}
+
 func withReadRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	var result T
 	var err error
 	for attempt := 0; ; attempt++ {
-		if result, err = fn(); err == nil || attempt >= len(retryBackoff) || !isTransientReadError(err) {
+		if result, err = fn(); err == nil || attempt >= len(retryBackoff) || !isTransientFault(err) {
 			return result, err
 		}
 		timer := time.NewTimer(retryBackoff[attempt])
@@ -312,16 +331,21 @@ func (c *Client) GetRetry(key string) ([]byte, error) {
 
 // GetWithETag downloads an object and returns its ETag for a later If-Match write.
 func (c *Client) GetWithETag(key string) ([]byte, string, error) {
-	resp, err := c.do(http.MethodGet, key, nil, nil, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", fmt.Errorf("objstore: read %s: %w", key, err)
-	}
-	return data, resp.Header.Get("ETag"), nil
+	var data []byte
+	var etag string
+	err := withRetry(func() error {
+		resp, err := c.do(http.MethodGet, key, nil, nil, nil)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if data, err = io.ReadAll(resp.Body); err != nil {
+			return fmt.Errorf("objstore: read %s: %w", key, err)
+		}
+		etag = resp.Header.Get("ETag")
+		return nil
+	})
+	return data, etag, err
 }
 
 // Put uploads an object (unconditional write).
@@ -337,6 +361,13 @@ func (c *Client) Put(key string, data []byte) error {
 // PutIfMatch writes an object only when its current ETag matches (compare-and-
 // swap). Returns ErrPreconditionFailed when the object changed underneath.
 func (c *Client) PutIfMatch(key string, data []byte, etag string) error {
+	return withRetry(func() error {
+		return c.putIfMatchOnce(key, data, etag)
+	})
+}
+
+// putIfMatchOnce is one PutIfMatch attempt.
+func (c *Client) putIfMatchOnce(key string, data []byte, etag string) error {
 	resp, err := c.do(http.MethodPut, key, nil, data, map[string]string{"If-Match": etag})
 	if err != nil {
 		return err
@@ -348,12 +379,14 @@ func (c *Client) PutIfMatch(key string, data []byte, etag string) error {
 // PutIfAbsent writes an object only when the key doesn't exist yet
 // (If-None-Match: *). Returns ErrPreconditionFailed when it already exists.
 func (c *Client) PutIfAbsent(key string, data []byte) error {
-	resp, err := c.do(http.MethodPut, key, nil, data, map[string]string{"If-None-Match": "*"})
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
+	return withRetry(func() error {
+		resp, err := c.do(http.MethodPut, key, nil, data, map[string]string{"If-None-Match": "*"})
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		return nil
+	})
 }
 
 // Delete removes an object; deleting a missing key is not an error (S3

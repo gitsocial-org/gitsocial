@@ -20,7 +20,7 @@ func TestPostPushMaintenance_FailedManifestRetriesNextPush(t *testing.T) {
 	// site whose marker records the current refs. Without this the pass below
 	// would be a bootstrap, which withholds the marker for its own reasons and
 	// would make the retry prove nothing.
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("seed pushSite: %v", err)
 	}
 	if _, ok := readSitePushState(client, ""); !ok {

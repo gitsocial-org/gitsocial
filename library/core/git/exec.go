@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -138,6 +139,48 @@ func DefaultExec(ctx context.Context, workdir string, args []string) (*ExecResul
 		Stdout: strings.TrimSpace(stdout.String()),
 		Stderr: strings.TrimSpace(stderr.String()),
 	}, nil
+}
+
+// ExecGitTransferContext runs a transfer command (push/fetch) with the child's
+// stderr mirrored to w as it is written, so a remote helper's progress reaches
+// the user while the transfer runs instead of sitting in a buffer until it ends.
+// The stderr is still captured for the error path. A transfer is a real
+// subprocess by definition (there is a remote on the other end), so this does
+// not route through the swappable test executor; w nil behaves like ExecGit.
+func ExecGitTransferContext(ctx context.Context, workdir string, args []string, w io.Writer) (*ExecResult, error) {
+	start := time.Now()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = workdir
+	cmd.Env = envWithS3HelperAlias(append(append(os.Environ(),
+		"GIT_TERMINAL_PROMPT=0",
+		"GCM_INTERACTIVE=Never",
+	), testIsolationEnv()...))
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if w != nil {
+		cmd.Stderr = io.MultiWriter(&stderr, w)
+	}
+
+	err := cmd.Run()
+	duration := time.Since(start)
+	if err != nil {
+		exitCode := 1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+		log.Debug("git transfer failed", "args", args, "duration_ms", duration.Milliseconds(), "exit_code", exitCode)
+		return nil, &GitError{
+			Op:     "git " + strings.Join(args, " "),
+			Args:   args,
+			Err:    ErrGitExec,
+			Stderr: strings.TrimSpace(stderr.String()),
+			Code:   exitCode,
+		}
+	}
+	log.Debug("git transfer", "args", args, "duration_ms", duration.Milliseconds())
+	return &ExecResult{Stdout: strings.TrimSpace(stdout.String()), Stderr: strings.TrimSpace(stderr.String())}, nil
 }
 
 // ExecGit executes a git command and returns stdout/stderr.

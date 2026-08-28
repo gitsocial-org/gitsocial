@@ -83,12 +83,24 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	branchPushed := ""
 	refsMoved := false
 	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
-	for _, cmd := range cmds {
-		sha, err := h.applyRefUpdate(cmd)
-		if err != nil {
-			fmt.Fprintf(w, "error %s %s\n", cmd.dst, oneLine(err))
+	// The writes run concurrently, the bookkeeping does not: each command targets
+	// its own key (no two commands in a batch share a write target), so the CAS
+	// contract stays per-ref and only the round trips overlap — the whole cost of
+	// a many-ref push, which a repo registering one ref per fork pays in full. The
+	// report lines and the state below are then emitted in command order, as git
+	// expects, from results the pool has already finished producing.
+	shas := make([]string, len(cmds))
+	errs := runParallel(len(cmds), func(i int) error {
+		sha, err := h.applyRefUpdate(cmds[i])
+		shas[i] = sha
+		return err
+	})
+	for i, cmd := range cmds {
+		if errs[i] != nil {
+			fmt.Fprintf(w, "error %s %s\n", cmd.dst, oneLine(errs[i]))
 			continue
 		}
+		sha := shas[i]
 		fmt.Fprintf(w, "ok %s\n", cmd.dst)
 		refsMoved = true
 		if h.remoteRefs != nil {
@@ -173,13 +185,16 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
 	// independent of the site.publish gate below, so a bucket-served repo clones
 	// and fetches with stock git over plain HTTPS even when the static site is off.
+	h.progress.call("maintenance: ref advertisement", 0, 0)
 	logDumbTransportInfo(h.client, h.prefix, src, refs, thin)
 	// Now that the bucket's refs are known, a HEAD left pointing at a ref the
 	// bucket does not carry can be repaired (ensureRemoteHEAD above cannot: it
 	// keeps any HEAD that is not a gitmsg branch).
+	h.progress.call("maintenance: HEAD", 0, 0)
 	h.repairDanglingHEAD(refs, head, branchPushed)
 	// Sealing packs already-loose history and, after a grace period, deletes the
 	// loose copies. Best-effort and self-rate-limited, like everything here.
+	h.progress.call("maintenance: packs", 0, 0)
 	h.maintainPacks(refs)
 	// A thin bucket is helper-only: it publishes no static site (the site reads a
 	// history the bucket does not carry). Sealing above still runs — it packs the
@@ -195,6 +210,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// plain s3:// git remote stays clean, and a bucket whose site predates the
 	// guard is left untouched with a one-line hint. Best-effort throughout — a
 	// read failure only skips this push's maintenance, never the git push itself.
+	h.progress.call("maintenance: site artifacts", 0, 0)
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)

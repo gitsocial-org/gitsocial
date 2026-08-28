@@ -176,15 +176,25 @@ func writeSiteCommitPages(client *Client, prefix string, entries []siteMetaEntry
 	if pages > budget {
 		pages, pending = budget, true
 	}
+	chunk := sitePagesChunk()
+	uploads := make([]sitePageUpload, 0, min(pages, chunk))
 	for j := 0; j < pages; j++ {
 		segment := entries[idx-(j+1)*sitePagesListSize : idx-j*sitePagesListSize]
 		page, err := renderSitePage("list", buildSiteCommitsSealedPage(site, segment, defaultBranch, sealed+j+1, sealed+pages))
 		if err != nil {
 			return nil, err
 		}
-		if err := putSitePage(client, prefix+siteCommitsDir+"/"+strconv.Itoa(sealed+j+1)+".html", page); err != nil {
+		uploads = append(uploads, sitePageUpload{key: prefix + siteCommitsDir + "/" + strconv.Itoa(sealed+j+1) + ".html", page: page})
+		if len(uploads) < chunk {
+			continue
+		}
+		if err := putSitePages(client, uploads, nil, "", 0, 0); err != nil {
 			return nil, err
 		}
+		uploads = uploads[:0]
+	}
+	if err := putSitePages(client, uploads, nil, "", 0, 0); err != nil {
+		return nil, err
 	}
 	if pages > 0 {
 		frontier = entries[idx-pages*sitePagesListSize].SHA[:12]

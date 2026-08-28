@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -23,7 +24,14 @@ const pushTimeout = 15 * time.Minute
 func execGitTransfer(workdir string, args []string) (*git.ExecResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
 	defer cancel()
-	return git.ExecGitContext(ctx, workdir, args)
+	// The s3 remote helper reports its own progress on stderr (object upload, ref
+	// writes, post-push maintenance), and a bucket push spends minutes there. Pass
+	// our stderr through so that work is visible as it happens rather than being
+	// captured and dropped on success. The pushes themselves run --quiet so what
+	// comes through is the helper's progress and any real failure, not git's
+	// per-ref listing — a repo with one state ref per fork would otherwise print
+	// hundreds of "[new reference]" lines over the top of it.
+	return git.ExecGitTransferContext(ctx, workdir, args, os.Stderr)
 }
 
 type PushResult struct {
@@ -205,7 +213,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.CodeCommits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", remote, bp.Branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, bp.Branch}); err != nil {
 				return nil, wrapCodePushError(remote, bp.Branch, err)
 			}
 		}
@@ -218,7 +226,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.AllBranches++
 		step(branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", remote, branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, branch}); err != nil {
 				return nil, wrapCodePushError(remote, branch, err)
 			}
 		}
@@ -245,7 +253,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		step("refs/gitmsg/*")
 		if !dryRun {
 			if _, err := execGitTransfer(workdir, []string{
-				"push", remote, "refs/gitmsg/*:refs/gitmsg/*",
+				"push", "--quiet", remote, "refs/gitmsg/*:refs/gitmsg/*",
 			}); err != nil {
 				return nil, wrapStateRefPushError(err)
 			}

@@ -41,7 +41,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 
 	// First push: full pass. It writes the refs manifest, configs, items, and the
 	// marker last.
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("first pushSite: %v", err)
 	}
 	if _, ok := readSitePushState(client, ""); !ok {
@@ -59,7 +59,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	manifestPutsBefore := bucket.putCount(siteManifestKey)
 	listsBefore := bucket.listCount()
 
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("second pushSite: %v", err)
 	}
 	if got := bucket.totalPuts(); got != putsBefore {
@@ -84,7 +84,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 		t.Fatalf("advance social ref: %v", err)
 	}
 	manifestBefore := bucket.putCount(siteManifestKey)
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("third pushSite: %v", err)
 	}
 	if got := bucket.putCount(siteManifestKey); got == manifestBefore {
@@ -98,7 +98,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 func TestPushSite_HeadChangeInvalidates(t *testing.T) {
 	client, _ := testClient(t)
 	seedSiteBucket(t, client)
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("first pushSite: %v", err)
 	}
 	if up, _ := siteMaintenanceUpToDate(client, "", mustSiteVersion(t), SiteOverride{}); !up {
@@ -119,7 +119,7 @@ func TestPushSite_HeadChangeInvalidates(t *testing.T) {
 func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	client, bucket := testClient(t)
 	seedSiteBucket(t, client)
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("first pushSite: %v", err)
 	}
 	// Corrupt the marker.
@@ -135,7 +135,7 @@ func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	}
 	// The full pass must run and rewrite the marker to a valid one.
 	manifestBefore := bucket.putCount(siteManifestKey)
-	if err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
+	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("second pushSite after corruption: %v", err)
 	}
 	if got := bucket.putCount(siteManifestKey); got == manifestBefore {

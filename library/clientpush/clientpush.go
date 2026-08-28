@@ -49,10 +49,14 @@ type Options struct {
 // data push still succeeded). Error mirrors Err as a string for JSON/RPC
 // consumers (error itself doesn't serialize).
 type SiteOutcome struct {
-	Published bool   `json:"published"`
-	Skipped   string `json:"skipped,omitempty"`
-	Error     string `json:"error,omitempty"`
-	Err       error  `json:"-"`
+	Published bool `json:"published"`
+	// Complete is false when the site published but a bootstrap still owes work
+	// a later push must finish, so a partial mirror is reported rather than
+	// reading as a finished publish.
+	Complete bool   `json:"complete"`
+	Skipped  string `json:"skipped,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Err      error  `json:"-"`
 }
 
 // Result combines the data-push result with the site outcome and whether the
@@ -125,8 +129,6 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 	if opts.SiteOnly {
 		return publishSiteOnly(workdir, remote, opts, siteProgress)
 	}
-	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
-
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
 
 	// --full detaches a thin fork relationship. Clearing the config FIRST makes
@@ -144,6 +146,12 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 	if !opts.DryRun {
 		reconcileTrackingRefs(workdir, remote)
 	}
+
+	// Counted AFTER the reconcile above, which is the whole point of it: the
+	// count reads the tracking refs, so a bucket emptied or rewound since the
+	// last push must be counted against what the bucket actually holds now, not
+	// against the tracking refs the last push wrote.
+	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
 
 	pushResult, err := gitmsg.PushWithProgress(workdir, opts.DryRun, codeBranches, remote, opts.AllBranches, onBranch)
 	if err != nil {
@@ -186,14 +194,14 @@ func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	if !strings.HasPrefix(remoteURL, "s3://") {
 		return nil, fmt.Errorf("remote %q is not an s3 remote: %s", remote, remoteURL)
 	}
-	published, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if err != nil {
 		return nil, fmt.Errorf("push site to %s: %w", remoteURL, err)
 	}
 	if !published {
 		return nil, errors.New("site publishing is disabled for this repo; enable with `gitsocial config site set publish true`")
 	}
-	res.Site = SiteOutcome{Published: true}
+	res.Site = SiteOutcome{Published: true, Complete: complete}
 	return res, nil
 }
 
@@ -215,7 +223,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if opts.DryRun {
 		return SiteOutcome{Skipped: "dry-run"}
 	}
-	published, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
 		// (an explicit `--site-only` still fails loudly, see publishSiteOnly).
@@ -227,7 +235,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if !published {
 		return SiteOutcome{Skipped: "site.publish not enabled"}
 	}
-	return SiteOutcome{Published: true}
+	return SiteOutcome{Published: true, Complete: complete}
 }
 
 // PublishSite uploads the browser static site to an s3 bucket and refreshes the
@@ -238,22 +246,22 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 // published is false (no error) when the workspace's site.publish guard is not
 // enabled — the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the site push.
-func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published bool, err error) {
-	published, err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
+func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
+	published, complete, err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
 	if err != nil || !published {
-		return published, err
+		return published, complete, err
 	}
 	// Point the bucket HEAD at the repo's real default branch (not an assumed
 	// "main"), and publish push-time stats (the default branch's commit count +
 	// times) the browser can't cheaply derive. Best-effort: never fails the push.
 	branch, times, err := defaultBranchStats(workdir)
 	if err != nil {
-		return true, nil
+		return true, complete, nil
 	}
 	_ = objstore.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
 	stats := map[string]any{"branch": branch, "commits": len(times), "commitTimes": times}
 	_ = objstore.WriteSiteStats(remoteURL, objstore.HelperEnvFromOS(), stats)
-	return true, nil
+	return true, complete, nil
 }
 
 // defaultBranchStats returns the current branch and every regular commit's

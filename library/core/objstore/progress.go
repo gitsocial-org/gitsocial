@@ -49,7 +49,10 @@ func (t *throttle) ready(done, total int) bool {
 	defer t.mu.Unlock()
 	now := t.now()
 	terminal := total > 0 && done >= total
-	if !t.started || terminal || now.Sub(t.last) >= t.interval {
+	// A phase marker (no counts) reports that a distinct, possibly long step has
+	// STARTED, so dropping it to the interval would hide exactly what it exists to
+	// show. One line per marker, and callers emit them once per step.
+	if isPhaseMarker(done, total) || !t.started || terminal || now.Sub(t.last) >= t.interval {
 		t.started = true
 		t.last = now
 		return true
@@ -148,6 +151,9 @@ func (p *progressWriter) finish() {
 // formatProgress renders one progress line: "<phase>: <done>/<total> (NN%)" when
 // the total is known, or "<phase>: <done>" when it is unknown (total == 0).
 func formatProgress(phase string, done, total int) string {
+	if isPhaseMarker(done, total) {
+		return phase
+	}
 	if total <= 0 {
 		return fmt.Sprintf("%s: %d", phase, done)
 	}
@@ -219,4 +225,11 @@ func stderrIsTTY() bool {
 		return false
 	}
 	return info.Mode()&os.ModeCharDevice != 0
+}
+
+// isPhaseMarker reports whether a call is a bare phase marker — a step that
+// names itself but counts nothing (both done and total zero), rendered as the
+// phase alone rather than "<phase>: 0".
+func isPhaseMarker(done, total int) bool {
+	return done == 0 && total == 0
 }

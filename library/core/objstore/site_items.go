@@ -577,15 +577,17 @@ func compressJSON(v any, quality int) ([]byte, error) {
 // putCompressed uploads pre-compressed bytes with `Content-Encoding: br` object
 // metadata so readers decode transparently.
 func putCompressed(client *Client, key string, compressed []byte) error {
-	resp, err := client.do(http.MethodPut, key, nil, compressed, map[string]string{
-		"Content-Type":     "application/json",
-		"Content-Encoding": "br",
+	return withRetry(func() error {
+		resp, err := client.do(http.MethodPut, key, nil, compressed, map[string]string{
+			"Content-Type":     "application/json",
+			"Content-Encoding": "br",
+		})
+		if err != nil {
+			return fmt.Errorf("upload %s: %w", key, err)
+		}
+		resp.Body.Close()
+		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("upload %s: %w", key, err)
-	}
-	resp.Body.Close()
-	return nil
 }
 
 // planItems seals a full items (re)build's shards, returning the plan (staged so

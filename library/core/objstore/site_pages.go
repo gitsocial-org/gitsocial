@@ -39,15 +39,19 @@ package objstore
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -145,20 +149,25 @@ const (
 	sitePagesHomeActivity = 10
 )
 
-// sitePagesBudget bounds one push's item-page writes. A page set larger than
-// the budget bootstraps over several pushes, resuming from the manifest's
-// cursor. A var so tests can lower it; GITSOCIAL_SITE_PAGES_BUDGET overrides.
+// sitePagesBudget bounds one push's item-page writes. Unbounded by default: a
+// push publishes the whole page set, because a bucket left mid-bootstrap is an
+// incomplete mirror — it serves item pages for part of its corpus and 404s the
+// rest until someone pushes again, and nothing in the push output demanded that
+// second push. The cursor machinery still earns its keep as the resume path for
+// a push that is interrupted rather than budgeted short.
+// GITSOCIAL_SITE_PAGES_BUDGET caps it for a caller that would rather spread a
+// very large first publish over several pushes. A var so tests can lower it.
 var sitePagesBudget = sitePagesBudgetFromEnv()
 
-// sitePagesBudgetFromEnv returns the per-push page budget, honoring a positive
-// GITSOCIAL_SITE_PAGES_BUDGET override, else the 5000 default.
+// sitePagesBudgetFromEnv returns the per-push page budget: a positive
+// GITSOCIAL_SITE_PAGES_BUDGET when set, else unbounded.
 func sitePagesBudgetFromEnv() int {
 	if v := os.Getenv("GITSOCIAL_SITE_PAGES_BUDGET"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			return n
 		}
 	}
-	return 5000
+	return math.MaxInt32
 }
 
 // sitePagesManifest is the .gitsocial/site/pages.json document.
@@ -219,17 +228,82 @@ func putSitePagesManifest(client *Client, prefix string, m *sitePagesManifest) e
 // it trades their bytes for their comprehension; the stylesheet they never fetch
 // goes through putSiteAsset instead.
 func putSiteText(client *Client, key, contentType string, body []byte) error {
-	resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": contentType})
-	if err != nil {
-		return fmt.Errorf("upload %s: %w", key, err)
-	}
-	resp.Body.Close()
-	return nil
+	return withRetry(func() error {
+		resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": contentType})
+		if err != nil {
+			return fmt.Errorf("upload %s: %w", key, err)
+		}
+		resp.Body.Close()
+		return nil
+	})
 }
 
 // putSitePage uploads one rendered HTML page.
 func putSitePage(client *Client, key string, page []byte) error {
 	return putSiteText(client, key, "text/html; charset=utf-8", page)
+}
+
+// sitePageUpload is one rendered page and the key it lands at.
+type sitePageUpload struct {
+	key  string
+	page []byte
+}
+
+// sitePagesChunk sizes one bootstrap upload batch: several round trips deep per
+// worker, so the pool stays fed, while the cursor still advances often enough
+// that an interrupted push repeats at most one batch.
+func sitePagesChunk() int {
+	return max(1, 4*resolveUploadConcurrency())
+}
+
+// putSitePages uploads a batch of rendered pages through a worker pool sized
+// like the object uploads (GITSOCIAL_S3_CONCURRENCY / s3.concurrency). A page
+// PUT is a full round trip and a bootstrap writes thousands of them, so serial
+// uploads make the site layer, not the network, the bound. Pages within a batch
+// are independent and their PUTs overwrite-idempotent, so completion order
+// carries no meaning; progress counts up from base under the mutex that holds
+// the single-goroutine-per-phase Progress contract.
+func putSitePages(client *Client, uploads []sitePageUpload, progress Progress, phase string, base, total int) error {
+	if len(uploads) == 0 {
+		return nil
+	}
+	concurrency := max(1, min(resolveUploadConcurrency(), len(uploads)))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	work := make(chan sitePageUpload)
+	var mu sync.Mutex
+	var firstErr error
+	var done int64
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for u := range work {
+				if err := putSitePage(client, u.key, u.page); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+						cancel()
+					}
+					mu.Unlock()
+					continue
+				}
+				mu.Lock()
+				progress.call(phase, base+int(atomic.AddInt64(&done, 1)), total)
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, u := range uploads {
+		select {
+		case work <- u:
+		case <-ctx.Done():
+		}
+	}
+	close(work)
+	wg.Wait()
+	return firstErr
 }
 
 // sitePagesEffective resolves the HTML page layer's enablement from the
@@ -764,16 +838,17 @@ func incrementalSitePages(client *Client, prefix string, site sitePageSite, prio
 		listByExt[l.Ext] = l
 	}
 	affectedDirs := map[string]bool{}
-	for i, r := range affected {
+	uploads := make([]sitePageUpload, 0, len(affected))
+	for _, r := range affected {
 		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site))
 		if err != nil {
 			return false, err
 		}
-		if err := putSitePage(client, prefix+"i/"+r.Msg.Short+".html", page); err != nil {
-			return false, err
-		}
+		uploads = append(uploads, sitePageUpload{key: prefix + "i/" + r.Msg.Short + ".html", page: page})
 		affectedDirs[listByExt[r.Msg.Ext].Dir] = true
-		progress.call("site pages", i+1, len(affected))
+	}
+	if err := putSitePages(client, uploads, progress, "site pages", 0, len(affected)); err != nil {
+		return false, err
 	}
 	counts, frontier, err := writeSiteTypeLists(client, prefix, roots, done, true, site, prior, affectedDirs)
 	if err != nil {
@@ -947,6 +1022,7 @@ func writeSiteItemPages(client *Client, prefix string, roots map[string][]*siteP
 	}
 	budget := sitePagesBudget
 	complete := true
+	chunk := sitePagesChunk()
 	for _, list := range sitePageLists {
 		rs := roots[list.Ext]
 		for done[list.Ext] < len(rs) {
@@ -954,17 +1030,20 @@ func writeSiteItemPages(client *Client, prefix string, roots map[string][]*siteP
 				complete = false
 				break
 			}
-			it := rs[done[list.Ext]]
-			page, err := renderSitePage("item", buildSiteItemPage(it, list, site))
-			if err != nil {
+			batch := min(chunk, len(rs)-done[list.Ext], budget)
+			uploads := make([]sitePageUpload, 0, batch)
+			for _, it := range rs[done[list.Ext] : done[list.Ext]+batch] {
+				page, err := renderSitePage("item", buildSiteItemPage(it, list, site))
+				if err != nil {
+					return nil, false, 0, err
+				}
+				uploads = append(uploads, sitePageUpload{key: prefix + "i/" + it.Msg.Short + ".html", page: page})
+			}
+			if err := putSitePages(client, uploads, progress, "site pages "+list.Ext, done[list.Ext], len(rs)); err != nil {
 				return nil, false, 0, err
 			}
-			if err := putSitePage(client, prefix+"i/"+it.Msg.Short+".html", page); err != nil {
-				return nil, false, 0, err
-			}
-			done[list.Ext]++
-			budget--
-			progress.call("site pages "+list.Ext, done[list.Ext], len(rs))
+			done[list.Ext] += batch
+			budget -= batch
 		}
 	}
 	return done, complete, budget, nil
@@ -1031,14 +1110,24 @@ func writeSiteTypeLists(client *Client, prefix string, roots map[string][]*siteP
 			}
 		}
 		finalSealed := sealed + len(newPages)
+		chunk := sitePagesChunk()
+		uploads := make([]sitePageUpload, 0, min(len(newPages), chunk))
 		for i, segment := range newPages {
 			page, err := renderSitePage("list", buildSiteSealedListPage(list, site, segment, sealed+i+1, finalSealed))
 			if err != nil {
 				return nil, nil, err
 			}
-			if err := putSitePage(client, prefix+list.Dir+"/"+strconv.Itoa(sealed+i+1)+".html", page); err != nil {
+			uploads = append(uploads, sitePageUpload{key: prefix + list.Dir + "/" + strconv.Itoa(sealed+i+1) + ".html", page: page})
+			if len(uploads) < chunk {
+				continue
+			}
+			if err := putSitePages(client, uploads, nil, "", 0, 0); err != nil {
 				return nil, nil, err
 			}
+			uploads = uploads[:0]
+		}
+		if err := putSitePages(client, uploads, nil, "", 0, 0); err != nil {
+			return nil, nil, err
 		}
 		sealed = finalSealed
 		page, err := renderSitePage("list", buildSiteListHeadPage(list, site, head, totalVisible, sealed))

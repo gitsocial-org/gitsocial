@@ -80,7 +80,7 @@ func PushBranchWithMerge(repoPath, branch string) error {
 // gitsocial-push path threads its resolved remote through here so the push and
 // its non-FF merge-retry target the same remote.
 func PushBranchWithMergeTo(repoPath, remote, branch string) error {
-	_, err := execGitTransfer(repoPath, []string{"push", remote, branch})
+	_, err := execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch})
 	if err == nil {
 		return nil
 	}
@@ -90,7 +90,7 @@ func PushBranchWithMergeTo(repoPath, remote, branch string) error {
 	if mergeErr := FetchAndMergeBranchTo(repoPath, remote, branch); mergeErr != nil {
 		return mergeErr
 	}
-	_, err = execGitTransfer(repoPath, []string{"push", remote, branch})
+	_, err = execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch})
 	return err
 }
 
