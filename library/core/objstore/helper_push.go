@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
 // pushCommand is one parsed "push [+]<src>:<dst>" line.
@@ -146,6 +148,17 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 // flushed to git (see push): none of this is part of git's ref-update contract,
 // so a slow or failed maintenance pass must never delay or fail the push itself.
 func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, extPushed map[string]string) {
+	// A gitsocial push is several git pushes in a row (code branches, tags, data
+	// branches, state refs) and every one of them lands here, so the same ref
+	// listing, HEAD check, sealing pass and site refresh would run four or five
+	// times over against a bucket that is still changing. The caller sets this
+	// on every transfer but the last, which then does the work once against the
+	// final state. A bare `git push` never sets it and is unaffected; a run that
+	// dies before its last transfer simply leaves the maintenance to the next
+	// push, which is where it would have landed anyway.
+	if os.Getenv(git.DeferMaintenanceEnv) == "1" {
+		return
+	}
 	// Advertise the repo's real default branch (its local HEAD symref) as the
 	// bucket HEAD — never assume "main". Fall back to a pushed branch only when
 	// HEAD can't be read (detached, or a non-repo caller).

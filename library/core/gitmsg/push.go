@@ -21,7 +21,7 @@ const pushTimeout = 15 * time.Minute
 
 // execGitTransfer runs a network-transfer git command (push/fetch) under
 // pushTimeout instead of the default short timeout.
-func execGitTransfer(workdir string, args []string) (*git.ExecResult, error) {
+func execGitTransfer(workdir string, args []string, more bool) (*git.ExecResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
 	defer cancel()
 	// The s3 remote helper reports its own progress on stderr (object upload, ref
@@ -31,7 +31,13 @@ func execGitTransfer(workdir string, args []string) (*git.ExecResult, error) {
 	// comes through is the helper's progress and any real failure, not git's
 	// per-ref listing — a repo with one state ref per fork would otherwise print
 	// hundreds of "[new reference]" lines over the top of it.
-	return git.ExecGitTransferContext(ctx, workdir, args, os.Stderr)
+	// more == this transfer is followed by another in the same push run, so the
+	// helper's end-of-push bucket maintenance waits for the last one.
+	var extra []string
+	if more {
+		extra = append(extra, git.DeferMaintenanceEnv+"=1")
+	}
+	return git.ExecGitTransferContext(ctx, workdir, args, os.Stderr, extra...)
 }
 
 type PushResult struct {
@@ -213,7 +219,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.CodeCommits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, bp.Branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, bp.Branch}, done < total); err != nil {
 				return nil, wrapCodePushError(remote, bp.Branch, err)
 			}
 		}
@@ -226,14 +232,14 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.AllBranches++
 		step(branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, branch}); err != nil {
+			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, branch}, done < total); err != nil {
 				return nil, wrapCodePushError(remote, branch, err)
 			}
 		}
 	}
 
 	step("tags")
-	tags, err := pushTags(workdir, remote, dryRun)
+	tags, err := pushTags(workdir, remote, dryRun, done < total)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +249,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.Commits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if err := PushBranchWithMergeTo(workdir, remote, bp.Branch); err != nil {
+			if err := pushBranchWithMergeTo(workdir, remote, bp.Branch, done < total); err != nil {
 				return nil, fmt.Errorf("push %s: %w", bp.Branch, err)
 			}
 		}
@@ -254,7 +260,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		if !dryRun {
 			if _, err := execGitTransfer(workdir, []string{
 				"push", "--quiet", remote, "refs/gitmsg/*:refs/gitmsg/*",
-			}); err != nil {
+			}, done < total); err != nil {
 				return nil, wrapStateRefPushError(err)
 			}
 			// The just-pushed state refs now match the remote; mirror them into the
@@ -292,7 +298,7 @@ func RemoteIsEmpty(workdir, remote string) bool {
 // one ref per line, "=" marking up-to-date tags (not counted); a rejected tag
 // surfaces as a git error. --dry-run contacts the remote but updates nothing.
 // A workspace without the remote configured is a no-op, like code branches.
-func pushTags(workdir, remote string, dryRun bool) (int, error) {
+func pushTags(workdir, remote string, dryRun, more bool) (int, error) {
 	if _, err := git.ExecGit(workdir, []string{"remote", "get-url", remote}); err != nil {
 		return 0, nil
 	}
@@ -300,7 +306,7 @@ func pushTags(workdir, remote string, dryRun bool) (int, error) {
 	if dryRun {
 		args = append(args, "--dry-run")
 	}
-	out, err := execGitTransfer(workdir, args)
+	out, err := execGitTransfer(workdir, args, more)
 	if err != nil {
 		return 0, fmt.Errorf("push tags: %w", err)
 	}

@@ -26,16 +26,12 @@ import (
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
-// mirrorSitePassCap bounds the site-drain loop: each pass advances the pages
-// cursor by one budget, so a cap this size covers any realistic backlog while
-// guaranteeing termination even if the completion signal is never seen.
+// mirrorSitePassCap bounds the site-drain loop. A push publishes the whole page
+// set by default, so the loop normally does not run at all; it earns its keep
+// when a bootstrap is deliberately budgeted short (GITSOCIAL_SITE_PAGES_BUDGET)
+// or an items walk defers, where each pass advances the cursor by one budget.
+// The cap covers any realistic backlog and guarantees termination regardless.
 const mirrorSitePassCap = 16
-
-// sitePagesUpToDatePhase is the progress phase objstore reports when a site
-// pass finds nothing to do — the only completion signal exposed at this layer.
-// If the wording ever drifts, the drain loop degrades to running its capped
-// number of cheap no-op passes (2-3 round trips each), never to a wrong result.
-const sitePagesUpToDatePhase = "site up to date"
 
 type mirrorFlags struct {
 	dir               string
@@ -811,15 +807,6 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 	defer siteDone()
 	failed := false
 	for _, t := range targets {
-		upToDate := false
-		progress := func(phase string, done, total int) {
-			if phase == sitePagesUpToDatePhase {
-				upToDate = true
-			}
-			if siteProgress != nil {
-				siteProgress(phase, done, total)
-			}
-		}
 		var onBranch func(branch string, done, total int)
 		if siteProgress != nil {
 			onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
@@ -833,19 +820,25 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 		if !cfg.JSONOutput {
 			fmt.Printf("Pushing to %s (%s) ...\n", t.name, t.url)
 		}
-		result, err := clientpush.Publish(cfg.WorkDir, opts, onBranch, progress)
+		result, err := clientpush.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
 		if err != nil {
 			failed = true
 			fmt.Fprintf(os.Stderr, "error: push to %s: %v\n", t.name, err)
 			continue
 		}
-		if !cfg.JSONOutput {
-			printPushResult(result, false)
-		}
-		if result.Site.Published && !upToDate {
-			if err := drainMirrorSitePages(cfg, t.name, progress, &upToDate); err != nil {
+		// Drain BEFORE reporting: the push's own site line describes the state
+		// at the end of that one pass, and mirror is about to change it. Printing
+		// first would tell the user to push again in the same breath as finishing
+		// the job for them.
+		if result.Site.Published && !result.Site.Complete {
+			complete, err := drainMirrorSitePages(cfg, t.name, siteProgress)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: site refresh on %s: %v\n", t.name, err)
 			}
+			result.Site.Complete = complete
+		}
+		if !cfg.JSONOutput {
+			printPushResult(result, false)
 		}
 	}
 	if failed {
@@ -854,21 +847,23 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 	return nil
 }
 
-// drainMirrorSitePages runs site-only passes until objstore reports the site
-// up to date (each pass advances the pages cursor by one budget) or the pass
-// cap is hit, in which case the re-run instruction is printed instead.
-func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress, upToDate *bool) error {
+// drainMirrorSitePages runs site-only passes until one reports the site
+// complete (each pass advances the pages cursor by one budget) or the pass cap
+// is hit, and reports which. Completion is the publish result's own signal, not
+// a progress phase read in passing, so the loop cannot be fooled by wording;
+// the caller folds the answer into the result it prints, so the reported site
+// state is the one the run actually left behind.
+func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress) (bool, error) {
 	for pass := 0; pass < mirrorSitePassCap; pass++ {
-		*upToDate = false
-		if _, err := clientpush.Publish(cfg.WorkDir, clientpush.Options{Remote: remote, SiteOnly: true}, nil, progress); err != nil {
-			return err
+		result, err := clientpush.Publish(cfg.WorkDir, clientpush.Options{Remote: remote, SiteOnly: true}, nil, progress)
+		if err != nil {
+			return false, err
 		}
-		if *upToDate {
-			return nil
+		if result.Site.Complete {
+			return true, nil
 		}
 	}
-	fmt.Println("Site pages are still filling in; re-run `gitsocial mirror` to continue")
-	return nil
+	return false, nil
 }
 
 // printMirrorPlan renders the --dry-run output: the resolved plan plus the

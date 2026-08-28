@@ -35,7 +35,9 @@ func FetchAndMergeBranch(repoPath, branch string) error {
 // gitsocial-push path threads its resolved remote through here so a
 // non-fast-forward retry merges against the same target it pushed to.
 func FetchAndMergeBranchTo(repoPath, remote, branch string) error {
-	if _, err := execGitTransfer(repoPath, []string{"fetch", remote, branch}); err != nil {
+	// A fetch never triggers the helper's end-of-push maintenance, so it carries
+	// no deferral either way.
+	if _, err := execGitTransfer(repoPath, []string{"fetch", remote, branch}, false); err != nil {
 		return err
 	}
 	remoteTip := fullHash(repoPath, "FETCH_HEAD")
@@ -80,7 +82,15 @@ func PushBranchWithMerge(repoPath, branch string) error {
 // gitsocial-push path threads its resolved remote through here so the push and
 // its non-FF merge-retry target the same remote.
 func PushBranchWithMergeTo(repoPath, remote, branch string) error {
-	_, err := execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch})
+	return pushBranchWithMergeTo(repoPath, remote, branch, false)
+}
+
+// pushBranchWithMergeTo is PushBranchWithMergeTo with the multi-transfer signal:
+// more says another transfer follows in the same push run, so the helper holds
+// its bucket maintenance for the last one. Both the first attempt and the
+// post-merge retry are the same logical step and carry the same answer.
+func pushBranchWithMergeTo(repoPath, remote, branch string, more bool) error {
+	_, err := execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch}, more)
 	if err == nil {
 		return nil
 	}
@@ -90,7 +100,7 @@ func PushBranchWithMergeTo(repoPath, remote, branch string) error {
 	if mergeErr := FetchAndMergeBranchTo(repoPath, remote, branch); mergeErr != nil {
 		return mergeErr
 	}
-	_, err = execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch})
+	_, err = execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch}, more)
 	return err
 }
 
