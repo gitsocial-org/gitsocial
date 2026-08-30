@@ -236,6 +236,13 @@
   .card-head .type-glyph { margin-right: 0; }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: 0.3rem; }
   .card .body.dim { color: var(--muted); }
+  /* A card body holding RENDERED markdown lays itself out: its blocks carry
+     their own spacing, and hard breaks are <br> elements rather than newlines
+     the wrapper would have to preserve. */
+  .card .body.body-md { white-space: normal; }
+  /* A card is a row in a list, not a page: an image inside one is a badge or a
+     thumbnail, and is bounded so a single screenshot cannot own the timeline. */
+  .card .body-md img { max-height: 12rem; width: auto; }
   /* List-card body clamp: long messages cap at ~10 rendered lines (--lh-body
      em-steps, matching the base font shorthand) with a theme-independent
      mask fade over the last ~2 lines; fixed-em gradient stops keep bodies
@@ -248,6 +255,11 @@
   }
   .body-clamp-toggle { display: block; margin-top: 0.2rem; padding: 0.15rem 0; }
   .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-left: 1.75rem; }
+  /* The indent above aligns a meta row under a card head's subject, past the
+     glyph column. A card with no head (post, comment, memo) leads the meta row
+     with the glyph itself, which then has to start AT the glyph column like
+     every other card — same specificity ladder as the rule it overrides. */
+  #gs-page .card .meta.meta-lead, .meta.meta-lead { margin-left: 0; }
   .hash { font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted); }
   /* Type glyphs carry one consistent semantic scheme across every view (timeline,
      search, lists, board, milestones, detail): a state-bearing glyph (issue,
@@ -671,6 +683,28 @@
     background: var(--chip); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
   }
   .embedded-from { font-style: italic; }
+  /* A reply's excerpt of what it answers, on a card. Same left-border kind
+     marker as .embedded (this IS embedded context, carried by the reply's own
+     commit), dimmed under a comment or quote and full-strength under a repost,
+     whose original is the item rather than context for it. */
+  .reply-quote {
+    margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-left: 2px solid var(--line);
+    background: var(--chip); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+  }
+  /* The block is its own navigation target — it opens the PARENT, not the reply
+     that carries it — so it takes the card's clickable treatment and says so on
+     hover: the border lights and the ground tints the way a card's does, which
+     is what a reader reads as "this goes somewhere else". Without it the
+     excerpt looks like part of the reply's own card, and a click reads as a
+     mis-navigation. */
+  .reply-quote.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+  .reply-quote.clickable:hover {
+    border-left-color: color-mix(in srgb, var(--link) 55%, var(--line));
+    background: color-mix(in srgb, var(--link) 8%, var(--chip));
+  }
+  .reply-quote-head { margin-bottom: 0.25rem; }
+  .reply-quote.dimmed .reply-quote-body { color: var(--muted); }
+  .reply-quote-body { font-size: var(--fs-ui); }
   .embedded-quote { white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: 0.25rem 0; font-size: var(--fs-ui); }
   /* PM detail extras (milestone/sprint members, sub-issues, relations),
      progress bars, the kanban board, and the in-bucket item search. */
@@ -702,6 +736,10 @@
   .chip.chip-priority.prio-low { background: var(--chip); }
   .chip.chip-retracted { background: var(--danger-t2); color: var(--text); }
   .chip.chip-origin { background: var(--link-t2); color: var(--text); }
+  /* An automated author's mark: muted, because it tells a reader what to SKIM
+     past, and a loud chip on the majority of a mirrored repo's rows would be
+     the noise it is meant to label. */
+  .chip.chip-bot { background: var(--chip); color: var(--muted); }
   .chip.chip-due { background: var(--warn-t2); color: var(--text); }
   .chip.chip-count { background: var(--chip); color: var(--muted); }
   .chip.chip-review { background: var(--chip); color: var(--text); }

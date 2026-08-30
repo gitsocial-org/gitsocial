@@ -182,7 +182,11 @@ func pageItemField(it *sitePageItem, key string) string {
 // entry for the resolved version.
 func pageItemBody(it *sitePageItem) string {
 	if it.Resolved.Message != "" {
-		return protocol.ExtractCleanContent(it.Resolved.Message)
+		// Link reference definitions render nothing on the platform the content
+		// came from, and nothing in the app either (gs-core.js parseMarkdown
+		// consumes them) — this layer prints plain paragraphs, so it drops them
+		// here, at the one accessor every page builder reads an item through.
+		return siteStripLinkRefDefs(protocol.ExtractCleanContent(it.Resolved.Message))
 	}
 	return it.Resolved.Subject
 }

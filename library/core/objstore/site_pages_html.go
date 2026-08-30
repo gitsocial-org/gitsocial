@@ -292,12 +292,12 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 </body>
 </html>
 {{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a></div>
+{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a></div>
 <span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a></nav>
 
-<h1>{{.Subject}}</h1>
-{{template "metaline" .}}
+{{if .Heading}}<h1>{{.Heading}}</h1>
+{{end}}{{template "metaline" .}}
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}{{template "paras" .Paras}}{{end}}{{range .Sections}}<section>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
@@ -325,7 +325,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="meta">… truncated — full README in the repository</p>
 {{end}}</section>
 {{end}}{{end}}{{if .Activity}}<section><h2>Recent activity</h2>
-{{range .Activity}}<div class="card"><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Type}}<span class="chip">{{.Type}}</span> {{end}}<a class="subject" href="{{.Href}}">{{.Subject}}</a></div>
+{{range .Activity}}<div class="card"><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}<a class="subject" href="{{.Href}}">{{.Subject}}</a></div>
 <span class="meta">{{.Author}} · {{.Date}}{{if .Sha}} · {{.Sha}}{{end}}</span></div>
 {{end}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon">⌄</span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
 {{end}}</section>
@@ -417,13 +417,18 @@ type siteItemPageData struct {
 	Chrome    sitePageChrome
 	ListDir   string
 	ListLabel string
-	Subject   string
-	Chip      *sitePageChip
-	Meta      []string
-	Paras     [][]string
-	Tomb      string
-	Sections  []sitePageSection
-	Omitted   int
+	// Subject titles the document (<title>, OG, the list row that links here).
+	// Heading is what the page itself shows, and stays EMPTY on a body-only type
+	// (sitePageBodyOnly), whose first line is prose the body renders in full —
+	// mirroring the app's detail (gs-render.js detailView).
+	Subject  string
+	Heading  string
+	Chip     *sitePageChip
+	Meta     []string
+	Paras    [][]string
+	Tomb     string
+	Sections []sitePageSection
+	Omitted  int
 }
 
 // sitePageNavLink is one type-list nav entry (Current renders bold, unlinked).
@@ -438,11 +443,14 @@ type sitePageNavLink struct {
 // a citable URL of its own; item rows leave it empty because the item already
 // has a page.
 type sitePageListEntry struct {
-	ID    string
-	Chip  *sitePageChip
-	Href  string
-	Title string
-	Meta  []string
+	ID         string
+	Glyph      string // leading type glyph ("" — this type has none)
+	GlyphClass string // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
+	GlyphTitle string // the glyph's title attribute (sitePageGlyphTitle)
+	Chip       *sitePageChip
+	Href       string
+	Title      string
+	Meta       []string
 }
 
 // siteListPageData feeds the "list" template.
@@ -471,16 +479,13 @@ type siteFrontPageData struct {
 // sitePageActivityRow is one row of the front page's recent-activity section:
 // the metadata the items index already carries, linking to the item's own
 // crawlable page. The app's homeActivity renders the same fields in the same
-// order (gs-render.js homeActivityRow), as the same card — glyph, type chip,
-// subject, meta — which the no-JS page can carry verbatim because the type
-// glyphs are plain text characters.
+// order (gs-render.js homeActivityRow), as the same card — glyph, subject,
+// meta — which the no-JS page can carry verbatim because the type glyphs are
+// plain text characters.
+//
+// No row carries a type chip: each type has its own glyph character and every
+// glyph is titled with its type, so a chip beside it only repeated the glyph.
 type sitePageActivityRow struct {
-	// Type is the row's type label, rendered as a chip on the item rows whose
-	// glyph alone does not say which kind they are. A code commit leaves it
-	// empty: its glyph is already the commit glyph, titled "commit", so a chip
-	// reading "commit" beside it says the same thing twice, and the row reads as
-	// the commit card it is everywhere else in the app.
-	Type    string
 	Href    string
 	Subject string
 	Author  string
@@ -491,7 +496,7 @@ type sitePageActivityRow struct {
 	Sha        string
 	Glyph      string // leading type glyph ("" — this type has none)
 	GlyphClass string // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
-	GlyphTitle string // the glyph's title attribute: the class type (sitePageGlyphClassType)
+	GlyphTitle string // the glyph's title attribute (sitePageGlyphTitle)
 }
 
 // siteFrontHome is the front page's body: the repo landing the booted app
@@ -621,6 +626,23 @@ func sitePageDescription(text, fallback string) string {
 	return collapsed
 }
 
+// sitePageBodyOnly reports whether an item type renders whole, with no first
+// line promoted to a heading. Mirrors gs-core.js BODY_ONLY_TYPES: replies
+// (comment, feedback) render under the thing they answer, which already names
+// the subject; a repost carries no content of its own; a quote is commentary
+// about its embedded original. A POST is not one of them — it is the root of
+// its own page and feed entry, and its first line names it everywhere else.
+//
+// Only roots get a static page, so on this layer the rule reaches reposts and
+// quotes; the app applies the same rule to the reply routes it renders.
+func sitePageBodyOnly(t string) bool {
+	switch t {
+	case "comment", "feedback", "repost", "quote":
+		return true
+	}
+	return false
+}
+
 // sitePageTypeLabel maps an item type to its display label.
 func sitePageTypeLabel(t string) string {
 	if t == "pull-request" {
@@ -663,6 +685,21 @@ func sitePageGlyph(itemType, classType, state string) (glyph, class string) {
 		class = sitePageStateClass(state)
 	}
 	return glyph, "tg-" + class
+}
+
+// sitePageGlyphTitle returns a glyph's title attribute, mirroring gs-render.js
+// typeGlyphEl: the class type, and on a state-bearing type (issue, pull request)
+// its state after it. The tint is the only state cue the row carries — the chip
+// that used to repeat it is gone — and a cue carried by color alone is no cue at
+// all for a reader who cannot see it.
+func sitePageGlyphTitle(classType, state string) string {
+	if classType != "issue" && classType != "pull-request" {
+		return classType
+	}
+	if state == "" {
+		state = "open"
+	}
+	return classType + " · " + state
 }
 
 // sitePageGlyphClassType returns the type the app tints and titles an item's
@@ -906,6 +943,10 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
+	bodyOnly := sitePageBodyOnly(pageItemType(it))
+	if bodyOnly {
+		body = pageItemBody(it)
+	}
 	d := siteItemPageData{
 		ListDir:   list.Dir,
 		ListLabel: list.Label,
@@ -913,9 +954,15 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 		Chip:      sitePageItemChip(it),
 		Meta:      siteItemPageMeta(it),
 	}
+	if !bodyOnly {
+		d.Heading = subject
+	}
 	if it.Retracted {
 		label := sitePageTypeLabel(pageItemType(it))
 		d.Subject = "retracted " + label
+		// A tombstone IS the page's own words, not the item's, so it heads every
+		// type — the body-only carve-out is about content, and there is none left.
+		d.Heading = d.Subject
 		d.Tomb = "this " + label + " was retracted by its author"
 		body = ""
 	} else {
@@ -951,9 +998,30 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 	return d
 }
 
+// sitePageListChip returns a list row's chip with the state pill removed from
+// the types whose glyph is tinted by state (issue, pull request) — the app's
+// cards carry that state in the glyph alone, so a chip beside it repeats it.
+// Every other chip stays: a draft PR's plain chip, a retraction marker, a
+// prerelease, and a milestone's or sprint's state, whose glyph carries no tint.
+func sitePageListChip(it *sitePageItem) *sitePageChip {
+	chip := sitePageItemChip(it)
+	if chip == nil || it.Retracted {
+		return chip
+	}
+	switch pageItemType(it) {
+	case "issue", "pull-request":
+		if strings.HasPrefix(chip.Class, "state ") {
+			return nil
+		}
+	}
+	return chip
+}
+
 // buildSiteListEntry renders one root as a list/front row. base is the page's
 // relative path to the site root; defaultType suppresses the redundant type
-// bit on a type's own list (an issue row on the issues list).
+// bit on a type's own list (an issue row on the issues list). The row leads with
+// the app's own type glyph, so the booted app re-renders the row rather than
+// replacing a chip-and-subject line with a glyph card.
 func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
@@ -968,11 +1036,17 @@ func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageList
 	} else if n > 0 || t == "issue" || t == "pull-request" {
 		meta = append(meta, fmt.Sprintf("%d comments", n))
 	}
+	classType := sitePageGlyphClassType(it)
+	state := pageItemField(it, "state")
+	glyph, glyphClass := sitePageGlyph(t, classType, state)
 	return sitePageListEntry{
-		Chip:  sitePageItemChip(it),
-		Href:  base + "i/" + it.Msg.Short + ".html",
-		Title: subject,
-		Meta:  meta,
+		Glyph:      glyph,
+		GlyphClass: glyphClass,
+		GlyphTitle: sitePageGlyphTitle(classType, state),
+		Chip:       sitePageListChip(it),
+		Href:       base + "i/" + it.Msg.Short + ".html",
+		Title:      subject,
+		Meta:       meta,
 	}
 }
 
@@ -1025,16 +1099,16 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			name, _ := pageDisplayAuthor(it.Msg)
 			itemType := pageItemType(it)
 			classType := sitePageGlyphClassType(it)
-			glyph, glyphClass := sitePageGlyph(itemType, classType, pageItemField(it, "state"))
+			state := pageItemField(it, "state")
+			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
 			row := sitePageActivityRow{
-				Type:       sitePageTypeLabel(itemType),
 				Href:       "./i/" + it.Msg.Short + ".html",
 				Subject:    subject,
 				Author:     name,
 				Date:       sitePageDate(pageEffectiveTime(it.Msg)),
 				Glyph:      glyph,
 				GlyphClass: glyphClass,
-				GlyphTitle: classType,
+				GlyphTitle: sitePageGlyphTitle(classType, state),
 			}
 			merged = append(merged, siteFrontActivityEntry{row: row, ts: pageEffectiveTime(it.Msg), sha: it.Msg.SHA})
 		}

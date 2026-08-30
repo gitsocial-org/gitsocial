@@ -47,21 +47,23 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // Recent activity closes the page: the newest items, each linking to its own
   // crawlable page (the front page's content links), below the README.
   ok("front closes with the recent-activity section", front.text.indexOf("<h2>Recent activity</h2>") > front.text.indexOf("Showcase fixture."));
-  // Rows are the app's own card shape — leading type glyph, type chip, subject —
-  // so the upgrade re-renders them rather than replacing one presentation with
-  // another. The glyphs are plain text, which is how the no-JS page can carry them.
+  // Rows are the app's own card shape — leading type glyph, subject — so the
+  // upgrade re-renders them rather than replacing one presentation with another.
+  // The glyphs are plain text, which is how the no-JS page can carry them, and a
+  // state-bearing glyph names its state in its title (the tint alone cannot).
   const cards = front.text.match(/<div class="card">/g) || [];
   ok("the section is capped at ten cards", cards.length === 10, "cards=" + cards.length);
   ok("activity rows link item pages, not app routes", (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length >= 1, "links=" + (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length);
-  ok("activity rows carry glyph, type, subject, author and date", /<span class="type-glyph tg-(?:open|closed)" title="issue">[○●]<\/span> <span class="chip">issue<\/span> <a class="subject" href="\.\/i\/[0-9a-f]{12}\.html">/.test(front.text) && /Ada Lovelace · \d{4}-\d{2}-\d{2}/.test(front.text));
+  ok("activity rows carry glyph, subject, author and date, and no type chip", /<span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject" href="\.\/i\/[0-9a-f]{12}\.html">/.test(front.text) && /Ada Lovelace · \d{4}-\d{2}-\d{2}/.test(front.text));
+  ok("no activity row repeats its glyph as a chip", !/<span class="type-glyph[^>]*>[^<]*<\/span> <span class="chip">/.test(front.text));
   // A reply gets no page of its own, so it must not appear here. Pinned to a
   // string with a POSITIVE control: REPLY_TEXT is asserted PRESENT on the parent
   // post's thread page below, so a reworded fixture turns that assertion red
   // instead of leaving this one passing against a string nothing produces.
   ok("activity excludes replies (they have no page)", !front.text.includes(REPLY_TEXT));
   // A code row is the commit card the app shows everywhere else: glyph, subject,
-  // and the short sha in the meta, with NO chip repeating what the glyph's own
-  // title already says. Item rows above keep their label, which their glyph lacks.
+  // and the short sha in the meta. No row carries a chip repeating what the
+  // glyph's own title already says — the item rows above dropped theirs too.
   ok("activity interleaves code commits (app-linked, commit glyph, no chip)", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="[^"]*index\.html#commit:[0-9a-f]+@/.test(front.text));
   ok("code activity rows carry the short sha in their meta", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject"[^>]*>[^<]*<\/a><\/div>\s*<span class="meta">[^<]* · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span>/.test(front.text));
   // The section closes with a crawlable link on to the social posts archive (the
@@ -127,6 +129,10 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("thread inlines direct replies (the control for the front page's reply exclusion)", !!thread && thread.includes(REPLY_TEXT) && thread.includes("What about generation-mode buckets?"));
   ok("thread inlines nested replies in order", !!thread && thread.indexOf("Thanks, appreciate it!") > thread.indexOf(REPLY_TEXT) && thread.includes("Seconded, well earned."));
   ok("nested reply carries its reply-to attribution", !!thread && /reply to /.test(thread));
+  // A post is the root of its own page, feed entry and OG card, and its first
+  // line names it on every other surface, so it keeps that line as its heading.
+  // The body-only rule is for replies and for a repost's absent content.
+  ok("post page keeps its first line as the heading", !!thread && /<h1>Shipping the S3 static site reader this week\.<\/h1>/.test(thread), thread && thread.slice(thread.indexOf("<nav>"), thread.indexOf("<nav>") + 300));
   const edited = pages.find((p) => p.includes("Improve onboarding and setup docs"));
   ok("edited issue renders the resolved version", !!edited);
   ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && / edited /.test(edited.replace(/·/g, " ")));
@@ -153,6 +159,12 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const issues = await get(TD + "issues/index.html");
   ok("issues list folds milestones/sprints in", issues.text.includes("v1.0 Launch") && issues.text.includes("Sprint 1: Foundations"));
   ok("issues list links item pages", /href="\.\.\/i\/[0-9a-f]{12}\.html"/.test(issues.text));
+  // Rows lead with the app's own glyph, tinted by state on issues and PRs, and
+  // carry no state chip repeating that tint — the same card the booted app paints.
+  ok("issue rows lead with a state-tinted glyph and no state chip", /<div class="card-head"><span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject"/.test(issues.text) && !/<span class="type-glyph tg-(?:open|closed|merged)"[^>]*>[○●⑂]<\/span> <span class="chip state/.test(issues.text), issues.text.slice(issues.text.indexOf('<div class="card"'), issues.text.indexOf('<div class="card"') + 220));
+  // A milestone keeps its chip: its glyph carries no state tint, so the pill is
+  // the row's only lifecycle cue.
+  ok("milestone rows keep their state chip beside the glyph", /<span class="type-glyph tg-milestone" title="milestone">◇<\/span> <span class="chip state [a-z]+">/.test(issues.text));
   const memos = await get(TD + "memos/index.html");
   ok("memos list carries the fixture memos", memos.text.includes("Cache invalidation policy"));
   const posts = await get(TD + "posts/index.html");
@@ -166,7 +178,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
   ok("commits page reads without JS (heading + card rows)", /<h1>commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
-  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
+  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.

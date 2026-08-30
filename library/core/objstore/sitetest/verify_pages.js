@@ -221,10 +221,16 @@ async function item8() {
     await wait(20);
     ok("context pane gets Show more toggle once laid out", findClass(cards[0], "body-clamp-toggle").length === 1 && ctxPane._cls.has("body-clamp"), "toggles=" + findClass(cards[0], "body-clamp-toggle").length);
   }
-  // The context sits above the commit's own subject.
+  // The context sits above the item's own meta and content. Anchored on the meta
+  // row, not a subject: a post/comment detail has no heading (its first line is
+  // prose the body renders), so the meta row is the item's first element.
   const kids = detail ? detail._children.filter((c) => c && c.nodeType === 1) : [];
-  const iThread = kids.indexOf(rc), iSubject = kids.findIndex((c) => c._cls && c._cls.has("subject"));
-  ok("reply context renders above the commit", iThread >= 0 && iSubject > iThread, "thread=" + iThread + " subject=" + iSubject);
+  const iThread = kids.indexOf(rc), iMeta = kids.findIndex((c) => c._cls && c._cls.has("detail-meta"));
+  ok("reply context renders above the commit", iThread >= 0 && iMeta > iThread, "thread=" + iThread + " meta=" + iMeta);
+  ok("a comment detail promotes no first line to a heading", kids.every((c) => !(c._cls && c._cls.has("subject"))), "kids=" + kids.map((c) => c.className).join(","));
+  // The context card IS the parent, which has a page of its own: clicking it
+  // opens that page rather than doing nothing on the reply already on screen.
+  ok("reply-context cards open the parent's own page", cards.length > 0 && cards.every((c) => c._cls.has("clickable")), "classes=" + cards.map((c) => c.className).join(" | "));
   // Trailer table: same-repo original/reply-to values are commit-route links.
   const links = [];
   for (const dd of findTag(detail || viewNode, "dd")) for (const a of findTag(dd, "a")) links.push(a.getAttribute("href"));

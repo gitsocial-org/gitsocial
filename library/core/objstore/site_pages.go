@@ -129,7 +129,15 @@ const (
 	// v14: --pad-panel returns to the shared 0.75rem 0.9rem pair (codeblocks
 	// carry their tighter padding directly); v13 heads hold the zero-top token
 	// that stripped card padding, and sealed heads keep it without the bump.
-	sitePagesVersion = 14
+	// v15: list rows lead with the app's type glyph (tinted by state on issues
+	// and pull requests, which drop the state chip it repeats), so a list page
+	// and the app's render of the same list are the same card; and a body-only
+	// item page (post, comment, repost, quote, feedback) drops its <h1>, whose
+	// text was the first line of the prose the body then continued. The front
+	// page is rewritten on every pass, but item pages and SEALED list pages are
+	// not — a sealed page is immutable by contract, so a v14 bucket would keep
+	// serving glyphless chip rows and sentence-fragment headings forever.
+	sitePagesVersion = 15
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.

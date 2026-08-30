@@ -224,11 +224,15 @@ func writeSiteCommitPages(client *Client, prefix string, entries []siteMetaEntry
 // knows.
 func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntry {
 	short := e.SHA[:12]
+	glyph, glyphClass := sitePageGlyph("commit", "commit", "")
 	return sitePageListEntry{
-		ID:    "c-" + short,
-		Href:  base + "index.html#commit:" + short + "@" + branch,
-		Title: e.Subject,
-		Meta:  []string{e.Author, sitePageDate(e.TS), short},
+		ID:         "c-" + short,
+		Glyph:      glyph,
+		GlyphClass: glyphClass,
+		GlyphTitle: "commit",
+		Href:       base + "index.html#commit:" + short + "@" + branch,
+		Title:      e.Subject,
+		Meta:       []string{e.Author, sitePageDate(e.TS), short},
 	}
 }
 

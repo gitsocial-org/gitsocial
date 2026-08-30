@@ -748,20 +748,23 @@ async function main() {
     // section links pages rather than app routes. The section fills in after the
     // landing's own fetches, so wait for the rows rather than assuming a settle time.
     for (let i = 0; i < 40 && findClass(view, "card").length === 0; i++) await wait(50);
+    const tgClass = (n) => Array.from((n && n._cls) || []).find((c) => c.indexOf("tg-") === 0) || "";
     const painted = findClass(view, "card").map((c) => ({
       glyph: global.__shim.textOf(findClass(c, "type-glyph")[0] || null).trim(),
+      glyphClass: tgClass(findClass(c, "type-glyph")[0]),
       type: global.__shim.textOf(findClass(c, "chip")[0] || null).trim(),
       subject: global.__shim.textOf(findClass(c, "subject")[0] || null).trim(),
     }));
     const section = front.text.slice(front.text.indexOf("<h2>Recent activity</h2>"));
-    // The chip is optional: a code row drops it (its glyph already says commit),
-    // so the glyph CLASS is what identifies a row's kind here, not a display label.
+    // No row carries a chip (the glyph, titled with its type, already says what a
+    // label would), so the glyph CLASS is what identifies a row's kind here. The
+    // capture group stays so a chip creeping back in is caught, not ignored.
     const rows = [...section.matchAll(/<div class="card"><div class="card-head">(?:<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span> )?(?:<span class="chip">([^<]*)<\/span> )?<a class="subject" href="([^"]+)">([^<]*)<\/a>/g)]
       .map((m) => ({ glyphClass: m[1] || "", glyph: m[2] || "", type: unesc(m[3] || ""), href: m[4], subject: unesc(m[5]) }));
     ok("home view paints recent-activity rows", painted.length > 0, "painted=" + painted.length);
     ok("front page carries the recent-activity section after the README", front.text.indexOf("<h2>Recent activity</h2>") > front.text.indexOf("README"));
-    ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.type === painted[i].type && r.subject === painted[i].subject),
-      "page=" + JSON.stringify(rows.map((r) => r.type + ":" + r.subject)) + " app=" + JSON.stringify(painted.map((r) => r.type + ":" + r.subject)));
+    ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.glyphClass === painted[i].glyphClass && r.subject === painted[i].subject),
+      "page=" + JSON.stringify(rows.map((r) => r.glyphClass + ":" + r.subject)) + " app=" + JSON.stringify(painted.map((r) => r.glyphClass + ":" + r.subject)));
     // The section is capped at the same round ten on both sides (HOME_ACTIVITY_LIMIT
     // / sitePagesHomeActivity): a summary below the README, not a scrolling log.
     ok("both surfaces cap the section at ten rows", rows.length === 10 && painted.length === 10, "page=" + rows.length + " app=" + painted.length);
@@ -769,7 +772,10 @@ async function main() {
     // characters the app paints — the card treatment survives the upgrade whole.
     ok("every row carries a type glyph on both surfaces", rows.every((r) => r.glyph) && painted.every((p) => p.glyph), "page=" + JSON.stringify(rows.map((r) => r.glyph)) + " app=" + JSON.stringify(painted.map((p) => p.glyph)));
     ok("the glyphs agree row for row", rows.every((r, i) => r.glyph === painted[i].glyph), "page=" + JSON.stringify(rows.map((r) => r.glyph)) + " app=" + JSON.stringify(painted.map((p) => p.glyph)));
-    ok("state-bearing rows carry a tinted glyph class", rows.filter((r) => r.type === "issue" || r.type === "pull request").every((r) => /^tg-(open|closed|merged)$/.test(r.glyphClass)), "classes=" + JSON.stringify(rows.map((r) => r.type + ":" + r.glyphClass)));
+    // A state-bearing row is now identified by its glyph character (○/● issue,
+    // ⑂ pull request), the label having gone with the chip.
+    const stateful = rows.filter((r) => r.glyph === "○" || r.glyph === "●" || r.glyph === "⑂");
+    ok("state-bearing rows carry a tinted glyph class", stateful.length > 0 && stateful.every((r) => /^tg-(open|closed|merged)$/.test(r.glyphClass)), "classes=" + JSON.stringify(rows.map((r) => r.glyph + ":" + r.glyphClass)));
     // Code commits interleave with the items on both surfaces. They are the rows
     // that keep the section honest on a repo whose gitmsg corpus is mostly one
     // extension, so the merge (not just the item set) is what must agree.
@@ -777,13 +783,13 @@ async function main() {
     const itemRows = rows.filter((r) => r.glyphClass !== "tg-commit");
     ok("the merge interleaves code commits", codeRows.length > 0 && rows.length > codeRows.length, "code=" + codeRows.length + " of " + rows.length);
     ok("code rows carry the commit glyph", codeRows.every((r) => r.glyph === "◦" && r.glyphClass === "tg-commit"), "glyphs=" + JSON.stringify(codeRows.map((r) => r.glyph + "/" + r.glyphClass)));
-    // A code row is the commit card: glyph, subject, sha, and no chip repeating
-    // what the glyph's own title already says. Item rows keep their label.
-    ok("code rows carry no chip repeating the glyph", codeRows.every((r) => r.type === ""), "chips=" + JSON.stringify(codeRows.map((r) => r.type)));
+    // Every row is the app's card: glyph, subject, sha on a code row, and no chip
+    // repeating what the glyph's own title already says.
+    ok("no row carries a chip repeating the glyph", rows.every((r) => r.type === "") && painted.every((p) => p.type === ""),
+      "page=" + JSON.stringify(rows.map((r) => r.type)) + " app=" + JSON.stringify(painted.map((p) => p.type)));
     ok("code rows carry the commit's short sha in the meta",
       codeRows.every((r) => new RegExp(" · [0-9a-f]{12}</span>").test(section.slice(section.indexOf(r.href)))),
       "hrefs=" + JSON.stringify(codeRows.map((r) => r.href)));
-    ok("item rows keep their type chip", itemRows.every((r) => r.type !== ""), "chips=" + JSON.stringify(itemRows.map((r) => r.type)));
     ok("item rows link to their crawlable item page", itemRows.every((r) => /^\.\/i\/[0-9a-f]{12}\.html$/.test(r.href)), "hrefs=" + JSON.stringify(itemRows.map((r) => r.href)));
     // A code commit has no page of its own, so its row deep-links into the app on
     // the same route the app's own row uses.
@@ -807,7 +813,8 @@ async function main() {
     const page = await get(base + "commits/index.html");
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(page.text));
-    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([^<]*)<\/span><\/div>/g)]
+    // The row leads with the commit glyph, the same one the app's code card paints.
+    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([^<]*)<\/span><\/div>/g)]
       .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4]) }));
     ok("commits page lists rows", rows.length > 0, "rows=" + rows.length);
     // Every row is a citable place: an id a URL can name, and a subject linking

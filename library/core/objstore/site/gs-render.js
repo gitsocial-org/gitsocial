@@ -7,7 +7,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, itemLabels, itemSubject, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the in-app route types a detail page's "back" may return to
   // (a list/board/search the user came from). Detail routes (commit/tag) are
@@ -581,11 +581,41 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "chip chip-origin", title: h["origin-url"] || label }, ["↗ " + label]);
   }
 
+  // BOT_EMAIL_RE recognizes an automation's identity in the origin author email
+  // the import records: GitHub marks an App with the "app/" prefix
+  // ("app/dependabot@…", "app/github-actions@…"), and the services that comment
+  // through a plain account are matched by their own address. Imported CI chatter
+  // is the bulk of a mirrored repository's social branch — 187 of ~250 comments
+  // on one real import — so a reader skimming needs to know which rows are
+  // machine-written without opening them.
+  // An automation is named in either half of the address: the LOGIN half for an
+  // App ("app/dependabot", "…[bot]") or a service account ("vercel@users.
+  // noreply.github.com"), and the DOMAIN half for a service that comments from
+  // its own address ("support@coderabbit.ai"), which the login half alone
+  // misses — 46 of one import's comments.
+  const BOT_LOGINS = /^(app\/.+|.+\[bot\]|dependabot|dependabot-preview|vercel|netlify|claassistant|cla-bot|github-actions|codecov|codecov-commenter|renovate|renovate-bot|sonarcloud|sonarqubecloud|greptileai|coderabbitai|copilot|copilot-pull-request-reviewer|semantic-release-bot|allcontributors|imgbot|snyk-bot|mergify)$/i;
+  const BOT_DOMAINS = /(^|\.)(coderabbit\.ai|dependabot\.com|renovateapp\.com|greptile\.com|codecov\.io|mergify\.com)$/i;
+
+  // botChip marks an item whose origin author is an automation, else null. The
+  // login half drops GitHub's numeric id prefix ("12345+login@…") first.
+  function botChip(header) {
+    const h = header || {};
+    const email = (h["origin-author-email"] || "").trim().toLowerCase();
+    const at = email.indexOf("@");
+    const login = (at > 0 ? email.slice(0, at) : email).replace(/^\d+\+/, "");
+    const domain = at > 0 ? email.slice(at + 1) : "";
+    const name = (h["origin-author-name"] || "").trim().toLowerCase();
+    const isBot = (login && BOT_LOGINS.test(login)) || (domain && BOT_DOMAINS.test(domain)) || name.endsWith("[bot]");
+    return isBot ? el("span", { class: "chip chip-bot", title: h["origin-author-email"] || "automated author" }, ["⚙ bot"]) : null;
+  }
+
   function headerChips(header, counts) {
     const h = header || {};
     const chips = [];
     const rc = retractedChip(h);
     if (rc) chips.push(rc);
+    const bc = botChip(h);
+    if (bc) chips.push(bc);
     const oc = originChip(h);
     if (oc) chips.push(oc);
     if (h.due) chips.push(el("span", { class: "chip chip-due" }, ["due " + h.due]));
@@ -641,13 +671,18 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // (issue, pull-request) tints its glyph by state (tg-open/closed/merged); every
   // pure type glyph (post, release, milestone, sprint, memo, …) falls through to the
   // single muted --type-glyph color. Null when the type has no glyph.
+  //
+  // A state-bearing glyph names its state in the title. The tint is the only
+  // state cue a card carries (the chip that used to repeat it is gone), and a
+  // cue carried by color alone is no cue at all for a reader who cannot see it.
   function typeGlyphEl(item, ext) {
     const g = typeGlyph(item, ext);
     if (!g) return null;
     const h = item.header || {};
     const t = h.type || ext;
-    const mod = (t === "issue" || t === "pull-request") ? glyphStateClass(h.state) : t;
-    return el("span", { class: "type-glyph tg-" + mod, title: t }, [g]);
+    const stateful = t === "issue" || t === "pull-request";
+    const mod = stateful ? glyphStateClass(h.state) : t;
+    return el("span", { class: "type-glyph tg-" + mod, title: stateful ? t + " · " + (h.state || "open") : t }, [g]);
   }
   // glyphStateClass maps an item state to its glyph tint class (open/closed/merged);
   // unknown or absent states default to open, matching the item-list default.
@@ -656,11 +691,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (state === "closed" || state === "canceled" || state === "cancelled" || state === "completed") return "closed";
     return "open";
   }
-  function prependGlyph(head, item, ext) { const g = typeGlyphEl(item, ext); if (g) head.prepend(g); }
+  // prependGlyph puts an item's type glyph at the front of a card head or, on the
+  // cards that have no head (post, comment, memo), of the meta row itself. A meta
+  // row is indented to sit under a head's SUBJECT, so a glyph leading one would
+  // land 1.75rem right of every other card's glyph — .meta-lead drops the indent
+  // for exactly that case, keeping one glyph column down the whole list.
+  function prependGlyph(head, item, ext) {
+    const g = typeGlyphEl(item, ext);
+    if (!g) return;
+    head.prepend(g);
+    if (head.classList && head.classList.contains("meta")) head.classList.add("meta-lead");
+  }
 
+  // subjectBody splits content into its first line and the rest, after dropping
+  // any link reference definitions (gs-core stripLinkRefDefs). A bot marker at
+  // the top is invisible on the platform the content came from, so it must not
+  // become the item's subject here — nor lead its body, which renders the same
+  // definitions away.
   function subjectBody(content) {
-    const nl = content.indexOf("\n");
-    return nl < 0 ? [content, ""] : [content.slice(0, nl), content.slice(nl + 1).trim()];
+    const text = stripLinkRefDefs(content || "");
+    const nl = text.indexOf("\n");
+    return nl < 0 ? [text, ""] : [text.slice(0, nl), text.slice(nl + 1).trim()];
   }
 
   // cardNav makes a whole item card navigate to its #commit: detail route on a
@@ -799,17 +850,76 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // clampedBody builds a LIST-card raw pre-wrap text body under the clamp.
+  // clampedBody renders a card's message body as MARKDOWN under the clamp — the
+  // same render the item's own detail page uses (renderCommitBody), so a card
+  // and the detail it opens show one thing. As plain text a card printed every
+  // imported comment's source at the reader: raw "[![badge](src)](href)", the
+  // <br/> and <hr/> tags GitHub's own bots emit, and HTML comments that are
+  // invisible upstream. The markdown pipeline already drops those comments,
+  // resolves reference links, and renders the rest.
   function clampedBody(text) {
-    return clampNode(el("div", { class: "body" }, [text]));
+    return clampNode(el("div", { class: "body body-md" }, [renderCommitBody(text)]));
+  }
+
+  // replyQuoteBlock renders what a reply answers, from the excerpt the reply's
+  // own commit carries (gs-core parentQuote) — no fetch, no parent lookup. The
+  // TUI nests the parent card the same way (tuisocial PostToCardWithOptions):
+  // dimmed under a comment or quote, undimmed under a repost, whose own content
+  // is empty because the original IS the item. Where the TUI caps at 5 lines,
+  // this uses the site's own clamp, which measures the rendered height and
+  // offers "Show more" — the excerpts run to 387 lines on real imports, so the
+  // cap is the normal case, not a safeguard. Null when the item carries none.
+  function replyQuoteBlock(item, dimmed) {
+    const q = parentQuote(item);
+    if (!q) return null;
+    const box = el("div", { class: "reply-quote" + (dimmed ? " dimmed" : "") }, []);
+    // No "in reply to" label: the quoted treatment (indent rule, dimmed body,
+    // its own author line) already says what this block is, and the label had
+    // to be read to learn nothing. The head starts at the block's own left edge
+    // — .meta indents to clear a card's glyph column, which does not exist here.
+    const who = el("div", { class: "reply-quote-head meta meta-lead" }, [authorEl(q.author || "unknown", q.email)]);
+    if (q.time) who.append(" · ", timeEl(Math.floor(Date.parse(q.time) / 1000) || 0));
+    const h = refHash(q.ref);
+    const sameRepo = h && !refRepoUrl(q.ref);
+    if (sameRepo) who.append(" · ", el("a", { class: "hash", href: commitRef(h, refBranch(q.ref)) }, [h.slice(0, 12)]));
+    box.append(who);
+    box.append(clampNode(el("div", { class: "body reply-quote-body" }, [q.quoted])));
+    // The block navigates to the PARENT, not to the card that contains it: the
+    // outer cardNav would otherwise swallow every click here and send a reader
+    // who clicked the quoted parent to the reply they were already looking at.
+    // Propagation stops for that reason; inner links and the clamp toggle keep
+    // their own behavior, and a cross-repo parent (no object in this bucket)
+    // stays unclickable rather than routing to a hash that resolves to nothing.
+    if (sameRepo) {
+      box.classList.add("clickable");
+      // Named, not just tinted: the card around this one opens the reply, so a
+      // reader needs to be told this block opens something else before clicking.
+      box.setAttribute("title", "Open what this replies to");
+      box.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.closest && ev.target.closest("a, button")) return;
+        const sel = typeof window !== "undefined" && window.getSelection ? window.getSelection() : null;
+        if (sel && !sel.isCollapsed) return;
+        ev.stopPropagation();
+        location.hash = commitRef(h, refBranch(q.ref));
+      });
+    }
+    return box;
   }
 
   function socialCard(item, counts) {
     const [subject, body] = subjectBody(item.content);
+    const type = (item.header && item.header.type) || "post";
     const card = el("div", { class: "card" }, []);
     const meta = metaRow(item, "gitmsg/social");
     prependGlyph(meta, item, "social");
     card.append(el("div", {}, [meta]));
-    card.append(clampedBody(subject + (body ? "\n" + body : "")));
+    const text = subject + (body ? "\n" + body : "");
+    if (text) card.append(clampedBody(text));
+    // A reply without what it answers reads as an answer to nothing ("Makes
+    // sense, thanks."), which is most of a merged timeline's social rows.
+    const quote = type === "comment" || type === "quote" || type === "repost"
+      ? replyQuoteBlock(item, type !== "repost") : null;
+    if (quote) card.append(quote);
     appendChipRow(card, headerChips(item.header, counts));
     return cardNav(card, item.commit.hash, "gitmsg/social");
   }
@@ -818,10 +928,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // child count) adds a "n sub" chip mirroring the TUI sub-issue indicator.
   function issueCard(item, subCount, counts) {
     const subject = itemSubject(item);
-    const state = (item.header && item.header.state) || "open";
     const card = el("div", { class: "card" }, []);
     const head = el("div", { class: "card-head" }, [
-      stateChip(state),
       el("a", { class: "subject", href: commitRef(item.commit.hash, "gitmsg/pm") }, [subject || "(untitled)"]),
     ]);
     prependGlyph(head, item, "pm");
@@ -835,10 +943,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function prCard(item, counts) {
     const subject = itemSubject(item);
     const h = item.header || {};
-    const state = h.state || "open";
     const card = el("div", { class: "card" }, []);
     const head = el("div", { class: "card-head" }, [
-      stateChip(state),
       el("a", { class: "subject", href: commitRef(item.commit.hash, "gitmsg/review") }, [subject || "(untitled)"]),
     ]);
     prependGlyph(head, item, "review");
@@ -1107,6 +1213,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const versions = (item.versions && item.versions.length) ? item.versions
       : [{ commit: item.commit, header: item.header, content: item.content, rawMessage: item.rawMessage, author: item.author, editorName: item.editorName, edited: item.edited, effectiveTime: item.effectiveTime }];
     const sel = { idx: versions.length - 1 };
+    // A reply (comment, feedback), a repost, or a quote renders whole, with no
+    // heading: the thing above it already names the subject, so its first line
+    // is the opening of a sentence, not a title. A post keeps its heading — it
+    // is the root of its own page and feed entry, and its first line names it
+    // everywhere else. See gs-core.js BODY_ONLY_TYPES.
+    const bodyOnly = isBodyOnly(item, (COMMIT_VIEW[kind.branch] || {}).ext);
     const wrap = el("div", { class: "detail" }, []);
     // Back link plus a copy-link/share affordance handing out the item's page URL
     // ({site.url}i/<short>.html) when the site config enables the HTML page layer,
@@ -1116,8 +1228,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]),
       shareControl(ctx, item.commit.short, kind.branch),
     ]));
-    const subjectEl = el("div", { class: "subject" }, []);
-    wrap.append(subjectEl);
+    const subjectEl = bodyOnly ? null : el("div", { class: "subject" }, []);
+    if (subjectEl) wrap.append(subjectEl);
     const metaSlot = el("div", { class: "detail-meta" }, []);
     wrap.append(metaSlot);
     const bodyPane = el("div", {}, []);
@@ -1127,8 +1239,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     function paint() {
       const v = versions[sel.idx];
       const [subject, body] = subjectBody(v.content);
-      subjectEl.textContent = subject || "(untitled)";
-      const cb = commitBody(body, v.rawMessage);
+      if (subjectEl) subjectEl.textContent = subject || "(untitled)";
+      const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage);
       metaSlot.replaceChildren(versionMetaRow(v, kind.branch), cb.modes);
       bodyPane.replaceChildren(cb.pane);
       dl.replaceChildren();
@@ -2704,7 +2816,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // puts the content under the ~10-line clamp with the meta line (author/time
   // + Raw toggle) ABOVE it, detail-page style (reply-context ancestors);
   // thread comments stay plain rendered content-first, no chrome.
-  function commentCard(item, branch, clamp) {
+  function commentCard(item, branch, clamp, nav) {
     const card = el("div", { class: "card comment" }, []);
     const content = item.content ? renderCommitBody(item.content) : el("div", { class: "body" }, ["(no content)"]);
     const meta = metaRow(item, branch || "gitmsg/social");
@@ -2719,17 +2831,22 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       card.append(content, meta);
     }
     for (const e of embeddedRefs(item.commit, item.header)) card.append(embeddedBlock(e));
-    return card;
+    // `nav` makes the whole card open the item it shows. The reply-context cards
+    // want it: they are the ANCESTORS of the page being read, each with a page
+    // of its own, and a reader who clicks the parent means to go there. Thread
+    // comments below the item do not — they are the page's own content, and the
+    // hash in each meta row is their permalink.
+    return nav ? cardNav(card, item.commit.hash, branch || "gitmsg/social") : card;
   }
 
   // commentRow places `depth` rail guides to a comment's left so the reply
   // hierarchy reads as continuous vertical connector lines (the TUI's indent),
   // then the comment card. Depth 0 renders the bare card, no rail.
-  function commentRow(item, depth, branch, clamp) {
-    if (depth <= 0) return commentCard(item, branch, clamp);
+  function commentRow(item, depth, branch, clamp, nav) {
+    if (depth <= 0) return commentCard(item, branch, clamp, nav);
     const rail = el("div", { class: "thread-rail" }, []);
     for (let i = 0; i < depth; i++) rail.append(el("span", { class: "rail-guide" }, []));
-    return el("div", { class: "comment-row" }, [rail, commentCard(item, branch, clamp)]);
+    return el("div", { class: "comment-row" }, [rail, commentCard(item, branch, clamp, nav)]);
   }
 
   // threadSection renders a grouped comment thread as a flat, chronological list
@@ -2798,7 +2915,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(el("div", { class: "thread-head mono" }, ["In reply to"]));
     if (fallback) wrap.append(fallback);
     for (let i = 0; i < chain.length; i++) {
-      wrap.append(commentRow(chain[i].item, Math.min(i, THREAD_MAX_DEPTH), chain[i].branch, true));
+      wrap.append(commentRow(chain[i].item, Math.min(i, THREAD_MAX_DEPTH), chain[i].branch, true, true));
     }
     return wrap;
   }
@@ -3345,17 +3462,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "search-snippet meta" }, highlightFrag(frag, query));
   }
 
-  // searchResultCard renders one grouped search hit: a state chip (issues/PRs),
-  // the highlighted subject (the metadata-index subject for a body-less
-  // light-tier hit) linking to the item detail, a meta row, and a snippet when
-  // the match was in the body/labels.
+  // searchResultCard renders one grouped search hit: the type glyph (tinted by
+  // state on issues/PRs), the highlighted subject (the metadata-index subject
+  // for a body-less light-tier hit) linking to the item detail, a meta row, and
+  // a snippet when the match was in the body/labels.
   function searchResultCard(item, group, query) {
     const subject = itemSubject(item);
     const h = item.header || {};
     const card = el("div", { class: "card search-result" }, []);
     const head = el("div", { class: "card-head" }, []);
     prependGlyph(head, item, group.ext);
-    if (h.state) head.append(stateChip(h.state));
     head.append(el("a", { class: "subject", href: commitRef(item.commit.hash, group.branch) }, highlightFrag(subject || "(untitled)", query)));
     card.append(head);
     card.append(metaRow(item, group.branch));
@@ -4758,11 +4874,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // (site_pages_html.go sitePageActivityRow) down to the glyph character, which
   // the page layer can carry because the glyphs are plain text.
   //
-  // A code row takes the commit glyph and its short sha and NO type chip: the
-  // glyph is already titled "commit", so a chip reading "commit" beside it said
-  // the same thing twice, and dropping it leaves the commit card this section
-  // shows everywhere else. Item rows keep the chip, whose label carries what
-  // their glyph does not (an issue and a milestone share a tint).
+  // No row carries a type chip. Each type has its own glyph character (○/● issue,
+  // ⑂ pull request, ◇ milestone, ◷ sprint, • post, ⏏ release, ☞ memo, ◦ commit)
+  // and every glyph is titled with its type, so a chip beside it only said the
+  // same thing twice — the code row already dropped it for exactly that reason.
   function homeActivityRow(item) {
     const branch = item._branch || "";
     const code = item._ext === "code";
@@ -4770,7 +4885,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const head = el("div", { class: "card-head" }, [
       el("a", { class: "subject", href: commitRef(item.commit.hash, branch) }, [itemSubject(item)]),
     ]);
-    if (!code) head.prepend(el("span", { class: "chip" }, [homeActivityLabel(item._type)]));
     if (code) head.prepend(el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]));
     else prependGlyph(head, item, item._ext);
     card.append(head);
@@ -4779,10 +4893,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     card.append(meta);
     return cardNav(card, item.commit.hash, branch);
   }
-
-  // homeActivityLabel words a row's type chip; only the hyphenated PR type reads
-  // wrong as a label. Mirrors the page layer's sitePageTypeLabel.
-  function homeActivityLabel(type) { return type === "pull-request" ? "pull request" : type; }
 
   // homeActivityMore is the section's trailing link to the full timeline, built
   // as the same centered chevron control the root file listing's "Show all N"
