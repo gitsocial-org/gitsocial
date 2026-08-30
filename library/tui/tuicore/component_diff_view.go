@@ -514,10 +514,16 @@ var diffMetadataOrder = []struct{ key, label string }{
 	{"reply-to", "Reply to"},
 }
 
-// diffMetadataExclude are structural header fields never shown in the block.
+// diffMetadataExclude are structural header fields never shown in the block:
+// protocol plumbing plus the origin provenance set (GITMSG.md §1.9), which is
+// fixed at import and MUST NOT change on edit. The current spellings are the
+// origin-author-name/-email pair; "origin-author"/"origin-email" are the legacy
+// keys older imported content still carries (protocol/types.go reads them too).
 var diffMetadataExclude = map[string]bool{
 	"ext": true, "v": true, "edits": true, "type": true, "retracted": true,
-	"origin-author": true, "origin-email": true, "origin-time": true, "origin-url": true,
+	"origin-author-name": true, "origin-author-email": true, "origin-platform": true,
+	"origin-time": true, "origin-url": true,
+	"origin-author": true, "origin-email": true,
 }
 
 // DiffContentWithMetadata prepends a readable metadata block (header fields such

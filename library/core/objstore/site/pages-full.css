@@ -784,7 +784,8 @@
   .contrib-scroll { max-height: 22rem; overflow-y: auto; }
   /* Item version history picker (detail pages, N>1 versions). A compact list of
      version rows; selecting one repaints the body pane, and a per-row "diff to
-     previous" toggle reveals a unified message-body diff. */
+     previous" toggle reveals that version's header deltas and message-body
+     diff. */
   .version-history { margin: 1rem 0; }
   .version-node { margin-bottom: 0.4rem; }
   .version-row {
@@ -800,6 +801,12 @@
   .version-diff-ctl { margin-left: auto; }
   .version-diff-pane:not(:empty) { border-top: 1px solid var(--line); }
   .version-diff { overflow: auto; }
+  /* Header deltas lead the diff pane: one "key from → to" row per changed
+     GitMsg field, which is where a close/merge lives (the body never moves). */
+  .version-header-delta { display: flex; flex-direction: column; gap: 0.3rem; padding: var(--pad-panel); }
+  .version-delta-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; font-size: var(--fs-ui); }
+  .version-delta-key, .version-delta-arrow, .version-delta-none { color: var(--muted); }
+  .version-delta-val { word-break: break-all; }
   /* PR review summary strip: count line + status chip, per-reviewer chips, and
      verdict feedback bodies. */
   .review-summary { margin-top: 1.2rem; }

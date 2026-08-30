@@ -913,34 +913,99 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return "v" + (i + 1);
   }
 
-  // versionMetaRow renders a version's author/time/hash meta with edited /
-  // edited-by chips (metaRow's shape, from a version entry).
+  // versionMetaRow renders a version's author/time/hash meta with its own state
+  // pill and edited / edited-by chips (metaRow's shape, from a version entry).
+  // The state is that VERSION's, not the item's resolved one, so selecting an
+  // older version in the history picker shows the state it carried then.
   function versionMetaRow(v, branch) {
     const when = v.effectiveTime || (v.commit && v.commit.authorTime);
     const row = el("span", { class: "meta" }, [authorEl(v.author || "unknown", effectiveAuthorEmail(v.commit, v.header)), " · ", timeEl(when), " · "]);
     row.append(el("a", { class: "hash", href: commitRef(v.commit.hash, branch) }, [v.commit.short]));
+    if (v.header && v.header.state) row.append(stateChip(v.header.state));
     if (v.edited) row.append(el("span", { class: "chip" }, ["edited"]));
     if (v.editorName) row.append(el("span", { class: "chip" }, ["edited by " + v.editorName]));
     return row;
   }
 
-  // versionDiffPanel renders a unified text diff of two versions' message bodies
-  // (previous vs current) — pure presentation over the in-memory commits, no
-  // fetches. A notice when the pair is too large; empty when unchanged.
+  // VERSION_DELTA_SKIP are header keys a version-to-version delta never reports:
+  // the protocol version, and `edits` (every edit carries it by construction —
+  // it names the canonical, it is not a change to the item).
+  const VERSION_DELTA_SKIP = { v: 1, edits: 1 };
+
+  // headerDelta lists the header fields that differ between two versions, as
+  // {key, from, to} ("" for an absent side). This is where a GitMsg lifecycle
+  // transition lives: closing an issue or merging a PR is an edit whose body is
+  // identical and whose header carries the new `state`, so a body-only diff
+  // reports "no changes" for the very commit that closed the item.
+  function headerDelta(prev, cur) {
+    const a = (prev && prev.header) || {}, b = (cur && cur.header) || {};
+    const out = [];
+    for (const key of Object.keys(Object.assign({}, a, b)).sort()) {
+      if (VERSION_DELTA_SKIP[key]) continue;
+      const from = a[key] === undefined ? "" : String(a[key]);
+      const to = b[key] === undefined ? "" : String(b[key]);
+      if (from !== to) out.push({ key, from, to });
+    }
+    return out;
+  }
+
+  // headerDeltaPanel renders header deltas as one "key: from → to" row each,
+  // with `state` rendering as its colored pills so a close/merge reads at a
+  // glance; an absent side shows as "—" (a field the edit added or dropped).
+  function headerDeltaPanel(deltas) {
+    const side = (key, val) => val === "" ? el("span", { class: "version-delta-none" }, ["—"])
+      : key === "state" ? stateChip(val)
+        : el("span", { class: "version-delta-val mono" }, [val]);
+    const panel = el("div", { class: "version-header-delta" }, []);
+    for (const d of deltas) {
+      panel.append(el("div", { class: "version-delta-row" }, [
+        el("span", { class: "version-delta-key mono" }, [d.key]),
+        side(d.key, d.from), el("span", { class: "version-delta-arrow" }, ["→"]), side(d.key, d.to),
+      ]));
+    }
+    return panel;
+  }
+
+  // versionDiffPanel renders what changed between two versions (previous vs
+  // current): the header deltas first, then a unified text diff of the message
+  // bodies — pure presentation over the in-memory commits, no fetches. Header
+  // first because most edits in a mirrored corpus are state transitions whose
+  // body never moves; reporting only the body diff made those edits read as
+  // empty. A notice when the pair is too large to diff; "No changes." only when
+  // neither side moved.
   function versionDiffPanel(prev, cur) {
+    const deltas = headerDelta(prev, cur);
+    const panel = el("div", { class: "version-diff" }, []);
+    if (deltas.length) panel.append(headerDeltaPanel(deltas));
     const ops = diffLines(prev.content || "", cur.content || "");
-    if (ops === null) return el("div", { class: "notice" }, ["Versions too large to diff."]);
+    if (ops === null) {
+      panel.append(el("div", { class: "notice" }, ["Versions too large to diff."]));
+      return panel;
+    }
     const hunks = buildHunks(ops, 3);
-    if (!hunks.length) return el("div", { class: "empty" }, ["No changes to the message."]);
-    return el("div", { class: "version-diff" }, [renderHunksUnified(hunks, null)]);
+    if (hunks.length) panel.append(renderHunksUnified(hunks, null));
+    else panel.append(el("div", { class: "empty" }, [deltas.length ? "The message itself is unchanged." : "No changes."]));
+    return panel;
+  }
+
+  // versionRowStateChip returns the state pill a history row shows: the state on
+  // the original (the baseline) and on any version that CHANGED it, nothing on
+  // versions that merely carried it forward — so the close/merge edit stands out
+  // without the same pill repeating down the whole list.
+  function versionRowStateChip(versions, i) {
+    const state = (versions[i].header || {}).state;
+    if (!state) return null;
+    if (i > 0 && (versions[i - 1].header || {}).state === state) return null;
+    return stateChip(state);
   }
 
   // versionHistorySection renders the compact "History (N versions)" picker on an
   // item detail page (TUI VersionPicker-flavored): one row per version, newest
-  // first, each with a label chip + author + relative time + short hash (and an
-  // "edited by" chip when the editor differs). Clicking a row shows that version's
-  // content in the main body pane via onSelect; each row above the original
-  // carries a "diff to previous" toggle rendering a unified message-body diff from
+  // first, each with a label chip + author + relative time + short hash (plus a
+  // state pill where the state changed, and an "edited by" chip when the editor
+  // differs). Clicking a row shows that version's content in the main body pane
+  // via onSelect; each row above the original carries a "diff to previous"
+  // toggle rendering that version's header deltas and message-body diff from
   // memory (zero new fetches).
   function versionHistorySection(versions, onSelect) {
     const total = versions.length;
@@ -955,6 +1020,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         " ", authorEl(v.author || "unknown", effectiveAuthorEmail(v.commit, v.header)), " · ", timeEl(when), " · ",
         el("span", { class: "hash mono" }, [v.commit.short]),
       ]);
+      const sc = versionRowStateChip(versions, i);
+      if (sc) meta.append(sc);
       if (v.editorName) meta.append(el("span", { class: "chip" }, ["edited by " + v.editorName]));
       const diffPane = el("div", { class: "version-diff-pane" }, []);
       if (i > 0) {
