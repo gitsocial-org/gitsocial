@@ -1044,12 +1044,13 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 	}
 	// Phase 4: prepare comment messages
 	// Build a lookup from post ExternalID to (hash, content) for ref sections
-	postLookup := map[string]struct{ hash, content string }{}
+	postLookup := map[string]refSource{}
 	for i, entry := range postEntries {
 		if i < len(postMessages) {
-			// postHashes may not exist if fast-import failed above, but we returned early in that case
-			h := mapping.GetHash(MappingKey(platform, "post", entry.item.ExternalID))
-			postLookup[entry.item.ExternalID] = struct{ hash, content string }{h, entry.item.Content}
+			postLookup[entry.item.ExternalID] = refSource{
+				content: entry.item.Content, authorName: entry.item.AuthorName,
+				authorEmail: entry.item.AuthorEmail, createdAt: entry.item.CreatedAt,
+			}
 		}
 	}
 	type commentEntry struct {
@@ -1075,12 +1076,13 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, postHash, "", branch)
 		// Build GitMsg-Ref section for the original post
 		var ref *protocol.Ref
-		if info, ok := postLookup[comment.PostID]; ok {
+		if src, ok := postLookup[comment.PostID]; ok {
+			refAuthor, refEmail, refTime := refIdentity(src, authorName, authorEmail, now)
 			r := protocol.Ref{
-				Ext: "social", Author: authorName, Email: authorEmail,
-				Time: now.Format(time.RFC3339), Ref: originalRef, V: "0.1.0",
+				Ext: "social", Author: refAuthor, Email: refEmail,
+				Time: refTime, Ref: originalRef, V: "0.1.0",
 				Fields:   map[string]string{"type": "post"},
-				Metadata: protocol.QuoteContent(info.content),
+				Metadata: protocol.QuoteContent(src.content),
 			}
 			ref = &r
 		}
@@ -1130,20 +1132,54 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 	return stats
 }
 
+// refSource is what a GitMsg-Ref snapshot of an imported parent needs: the
+// content it quotes, plus the identity and time of whoever wrote that parent
+// UPSTREAM. The importer's own identity signs the commit (GITMSG §1.9 keeps the
+// real author in origin-* fields), but a reference section describes the item it
+// points AT — recording the importer there attributes someone else's issue or
+// pull request to whoever ran the import, in a trailer whose whole purpose
+// (GITMSG §1.4) is reconstruction without fetching the referenced commit.
+type refSource struct {
+	content     string
+	authorName  string
+	authorEmail string
+	createdAt   time.Time
+}
+
+// refIdentity returns the author, email and time a ref snapshot should carry,
+// falling back to the importer's identity and the import time only when the
+// source carries none — a reference trailer MUST have all three (GITMSG §1.4).
+func refIdentity(src refSource, fallbackName, fallbackEmail string, fallbackTime time.Time) (string, string, string) {
+	name, email, when := src.authorName, src.authorEmail, src.createdAt
+	if name == "" && email == "" {
+		name, email = fallbackName, fallbackEmail
+	}
+	if when.IsZero() {
+		when = fallbackTime
+	}
+	return name, email, when.Format(time.RFC3339)
+}
+
 // issueContentByID maps issue external IDs to their full content for ref quoting.
-func issueContentByID(issues []ImportIssue) map[string]string {
-	m := make(map[string]string, len(issues))
+func issueContentByID(issues []ImportIssue) map[string]refSource {
+	m := make(map[string]refSource, len(issues))
 	for _, issue := range issues {
-		m[issue.ExternalID] = joinTitleBody(issue.Title, issue.Body)
+		m[issue.ExternalID] = refSource{
+			content: joinTitleBody(issue.Title, issue.Body), authorName: issue.AuthorName,
+			authorEmail: issue.AuthorEmail, createdAt: issue.CreatedAt,
+		}
 	}
 	return m
 }
 
 // prContentByID maps PR external IDs to their full content for ref quoting.
-func prContentByID(prs []ImportPR) map[string]string {
-	m := make(map[string]string, len(prs))
+func prContentByID(prs []ImportPR) map[string]refSource {
+	m := make(map[string]refSource, len(prs))
 	for _, pr := range prs {
-		m[pr.ExternalID] = joinTitleBody(pr.Title, pr.Body)
+		m[pr.ExternalID] = refSource{
+			content: joinTitleBody(pr.Title, pr.Body), authorName: pr.AuthorName,
+			authorEmail: pr.AuthorEmail, createdAt: pr.CreatedAt,
+		}
 	}
 	return m
 }
@@ -1173,7 +1209,7 @@ func sortByItemAndTime(comments []ImportComment) []ImportComment {
 // social branch, each referencing its parent extension item (issue or PR) by
 // canonical hash. Mirrors executeSocial's comment phase; parentContent maps
 // parent external IDs in the current plan to their content for ref quoting.
-func executeItemComments(opts Options, comments []ImportComment, mapping *MappingFile, parentKeyType, commentKeyType, parentExt, parentType string, parentContent map[string]string) Stats {
+func executeItemComments(opts Options, comments []ImportComment, mapping *MappingFile, parentKeyType, commentKeyType, parentExt, parentType string, parentContent map[string]refSource) Stats {
 	stats := Stats{}
 	if len(comments) == 0 {
 		return stats
@@ -1225,12 +1261,13 @@ func executeItemComments(opts Options, comments []ImportComment, mapping *Mappin
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", parentBranch)
 		// Build GitMsg-Ref section for the parent item
 		var ref *protocol.Ref
-		if content, ok := parentContent[c.PostID]; ok {
+		if src, ok := parentContent[c.PostID]; ok {
+			refAuthor, refEmail, refTime := refIdentity(src, authorName, authorEmail, now)
 			r := protocol.Ref{
-				Ext: parentExt, Author: authorName, Email: authorEmail,
-				Time: now.Format(time.RFC3339), Ref: originalRef, V: "0.1.0",
+				Ext: parentExt, Author: refAuthor, Email: refEmail,
+				Time: refTime, Ref: originalRef, V: "0.1.0",
 				Fields:   map[string]string{"type": parentType},
-				Metadata: protocol.QuoteContent(content),
+				Metadata: protocol.QuoteContent(src.content),
 			}
 			ref = &r
 		}

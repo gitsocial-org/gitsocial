@@ -317,7 +317,7 @@ func TestExecuteItemComments_DryRun(t *testing.T) {
 		{ExternalID: "902", PostID: "2", Content: "comment on issue in plan"},
 		{ExternalID: "903", PostID: "3", Content: "comment on unknown issue"},
 	}
-	parentContent := map[string]string{"2": "Issue two\n\nBody"}
+	parentContent := map[string]refSource{"2": {content: "Issue two\n\nBody"}}
 	stats := executeItemComments(Options{DryRun: true}, comments, mapping, "issue", "issue-comment", "pm", "issue", parentContent)
 	if stats.Comments != 2 {
 		t.Errorf("Comments = %d, want 2", stats.Comments)

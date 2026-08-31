@@ -1,7 +1,10 @@
 // types.go - Protocol data types for headers, messages, and refs
 package protocol
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 type Header struct {
 	Ext        string
@@ -64,6 +67,45 @@ func OriginDisplayAuthor(origin *Origin) string {
 		return "@" + email[:idx]
 	}
 	return "@" + email
+}
+
+// EffectiveAuthor returns the identity an item is attributed to: its ORIGIN
+// author over the git commit author, mirroring the cache's effective_author_name
+// / effective_author_email generated columns. Imported content is committed by
+// whoever ran the import and carries the real author in origin-* fields
+// (GITMSG §1.9), so any surface reading a commit directly — rather than through
+// a *_items_resolved view, which COALESCEs this already — must resolve it here
+// or it will attribute the whole mirror to the importer. The name falls back to
+// an @handle derived from the origin email, as OriginDisplayAuthor does.
+func EffectiveAuthor(header *Header, gitName, gitEmail string) (string, string) {
+	origin := ExtractOrigin(header)
+	if origin == nil {
+		return gitName, gitEmail
+	}
+	name, email := OriginDisplayAuthor(origin), origin.AuthorEmail
+	if name == "" {
+		name = gitName
+	}
+	if email == "" {
+		email = gitEmail
+	}
+	return name, email
+}
+
+// EffectiveTime returns the time an item is displayed and sorted by: its
+// origin-time over the git author time, mirroring effective_timestamp. An
+// import commits in one run, so git author times reflect import order rather
+// than the real chronology.
+func EffectiveTime(header *Header, gitTime time.Time) time.Time {
+	origin := ExtractOrigin(header)
+	if origin == nil || origin.Time == "" {
+		return gitTime
+	}
+	t, err := time.Parse(time.RFC3339, origin.Time)
+	if err != nil {
+		return gitTime
+	}
+	return t
 }
 
 // ApplyOrigin adds origin-* fields to a header fields map.

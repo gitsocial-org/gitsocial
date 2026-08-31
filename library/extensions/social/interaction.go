@@ -32,15 +32,26 @@ func resolveItem(workdir, itemID string) *SocialItem {
 			postType = string(GetPostType(msg))
 		}
 		wsRepoURL := gitmsg.ResolveRepoURL(workdir)
+		// The identity and time this item is ATTRIBUTED to, not the ones git
+		// recorded: an imported post is committed by whoever ran the import and
+		// carries its real author in origin-* fields. The cache-backed path above
+		// resolves this through social_items_resolved; this fallback runs when the
+		// item is not cached yet, and every GitMsg-Ref built from the item it
+		// returns (buildRefFromItem) would otherwise name the importer.
+		var header *protocol.Header
+		if msg != nil {
+			header = &msg.Header
+		}
+		authorName, authorEmail := protocol.EffectiveAuthor(header, commit.Author, commit.Email)
 		item := &SocialItem{
 			RepoURL:     wsRepoURL,
 			Hash:        commit.Hash,
 			Branch:      branch,
-			AuthorName:  commit.Author,
-			AuthorEmail: commit.Email,
+			AuthorName:  authorName,
+			AuthorEmail: authorEmail,
 			Content:     protocol.ExtractCleanContent(commit.Message),
 			Type:        postType,
-			Timestamp:   commit.Timestamp,
+			Timestamp:   protocol.EffectiveTime(header, commit.Timestamp),
 		}
 		if msg != nil {
 			item.HeaderExt = msg.Header.Ext
