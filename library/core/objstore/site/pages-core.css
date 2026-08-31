@@ -146,6 +146,74 @@
   }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  /* Shared chrome vocabulary. The sidebar and the recent-activity block are the
+     same components on both surfaces, so their rules live here — inlined into
+     every generated page, linked ahead of pages-full.css by the app — and
+     neither sheet restates them. The app's nav element carries id="nav" for its
+     own JS; a generated page cannot carry that id (its markup coexists in the
+     DOM with the staged app chrome, where a duplicate would answer the app's
+     getElementById), so the page's nav takes .nav-list and every rule names
+     both. What stays in pages-full.css is the app SHELL's behavior around these
+     components — the sticky, viewport-tall .nav column, the viewport-pinned
+     footer, the collapse and drawer states — none of which a static page has. */
+  .nav-header {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding-bottom: 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
+  }
+  .repo-title {
+    flex: 1 1 auto; min-width: 0;
+    font-family: var(--mono); font-weight: 600; font-size: var(--fs-ui);
+    color: var(--muted); word-break: break-word;
+  }
+  a.repo-title { color: var(--muted); }
+  a.repo-title:hover { color: var(--text); text-decoration: none; }
+  #nav, .nav-list { display: flex; flex-direction: column; gap: 0.15rem; }
+  #nav .nav-group, .nav-list .nav-group { display: flex; flex-direction: column; gap: 0.15rem; }
+  #nav .nav-section, .nav-list .nav-section, .nav-footer {
+    font-family: var(--mono); font-size: var(--fs-dense); text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); opacity: 0.7;
+    padding: 0.4rem 0.5rem 0.1rem;
+  }
+  #nav .nav-group a, .nav-list .nav-group a { margin-left: 1.5rem; }
+  #nav a, #nav .nav-disabled, .nav-list a {
+    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: var(--r-ctl);
+    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+  }
+  #nav a:hover, .nav-list a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
+  #nav a.active, .nav-list a.active { color: var(--text); font-weight: 600; background: var(--link-t2); }
+  .nav-icon {
+    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    width: 1rem; margin-right: 0.5rem; color: inherit;
+    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1;
+  }
+  .foot-brand { display: inline-flex; align-items: center; gap: 0.7rem; color: var(--muted); }
+  .foot-brand:hover { text-decoration: none; color: var(--text); }
+  .logo-small { width: 18px; height: 18px; color: inherit; display: block; }
+  .nav-footer .logo-small { width: 14px; height: 14px; }
+  /* Inline icon wrapper (the chevrons and the file-type icons): the box is the
+     ink, so flex centering is exact. The per-type hues stay in pages-full.css
+     with the icon set that consumes them. */
+  .gs-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted); vertical-align: -0.15em;
+  }
+  .gs-icon svg { width: 100%; height: 100%; display: block; }
+  /* Recent activity closes both landings — the app's home view and the generated
+     front page — as the same heading, the same cards, and the same centered
+     chevron control (a button in the app, an anchor on the page). */
+  .home-activity-head {
+    font-size: var(--fs-h2); margin: 1.5rem 0 0.5rem;
+    border-bottom: 1px solid var(--line); padding-bottom: 0.25rem;
+  }
+  .show-more {
+    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+    width: 100%; margin-top: 0.5rem; padding: 0.35rem;
+    background: transparent; border: none; cursor: pointer;
+    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+  }
+  .show-more:hover { color: var(--text); }
+  .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
+  .show-more-label { font-size: var(--fs-ui); }
   /* The pre-rendered page shell. Nav and content are siblings under #gs-page
      (there is no wrapper element to make them two columns of a grid), so the
      sidebar column is RESERVED as left padding and the nav is positioned into
@@ -165,10 +233,22 @@
        when full (and its flex frame) never arrives. */
     width: 100%;
   }
-  #gs-page > nav {
+  /* The pre-rendered page's sidebar column: the app's sidebar, at the app's
+     width and x, positioned into the reserved padding. The page's aside is
+     .page-nav rather than .nav, so pages-full.css's shell rules for the app's
+     scrolling column — and the app's own `.nav` DOM queries — leave it alone;
+     everything inside it is the shared vocabulary above. */
+  #gs-page > .page-nav {
     position: absolute; left: var(--shell-pad); top: var(--shell-pad);
     width: var(--nav-w); display: flex; flex-direction: column;
-    align-items: flex-start; gap: 0.35rem;
+  }
+  /* The page's brand credit sits in flow under its links. pages-full.css pins
+     the app's to the viewport bottom, which a scrolling sidebar needs and a
+     short static column does not — under it the credit would strand far below
+     the last link. The id weight is what beats that rule once full lands. */
+  #gs-page .nav-footer {
+    position: static; width: auto; margin-top: 1.2rem; padding: 0.5rem 0.5rem 0;
+    border-top: 1px solid var(--line); background: none; font-size: 0.5rem;
   }
   /* The page's boot state. NOTHING is hidden until a script adds .gs-boot to
      <html> (the pages' inline boot script), so the served document stays
@@ -190,10 +270,9 @@
   :where(#gs-page) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: 0.2rem 0 0.4rem; }
   :where(#gs-page) p { margin: 1rem 0; }
-  :where(#gs-page) nav, :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
-  :where(#gs-page) nav, :where(#gs-page) footer { font-size: var(--fs-dense); }
-  :where(#gs-page) nav a, :where(#gs-page) nav b, :where(#gs-page) footer a { margin-right: 0.9rem; }
-  #gs-page > nav a, #gs-page > nav b { margin-right: 0; }
+  :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
+  :where(#gs-page) footer { font-size: var(--fs-dense); }
+  :where(#gs-page) footer a { margin-right: 0.9rem; }
   :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: 0.9rem; }
   :where(#gs-page) pre {
     font-size: var(--fs-dense); line-height: 1; overflow-x: auto; margin: 1em 0;
@@ -221,9 +300,15 @@
   #gs-page .show-more, #gs-page .show-more:hover { text-decoration: none; }
   @media (max-width: 720px) {
     #gs-page { padding: 0.75rem; }
-    #gs-page > nav {
-      position: static; width: auto; flex-direction: row; flex-wrap: wrap;
-      gap: 0.9rem; margin-bottom: 0.6rem;
-    }
-    #gs-page > nav a, #gs-page > nav b { margin-right: 0.9rem; }
+    /* No drawer without JS (the app's hamburger is a scripted control), so the
+       sidebar leads the page as a wrapped row of the same nav items, section
+       labels reading inline as the group headings they are. Nothing is hidden:
+       every served byte stays visible to a crawler and a no-JS reader. */
+    #gs-page > .page-nav { position: static; width: auto; margin-bottom: 0.6rem; }
+    #gs-page .nav-list, #gs-page .nav-list .nav-group { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+    #gs-page .nav-list .nav-group { width: 100%; }
+    #gs-page .nav-list .nav-group a { margin-left: 0; }
+    /* The credit follows that row as a quiet footnote rather than a ruled band
+       across the page (on desktop it closes a column; here it closes nothing). */
+    #gs-page .nav-footer { margin-top: 0.4rem; padding: 0.2rem 0; border-top: none; }
   }

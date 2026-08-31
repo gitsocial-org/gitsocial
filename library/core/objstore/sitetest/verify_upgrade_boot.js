@@ -674,7 +674,7 @@ async function main() {
     // The nav is the sidebar's column rather than a spacer standing in for it:
     // positioned INTO a gutter the content reserves as padding, never a row of
     // the content's own flow (which would size that row to the link stack).
-    ok("the page's own nav occupies the sidebar gutter, out of flow", /#gs-page\s*>\s*nav\s*\{[^}]*position:\s*absolute/.test(headCSS) && /#gs-page\s*\{[^}]*padding:[^;}]*calc\(/.test(headCSS), headCSS.slice(0, 240));
+    ok("the page's own nav occupies the sidebar gutter, out of flow", /#gs-page\s*>\s*\.page-nav\s*\{[^}]*position:\s*absolute/.test(headCSS) && /#gs-page\s*\{[^}]*padding:[^;}]*calc\(/.test(headCSS), headCSS.slice(0, 240));
     ok("the nav cannot size a row of the content flow", !/#gs-page\s*>\s*nav\s*\{[^}]*grid-row/.test(headCSS), headCSS.slice(0, 240));
   }
 
@@ -729,7 +729,7 @@ async function main() {
     const md = findClass(view, "markdown")[0];
     const appHeadings = findTag(md, /^h[1-6]$/).map((h) => global.__shim.textOf(h).trim()).filter(Boolean);
     const readmeStart = front.text.indexOf('<p class="meta">README</p>');
-    const readme = readmeStart < 0 ? "" : front.text.slice(readmeStart, front.text.indexOf("<h2>Recent activity</h2>"));
+    const readme = readmeStart < 0 ? "" : front.text.slice(readmeStart, front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
     ok("home view renders the README as markdown", !!md && appHeadings.length > 0, "headings=" + JSON.stringify(appHeadings));
     ok("front page carries the same headings as real heading elements",
       !!readme && appHeadings.every((h) => new RegExp("<h[1-6][^>]*>" + h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "</h[1-6]>").test(readme)),
@@ -755,14 +755,14 @@ async function main() {
       type: global.__shim.textOf(findClass(c, "chip")[0] || null).trim(),
       subject: global.__shim.textOf(findClass(c, "subject")[0] || null).trim(),
     }));
-    const section = front.text.slice(front.text.indexOf("<h2>Recent activity</h2>"));
+    const section = front.text.slice(front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
     // No row carries a chip (the glyph, titled with its type, already says what a
     // label would), so the glyph CLASS is what identifies a row's kind here. The
     // capture group stays so a chip creeping back in is caught, not ignored.
     const rows = [...section.matchAll(/<div class="card"><div class="card-head">(?:<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span> )?(?:<span class="chip">([^<]*)<\/span> )?<a class="subject" href="([^"]+)">([^<]*)<\/a>/g)]
       .map((m) => ({ glyphClass: m[1] || "", glyph: m[2] || "", type: unesc(m[3] || ""), href: m[4], subject: unesc(m[5]) }));
     ok("home view paints recent-activity rows", painted.length > 0, "painted=" + painted.length);
-    ok("front page carries the recent-activity section after the README", front.text.indexOf("<h2>Recent activity</h2>") > front.text.indexOf("README"));
+    ok("front page carries the recent-activity section after the README", front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>') > front.text.indexOf("README"));
     ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.glyphClass === painted[i].glyphClass && r.subject === painted[i].subject),
       "page=" + JSON.stringify(rows.map((r) => r.glyphClass + ":" + r.subject)) + " app=" + JSON.stringify(painted.map((r) => r.glyphClass + ":" + r.subject)));
     // The section is capped at the same round ten on both sides (HOME_ACTIVITY_LIMIT
@@ -799,7 +799,7 @@ async function main() {
     // the app's own timeline route once upgraded.
     const appMore = findClass(view, "show-more").filter((n) => /See more/.test(global.__shim.textOf(n)));
     ok("home view closes the section with a See more control", appMore.length === 1 && appMore[0].getAttribute("href") === "#/timeline", "n=" + appMore.length + " href=" + (appMore[0] && appMore[0].getAttribute("href")));
-    ok("front page closes the section with the same affordance over a crawlable page", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon">⌄<\/span><span class="show-more-label">See more<\/span><\/a>/.test(section), "tail=" + section.slice(-220));
+    ok("front page closes the section with the same affordance over a crawlable page", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon"><span class="gs-icon chevron"><svg [^>]*><path [^>]*\/><\/svg><\/span><\/span><span class="show-more-label">See more<\/span><\/a>/.test(section), "tail=" + section.slice(-220));
     ok("that page is the one the app maps back to /timeline", UP.hashForPath(base, base + "posts/index.html") === "#/timeline");
   }
 
@@ -823,9 +823,10 @@ async function main() {
     ok("every row's subject links the app's commit view on the default branch", rows.every((r) => /^\.\.\/index\.html#commit:[0-9a-f]{12}@/.test(r.href)), JSON.stringify(rows.map((r) => r.href)));
     ok("every row's meta is author · date · sha", rows.every((r) => /^.+ · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}$/.test(r.meta)), JSON.stringify(rows.map((r) => r.meta)));
     // The nav is what makes the list reachable from every other crawlable page —
-    // and on the commits list itself the nav marks it current (bold, unlinked).
+    // and on the commits list itself the nav marks it current, in the app's own
+    // active treatment (the link stays a link, as the app's active item does).
     ok("the commits list is in every other page's nav", /href="\.\.\/commits\/index\.html"/.test((await get(base + "posts/index.html")).text) && /href="\.\/commits\/index\.html"/.test((await get(base + "index.html")).text));
-    ok("the commits page's own nav marks it current", /<b>commits<\/b>/.test(page.text) && !/href="\.\.\/commits\/index\.html"/.test(page.text));
+    ok("the commits page's own nav marks it current", /<a href="\.\.\/commits\/index\.html" class="active"><span class="nav-icon">≡<\/span>Commits<\/a>/.test(page.text));
 
     await bootLike(base, "/commits", null);
     const view = global.__shim.viewNode;

@@ -59,7 +59,7 @@ const (
 // unchanged. It is deliberately NOT a member of sitePageLists: its rows are code
 // commits rather than gitmsg roots, so every loop keyed on an extension's roots
 // would have to special-case it, and the feed/cache contracts above differ.
-var siteCommitsList = sitePageList{Ext: siteCodeExt, Dir: siteCommitsDir, Label: "commits", Route: siteCommitsRoute}
+var siteCommitsList = sitePageList{Ext: siteCodeExt, Dir: siteCommitsDir, Label: "commits", Route: siteCommitsRoute, NavLabel: "Commits", Glyph: "≡", Section: "Repository"}
 
 // siteCommitsState is the commits layer's published pagination, recorded in the
 // pages manifest and read back by BOTH sides: the next push (to seal onward
@@ -252,6 +252,7 @@ func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePa
 		Image:       site.Image,
 		Icon:        site.Icon,
 		Feed:        site.URL + sitePagesFeedKey,
+		Nav:         sitePageSidebar("../", siteCommitsDir),
 	}
 }
 
@@ -262,7 +263,7 @@ func buildSiteCommitsHeadPage(site sitePageSite, head []siteMetaEntry, branch st
 		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, siteCommitsList.Label), branch, "newest first"}
-	d := siteChainedListPage(siteCommitsDir, siteCommitsList.Label, entries, metaBits, 0, sealed)
+	d := siteChainedListPage(siteCommitsList.Label, entries, metaBits, 0, sealed)
 	d.Chrome = siteCommitsChrome(site, siteCommitsList.Label+" · "+site.Title, site.URL+siteCommitsDir+"/index.html", siteCommitsRoute)
 	return d
 }
@@ -276,7 +277,7 @@ func buildSiteCommitsSealedPage(site sitePageSite, segment []siteMetaEntry, bran
 		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), siteCommitsList.Label), branch, fmt.Sprintf("older page %d", n)}
-	d := siteChainedListPage(siteCommitsDir, siteCommitsList.Label, entries, metaBits, n, sealed)
+	d := siteChainedListPage(siteCommitsList.Label, entries, metaBits, n, sealed)
 	title := fmt.Sprintf("%s · page %d · %s", siteCommitsList.Label, n, site.Title)
 	d.Chrome = siteCommitsChrome(site, title, site.URL+siteCommitsDir+"/"+strconv.Itoa(n)+".html", siteCommitsRoute+"/"+strconv.Itoa(n))
 	return d

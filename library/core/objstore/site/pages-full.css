@@ -80,13 +80,13 @@
   }
   .filter-chip:hover, .load-more:hover, .board-lane-jump:hover { color: var(--text); background: var(--chip); }
   .load-more:hover, .board-lane-jump:hover { border-color: var(--link); }
-  .view-toggle, .board-col-toggle, .board-col-hide, .show-more, .body-clamp-toggle,
+  .view-toggle, .board-col-toggle, .board-col-hide, .body-clamp-toggle,
   .board-more, .facet-more {
     background: transparent; border: none; cursor: pointer;
     font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
   }
   .view-toggle:hover, .board-col-toggle:hover, .board-col-hide:hover,
-  .show-more:hover, .body-clamp-toggle:hover { color: var(--text); }
+  .body-clamp-toggle:hover { color: var(--text); }
   /* One input recipe (in-page search, tree filter, contributor filter): mono at
      the UI scale on the panel surface, one shared link-tinted focus shift. */
   .search-input, .tree-search, .contrib-filter {
@@ -117,17 +117,9 @@
     height: calc(100vh - 2.5rem); height: calc(100dvh - 2.5rem);
     overflow-y: auto; padding-bottom: 3.25rem;
   }
-  /* Sidebar header row: repo title, theme toggle (icon-only, before collapse),
-     and the collapse control all on one line. */
-  .nav-header {
-    display: flex; align-items: center; gap: 0.4rem;
-    padding-bottom: 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
-  }
-  .repo-title {
-    flex: 1 1 auto; min-width: 0;
-    font-family: var(--mono); font-weight: 600; font-size: var(--fs-ui);
-    color: var(--muted); word-break: break-word;
-  }
+  /* The sidebar header row (repo title, theme toggle, collapse control) is one
+     line; the row and the title itself are shared vocabulary in pages-core.css,
+     and only the app's own controls sit here. */
   .theme-icon, .nav-collapse {
     flex: 0 0 auto; background: transparent; border: none; cursor: pointer;
     color: var(--muted); padding: 0; line-height: 1; display: inline-flex;
@@ -150,41 +142,10 @@
   /* Layout width: fixed (max-width shell, the reading default) or full width
      (code/diff-friendly), toggled in the sidebar header and persisted. */
   body.wide .shell { max-width: none; }
-  #nav { display: flex; flex-direction: column; gap: 0.15rem; }
-  /* Grouped nav (mirrors the TUI nav registry): a section is a non-collapsible
-     muted label followed by its links; the group is itself a flex column so the
-     0.15rem rhythm carries inside it. Child links take a slight left indent,
-     GitHub settings-sidebar style. Reuses --muted / --fs-dense; theming rides
-     the CSS variables, so light/dark need no extra rules. */
-  #nav .nav-group { display: flex; flex-direction: column; gap: 0.15rem; }
-  #nav .nav-section, .nav-footer {
-    font-family: var(--mono); font-size: var(--fs-dense); text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--muted); opacity: 0.7;
-    padding: 0.4rem 0.5rem 0.1rem;
-  }
-  #nav .nav-group a { margin-left: 1.5rem; }
-  /* Nav items reuse the tree-row hover feel: a soft rounded chip tint. The
-     active item is signaled by a stronger link-tinted fill + bolder text (the
-     trees.software list style), NOT a left-border indicator. The whole sidebar
-     shares one voice: IBM Plex Mono at 0.8rem (repo title, nav links, glyphs),
-     with the file tree and footer kept denser. */
-  #nav a, #nav .nav-disabled {
-    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: var(--r-ctl);
-    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
-  }
-  #nav a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
-  #nav a.active {
-    color: var(--text); font-weight: 600;
-    background: var(--link-t2);
-  }
-  /* Nav item icons mirror the TUI nav panel's per-item glyphs. Muted like the
-     file-type icons, inheriting the item's hover/active color; a fixed box so
-     labels align regardless of glyph width. */
-  .nav-icon {
-    flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-    width: 1rem; margin-right: 0.5rem; color: inherit;
-    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1;
-  }
+  /* The nav list itself — groups, section labels, item rows, hover and active
+     states, item glyphs — is shared vocabulary in pages-core.css, so the
+     generated pages' sidebar IS this sidebar. Only the app's own additions
+     (the code search affordance, the memo disabled state) sit here. */
   /* Code nav search magnifier: pinned to the item's right edge, muted like the
      glyphs, brightening on hover. Clicking navigates to Code (if elsewhere) and
      focuses the tree search input — no second search box. */
@@ -323,8 +284,6 @@
     flex: 0 0 auto; max-width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
-  a.repo-title { color: var(--muted); }
-  a.repo-title:hover { color: var(--text); text-decoration: none; }
   .mono { font-family: var(--mono); }
   /* File browser: breadcrumb, tree listing, blob view. */
   .breadcrumb { font-size: var(--fs-ui); margin-bottom: 0.8rem; word-break: break-all; }
@@ -347,25 +306,14 @@
     pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--bg));
   }
-  .show-more {
-    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
-    width: 100%; margin-top: 0.5rem; padding: 0.35rem;
-  }
-  .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
-  .show-more-label { font-size: var(--fs-ui); }
-  /* Home's recent-activity heading, above the metadata-only item rows that close
-     the landing (the static front page carries the same section). */
-  .home-activity-head {
-    font-size: var(--fs-h2); margin: 1.5rem 0 0.5rem;
-    border-bottom: 1px solid var(--line); padding-bottom: 0.25rem;
-  }
+  /* The centered chevron control (.show-more) and home's recent-activity
+     heading are shared vocabulary in pages-core.css: the generated front page
+     closes with the same section. */
   .tree-icon { width: 1.1rem; text-align: center; opacity: 0.85; }
   /* File-type icons (vendored @pierre/vscode-icons, monochrome currentColor, so
      they read on both themes via the inherited --muted color). Cloned from
      cached templates; the render layer falls back to the text glyphs when
      icons.js is absent. */
-  .gs-icon { display: inline-flex; align-items: center; justify-content: center; width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted); vertical-align: -0.15em; }
-  .gs-icon svg { width: 100%; height: 100%; display: block; }
   .tree-icon.gs-icon { width: 1.1rem; height: 1.1rem; opacity: 1; }
   /* Per-filetype icon color: the monochrome Pierre SVGs inherit currentColor, so
      tinting is just a color on the wrapper, switched per theme by the --i-* hue
@@ -905,10 +853,6 @@
   body.wide .nav-footer { left: var(--shell-pad); }
   /* A collapsed desktop sidebar hides the nav, so its fixed footer must hide too. */
   body.nav-collapsed .nav-footer { display: none; }
-  .foot-brand { display: inline-flex; align-items: center; gap: 0.7rem; color: var(--muted); }
-  .foot-brand:hover { text-decoration: none; color: var(--text); }
-  .logo-small { width: 18px; height: 18px; color: inherit; display: block; }
-  .nav-footer .logo-small { width: 14px; height: 14px; }
   /* Analytics: per-extension item counts (stat grid) and the commits-per-month
      activity bar row (CSS-only, no chart library). */
   .analytics-section { margin: 1.2rem 0; }

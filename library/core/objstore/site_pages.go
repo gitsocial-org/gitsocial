@@ -137,7 +137,13 @@ const (
 	// page is rewritten on every pass, but item pages and SEALED list pages are
 	// not — a sealed page is immutable by contract, so a v14 bucket would keep
 	// serving glyphless chip rows and sentence-fragment headings forever.
-	sitePagesVersion = 15
+	// v16: every page carries the app's own sidebar (repo title, sections,
+	// per-item glyphs, active item, brand credit) in place of the one-line link
+	// row, and the front page closes with the app's recent-activity block
+	// (classed heading, chevron control) rather than a plain <section>. Item
+	// pages and SEALED list pages are never rewritten without a bump, so a v15
+	// bucket would serve the old chrome beside the new one forever.
+	sitePagesVersion = 16
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -1150,9 +1156,11 @@ func writeSiteTypeLists(client *Client, prefix string, roots map[string][]*siteP
 	return counts, frontier, nil
 }
 
-// siteChainedListPage assembles the shape every list page shares: the nav, the
-// heading, the rows, and the chain that links a mutable head to its sealed
-// pages. n = 0 is the head; n >= 1 is a sealed page (1 = oldest).
+// siteChainedListPage assembles the shape every list page shares: the heading,
+// the rows, and the chain that links a mutable head to its sealed pages. n = 0
+// is the head; n >= 1 is a sealed page (1 = oldest). The sidebar rides on the
+// chrome each caller builds (sitePageSidebar), which is also where a page's own
+// dir is marked current.
 //
 // The chain is the reason this has one owner rather than one per list kind. The
 // newest sealed page AT SEAL TIME links "← newer" to the head and keeps that
@@ -1161,9 +1169,8 @@ func writeSiteTypeLists(client *Client, prefix string, roots map[string][]*siteP
 // every page. Two copies of that rule drift silently, and a drifted chain is a
 // crawler walking into a page that links nowhere. Callers own what actually
 // differs between the kinds: the row builder, the meta line, and the chrome.
-func siteChainedListPage(dir, label string, entries []sitePageListEntry, metaBits []string, n, sealed int) siteListPageData {
+func siteChainedListPage(label string, entries []sitePageListEntry, metaBits []string, n, sealed int) siteListPageData {
 	d := siteListPageData{
-		Nav:      sitePageNav("../", dir),
 		Heading:  label,
 		MetaBits: metaBits,
 		Entries:  entries,
@@ -1202,7 +1209,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		metaBits = append(metaBits, fmt.Sprintf("%d open", openCount))
 	}
 	metaBits = append(metaBits, "newest first")
-	d := siteChainedListPage(list.Dir, list.Label, entries, metaBits, 0, sealed)
+	d := siteChainedListPage(list.Label, entries, metaBits, 0, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         list.Label + " · " + site.Title,
 		AccentCSS:     site.AccentCSS,
@@ -1217,6 +1224,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
+		Nav:           sitePageSidebar("../", list.Dir),
 	}
 	return d
 }
@@ -1229,7 +1237,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		entries = append(entries, buildSiteListEntry(it, "../", sitePageDefaultTypes[list.Ext]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
-	d := siteChainedListPage(list.Dir, list.Label, entries, metaBits, n, sealed)
+	d := siteChainedListPage(list.Label, entries, metaBits, n, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
 		AccentCSS:     site.AccentCSS,
@@ -1244,6 +1252,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
+		Nav:           sitePageSidebar("../", list.Dir),
 	}
 	return d
 }
@@ -1273,7 +1282,6 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 		description = site.Title + ": code, issues, pull requests, posts and releases."
 	}
 	d := siteFrontPageData{
-		Nav:      sitePageNav("./", ""),
 		Heading:  site.Title,
 		MetaBits: metaBits,
 		Home:     home,
@@ -1300,6 +1308,7 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 		Image: site.Image,
 		Icon:  site.Icon,
 		Feed:  site.URL + sitePagesFeedKey,
+		Nav:   sitePageSidebar("./", ""),
 	}
 	page, err := renderSitePage("front", d)
 	if err != nil {

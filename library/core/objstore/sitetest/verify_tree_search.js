@@ -27,12 +27,12 @@ function block(css, sel) { const i = css.indexOf(sel); if (i < 0) return ""; ret
 async function markup() {
   console.log("--- markup (index.html) ---");
   // Item 2: left borders removed from nav.
-  ok("nav base rule drops border-left", !/border-left/.test(block(HTML, "#nav a, #nav .nav-disabled {")));
-  ok("nav active rule drops border-left/border-left-color", !/border-left/.test(block(HTML, "#nav a.active {")));
-  ok("nav active uses a tint background", /background:/.test(block(HTML, "#nav a.active {")));
+  ok("nav base rule drops border-left", !/border-left/.test(block(HTML, "#nav a, #nav .nav-disabled, .nav-list a {")));
+  ok("nav active rule drops border-left/border-left-color", !/border-left/.test(block(HTML, "#nav a.active, .nav-list a.active {")));
+  ok("nav active uses a tint background", /background:/.test(block(HTML, "#nav a.active, .nav-list a.active {")));
   ok("no residual border-left in mobile nav overrides", !/#nav a[^{]*\{[^}]*border-left/.test(HTML.slice(HTML.indexOf("@media (max-width: 720px)"))));
   // Item 4: every nav item carries an icon glyph.
-  const navBlock = HTML.slice(HTML.indexOf('<nav id="nav">'), HTML.indexOf("</nav>"));
+  const navBlock = HTML.slice(HTML.indexOf('<nav id="nav"'), HTML.indexOf("</nav>"));
   const anchors = (navBlock.match(/<a /g) || []).length;
   const icons = (navBlock.match(/class="nav-icon"/g) || []).length;
   ok("every nav anchor carries a nav-icon (" + anchors + ")", anchors === 13 && icons === 13, "a=" + anchors + " icons=" + icons);
@@ -41,7 +41,7 @@ async function markup() {
   // Item 13a: sidebar voice is IBM Plex Mono at the UI scale (nav links, glyphs,
   // footer). Round 14d moved the literal 0.8rem onto the --fs-ui token (= 0.8rem),
   // so the size now reads through var(--fs-ui); the mono voice is unchanged.
-  const navRule = block(HTML, "#nav a, #nav .nav-disabled {");
+  const navRule = block(HTML, "#nav a, #nav .nav-disabled, .nav-list a {");
   ok("nav links use var(--mono) at var(--fs-ui)", /font-family:\s*var\(--mono\)/.test(navRule) && /font-size:\s*var\(--fs-ui\)/.test(navRule));
   ok("nav-icon glyphs use var(--mono) at var(--fs-ui)", /\.nav-icon\s*\{[^}]*font-family:\s*var\(--mono\)[^}]*font-size:\s*var\(--fs-ui\)/.test(HTML.replace(/\n/g, " ")));
   const footRule = block(HTML, "footer {");

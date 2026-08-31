@@ -291,10 +291,15 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{define "foot"}}</div>
 </body>
 </html>
+{{end}}{{define "sidebar"}}<aside class="page-nav">
+<div class="nav-header"><a class="repo-title" href="{{.Base}}index.html">{{.SiteTitle}}</a></div>
+<nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
+<div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
+</aside>
 {{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a></div>
 <span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
-{{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a></nav>
+{{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}<h1>{{.Heading}}</h1>
 {{end}}{{template "metaline" .}}
@@ -306,13 +311,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{template "paras" .Paras}}{{end}}</section>
 {{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
-{{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a> <a href="{{.Chrome.Base}}index.html">home</a>{{range .Nav}} {{if .Current}}<b>{{.Label}}</b>{{else}}<a href="{{.Href}}">{{.Label}}</a>{{end}}{{end}}</nav>
+{{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 <h1>{{.Heading}}</h1>
 <p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
 {{if .Entries}}{{template "entries" .Entries}}{{else}}<p class="meta">nothing here yet</p>
 {{end}}<footer>{{if .NewerHref}}<a href="{{.NewerHref}}">← newer</a> {{end}}{{if .OlderHref}}<a href="{{.OlderHref}}">older →</a> {{end}}<a href="{{.Chrome.Base}}index.html">home</a></footer>
-{{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}<nav><a href="{{.Chrome.Base}}index.html"><b>{{.Chrome.SiteTitle}}</b></a>{{range .Nav}} <a href="{{.Href}}">{{.Label}}</a>{{end}}</nav>
+{{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 <h1>{{.Heading}}</h1>
 {{if .MetaBits}}<p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
@@ -324,12 +329,12 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{end}}{{if .Readme}}<section><p class="meta">README</p>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="meta">… truncated — full README in the repository</p>
 {{end}}</section>
-{{end}}{{end}}{{if .Activity}}<section><h2>Recent activity</h2>
+{{end}}{{end}}{{if .Activity}}<div class="home-activity"><h2 class="home-activity-head">Recent activity</h2>
 {{range .Activity}}<div class="card"><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}<a class="subject" href="{{.Href}}">{{.Subject}}</a></div>
 <span class="meta">{{.Author}} · {{.Date}}{{if .Sha}} · {{.Sha}}{{end}}</span></div>
-{{end}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon">⌄</span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
-{{end}}</section>
-{{end}}<footer>{{range .Nav}}<a href="{{.Href}}">{{.Label}}</a> {{end}}</footer>
+{{end}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
+{{end}}</div>
+{{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
 {{template "foot"}}{{end}}`
 
 // sitePageTemplates is the parsed page template set, with the inlined core CSS
@@ -390,13 +395,14 @@ type sitePageChrome struct {
 	Description   string // meta/OG description, whitespace-collapsed, ~160 chars
 	OGTitle       string // og:title (the bare subject)
 	SiteTitle     string
-	Canonical     string // absolute self URL from site.url
-	Route         string // gs-route content, in the shell's parseRoute grammar
-	Base          string // relative path from this page to the site root ("./" or "../")
-	Image         string // absolute og:image/twitter:image URL ("" = no card, twitter:card stays "summary")
-	Feed          string // absolute feed.xml URL for the autodiscovery link (a relative href breaks after gs-upgrade.js hash-rewrites the location)
-	TypeFeed      string // absolute <dir>/feed.xml URL — a second autodiscovery link on a type's list pages ("" elsewhere)
-	TypeFeedTitle string // the type feed link's distinct display title ("<label> · <site title>")
+	Canonical     string             // absolute self URL from site.url
+	Route         string             // gs-route content, in the shell's parseRoute grammar
+	Base          string             // relative path from this page to the site root ("./" or "../")
+	Image         string             // absolute og:image/twitter:image URL ("" = no card, twitter:card stays "summary")
+	Feed          string             // absolute feed.xml URL for the autodiscovery link (a relative href breaks after gs-upgrade.js hash-rewrites the location)
+	TypeFeed      string             // absolute <dir>/feed.xml URL — a second autodiscovery link on a type's list pages ("" elsewhere)
+	TypeFeedTitle string             // the type feed link's distinct display title ("<label> · <site title>")
+	Nav           []sitePageNavGroup // the sidebar, with this page's own destination current (sitePageSidebar)
 }
 
 // sitePageChip is one state/type chip.
@@ -431,11 +437,20 @@ type siteItemPageData struct {
 	Omitted  int
 }
 
-// sitePageNavLink is one type-list nav entry (Current renders bold, unlinked).
+// sitePageNavLink is one sidebar entry: the app's nav item, pointed at this
+// site's own generated page (Current takes the app's .active treatment).
 type sitePageNavLink struct {
 	Href    string
 	Label   string
+	Glyph   string
 	Current bool
+}
+
+// sitePageNavGroup is one sidebar section and its links; an empty Section
+// renders its links at the sidebar's top level, as the app's do.
+type sitePageNavGroup struct {
+	Section string
+	Links   []sitePageNavLink
 }
 
 // sitePageListEntry is one row on a list or front page. ID, when set, is the
@@ -456,7 +471,6 @@ type sitePageListEntry struct {
 // siteListPageData feeds the "list" template.
 type siteListPageData struct {
 	Chrome    sitePageChrome
-	Nav       []sitePageNavLink
 	Heading   string
 	MetaBits  []string
 	Entries   []sitePageListEntry
@@ -467,7 +481,6 @@ type siteListPageData struct {
 // siteFrontPageData feeds the "front" template (index.html).
 type siteFrontPageData struct {
 	Chrome            sitePageChrome
-	Nav               []sitePageNavLink
 	Heading           string
 	MetaBits          []string
 	Home              *siteFrontHome
@@ -550,23 +563,28 @@ type sitePageSite struct {
 }
 
 // sitePageList describes one type directory: source extension, bucket dir,
-// display label, and the shell route its pages map to.
+// display label, the shell route its pages map to, and its sidebar identity
+// (the app's own label, glyph and section, so the pages' sidebar is the app's —
+// see sitePageSidebar).
 type sitePageList struct {
-	Ext   string
-	Dir   string
-	Label string
-	Route string
+	Ext      string
+	Dir      string
+	Label    string
+	Route    string
+	NavLabel string
+	Glyph    string
+	Section  string // sidebar section ("" — an ungrouped top-level item)
 }
 
 // sitePageLists orders the five type directories. Milestones and sprints fold
 // into issues; the posts list routes to the shell's /timeline tab (the shell
 // has no posts-only surface). Routes match gs-core.js parseRoute's INDEX_TABS.
 var sitePageLists = []sitePageList{
-	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues"},
-	{Ext: "review", Dir: "prs", Label: "prs", Route: "/prs"},
-	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline"},
-	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases"},
-	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos"},
+	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○", Section: "PM"},
+	{Ext: "review", Dir: "prs", Label: "prs", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂", Section: "Repository"},
+	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱", Section: "Social"},
+	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases", NavLabel: "Releases", Glyph: "⏏"},
+	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos", NavLabel: "Memos", Glyph: "☞"},
 }
 
 // renderSitePage executes one page template into bytes.
@@ -980,6 +998,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 		Image:       site.Image,
 		Icon:        site.Icon,
 		Feed:        site.URL + sitePagesFeedKey,
+		Nav:         sitePageSidebar("../", list.Dir),
 	}
 	if pageItemType(it) == "release" {
 		if s := buildSiteReleaseArtifacts(it); s != nil {
@@ -1129,17 +1148,39 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 	return rows
 }
 
-// sitePageNav builds the list nav links for a list/front page. base is the
-// page's relative path to the site root; current bolds that list's link. The
-// commits list closes the row: it is the newest surface and the only one whose
-// rows are code rather than gitmsg items, so it reads as an addendum to the five
-// type dirs rather than one of them.
-func sitePageNav(base, current string) []sitePageNavLink {
-	nav := make([]sitePageNavLink, 0, len(sitePageLists)+1)
-	for _, l := range append(append([]sitePageList{}, sitePageLists...), siteCommitsList) {
-		nav = append(nav, sitePageNavLink{Href: base + l.Dir + "/index.html", Label: l.Label, Current: l.Dir == current})
+// sitePageNavSections orders the sidebar's sections, mirroring the app's own
+// nav (index.html / gs-upgrade.js CHROME); the empty section closes the list
+// with the ungrouped items, as it does there.
+var sitePageNavSections = []string{"Social", "PM", "Repository", ""}
+
+// sitePageSidebar builds a page's sidebar: the app's nav — sections, glyphs,
+// labels and the active item — narrowed to the destinations that have a
+// generated page, so every link a crawler or a no-JS reader follows is a real
+// document. base is the page's relative path to the site root; current is the
+// dir the page belongs to ("" — the front page, so Home is current).
+func sitePageSidebar(base, current string) []sitePageNavGroup {
+	groups := []sitePageNavGroup{{Links: []sitePageNavLink{
+		{Href: base + "index.html", Label: "Home", Glyph: "⌂", Current: current == ""},
+	}}}
+	lists := append(append([]sitePageList{}, sitePageLists...), siteCommitsList)
+	for _, section := range sitePageNavSections {
+		group := sitePageNavGroup{Section: section}
+		for _, l := range lists {
+			if l.Section != section {
+				continue
+			}
+			group.Links = append(group.Links, sitePageNavLink{
+				Href:    base + l.Dir + "/index.html",
+				Label:   l.NavLabel,
+				Glyph:   l.Glyph,
+				Current: l.Dir == current,
+			})
+		}
+		if len(group.Links) > 0 {
+			groups = append(groups, group)
+		}
 	}
-	return nav
+	return groups
 }
 
 // siteXMLEscaper escapes text/attribute content for the sitemap XML (locs are

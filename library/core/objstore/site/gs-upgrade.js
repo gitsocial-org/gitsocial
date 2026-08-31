@@ -219,7 +219,7 @@
     '      <button id="width-toggle" class="nav-collapse" aria-label="Toggle layout width" title="Toggle fixed/full width">↔</button>',
     '      <button id="nav-collapse" class="nav-collapse" aria-label="Collapse navigation" title="Collapse navigation">«</button>',
     '    </div>',
-    '    <nav id="nav">',
+    '    <nav id="nav" class="nav-list">',
     '      <a href="#/search" data-nav="search"><span class="nav-icon">⌕</span>Search</a>',
     '      <a href="#/" data-nav="home"><span class="nav-icon">⌂</span>Home</a>',
     '      <div class="nav-group"><div class="nav-section">Social</div>',
