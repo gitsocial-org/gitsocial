@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# pre-push - run the merge gate (scripts/check.sh) before any push.
+#
+# Install once per clone (hooks are not version-controlled; this points git at
+# the tracked directory instead of copying a file into .git/hooks):
+#   git config core.hooksPath scripts/hooks
+#
+# Escape hatch for an emergency push (skips vet, lint and the suite):
+#   GITSOCIAL_SKIP_GATE=1 git push
+#
+# The gate is the FULL suite, not `-short`: correctness matters more
+# than push latency here. See documentation/ARCHITECTURE.md "Test & Lint".
+set -o pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+if [ -n "${GITSOCIAL_SKIP_GATE:-}" ]; then
+	printf 'pre-push: GITSOCIAL_SKIP_GATE set — skipping scripts/check.sh\n'
+	exit 0
+fi
+
+printf 'pre-push: scripts/check.sh (full suite, ~4 min warm; GITSOCIAL_SKIP_GATE=1 to bypass)\n'
+exec "$root/scripts/check.sh" </dev/null

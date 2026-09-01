@@ -7,7 +7,9 @@
 #
 # Sequence (each step is idempotent — a mid-release failure is fixed by
 # re-running the driver):
-#   1. Preflight   — clean tree, up-to-date main, tests green, tools + full
+#   1. Preflight   — clean tree, up-to-date main, tests green (`-race` plus the
+#                    browser site battery, the two checks the per-push gate
+#                    scripts/check.sh is too slow to carry), tools + full
 #                    credential set present. Fails fast before anything ships.
 #   2. Tag         — create vX.Y.Z locally (skip if it exists).
 #   3. Build       — `goreleaser release --clean`: all-platform archives +
@@ -119,10 +121,10 @@ preflight() {
   log "Preflight: $TAG"
 
   # Tooling.
-  for tool in git go goreleaser syft rcodesign curl; do
+  for tool in git go goreleaser syft rcodesign curl node; do
     have "$tool" || fail "required tool not found on PATH: $tool"
   done
-  info "tools checked: git go goreleaser syft rcodesign curl"
+  info "tools checked: git go goreleaser syft rcodesign curl node"
 
   # Credentials (documented in the header). Report everything missing at once.
   MISSING=""
@@ -163,13 +165,21 @@ preflight() {
     info "on up-to-date main @ $(git rev-parse --short main)"
   fi
 
-  # Tests green (real run only; dry-run just states it).
+  # Tests green (real run only; dry-run just states it). The per-push gate
+  # (scripts/check.sh) already covers vet + lint + the plain suite; a release
+  # additionally pays for the two checks too slow to run on every push:
+  # `-race` (supersedes the plain suite) and the browser site battery.
   if $DRY_RUN; then
-    printf '    [dry-run] go test ./...\n'
+    printf '    [dry-run] go test -race ./...\n'
+    printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/objstore/\n'
   else
-    info "running go test ./... (this can take a while)"
-    go test ./... >/dev/null || die "go test ./... failed"
-    info "tests green"
+    info "running go test -race ./... (this can take a while)"
+    go test -race ./... >/dev/null || die "go test -race ./... failed"
+    info "tests green (race)"
+    info "running the site battery (go test -tags sitetest ./library/core/objstore/)"
+    go test -tags sitetest -timeout 30m ./library/core/objstore/ >/dev/null \
+      || die "site battery failed (rerun without >/dev/null to see which suite)"
+    info "site battery green"
   fi
 }
 
