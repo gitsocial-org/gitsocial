@@ -19,6 +19,7 @@ JSON-RPC 2.0 interface for editor and client integration. Launched via `gitsocia
   - [4.3. Review](#43-review)
   - [4.4. Release](#44-release)
   - [4.5. Core](#45-core)
+  - [4.6. Search](#46-search)
 - [5. Server Notifications](#5-server-notifications)
   - [5.1. Subscribe](#51-subscribe)
   - [5.2. Unsubscribe](#52-unsubscribe)
@@ -260,26 +261,6 @@ Returns posts for a given scope.
 | `content` | string | yes | Quote body |
 
 **Result:** `Post`
-
-#### social.search
-
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | yes | Search query (supports `author:`, `repo:`, `type:` filters) |
-| `limit` | int | no | Max results (default: 20) |
-| `scope` | string | no | Restrict search scope |
-
-**Result:** `SearchResult`
-
-```json
-{
-  "query": "dark mode",
-  "results": [{"post": {...}, "score": 0.95}],
-  "total": 3,
-  "hasMore": false
-}
-```
 
 #### social.getLists
 
@@ -636,6 +617,26 @@ Returns posts for a given scope.
 
 **Result:** `Post[]`
 
+#### pm.getLinks
+
+Returns the link graph around an item: what it blocks, what blocks it, and what it relates to.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | Item ref |
+
+**Result:** `{"blocks": Issue[], "blockedBy": Issue[], "related": Issue[]}`
+
+#### pm.isBlocked
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | Item ref |
+
+**Result:** `bool`
+
 ---
 
 ### 4.3. Review
@@ -702,9 +703,9 @@ Returns posts for a given scope.
 
 **Result:** `PullRequest`
 
-#### review.updatePRTips
+#### review.markReady
 
-Capture current branch tips as a new version (signals "new code ready for review").
+Takes a draft PR out of draft state.
 
 **Params:**
 | Field | Type | Required | Description |
@@ -713,52 +714,16 @@ Capture current branch tips as a new version (signals "new code ready for review
 
 **Result:** `PullRequest`
 
-#### review.syncPRBranch
+#### review.convertToDraft
 
-Update the head branch with changes from the base branch.
+Puts an open PR back into draft state.
 
 **Params:**
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `ref` | string | yes | PR ref |
-| `strategy` | string | no | Sync strategy: `rebase` (default), `merge` |
 
 **Result:** `PullRequest`
-
-#### review.getPRVersions
-
-Get all versions of a PR (original + edits chain) with base-tip/head-tip snapshots.
-
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-
-**Result:** `PRVersion[]`
-
-#### review.comparePRVersions
-
-Range-diff between two PR versions.
-
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `from` | number | yes | Source version number |
-| `to` | number | yes | Target version number |
-
-**Result:** `string` (range-diff output)
-
-#### review.getVersionAwareReviews
-
-Compute per-reviewer staleness against PR versions. Uses range-diff to distinguish pure rebases from code changes.
-
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-
-**Result:** `VersionAwareReview[]`
 
 #### review.closePR
 
@@ -935,6 +900,10 @@ Removes a fork URL from the core config.
 | `url` | string | yes | Fork repository URL |
 
 **Result:** `true`
+
+**Not exposed over RPC.** These review operations exist in the library and the CLI but have no RPC method:
+`UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`,
+`GetVersionAwareReviews`. Clients needing them must shell out to `gitsocial review`.
 
 ---
 
@@ -1216,6 +1185,42 @@ Returns edit history for any item (post, issue, PR, release, etc.).
 
 ---
 
+### 4.6. Search
+
+#### search
+
+Cross-extension search (posts, issues, PRs, releases, feedback). Registered at the
+top level, not under `social.`.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `query` | string | no | Free-text query |
+| `author` | string | no | Filter by author email |
+| `repo` | string | no | Filter by repository URL |
+| `type` | string | no | Filter by type: `post`, `comment`, `repost`, `quote`, `issue`, `milestone`, `sprint`, `pr`, `feedback`, `release` |
+| `hash` | string | no | Filter by commit-hash prefix |
+| `after` | string | no | ISO 8601 timestamp lower bound |
+| `before` | string | no | ISO 8601 timestamp upper bound |
+| `limit` | int | no | Max results (default: 20) |
+| `scope` | string | no | `timeline` (default), `list:<id>`, `repository:<url>`, `repos:<csv>` |
+| `sort` | string | no | `score` (default) or `date` |
+
+**Result:** `SearchResult`
+
+```json
+{
+  "query": "dark mode",
+  "results": [{"repo_url": "https://github.com/user/repo", "hash": "abc123456789", "branch": "gitmsg/social", "content": "dark mode toggle", "type": "post", "extension": "social", "score": 8.5}],
+  "total": 3,
+  "total_searched": 1240,
+  "has_more": false,
+  "execution_time_ms": 12
+}
+```
+
+---
+
 ## 5. Server Notifications
 
 Server-initiated notifications (no `id` field) pushed to the client. Clients opt in by sending `subscribe` after initialization.
@@ -1429,43 +1434,6 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
 }
 ```
 
-### PRVersion
-
-```json
-{
-  "number": 0,
-  "label": "original | v1 | v2 | latest",
-  "commit_hash": "string (12-char)",
-  "repo_url": "string",
-  "branch": "string",
-  "author_name": "string",
-  "author_email": "string",
-  "timestamp": "string (ISO 8601)",
-  "base_tip": "string (12-char hash)",
-  "head_tip": "string (12-char hash)",
-  "state": "open | merged | closed",
-  "is_retracted": false
-}
-```
-
-### VersionAwareReview
-
-```json
-{
-  "reviewer_name": "string",
-  "reviewer_email": "string",
-  "state": "approved | changes-requested",
-  "reviewed_at": "string (ISO 8601)",
-  "reviewed_version": 0,
-  "reviewed_label": "original | v1 | latest",
-  "current_version": 2,
-  "current_label": "latest",
-  "head_changed": true,
-  "code_changed": false,
-  "stale": false
-}
-```
-
 ### Feedback
 
 ```json
@@ -1563,7 +1531,7 @@ All methods operate on the workspace set during `initialize`. To switch workspac
 
 - Go `time.Time` serializes as ISO 8601 string
 - Go `nil` pointers are omitted from JSON (not `null`)
-- `Result[T]` maps to JSON-RPC: `Success` → `result`, `Failure` → `error`
+- `Result[T]` maps to JSON-RPC: a successful result (`result.Ok`) becomes `result`, a failed one (`result.Err`) becomes `error`
 - Refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` format
 
 ### 7.4. Extension Registration
@@ -1581,8 +1549,8 @@ library/rpc/
 ├── methods_review.go   # review.* method handlers
 ├── methods_release.go  # release.* method handlers
 ├── methods_core.go     # core.* + lifecycle method handlers
-├── notifications.go    # Subscription management, event push
-└── types.go            # Request/response param structs
+├── methods_search.go   # top-level search method handler
+└── types.go            # Request/response param structs, subscription events
 ```
 
 Each method handler is a function that unmarshals params, calls the existing extension API, and returns the result. No business logic lives in the RPC layer.

@@ -37,7 +37,7 @@ bin/gitsocial tui                             # Launch TUI
 
 ### Test & Lint
 
-**The gate is `scripts/check.sh`**: `go vet ./...`, then `golangci-lint run ./...`, then the full `go test ./...` (~4 min on a warm cache, ~8 min cold; `library/tui/test` alone is ~215s). It runs the stages in order, names the stage that failed, and exits non-zero on any failure. A missing `golangci-lint` is a failure unless `--skip-lint` is passed.
+**The gate is `scripts/check.sh`**: `go vet ./...`, then `golangci-lint run ./...`, then the full `go test ./...` (~4 min on a warm cache, ~8 min cold; `library/tui/test` alone is ~182s). It runs the stages in order, names the stage that failed, and exits non-zero on any failure. A missing `golangci-lint` is a failure unless `--skip-lint` is passed.
 
 ```bash
 scripts/check.sh                 # the gate: vet + lint + full suite
@@ -119,7 +119,7 @@ Internal helpers                      → return error
 #### Common patterns (see code for examples)
 
 - **Cache access** — wrap every DB op in `cache.QueryLocked` / `ExecLocked`; example: `library/extensions/social/`.
-- **Extension API** — public extension funcs return `Result[T]` (`Success`/`Failure`); example: `library/extensions/social/`.
+- **Extension API** — public extension funcs return `Result[T]`, built with `result.Ok` / `result.Err`; example: `library/extensions/social/`.
 - **CLI command** — one `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
 - **TUI view** — implement the `View` interface (`Update`/`Render`); example: `library/tui/tuicore/`.
 
@@ -195,7 +195,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `core/fetch`<br>Fetch orchestration | — | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | — | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | — | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
-| `core/result`<br>Result type | `Result[T]` | `Result[T]`, `Success`, `Failure` |
+| `core/result`<br>Result type | `Result[T]`, `Error` | `Ok`, `Err`, `ErrWithDetails` |
 | `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters for identity verification | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |

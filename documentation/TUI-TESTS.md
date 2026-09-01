@@ -32,7 +32,7 @@ scripts/test.sh ./library/tui/test/...               # all TUI tests, streamed
 scripts/test.sh -run Smoke ./library/tui/test/       # smoke only, streamed
 ```
 
-Tests create temp dirs, no external dependencies. Total runtime ~35s (dominated by smoke test's all-keys × all-views matrix).
+Tests create temp dirs, no external dependencies. Total runtime ~3 minutes (181s measured standalone on a warm build; longer inside the full `go test ./...` gate, where packages compete for cores). The smoke test's all-keys × all-views matrix dominates.
 
 ---
 
@@ -50,6 +50,9 @@ library/tui/test/
 ├── golden_test.go      # Visual regression tests
 ├── navigation_test.go  # View-to-view navigation tests
 ├── sequence_test.go    # Multi-step interaction tests
+├── cursor_test.go      # List-cursor stability across fetch and back-nav
+├── history_diff_test.go # History-diff footer registration + render
+├── stack_test.go       # Stacked-PR display, bindings, and navigation
 └── testdata/           # Generated artifacts (committed)
     ├── fixture-repo.tar.gz  # Pre-built git repo with seeded data
     ├── fixture.json         # Fixture metadata (entity IDs)
@@ -62,10 +65,13 @@ Wraps `tui.NewModel` without a real terminal. Sends `tea.KeyMsg` and `tea.Window
 
 ```go
 type Harness struct {
-    model   tui.Model
-    t       *testing.T
-    workdir string
-    cache   string
+    model        tui.Model
+    t            *testing.T
+    workdir      string
+    cache        string
+    width        int
+    height       int
+    SkippedExecN int // execMsg commands skipped (editor spawns, etc.)
 }
 
 func New(t *testing.T, workdir, cacheDir string) *Harness
@@ -74,12 +80,15 @@ func New(t *testing.T, workdir, cacheDir string) *Harness
 func (h *Harness) SendKey(key string)
 func (h *Harness) SendKeys(keys ...string)
 func (h *Harness) Navigate(path string)
+func (h *Harness) NavigateTo(loc tuicore.Location)
 func (h *Harness) SetSize(w, h int)
+func (h *Harness) DrainCmds()
 
 // Inspect
 func (h *Harness) Rendered() string
 func (h *Harness) CurrentPath() string
 func (h *Harness) CurrentContext() tuicore.Context
+func (h *Harness) CurrentView() tuicore.View
 func (h *Harness) BindingsForContext(ctx tuicore.Context) []tuicore.Binding
 ```
 
@@ -97,8 +106,8 @@ func getFixture(t *testing.T) *Fixture        // shared read-only fixture
 To regenerate the fixture after changing seed data:
 
 ```bash
-go test ./tui/test/ -run TestGenerateFixture -generate
-go test ./tui/test/ -run Golden -update      # regenerate golden files too
+go test ./library/tui/test/ -run TestGenerateFixture -generate
+go test ./library/tui/test/ -run Golden -update      # regenerate golden files too
 ```
 
 Seeds via extension APIs (not raw git):
@@ -172,7 +181,7 @@ The smoke test produces hundreds of subtests (one per key × view combination).
 Golden files are ANSI-stripped and compared line-by-line. Update with:
 
 ```bash
-go test ./tui/test/ -run Golden -update
+go test ./library/tui/test/ -run Golden -update
 ```
 
 Layout property checks verify every view at 3 terminal sizes: no line exceeds width, output fits height.
@@ -220,6 +229,36 @@ Layout property checks verify every view at 3 terminal sizes: no line exceeds wi
 | `TestSequence/PREditNavigates` | PR detail → e → /review/edit-pr |
 | `TestSequence/PRCommentTriggersEditor` | PR detail → c → editor spawned |
 | `TestSequence/MultipleViewRenders` | Visits 10 views sequentially, verifies each renders |
+
+### 6. Cursor Tests — list selection stability
+
+**File**: `cursor_test.go`
+
+| Test | Verifies |
+|------|----------|
+| `TestTimelineCursorSurvivesFetch` | A completed fetch does not move the timeline cursor |
+| `TestTimelineCursorSurvivesBackNav` | Opening an item and pressing esc returns to the same selection |
+
+### 7. History-Diff Tests — footer registration
+
+**File**: `history_diff_test.go`
+
+| Test | Verifies |
+|------|----------|
+| `TestHistoryDiffFooter` | Each history-diff context registers the expected footer entries, without duplicates or conflicts with the global key set |
+| `TestHistoryDiffFooter/PostHistoryDiffRenders` | The post history-diff view renders |
+
+### 8. Stack Tests — stacked pull requests
+
+**File**: `stack_test.go`
+
+Seeds a child PR on top of the fixture's PR (`DependsOn`), once per package run.
+
+| Test | Verifies |
+|------|----------|
+| `TestStackDisplay/BadgeOnPRList` | Stack badge appears on the PR list |
+| `TestStackBindings` | Stack keys are registered on the PR contexts |
+| `TestStackNavigationBackend` | `review.GetStack` / `GetDependents` back the navigation |
 
 ---
 

@@ -25,9 +25,10 @@ gitsocial [--json] <command> [subcommand] [args...] [flags]
 
 **Global flags:**
 - `--json` - Machine-readable JSON output
-- `-C <path>` - Run in directory (like git -C)
-- `--cache-dir` - Cache directory (default: `~/.cache/gitsocial`)
+- `--workdir, -C <path>` - Run in directory (like git -C)
+- `--cache-dir <path>` - Cache directory (default: `~/.cache/gitsocial`)
 - `--help` - Show help
+- `--version` - Print the version
 
 **Extensions:** `social`, `pm`, `release`, `review`, `memo`
 
@@ -90,6 +91,8 @@ gitsocial import [url]
       --token string       API token (default: from platform CLI or env)
       --state string       Filter by state: open, closed, merged, all (default: all)
       --email-map string   Path to username=email mapping file
+      --categories string  Discussion category slugs to import (comma-separated, default: all)
+      --update             Sync changes from the platform for already-imported items
   -v, --verbose            Print each item as it's imported
   -y, --yes                Skip confirmation and first-run prompts
       --all-branches       First-run fetch mode: track all upstream branches (skips the prompt)
@@ -188,6 +191,14 @@ gitsocial push --site-only   # Refresh only the browser site, no data push
 gitsocial push --full        # Detach a thin fork bucket (upload everything it lacks)
 ```
 
+**Flags:**
+- `--dry-run` - Preview what would be pushed
+- `--no-code` - Skip code branches (default branch + PR heads)
+- `--all-branches` - Publish every local branch, not just the default branch and open-PR heads
+- `--no-site` - Skip the browser static site
+- `--site-only` - Refresh only the browser site, no data push
+- `--full` - Detach a thin fork bucket (upload everything it lacks)
+
 ### gitsocial mirror
 
 Mirror a forge-hosted project (GitHub, GitLab, ...) into an S3 bucket as a full, browsable GitSocial site. `mirror` is the sync loop — upstream forge → local workspace → bucket: it fetches from the forge and imports new issues, PRs, releases, and discussions before pushing data, code, and the browser site. `push` is one-directional (local → remote); that is why the no-argument form of `mirror` is not `push` — it refreshes from the forge first.
@@ -216,6 +227,7 @@ Credentials resolve via `GITSOCIAL_S3_*`, then `~/.config/gitsocial/credentials.
 - `-y, --yes` - Never prompt (cron-safe); missing credentials fail with the setup command
 - `--no-site` - Skip the browser site entirely (also skips enabling `site.publish`)
 - `--dry-run` - Print the provider checklist and the resolved plan, write nothing
+- `--full-fetch` - Also fetch registered forks, followed repos and identity bindings (local viewing state; nothing mirror publishes depends on it)
 
 ```
 gitsocial mirror https://github.com/octocat/Hello-World s3://<endpoint>/<bucket>/hello
@@ -236,7 +248,7 @@ gitsocial config list
 
 ### gitsocial settings
 
-Manage user settings. Each key is scoped — local (this host, in `~/.config/gitsocial/settings.json`) or personal (synced across machines via `refs/gitmsg/core/config`). Writes route by scope automatically; see [SETTINGS.md](SETTINGS.md) for the full key list and the scope model.
+Manage user settings. Editable keys are stored in the personal bare repo (`refs/gitmsg/core/config`) and sync across machines; the rest are read-only process environment. Nothing is written to a settings file on disk. See [SETTINGS.md](SETTINGS.md) for the full key list and the scope model.
 
 ```
 gitsocial settings get <key>
@@ -347,6 +359,7 @@ gitsocial search --draft --json
 - `--group-by` - Group results by field (state, author, type, extension, repo, label, assignee, reviewer, milestone, base)
 - `--top` - Max items per group (default: unlimited)
 - `--count-only` - Show only group counts, no items
+- `--tier` - Memo tier scope: `session` / `personal` / `project` / `inherited` / `external` (requires `--type memo`)
 
 ### gitsocial show
 
@@ -501,10 +514,9 @@ Short form: when unambiguous, use just the hash prefix (e.g., `abc123`).
 
 | Variable | Purpose |
 |----------|---------|
-| `GITSOCIAL_HOME` | Config directory (default: `~/.config/gitsocial`) |
+| `XDG_CONFIG_HOME` | User-config root (default: `~/.config`); GitSocial config lives under `<root>/gitsocial` |
 | `GITSOCIAL_EDITOR` | Editor for messages (falls back to `$EDITOR`) |
-| `GITSOCIAL_PAGER` | Pager for output (falls back to `$PAGER`) |
-| `GITSOCIAL_NO_COLOR` | Disable colors |
+| `GM_PAGER` | Pager for output (falls back to `$PAGER`) |
 | `GITSOCIAL_PPROF` | Capture a profile for the current run: `cpu` → `/tmp/gitsocial-cpu.pprof`, `mem` → `/tmp/gitsocial-mem.pprof`, `trace` → `/tmp/gitsocial.trace`. Output written on clean exit; analyze with `go tool pprof` / `go tool trace`. |
 | `GITSOCIAL_S3_ACCESS_KEY` / `GITSOCIAL_S3_SECRET_KEY` | S3 credentials (take precedence over AWS vars) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 credential fallback (S3-ecosystem convention) |

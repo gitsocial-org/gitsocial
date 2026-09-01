@@ -101,6 +101,15 @@ func main() {
 	defer stop()
 
 	version = resolveVersion()
+	if err := buildRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(ExitError)
+	}
+}
+
+// buildRootCmd assembles the full command tree: root, core commands, and every
+// registered extension.
+func buildRootCmd() *cobra.Command {
 	rootCmd := newRootCmd()
 
 	// Core commands
@@ -133,10 +142,7 @@ func main() {
 	// Extension commands (auto-registered via init())
 	RegisterAllExtensions(rootCmd)
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(ExitError)
-	}
+	return rootCmd
 }
 
 // newTUICmd creates the command for launching the interactive TUI.
