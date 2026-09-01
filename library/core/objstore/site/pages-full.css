@@ -867,7 +867,7 @@
   .activity-plot { display: flex; align-items: flex-start; gap: 0.35rem; }
   .activity-plot .activity-chart { flex: 1 1 0; min-width: 0; }
   .activity-yaxis {
-    flex: 0 0 auto; height: 192px; box-sizing: border-box; min-width: 1.6rem;
+    flex: 0 0 auto; height: 192px; min-width: 1.6rem;
     display: flex; flex-direction: column; justify-content: space-between;
     padding: 0.5rem 0 1.4rem; text-align: right; font-size: var(--fs-dense); color: var(--muted);
   }

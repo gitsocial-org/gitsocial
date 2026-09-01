@@ -661,11 +661,11 @@ async function main() {
     ok("the core declares the tokens the full sheet consumes", /--shell-max:/.test(headCSS) && /--fs-body:/.test(headCSS) && /--pl-link:/.test(headCSS));
     // Inlined at every page depth, the core may reference no URL: a relative
     // url() would resolve against the page's directory, not the site root.
-    ok("the core carries no url()", !/url\(/i.test(coreCSS.text));
+    ok("the core carries no url()", !/url\(/i.test(stripComments(coreCSS.text)));
     // border-box is what makes the shared 1012px mean the same thing on both
     // surfaces (max-width INCLUDES padding), and it now exists exactly once.
     ok("the core resets the box model globally", /\*\s*\{\s*box-sizing:\s*border-box/.test(headCSS), headCSS.slice(0, 120));
-    ok("the full sheet no longer restates the reset or the tokens", !/box-sizing:\s*border-box/.test(css.text) && !/--pl-link:/.test(css.text));
+    ok("the full sheet no longer restates the reset or the tokens", !/box-sizing:\s*border-box/.test(stripComments(css.text)) && !/--pl-link:/.test(stripComments(css.text)));
     // The one value stated twice (a media query cannot consume a custom
     // property): both sheets must collapse at the same breakpoint.
     const appBP = /@media\s*\(max-width:\s*([0-9]+px)\)/.exec(css.text);
