@@ -3,26 +3,24 @@ package review
 
 import (
 	"database/sql"
-	"io"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 var repoTemplate string
 var testCacheDir string
 
 func TestMain(m *testing.M) {
-	dir, _ := os.MkdirTemp("", "review-test-template-*")
-	git.Init(dir, "main")
-	git.ExecGit(dir, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(dir, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(dir, git.CommitOptions{Message: "Initial commit", AllowEmpty: true})
+	dir, err := testutil.NewRepoTemplate()
+	if err != nil {
+		panic(err)
+	}
 	// Pre-create a `feature` branch so tests using `Head: "feature"` resolve to
 	// a real tip without needing per-test branch setup. Tests exercising
 	// other branch names create them inline.
@@ -49,53 +47,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func copyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		if entry.IsDir() {
-			if err := os.MkdirAll(dstPath, 0o755); err != nil {
-				return err
-			}
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-			continue
-		}
-		srcFile, err := os.Open(srcPath)
-		if err != nil {
-			return err
-		}
-		dstFile, err := os.Create(dstPath)
-		if err != nil {
-			srcFile.Close()
-			return err
-		}
-		_, err = io.Copy(dstFile, srcFile)
-		srcFile.Close()
-		dstFile.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func setupTestDB(t *testing.T) {
 	t.Helper()
-	cache.Reset()
-	dir := t.TempDir()
-	if err := cache.Open(dir); err != nil {
-		t.Fatalf("cache.Open() error = %v", err)
-	}
-	t.Cleanup(func() {
-		cache.Reset()
-		cache.Open(testCacheDir)
-	})
+	testutil.OpenTempCache(t, testCacheDir)
 }
 
 const reviewTestBranch = "gitmsg/review"
@@ -103,11 +57,7 @@ const reviewTestRepoURL = "https://github.com/test/repo"
 
 func initTestRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := copyDir(repoTemplate, dir); err != nil {
-		t.Fatalf("copyDir() error = %v", err)
-	}
-	return dir
+	return testutil.CopyRepo(t, repoTemplate)
 }
 
 func insertReviewTestCommit(t *testing.T, repoURL, hash string) {

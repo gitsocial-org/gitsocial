@@ -4,7 +4,6 @@ package fetch
 import (
 	"database/sql"
 	"os"
-	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 var (
@@ -55,22 +55,13 @@ func TestMain(m *testing.M) {
 
 func cloneFixture(t *testing.T) string {
 	t.Helper()
-	dst := t.TempDir()
-	cmd := exec.Command("cp", "-a", baseRepoDir+"/.", dst)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("cloneFixture: %v: %s", err, out)
-	}
-	return dst
+	return testutil.CopyRepo(t, baseRepoDir)
 }
 
 // setupTestCache initializes a fresh cache database in a temp directory.
 func setupTestCache(t *testing.T) {
 	t.Helper()
-	cache.Reset()
-	if err := cache.Open(t.TempDir()); err != nil {
-		t.Fatalf("cache.Open() error = %v", err)
-	}
-	t.Cleanup(func() { cache.Reset() })
+	testutil.OpenTempCache(t, "")
 }
 
 // initTestRepo creates a git repo with N commits, returns dir and commit list (newest first).

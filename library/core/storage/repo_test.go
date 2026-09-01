@@ -5,26 +5,22 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 var baseSourceRepoDir string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "storage-test-base-*")
+	dir, err := testutil.NewRepoTemplate()
 	if err != nil {
 		panic(err)
 	}
 	defer os.RemoveAll(dir)
-	git.Init(dir, "main")
-	git.ExecGit(dir, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(dir, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(dir, git.CommitOptions{Message: "initial", AllowEmpty: true})
 	git.ExecGit(dir, []string{"checkout", "-b", "gitmsg/social/posts"})
 	git.CreateCommit(dir, git.CommitOptions{Message: "post", AllowEmpty: true})
 	git.ExecGit(dir, []string{"checkout", "main"})
@@ -34,12 +30,7 @@ func TestMain(m *testing.M) {
 
 func cloneFixture(t *testing.T) string {
 	t.Helper()
-	dst := t.TempDir()
-	cmd := exec.Command("cp", "-a", baseSourceRepoDir+"/.", dst)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("cloneFixture: %v: %s", err, out)
-	}
-	return dst
+	return testutil.CopyRepo(t, baseSourceRepoDir)
 }
 
 // failOnArg returns an ExecFunc that fails with exit code 128 when any arg matches failArg.

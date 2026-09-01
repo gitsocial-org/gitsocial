@@ -613,11 +613,10 @@ func TestEditRelease_cacheFailed(t *testing.T) {
 }
 
 func TestEditRelease_getFailed(t *testing.T) {
-	// This test uses a SQLite trigger to sabotage version records mid-transaction.
-	// With the materialized core_commits_resolved table, the trigger's retraction
-	// races with syncResolvedVersion and doesn't reliably produce the expected error.
-	// The scenario (external trigger corrupting version state) doesn't occur in production.
-	t.Skip("incompatible with materialized resolved table")
+	// A SQLite trigger sabotages the version records mid-edit, so the release
+	// reads back as retracted. This was skipped while a materialized resolved
+	// table raced the trigger; resolution now runs off the effective_* generated
+	// columns, so the outcome is deterministic again.
 	setupTestDB(t)
 	dir := initTestRepo(t)
 
@@ -639,13 +638,8 @@ func TestEditRelease_getFailed(t *testing.T) {
 		return err
 	})
 
-	// The trigger marks the version record as retracted, but with the materialized
-	// core_commits_resolved table the retraction must also propagate there. The trigger
-	// does update it, but syncResolvedVersion runs first and sets is_retracted=0, then
-	// the trigger fires and sets is_retracted=1 on the version table + resolved table.
-	// The edit commit is then created with correct retraction state. However, EditRelease
-	// re-reads the release after the edit and now sees it via the extension view which
-	// correctly picks up is_retracted=1, causing it to return not-found instead of GET_FAILED.
+	// EditRelease re-reads the release after writing the edit and sees it
+	// retracted, so it fails rather than returning an edited release.
 	newTag := "v1.0.1"
 	res := EditRelease(dir, created.Data.ID, EditReleaseOptions{Tag: &newTag})
 	if res.Success {

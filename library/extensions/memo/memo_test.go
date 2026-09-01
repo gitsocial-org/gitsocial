@@ -4,7 +4,6 @@ package memo
 import (
 	"database/sql"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 var (
@@ -31,11 +31,12 @@ var (
 func TestMain(m *testing.M) {
 	// A reusable git repo template (cloned per test) so each test gets a fresh
 	// workspace without paying the init cost.
-	tmpl, _ := os.MkdirTemp("", "memo-test-template-*")
-	git.Init(tmpl, "main")
+	tmpl, err := testutil.NewRepoTemplate()
+	if err != nil {
+		panic(err)
+	}
 	git.ExecGit(tmpl, []string{"config", "user.email", "memo-test@test.com"})
 	git.ExecGit(tmpl, []string{"config", "user.name", "Memo Test"})
-	git.CreateCommit(tmpl, git.CommitOptions{Message: "init", AllowEmpty: true})
 	git.ExecGit(tmpl, []string{"remote", "add", "origin", "https://github.com/test/memo-repo.git"})
 	repoTemplate = tmpl
 
@@ -83,24 +84,12 @@ func TestMain(m *testing.M) {
 
 func setupTestDB(t *testing.T) {
 	t.Helper()
-	cache.Reset()
-	dir := t.TempDir()
-	if err := cache.Open(dir); err != nil {
-		t.Fatalf("cache.Open: %v", err)
-	}
-	t.Cleanup(func() {
-		cache.Reset()
-		cache.Open(testCacheDir)
-	})
+	testutil.OpenTempCache(t, testCacheDir)
 }
 
 func initTestRepo(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
-	if err := copyDir(repoTemplate, dir); err != nil {
-		t.Fatalf("copyDir: %v", err)
-	}
-	return dir
+	return testutil.CopyRepo(t, repoTemplate)
 }
 
 // freshHome resets the temporary $HOME (and XDG_CONFIG_HOME, which config-path
@@ -115,42 +104,6 @@ func freshHome(t *testing.T) {
 		os.Setenv("HOME", tempHomeDir)
 		os.Setenv("XDG_CONFIG_HOME", filepath.Join(tempHomeDir, ".config"))
 	})
-}
-
-func copyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		sp := filepath.Join(src, e.Name())
-		dp := filepath.Join(dst, e.Name())
-		if e.IsDir() {
-			if err := os.MkdirAll(dp, 0o755); err != nil {
-				return err
-			}
-			if err := copyDir(sp, dp); err != nil {
-				return err
-			}
-			continue
-		}
-		sf, err := os.Open(sp)
-		if err != nil {
-			return err
-		}
-		df, err := os.Create(dp)
-		if err != nil {
-			sf.Close()
-			return err
-		}
-		_, err = io.Copy(df, sf)
-		sf.Close()
-		df.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // --- Pure tests (no DB) ---------------------------------------------------

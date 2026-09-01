@@ -9,21 +9,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 
 	_ "github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 func setupTestDB(t *testing.T) {
 	t.Helper()
-	cache.Reset()
-	dir := t.TempDir()
-	if err := cache.Open(dir); err != nil {
-		t.Fatalf("cache.Open() error = %v", err)
-	}
-	t.Cleanup(func() {
-		cache.Reset()
-		cache.Open(testCacheDir)
-	})
+	testutil.OpenTempCache(t, testCacheDir)
 }
 
 const pmSyncTestRepoURL = "https://github.com/test/repo"

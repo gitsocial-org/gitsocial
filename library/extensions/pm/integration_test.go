@@ -3,12 +3,12 @@ package pm
 
 import (
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 
 	_ "github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -17,14 +17,10 @@ var baseRepoDir string
 var testCacheDir string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "pm-test-base-*")
+	dir, err := testutil.NewRepoTemplate()
 	if err != nil {
 		panic(err)
 	}
-	git.Init(dir, "main")
-	git.ExecGit(dir, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(dir, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(dir, git.CommitOptions{Message: "Initial commit", AllowEmpty: true})
 	baseRepoDir = dir
 
 	cacheDir, err := os.MkdirTemp("", "pm-test-cache-*")
@@ -43,12 +39,7 @@ func TestMain(m *testing.M) {
 
 func cloneFixture(t *testing.T) string {
 	t.Helper()
-	dst := t.TempDir()
-	cmd := exec.Command("cp", "-a", baseRepoDir+"/.", dst)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("cloneFixture: %v: %s", err, out)
-	}
-	return dst
+	return testutil.CopyRepo(t, baseRepoDir)
 }
 
 func initWorkspace(t *testing.T) string {

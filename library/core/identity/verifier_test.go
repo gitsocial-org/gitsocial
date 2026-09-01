@@ -11,6 +11,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/identity/forge"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 // --- Pure helpers ---
@@ -173,11 +174,7 @@ func ptrString(s string) *string { return &s }
 
 func setupTestCache(t *testing.T) {
 	t.Helper()
-	cache.Reset()
-	if err := cache.Open(t.TempDir()); err != nil {
-		t.Fatalf("cache.Open: %v", err)
-	}
-	t.Cleanup(func() { cache.Reset() })
+	testutil.OpenTempCache(t, "")
 }
 
 // withDNSEnabled flips the DNS verification flag on for the duration of a test
