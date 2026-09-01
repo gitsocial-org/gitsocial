@@ -17,8 +17,11 @@ var trailerPattern = regexp.MustCompile(`^(Fixes|Closes|Resolves|Implements|Refs
 // ExtractTrailers parses recognized git trailers from the commit message footer.
 // Returns nil if no trailers are found.
 func ExtractTrailers(message string) []Trailer {
-	lines := strings.Split(message, "\n")
-	// Find the last blank line — trailers follow it
+	// Drop the trailing blank lines first: git stores every commit message with a
+	// final newline, which would otherwise be picked up as the last blank line and
+	// leave no footer after it.
+	lines := strings.Split(strings.TrimRight(message, " \t\r\n"), "\n")
+	// Find the last blank line, trailers follow it
 	blankIdx := -1
 	for i := len(lines) - 1; i >= 0; i-- {
 		if strings.TrimSpace(lines[i]) == "" {

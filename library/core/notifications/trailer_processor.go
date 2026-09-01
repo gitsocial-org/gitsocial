@@ -24,9 +24,15 @@ func TrailerProcessor() fetch.CommitProcessor {
 		}
 		if err := cache.ExecLocked(func(db *sql.DB) error {
 			for _, t := range trailers {
+				// Only commit refs can join core_commits. URLs and opaque tracker
+				// ids parse as unknown refs whose whole text lands in Value, so the
+				// empty-hash check alone would let them through as dead rows.
+				if protocol.ParseRef(t.Value).Type != protocol.RefTypeCommit {
+					continue
+				}
 				ref := protocol.ResolveRefWithDefaults(t.Value, repoURL, branch)
 				if ref.Hash == "" {
-					continue // not a GitMsg ref (URL or opaque ID)
+					continue
 				}
 				if _, err := db.Exec(`
 					INSERT INTO core_trailer_refs (repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key, trailer_value)
