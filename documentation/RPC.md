@@ -901,9 +901,64 @@ Removes a fork URL from the core config.
 
 **Result:** `true`
 
-**Not exposed over RPC.** These review operations exist in the library and the CLI but have no RPC method:
-`UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`,
-`GetVersionAwareReviews`. Clients needing them must shell out to `gitsocial review`.
+#### review.updatePRTips
+
+Re-snapshots the PR's base and head tips from the live branches.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | PR ref |
+
+**Result:** `PullRequest`
+
+#### review.syncPRBranch
+
+Brings the head branch up to date with the base, then re-snapshots the tips.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | PR ref |
+| `strategy` | string | no | `rebase` (default) or `merge` |
+
+**Result:** `PullRequest`
+
+#### review.getPRVersions
+
+Lists every version of the PR, oldest first.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | PR ref |
+
+**Result:** `PRVersion[]`
+
+#### review.comparePRVersions
+
+Range-diffs two versions of the PR.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | PR ref |
+| `from` | int | yes | Version number to compare from |
+| `to` | int | yes | Version number to compare to |
+
+**Result:** string (the range-diff)
+
+#### review.getVersionAwareReviews
+
+Each reviewer's latest review tagged with the version it was left against, so a
+client can tell a stale approval from a current one.
+
+**Params:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ref` | string | yes | PR ref |
+
+**Result:** `VersionAwareReview[]`
 
 ---
 
@@ -1187,10 +1242,12 @@ Returns edit history for any item (post, issue, PR, release, etc.).
 
 ### 4.6. Search
 
-#### search
+#### search / social.search
 
-Cross-extension search (posts, issues, PRs, releases, feedback). Registered at the
-top level, not under `social.`.
+Cross-extension search (posts, issues, PRs, releases, feedback). `search` is the
+real name: it spans every extension, so filing it under `social.` would
+misdescribe it. `social.search` is registered as an alias for clients written
+against the name this document used to give, and dispatches to the same handler.
 
 **Params:**
 | Field | Type | Required | Description |
@@ -1454,6 +1511,45 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
   "isEdited": false,
   "isRetracted": false,
   "comments": 0
+}
+```
+
+### PRVersion
+
+```json
+{
+  "number": 0,
+  "label": "string",
+  "commit_hash": "string",
+  "repo_url": "string (URL)",
+  "branch": "string",
+  "author_name": "string",
+  "author_email": "string",
+  "timestamp": "string (ISO 8601)",
+  "subject": "string (optional)",
+  "body": "string (optional)",
+  "base_tip": "string (optional)",
+  "head_tip": "string (optional)",
+  "state": "open | merged | closed",
+  "is_retracted": false
+}
+```
+
+### VersionAwareReview
+
+```json
+{
+  "reviewer_name": "string",
+  "reviewer_email": "string",
+  "state": "approved | changes-requested",
+  "reviewed_at": "string (ISO 8601)",
+  "reviewed_version": 0,
+  "reviewed_label": "string",
+  "current_version": 0,
+  "current_label": "string",
+  "head_changed": false,
+  "code_changed": false,
+  "stale": false
 }
 ```
 

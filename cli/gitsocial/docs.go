@@ -24,6 +24,10 @@ func newDocsKeybindingsCmd() *cobra.Command {
 		Short: "Generate keybinding documentation",
 		Run: func(cmd *cobra.Command, args []string) {
 			docs := tuikeydoc.CollectAll()
+			if cfg := GetConfig(cmd); cfg != nil && cfg.JSONOutput {
+				PrintJSON(docs)
+				return
+			}
 			fmt.Print(tuikeydoc.Generate(docs))
 		},
 	}

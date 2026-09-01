@@ -22,6 +22,11 @@ func RegisterReviewMethods(s *Server) {
 	s.registry.Register("review.retractPR", s.requireInit(reviewRetractPR(s)))
 	s.registry.Register("review.markReady", s.requireInit(reviewMarkReady(s)))
 	s.registry.Register("review.convertToDraft", s.requireInit(reviewConvertToDraft(s)))
+	s.registry.Register("review.updatePRTips", s.requireInit(reviewUpdatePRTips(s)))
+	s.registry.Register("review.syncPRBranch", s.requireInit(reviewSyncPRBranch(s)))
+	s.registry.Register("review.getPRVersions", s.requireInit(reviewGetPRVersions(s)))
+	s.registry.Register("review.comparePRVersions", s.requireInit(reviewComparePRVersions(s)))
+	s.registry.Register("review.getVersionAwareReviews", s.requireInit(reviewGetVersionAwareReviews(s)))
 	s.registry.Register("review.getFeedbackForPR", s.requireInit(reviewGetFeedbackForPR(s)))
 	s.registry.Register("review.createFeedback", s.requireInit(reviewCreateFeedback(s)))
 	s.registry.Register("review.updateFeedback", s.requireInit(reviewUpdateFeedback(s)))
@@ -188,6 +193,66 @@ func reviewMarkReady(s *Server) HandlerFunc {
 func reviewConvertToDraft(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.ConvertToDraft(workdir, ref))
+	}, s)
+}
+
+// reviewUpdatePRTips re-snapshots the PR's base and head tips.
+func reviewUpdatePRTips(s *Server) HandlerFunc {
+	return refAction(func(workdir, ref string) (any, *RPCError) {
+		return fromResult(review.UpdatePRTips(workdir, ref))
+	}, s)
+}
+
+// reviewSyncPRBranch brings the head branch up to date with the base, by
+// rebase unless the caller asks for "merge".
+func reviewSyncPRBranch(s *Server) HandlerFunc {
+	return func(raw json.RawMessage) (any, *RPCError) {
+		p, rpcErr := decodeParams[struct {
+			Ref      string `json:"ref"`
+			Strategy string `json:"strategy"`
+		}](raw)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if p.Ref == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref is required"}
+		}
+		return fromResult(review.SyncPRBranch(s.session.Workdir, p.Ref, p.Strategy))
+	}
+}
+
+// --- Versions ---
+
+// reviewGetPRVersions lists the PR's version history.
+func reviewGetPRVersions(s *Server) HandlerFunc {
+	return refAction(func(_, ref string) (any, *RPCError) {
+		return fromResult(review.GetPRVersions(ref, s.session.RepoURL))
+	}, s)
+}
+
+// reviewComparePRVersions range-diffs two versions of the PR.
+func reviewComparePRVersions(s *Server) HandlerFunc {
+	return func(raw json.RawMessage) (any, *RPCError) {
+		p, rpcErr := decodeParams[struct {
+			Ref  string `json:"ref"`
+			From int    `json:"from"`
+			To   int    `json:"to"`
+		}](raw)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if p.Ref == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "ref is required"}
+		}
+		return fromResult(review.ComparePRVersions(s.session.Workdir, s.session.CacheDir, p.Ref, p.From, p.To))
+	}
+}
+
+// reviewGetVersionAwareReviews returns each review tagged with the version it
+// was left against.
+func reviewGetVersionAwareReviews(s *Server) HandlerFunc {
+	return refAction(func(workdir, ref string) (any, *RPCError) {
+		return fromResult(review.GetVersionAwareReviews(workdir, ref))
 	}, s)
 }
 

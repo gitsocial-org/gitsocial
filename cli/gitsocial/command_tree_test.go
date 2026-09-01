@@ -18,21 +18,20 @@ import (
 // design. Anything not listed here is walked, so a new command is covered
 // automatically.
 var jsonSkipPaths = map[string]bool{
-	"tui":              true, // takes over the terminal
-	"rpc":              true, // blocks reading stdin
-	"__git-remote-s3":  true, // spawned by git, speaks the helper protocol on stdin
-	"fetch":            true, // network
-	"push":             true, // network
-	"mirror":           true, // network
-	"import":           true, // network
-	"import all":       true, // network
-	"import pm":        true, // network
-	"import release":   true, // network
-	"import review":    true, // network
-	"import social":    true, // network
-	"personal init":    true, // writes the personal repo
-	"personal sync":    true, // network
-	"docs keybindings": true, // generates markdown; --json does not apply
+	"tui":             true, // takes over the terminal
+	"rpc":             true, // blocks reading stdin
+	"__git-remote-s3": true, // spawned by git, speaks the helper protocol on stdin
+	"fetch":           true, // network
+	"push":            true, // network
+	"mirror":          true, // network
+	"import":          true, // network
+	"import all":      true, // network
+	"import pm":       true, // network
+	"import release":  true, // network
+	"import review":   true, // network
+	"import social":   true, // network
+	"personal init":   true, // writes the personal repo
+	"personal sync":   true, // network
 }
 
 // walkCommands returns every command below root keyed by its full path, with

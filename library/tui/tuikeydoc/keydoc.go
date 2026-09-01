@@ -14,23 +14,23 @@ import (
 
 // KeyDoc represents a single keybinding for documentation.
 type KeyDoc struct {
-	Key   string
-	Label string
+	Key   string `json:"key"`
+	Label string `json:"label"`
 }
 
 // ContextDoc represents all keybindings for a specific context.
 type ContextDoc struct {
-	Context   tuicore.Context
-	Title     string
-	Component string // "CardList", "SectionList", "VersionPicker", ""
-	Keys      []KeyDoc
+	Context   tuicore.Context `json:"context"`
+	Title     string          `json:"title"`
+	Component string          `json:"component,omitempty"` // "CardList", "SectionList", "VersionPicker", ""
+	Keys      []KeyDoc        `json:"keys"`
 }
 
 // DomainDoc represents all contexts grouped under one domain.
 type DomainDoc struct {
-	Domain   string
-	Title    string
-	Contexts []ContextDoc
+	Domain   string       `json:"domain"`
+	Title    string       `json:"title"`
+	Contexts []ContextDoc `json:"contexts"`
 }
 
 // docHost is a lightweight ViewHost for binding collection without TUI dependencies.
