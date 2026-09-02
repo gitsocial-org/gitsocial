@@ -173,6 +173,12 @@ func shouldSkipCmd(cmd tea.Cmd) bool {
 		strings.Contains(name, "startFetch")
 }
 
+// cmdTimeout bounds one command so a genuinely blocking one cannot hang the
+// suite. It is not a performance budget: a data load that overruns it is
+// dropped, leaving the view on its loading frame, so keep it far above what a
+// load costs on a busy machine.
+const cmdTimeout = 5 * time.Second
+
 // execCmd runs a tea.Cmd synchronously with a timeout, skipping known blockers
 // and any command that takes longer than the budget (likely a timer/sleep).
 //
@@ -191,7 +197,7 @@ func execCmd(cmd tea.Cmd) tea.Msg {
 	select {
 	case msg := <-done:
 		return msg
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(cmdTimeout):
 		return nil
 	}
 }

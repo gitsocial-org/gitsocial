@@ -8,13 +8,13 @@
 │     ⏱  Timeline              ││                                                                                      │
 │     ⎇  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
 │     ☷ My Lists              ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
-│     ㋡ My Followers          ││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
-│     ➼  Explore               ││  with  git clone --mirror  — no API scraping, no data loss.                          │
-│  ▢  PM  ················  P  ││                                                                                      │
-│  ⑂  Review  ············  R  ││  ## Workflow                                                                         │
-│  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││  • Fetch — Pull updates from repositories you follow                                 │
-│                              ││  • Push — Publish your local changes to your remote                                  │
+│        • Memo Inherits (au...││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
+│     ㋡ My Followers          ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││  ## Workflow                                                                         │
+│  ⑂  Review  ············  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││  • Fetch — Pull updates from repositories you follow                                 │
+│  ☞  Memos  ·············  M  ││  • Push — Publish your local changes to your remote                                  │
 │                              ││  • Lists — Group repositories into curated feeds                                     │
 │                              ││                                                                                      │
 │                              ││  Follow someone by adding their repo to a list. Their posts appear in your           │

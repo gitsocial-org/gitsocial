@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 var (
@@ -33,6 +35,26 @@ func assertContains(t *testing.T, output, substr string) {
 	}
 }
 
+// assertRendersItem navigates to a location and asserts that every fragment of
+// seeded content appears in the view. Unlike assertNotEmpty, a view that draws
+// only its own chrome and an empty-state message fails.
+func assertRendersItem(t *testing.T, h *Harness, loc tuicore.Location, want ...string) {
+	t.Helper()
+	h.NavigateTo(loc)
+	out := renderedAfterLoad(h, want)
+	for _, substr := range want {
+		// An empty expectation (a fixture field that was never seeded) would
+		// match anything, so treat it as a failure rather than a free pass.
+		if substr == "" {
+			t.Errorf("%s: empty expectation, the fixture field it comes from is unset", loc.Path)
+			continue
+		}
+		if !strings.Contains(out, substr) {
+			t.Errorf("%s: expected rendered item content %q, got:\n%s", loc.Path, substr, out)
+		}
+	}
+}
+
 // assertNotEmpty checks that the output is non-empty after stripping ANSI.
 func assertNotEmpty(t *testing.T, output string) {
 	t.Helper()
@@ -58,4 +80,27 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+// renderedAfterLoad samples the view, and if anything wanted is missing gives
+// the async load one more drain before sampling again. A view whose load
+// overran the harness command budget renders its loading frame, so a single
+// sample makes the assertion a race against the machine.
+func renderedAfterLoad(h *Harness, want []string) string {
+	out := rendered(h)
+	if !missingAny(out, want) {
+		return out
+	}
+	h.DrainCmds()
+	return rendered(h)
+}
+
+// missingAny reports whether any non-empty wanted substring is absent.
+func missingAny(out string, want []string) bool {
+	for _, substr := range want {
+		if substr != "" && !strings.Contains(out, substr) {
+			return true
+		}
+	}
+	return false
 }

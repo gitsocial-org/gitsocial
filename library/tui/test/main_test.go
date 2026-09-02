@@ -10,8 +10,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
-var sharedFixture *Fixture
-
 func TestMain(m *testing.M) {
 	flag.Parse()
 	// When generating fixture, skip shared fixture setup (tarball doesn't exist yet)

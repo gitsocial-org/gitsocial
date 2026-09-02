@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	osexec "os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
@@ -23,13 +25,26 @@ import (
 
 const (
 	fixtureRepoTar  = "testdata/fixture-repo.tar.gz"
+	fixtureForkTar  = "testdata/fixture-fork.tar.gz"
 	fixtureMetaJSON = "testdata/fixture.json"
+	// fixtureForkURL is the origin of the second (fork) repo. It is a fake URL:
+	// nothing ever fetches it, and no forge adapter matches it, so the suite
+	// stays offline.
+	fixtureForkURL = "https://github.com/bob/repo"
+	// fixtureInheritURL is a memo inherit source: a ref in the workspace repo,
+	// so it survives the tarball without needing a repo behind it.
+	fixtureInheritURL = "https://github.com/acme/handbook"
 )
+
+// sharedFixture is the per-package fixture created by TestMain and handed to
+// read-only tests by getFixture.
+var sharedFixture *Fixture
 
 // Fixture holds references to seeded data for assertion in tests.
 type Fixture struct {
 	Workdir  string `json:"-"`
 	CacheDir string `json:"-"`
+	ForkDir  string `json:"-"`
 
 	// Social
 	PostID         string `json:"post_id"`
@@ -54,13 +69,32 @@ type Fixture struct {
 	// Review
 	PRID      string `json:"pr_id"`
 	PRSubject string `json:"pr_subject"`
+
+	// Memo (project tier, the only tier that lives inside the repo)
+	MemoID         string `json:"memo_id"`
+	MemoSubject    string `json:"memo_subject"`
+	MemoBody       string `json:"memo_body"`
+	MemoLabel      string `json:"memo_label"`
+	EditedMemoID   string `json:"edited_memo_id"`
+	EditedMemoSubj string `json:"edited_memo_subject"`
+	InheritURL     string `json:"inherit_url"`
+
+	// Forks
+	ForkURL string `json:"fork_url"`
+
+	// Cross-repo proposal: the fork's inert edit of the workspace issue
+	ProposalRepoURL string `json:"proposal_repo_url"`
+	ProposalIssueID string `json:"proposal_issue_id"`
 }
 
-// setupFixtureForMain loads the pre-built fixture repo from tarball.
-// Falls back to generating fresh if tarball doesn't exist.
+// setupFixtureForMain loads the pre-built workspace and fork repos from their
+// tarballs, opens a fresh cache and syncs both into it. Panics if a tarball is
+// missing: regenerate with the -generate flag.
 func setupFixtureForMain() *Fixture {
-	if _, err := os.Stat(fixtureRepoTar); err != nil {
-		panic(fmt.Sprintf("fixture tarball not found at %s — run: go test ./tui/test/ -run GenerateFixture -generate", fixtureRepoTar))
+	for _, tarball := range []string{fixtureRepoTar, fixtureForkTar} {
+		if _, err := os.Stat(tarball); err != nil {
+			panic(fmt.Sprintf("fixture tarball not found at %s — run: go test ./tui/test/ -run GenerateFixture -generate", tarball))
+		}
 	}
 	metaBytes, err := os.ReadFile(fixtureMetaJSON)
 	if err != nil {
@@ -93,8 +127,12 @@ func setupFixtureForMain() *Fixture {
 	}
 	f.CacheDir = cacheDir
 	syncAllPanic(resolved)
-	// Reset all commit timestamps to "now" so relative time is always "just now",
-	// regardless of when the fixture tarball was generated.
+	f.ForkDir = extractForkPanic()
+	// The fork's cross-repo edit only resolves once the canonical it edits is
+	// cached, so the fork is synced after the workspace.
+	syncAllPanic(f.ForkDir)
+	// Rewrite commit timestamps so relative time is always "just now",
+	// regardless of when the fixture tarballs were generated.
 	resetTimestampsPanic()
 	return &f
 }
@@ -102,19 +140,50 @@ func setupFixtureForMain() *Fixture {
 // SetupFixture creates a fresh fixture per test. Use getFixture(t) for shared read-only fixture.
 func SetupFixture(t *testing.T) *Fixture {
 	t.Helper()
+	// The cache handle is process-global and cache.Open is a no-op while one is
+	// already open, so the shared fixture's cache must be closed first or this
+	// "isolated" fixture would silently read and write the shared one.
+	cache.Reset()
 	f := setupFixtureForMain()
 	t.Cleanup(func() {
 		cache.Reset()
 		os.RemoveAll(f.Workdir)
 		os.RemoveAll(f.CacheDir)
+		os.RemoveAll(f.ForkDir)
+		// The cache handle is process-global: reopen the shared fixture's cache
+		// so tests that run after this one still see their data.
+		if sharedFixture != nil {
+			if err := cache.Open(sharedFixture.CacheDir); err != nil {
+				t.Logf("reopen shared cache: %v", err)
+			}
+		}
 	})
 	return f
+}
+
+// extractForkPanic unpacks the fork repo tarball into a fresh temp dir.
+func extractForkPanic() string {
+	dir, err := os.MkdirTemp("", "tui-test-fork-*")
+	if err != nil {
+		panic(fmt.Sprintf("MkdirTemp fork: %v", err))
+	}
+	cmd := osexec.Command("tar", "xzf", fixtureForkTar, "-C", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		panic(fmt.Sprintf("tar extract fork: %v: %s", err, out))
+	}
+	resolved, _ := git.GetRootDir(dir)
+	if resolved == "" {
+		resolved = dir
+	}
+	return resolved
 }
 
 // --- Generation (creates the repo from scratch) ---
 
 // generateFixture creates a fresh fixture repo and saves it as tarball + metadata.
 func generateFixture() {
+	restoreHome := isolateHomePanic()
+	defer restoreHome()
 	workdir, err := os.MkdirTemp("", "tui-fixture-gen-*")
 	if err != nil {
 		panic(fmt.Sprintf("MkdirTemp: %v", err))
@@ -139,13 +208,7 @@ func generateFixture() {
 	if _, err := git.ExecGit(resolved, []string{"remote", "add", "origin", "https://github.com/user/repo"}); err != nil {
 		panic(fmt.Sprintf("git remote add: %v", err))
 	}
-	for _, ext := range []string{"social", "pm", "review", "release"} {
-		if err := gitmsg.WriteExtConfig(resolved, ext, map[string]interface{}{
-			"branch": "gitmsg/" + ext,
-		}); err != nil {
-			panic(fmt.Sprintf("WriteExtConfig %s: %v", ext, err))
-		}
-	}
+	writeExtConfigsPanic(resolved)
 	// Open a temporary cache — extension APIs write to both git and cache
 	cacheDir, err := os.MkdirTemp("", "tui-fixture-cache-*")
 	if err != nil {
@@ -161,13 +224,21 @@ func generateFixture() {
 	f.seedPMPanic(resolved)
 	f.seedReleasePanic(resolved)
 	f.seedReviewPanic(resolved)
-	// Save tarball
+	f.seedMemoPanic(resolved)
+	f.seedForkPanic(resolved)
+	forkDir := f.seedProposalPanic()
+	defer os.RemoveAll(forkDir)
+	// Save tarballs
 	if err := os.MkdirAll("testdata", 0755); err != nil {
 		panic(fmt.Sprintf("mkdir testdata: %v", err))
 	}
 	cmd := osexec.Command("tar", "czf", fixtureRepoTar, "-C", resolved, ".")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		panic(fmt.Sprintf("tar create: %v: %s", err, out))
+	}
+	forkCmd := osexec.Command("tar", "czf", fixtureForkTar, "-C", forkDir, ".")
+	if out, err := forkCmd.CombinedOutput(); err != nil {
+		panic(fmt.Sprintf("tar create fork: %v: %s", err, out))
 	}
 	// Save metadata
 	metaBytes, err := json.MarshalIndent(f, "", "  ")
@@ -177,7 +248,46 @@ func generateFixture() {
 	if err := os.WriteFile(fixtureMetaJSON, metaBytes, 0644); err != nil {
 		panic(fmt.Sprintf("write metadata: %v", err))
 	}
-	fmt.Printf("Generated fixture: %s (%s)\n", fixtureRepoTar, fixtureMetaJSON)
+	fmt.Printf("Generated fixture: %s + %s (%s)\n", fixtureRepoTar, fixtureForkTar, fixtureMetaJSON)
+}
+
+// isolateHomePanic points HOME, XDG_CONFIG_HOME and GITSOCIAL_PERSONAL_REPO at
+// a throwaway directory for the duration of fixture generation, so nothing can
+// reach the real personal memo repo or the real config. Returns the restore fn.
+func isolateHomePanic() func() {
+	tmpHome, err := os.MkdirTemp("", "tui-fixture-home-*")
+	if err != nil {
+		panic(fmt.Sprintf("MkdirTemp home: %v", err))
+	}
+	saved := map[string]string{}
+	for _, key := range []string{"HOME", "XDG_CONFIG_HOME", "GITSOCIAL_PERSONAL_REPO"} {
+		saved[key] = os.Getenv(key)
+	}
+	os.Setenv("HOME", tmpHome)
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
+	os.Setenv("GITSOCIAL_PERSONAL_REPO", filepath.Join(tmpHome, "personal"))
+	return func() {
+		for key, val := range saved {
+			if val == "" {
+				os.Unsetenv(key)
+			} else {
+				os.Setenv(key, val)
+			}
+		}
+		os.RemoveAll(tmpHome)
+	}
+}
+
+// writeExtConfigsPanic writes the gitmsg extension config ref for every
+// extension the fixture seeds.
+func writeExtConfigsPanic(workdir string) {
+	for _, ext := range []string{"social", "pm", "review", "release", "memo"} {
+		if err := gitmsg.WriteExtConfig(workdir, ext, map[string]interface{}{
+			"branch": "gitmsg/" + ext,
+		}); err != nil {
+			panic(fmt.Sprintf("WriteExtConfig %s: %v", ext, err))
+		}
+	}
 }
 
 // --- Seeding ---
@@ -261,12 +371,109 @@ func (f *Fixture) seedReviewPanic(workdir string) {
 	}
 }
 
-// resetTimestampsPanic sets all cached commit timestamps to now.
+// seedMemoPanic initializes the project memo tier and seeds project-tier memos
+// plus one inherited source. Only the project tier is seeded: personal and
+// session tiers live outside the repo, so they cannot travel in the tarball.
+func (f *Fixture) seedMemoPanic(workdir string) {
+	init := memo.InitProject(workdir)
+	mustSucceed("memo.InitProject", init.Success, resultErrMsg(init.Error))
+	f.MemoSubject = "Cache invalidation rules"
+	f.MemoBody = "Storage can be deleted anytime; fetch strategy comes from cache.db metadata."
+	f.MemoLabel = "kind/decision"
+	m := memo.CreateMemo(workdir, f.MemoSubject, f.MemoBody, memo.CreateMemoOptions{
+		Tier: memo.TierProject, Labels: []string{f.MemoLabel},
+	})
+	mustSucceed("memo.CreateMemo", m.Success, resultErrMsg(m.Error))
+	f.MemoID = m.Data.ID
+	f.EditedMemoSubj = "Review checklist (updated)"
+	second := memo.CreateMemo(workdir, "Review checklist", "Check the spec before the code.", memo.CreateMemoOptions{
+		Tier: memo.TierProject, Labels: []string{"kind/howto"},
+	})
+	mustSucceed("memo.CreateMemo second", second.Success, resultErrMsg(second.Error))
+	f.EditedMemoID = second.Data.ID
+	edited := memo.EditMemo(workdir, second.Data.ID, memo.EditMemoOptions{Subject: &f.EditedMemoSubj})
+	mustSucceed("memo.EditMemo", edited.Success, resultErrMsg(edited.Error))
+	f.InheritURL = fixtureInheritURL
+	inherit := memo.AddInherit(workdir, f.InheritURL)
+	mustSucceed("memo.AddInherit", inherit.Success, resultErrMsg(inherit.Error))
+}
+
+// seedForkPanic registers the fork repo on the workspace.
+func (f *Fixture) seedForkPanic(workdir string) {
+	f.ForkURL = fixtureForkURL
+	if err := gitmsg.AddFork(workdir, f.ForkURL); err != nil {
+		panic(fmt.Sprintf("AddFork: %v", err))
+	}
+}
+
+// seedProposalPanic builds the fork repo and has it close the workspace issue.
+// A cross-repo edit is inert until the owner accepts it, so this leaves an open
+// proposal on the issue. Returns the fork repo path for tarballing.
+func (f *Fixture) seedProposalPanic() string {
+	forkDir, err := os.MkdirTemp("", "tui-fixture-fork-*")
+	if err != nil {
+		panic(fmt.Sprintf("MkdirTemp fork: %v", err))
+	}
+	if err := git.Init(forkDir, "main"); err != nil {
+		panic(fmt.Sprintf("git.Init fork: %v", err))
+	}
+	resolved, _ := git.GetRootDir(forkDir)
+	if resolved == "" {
+		resolved = forkDir
+	}
+	for _, kv := range [][2]string{{"user.email", "bob@example.com"}, {"user.name", "Bob"}} {
+		if _, err := git.ExecGit(resolved, []string{"config", kv[0], kv[1]}); err != nil {
+			panic(fmt.Sprintf("git config %s: %v", kv[0], err))
+		}
+	}
+	if _, err := git.CreateCommit(resolved, git.CommitOptions{Message: "Initial commit", AllowEmpty: true}); err != nil {
+		panic(fmt.Sprintf("CreateCommit fork: %v", err))
+	}
+	if _, err := git.ExecGit(resolved, []string{"remote", "add", "origin", fixtureForkURL}); err != nil {
+		panic(fmt.Sprintf("git remote add fork: %v", err))
+	}
+	writeExtConfigsPanic(resolved)
+	closed := pm.CloseIssue(resolved, f.IssueID)
+	mustSucceed("CloseIssue from fork", closed.Success, resultErrMsg(closed.Error))
+	f.ProposalRepoURL = fixtureForkURL
+	f.ProposalIssueID = f.IssueID
+	return resolved
+}
+
+// resetTimestampsPanic rewrites every cached commit timestamp into the last few
+// seconds, preserving the original order.
 func resetTimestampsPanic() {
-	now := time.Now().UTC().Format(time.RFC3339)
 	if err := cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`UPDATE core_commits SET timestamp = ?`, now)
-		return err
+		rows, err := db.Query(`SELECT repo_url, hash, branch FROM core_commits ORDER BY timestamp ASC, rowid ASC`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var keys [][3]string
+		for rows.Next() {
+			var k [3]string
+			if err := rows.Scan(&k[0], &k[1], &k[2]); err != nil {
+				return err
+			}
+			keys = append(keys, k)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		// One second apart, ending now, so every commit still renders as
+		// "just now" while the original order (and therefore version numbering
+		// and list order) stays deterministic.
+		base := time.Now().UTC().Add(-time.Duration(len(keys)) * time.Second)
+		for i, k := range keys {
+			ts := base.Add(time.Duration(i) * time.Second).Format(time.RFC3339)
+			if _, err := db.Exec(
+				`UPDATE core_commits SET timestamp = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				ts, k[0], k[1], k[2],
+			); err != nil {
+				return err
+			}
+		}
+		return nil
 	}); err != nil {
 		panic(fmt.Sprintf("reset timestamps: %v", err))
 	}

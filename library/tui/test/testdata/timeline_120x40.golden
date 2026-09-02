@@ -1,39 +1,39 @@
-╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/17 ─────────────────────────────────────────────────────────────────╮
+╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/20 ─────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏◷  Alice ⇡ · TIME     · planned · #2ee2dc9a7ba1@gitmsg/pm                          │
-│  ⚑  Notifications  ·····  @  ││  ▏   Sprint 23: UX Polish                                                            │
-│  ◧  Analytics  ·········  %  ││  ▏                                                                                   │
-│ ──────────────────────────── ││  ▏   Two-week sprint for user experience improvements.                               │
+│  ⌕  Search  ············  /  ││  ▏•  Bob · TIME     · https://github.com/bob/repo#commit:c6d0fad79532@main           │
+│  ⚑  Notifications  ·····  @  ││  ▏   Initial commit                                                                  │
+│  ◧  Analytics  ·········  %  ││                                                                                      │
+│ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⌘  Social  ············  S  ││                                                                                      │
-│     ⏱  Timeline              ││   ────────────────────────────────────────────────────────────────────────────────   │
-│     ⎇  My Repository         ││                                                                                      │
-│     ☷ My Lists              ││   ⏏  Alice ⇡ · TIME     · #ea0985cc6656@gitmsg/release                               │
-│     ㋡ My Followers          ││      Release v2.0.0-beta.1                                                           │
+│     ⏱  Timeline              ││   ☞  Alice ⇡ · TIME     · #cac84b5af758@gitmsg/memo                                  │
+│     ⎇  My Repository         ││      Cache invalidation rules                                                        │
+│     ☷ My Lists              ││                                                                                      │
+│        • Memo Inherits (au...││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
+│     ㋡ My Followers          ││      kind/decision                                                                   │
 │     ➼  Explore               ││                                                                                      │
-│  ▢  PM  ················  P  ││      Beta release for testing new features.                                          │
+│  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ☞  Memos  ·············  M  ││                                                                                      │
-│                              ││   •  Alice ⇡ · TIME     · #d4de2bdf6448@main                                         │
-│                              ││      Merge branch 'theme-toggle' into main                                           │
+│  ⏏  Release  ···········  V  ││   ☞  Alice ⇡ ✎ · TIME     · #1234026e62fa@gitmsg/memo                                │
+│  ☞  Memos  ·············  M  ││      Review checklist (updated)                                                      │
+│                              ││                                                                                      │
+│                              ││      Check the spec before the code.                                                 │
+│                              ││      kind/howto                                                                      │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   ⏏  Alice ⇡ · TIME     · #c46fb8eedbca@gitmsg/release                               │
-│                              ││      Release v1.0.0                                                                  │
-│                              ││                                                                                      │
-│                              ││      Pre-built binaries for Linux, macOS, and Windows.                               │
+│                              ││   •  Alice ⇡ · TIME     · #95346f2791cd@main                                         │
+│                              ││      Merge branch '_gitmsg-merge-tmp' into main                                      │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   ⑂  Alice ⇡ ✎ · TIME     · merged · #fc1e2278f228@gitmsg/review                     │
-│                              ││      Add theme toggle component                                                      │
+│                              ││   ⑂  Alice ⇡ · TIME     · open · #328a8a50f210@gitmsg/review                         │
+│                              ││      Add dark mode support                                                           │
 │                              ││                                                                                      │
-│ ──────────────────────────── ││      Clean separation of theme variables.                                            │
+│ ──────────────────────────── ││      Implements theme toggle with system preference detection.                       │
 │  ⚙  Configuration            ││                                                                                      │
 │  ⚿  Identity                 ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
-│  ⌨  Settings                 ││   ↩  Alice ⇡ · TIME     · #4361a6f5268b@gitmsg/review                                │
+│  ⌨  Settings                 ││   ●  Alice ⇡ · TIME     · canceled · #785b3089ef41@gitmsg/pm                         │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  tab:focus  f:fetch  I:import    │
 │.../tui-test-FIXTURE          ││   q:quit  ?:help                                                                     │

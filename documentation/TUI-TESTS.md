@@ -53,8 +53,10 @@ library/tui/test/
 ├── cursor_test.go      # List-cursor stability across fetch and back-nav
 ├── history_diff_test.go # History-diff footer registration + render
 ├── stack_test.go       # Stacked-PR display, bindings, and navigation
+├── proposal_test.go    # Cross-repo proposal display + accept/decline flow
 └── testdata/           # Generated artifacts (committed)
-    ├── fixture-repo.tar.gz  # Pre-built git repo with seeded data
+    ├── fixture-repo.tar.gz  # Pre-built workspace repo with seeded data
+    ├── fixture-fork.tar.gz  # Pre-built fork repo (the cross-repo proposal)
     ├── fixture.json         # Fixture metadata (entity IDs)
     └── *.golden             # Golden files (generated with -update flag)
 ```
@@ -96,12 +98,14 @@ func (h *Harness) BindingsForContext(ctx tuicore.Context) []tuicore.Binding
 
 ### Fixture
 
-Pre-built git repo stored as a tarball (`testdata/fixture-repo.tar.gz`) with entity IDs in `testdata/fixture.json`. Extracted once per test run via `TestMain`, shared read-only across tests. Fixture data uses examples from the protocol specs (Alice, dark mode, etc.).
+Two pre-built git repos stored as tarballs, with entity IDs in `testdata/fixture.json`. `testdata/fixture-repo.tar.gz` is the workspace (origin `https://github.com/user/repo`); `testdata/fixture-fork.tar.gz` is a second repo (origin `https://github.com/bob/repo`) that carries one cross-repo edit of the workspace's issue. Both are extracted once per test run via `TestMain` and shared read-only across tests. Fixture data uses examples from the protocol specs (Alice, dark mode, etc.).
 
 ```go
-func SetupFixture(t *testing.T) *Fixture     // per-test isolation (extracts fresh copy)
+func SetupFixture(t *testing.T) *Fixture     // per-test isolation (extracts fresh copies)
 func getFixture(t *testing.T) *Fixture        // shared read-only fixture
 ```
+
+The cache handle is process-global and `cache.Open` is a no-op while one is already open, so `SetupFixture` closes the shared cache first and reopens it on cleanup. Tests that mutate the repo (accept a proposal, close an issue) must use `SetupFixture`; everything else uses `getFixture`.
 
 To regenerate the fixture after changing seed data:
 
@@ -110,13 +114,20 @@ go test ./library/tui/test/ -run TestGenerateFixture -generate
 go test ./library/tui/test/ -run Golden -update      # regenerate golden files too
 ```
 
+Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory, so it can never reach the real personal memo repo or the real config.
+
 Seeds via extension APIs (not raw git):
 - **Social**: 2 posts, 1 comment, 1 repost, 1 quote, 1 edit
 - **PM**: 3 issues (open/closed/canceled), 1 milestone, 1 sprint
 - **Release**: 2 releases (stable + prerelease with artifacts)
 - **Review**: 2 PRs (open with feedback + merged), 1 approval
+- **Memo**: project tier initialized, 2 project memos (one edited, one labeled), 1 inherited source
+- **Forks**: 1 registered fork (`refs/gitmsg/core/forks/<urlHash>`)
+- **Proposal**: the fork closes the workspace issue, leaving an inert cross-repo proposal
 
-Cache populated via `SyncWorkspaceToCache()` for each extension, same as the real app.
+Only the project memo tier is seeded: the personal and session tiers live outside the repo (`~/.config/gitsocial/personal`, the cache dir) so they cannot travel in a tarball.
+
+Cache populated via `SyncWorkspaceToCache()` for each extension, same as the real app. The workspace is synced first and the fork second, because a cross-repo edit only resolves once the canonical it edits is cached. Commit timestamps are then rewritten one second apart, ending now, so relative time always renders as "just now" while version and list ordering stays deterministic.
 
 ### Assert Helpers
 
@@ -124,9 +135,12 @@ Cache populated via `SyncWorkspaceToCache()` for each extension, same as the rea
 func stripANSI(s string) string                          // remove ANSI escape codes
 func rendered(h *Harness) string                          // strip ANSI from rendered
 func assertContains(t, output, substr)                    // substring in stripped output
+func assertRendersItem(t, h, loc, want...)                // navigate, then require seeded content
 func assertNotEmpty(t, output)                            // non-empty after stripping
 func assertLineCount(t, output, maxLines)                 // output fits height
 ```
+
+`assertNotEmpty` passes on a view that draws nothing but its own chrome and an empty-state message, so it is only appropriate for views with no seeded data. Prefer `assertRendersItem`: it navigates, then requires every named fragment of seeded content, and fails on an empty expectation so an unset fixture field cannot make the assertion vacuous.
 
 ---
 
@@ -151,14 +165,20 @@ The smoke test produces hundreds of subtests (one per key × view combination).
 |------|----------|
 | `TestDisplay/Timeline` | Author name, "Timeline" title |
 | `TestDisplay/Search` | Non-empty search view |
-| `TestDisplay/MyRepository` | Non-empty repo view |
+| `TestDisplay/MyRepository` | Project memos appear in the workspace feed |
 | `TestDisplay/Board` | "Board" title |
 | `TestDisplay/IssuesList` | Issue subject from fixture |
 | `TestDisplay/Milestones` | Milestone title from fixture |
 | `TestDisplay/Sprints` | Sprint title from fixture |
 | `TestDisplay/PRList` | PR subject from fixture |
 | `TestDisplay/ReleasesList` | Release subject from fixture |
-| `TestDisplay/Notifications` | Non-empty notifications view |
+| `TestDisplay/Notifications` | The fork's cross-repo edit notification |
+| `TestDisplay/Memos` | Memo subject, body, label and tier badge |
+| `TestDisplay/ProjectMemos` | Both project-tier memos |
+| `TestDisplay/MemoDetail` | Memo subject, body and label |
+| `TestDisplay/MemoHistory` | Edited memo's two versions |
+| `TestDisplay/MemoInherits` | Inherited source URL |
+| `TestDisplay/Forks` | Fork count and the registered fork URL |
 | `TestDisplay/Settings` | "Settings" text |
 | `TestDisplay/Cache` | "Cache" text |
 | `TestDisplay/Help` | "Help" text |
@@ -184,7 +204,7 @@ Golden files are ANSI-stripped and compared line-by-line. Update with:
 go test ./library/tui/test/ -run Golden -update
 ```
 
-Layout property checks verify every view at 3 terminal sizes: no line exceeds width, output fits height.
+Layout property checks verify every view at 3 terminal sizes: the output fits the terminal height and every view renders. They do **not** check width: nothing in the suite fails on a line wider than the terminal.
 
 ### 4. Navigation Tests — view transitions
 
@@ -259,6 +279,23 @@ Seeds a child PR on top of the fixture's PR (`DependsOn`), once per package run.
 | `TestStackDisplay/BadgeOnPRList` | Stack badge appears on the PR list |
 | `TestStackBindings` | Stack keys are registered on the PR contexts |
 | `TestStackNavigationBackend` | `review.GetStack` / `GetDependents` back the navigation |
+
+### 9. Proposal Tests: cross-repo proposals
+
+**File**: `proposal_test.go`
+
+The fork repo's edit of the workspace issue is inert until the owner acts, so it renders as an open proposal everywhere the owner might act on it.
+
+| Test | Verifies |
+|------|----------|
+| `TestProposalDisplay/IssueListMarker` | The ✎ proposed-edit marker on the issue card |
+| `TestProposalDisplay/IssueDetailBanner` | The "Proposed edits from another repo" banner |
+| `TestProposalDisplay/HistoryRow` | The `✎ proposal · bob/repo` tag on the fork's version |
+| `TestProposalDisplay/HistoryFooterOffersAcceptAndDecline` | `A`/`X` appear only when an open proposal is present |
+| `TestProposalAccept` | `A` applies the proposal: issue closes, marker clears |
+| `TestProposalDecline` | `X` declines it: issue stays open, marker clears |
+
+Both action tests mutate the repo, so they take an isolated fixture via `SetupFixture`.
 
 ---
 
@@ -343,5 +380,7 @@ Maps string key names to `tea.KeyMsg`:
 - Extension registration order bugs
 - Context mismatches (key bound to wrong context)
 - Misaligned borders, broken box-drawing characters (golden files)
-- Content overflowing panel boundaries (layout property checks)
+- Content overflowing the terminal height (layout property checks)
 - Responsive layout regressions across terminal sizes (multi-size layout checks)
+
+Not caught: horizontal overflow. `assertLineCount` bounds the number of lines only, so a line wider than the terminal passes every check except a golden diff.

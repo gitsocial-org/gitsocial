@@ -8,13 +8,13 @@
 │     ⏱  Timeline              ││    fetch.auto.backoff    true  (false · true)  doubles per empty cycle, max 30m      │
 │     ⎇  My Repository         ││                                                                                      │
 │     ☷ My Lists              ││  Workspace                                                                           │
-│     ㋡ My Followers          ││    fetch.workspace_mode  (not set)  (default · *)                                    │
-│     ➼  Explore               ││                                                                                      │
-│  ▢  PM  ················  P  ││  Output  · synced                                                                    │
-│  ⑂  Review  ············  R  ││    output.color          auto  (auto · always · never)                               │
-│  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││  Log  · synced                                                                       │
-│                              ││    log.level             info  (debug · info · warn · error)                         │
+│        • Memo Inherits (au...││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│     ㋡ My Followers          ││                                                                                      │
+│     ➼  Explore               ││  Output  · synced                                                                    │
+│  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
+│  ⑂  Review  ············  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││  Log  · synced                                                                       │
+│  ☞  Memos  ·············  M  ││    log.level             info  (debug · info · warn · error)                         │
 │                              ││                                                                                      │
 │                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │

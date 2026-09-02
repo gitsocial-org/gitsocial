@@ -2,7 +2,10 @@
 package test
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestDisplay(t *testing.T) {
@@ -21,8 +24,7 @@ func TestDisplay(t *testing.T) {
 		assertNotEmpty(t, h.Rendered())
 	})
 	t.Run("MyRepository", func(t *testing.T) {
-		h.Navigate("/social/repository")
-		assertNotEmpty(t, h.Rendered())
+		assertRendersItem(t, h, tuicore.Location{Path: "/social/repository"}, f.MemoSubject, f.EditedMemoSubj)
 	})
 	t.Run("Board", func(t *testing.T) {
 		h.Navigate("/pm/board")
@@ -61,8 +63,28 @@ func TestDisplay(t *testing.T) {
 		assertContains(t, out, f.ReleaseSubject)
 	})
 	t.Run("Notifications", func(t *testing.T) {
-		h.Navigate("/notifications")
-		assertNotEmpty(t, h.Rendered())
+		// The fork's cross-repo edit of the workspace issue is the seeded event.
+		assertRendersItem(t, h, tuicore.Location{Path: "/notifications"}, "Bob edited your item", "bob/repo")
+	})
+	t.Run("Memos", func(t *testing.T) {
+		assertRendersItem(t, h, tuicore.Location{Path: "/memo/list"},
+			f.MemoSubject, f.MemoBody, f.MemoLabel, f.EditedMemoSubj, "[project]")
+	})
+	t.Run("ProjectMemos", func(t *testing.T) {
+		assertRendersItem(t, h, tuicore.Location{Path: "/memo/project"}, f.MemoSubject, f.EditedMemoSubj)
+	})
+	t.Run("MemoDetail", func(t *testing.T) {
+		assertRendersItem(t, h, tuicore.LocMemoDetail(f.MemoID), f.MemoSubject, f.MemoBody, f.MemoLabel)
+	})
+	t.Run("MemoHistory", func(t *testing.T) {
+		assertRendersItem(t, h, tuicore.LocMemoHistory(f.EditedMemoID), f.EditedMemoSubj, "2 version(s)")
+	})
+	t.Run("MemoInherits", func(t *testing.T) {
+		assertRendersItem(t, h, tuicore.Location{Path: "/memo/inherits"}, f.InheritURL)
+	})
+	t.Run("Forks", func(t *testing.T) {
+		// The view renders fork URLs without the scheme.
+		assertRendersItem(t, h, tuicore.LocForks, "Forks (1)", strings.TrimPrefix(f.ForkURL, "https://"))
 	})
 	t.Run("Settings", func(t *testing.T) {
 		h.Navigate("/settings")
