@@ -55,6 +55,22 @@ func flushMapping(opts Options, mapping *MappingFile) {
 	}
 }
 
+// syncEditFields propagates mutable extension fields (state, labels, assignees)
+// from freshly imported edit commits onto the canonical rows they edit, the way
+// the fetch ingest path does after inserting an edit's extension row. Without
+// it an imported close/merge edit exists but the canonical item still reads
+// with its original state. Hashes that are not edits are ignored.
+func syncEditFields(repoURL, branch string, hashes []string) {
+	if len(hashes) == 0 {
+		return
+	}
+	keys := make([]cache.EditKey, 0, len(hashes))
+	for _, hash := range hashes {
+		keys = append(keys, cache.EditKey{RepoURL: repoURL, Hash: hash, Branch: branch})
+	}
+	cache.SyncEditExtensionFields(keys)
+}
+
 // Run executes the full import pipeline for the requested extensions.
 func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 	progress := func(ext string, phase ProgressPhase, stats Stats, itemCount, itemTotal int, detail string) {
@@ -376,6 +392,7 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 						continue
 					}
 				}
+				syncEditFields(repoURL, branch, closeHashes)
 			}
 		}
 	}
@@ -490,6 +507,7 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 						continue
 					}
 				}
+				syncEditFields(repoURL, branch, closeHashes)
 			}
 		}
 		// Phase 11: issue links (still sequential — small count, requires all mappings)
@@ -854,6 +872,7 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 					continue
 				}
 			}
+			syncEditFields(repoURL, branch, stateHashes)
 		}
 	}
 	// Comment phase: conversation comments ride their parent PRs
@@ -1515,6 +1534,7 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 			stats.UpdatedMilestones++
 		}
 	}
+	syncEditFields(repoURL, branch, hashes)
 	return stats
 }
 
@@ -1666,6 +1686,7 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		}
 		stats.UpdatedPRs++
 	}
+	syncEditFields(repoURL, branch, hashes)
 	return stats
 }
 
@@ -1771,6 +1792,7 @@ func updateRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats 
 		}
 		stats.UpdatedReleases++
 	}
+	syncEditFields(repoURL, branch, hashes)
 	return stats
 }
 
@@ -1861,6 +1883,7 @@ func updateSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 		}
 		stats.UpdatedPosts++
 	}
+	syncEditFields(repoURL, branch, hashes)
 	return stats
 }
 
