@@ -716,7 +716,9 @@ func (p *NavPanel) renderChildren(content *strings.Builder, parentID, activeID s
 			label = fmt.Sprintf("%s (%d)", child.Label, p.unpushedCount)
 		}
 		isSelected := activeID == child.ID
-		line := indent + prefix + icon + label
+		// padToWidth only pads, so an over-long child label (memo's auto-managed
+		// inherit list, for one) would push the panel border past the terminal.
+		line := TruncateToWidth(indent+prefix+icon+label, p.width-2)
 		var rendered string
 		if isSelected {
 			rendered = padToWidth(selectedStyle.Render(line))
