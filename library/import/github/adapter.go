@@ -42,18 +42,26 @@ func (a *Adapter) FetchSocial(opts importpkg.FetchOptions) (*importpkg.SocialPla
 	return a.fetchDiscussions(opts)
 }
 
+// execCommand builds the process that runs gh; tests replace it to drive the
+// wrapper (including its retry and backoff) without the real CLI.
+var execCommand = exec.Command
+
+// retrySleep waits out the backoff between gh retries; tests replace it to
+// record the delays instead of sleeping through them.
+var retrySleep = time.Sleep
+
 // gh executes a gh CLI command with retry on rate limit / server errors.
 func gh(args ...string) ([]byte, error) {
 	maxRetries := 3
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		cmd := exec.Command("gh", args...)
+		cmd := execCommand("gh", args...)
 		out, err := cmd.Output()
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				stderr := string(exitErr.Stderr)
 				if attempt < maxRetries && isRetryableError(stderr) {
 					wait := time.Duration(1<<uint(attempt)) * time.Second
-					time.Sleep(wait)
+					retrySleep(wait)
 					continue
 				}
 				return nil, fmt.Errorf("gh %s: %s", strings.Join(args, " "), stderr)
