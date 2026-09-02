@@ -378,7 +378,8 @@ Returns posts for a given scope.
 | `due` | string | no | ISO 8601 due date |
 | `milestone` | string | no | Milestone ref |
 | `sprint` | string | no | Sprint ref |
-| `parent` | string | no | Parent issue ref |
+| `parent` | string | no | Parent issue ref. `root` is derived from it per GITPM.md §1.7, so a client normally sends this alone. |
+| `root` | string | no | Top-level ancestor ref. Only send this to override the derivation; sending `parent` alone is the usual case. |
 | `labels` | Label[] | no | `[{"scope":"priority","value":"high"}]` |
 
 **Result:** `Issue`
@@ -396,7 +397,8 @@ Returns posts for a given scope.
 | `due` | string | no | New due date |
 | `milestone` | string | no | New milestone ref |
 | `sprint` | string | no | New sprint ref |
-| `parent` | string | no | New parent ref |
+| `parent` | string | no | New parent ref. Sending it without `root` re-derives the root; sending `""` clears both. |
+| `root` | string | no | Top-level ancestor ref. Only send this to override the derivation. |
 | `labels` | Label[] | no | New labels |
 
 **Result:** `Issue`

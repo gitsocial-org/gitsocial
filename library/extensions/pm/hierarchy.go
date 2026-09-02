@@ -48,6 +48,20 @@ func DeriveHierarchy(parentRef, defaultRepoURL, selfRef string) (parent, root st
 	return "", parentRefStr, nil
 }
 
+// resolveHierarchy fills a child issue's root when the caller named only a
+// parent. GITPM.md §1.7 keeps `root` alone at the first level (parent and root
+// are the same commit there) and both fields below it, and DeriveHierarchy
+// reads a missing root as "this parent is top-level", so a caller that skips
+// the derivation silently mis-roots every level beneath it.
+func resolveHierarchy(opts *CreateIssueOptions, repoURL, selfRef string) error {
+	parent, root, err := DeriveHierarchy(opts.Parent, repoURL, selfRef)
+	if err != nil {
+		return err
+	}
+	opts.Parent, opts.Root = parent, root
+	return nil
+}
+
 // localizedCommitRef builds a "#commit:" ref, stripping the repo prefix when it
 // matches the workspace so serialized headers stay workspace-relative.
 func localizedCommitRef(repoURL, hash, branch, defaultRepoURL string) string {

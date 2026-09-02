@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
@@ -105,6 +106,140 @@ func refHash(t *testing.T, issueRef string) string {
 		t.Fatalf("could not extract a hash from %q", issueRef)
 	}
 	return hash
+}
+
+// issueHeader returns the GitMsg header line of the commit behind an issue ref.
+func issueHeader(t *testing.T, workdir, issueRef string) string {
+	t.Helper()
+	out, err := git.ExecGit(workdir, []string{"log", "-1", "--format=%B", refHash(t, issueRef)})
+	if err != nil {
+		t.Fatalf("read commit %s: %v", refHash(t, issueRef), err)
+	}
+	for _, line := range strings.Split(out.Stdout, "\n") {
+		if strings.HasPrefix(line, "GitMsg:") {
+			return line
+		}
+	}
+	t.Fatalf("no GitMsg header in commit %s", refHash(t, issueRef))
+	return ""
+}
+
+// branchTipHeader returns the GitMsg header line of the newest commit on the PM
+// branch, which is where an edit lands.
+func branchTipHeader(t *testing.T, workdir string) string {
+	t.Helper()
+	out, err := git.ExecGit(workdir, []string{"log", "-1", "--format=%B", gitmsg.GetExtBranch(workdir, "pm")})
+	if err != nil {
+		t.Fatalf("read branch tip: %v", err)
+	}
+	for _, line := range strings.Split(out.Stdout, "\n") {
+		if strings.HasPrefix(line, "GitMsg:") {
+			return line
+		}
+	}
+	t.Fatal("no GitMsg header on the branch tip")
+	return ""
+}
+
+// TestCreateIssueDerivesHierarchy pins the spec form for a caller that names
+// only a parent: root alone at the first level (GITPM.md §1.7, where parent and
+// root would be the same commit), both fields below it. A caller that skipped
+// the derivation used to write parent with no root, which the next level down
+// then read as "my parent is top-level" and mis-rooted.
+func TestCreateIssueDerivesHierarchy(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+
+	top := newIssue(t, workdir, "Top", CreateIssueOptions{})
+	child := newIssue(t, workdir, "Child", CreateIssueOptions{Parent: top.ID})
+	header := issueHeader(t, workdir, child.ID)
+	if strings.Contains(header, "parent=") {
+		t.Errorf("header = %q, want no parent field for a direct child", header)
+	}
+	if !strings.Contains(header, "root=\"#commit:"+refHash(t, top.ID)) {
+		t.Errorf("header = %q, want root referencing the top-level issue", header)
+	}
+
+	grandchild := newIssue(t, workdir, "Grandchild", CreateIssueOptions{Parent: child.ID})
+	header = issueHeader(t, workdir, grandchild.ID)
+	if !strings.Contains(header, "parent=\"#commit:"+refHash(t, child.ID)) {
+		t.Errorf("header = %q, want parent referencing the immediate parent", header)
+	}
+	if !strings.Contains(header, "root=\"#commit:"+refHash(t, top.ID)) {
+		t.Errorf("header = %q, want root referencing the top-level ancestor, not the parent", header)
+	}
+}
+
+// TestCreateIssueKeepsExplicitRoot leaves a caller that supplies both fields
+// alone: explicit wins over derivation.
+func TestCreateIssueKeepsExplicitRoot(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	top := newIssue(t, workdir, "Top", CreateIssueOptions{})
+	child := newIssue(t, workdir, "Child", CreateIssueOptions{Parent: top.ID})
+	parentRef, rootRef, err := DeriveHierarchy(child.ID, repoURL, "")
+	if err != nil {
+		t.Fatalf("DeriveHierarchy: %v", err)
+	}
+	grandchild := newIssue(t, workdir, "Grandchild", CreateIssueOptions{Parent: parentRef, Root: rootRef})
+	header := issueHeader(t, workdir, grandchild.ID)
+	if !strings.Contains(header, "root=\"#commit:"+refHash(t, top.ID)) {
+		t.Errorf("header = %q, want the caller's explicit root preserved", header)
+	}
+}
+
+// TestUpdateIssueRederivesHierarchy covers a move: naming a new parent without
+// a root must re-derive the root rather than strand the one already on the
+// issue, and clearing the parent must clear the root with it.
+func TestUpdateIssueRederivesHierarchy(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+
+	topA := newIssue(t, workdir, "Top A", CreateIssueOptions{})
+	topB := newIssue(t, workdir, "Top B", CreateIssueOptions{})
+	child := newIssue(t, workdir, "Child", CreateIssueOptions{Parent: topA.ID})
+
+	// UpdateIssue returns the canonical issue, so the edit's own header is on
+	// the branch tip rather than on the returned ID.
+	moved := topB.ID
+	res := UpdateIssue(workdir, child.ID, UpdateIssueOptions{Parent: &moved})
+	if !res.Success {
+		t.Fatalf("UpdateIssue(move) failed: %s", res.Error.Message)
+	}
+	header := branchTipHeader(t, workdir)
+	if !strings.Contains(header, "root=\"#commit:"+refHash(t, topB.ID)) {
+		t.Errorf("header = %q, want root re-derived to the new parent", header)
+	}
+	if strings.Contains(header, refHash(t, topA.ID)) {
+		t.Errorf("header = %q, still references the old parent", header)
+	}
+
+	cleared := ""
+	res = UpdateIssue(workdir, res.Data.ID, UpdateIssueOptions{Parent: &cleared})
+	if !res.Success {
+		t.Fatalf("UpdateIssue(clear) failed: %s", res.Error.Message)
+	}
+	header = branchTipHeader(t, workdir)
+	if strings.Contains(header, "root=") || strings.Contains(header, "parent=") {
+		t.Errorf("header = %q, want both hierarchy fields cleared", header)
+	}
+}
+
+// TestCreateIssueRejectsUnknownParent surfaces the derivation error instead of
+// writing a dangling ref.
+func TestCreateIssueRejectsUnknownParent(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+
+	res := CreateIssue(workdir, "Orphan", "", CreateIssueOptions{Parent: "#commit:deadbeefcafe@gitmsg/pm"})
+	if res.Success {
+		t.Fatal("CreateIssue with an unknown parent succeeded, want INVALID_PARENT")
+	}
+	if res.Error.Code != "INVALID_PARENT" {
+		t.Errorf("code = %q, want INVALID_PARENT", res.Error.Code)
+	}
 }
 
 func TestIsBlocked(t *testing.T) {

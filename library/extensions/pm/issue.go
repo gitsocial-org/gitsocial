@@ -51,6 +51,12 @@ func CreateIssue(workdir, subject, body string, opts CreateIssueOptions) Result[
 		opts.Related[i] = protocol.LocalizeRef(r, repoURL)
 	}
 
+	if opts.Parent != "" && opts.Root == "" {
+		if err := resolveHierarchy(&opts, repoURL, ""); err != nil {
+			return result.Err[Issue]("INVALID_PARENT", err.Error())
+		}
+	}
+
 	content := buildIssueContent(subject, body, opts)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
@@ -180,6 +186,15 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	}
 	if opts.Parent != nil {
 		createOpts.Parent = *opts.Parent
+		if opts.Root == nil {
+			selfRef := protocol.LocalizeRef(
+				protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
+				repoURL,
+			)
+			if err := resolveHierarchy(&createOpts, repoURL, selfRef); err != nil {
+				return result.Err[Issue]("INVALID_PARENT", err.Error())
+			}
+		}
 	}
 	if opts.Root != nil {
 		createOpts.Root = *opts.Root
