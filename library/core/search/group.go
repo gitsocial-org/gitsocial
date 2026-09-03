@@ -108,13 +108,18 @@ func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field 
 }
 
 // enrichReview queries review_items for state, labels, reviewers, base, scoped to result set items.
+// Labels are not a review_items column: they live on core_commits, which is the
+// same source review_items_resolved reads them from.
 func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field string) {
 	if field != "state" && field != "label" && field != "reviewer" && field != "base" {
 		return
 	}
 
 	hashFilter, hashArgs := buildHashFilter(keyIndex)
-	query := `SELECT repo_url, hash, branch, state, labels, reviewers, base
+	query := `SELECT repo_url, hash, branch, state,
+		(SELECT c.labels FROM core_commits c WHERE c.repo_url = review_items.repo_url
+			AND c.hash = review_items.hash AND c.branch = review_items.branch) AS labels,
+		reviewers, base
 		FROM review_items WHERE type = 'pull-request' AND ` + hashFilter
 	rows, err := db.Query(query, hashArgs...)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -72,6 +73,31 @@ func assertLineCount(t *testing.T, output string, maxLines int) {
 	if len(lines) > maxLines {
 		t.Errorf("got %d lines, max %d", len(lines), maxLines)
 	}
+}
+
+// lineWidth returns the visible column count of one already ANSI-stripped line.
+// Runes, not bytes, because the UI is full of multi-byte box-drawing characters;
+// trailing padding is ignored, since views pad rows out with spaces.
+func lineWidth(line string) int {
+	return utf8.RuneCountInString(strings.TrimRight(line, " "))
+}
+
+// assertMaxWidth checks that no rendered line is wider than maxCols. This is the
+// horizontal counterpart to assertLineCount: without it a panel border pushed
+// past the terminal edge passes every assertion except a golden diff.
+func assertMaxWidth(t *testing.T, output string, maxCols int) {
+	t.Helper()
+	for i, line := range strings.Split(stripANSI(output), "\n") {
+		if w := lineWidth(line); w > maxCols {
+			t.Errorf("line %d is %d columns wide, max %d:\n%s", i+1, w, maxCols, line)
+		}
+	}
+}
+
+// assertFitsTerminal checks the current render against the harness terminal width.
+func assertFitsTerminal(t *testing.T, h *Harness) {
+	t.Helper()
+	assertMaxWidth(t, h.Rendered(), h.width)
 }
 
 // truncate shortens a string to max characters for readable error messages.
