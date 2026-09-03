@@ -259,6 +259,14 @@ func (v *SiteView) Render(state *State) string {
 	wrapper := NewViewWrapper(state)
 	rs := DefaultRowStyles()
 
+	// The value column is whatever the pane leaves after the row indent, the
+	// fixed 20-column label and the two-space gaps. Bound the plain text before
+	// styling: truncating afterwards would slice an escape sequence.
+	valueWidth := wrapper.ContentWidth() - 24
+	if valueWidth < 10 {
+		valueWidth = 10
+	}
+
 	var b strings.Builder
 	for i, f := range siteFields {
 		value := *f.get(&v.config)
@@ -266,8 +274,12 @@ func (v *SiteView) Render(state *State) string {
 		if display == "" {
 			display = "(not set)"
 		}
+		display = TruncateToWidth(display, valueWidth)
 		if hint := f.hint; hint != "" {
-			display += "  " + Dim.Render(hint)
+			// The hint is supplementary, so it yields the leftover room.
+			if room := valueWidth - AnsiWidth(display) - 2; room > 3 {
+				display += "  " + Dim.Render(TruncateToWidth(hint, room))
+			}
 		}
 		var line string
 		if i == v.cursor && v.editMode {

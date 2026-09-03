@@ -386,7 +386,15 @@ func (v *CacheView) Render(state *State) string {
 		return wrapper.Render(content, footer)
 	}
 
-	rs := RowStylesWithWidths(80, 10)
+	// Column widths follow the content pane: a fixed label width overflows the
+	// border on any terminal narrower than it plus the value and hint columns.
+	// Budget is label + gap + value(10) + gap + the widest hint ("C:clear all").
+	inner := wrapper.ContentWidth()
+	labelWidth := inner - 25
+	if labelWidth < 20 {
+		labelWidth = 20
+	}
+	rs := RowStylesWithWidths(labelWidth, 10)
 	dbSize := cache.FormatBytesMB(v.stats.DbSizeBytes)
 	repoSize := cache.FormatBytesMB(v.stats.RepoSizeBytes)
 	forkSize := cache.FormatBytesMB(v.stats.ForkSizeBytes)
@@ -404,39 +412,41 @@ func (v *CacheView) Render(state *State) string {
 	var b strings.Builder
 
 	// Memory
-	memLabel := rs.Header.Width(80).Render("Memory")
+	memLabel := rs.Header.Width(labelWidth).Render("Memory")
 	fmt.Fprintf(&b, "%s  %s", memLabel, rs.Value.Render(memorySize))
 	b.WriteString("\n\n")
 
 	// Cache header. The "C:clear all" hint uses local inline styles (no
 	// BgFooter background) because it renders inside content, not the footer.
-	cacheLabel := rs.Header.Width(80).Render("Cache")
+	cacheLabel := rs.Header.Width(labelWidth).Render("Cache")
 	keyHint := lipgloss.NewStyle().Foreground(BorderFocused).Bold(true).Render("C")
 	labelHint := lipgloss.NewStyle().Foreground(TextNormal).Render("clear all")
 	fmt.Fprintf(&b, "%s  %s  %s", cacheLabel, rs.Value.Render(totalSize), keyHint+":"+labelHint)
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(v.stats.Location))
+	b.WriteString(rs.Dim.Render(TruncateToWidth(v.stats.Location, inner)))
 	b.WriteString("\n\n")
 
 	// Database header
-	dbHeader := rs.Header.Width(80).Render("Database")
+	dbHeader := rs.Header.Width(labelWidth).Render("Database")
 	fmt.Fprintf(&b, "%s  %s  %s", dbHeader, rs.Value.Render(dbSize), keyStyle.Render("D")+":"+labelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(fmt.Sprintf("%d repos, %d commits (%s/cache.db)", v.stats.Repositories, v.stats.Items, v.stats.Location)))
+	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/cache.db)", v.stats.Repositories, v.stats.Items, v.stats.Location), inner)))
 	b.WriteString("\n\n")
 
 	// Repositories header
-	repoHeader := rs.Header.Width(80).Render("Repositories")
+	repoHeader := rs.Header.Width(labelWidth).Render("Repositories")
 	fmt.Fprintf(&b, "%s  %s  %s", repoHeader, rs.Value.Render(repoSize), keyStyle.Render("X")+":"+labelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(fmt.Sprintf("%d repos, %d commits (%s/repositories)", v.stats.Repositories, totalRepoCommits, v.stats.Location)))
+	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/repositories)", v.stats.Repositories, totalRepoCommits, v.stats.Location), inner)))
 	b.WriteString("\n")
 
 	if len(v.stats.TopRepos) > 0 {
 		for _, repo := range v.stats.TopRepos {
+			// Keep the tail of a long URL: the host prefix repeats, the path
+			// is what distinguishes one repo from another.
 			repoName := repo.URL
-			if len(repoName) > 70 {
-				repoName = "..." + repoName[len(repoName)-67:]
+			if nameMax := labelWidth - 10; len(repoName) > nameMax && nameMax > 3 {
+				repoName = "..." + repoName[len(repoName)-(nameMax-3):]
 			}
 			label := fmt.Sprintf("%s (%d)", repoName, repo.Commits)
 			size := cache.FormatBytesMB(repo.Size)
@@ -450,7 +460,7 @@ func (v *CacheView) Render(state *State) string {
 			}
 			if isSelected {
 				v.cursorLine = strings.Count(b.String(), "\n")
-				raw := fmt.Sprintf("  %-80s  %s", label, size)
+				raw := fmt.Sprintf("  %-*s  %s", labelWidth, label, size)
 				if suffix != "" {
 					raw += "  " + suffix
 				}
@@ -469,10 +479,10 @@ func (v *CacheView) Render(state *State) string {
 	b.WriteString("\n")
 
 	// Forks header
-	forkHeader := rs.Header.Width(80).Render("Forks")
+	forkHeader := rs.Header.Width(labelWidth).Render("Forks")
 	fmt.Fprintf(&b, "%s  %s  %s", forkHeader, rs.Value.Render(forkSize), keyStyle.Render("F")+":"+labelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(fmt.Sprintf("%d forks (%s/forks)", v.stats.ForkCount, v.stats.Location)))
+	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d forks (%s/forks)", v.stats.ForkCount, v.stats.Location), inner)))
 	b.WriteString("\n")
 	if len(v.stats.TopForks) > 0 {
 		for _, fork := range v.stats.TopForks {

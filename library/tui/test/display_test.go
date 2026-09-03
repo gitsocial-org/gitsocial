@@ -113,9 +113,7 @@ func TestDisplay(t *testing.T) {
 		h.Navigate("/config/site")
 		out := h.Rendered()
 		assertNotEmpty(t, out)
-		// No assertFitsTerminal here: the key descriptions are rendered at their
-		// natural length, so this view overflows a 120-column terminal by up to
-		// 11 columns today. Add the check once the view wraps them.
+		assertFitsTerminal(t, h)
 		assertContains(t, out, "Site")
 		assertContains(t, out, "title")
 		assertContains(t, out, "accent")
@@ -125,10 +123,7 @@ func TestDisplay(t *testing.T) {
 		h.Navigate("/cache")
 		out := h.Rendered()
 		assertNotEmpty(t, out)
-		// No assertFitsTerminal here: the rows are laid out at a hardcoded
-		// 80-column label width and the storage paths are printed unbounded, so
-		// this view overflows a 120-column terminal by up to 21 columns today.
-		// Add the check once the widths derive from the content pane.
+		assertFitsTerminal(t, h)
 		assertContains(t, out, "Cache")
 	})
 	t.Run("Help", func(t *testing.T) {
