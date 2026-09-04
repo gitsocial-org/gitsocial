@@ -17,18 +17,52 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
-// testIsolationEnv neutralizes the host's global/system git config when running
-// under `go test`, so tests don't inherit per-machine state like signing keys,
-// aliases, or includeIf overrides. (Credential-helper dialog suppression is
-// handled separately by GCM_INTERACTIVE=Never on every invocation.)
-func testIsolationEnv() []string {
+// gitRedirectEnv are the variables that point git at a repository other than
+// the one the caller named. An ambient value overrides cmd.Dir, so under
+// `go test` one of these in the environment silently retargets every
+// invocation: a test that builds a temp repo would then commit into whatever
+// repo the variable names.
+var gitRedirectEnv = []string{
+	"GIT_DIR=",
+	"GIT_WORK_TREE=",
+	"GIT_COMMON_DIR=",
+	"GIT_INDEX_FILE=",
+	"GIT_OBJECT_DIRECTORY=",
+	"GIT_ALTERNATE_OBJECT_DIRECTORIES=",
+	"GIT_NAMESPACE=",
+}
+
+// testIsolationEnv neutralizes the host's git environment when running under
+// `go test`: it drops the repo-redirecting variables (they must be removed, not
+// blanked — git rejects an empty GIT_DIR rather than ignoring it) and points
+// global/system config at /dev/null, so tests don't inherit per-machine state
+// like signing keys, aliases, or includeIf overrides. Outside tests the
+// environment passes through unchanged. (Credential-helper dialog suppression
+// is handled separately by GCM_INTERACTIVE=Never on every invocation.)
+func testIsolationEnv(env []string) []string {
 	if !testing.Testing() {
-		return nil
+		return env
 	}
-	return []string{
+	kept := make([]string, 0, len(env)+2)
+	for _, entry := range env {
+		if !hasAnyPrefix(entry, gitRedirectEnv) {
+			kept = append(kept, entry)
+		}
+	}
+	return append(kept,
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_SYSTEM=/dev/null",
+	)
+}
+
+// hasAnyPrefix reports whether s starts with any of the given prefixes.
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
 	}
+	return false
 }
 
 // s3HelperAlias returns the git alias that resolves s3:// remotes by running
@@ -103,14 +137,14 @@ func DefaultExec(ctx context.Context, workdir string, args []string) (*ExecResul
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = envWithS3HelperAlias(append(append(os.Environ(),
+	cmd.Env = envWithS3HelperAlias(testIsolationEnv(append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
 		// Git Credential Manager: don't pop GUI dialogs for fresh auth — cached
 		// tokens still work, so private-repo fetches the user already
 		// authenticated to keep functioning. Prevents surprise sign-in dialogs
 		// when gitsocial fetches external repos the user has no creds for.
 		"GCM_INTERACTIVE=Never",
-	), testIsolationEnv()...))
+	)))
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -163,10 +197,10 @@ func ExecGitTransferContext(ctx context.Context, workdir string, args []string, 
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = envWithS3HelperAlias(append(append(append(os.Environ(),
+	cmd.Env = envWithS3HelperAlias(append(testIsolationEnv(append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
 		"GCM_INTERACTIVE=Never",
-	), testIsolationEnv()...), extraEnv...))
+	)), extraEnv...))
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -228,10 +262,10 @@ func execGitWithStdin(workdir string, args []string, stdin string) (string, erro
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = workdir
-	cmd.Env = envWithS3HelperAlias(append(append(os.Environ(),
+	cmd.Env = envWithS3HelperAlias(testIsolationEnv(append(os.Environ(),
 		"GIT_TERMINAL_PROMPT=0",
 		"GCM_INTERACTIVE=Never",
-	), testIsolationEnv()...))
+	)))
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
