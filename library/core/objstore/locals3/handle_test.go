@@ -12,7 +12,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/xml"
 	"fmt"
@@ -502,23 +501,24 @@ func TestListObjectsV2ETagTracksValue(t *testing.T) {
 	}
 }
 
-// TestListObjectsV2DoesNotEscapeKeys reproduces a DEFECT, not intended
-// behavior: the listing writes each key straight into the XML, so a key holding
-// a character XML reserves breaks the whole document. "&" is legal in a git ref
-// name (git check-ref-format accepts refs/heads/foo&bar), and a real bucket
-// escapes it, so a locally pushed repo carrying such a branch makes every
-// ListObjectsV2 consumer (ref listing, push state, the thin-fork walk) fail to
-// parse the entire listing, not just that one entry.
-func TestListObjectsV2DoesNotEscapeKeys(t *testing.T) {
+// TestListObjectsV2EscapesKeys pins that a key holding a character XML reserves
+// survives the listing. "&" is legal in a git ref name (git check-ref-format
+// accepts refs/heads/foo&bar), and writing it raw would make the whole document
+// unparseable rather than just that entry, breaking every ListObjectsV2 consumer
+// (ref listing, push state, the thin-fork walk) against a locally pushed repo.
+func TestListObjectsV2EscapesKeys(t *testing.T) {
 	newBucketRoot(t)
 	putObject(t, "showcase/refs/heads/foo&bar", "a")
 	res := request(t, http.MethodGet, "/showcase?list-type=2", nil, nil)
-	if !strings.Contains(res.Body.String(), "<Key>refs/heads/foo&bar</Key>") {
-		t.Fatalf("listing = %q, want the unescaped key this test documents", res.Body.String())
+	if !strings.Contains(res.Body.String(), "<Key>refs/heads/foo&amp;bar</Key>") {
+		t.Fatalf("listing = %q, want the key XML-escaped", res.Body.String())
 	}
 	var parsed listBucketResult
-	if err := xml.Unmarshal(res.Body.Bytes(), &parsed); err == nil {
-		t.Errorf("listing parsed as XML; the escaping defect is fixed, so replace this test with a round-trip assertion")
+	if err := xml.Unmarshal(res.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("listing does not parse as XML: %v", err)
+	}
+	if len(parsed.Contents) != 1 || parsed.Contents[0].Key != "refs/heads/foo&bar" {
+		t.Errorf("parsed keys = %+v, want the original unescaped key back", parsed.Contents)
 	}
 }
 
@@ -548,15 +548,13 @@ func TestTrailingSlashServesDirectoryIndex(t *testing.T) {
 	}
 }
 
-// TestHandleServesFileOutsideRootViaEncodedTraversal reproduces a DEFECT, not
-// intended behavior: request keys are joined onto the bucket root without
-// confinement (see TestDiskPathEscapesRootWithDotDot), and ServeMux only
-// rewrites a literal "..", so a percent-encoded traversal reaches handle intact
-// and reads a file outside -root. PUT and DELETE map keys the same way, so they
-// write and delete outside it too. The server binds 127.0.0.1 and is
-// development-only, which bounds the blast radius but does not close the hole.
-// The test drives a raw request line, since an http.Client would normalize it.
-func TestHandleServesFileOutsideRootViaEncodedTraversal(t *testing.T) {
+// TestHandleRefusesEncodedTraversal pins the confinement: a percent-encoded
+// ".." reaches handle already decoded (ServeMux only rewrites the literal
+// form), so the handler itself must refuse it rather than rely on the mux.
+// Reads, writes and deletes are all refused, since PUT and DELETE map keys the
+// same way. The test drives a raw request line, since an http.Client would
+// normalize it before it left.
+func TestHandleRefusesEncodedTraversal(t *testing.T) {
 	outside := t.TempDir()
 	secret := filepath.Join(outside, "secret.txt")
 	if err := os.WriteFile(secret, []byte("not bucket content"), 0o644); err != nil {
@@ -568,29 +566,41 @@ func TestHandleServesFileOutsideRootViaEncodedTraversal(t *testing.T) {
 	}
 	withRoot(t, bucketRoot)
 
-	// main() registers handle on a ServeMux, so the reproduction goes through
-	// one too rather than calling handle directly.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handle)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	conn, err := net.Dial("tcp", strings.TrimPrefix(server.URL, "http://"))
-	if err != nil {
-		t.Fatal(err)
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		conn, err := net.Dial("tcp", strings.TrimPrefix(server.URL, "http://"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw := method + " /bucket/%2e%2e/%2e%2e/secret.txt HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+		if _, err := conn.Write([]byte(raw)); err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(conn)
+		conn.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(string(out), "HTTP/1.1 403") {
+			t.Errorf("%s traversal = %q, want 403", method, firstLine(string(out)))
+		}
 	}
-	defer conn.Close()
-	if _, err := fmt.Fprint(conn, "GET /showcase/%2e%2e/%2e%2e/secret.txt HTTP/1.1\r\nHost: locals3\r\nConnection: close\r\n\r\n"); err != nil {
-		t.Fatal(err)
+	if body, err := os.ReadFile(secret); err != nil || string(body) != "not bucket content" {
+		t.Errorf("secret.txt = %q (err %v), want it untouched outside the root", body, err)
 	}
-	res, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(outside, "pwned.txt")); !os.IsNotExist(err) {
+		t.Error("a PUT created a file outside the bucket root")
 	}
-	defer res.Body.Close()
-	body := make([]byte, 64)
-	n, _ := res.Body.Read(body)
-	if res.StatusCode != 200 || string(body[:n]) != "not bucket content" {
-		t.Errorf("encoded traversal = %d %q; a confined server answers 404 or 403, so the defect is fixed and this test should be replaced", res.StatusCode, body[:n])
+}
+
+// firstLine returns the status line of a raw HTTP response, for error messages.
+func firstLine(s string) string {
+	if i := strings.Index(s, "\r\n"); i >= 0 {
+		return s[:i]
 	}
+	return s
 }

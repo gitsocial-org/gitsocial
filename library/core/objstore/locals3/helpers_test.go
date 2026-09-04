@@ -52,22 +52,29 @@ func TestDiskPathJoinsUnderRoot(t *testing.T) {
 	}
 }
 
-// TestDiskPathEscapesRootWithDotDot documents a DEFECT, not intended behavior.
-// diskPath maps a request key with filepath.Join, which resolves ".." segments
-// instead of rejecting them, so a key carrying them addresses a file outside
-// the bucket root. net/http's ServeMux only cleans the literal form, so a
-// percent-encoded traversal reaches the handler intact (see the end-to-end
-// reproduction in TestHandleServesFileOutsideRootViaEncodedTraversal). The
-// intended property is that every request stays under root; this test pins what
-// the code does today so the gap is not silently inherited.
-func TestDiskPathEscapesRootWithDotDot(t *testing.T) {
+// TestWithinRoot covers the confinement guard. diskPath still resolves ".."
+// (filepath.Join's behavior), so containment is decided separately: withinRoot
+// is what keeps a traversing key from addressing a file outside the bucket
+// root, and handle refuses one with a 403.
+func TestWithinRoot(t *testing.T) {
 	withRoot(t, "/srv/buckets")
-	got := diskPath("showcase/../../etc/passwd")
-	if want := "/srv/etc/passwd"; got != want {
-		t.Errorf("diskPath with .. = %q, want %q (the escape this test documents)", got, want)
+	cases := []struct {
+		key  string
+		want bool
+	}{
+		{"showcase/refs/heads/main", true},
+		{"showcase", true},
+		{"showcase/a/../b", true},
+		{"showcase/../showcase/x", true},
+		{"showcase/../../etc/passwd", false},
+		{"..", false},
+		{"../sibling", false},
+		{"showcase/../..", false},
 	}
-	if strings.HasPrefix(got, "/srv/buckets") {
-		t.Errorf("diskPath(%q) = %q is confined to root; the defect is fixed, update this test", "showcase/../../etc/passwd", got)
+	for _, c := range cases {
+		if got := withinRoot(diskPath(c.key)); got != c.want {
+			t.Errorf("withinRoot(diskPath(%q)) = %v, want %v (resolved %q)", c.key, got, c.want, diskPath(c.key))
+		}
 	}
 }
 

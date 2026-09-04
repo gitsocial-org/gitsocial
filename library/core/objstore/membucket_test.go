@@ -12,6 +12,7 @@ package objstore
 
 import (
 	"crypto/md5"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -253,7 +254,11 @@ func (m *memBucket) list(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(keys)
 	fmt.Fprint(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>`)
 	for _, k := range keys {
-		fmt.Fprintf(w, "<Contents><Key>%s</Key><ETag>%s</ETag></Contents>", k, etag(m.objs[k].body))
+		// Escape the key, as a real bucket and locals3 both do: "&" is legal in a
+		// git ref name and writing it raw makes the whole document unparseable.
+		fmt.Fprint(w, "<Contents><Key>")
+		_ = xml.EscapeText(w, []byte(k))
+		fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", etag(m.objs[k].body))
 	}
 	fmt.Fprint(w, `</ListBucketResult>`)
 }

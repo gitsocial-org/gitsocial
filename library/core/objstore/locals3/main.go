@@ -15,6 +15,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
@@ -38,6 +39,18 @@ func etagOf(b []byte) string { return fmt.Sprintf("%q", fmt.Sprintf("%x", md5.Su
 
 // diskPath maps a request key ("<bucket>/<key>") to an absolute file path.
 func diskPath(key string) string { return filepath.Join(root, filepath.FromSlash(key)) }
+
+// withinRoot reports whether a path resolved from a request key stays under the
+// served root. filepath.Join resolves ".." rather than rejecting it, and
+// ServeMux only rewrites a literal one, so a percent-encoded traversal reaches
+// the handler already decoded.
+func withinRoot(path string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
 
 // encSuffix names the sidecar file that records an object's Content-Encoding
 // (git refs and object keys never end in it, so a walk can skip it cleanly).
@@ -197,6 +210,12 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.HasSuffix(key, "/") && r.URL.RawQuery == "" {
 		key += "index.html"
 	}
+	// Refuse a key that escapes the bucket root, for writes and deletes as much
+	// as reads: sitetest/serve.js applies the same confinement.
+	if !withinRoot(diskPath(key)) {
+		w.WriteHeader(403)
+		return
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	switch r.Method {
@@ -236,7 +255,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				if body, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(k))); err == nil {
 					etag = etagOf(body)
 				}
-				fmt.Fprintf(w, "<Contents><Key>%s</Key><ETag>%s</ETag></Contents>", k, etag)
+				// Escape the key: "&" is legal in a git ref name, and writing it
+				// raw makes the whole document unparseable, not just this entry.
+				fmt.Fprint(w, "<Contents><Key>")
+				_ = xml.EscapeText(w, []byte(k))
+				fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", etag)
 			}
 			fmt.Fprint(w, `</ListBucketResult>`)
 			return
