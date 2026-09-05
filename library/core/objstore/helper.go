@@ -479,6 +479,9 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 			return "", nil, true, nil
 		}
 	}
+	if h.client == nil {
+		return "", nil, false, fmt.Errorf("object %s is not in the local odb and this helper has no bucket client to fall back to", sha)
+	}
 	key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
 	data, err := h.client.Get(key)
 	if errors.Is(err, ErrNotFound) {

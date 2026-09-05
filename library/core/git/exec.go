@@ -55,6 +55,18 @@ func testIsolationEnv(env []string) []string {
 	)
 }
 
+// UnsetRedirectEnv removes the repo-redirecting variables from this process's
+// own environment. ExecGit strips them per command, but a test that spawns git
+// itself inherits os.Environ() untouched, and git exports GIT_DIR to every hook
+// it runs: a suite run from the pre-push gate would then build its fixtures
+// inside the repository being pushed. Tests call this from TestMain; one that
+// wants a redirect sets it explicitly with t.Setenv.
+func UnsetRedirectEnv() {
+	for _, prefix := range gitRedirectEnv {
+		os.Unsetenv(strings.TrimSuffix(prefix, "="))
+	}
+}
+
 // hasAnyPrefix reports whether s starts with any of the given prefixes.
 func hasAnyPrefix(s string, prefixes []string) bool {
 	for _, prefix := range prefixes {
