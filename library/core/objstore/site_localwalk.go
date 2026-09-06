@@ -38,11 +38,13 @@ import (
 // single-goroutine); a nil *localCommitSource is inert (every read misses),
 // which is how a no-local-repo context degrades to bucket-only reads.
 type localCommitSource struct {
-	mu     sync.Mutex
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Reader
-	broken bool // a protocol/IO error retired the process; every later read misses
+	mu      sync.Mutex
+	gitDir  string // the odb the batch reads, for the callers that must run their own git
+	workdir string
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  *bufio.Reader
+	broken  bool // a protocol/IO error retired the process; every later read misses
 }
 
 // newLocalCommitSource starts a `git cat-file --batch` bound to gitDir (or a
@@ -79,7 +81,7 @@ func newLocalCommitSource(gitDir, workdir string) *localCommitSource {
 	if err := cmd.Start(); err != nil {
 		return nil
 	}
-	return &localCommitSource{cmd: cmd, stdin: stdin, stdout: bufio.NewReaderSize(stdout, 1<<20)}
+	return &localCommitSource{gitDir: gitDir, workdir: workdir, cmd: cmd, stdin: stdin, stdout: bufio.NewReaderSize(stdout, 1<<20)}
 }
 
 // close shuts the cat-file process down. Safe on a nil source.

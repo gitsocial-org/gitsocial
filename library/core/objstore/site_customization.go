@@ -113,6 +113,12 @@ type siteCustomization struct {
 	Description string `json:"description,omitempty"`
 	Publish     string `json:"publish,omitempty"` // "true" enables the static site (default off)
 	Pages       string `json:"pages,omitempty"`   // "true" enables the HTML page layer (needs publish + url)
+	// The file layer's escape hatch: comma-separated path globs ("**" spans any
+	// number of segments) that publish what the document rule misses and withhold
+	// what it should not have taken. Strings rather than lists so the type stays
+	// comparable and the CLI stores one value per key.
+	FilesInclude string `json:"filesInclude,omitempty"`
+	FilesExclude string `json:"filesExclude,omitempty"`
 }
 
 // siteBoolString normalizes a raw guard value to "true"/"false" ("" when it is
@@ -130,6 +136,21 @@ func siteBoolString(v interface{}) string {
 		}
 	}
 	return ""
+}
+
+// NormalizeSiteGlobs keeps the well-formed globs of a comma-separated list:
+// repo-relative paths, no leading slash and no traversal, so a glob can only
+// ever select inside the tree being published.
+func NormalizeSiteGlobs(v string) string {
+	var kept []string
+	for _, g := range strings.Split(v, ",") {
+		g = strings.TrimSpace(g)
+		if g == "" || strings.HasPrefix(g, "/") || g == ".." || strings.HasPrefix(g, "../") || strings.Contains(g, "/../") {
+			continue
+		}
+		kept = append(kept, g)
+	}
+	return strings.Join(kept, ",")
 }
 
 // ValidSiteAccent reports whether v is a strict #rgb/#rrggbb hex color.
@@ -244,6 +265,12 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	}
 	if v, ok := raw["pages"]; ok {
 		c.Pages = siteBoolString(v)
+	}
+	if s, ok := raw["filesInclude"].(string); ok {
+		c.FilesInclude = NormalizeSiteGlobs(s)
+	}
+	if s, ok := raw["filesExclude"].(string); ok {
+		c.FilesExclude = NormalizeSiteGlobs(s)
 	}
 	if c == (siteCustomization{}) {
 		return siteCustomization{}, false

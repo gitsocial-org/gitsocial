@@ -83,7 +83,14 @@ func isSealedSitemapPartKey(key string) bool {
 // force-pushed, and the commits layer's ancestry guard exists precisely to
 // re-derive the pages when it is. A year-long immutable copy in a visitor's
 // browser would outlive that repair, so those pages revalidate.
+//
+// Neither is a file page under `f/`, whose key mirrors a repo path and can
+// therefore end in `<type dir>/<n>.html` by coincidence: a document is mutable
+// and is never sealed.
 func isSealedListPageKey(key string) bool {
+	if isSiteFilePageKey(key) {
+		return false
+	}
 	slash := strings.LastIndex(key, "/")
 	if slash < 0 {
 		return false
@@ -99,6 +106,14 @@ func isSealedListPageKey(key string) bool {
 		}
 	}
 	return false
+}
+
+// isSiteFilePageKey reports whether a key is a file page (`f/<repo path>.html`),
+// matched at a path boundary so a repo directory merely named f/ elsewhere is
+// never misread.
+func isSiteFilePageKey(key string) bool {
+	i := strings.Index(key, sitePagesFilesDir+"/")
+	return i >= 0 && (i == 0 || key[i-1] == '/')
 }
 
 // isDigitString reports whether s is non-empty and all decimal digits.

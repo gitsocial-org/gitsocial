@@ -33,6 +33,10 @@ type SiteCustomization struct {
 	Description string `json:"description,omitempty"`
 	Publish     string `json:"publish,omitempty"`
 	Pages       string `json:"pages,omitempty"`
+	// Comma-separated path globs the file-page layer publishes beyond, and
+	// withholds from, its document rule.
+	FilesInclude string `json:"filesInclude,omitempty"`
+	FilesExclude string `json:"filesExclude,omitempty"`
 }
 
 // ReadWorkspaceSiteCustomization returns the `site` sub-object of the workspace's
@@ -87,6 +91,12 @@ func WriteWorkspaceSiteCustomization(workdir string, c SiteCustomization) error 
 	}
 	if c.Pages != "" {
 		site["pages"] = c.Pages
+	}
+	if c.FilesInclude != "" {
+		site["filesInclude"] = c.FilesInclude
+	}
+	if c.FilesExclude != "" {
+		site["filesExclude"] = c.FilesExclude
 	}
 	if len(site) == 0 {
 		delete(config, coreConfigSiteKey)

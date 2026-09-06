@@ -195,8 +195,24 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("every list page's nav links the commits list", /href="\.\.\/commits\/index\.html"/.test(posts.text) && /href="\.\/commits\/index\.html"/.test(front.text));
   ok("sitemap covers the commits list", locs.includes(cfg.url + "commits/index.html"), JSON.stringify(locs.filter((l) => l.includes("commits"))));
 
+  console.log("\n--- File pages ---");
+  // A repo's own prose gets a crawlable page keyed by its repo path, whose boot
+  // hook is the app's file route over that same path: what the crawler reads and
+  // what the app opens are the same document.
+  const doc = await get(TD + "f/notes.html");
+  ok("f/notes.html served", doc.status === 200);
+  ok("file page reads without JS (heading + the file's own text)", /<h1>notes\.txt<\/h1>/.test(doc.text) && /<pre>one\ntwo/.test(doc.text));
+  ok("file page boots the app's file route on its own path", /name="gs-route" content="file:notes\.txt@main"/.test(doc.text) && /data-base="\.\.\/"/.test(doc.text));
+  ok("file page self-canonicalizes at its own key", doc.text.includes('<link rel="canonical" href="' + cfg.url + 'f/notes.html">'));
+  // The README is the front page's, so it gets no second page of its own.
+  ok("the root README gets no file page", (await get(TD + "f/README.html")).status === 404);
+  const fileIndex = await get(TD + "f/index.html");
+  ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>files<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
+  ok("every page's sidebar links the file index", /href="\.\/f\/index\.html"/.test(front.text) && /href="\.\.\/f\/index\.html"/.test(posts.text));
+  ok("sitemap covers the file pages, dated by their last commit", locs.includes(cfg.url + "f/index.html") && locs.includes(cfg.url + "f/notes.html"), JSON.stringify(locs.filter((l) => l.includes("/f/"))));
+
   console.log("\n--- Guards off: zero page keys, shell index.html intact ---");
-  for (const key of ["timeline.html", "sitemap.xml", "robots.txt", "pages.css", "posts/index.html", "issues/index.html", "commits/index.html"]) {
+  for (const key of ["timeline.html", "sitemap.xml", "robots.txt", "pages.css", "posts/index.html", "issues/index.html", "commits/index.html", "f/index.html"]) {
     const r = await get(OTHER + key);
     ok("other-demo has no " + key, r.status === 404, "status=" + r.status);
   }

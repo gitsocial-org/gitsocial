@@ -252,7 +252,7 @@ func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePa
 		Image:       site.Image,
 		Icon:        site.Icon,
 		Feed:        site.URL + sitePagesFeedKey,
-		Nav:         sitePageSidebar("../", siteCommitsDir),
+		Nav:         sitePageSidebar("../", siteCommitsDir, site.Files),
 	}
 }
 

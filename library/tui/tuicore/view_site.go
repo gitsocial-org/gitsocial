@@ -36,6 +36,8 @@ var siteFields = []siteField{
 	{"description", "plain text, 300 chars max", func(c *objstore.SiteCustomization) *string { return &c.Description }},
 	{"publish", "true/false: master switch for the static site (default false)", func(c *objstore.SiteCustomization) *string { return &c.Publish }},
 	{"pages", "true/false: crawlable HTML pages (needs publish + url)", func(c *objstore.SiteCustomization) *string { return &c.Pages }},
+	{"filesInclude", "path globs the file pages publish beyond prose documents", func(c *objstore.SiteCustomization) *string { return &c.FilesInclude }},
+	{"filesExclude", "path globs the file pages never publish", func(c *objstore.SiteCustomization) *string { return &c.FilesExclude }},
 }
 
 // SiteView displays and edits the workspace's site customization (title, accent,
@@ -227,6 +229,10 @@ func validateSiteField(label, value string) string {
 	case "publish", "pages":
 		if value != "true" && value != "false" {
 			return "must be true or false"
+		}
+	case "filesInclude", "filesExclude":
+		if objstore.NormalizeSiteGlobs(value) == "" {
+			return "must be comma-separated repo-relative path globs"
 		}
 	}
 	return ""

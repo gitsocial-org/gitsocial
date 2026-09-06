@@ -116,7 +116,7 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 
 // siteConfigKeys are the customization fields settable under the core config's
 // `site` sub-object, published as the static site's site-config.json artifact.
-var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "image": true, "url": true, "description": true, "publish": true, "pages": true}
+var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "image": true, "url": true, "description": true, "publish": true, "pages": true, "filesInclude": true, "filesExclude": true}
 
 // siteOverrideKeys maps the per-remote-overridable deployment keys to their git
 // config suffix (remote.<name>.<suffix>). Only these three deployment keys are
@@ -187,7 +187,11 @@ Keys:
   publish      true/false (default false): master switch for the static site;
                unset or false, pushes move repo data only
   pages        true/false (default false): the crawlable HTML page layer;
-               effective only with publish=true and a valid url`,
+               effective only with publish=true and a valid url
+  filesInclude comma-separated path globs the file pages publish beyond their
+               own prose-document rule (e.g. "handbook/**/*.text")
+  filesExclude comma-separated path globs the file pages never publish
+               (e.g. "**/help.md,internal/**")`,
 	}
 	cmd.AddCommand(newSiteConfigGetCmd(), newSiteConfigSetCmd(), newSiteConfigListCmd())
 	return cmd
@@ -270,7 +274,7 @@ func newSiteConfigListCmd() *cobra.Command {
 				fmt.Println("No site customization set")
 				return
 			}
-			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages"} {
+			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "filesInclude", "filesExclude"} {
 				if v, ok := site[k].(string); ok && v != "" {
 					fmt.Printf("%s = %s\n", k, siteConfigDisplay(k, v))
 				}
@@ -295,7 +299,7 @@ func newSiteConfigSetCmd() *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "Set a site customization value",
 		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon,
-image, url, description, publish, pages.
+image, url, description, publish, pages, filesInclude, filesExclude.
 
   accent / accentDark  strict #rgb or #rrggbb hex (e.g. #0a7 or #00dddd)
   favicon              @path/to/icon.png to read+encode a raw image (png/webp/
@@ -327,7 +331,7 @@ publish, and pages are overridable per-remote; identity keys travel with the rep
 				return
 			}
 			if !siteConfigKeys[key] {
-				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, image, url, description, publish, pages)", key))
+				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, image, url, description, publish, pages, filesInclude, filesExclude)", key))
 				os.Exit(ExitError)
 			}
 			resolved, err := resolveSiteConfigValue(key, value)
@@ -421,6 +425,12 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 			return "", fmt.Errorf("%s must be true or false, got %q", key, value)
 		}
 		return v, nil
+	case "filesInclude", "filesExclude":
+		globs := objstore.NormalizeSiteGlobs(value)
+		if globs == "" {
+			return "", fmt.Errorf("%s must be comma-separated repo-relative path globs, got %q", key, value)
+		}
+		return globs, nil
 	default:
 		return value, nil
 	}

@@ -83,9 +83,9 @@ const (
 	siteFeedBodyMax = 4 * 1024
 	// sitePageDescriptionLen bounds the meta/OG description (~160 chars).
 	sitePageDescriptionLen = 160
-	// sitePageRobotsTombstone is the meta robots value a tombstone carries: no
+	// sitePageRobotsNoIndex is the meta robots value a tombstone carries: no
 	// content to index, but its outbound links still count.
-	sitePageRobotsTombstone = "noindex,follow"
+	sitePageRobotsNoIndex = "noindex,follow"
 )
 
 // sitePageMaxReplies caps a thread's inlined replies; the rest truncate into an
@@ -321,6 +321,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
 {{if .Entries}}{{template "entries" .Entries}}{{else}}<p class="meta">nothing here yet</p>
 {{end}}<footer>{{if .NewerHref}}<a href="{{.NewerHref}}">← newer</a> {{end}}{{if .OlderHref}}<a href="{{.OlderHref}}">older →</a> {{end}}<a href="{{.Chrome.Base}}index.html">home</a></footer>
+{{template "foot"}}{{end}}{{define "file"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
+
+{{if .Heading}}<h1>{{.Heading}}</h1>
+{{end}}<p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+{{if .HTML}}{{.HTML}}{{else}}<pre>{{.Pre}}</pre>
+{{end}}{{if .Truncated}}<p class="meta">… truncated — full file in the repository</p>
+{{end}}<footer><a href="{{.Chrome.Base}}f/index.html">← files</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 <h1>{{.Heading}}</h1>
@@ -565,6 +572,7 @@ type sitePageSite struct {
 	Image       string       // absolute og:image URL ("" = no social card)
 	Icon        template.URL // favicon href every page's head declares
 	AccentCSS   template.CSS // accent override every page's head inlines ("" = none configured)
+	Files       bool         // the file layer has pages: every sidebar carries the Files entry
 }
 
 // sitePageList describes one type directory: source extension, bucket dir,
@@ -978,14 +986,18 @@ func sitePageItemSubject(it *sitePageItem) string {
 // siteItemPageTitles resolves every root's <title> subject so no two pages share
 // one: a unique subject is used as is, a shared one takes the item's date, and
 // its short ref when that repeats too (the short ref IS the page key, so this
-// always terminates).
-func siteItemPageTitles(roots map[string][]*sitePageItem) map[string]string {
+// always terminates). taken holds the titles other layers already published, so
+// uniqueness holds across the whole site rather than within this one.
+func siteItemPageTitles(roots map[string][]*sitePageItem, taken map[string]bool) map[string]string {
 	var items []*sitePageItem
 	for _, list := range sitePageLists {
 		items = append(items, roots[list.Ext]...)
 	}
 	subjects := make(map[string]string, len(items))
 	shared, dated := map[string]int{}, map[string]int{}
+	for t := range taken {
+		shared[t]++
+	}
 	for _, it := range items {
 		subject := sitePageItemSubject(it)
 		subjects[it.Msg.Short] = subject
@@ -1008,6 +1020,16 @@ func siteItemPageTitles(roots map[string][]*sitePageItem) map[string]string {
 		titles[it.Msg.Short] = subject
 	}
 	return titles
+}
+
+// siteTitleSet collects the resolved titles a layer published, for the next
+// layer's own disambiguation.
+func siteTitleSet(titles map[string]string) map[string]bool {
+	set := make(map[string]bool, len(titles))
+	for _, t := range titles {
+		set[t] = true
+	}
+	return set
 }
 
 // siteItemPageDatedTitle appends an item's date to a subject two pages share.
@@ -1047,7 +1069,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		d.Heading = d.Subject
 		d.Tomb = "this " + sitePageTypeLabel(pageItemType(it)) + " was retracted by its author"
 		// The page stays for links that already exist, but has nothing to index.
-		robots = sitePageRobotsTombstone
+		robots = sitePageRobotsNoIndex
 		body = ""
 	} else {
 		d.Paras = sitePageParas(body)
@@ -1065,7 +1087,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		Image:       site.Image,
 		Icon:        site.Icon,
 		Feed:        site.URL + sitePagesFeedKey,
-		Nav:         sitePageSidebar("../", list.Dir),
+		Nav:         sitePageSidebar("../", list.Dir, site.Files),
 	}
 	if pageItemType(it) == "release" {
 		if s := buildSiteReleaseArtifacts(it); s != nil {
@@ -1224,12 +1246,16 @@ var sitePageNavSections = []string{"Social", "PM", "Repository", ""}
 // labels and the active item — narrowed to the destinations that have a
 // generated page, so every link a crawler or a no-JS reader follows is a real
 // document. base is the page's relative path to the site root; current is the
-// dir the page belongs to ("" — the front page, so Home is current).
-func sitePageSidebar(base, current string) []sitePageNavGroup {
+// dir the page belongs to ("" — the front page, so Home is current); files adds
+// the file layer's entry, which a repo that publishes no documents never sees.
+func sitePageSidebar(base, current string, files bool) []sitePageNavGroup {
 	groups := []sitePageNavGroup{{Links: []sitePageNavLink{
 		{Href: base + "index.html", Label: "Home", Glyph: "⌂", Current: current == ""},
 	}}}
 	lists := append(append([]sitePageList{}, sitePageLists...), siteCommitsList)
+	if files {
+		lists = append(lists, siteFilesList)
+	}
 	for _, section := range sitePageNavSections {
 		group := sitePageNavGroup{Section: section}
 		for _, l := range lists {
@@ -1382,9 +1408,10 @@ func renderSiteSitemapIndex(parts []siteSitemapEntry) []byte {
 // index pages and the commits list (head + every sealed page) ride the single
 // urlset / head part only (see buildSiteSitemapListEntries); the part math runs
 // on root + items alone.
-func writeSiteSitemap(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, commits *siteCommitsState) error {
+func writeSiteSitemap(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, commits *siteCommitsState, files *siteFilesState) error {
 	entries := buildSiteSitemapEntries(roots, done, site)
 	lists := append(buildSiteSitemapListEntries(roots, done, site), buildSiteCommitsSitemapEntries(commits, site)...)
+	lists = append(lists, buildSiteFilesSitemapEntries(files, site)...)
 	if len(entries) <= siteSitemapPartSize {
 		return putSiteText(client, prefix+sitePagesSitemapKey, "application/xml", renderSiteURLSet(append(entries, lists...)))
 	}

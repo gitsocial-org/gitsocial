@@ -697,6 +697,14 @@ async function main() {
   const subject = GS.itemSubject ? GS.itemSubject(issue) : "";
   ok("item-page meta route boots that item's detail", subject ? itemView.includes(subject) : itemView.length > 0, "view=" + itemView.slice(0, 80));
 
+  // File page: its meta route is the app's own file route over the same path, so
+  // the document a crawler read is the document the boot opens.
+  const filePage = await get(base + "f/notes.html");
+  ok("file page served + readable without JS", filePage.status === 200 && /<pre>/.test(filePage.text));
+  ok("file page carries gs-route (file) + data-base(../) + upgrade script", /name="gs-route" content="file:notes\.txt@main"/.test(filePage.text) && /data-base="\.\.\/"/.test(filePage.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(filePage.text));
+  const fileView = await bootLike(base, "file:notes.txt@main", null);
+  ok("file-page meta route boots the app's file view", fileView.length > 0 && !/not found/i.test(fileView), "view=" + fileView.slice(0, 80));
+
   console.log("\n--- Front page ↔ booted home view agree (no first-load swap) ---");
   // index.html is dual-owned: the static front page paints first and the app's
   // home render replaces that body in place. The two must therefore SHOW THE
@@ -1117,6 +1125,13 @@ async function main() {
     ok("a throw after the chrome is up: the boot rejected", !!r.err, "err=" + (r.err && r.err.message));
     ok("a throw after the chrome is up: the static page is back, styled, with no chrome", page.visible() === HOST && page.styledByPage() && !page.chromeUp() && !page.booting() && !page.viewLoading(), "visible=" + JSON.stringify(page.visible()));
     ok("a throw after the chrome is up: the app stylesheet is inert again", page.appCSS() && page.appCSS().media === "not all", "media=" + (page.appCSS() && page.appCSS().media));
+  }
+  {
+    // A file page is the deepest entry the layer publishes and the one a search
+    // result lands on: its failure path has to hand back the document itself.
+    const page = mkPage({ url: base + "f/notes.html", metaRoute: "file:notes.txt@main", dataBase: "../", content: HOST, serves: { "gs-app.js": false } });
+    const r = await runBoot(page);
+    ok("a failed boot on a file page restores the readable document", !!r.err && page.visible() === HOST && page.styledByPage() && !page.chromeUp() && !page.booting(), JSON.stringify(page.states()));
   }
   // Loading the shell as one batch means a failure can land while its siblings are
   // still in flight. Each one must abort the takeover BEFORE anything is staged —
