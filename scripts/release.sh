@@ -29,9 +29,11 @@
 # --dry-run prints every step (with the real commands) and touches nothing: no
 # tag, no build, no publish, no upload. Working tree and git state stay clean.
 #
-# Required credentials/env — supplied by the operator environment, typically
-# sourced from the untracked repo-root .env (the set matches .goreleaser.yaml;
-# this driver replaced the retired CI workflows, see git history):
+# Required credentials/env — read from the untracked repo-root .env, which the
+# driver sources itself (shell syntax; GITSOCIAL_RELEASE_ENV overrides the
+# path, GITSOCIAL_RELEASE_ENV="" disables loading and uses the ambient
+# environment). The set matches .goreleaser.yaml; this driver replaced the
+# retired CI workflows, see git history:
 #   Apple signing + notarization (SIGNING.md):
 #     APPLE_CERT_P12        base64 of the Developer ID Application .p12
 #     APPLE_CERT_PASSWORD   password for that .p12
@@ -59,6 +61,31 @@
 #                          fresh build of the current tree into bin/gitsocial,
 #                          so the current CLI — including `remote put` — is used)
 set -euo pipefail
+
+# --- credential env file ---
+# Credentials live in an untracked, shell-syntax env file: repo-root .env by
+# default, GITSOCIAL_RELEASE_ENV overrides the path, GITSOCIAL_RELEASE_ENV=""
+# disables loading (for a shell that already exports the set). It is sourced,
+# not parsed, so `export K="$(cat "$CERTS/key")"` style lines work; `set -a`
+# additionally exports bare `K=v` assignments. The file wins over values
+# already in the environment, so a fresh shell and an operator shell resolve
+# identically. Loaded before anything reads a variable, and anything the file
+# fails to set is still caught by the preflight credential check.
+ENV_FILE="${GITSOCIAL_RELEASE_ENV-.env}"
+if [ -n "$ENV_FILE" ]; then
+  if [ -r "$ENV_FILE" ]; then
+    printf '    loading credentials from %s\n' "$ENV_FILE"
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  elif [ -n "${GITSOCIAL_RELEASE_ENV:-}" ]; then
+    printf '\033[31merror: GITSOCIAL_RELEASE_ENV set but not readable: %s\033[0m\n' "$ENV_FILE" >&2
+    exit 1
+  else
+    printf '    no .env found — expecting credentials in the environment\n'
+  fi
+fi
 
 # --- mirror targets (GITHUB_REPO matches .goreleaser.yaml's release target) ---
 GITHUB_REPO="gitsocial-org/gitsocial"
