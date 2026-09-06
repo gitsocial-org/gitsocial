@@ -1,6 +1,6 @@
 // site_markdown.go - the markdown renderer the page layer uses for the front
 // page's README: a Go port of the reader's own grammar, emitting an HTML string
-// where the reader builds DOM nodes.
+// where the reader builds DOM nodes, and backing siteMarkdownPlainText.
 //
 // The grammar is deliberately not designed here — it is transcribed from the
 // three functions the booted app renders the same README with, so the served
@@ -190,6 +190,67 @@ func renderSiteMarkdown(text string, ctx siteMarkdownContext) string {
 	b.WriteString("<div class=\"markdown\">\n")
 	writeSiteMDBlocks(&b, blocks, r)
 	b.WriteString("</div>\n")
+	return b.String()
+}
+
+// siteMarkdownPlainText flattens markdown to prose over the renderer's own
+// grammar: markup drops, link text and image alt text survive.
+func siteMarkdownPlainText(text string) string {
+	var lines []string
+	appendSiteMDPlainText(&lines, parseSiteMarkdown(text))
+	return strings.Join(lines, "\n")
+}
+
+// appendSiteMDPlainText appends each block's plain text (raw HTML contributes
+// nothing: only the render path sanitizes it).
+func appendSiteMDPlainText(lines *[]string, blocks []siteMDBlock) {
+	for _, block := range blocks {
+		switch block.Kind {
+		case siteMDCode:
+			*lines = append(*lines, block.Text)
+		case siteMDQuote:
+			appendSiteMDPlainText(lines, block.Blocks)
+		case siteMDList:
+			for _, item := range block.Items {
+				*lines = append(*lines, siteMDSpanPlainText(item.Spans))
+				appendSiteMDPlainText(lines, item.Children)
+			}
+		case siteMDTable:
+			*lines = append(*lines, siteMDCellsPlainText(block.Headers))
+			for _, row := range block.Rows {
+				*lines = append(*lines, siteMDCellsPlainText(row))
+			}
+		case siteMDHTML, siteMDHTMLOpen, siteMDHTMLClose, siteMDThematic:
+		default:
+			*lines = append(*lines, siteMDSpanPlainText(block.Spans))
+		}
+	}
+}
+
+// siteMDCellsPlainText joins one table row's cells with spaces.
+func siteMDCellsPlainText(cells [][]siteMDSpan) string {
+	texts := make([]string, 0, len(cells))
+	for _, cell := range cells {
+		texts = append(texts, siteMDSpanPlainText(cell))
+	}
+	return strings.Join(texts, " ")
+}
+
+// siteMDSpanPlainText flattens inline spans to prose. Distinct from
+// siteMDSpanText, which must keep mirroring the reader's slug input exactly.
+func siteMDSpanPlainText(spans []siteMDSpan) string {
+	var b strings.Builder
+	for _, s := range spans {
+		switch {
+		case s.Kind == siteMDRawHTML:
+		case s.Kind == siteMDImage:
+			b.WriteString(s.Alt)
+		case len(s.Spans) > 0:
+			b.WriteString(siteMDSpanPlainText(s.Spans))
+		default:
+			b.WriteString(s.Value)
+		}
+	}
 	return b.String()
 }
 

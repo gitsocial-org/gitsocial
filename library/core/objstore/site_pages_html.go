@@ -83,6 +83,9 @@ const (
 	siteFeedBodyMax = 4 * 1024
 	// sitePageDescriptionLen bounds the meta/OG description (~160 chars).
 	sitePageDescriptionLen = 160
+	// sitePageRobotsTombstone is the meta robots value a tombstone carries: no
+	// content to index, but its outbound links still count.
+	sitePageRobotsTombstone = "noindex,follow"
 )
 
 // sitePageMaxReplies caps a thread's inlined replies; the rest truncate into an
@@ -268,7 +271,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Icon}}<link rel="icon" href="{{.Icon}}">
 {{end}}<meta name="description" content="{{.Description}}">
 <link rel="canonical" href="{{.Canonical}}">
-<meta property="og:title" content="{{.OGTitle}}">
+{{if .Robots}}<meta name="robots" content="{{.Robots}}">
+{{end}}<meta property="og:title" content="{{.OGTitle}}">
 <meta property="og:description" content="{{.Description}}">
 <meta property="og:site_name" content="{{.SiteTitle}}">
 <meta property="og:url" content="{{.Canonical}}">
@@ -396,6 +400,7 @@ type sitePageChrome struct {
 	OGTitle       string // og:title (the bare subject)
 	SiteTitle     string
 	Canonical     string             // absolute self URL from site.url
+	Robots        string             // meta robots content ("" = no tag, the indexable default)
 	Route         string             // gs-route content, in the shell's parseRoute grammar
 	Base          string             // relative path from this page to the site root ("./" or "../")
 	Image         string             // absolute og:image/twitter:image URL ("" = no card, twitter:card stays "summary")
@@ -631,11 +636,11 @@ func sitePageParas(text string) [][]string {
 }
 
 // sitePageDescription extracts a meta/OG description: the text (falling back
-// to the subject) whitespace-collapsed and truncated to ~160 chars.
+// to the subject) stripped of markdown, collapsed and truncated to ~160 chars.
 func sitePageDescription(text, fallback string) string {
-	collapsed := strings.Join(strings.Fields(text), " ")
+	collapsed := strings.Join(strings.Fields(siteMarkdownPlainText(text)), " ")
 	if collapsed == "" {
-		collapsed = strings.Join(strings.Fields(fallback), " ")
+		collapsed = strings.Join(strings.Fields(siteMarkdownPlainText(fallback)), " ")
 	}
 	runes := []rune(collapsed)
 	if len(runes) > sitePageDescriptionLen {
@@ -955,10 +960,70 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 	return &sitePageSection{Meta: meta, Pre: strings.Join(lines, "\n")}
 }
 
+// sitePageItemSubject returns the subject an item page is titled by: its first
+// line, or for a retracted one the type and tag (every tombstone body is the
+// same sentence, so the tag is all that identifies it).
+func sitePageItemSubject(it *sitePageItem) string {
+	if !it.Retracted {
+		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+		return subject
+	}
+	subject := "retracted " + sitePageTypeLabel(pageItemType(it))
+	if tag := pageItemField(it, "tag"); tag != "" {
+		subject += " " + tag
+	}
+	return subject
+}
+
+// siteItemPageTitles resolves every root's <title> subject so no two pages share
+// one: a unique subject is used as is, a shared one takes the item's date, and
+// its short ref when that repeats too (the short ref IS the page key, so this
+// always terminates).
+func siteItemPageTitles(roots map[string][]*sitePageItem) map[string]string {
+	var items []*sitePageItem
+	for _, list := range sitePageLists {
+		items = append(items, roots[list.Ext]...)
+	}
+	subjects := make(map[string]string, len(items))
+	shared, dated := map[string]int{}, map[string]int{}
+	for _, it := range items {
+		subject := sitePageItemSubject(it)
+		subjects[it.Msg.Short] = subject
+		shared[subject]++
+	}
+	for _, it := range items {
+		if subject := subjects[it.Msg.Short]; shared[subject] > 1 {
+			dated[siteItemPageDatedTitle(it, subject)]++
+		}
+	}
+	titles := make(map[string]string, len(items))
+	for _, it := range items {
+		subject := subjects[it.Msg.Short]
+		if shared[subject] > 1 {
+			subject = siteItemPageDatedTitle(it, subject)
+			if dated[subject] > 1 {
+				subject += " · #commit:" + it.Msg.Short
+			}
+		}
+		titles[it.Msg.Short] = subject
+	}
+	return titles
+}
+
+// siteItemPageDatedTitle appends an item's date to a subject two pages share.
+func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
+	date := sitePageDate(pageEffectiveTime(it.Msg))
+	if date == "" {
+		return subject
+	}
+	return subject + " · " + date
+}
+
 // buildSiteItemPage assembles one root's full item-page data: chrome, meta
 // line, escaped-text body (or tombstone), release extras, and the thread
-// sections in timestamp order up to the reply/byte cap.
-func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) siteItemPageData {
+// sections in timestamp order up to the reply/byte cap. title is the site-unique
+// <title> subject; headings and the OG card keep the plain subject.
+func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, title string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
 	bodyOnly := sitePageBodyOnly(pageItemType(it))
@@ -968,31 +1033,33 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite) s
 	d := siteItemPageData{
 		ListDir:   list.Dir,
 		ListLabel: list.Label,
-		Subject:   subject,
+		Subject:   sitePageItemSubject(it),
 		Chip:      sitePageItemChip(it),
 		Meta:      siteItemPageMeta(it),
 	}
+	robots := ""
 	if !bodyOnly {
 		d.Heading = subject
 	}
 	if it.Retracted {
-		label := sitePageTypeLabel(pageItemType(it))
-		d.Subject = "retracted " + label
 		// A tombstone IS the page's own words, not the item's, so it heads every
 		// type — the body-only carve-out is about content, and there is none left.
 		d.Heading = d.Subject
-		d.Tomb = "this " + label + " was retracted by its author"
+		d.Tomb = "this " + sitePageTypeLabel(pageItemType(it)) + " was retracted by its author"
+		// The page stays for links that already exist, but has nothing to index.
+		robots = sitePageRobotsTombstone
 		body = ""
 	} else {
 		d.Paras = sitePageParas(body)
 	}
 	d.Chrome = sitePageChrome{
-		Title:       d.Subject + " · " + site.Title,
+		Title:       title + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,
 		Description: sitePageDescription(body, d.Subject),
 		OGTitle:     d.Subject,
 		SiteTitle:   site.Title,
 		Canonical:   site.URL + "i/" + it.Msg.Short + ".html",
+		Robots:      robots,
 		Route:       route,
 		Base:        "../",
 		Image:       site.Image,
@@ -1201,6 +1268,9 @@ type siteSitemapEntry struct {
 // (root, resolved edit, or newest reply). Item entries sort ascending by
 // creation (time, sha) — creation never changes, so appends land at the tail
 // and sealed part membership stays stable.
+//
+// A retracted root stays OUT: its page is a noindex tombstone, so submitting it
+// spends crawl budget to be told no. Its activity still dates the site root.
 func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) []siteSitemapEntry {
 	var items []siteSitemapEntry
 	var newest int64
@@ -1209,6 +1279,9 @@ func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]i
 			last := sitePageLastActivity(it)
 			if last > newest {
 				newest = last
+			}
+			if it.Retracted {
+				continue
 			}
 			items = append(items, siteSitemapEntry{
 				loc:     site.URL + "i/" + it.Msg.Short + ".html",
@@ -1228,24 +1301,31 @@ func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]i
 }
 
 // buildSiteSitemapListEntries collects the type-list index pages' sitemap
-// entries with <lastmod> = the type's latest item activity ("" for an empty
-// type). These stay out of buildSiteSitemapEntries: their positions would shift
-// as items append, so they ride the rewritten head part (or the single urlset),
-// never a sealed one.
+// entries with <lastmod> = the type's latest item activity. These stay out of
+// buildSiteSitemapEntries: their positions would shift as items append, so they
+// ride the rewritten head part (or the single urlset), never a sealed one.
+//
+// A list with nothing to list is skipped: the page is still generated and
+// sidebar-linked, but "nothing here yet" cannot be indexed on its merits.
+// Retracted roots do not count, since the list hides them.
 func buildSiteSitemapListEntries(roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) []siteSitemapEntry {
 	entries := make([]siteSitemapEntry, 0, len(sitePageLists))
 	for _, list := range sitePageLists {
 		var newest int64
+		listed := 0
 		for _, it := range roots[list.Ext][:done[list.Ext]] {
+			if it.Retracted {
+				continue
+			}
+			listed++
 			if t := sitePageLastActivity(it); t > newest {
 				newest = t
 			}
 		}
-		lastmod := ""
-		if newest > 0 {
-			lastmod = sitePageDate(newest)
+		if listed == 0 {
+			continue
 		}
-		entries = append(entries, siteSitemapEntry{loc: site.URL + list.Dir + "/index.html", lastmod: lastmod})
+		entries = append(entries, siteSitemapEntry{loc: site.URL + list.Dir + "/index.html", lastmod: sitePageDate(newest)})
 	}
 	return entries
 }

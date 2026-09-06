@@ -4,7 +4,8 @@
 // thread/edit/retract resolution (incl. the ts+hash tiebreak), thread cap
 // truncation, manifest diff/partition (new root vs reply→root regeneration),
 // bootstrap cursor resume under a small budget, sitemap/robots coverage and
-// index mode, the front-page README, and the pages-aware push-state marker.
+// index mode, crawl hygiene (noindex tombstones, sitemap filtering, unique
+// titles), the front-page README, and the pages-aware push-state marker.
 
 package objstore
 
@@ -635,17 +636,26 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	if strings.Contains(sitemap, "a&b") || !strings.Contains(sitemap, "a&amp;b") {
 		t.Error("sitemap locs must be XML-escaped")
 	}
-	if got := strings.Count(sitemap, "<url>"); got != 12 {
-		t.Errorf("sitemap has %d urls, want 12 (root + 5 pages + 5 lists + commits)", got)
+	// Only the four empty type lists drop out; posts and the commits list stay.
+	if got := strings.Count(sitemap, "<url>"); got != 8 {
+		t.Errorf("sitemap has %d urls, want 8 (root + 5 pages + posts + commits)", got)
 	}
 	for _, sha := range shas {
 		if !strings.Contains(sitemap, "/i/"+sha[:12]+".html</loc>") {
 			t.Errorf("sitemap must cover i/%s.html", sha[:12])
 		}
 	}
-	for _, dir := range []string{"issues", "prs", "posts", "releases", "memos", siteCommitsDir} {
+	for _, dir := range []string{"posts", siteCommitsDir} {
 		if !strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
 			t.Errorf("sitemap must cover %s/index.html", dir)
+		}
+	}
+	for _, dir := range []string{"issues", "prs", "releases", "memos"} {
+		if strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
+			t.Errorf("empty list %s/index.html must stay out of the sitemap", dir)
+		}
+		if !keyExists(client, dir+"/index.html") {
+			t.Errorf("empty list %s/index.html must still be generated", dir)
 		}
 	}
 	if !strings.Contains(sitemap, "<lastmod>1970-01-01</lastmod>") {
@@ -673,8 +683,8 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml", sitePagesSitemapHeadKey} {
 		urls += strings.Count(getKey(t, client, part), "<url>")
 	}
-	if urls != 12 {
-		t.Errorf("parts cover %d urls, want 12", urls)
+	if urls != 8 {
+		t.Errorf("parts cover %d urls, want 8", urls)
 	}
 	for _, part := range []string{"sitemap-1.xml", "sitemap-2.xml"} {
 		if strings.Contains(getKey(t, client, part), "index.html</loc>") {
@@ -1405,5 +1415,127 @@ func TestSitePageIconRendered(t *testing.T) {
 	}
 	if !strings.Contains(string(def), `<link rel="icon" href="data:image/svg`) {
 		t.Errorf("rendered default icon link missing\n%.400s", def)
+	}
+}
+
+// pageTitleOf extracts a rendered page's <title> text.
+func pageTitleOf(t *testing.T, page string) string {
+	t.Helper()
+	start := strings.Index(page, "<title>")
+	end := strings.Index(page, "</title>")
+	if start < 0 || end < start {
+		t.Fatalf("page carries no <title>:\n%.300s", page)
+	}
+	return page[start+len("<title>") : end]
+}
+
+// TestSitePages_CrawlHygiene: tombstones and empty lists keep their pages but
+// leave the sitemap, descriptions are markdown-stripped, titles are unique.
+func TestSitePages_CrawlHygiene(t *testing.T) {
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "true", "url": "https://example.com/", "title": "Crawl"})
+	markdown := "## What changed\n\n- **bold** item with `code` and a [link](https://example.com/x)\n\n**Full Changelog**: https://example.com/c"
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "Release notes\n\n" + markdown, ts: 1000}})
+	release := func(subject, tag string) string {
+		return subject + "\n\nnotes\n\nGitMsg: ext=\"release\"; type=\"release\"; tag=\"" + tag + "\"; v=\"0.1.0\""
+	}
+	// Three v1.0.0 releases: two share a day (short ref separates them), one does not.
+	rel := seedExtMessages(t, client, "release", "", []pageMsgSpec{
+		{msg: release("v1.0.0", "v1.0.0"), ts: 2000},
+		{msg: release("v1.0.0", "v1.0.0"), ts: 2000},
+		{msg: release("v1.0.0", "v1.0.0"), ts: 90000000},
+		{msg: release("v2.0.0", "v2.0.0"), ts: 2100},
+		{msg: release("v3.0.0", "v3.0.0"), ts: 2200},
+	})
+	retract := "GitMsg: ext=\"release\"; edits=\"#commit:" + rel[4][:12] + "@gitmsg/release\"; retracted=\"true\"; v=\"0.1.0\""
+	seedExtMessages(t, client, "release", rel[4], []pageMsgSpec{{msg: retract, ts: 2300}})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	sitemap := getKey(t, client, sitePagesSitemapKey)
+
+	// The tombstone: page served, noindex,follow, out of the sitemap.
+	tomb := getKey(t, client, "i/"+rel[4][:12]+".html")
+	if !strings.Contains(tomb, "was retracted by its author") {
+		t.Errorf("retracted release page is not a tombstone:\n%.400s", tomb)
+	}
+	if !strings.Contains(tomb, `<meta name="robots" content="noindex,follow">`) {
+		t.Errorf("tombstone must carry noindex,follow:\n%.600s", tomb)
+	}
+	if got := pageTitleOf(t, tomb); got != "retracted release v3.0.0 · Crawl" {
+		t.Errorf("tombstone title = %q, want the tag in it", got)
+	}
+	if strings.Contains(sitemap, "/i/"+rel[4][:12]+".html</loc>") {
+		t.Error("a retracted root must not be submitted in the sitemap")
+	}
+	live := getKey(t, client, "i/"+rel[3][:12]+".html")
+	if strings.Contains(live, `name="robots"`) {
+		t.Error("a live item page must carry no robots meta")
+	}
+	if !strings.Contains(sitemap, "/i/"+rel[3][:12]+".html</loc>") {
+		t.Error("a live item page must be submitted in the sitemap")
+	}
+
+	// Three pages titled v1.0.0 become three distinct titles.
+	wantTitles := map[string]string{
+		rel[0]: "v1.0.0 · 1970-01-01 · #commit:" + rel[0][:12] + " · Crawl",
+		rel[1]: "v1.0.0 · 1970-01-01 · #commit:" + rel[1][:12] + " · Crawl",
+		rel[2]: "v1.0.0 · 1972-11-07 · Crawl",
+		rel[3]: "v2.0.0 · Crawl",
+	}
+	for sha, want := range wantTitles {
+		if got := pageTitleOf(t, getKey(t, client, "i/"+sha[:12]+".html")); got != want {
+			t.Errorf("i/%s.html title = %q, want %q", sha[:12], got, want)
+		}
+	}
+
+	// Empty type lists: generated, sidebar-linked, unsubmitted.
+	for _, dir := range []string{"issues", "prs", "memos"} {
+		if !keyExists(client, dir+"/index.html") {
+			t.Errorf("%s/index.html must still be generated", dir)
+		}
+		if strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
+			t.Errorf("empty list %s/index.html must stay out of the sitemap", dir)
+		}
+	}
+	for _, dir := range []string{"posts", "releases"} {
+		if !strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
+			t.Errorf("non-empty list %s/index.html must be in the sitemap", dir)
+		}
+	}
+
+	// Descriptions carry prose, not markup.
+	post := getKey(t, client, "i/"+pagesRefs(client, t)["refs/heads/gitmsg/social"][:12]+".html")
+	desc := post[strings.Index(post, `<meta name="description" content="`)+len(`<meta name="description" content="`):]
+	desc = desc[:strings.Index(desc, `">`)]
+	for _, markup := range []string{"**", "`", "](", "##", "- "} {
+		if strings.Contains(desc, markup) {
+			t.Errorf("description carries markdown %q: %s", markup, desc)
+		}
+	}
+	if !strings.Contains(desc, "What changed") || !strings.Contains(desc, "bold item with code and a link") || !strings.Contains(desc, "Full Changelog: https://example.com/c") {
+		t.Errorf("description lost its prose: %s", desc)
+	}
+
+	// No two generated pages share a title.
+	keys, err := client.List("")
+	if err != nil {
+		t.Fatalf("list bucket: %v", err)
+	}
+	titles := map[string]string{}
+	pages := 0
+	for _, key := range keys {
+		if !strings.HasSuffix(key, ".html") {
+			continue
+		}
+		pages++
+		title := pageTitleOf(t, getKey(t, client, key))
+		if other, dup := titles[title]; dup {
+			t.Errorf("%s and %s share the title %q", other, key, title)
+		}
+		titles[title] = key
+	}
+	if pages < 12 {
+		t.Fatalf("only %d generated pages were checked for title collisions", pages)
 	}
 }

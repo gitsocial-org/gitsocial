@@ -143,7 +143,12 @@ const (
 	// (classed heading, chevron control) rather than a plain <section>. Item
 	// pages and SEALED list pages are never rewritten without a bump, so a v15
 	// bucket would serve the old chrome beside the new one forever.
-	sitePagesVersion = 16
+	// v17: heads answer to search engines. A retraction tombstone carries
+	// <meta name="robots" content="noindex,follow">, meta descriptions are
+	// stripped of markdown, and item <title>s are made site-unique. Item pages
+	// and sealed list pages are never rewritten outside a full regen, so a v16
+	// bucket would serve duplicate titles forever without the bump.
+	sitePagesVersion = 17
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -853,8 +858,9 @@ func incrementalSitePages(client *Client, prefix string, site sitePageSite, prio
 	}
 	affectedDirs := map[string]bool{}
 	uploads := make([]sitePageUpload, 0, len(affected))
+	titles := siteItemPageTitles(roots)
 	for _, r := range affected {
-		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site))
+		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles[r.Msg.Short]))
 		if err != nil {
 			return false, err
 		}
@@ -1037,6 +1043,7 @@ func writeSiteItemPages(client *Client, prefix string, roots map[string][]*siteP
 	budget := sitePagesBudget
 	complete := true
 	chunk := sitePagesChunk()
+	titles := siteItemPageTitles(roots)
 	for _, list := range sitePageLists {
 		rs := roots[list.Ext]
 		for done[list.Ext] < len(rs) {
@@ -1047,7 +1054,7 @@ func writeSiteItemPages(client *Client, prefix string, roots map[string][]*siteP
 			batch := min(chunk, len(rs)-done[list.Ext], budget)
 			uploads := make([]sitePageUpload, 0, batch)
 			for _, it := range rs[done[list.Ext] : done[list.Ext]+batch] {
-				page, err := renderSitePage("item", buildSiteItemPage(it, list, site))
+				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles[it.Msg.Short]))
 				if err != nil {
 					return nil, false, 0, err
 				}
