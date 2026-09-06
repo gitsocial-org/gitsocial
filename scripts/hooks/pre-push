@@ -1,23 +1,31 @@
 #!/usr/bin/env bash
-# pre-push - run the merge gate (scripts/check.sh) before any push.
+# pre-push - run the quick gate (scripts/check.sh --quick) before any push.
 #
-# Install once per clone (hooks are not version-controlled; this points git at
-# the tracked directory instead of copying a file into .git/hooks):
-#   git config core.hooksPath scripts/hooks
-#
-# Escape hatch for an emergency push (skips vet, lint and the suite):
-#   GITSOCIAL_SKIP_GATE=1 git push
-#
-# The gate is the FULL suite, not `-short`: correctness matters more
-# than push latency here. See documentation/ARCHITECTURE.md "Test & Lint".
+# Install once per clone: git config core.hooksPath scripts/hooks
+# Skip once: GITSOCIAL_SKIP_GATE=1 git push
 set -o pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+zero=0000000000000000000000000000000000000000
+
+# pushed ranges for the commit-subject check: remote..local per ref, a new branch as local --not --remotes
+ranges=""
+not=""
+while read -r _ local_sha _ remote_sha; do
+	if [ -z "$local_sha" ] || [ "$local_sha" = "$zero" ]; then continue; fi
+	if [ "$remote_sha" = "$zero" ]; then
+		ranges="$ranges $local_sha"
+		not=" --not --remotes"
+	else
+		ranges="$ranges $remote_sha..$local_sha"
+	fi
+done
+export GITSOCIAL_PUSH_RANGES="${ranges# }$not"
 
 if [ -n "${GITSOCIAL_SKIP_GATE:-}" ]; then
-	printf 'pre-push: GITSOCIAL_SKIP_GATE set — skipping scripts/check.sh\n'
+	printf 'pre-push: GITSOCIAL_SKIP_GATE set, skipping scripts/check.sh\n'
 	exit 0
 fi
 
-printf 'pre-push: scripts/check.sh (full suite, ~4 min warm; GITSOCIAL_SKIP_GATE=1 to bypass)\n'
-exec "$root/scripts/check.sh" </dev/null
+printf 'pre-push: scripts/check.sh --quick (up to about 90 s warm; GITSOCIAL_SKIP_GATE=1 to skip)\n'
+exec "$root/scripts/check.sh" --quick </dev/null

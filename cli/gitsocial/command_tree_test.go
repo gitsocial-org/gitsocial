@@ -103,9 +103,7 @@ func TestCommandTreeHelp(t *testing.T) {
 }
 
 func TestCommandTreeJSONOutput(t *testing.T) {
-	if testing.Short() {
-		t.Skip("spawns the binary once per command")
-	}
+	fullTierOnly(t)
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
 	for _, ext := range []string{"social", "pm", "review", "release"} {

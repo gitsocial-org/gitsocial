@@ -113,6 +113,7 @@ func TestGolden(t *testing.T) {
 	}
 
 	t.Run("LayoutProperties", func(t *testing.T) {
+		fullTierOnly(t)
 		sizes := []struct {
 			name   string
 			width  int

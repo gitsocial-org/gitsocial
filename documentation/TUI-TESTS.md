@@ -32,7 +32,7 @@ scripts/test.sh ./library/tui/test/...               # all TUI tests, streamed
 scripts/test.sh -run Smoke ./library/tui/test/       # smoke only, streamed
 ```
 
-Tests create temp dirs, no external dependencies. Total runtime ~3 minutes (181s measured standalone on a warm build; longer inside the full `go test ./...` gate, where packages compete for cores). The smoke test's all-keys × all-views matrix dominates.
+Tests create temp dirs, no external dependencies. The full tier (`GITSOCIAL_TEST_FULL=1`) runs in about 206 s standalone; `TestSmoke` (90 s) and `TestGolden/LayoutProperties` (59 s) dominate. The quick tier (`scripts/check.sh --quick`) skips those two and `TestSequence` and runs in about 40 s standalone.
 
 ---
 
@@ -155,7 +155,7 @@ func assertLineCount(t, output, maxLines)                 // output fits height
 | `TestSmoke/AllKeysAllViews` | Iterates `AllViewMetas()` × `Registry.ForContext(ctx)`. Sends every registered key on every view — no panic = pass |
 | `TestSmoke/UnregisteredKeysIgnored` | Sends unbound keys (z, x, 1, !, #, etc.) — verifies graceful ignore |
 
-The smoke test produces hundreds of subtests (one per key × view combination).
+The smoke test produces 6,364 subtests and runs only in the full tier (`GITSOCIAL_TEST_FULL=1`), as do `TestSequence` and `TestGolden/LayoutProperties`.
 
 ### 2. Display Tests — verify actual content rendering
 

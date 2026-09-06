@@ -37,20 +37,20 @@ bin/gitsocial tui                             # Launch TUI
 
 ### Test & Lint
 
-**The gate is `scripts/check.sh`**: `go vet ./...`, then `golangci-lint run ./...`, then the full `go test ./...` (~4 min on a warm cache, ~8 min cold; `library/tui/test` alone is ~182s). It runs the stages in order, names the stage that failed, and exits non-zero on any failure. A missing `golangci-lint` is a failure unless `--skip-lint` is passed.
+**The gate is `scripts/check.sh`**, in two tiers. `scripts/check.sh --quick` runs the prose check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push (about 90 s warm when every package reruns, less after a change in one package). `scripts/check.sh` runs the same with `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too (about 4 min warm); run it before merging to `main` and at release. Stages run in order, the failing stage is named, and any failure exits non-zero. A missing `golangci-lint` fails unless `--skip-lint` is passed.
+
+Guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release (`scripts/release.sh` preflight). `-short` skips 66 real-git subtests and is a local smoke run, never a tier.
+
+`scripts/prose-check.sh` is stage 0. It counts STYLE.md violations (em-dashes, comment blocks over three lines, long `Short` and flag help) and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts the current counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 
 ```bash
-scripts/check.sh                 # the gate: vet + lint + full suite
-scripts/check.sh --skip-lint     # golangci-lint not installed (not a valid gate run)
-scripts/check.sh -short ./...    # extra args go to the test stage (smoke run, not the gate)
+scripts/check.sh --quick         # the push tier
+scripts/check.sh                 # the full tier
+scripts/check.sh --skip-lint     # golangci-lint not installed (not a gate run)
+scripts/check.sh -short ./...    # extra args go to the test stage (smoke run, not a gate run)
 git config core.hooksPath scripts/hooks   # install the pre-push hook (once per clone)
-GITSOCIAL_SKIP_GATE=1 git push   # emergency escape hatch, skips the gate
-scripts/coverage.sh              # statement-weighted coverage report
+GITSOCIAL_SKIP_GATE=1 git push   # skip the gate once
 ```
-
-The pre-push hook lives at `scripts/hooks/pre-push` and is version-controlled; `core.hooksPath` points git at it, so there is nothing to copy into `.git/hooks` and no installer to keep in sync.
-
-**Full run, not `-short`.** The gate is the full suite. `-short` skips 66 subtests (the real-git integration paths in `core/fetch`, `core/storage`, `core/gitmsg`, `core/git`), which is exactly the code most likely to break, so `-short` is a local smoke run only — never the gate and never what a push runs. `-race` and the browser site battery are too slow for every push and run at release time instead (`scripts/release.sh` preflight).
 
 **Coverage** (`scripts/coverage.sh`, writes `.test-artifacts/coverage/`): runs `go test ./... -coverpkg=./...` so code exercised by another package's integration tests gets credit, then reports the statement-weighted total (not a mean of per-package percentages), a ranked per-package table including packages with no test files of their own, and every function at 0.0%. The total is a **floor**: coverage cannot see the S3 helper tests (they run the helper as a child process, so `helper_push.go` / `thin.go` look untested) or the ~40 browser suites behind `-tags sitetest` (`site_pages*.go`).
 

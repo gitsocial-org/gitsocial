@@ -26,3 +26,11 @@ func TestMain(m *testing.M) {
 	os.Unsetenv(git.DeferMaintenanceEnv)
 	os.Exit(m.Run())
 }
+
+// fullTierOnly skips the test unless GITSOCIAL_TEST_FULL=1 (scripts/check.sh without --quick).
+func fullTierOnly(t *testing.T) {
+	t.Helper()
+	if os.Getenv("GITSOCIAL_TEST_FULL") == "" {
+		t.Skip("full tier only: GITSOCIAL_TEST_FULL=1")
+	}
+}

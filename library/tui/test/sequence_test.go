@@ -8,6 +8,7 @@ import (
 )
 
 func TestSequence(t *testing.T) {
+	fullTierOnly(t)
 	f := getFixture(t)
 	h := New(t, f.Workdir, f.CacheDir)
 

@@ -274,6 +274,7 @@ func gitIn(t *testing.T, dir string, env []string, args ...string) string {
 }
 
 func TestS3Helper_cloneRoundTrip(t *testing.T) {
+	fullTierOnly(t)
 	// Source repo: a commit on main, a gitmsg/social branch with a GitMsg
 	// message, and a per-element state ref — the shapes that must round-trip.
 	src := initCLITestRepo(t)
@@ -336,6 +337,7 @@ func TestS3Helper_cloneRoundTrip(t *testing.T) {
 // annotated tag, gitmsg branches and state refs) into an empty bucket, clone
 // it back, push an incremental commit, fetch it, and delete a ref.
 func TestS3Helper_pushRoundTrip(t *testing.T) {
+	fullTierOnly(t)
 	src := initCLITestRepo(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	commitEnv := []string{"-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test"}
@@ -408,6 +410,7 @@ func TestS3Helper_pushRoundTrip(t *testing.T) {
 // dumb-HTTP transport, and a stock `git fetch` picks up a later push — proving
 // info/refs is written on every data-only push (site disabled) and refreshed.
 func TestS3Helper_dumbHTTPClone(t *testing.T) {
+	fullTierOnly(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	commitEnv := []string{"-c", "user.email=cli-test@test.com", "-c", "user.name=CLI Test"}
 	// A clean repo with a real root tree (no empty-tree root commit, which stock
@@ -499,6 +502,7 @@ func TestS3Helper_dumbHTTPClone(t *testing.T) {
 // Here maintenance is frozen indefinitely; the push must still report success
 // promptly (proving the report preceded maintenance), after which we unblock.
 func TestS3Helper_pushReportsBeforeSiteMaintenance(t *testing.T) {
+	fullTierOnly(t)
 	src := initCLITestRepo(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	if err := os.WriteFile(filepath.Join(src, "README.md"), []byte("report first\n"), 0644); err != nil {
@@ -617,6 +621,7 @@ func commitIn(t *testing.T, dir string, env []string, file, msg string) {
 // TestS3Helper_nonFastForwardRejected: a stale writer must not clobber a ref
 // another writer advanced; a force push may.
 func TestS3Helper_nonFastForwardRejected(t *testing.T) {
+	fullTierOnly(t)
 	src, env, _, remote := pushTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 
@@ -656,6 +661,7 @@ func TestS3Helper_nonFastForwardRejected(t *testing.T) {
 // TestS3Helper_casRetryOnContention: a concurrent fast-forwardable write lands
 // between the helper's read and write; the CAS loop must retry and converge.
 func TestS3Helper_casRetryOnContention(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := pushTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 	oldSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
@@ -689,6 +695,7 @@ func TestS3Helper_casRetryOnContention(t *testing.T) {
 // git's "stale info" (the write-time re-check, not just the client-side one);
 // a lease stale already at list time is rejected by git client-side.
 func TestS3Helper_forceWithLease(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := pushTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 	baseSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
@@ -750,6 +757,7 @@ func TestS3Helper_forceWithLease(t *testing.T) {
 // — a matching lease authorizes a rewrite by advancing the chain, and a
 // concurrent generation taken between list and create rejects with stale info.
 func TestS3Helper_generationForceWithLease(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := generationTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 	baseSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
@@ -787,6 +795,7 @@ func TestS3Helper_generationForceWithLease(t *testing.T) {
 // TestS3Helper_pushRejectsNonCASBucket: a bucket that ignores conditional
 // headers must fail the probe before any ref is written.
 func TestS3Helper_pushRejectsNonCASBucket(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := pushTestRepo(t)
 	fixture.mu.Lock()
 	fixture.noConditional = true
@@ -804,6 +813,7 @@ func TestS3Helper_pushRejectsNonCASBucket(t *testing.T) {
 // TestS3Helper_refModeMarkerWritten: the probed mode is recorded in the
 // bucket marker (the fixture supports full conditional writes → etag).
 func TestS3Helper_refModeMarkerWritten(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := pushTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 	if data, ok := fixture.object("repo/.gitsocial/ref-mode"); !ok || strings.TrimSpace(string(data)) != "etag" {
@@ -828,6 +838,7 @@ func generationTestRepo(t *testing.T) (string, []string, *s3Fixture, string) {
 // TestS3Helper_generationPushRoundTrip: on a create-only-CAS bucket the probe
 // selects generation mode; pushes, clones, GC, and deletion all round-trip.
 func TestS3Helper_generationPushRoundTrip(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := generationTestRepo(t)
 	gitIn(t, src, env, "branch", "gitmsg/social", "main")
 	mainSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
@@ -894,6 +905,7 @@ func TestS3Helper_generationPushRoundTrip(t *testing.T) {
 // TestS3Helper_generationContention: a concurrent writer takes the next
 // generation between the helper's list and create; the loop must converge.
 func TestS3Helper_generationContention(t *testing.T) {
+	fullTierOnly(t)
 	src, env, fixture, remote := generationTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 	oldSHA := strings.TrimSpace(gitIn(t, src, env, "rev-parse", "main"))
@@ -923,6 +935,7 @@ func TestS3Helper_generationContention(t *testing.T) {
 // TestS3Helper_generationNonFastForward: the fast-forward rules hold in
 // generation mode exactly as in etag mode.
 func TestS3Helper_generationNonFastForward(t *testing.T) {
+	fullTierOnly(t)
 	src, env, _, remote := generationTestRepo(t)
 	gitIn(t, src, env, "push", remote, "main")
 
@@ -953,6 +966,7 @@ func TestS3Helper_generationNonFastForward(t *testing.T) {
 // TestS3Helper_rejectsNonCanonicalURLs: the only accepted s3 URL is the
 // canonical host form; bucket-only authorities and query params fail loudly.
 func TestS3Helper_rejectsNonCanonicalURLs(t *testing.T) {
+	fullTierOnly(t)
 	src, env, _, remote := pushTestRepo(t)
 
 	out := gitInErr(t, src, env, "push", "s3://url-bucket/repo", "main")
@@ -969,6 +983,7 @@ func TestS3Helper_rejectsNonCanonicalURLs(t *testing.T) {
 // through gitsocial with NO alias in the environment, no shim, and no global
 // config — core/git's exec layer injects the helper alias itself.
 func TestS3Helper_zeroSetup(t *testing.T) {
+	fullTierOnly(t)
 	fixture := &s3Fixture{bucket: "zero-bucket", objects: map[string][]byte{}}
 	server := httptest.NewServer(fixture)
 	t.Cleanup(server.Close)
@@ -1005,6 +1020,7 @@ func TestS3Helper_zeroSetup(t *testing.T) {
 // directory from the s3 URL, and leaves the repo self-sufficient — the local
 // alias lets PLAIN git (helper binary on PATH as `gitsocial`) fetch afterwards.
 func TestS3Helper_cloneCommand(t *testing.T) {
+	fullTierOnly(t)
 	src := initCLITestRepo(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	commitIn(t, src, baseEnv, "README.md", "clone me")
@@ -1045,6 +1061,7 @@ func TestS3Helper_cloneCommand(t *testing.T) {
 
 // TestS3Helper_customAliasPreserved: a user-set local alias is never overwritten.
 func TestS3Helper_customAliasPreserved(t *testing.T) {
+	fullTierOnly(t)
 	src := initCLITestRepo(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	gitIn(t, src, baseEnv, "remote", "set-url", "origin", "s3://minio.example.com/some-bucket/repo")
@@ -1061,6 +1078,7 @@ func TestS3Helper_customAliasPreserved(t *testing.T) {
 // gitsocial fetch pulls its gitmsg/social branch into the cache and the post
 // shows up in the timeline.
 func TestS3Helper_timelineFromS3Repo(t *testing.T) {
+	fullTierOnly(t)
 	src := initCLITestRepo(t)
 	baseEnv := append(os.Environ(), "HOME="+t.TempDir(), "GIT_CONFIG_NOSYSTEM=1")
 	commitIn(t, src, baseEnv, "README.md", "s3 timeline source")

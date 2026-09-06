@@ -197,11 +197,11 @@ preflight() {
   # additionally pays for the two checks too slow to run on every push:
   # `-race` (supersedes the plain suite) and the browser site battery.
   if $DRY_RUN; then
-    printf '    [dry-run] go test -race ./...\n'
+    printf '    [dry-run] GITSOCIAL_TEST_FULL=1 go test -race ./...\n'
     printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/objstore/\n'
   else
     info "running go test -race ./... (this can take a while)"
-    go test -race ./... >/dev/null || die "go test -race ./... failed"
+    GITSOCIAL_TEST_FULL=1 go test -race ./... >/dev/null || die "go test -race ./... failed"
     info "tests green (race)"
     info "running the site battery (go test -tags sitetest ./library/core/objstore/)"
     go test -tags sitetest -timeout 30m ./library/core/objstore/ >/dev/null \
