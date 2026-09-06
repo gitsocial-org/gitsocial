@@ -85,6 +85,7 @@ library/extensions/* → library/core/* → stdlib only
 #### Do
 
 - Read relevant specs first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`
+- Follow `documentation/STYLE.md` (prose, help text, comments, commits)
 - Optionally read relevant `documentation/` files
 - Add a brief comment at the top of each file (e.g., `// commits.go - Git commit operations`)
 - Add a one-liner comment above each function
