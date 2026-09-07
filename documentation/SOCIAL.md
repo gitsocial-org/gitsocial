@@ -1,109 +1,58 @@
 # Social Extension
 
-Posts, comments, reposts, and quotes stored as commits on the `gitmsg/social` branch. The timeline is driven by **lists** — named groups of repositories the workspace follows.
+Posts, comments, reposts and quotes are commits on the `gitmsg/social` branch ([GITSOCIAL.md](../specs/GITSOCIAL.md)), and the timeline is the union of the lists a workspace follows.
 
-> **Spec:** [GITSOCIAL.md](../specs/GITSOCIAL.md) — wire format for messages, fields, and lists.
-
-## Implicit vs. explicit
-
-On the configured branch (default `gitmsg/social`), commits without a `GitMsg:` trailer are **implicit posts** — plain `git commit` is a valid post. Commits with a `GitMsg:` trailer are **explicit interactions** (`comment`, `repost`, `quote`) or edits/retracts. All other branches are ignored.
+[Initialize](#initialize) · [Post](#post) · [Lists and timeline](#lists-and-timeline) · [Followers](#followers) · [Reference](#reference)
 
 ## Initialize
 
 ```
-gitsocial social init                  # creates refs/gitmsg/social/config and the gitmsg/social branch
-gitsocial social init -b <branch>      # initialize on a custom branch
-gitsocial social config get / set / list   # read/write config keys
+gitsocial social init [-b <branch>]        # refs/gitmsg/social/config and the gitmsg/social branch
+gitsocial social config get|set|list
 ```
 
-`init` is idempotent. Branch resolution follows GITMSG.md Section 3.3.
+`init` is idempotent. On the configured branch a commit without a `GitMsg:` trailer is a post, so a plain `git commit` there posts. Commits with a trailer are comments, reposts, quotes, edits or retractions. Other branches are ignored.
 
-## Author content
+## Post
 
 ```
-gitsocial social post "Hello world"
+gitsocial social post "Hello world" [-l kind/note]
 gitsocial social comment <ref> "Great idea!"
 gitsocial social repost <ref>
 gitsocial social quote <ref> "Worth reading:"
-
 gitsocial social edit <ref> "Updated text"
 gitsocial social retract <ref>
 ```
 
-Edits and retracts use the core versioning chain (`edits` + `retracted="true"`); the latest version wins in queries.
-
-Comments reply to the **thread root** via `original`. Nested replies add `reply-to` pointing at the parent comment, while `original` still points at the root post.
+A comment's `original` is the thread's root post; a nested reply adds `reply-to` for its parent. Edits and retractions use core versioning, and the latest version wins.
 
 ## Lists and timeline
 
-Lists are named sets of `<url>#branch:<branch>` entries. The timeline queries posts from the union of all lists (or one, with `--list`).
+A list is a named set of repositories. The timeline shows posts from every list, or from one list with `-l`.
 
 ```
 gitsocial social list create following
-gitsocial social list add following https://github.com/user/repo
-gitsocial social list add following https://github.com/user/repo --branch '*'   # follow all branches
+gitsocial social list add following https://github.com/user/repo [--all-branches]
 gitsocial social list remove following https://github.com/user/repo
-gitsocial social list show                       # all lists
-gitsocial social list show following             # one list
-gitsocial social list repo <repo-url>            # lists defined by a remote repo
+gitsocial social list show [following]
+gitsocial social list ls
+gitsocial social list repo <repo-url>       # the lists a remote repository publishes
+gitsocial social timeline [-l following] [-r workspace] [-n 50]
+gitsocial social fetch                      # every repository in every list; `gitsocial fetch` does this and more
 ```
-
-```
-gitsocial social timeline                  # all lists, newest first
-gitsocial social timeline -l following     # one list
-gitsocial social timeline -r workspace     # workspace only
-gitsocial social timeline -n 50            # limit
-```
-
-Lists are stored under `refs/gitmsg/social/lists/<name>/` (one ref per member; metadata at `_meta`). Adds and removes from concurrent clones don't collide.
 
 ## Followers
 
-A repository is treated as a **follower** of the workspace when its lists include the workspace URL. Followers are detected during fetch (when followed repositories' list refs are scanned) and recorded in `social_followers`.
+A repository follows the workspace when one of its lists contains the workspace URL. Followers are detected during fetch.
 
 ```
-gitsocial social followers              # who follows the workspace
-gitsocial social followers --json
+gitsocial social followers [--json]
 ```
 
-Following someone is just adding their repo to a list; "follow back" is symmetrical.
+## Reference
 
-## Fetch
-
-```
-gitsocial social fetch                  # fetch all repos in all lists
-```
-
-This wraps the core fetch with social-only processors. The general `gitsocial fetch` does the same plus all other extensions.
-
-## How posts surface in queries
-
-Default `social timeline` filters:
-
-- Excludes retracted (latest version wins).
-- Excludes commits removed from the source branch (force-pushed away → marked stale).
-- Includes implicit posts (no trailer) and explicit posts on the configured branch only.
-
-Order: newest first by effective timestamp (origin-time wins for imported content).
-
-## Notifications
-
-Mentions (`@email`), replies, comments on workspace posts, and reposts of workspace posts surface through core notifications. See [NOTIFICATIONS.md](NOTIFICATIONS.md) for the trailer-driven aggregation model.
-
-## Operational checks
-
-```bash
-# What's the social config?
-gitsocial social config get
-
-# Raw cache state (posts on the configured branch)
-sqlite3 ~/.cache/gitsocial/cache.db \
-    "SELECT type, COUNT(*) FROM social_items_resolved
-     WHERE branch = 'gitmsg/social' GROUP BY type"
-
-# Who follows this workspace?
-sqlite3 ~/.cache/gitsocial/cache.db \
-    "SELECT workspace_url, repo_url, detected_at FROM social_followers"
-```
-
-The TUI's social section (`T` from any screen — Timeline) provides the post list, lists, repositories, and threaded discussion views. See [TUI-KEYS.md](TUI-KEYS.md) for per-view bindings.
+- Branch resolution follows [GITMSG.md §3.4](../specs/GITMSG.md#34-branch-resolution).
+- Lists live at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)), so adds from concurrent clones do not collide.
+- The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)), and orders by effective timestamp, newest first; imported content sorts by its origin time.
+- Mentions, replies, comments and reposts of workspace posts raise [notifications](NOTIFICATIONS.md#types).
+- In the TUI, `S` opens the timeline ([TUI-KEYS.md](TUI-KEYS.md#social-extension)).

@@ -1,37 +1,12 @@
 # TUI View Diagrams
 
-ASCII reference layouts for all TUI views. Examples use data from protocol specs.
+Reference layouts for the TUI's list and detail views, drawn with the data the protocol specs use as examples.
 
-## Table of Contents
+[Layout](#layout) · [List views](#list-views) · [Detail views](#detail-views) · [Routes](#routes)
 
-- [TUI View Diagrams](#tui-view-diagrams)
-  - [Table of Contents](#table-of-contents)
-  - [Canonical Layout](#canonical-layout)
-- [List Views](#list-views)
-  - [Timeline](#timeline)
-  - [Repository](#repository)
-  - [List Repositories](#list-repositories)
-  - [List Posts](#list-posts)
-  - [Issues](#issues)
-  - [Milestones](#milestones)
-  - [Sprints](#sprints)
-  - [Releases](#releases)
-  - [Pull Requests](#pull-requests)
-  - [Search](#search)
-  - [Notifications](#notifications)
-- [Detail Views](#detail-views)
-  - [Post Detail](#post-detail)
-  - [Issue Detail](#issue-detail)
-  - [Milestone Detail](#milestone-detail)
-  - [Sprint Detail](#sprint-detail)
-  - [Release Detail](#release-detail)
-  - [PR Detail](#pr-detail)
+## Layout
 
----
-
-## Canonical Layout
-
-All structured detail views follow this pattern:
+Every structured detail view follows one pattern: a header line, a hero card with the subject, a field table and the body, then sections separated by double rules, and the footer with the view's keys. The keys per view are in [TUI-KEYS.md](TUI-KEYS.md); the diagrams below leave the footer out.
 
 ```
 ╭─ ICON[⇡]  Subject (40ch) · Author · FormatTime · [repo]#hash ───────────╮
@@ -60,13 +35,13 @@ All structured detail views follow this pattern:
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+## List views
 
-# List Views
+List views are a `CardList`: one card per item, a `▏` bar on the selected card, and a separator between cards. `MaxLines` is the card's body height.
 
-## Timeline
+### Timeline
 
-CardList. MaxLines: 5, ShowStats, Separator.
+MaxLines 5, with interaction counts.
 
 ```
 ╭─ Timeline ──────────────────────────────────────────────────────────────╮
@@ -85,15 +60,12 @@ CardList. MaxLines: 5, ShowStats, Separator.
 │  ↻  Alice · 1d ago · #bcd234567890                                      │
 │  ┊ Bob · Great idea!                                                    │
 │                                                                         │
-│ m:my repo  n:new post  p:push  o:notifs  l:lists  /:search              │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Repository
 
-## Repository
-
-CardList. Title reflects follow status (workspace/followed/mutual/unfollowed).
+The title carries the follow state: workspace, followed, mutual or unfollowed.
 
 ```
 ╭─ ⎇  ✓ user/repo · 1/5 ─────────────────────────────────────────────────╮
@@ -107,21 +79,12 @@ CardList. Title reflects follow status (workspace/followed/mutual/unfollowed).
 │  •  Alice · 1d ago · #def456789abc                                      │
 │  Add dark mode support                                                  │
 │                                                                         │
-│ l:lists  a:add  /:search  [:older  ]:newer  o:notifs  %:analytics       │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
-```
-╭─ ♥  My Repository · 1/3 ────────────────────────────────────────────────╮
-│  ...                                                                    │
-╰─────────────────────────────────────────────────────────────────────────╯
-```
+### List repositories
 
----
-
-## List Repositories
-
-Text-based list (not CardList). Input field for local lists.
+A text list with an input field for local lists.
 
 ```
 ╭─ ☷  My List ───────────────────────────────────────────────────────────╮
@@ -133,15 +96,12 @@ Text-based list (not CardList). Input field for local lists.
 │    bob/repo             ✓ mutual    · https://github.com/bob/repo       │
 │    alice/repo                       · https://gitlab.com/alice/repo     │
 │                                                                         │
-│ a:add  D:remove  enter:open                                             │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### List posts
 
-## List Posts
-
-CardList. Posts aggregated from all repos in a list.
+Posts from every repository in a list.
 
 ```
 ╭─ ☷  My List ───────────────────────────────────────────────────────────╮
@@ -154,15 +114,12 @@ CardList. Posts aggregated from all repos in a list.
 │  •  Bob · 5h ago · bob/repo#def456789abc                                │
 │  Great idea!                                                            │
 │                                                                         │
-│ r:repositories  /:search                                                │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Issues
 
-## Issues
-
-CardList. MaxLines: 1, Separator. Quick-create and search modes.
+MaxLines 1. `n` opens the issue form.
 
 ```
 ╭─ ○  Open Issues · (3) ─────────────────────────────────────────────────╮
@@ -173,18 +130,10 @@ CardList. MaxLines: 1, Separator. Quick-create and search modes.
 │  ─────────────────────────────────────────────────────────────         │
 │  ●  Add keyboard shortcuts · Alice · 3d ago · kind/task                │
 │                                                                        │
-│ n:new  F:filter  m:mine  r:refresh  /:search                           │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
-Pressing `n` opens the full IssueForm (a separate modal view) — there is
-no longer a separate inline quick-create input.
-
----
-
-## Milestones
-
-CardList. MaxLines: 1, Separator.
+### Milestones
 
 ```
 ╭─ ◇  Open Milestones · (2) ─────────────────────────────────────────────╮
@@ -193,15 +142,10 @@ CardList. MaxLines: 1, Separator.
 │  ─────────────────────────────────────────────────────────────         │
 │  ◇  Design System Epic · Bob · due Feb 15 · ░░░░░░░░░░░░  0/4          │
 │                                                                        │
-│ n:new  F:filter  r:refresh  /:search                                   │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
----
-
-## Sprints
-
-CardList. MaxLines: 1, Separator.
+### Sprints
 
 ```
 ╭─ ◷  Active Sprints · (2) ──────────────────────────────────────────────╮
@@ -210,15 +154,12 @@ CardList. MaxLines: 1, Separator.
 │  ─────────────────────────────────────────────────────────────         │
 │  ◷  Sprint 24 · Bob · Feb 14-28 · ░░░░░░░░░░░░  0/3 · planned          │
 │                                                                        │
-│ n:new  F:filter  r:refresh  /:search                                   │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Releases
 
-## Releases
-
-CardList. MaxLines: 2, Separator, no ShowStats.
+MaxLines 2.
 
 ```
 ╭─ ⏏  Releases (2) ──────────────────────────────────────────────────────╮
@@ -231,15 +172,12 @@ CardList. MaxLines: 2, Separator, no ShowStats.
 │  ⏏  Release v2.0.0-beta.1 · Alice · 2w ago                             │
 │     Implements dark mode support.                                      │
 │                                                                        │
-│ N:create  c:comment                                                    │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Pull requests
 
-## Pull Requests
-
-CardList. MaxLines: 2, Separator, no ShowStats.
+MaxLines 2.
 
 ```
 ╭─ ⑂  Pull Requests (2) ─────────────────────────────────────────────────╮
@@ -252,15 +190,12 @@ CardList. MaxLines: 2, Separator, no ShowStats.
 │  ⑂  Add keyboard shortcuts · Bob · 1d ago · open                       │
 │     main ← feature/shortcuts · +42 -8                                  │
 │                                                                        │
-│ N:create                                                               │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Search
 
-## Search
-
-Input at top, CardList results below.
+An input at the top, results as cards below, matches highlighted.
 
 ```
 ╭─ Search ────────────────────────────────────────────────────────────────╮
@@ -276,15 +211,12 @@ Input at top, CardList results below.
 │  ○  Add [dark] [mode] support · Alice · 3d ago · kind/feature           │
 │  Users can toggle between light and [dark] themes...                    │
 │                                                                         │
-│ /:edit  enter:open                                                      │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Notifications
 
-## Notifications
-
-CardList. Read items dimmed.
+Read items are dimmed.
 
 ```
 ╭─ Notifications ─────────────────────────────────────────────────────────╮
@@ -301,17 +233,14 @@ CardList. Read items dimmed.
 │                                                                         │
 │  ⎇  Bob started following · 1d ago                  (dimmed = read)    │
 │                                                                         │
-│ m:read  M:read-all  u:unread  U:unread-all  F:filter                    │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+## Detail views
 
-# Detail Views
+### Post detail
 
-## Post Detail
-
-Thread layout (social-specific, not canonical pattern).
+A thread: the parent dimmed above, the post itself, then replies indented by depth.
 
 ```
 ╭─ •  Alice <alice@example.com> · Jan 6, 2025 10:30 UTC · #abc1234 ───────╮
@@ -336,13 +265,10 @@ Thread layout (social-specific, not canonical pattern).
 │      ↩  Alice · 30m ago                                                 │
 │      I agree!                                                           │
 │                                                                         │
-│ c:comment  y:repost  e:edit  h:history  v:raw  r:repository  /:search   │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
-
-## Issue Detail
+### Issue detail
 
 ```
 ╭─ ○  Add dark mode support · Alice · 2h ago · #abc123456789 ─────────────╮
@@ -371,13 +297,10 @@ Thread layout (social-specific, not canonical pattern).
 │  ↩  Alice · 30m ago                                                     │
 │  Adding real-time collaboration to the scope.                           │
 │                                                                         │
-│ c:comment  e:edit  m:milestone  s:sprint  h:history  /:search  X:retr   │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
-
-## Milestone Detail
+### Milestone detail
 
 ```
 ╭─ ◇  Release v2.0 · Alice · 5d ago · #def456789012 ──────────────────────╮
@@ -406,13 +329,10 @@ Thread layout (social-specific, not canonical pattern).
 │  ↩  Bob · 3d ago                                                        │
 │  Adding real-time collaboration to the scope, extending due date.       │
 │                                                                         │
-│ c:comment  e:edit  h:history  /:search  X:retract                       │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
-
-## Sprint Detail
+### Sprint detail
 
 ```
 ╭─ ◷  Sprint 23: UX Polish · Alice · 5d ago · #abc123456789 ──────────────╮
@@ -442,13 +362,12 @@ Thread layout (social-specific, not canonical pattern).
 │  ↩  Alice · 2d ago                                                      │
 │  Retrospective: Good velocity this sprint.                              │
 │                                                                         │
-│ c:comment  e:edit  h:history  /:search  X:retract                       │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Release detail
 
-## Release Detail
+`s` opens the SBOM view.
 
 ```
 ╭─ ⏏  Release v1.0.0 · Alice · 2d ago · #abc123456789 ────────────────────╮
@@ -473,13 +392,10 @@ Thread layout (social-specific, not canonical pattern).
 │  ↩  Bob · 1d ago                                                        │
 │  Implements dark mode support.                                          │
 │                                                                         │
-│ s:sbom  e:edit  c:comment  /:search  X:retract                          │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Release SBOM
-
-Navigated to via `s` from Release Detail. Shows full SBOM package list with search.
+### Release SBOM
 
 ```
 ╭─ ⏏  SBOM · Release v1.0.0 ────────────────────────────────────────────╮
@@ -500,13 +416,12 @@ Navigated to via `s` from Release Detail. Shows full SBOM package list with sear
 │  github.com/mattn/go-sqlite3    v1.14.22      MIT                       │
 │  ...                                                                    │
 │                                                                         │
-│ /:search                                                                │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
----
+### Pull request detail
 
-## PR Detail
+`d` opens the diff, `i` the interdiff between versions.
 
 ```
 ╭─ ⑂  Add dark mode support · Alice · 3h ago · #abc123456789 ─────────────╮
@@ -562,6 +477,18 @@ Navigated to via `s` from Release Detail. Shows full SBOM package list with sear
 │  ↩  Alice · 30m ago                                                     │
 │  Clean separation of theme variables.                                   │
 │                                                                         │
-│ d:diff  i:interdiff  r:review  c:comment  M:merge  S:sync  e:edit  h    │
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
+
+## Routes
+
+Every view has a route; the diagrams above cover the list and detail shapes, and the rest share them.
+
+| Section | Routes |
+|---|---|
+| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
+| PM | `/pm/board`, `/pm/issues`, `/pm/issue`, `/pm/new-issue`, `/pm/edit-issue`, `/pm/milestones`, `/pm/milestone`, `/pm/new-milestone`, `/pm/edit-milestone`, `/pm/sprints`, `/pm/sprint`, `/pm/new-sprint`, `/pm/edit-sprint`, `/pm/config`, and `/pm/<item>/history` with `/history/diff` for each item type |
+| Review | `/review/prs`, `/review/pr`, `/review/new-pr`, `/review/edit-pr`, `/review/feedback`, `/review/diff`, `/review/pr/interdiff`, `/review/pr/history`, `/review/pr/history/diff` |
+| Release | `/release/list`, `/release/detail`, `/release/new`, `/release/edit`, `/release/sbom`, `/release/history`, `/release/history/diff`, `/export-artifact` |
+| Memo | `/memo/list`, `/memo/project`, `/memo/personal`, `/memo/inherited`, `/memo/inherits`, `/memo/session`, `/memo/session/items`, `/memo/detail`, `/memo/new`, `/memo/edit`, `/memo/history`, `/memo/history/diff` |
+| Core | `/search`, `/search/help`, `/notifications`, `/lists`, `/analytics`, `/diff`, `/settings`, `/config`, `/config/forks`, `/config/identity`, `/config/site`, `/cache`, `/errorlog`, `/help` |

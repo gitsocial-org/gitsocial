@@ -1,112 +1,80 @@
 # Project Management Extension
 
-Issues, milestones, and sprints stored as commits on the `gitmsg/pm` branch. State changes (close, reopen, label edits) are edits to the canonical commit; comments live on the social branch.
+Issues, milestones and sprints are commits on the `gitmsg/pm` branch ([GITPM.md](../specs/GITPM.md)); a state change is an edit of the original commit, and comments live on the social branch.
 
-> **Spec:** [GITPM.md](../specs/GITPM.md) — wire format for issues, milestones, sprints, and links.
+[Initialize](#initialize) · [Issues](#issues) · [Milestones and sprints](#milestones-and-sprints) · [Labels](#labels) · [Forks](#forks) · [Board](#board) · [Reference](#reference)
 
 ## Initialize
 
 ```
-gitsocial pm init                     # creates refs/gitmsg/pm/config and the gitmsg/pm branch
-gitsocial pm init -b <branch>         # initialize on a custom branch
-gitsocial pm config get / set / list
+gitsocial pm init [-b <branch>]          # refs/gitmsg/pm/config and the gitmsg/pm branch
+gitsocial pm config get|set|list
 ```
 
-`init` is idempotent. Branch resolution follows GITMSG.md Section 3.3.
+`init` is idempotent.
 
 ## Issues
 
 ```
-gitsocial pm issue create "Login page returns 500" \
-    -l kind/bug,priority/high \
-    -a alice@example.com,bob@example.com \
-    -m <milestone-hash> -s <sprint-hash> \
-    -d 2026-06-01 \
-    --blocks <hash>,<hash> --blocked-by <hash> --related <hash>
-
-gitsocial pm issue list -s open -l kind/bug
+gitsocial pm issue create "Login page returns 500" -l kind/bug,priority/high -a alice@example.com -d 2026-06-01
+gitsocial pm issue create "Add OAuth" -m <milestone> -s <sprint> --parent <issue> --blocks <issue> --blocked-by <issue> --related <issue>
+gitsocial pm issue list [-s open] [-l kind/bug] [--sort <field>] [-n 50]
 gitsocial pm issue list -f 'state:open priority:high assignee:alice@example.com due:overdue'
 gitsocial pm issue show <ref>
+gitsocial pm issue edit <ref> [--subject ...] [--body ...] [--state ...] [-l ...] [-a ...]
 gitsocial pm issue close <ref>
 gitsocial pm issue reopen <ref>
-gitsocial pm issue comment <ref> "Repro steps below..."
+gitsocial pm issue comment <ref> "Repro steps below"
 gitsocial pm issue comments <ref>
 ```
 
-Issue links (`blocks`, `blocked-by`, `related`) are stored in `pm_links`. Sub-issues use `parent` (and `root` is denormalized for fast tree queries).
-
-Issues auto-close when a PR with a matching `closes="<issue-ref>"` transitions to `state="merged"`.
+- `-f` takes `state:`, `priority:`, `assignee:`, `milestone:`, `sprint:` and `due:today|overdue|week` terms, a leading `-` to exclude, and free text for full-text search.
+- A sub-issue names its `--parent`; `root` is derived. `--blocks`, `--blocked-by` and `--related` link issues.
+- An issue closes when a pull request whose `--closes` names it is merged.
 
 ## Milestones and sprints
 
 ```
 gitsocial pm milestone create "v1.0" --due 2026-06-30
-gitsocial pm milestone close <ref>
-gitsocial pm milestone cancel <ref>     # close without "completed" semantics
-gitsocial pm milestone delete <ref>     # retract
-
+gitsocial pm milestone list | show <ref> | edit <ref> | close <ref> | reopen <ref> | cancel <ref> | delete <ref>
 gitsocial pm sprint create "Sprint 14" --start 2026-05-01 --end 2026-05-14
-gitsocial pm sprint start <ref>         # transition to active
-gitsocial pm sprint complete <ref>
-gitsocial pm sprint cancel <ref>
-gitsocial pm sprint delete <ref>        # retract
+gitsocial pm sprint list | show <ref> | edit <ref> | start <ref> | complete <ref> | cancel <ref> | delete <ref>
 ```
 
-Issues are linked to milestones/sprints via `--milestone` / `--sprint` flags at create or via `pm issue` edits.
+`delete` retracts. An issue joins a milestone or sprint with `-m` or `-s` on create or edit.
 
 ## Labels
 
-PM uses the core `labels` field (comma-separated `<scope>/<value>`). Common conventions:
+Labels are the core `<scope>/<value>` field ([GITMSG.md §1.7](../specs/GITMSG.md#17-labels)).
 
-| Scope | Example values |
-|-------|----------------|
-| `kind/` | `bug`, `feature`, `task`, `chore`, `docs` |
-| `priority/` | `low`, `normal`, `high`, `critical` |
-| `area/`, `topic/` | freeform categorical |
+| Scope | Values |
+|---|---|
+| `kind/` | `bug`, `feature`, `task`, `story` |
+| `priority/` | `low`, `medium`, `high`, `critical` |
+| `status/` | the board columns: `backlog`, `in-progress`, `review`, `done` |
+| `area/`, `team/`, `needs/`, `release/` | free |
 
-See GITMSG.md Section 1.7 for the core label format.
-
-## Forks (cross-fork issue discovery)
-
-```
-gitsocial fork add <fork-url>           # registered in core config
-gitsocial fetch                         # picks up issues, PRs, etc. from each fork
-```
-
-Issues opened on a registered fork appear in the upstream's `pm issue list` and trigger notifications. Fork registration lives at `refs/gitmsg/core/forks/<urlHash>` (per-element refs, no write contention).
-
-## Board view
+## Forks
 
 ```
-gitsocial pm board                      # CLI-only summary; rich kanban is in the TUI
+gitsocial fork add <fork-url>
+gitsocial fetch
 ```
 
-The TUI's PM section (`B` from any screen — Board) groups issues by state, with separate views for issues, milestones, sprints, and detail/history.
+Issues opened on a registered fork appear in `pm issue list` and raise notifications. An edit made from another repository is a proposal until the owner accepts it.
 
-## How items surface in queries
+## Board
 
-Default `issue list` filters:
-
-- Excludes retracted (latest version wins).
-- Excludes commits removed from the source branch (force-pushed away).
-- Filter flags: `-s/--state`, `-l/--labels`, plus the rich filter query via `-f` (`state:open priority:high assignee:<email> milestone:<hash> sprint:<hash> due:today|overdue|week`, prefix with `-` to exclude, and freeform text for full-text search).
-
-## Notifications
-
-Mentions, assignments, and link updates surface through core notifications. See [NOTIFICATIONS.md](NOTIFICATIONS.md).
-
-## Operational checks
-
-```bash
-gitsocial pm config get
-
-# Issue counts by state
-sqlite3 ~/.cache/gitsocial/cache.db \
-    "SELECT type, state, COUNT(*) FROM pm_items_resolved GROUP BY type, state"
-
-# Open issues assigned to a user
-sqlite3 ~/.cache/gitsocial/cache.db \
-    "SELECT i.hash, i.state FROM pm_items_resolved i
-     JOIN pm_assignees a USING(repo_url, hash, branch)
-     WHERE a.email = 'alice@example.com' AND i.state = 'open'"
 ```
+gitsocial pm board          # a summary; the kanban board is in the TUI
+```
+
+Columns come from the `framework` config (`minimal`, `kanban`, `scrum`) or a custom `boards` list ([GITPM.md §2](../specs/GITPM.md#2-config)).
+
+## Reference
+
+- Links and hierarchy: [GITPM.md §1.6](../specs/GITPM.md#16-issue-links) and [§1.7](../specs/GITPM.md#17-hierarchy-references).
+- `issue list` excludes retracted items ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)); the latest version wins.
+- Links are stored in `pm_links`, assignees in `pm_assignees` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)).
+- Mentions, assignments and link changes raise [notifications](NOTIFICATIONS.md#types).
+- In the TUI, `P` opens the board ([TUI-KEYS.md](TUI-KEYS.md#pm-extension)).

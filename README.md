@@ -11,15 +11,13 @@
 
 ## About
 
-GitSocial is a CLI/TUI Go binary that stores issues, PRs, and other collaboration in git itself, as commits with [structured trailers](specs/GITMSG.md) on `gitmsg/*` branches.
+GitSocial stores issues, pull requests, comments, etc. in the git repository itself, and can push it to an S3 bucket you own as a [git remote](documentation/S3.md) and a [static site](documentation/STATIC-SITE.md), like [GitSocial.org](https://gitsocial.org).
 
-A single idempotent command mirrors a project from GitHub or other hosts to an S3-compatible bucket you own; the bucket serves a [complete static site](documentation/STATIC-SITE.md) of the project (code, timeline, issues, releases, etc.), and doubles as a plain `git clone` source:
+Each item is a commit with [GitMsg trailers](specs/GITMSG.md) on a `gitmsg/*` branch: it moves with `git push` and `git fetch`. The CLI and TUI can create and browse them ([demo](documentation/demo/demo.mp4)), the [timeline](documentation/SOCIAL.md) shows items from followed repositories, and one command mirrors a forge project into a bucket:
 
 ```bash
 gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
 ```
-
-[GitSocial.org](https://gitsocial.org) is served this way. The forge becomes optional: issues, PRs, releases, and posts can be created with the CLI/TUI ([demo](documentation/demo/demo.mp4)) and pushed like any other commits, and other repositories followed through a [timeline](documentation/SOCIAL.md).
 
 ## Installation
 
@@ -64,7 +62,7 @@ gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
 Clone it from GitHub or any host, then from the project directory:
 
 ```bash
-gitsocial import     # import issues, PRs, etc
+gitsocial import     # import issues, PRs, etc. from GitHub or GitLab
 gitsocial tui        # explore in the terminal
 ```
 

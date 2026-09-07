@@ -1,670 +1,169 @@
 # Review Extension
 
-Pull requests and review feedback stored as commits on the `gitmsg/review` branch. PRs live on the author's repository and are discovered by reviewers via fetch/follow.
+Pull requests and review feedback are commits on the `gitmsg/review` branch ([GITREVIEW.md](../specs/GITREVIEW.md)) of the author's repository, discovered by reviewers through fetch and follow.
 
-> **Spec:** [GITREVIEW.md](../specs/GITREVIEW.md) — wire format for pull requests, feedback, review states, and version tracking.
+[Initialize](#initialize) · [Pull requests](#pull-requests) · [Feedback](#feedback) · [Forks](#forks) · [Flows](#flows) · [Reference](#reference)
 
 ## Initialize
 
 ```
-gitsocial review init                  # creates refs/gitmsg/review/config and the gitmsg/review branch
-gitsocial review init -b <branch>      # initialize on a custom branch
-gitsocial review config get / set / list
+gitsocial review init [-b <branch>]         # refs/gitmsg/review/config and the gitmsg/review branch
+gitsocial review config get|set|list
 ```
+
+`init` is idempotent.
 
 ## Pull requests
 
 ```
-gitsocial review pr create "Add dark mode" \
-    --base '#branch:main' --head '#branch:dark-mode' \
-    --reviewers bob@example.com,carol@example.com \
-    --closes <issue-ref> \
-    --stack                              # auto-set depends-on from base→head matching
-
-gitsocial review pr list
+gitsocial review pr create "Add dark mode" --base '#branch:main' --head '#branch:dark-mode' \
+    [--reviewers bob@example.com,carol@example.com] [--closes <issue-ref>] [--draft] [--stack | --depends-on <pr-ref>]
+gitsocial review pr list [-s open]
 gitsocial review pr show <ref>
-gitsocial review pr update <ref>         # capture new branch tips as a new version
+gitsocial review pr edit <ref> [--title ...] [--body ...] [--reviewers ...] [--closes ...]
+gitsocial review pr update <ref>                       # record the current branch tips as a new version
+gitsocial review pr diff <ref> [--from <n> --to <m>]   # range-diff between two versions
 gitsocial review pr sync <ref> [--strategy rebase|merge]
 gitsocial review pr merge <ref> [--strategy fast-forward|squash|rebase|merge]
 gitsocial review pr close <ref>
 gitsocial review pr retract <ref>
-gitsocial review pr draft <ref>          # open → draft
-gitsocial review pr ready <ref>          # draft → open
-gitsocial review pr diff <ref>           # range-diff between PR versions
-gitsocial review pr stack <ref>          # show the full stack
-gitsocial review pr rebase-stack <ref>   # cascade rebase PRs above
-gitsocial review pr sync-stack <ref>     # snapshot tips for all PRs in stack
+gitsocial review pr draft <ref> | ready <ref>
+gitsocial review pr stack <ref> | rebase-stack <ref> | sync-stack <ref>
 ```
 
-`--base` and `--head` accept any ref (`#branch:<name>` for local, `<url>#branch:<name>` for cross-forge — see [§2 Cross-Forge Contribution](#2-cross-forge-contribution)). `--depends-on` sets stack relationships explicitly when `--stack` auto-detection isn't enough.
+- `--base` and `--head` take `#branch:<name>` for this repository or `<url>#branch:<name>` for another one.
+- `--stack` derives `depends-on` from the pull request whose head is this one's base; `--depends-on` sets it by hand.
 
 ## Feedback
 
 ```
 gitsocial review feedback approve <pr-ref> [-m "LGTM"]
-gitsocial review feedback request-changes <pr-ref> -m "Reasoning..."
-gitsocial review feedback comment "Consider caching this" \
-    --pr <pr-ref> --commit <12-char-sha> --file path/to.go \
+gitsocial review feedback request-changes <pr-ref> -m "Why"
+gitsocial review feedback comment "Consider caching this" --pr <pr-ref> --commit <sha12> --file path/to.go \
     --new-line 42 [--new-line-end 50] [--old-line 40] [--suggest]
 ```
 
-Reviews are tied to the version the reviewer saw; force-push doesn't auto-dismiss them. See [Version Tracking and Review Staleness](#10-version-tracking-and-review-staleness).
+Feedback is tied to the version the reviewer saw. A later version never dismisses it; it is marked stale when the code changed.
 
 ## Forks
 
 ```
-gitsocial review fork add <fork-url>     # alias for `gitsocial fork add`
-gitsocial review fork list
-gitsocial review fork remove <fork-url>
+gitsocial fork add <fork-url>       # also `gitsocial review fork add|list|remove`
+gitsocial fetch
 ```
 
-PRs from registered forks appear in `pr list` and trigger `fork-pr` notifications. See [Fork PR Discovery](#3-fork-pr-discovery) for the full flow.
-
-The TUI's review section (`R` from any screen — Pull Requests) provides the PR list, detail, files-changed, interdiff, history, and feedback flows.
-
----
-
-## Flows — Table of Contents
-
-The remainder of this document walks through usage scenarios in detail.
-
-- [Why GitSocial Reviews](#why-gitsocial-reviews)
-- [Same-Repo Pull Request](#1-same-repo-pull-request)
-- [Cross-Forge Contribution](#2-cross-forge-contribution)
-- [Fork PR Discovery](#3-fork-pr-discovery)
-- [Review with Suggestions](#4-review-with-suggestions)
-- [Multi-Reviewer Approval](#5-multi-reviewer-approval)
-- [Pull Request Linked to Issues](#6-pull-request-linked-to-issues)
-- [Discussion Threads](#7-discussion-threads-on-a-pull-request)
-- [Pull Request Lifecycle](#8-pull-request-lifecycle)
-- [Viewing Diffs in TUI](#9-viewing-diffs-in-tui)
-- [Version Tracking and Review Staleness](#10-version-tracking-and-review-staleness)
-- [Merge Strategies](#11-merge-strategies)
-- [Branch Sync](#12-branch-sync)
-- [Stacked Pull Requests](#13-stacked-pull-requests)
-
----
-
-## Why GitSocial Reviews
-
-GitSocial stores PRs as commits on a `gitmsg/review` branch inside the repo itself. The repo is the source of truth. Everything else follows from that.
-
-**Cross-forge PRs.** `base` and `head` fields are URLs, not internal IDs. A GitLab contributor can submit a PR targeting a GitHub upstream. On merge, fork PRs are copied to upstream with the original author preserved — surviving fork deletion.
-
-**Rebase-resilient identity.** The PR references `head="#branch:feature"` — the branch name doesn't change when its commits are rebased. State changes (edits, merge, close) are new commits linked via `edits`. Force-push can't destroy review context because review data lives on a separate branch.
-
-**Version tracking.** Every `pr update` records the hash of the base and head branch tips. The edits chain is the version history — walking it gives every recorded code snapshot. `pr diff` runs `git range-diff` between any two versions. Feedback timestamps are compared against version timestamps to determine which version a reviewer saw — pure rebases (patches identical) are distinguished from actual code changes. Reviews are never auto-dismissed.
-
-**Per-PR merge strategies.** Fast-forward, squash, rebase, and merge commit — chosen per-PR via `--strategy`, not a repo-wide setting.
-
-### Comparison
-
-| Pain Point | GitHub/GitLab | GitSocial |
-|------------|--------------|-----------|
-| Cross-forge PR | Impossible | Protocol-native via URLs |
-| PR identity survives rebase | Tied to commit SHAs | PR commit on review branch = permanent anchor |
-| History of code changes | Force-push = gone | `base-tip`/`head-tip` snapshots in edits chain |
-| Review lost on rebase | Comments hidden/outdated | Edits chain preserves all versions; range-diff shows what changed |
-| What changed between reviews? | GitLab has version diffs; GitHub has no built-in comparison | `pr diff` shows range-diff between any two versions |
-| Review dismissal on rebase | Unpredictable auto-dismiss | Range-diff detects actual code changes vs. pure rebase; never auto-dismiss |
-| Merge strategy | Repo-level config; choose from enabled options | All 4 strategies per-PR via `--strategy` |
-| Update branch | Merge vs rebase dilemma | `pr sync` with rebase or merge, auto-captures tips |
-| Fork PR, fork deleted | Review orphaned | PR copied to upstream on merge |
-
----
+Pull requests from a registered fork appear in `pr list` and raise a `fork-pr` notification. On merge or close, a fork pull request is copied to this repository with the author's identity preserved, so the record survives the fork's deletion.
 
 ## Flows
 
-## 1. Same-Repo Pull Request
-
-Alice and Bob work on the same repo. Alice proposes a change, Bob reviews it.
+### Same repository
 
 ```
-    Alice                           Bob
-      │                              │
-      ●  push dark-mode branch       │
-      ●  create PR                   │
-      │  open, base=main             │
-      │  head=dark-mode              │
-      │                              │
-      │                              ●  fetch gitmsg/review
-      │                              ●  see open PR
-      │                              ●  post inline review
-      │                              │
-      ●  read review, push fix       │
-      │                              │
-      │                              ●  approve
-      │                              │
-      ●  merge (state=merged)        │
-      ●  closes linked issues        │
+    Alice                            Bob
+      │                               │
+      ●  push dark-mode               │
+      ●  pr create, push              │
+      │  base=main, head=dark-mode    │
+      │                               ●  fetch
+      │                               ●  post inline feedback, push
+      ●  fetch, push a fix            │
+      ●  pr update, push              │
+      │                               ●  fetch, approve, push
+      ●  fetch, pr merge              │
+      ●  the linked issues close      │
 ```
 
-### Messages
+### Cross-forge
 
-**Alice creates pull request:**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; closes="#commit:abc123456789@gitmsg/pm"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; reviewers="bob@example.com"; v="0.1.0"
-```
-
-**Bob posts inline review:**
-```
-Consider caching this value to avoid recomputation on every render.
-
-GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.js"; line-start="42"; side="right"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
- > Add dark mode support
-```
-
-**Bob approves:**
-```
-LGTM!
-
-GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; review-state="approved"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
- > Add dark mode support
-```
-
-**Alice merges (edits original pull request commit):**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; head="#branch:dark-mode"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0"
-```
-
----
-
-## 2. Cross-Forge Contribution
-
-Alice works on GitLab, Bob maintains the upstream repo on GitHub. Alice forks, proposes changes, Bob reviews on GitHub.
+Alice's repository is on GitLab and Bob's on GitHub; either could be a bucket instead, on any S3 provider, and two buckets need not share one. The pull request lives on Alice's `gitmsg/review` branch with a `base` URL into Bob's repository; Bob's feedback lives on his own branch and references her pull request by URL.
 
 ```
-    GitLab (alice)                 GitHub (bob)
-      │                              │
-      ●  push dark-mode branch       │
-      ●  create PR                   │
-      │  head=gitlab/alice/repo      │
-      │  base=github/bob/repo        │
-      │                              │
-      │                              ●  follow alice's repo
-      │                              ●  fetch gitmsg/review
-      │                              ●  see cross-forge PR
-      │                              ●  post review
-      │                              │
-      ●  read review (fetch bob)     │
-      ●  push fix                    │
-      │                              │
-      │                              ●  approve
-      │                              ●  merge
-```
-
-### Messages
-
-**Alice creates cross-forge pull request (on her GitLab repo's gitmsg/review branch):**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
-```
-
-**Bob reviews (on his GitHub repo's gitmsg/review branch):**
-```
-Solid approach. One suggestion on the CSS transitions.
-
-GitMsg: ext="review"; type="feedback"; pull-request="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; review-state="approved"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0"
- > Add dark mode support
-```
-
-**Bob merges (on his GitHub repo):**
-
-Step 1 — Copy fork PR to upstream (preserves original author via GitMsg-Ref):
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@gitlab.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:bbb222333444@gitmsg/review"; v="0.1.0"
- > Add dark mode support
-```
-
-Step 2 — Merge edit references the local copy:
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; edits="#commit:ccc333444555@gitmsg/review"; state="merged"; base="#branch:main"; head="https://gitlab.com/alice/repo#branch:dark-mode"; merge-base="f1e2d3c4b5a6"; merge-head="a1b2c3d4e5f6"; v="0.1.0"
-```
-
----
-
-## 3. Fork PR Discovery
-
-A maintainer registers forks so PRs (and issues) from contributors are automatically discovered during fetch, appear in `pr list`, and trigger notifications.
-
-```
-    Maintainer (upstream)               Contributor (fork)
-      │                                      │
-      ●  gitsocial fork add                  │
-      │  <fork-url>                          │
-      │                                      │
-      │                                      ●  push feature branch
-      │                                      ●  create PR
-      │                                      │  base=#branch:main
-      │                                      │  head=#branch:feature
-      │                                      │
-      ●  gitsocial fetch                     │
-      │  → fetches fork's gitmsg/* branches  │
-      │  → all extension processors          │
-      │                                      │
-      ●  pr list shows fork PR               │
-      ●  notification: "fork-pr"             │
-      │                                      │
-      ●  review / merge                      │
-```
-
-### How It Works
-
-1. **Register fork**: `gitsocial fork add https://github.com/contributor/repo`
-2. **Fetch**: During `gitsocial fetch`, all `gitmsg/*` branches from each registered fork are fetched and processed through all extension processors (review, PM, social, release)
-3. **Discovery**: Fork PRs with a `base` that is a local ref (`#branch:main`) or explicitly targets the workspace URL are included in `pr list`
-4. **Notifications**: New fork PRs appear as `fork-pr` notifications; feedback on workspace PRs appears as `feedback`/`approved`/`changes-requested` notifications
-
-### Fork Config
-
-Forks are stored in the core config (`refs/gitmsg/core/config`):
-
-```json
-{
-  "version": "0.1.0",
-  "forks": [
-    "https://github.com/contributor/repo"
-  ]
-}
-```
-
----
-
-## 4. Review with Suggestions
-
-Reviewer proposes concrete code changes that the author can apply directly.
-
-```
-     Bob                           Alice
-      │                              │
-      ●  create PR                   │
-      │                              │
-      │                              ●  post suggestion
-      │                              │
-      ●  apply suggestion            │
-      ●  push updated branch         │
-      │                              │
-      │                              ●  approve
-```
-
-### Messages
-
-**Alice suggests a change:**
-~~~
-Use a CSS custom property for the transition
-
-```suggestion
-transition: background-color var(--theme-transition, 200ms) ease;
-```
-
-GitMsg: ext="review"; type="feedback"; pull-request="#commit:aaa111222333@gitmsg/review"; commit="def456789abc"; file="src/theme.css"; line-start="18"; side="right"; suggestion="true"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Bob"; email="bob@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
- > Refactor theme transitions
-~~~
-
----
-
-## 5. Multi-Reviewer Approval
-
-A pull request requires multiple reviewers. Aggregation determines merge readiness.
-
-```
-    Alice                   Bob                       Carol
-      │                      │                        │
-      ●  create PR           │                        │
-      │  reviewers=          │                        │
-      │  bob,carol           │                        │
-      │                      │                        │
-      │                      ●  changes-requested     │
-      │                      │                        │
-      ●  push fix            │                        │
-      │                      │                        │
-      │                      ●  approved              │
-      │                      │                        ●  approved
-      │                      │                        │
-      ●  merge               │                        │
-```
-
-### Aggregation Rules
-
-- Any `changes-requested` → pull request is blocked
-- All reviewers `approved` → pull request is ready to merge
-- Only the latest review per reviewer counts
-
----
-
-## 6. Pull Request Linked to Issues
-
-A pull request closes issues when merged. The `closes` field contains commit references to PM issues.
-
-### Messages
-
-**Pull request that closes two issues:**
-```
-Add dark mode support
-
-Implements theme switching with system preference detection.
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; closes="#commit:abc123456789@gitmsg/pm,#commit:def456789012@gitmsg/pm"; head="#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
-GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-06T10:00:00Z"; ref="#commit:abc123456789@gitmsg/pm"; v="0.1.0"
- > Add dark mode support
-GitMsg-Ref: ext="pm"; type="issue"; author="Bob"; email="bob@example.com"; time="2025-01-07T09:00:00Z"; ref="#commit:def456789012@gitmsg/pm"; v="0.1.0"
- > Support system theme preference
-```
-
-When the pull request transitions to `state="merged"`, implementations auto-close the referenced issues.
-
----
-
-## 7. Discussion Threads on a Pull Request
-
-General discussion (not anchored to code) uses GitSocial comments. Nested replies use `reply-to`.
-
-```
-    Alice               Bob                   Carol
-      │                  │                      │
-      ●  create PR       │                      │
-      │                  │                      │
-      │                  ●  "Should we also     │
-      │                  │   handle prefers-    │
-      │                  │   contrast?"         │
-      │                  │                      │
-      │                  │                      ●  "Yes, good idea.
-      │                  │                      │   I can follow up
-      │                  │                      │   in a separate PR."
-      │                  │                      │
-      ●  "Filed          │                      │
-      │   issue #42"     │                      │
-```
-
-### Messages
-
-**Bob comments on the pull request:**
-```
-Should we also handle prefers-contrast?
-
-GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:aaa111222333@gitmsg/review"; v="0.1.0"
- > Add dark mode support
-```
-
-**Carol replies to Bob's comment:**
-```
-Yes, good idea. I can follow up in a separate PR.
-
-GitMsg: ext="social"; type="comment"; original="#commit:aaa111222333@gitmsg/review"; reply-to="#commit:ccc333444555@gitmsg/social"; v="0.1.0"
-GitMsg-Ref: ext="social"; type="comment"; author="Bob"; email="bob@example.com"; time="2025-01-20T11:00:00Z"; ref="#commit:ccc333444555@gitmsg/social"; v="0.1.0"
- > Should we also handle prefers-contrast?
-```
-
----
-
-## 8. Pull Request Lifecycle
-
-Full state machine for a pull request:
-
-```
-         create
-           │
-           v
-        ┌──────┐           ┌────────┐
-        │ open │─────────> │ closed │
-        └──┬───┘           └────────┘
-           │               reopen via
-           v               new PR
-       ┌────────┐
-       │ merged │
-       └────────┘
-```
-
-- `open` → `merged`: The base owner (whoever owns the target/base repo) edits the original pull request commit with `state="merged"`
-- `open` → `closed`: The base owner edits with `state="closed"` to decline the pull request
-- Retract: The author's counterpart to close — withdraws their own proposal via `retracted="true"`, hiding it from all views. Distinct from `state="closed"`, which is the base owner's decline
-- Reopen: Not a state transition. Create a new pull request referencing the same branches
-
----
-
-## 9. Viewing Diffs in TUI
-
-The TUI provides a files changed view accessible from the PR detail via `d`. It shows syntax-highlighted unified diffs with colored added/removed lines and line number gutters.
-
-Inline feedback from the diff view pre-fills the file, line number, and side parameters when creating feedback commits, producing the same `file`, `line-start`, and `side` headers as CLI-created inline reviews.
-
----
-
-## 10. Version Tracking and Review Staleness
-
-When an author rebases or pushes new commits, `pr update` captures new branch tips as a version. Reviewers see version-aware staleness — using `git range-diff` to distinguish pure rebases from actual code changes.
-
-```
-    Alice                               Bob
-      │                                  │
-      ●  create PR (head=dark-mode)      │
-      │  base-tip="aaa", head-tip="bbb"  │
-      │                                  │
-      │                                  ●  review, request changes
-      │                                  │
-      ●  push fix                        │
-      ●  pr update                       │
-      │  base-tip="aaa", head-tip="ccc"  │
-      │                                  │
-      │                                  ●  fetch → sees new version
-      │                                  ●  pr show:
-      │                                  │  "changes requested
-      │                                  │   (reviewed original,
-      │                                  │   current is latest,
-      │                                  │   code changed) [stale]"
-      │                                  │
-      │                                  ●  pr diff → range-diff
-      │                                  │  shows what changed
-      │                                  ●  approve
-```
-
-### Messages
-
-**Alice creates PR (version 0 = original):**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="bbb222ccc333"; reviewers="bob@example.com"; v="0.1.0"
-```
-
-**Alice runs `pr update` after pushing fixes (version 1 = latest):**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="open"; base="#branch:main"; base-tip="aaa111bbb222"; head="#branch:dark-mode"; head-tip="ccc333ddd444"; v="0.1.0"
-```
-
-Updates are explicit — the author signals "new code is ready" by running `pr update`. Not every WIP push triggers a version.
-
-### Version-Aware Staleness Detection
-
-The reviewer's feedback has a timestamp. The PR's edits chain has timestamps and `head-tip` values. By comparing them, we know which version the reviewer saw. When the head-tip changed, `git range-diff` determines if the patches actually changed:
-
-- `head-tip` unchanged → approval is **current** ("no code changes")
-- `head-tip` changed, patches identical (pure rebase) → "no code changes"
-- Patch content changed → "code changed" with `[stale]` marker
-- Never auto-dismiss. Never hide. Let humans decide.
-
----
-
-## 11. Merge Strategies
-
-Four merge strategies available per-PR via `--strategy` flag. Teams pick per-PR instead of fighting over a repo-wide default.
-
-```
-    Alice
-      │
-      ●  pr merge <ref>                    # fast-forward (default)
-      ●  pr merge <ref> --strategy squash  # squash all commits
-      ●  pr merge <ref> --strategy rebase  # replay commits onto base
-      ●  pr merge <ref> --strategy merge   # force merge commit
-```
-
-After a successful merge, the base branch is pushed to origin so the remote code agrees with the merged state published on `gitmsg/review`. A failed base push is reported as a warning (the merge itself already happened locally); push the base manually to recover.
-
-### Messages
-
-**Merge edit (same for all strategies — the git operation differs, but the review record is the same):**
-```
-Add dark mode support
-
-GitMsg: ext="review"; type="pull-request"; edits="#commit:aaa111222333@gitmsg/review"; state="merged"; base="#branch:main"; base-tip="ddd444eee555"; head="#branch:dark-mode"; head-tip="eee555fff666"; merge-base="ddd444eee555"; merge-head="eee555fff666"; v="0.1.0"
-```
-
-`merge-base` and `merge-head` are captured before the merge (lost after fast-forward). They enable reconstructing the original diff of a merged PR.
-
----
-
-## 12. Branch Sync
-
-Keep the head branch up-to-date with the base branch. `pr sync` rebases or merges, then auto-captures new tips.
-
-```
-    Alice
-      │
-      ●  pr show → "3 commits behind main"
-      │
-      ●  pr sync <ref>          # rebase head onto base (default)
-      ●  pr sync <ref> --strategy merge    # merge base into head
-      │
-      │  → auto-runs pr update
-      │  → new version with updated tips
-```
-
-After sync, the version history shows the rebase via range-diff. Reviewers can see what changed (if anything) between the pre-sync and post-sync versions.
-
----
-
-## 13. Stacked Pull Requests
-
-Decompose a large change into an ordered chain of small PRs. Each PR builds on the one below it — the bottom targets `main`, each subsequent PR targets the previous PR's branch. The `depends-on` field makes the relationship explicit so it survives branch renames and works across forges.
-
-```
-    Alice                              Bob
+    GitLab (alice)                    GitHub (bob)
       │                                 │
-      ●  push auth-middleware           │
-      ●  pr create PR1                  │
-      │  base=main, head=auth-middleware│
-      │                                 │
-      ●  push auth-routes               │
-      ●  pr create PR2 --stack          │
-      │  base=auth-middleware           │
-      │  head=auth-routes               │
-      │  → auto-sets depends-on=PR1     │
-      │                                 │
-      ●  push auth-tests                │
-      ●  pr create PR3 --stack          │
-      │  → auto-sets depends-on=PR2     │
-      │                                 │
-      │                                 ●  pr stack <PR2>
-      │                                 │  shows full chain
-      │                                 ●  review PR1, approve
-      │                                 │
-      ●  pr merge PR1                   │
-      │  → PR2 auto-retargets to main   │
-      │                                 │
-      ●  pr rebase-stack PR2            │
-      │  → rebases PR2, PR3 onto main   │
-      │                                 ●  review PR2, approve
-      │                                 │
-      ●  pr merge PR2                   │
-      │  → PR3 auto-retargets           │
+      ●  push dark-mode                 │
+      ●  pr create, push                │
+      │  head=gitlab.com/alice/repo     │
+      │  base=github.com/bob/repo       │
+      │                                 ●  fork add alice's repository, fetch
+      │                                 ●  post feedback, push
+      ●  follow bob's repository, fetch │
+      ●  push a fix, pr update, push    │
+      │                                 ●  approve
+      │                                 ●  pr merge: copies the pull request to
+      │                                 │  bob's repository, author preserved
 ```
 
-### Messages
+A bucket upstream is named by its `s3://` URL, the form it uses for itself, or targeted with a local ref such as `#branch:main`; the contributor reads a public bucket over its `https://` domain.
 
-**Alice creates PR1 (root of stack):**
-```
-Add auth middleware
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="a1b2c3d4e5f6"; head="#branch:auth-middleware"; head-tip="b2c3d4e5f6a7"; v="0.1.0"
-```
-
-**Alice creates PR2 (stacked on PR1):**
-```
-Add API routes for auth
-
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:auth-middleware"; base-tip="b2c3d4e5f6a7"; head="#branch:auth-routes"; head-tip="c3d4e5f6a7b8"; depends-on="#commit:abc123456789@gitmsg/review"; v="0.1.0"
-GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="#commit:abc123456789@gitmsg/review"; v="0.1.0"
- > Add auth middleware
-```
-
-**Alice merges PR1 — PR2 gets auto-retargeted:**
-
-After PR1 is merged, an edit commit is created for PR2 updating its base from `#branch:auth-middleware` to `#branch:main`:
-```
-Add API routes for auth
-
-GitMsg: ext="review"; type="pull-request"; edits="#commit:def456789012@gitmsg/review"; state="open"; base="#branch:main"; base-tip="d4e5f6a7b8c9"; head="#branch:auth-routes"; head-tip="c3d4e5f6a7b8"; depends-on="#commit:abc123456789@gitmsg/review"; v="0.1.0"
-```
-
-The `depends-on` ref still points to the now-merged PR1 — the relationship is preserved as history. Only `base` changes to reflect the new merge target.
-
-### Stack Operations
-
-**View the full stack** from any member:
-```bash
-gitsocial review pr stack <any-member-ref>
-```
-```
-Stack (3 PRs):
-  ✓ #1  Add auth middleware          main ← auth-middleware         [merged]
-  ● #2  Add API routes for auth      auth-middleware ← auth-routes  [open]
-  ● #3  Add auth integration tests   auth-routes ← auth-tests       [open]
-```
-
-**Cascade rebase** — when you update a PR in the middle of a stack, rebase all PRs above it:
-```bash
-gitsocial review pr rebase-stack <pr-ref>
-```
-
-Walks up the chain via `depends-on`. For each dependent: rebases its head branch onto its base and creates an edit with updated tips. Stops on first conflict with a clear error identifying which PR failed.
-
-**Sync stack tips** — snapshot current branch tips for all open PRs (no rebase):
-```bash
-gitsocial review pr sync-stack <pr-ref>
-```
-
-### Merge Ordering
-
-`pr merge` refuses to merge a PR if any of its `depends-on` targets is unmerged. This enforces bottom-up order — you cannot merge PR2 while PR1 is still open.
-
-### Cross-Forge Stacks
-
-Because `depends-on` uses the standard ref format with optional repo URLs, stacks can span forges:
+### Fork discovery
 
 ```
-PR1 on GitHub:  base="#branch:main"; depends-on=(none)
-PR2 on GitLab:  base="https://github.com/org/repo#branch:auth-middleware";
-                 depends-on="https://github.com/org/repo#commit:abc123@gitmsg/review"
+    Maintainer (upstream)                  Contributor (fork)
+      │                                         │
+      ●  gitsocial fork add <fork-url>          │
+      │                                         ●  push feature
+      │                                         ●  pr create, base=#branch:main
+      ●  gitsocial fetch                        │
+      │  fetches the fork's gitmsg/* branches   │
+      ●  pr list shows the fork's pull request  │
+      ●  notification: fork-pr                  │
+      ●  review, merge                          │
 ```
 
-No forge needs to understand "stacks" natively. Stack metadata lives in the git commit, readable by any GitSocial implementation regardless of hosting.
+A fork's pull request is discovered when its `base` is a local ref or names the workspace URL.
 
-### Platform Import
+### Versions
 
-When importing PRs from GitHub or GitLab via `gitsocial import review`, stack relationships are auto-detected by matching base branches to head branches across imported PRs (same-repo, open PRs only). Each child PR gets an edit commit adding `depends-on` pointing to the parent.
+```
+    Alice                                Bob
+      │                                   │
+      ●  pr create, head-tip=bbb          │
+      │                                   ●  request changes
+      ●  push a fix                       │
+      ●  pr update, head-tip=ccc          │
+      │                                   ●  fetch; pr show reads
+      │                                   │  changes-requested (reviewed original, current is v1, code changed) [stale]
+      │                                   ●  pr diff: range-diff of the two versions
+      │                                   ●  approve
+```
 
-The detection logic is platform-agnostic: both `FetchReview` adapters populate `BaseBranch`, `HeadBranch`, and `HeadRepo` uniformly on `ImportPR`, so the same matching rules apply regardless of source.
+`pr update` records `base-tip` and `head-tip` as a new version, and the edits chain is the version history. Feedback stays current when the head tip is unchanged or the patches are identical, and is marked stale when the code changed. Nothing is dismissed automatically.
 
-### TUI Support
+### Stacks
 
-- **PR list:** Stacked PRs show a `stacked` badge in the subtitle
-- **PR detail:** A "Stack" section renders after the hero card listing all PRs in the chain with state icons and a current-PR marker
-- **Navigation:** `[` jumps to the previous PR in the stack, `]` jumps to the next — without leaving the detail view
+```
+    Alice                                        Bob
+      │                                           │
+      ●  pr create PR1   main ← middleware        │
+      ●  pr create PR2 --stack                    │
+      │  middleware ← routes, depends-on=PR1      │
+      ●  pr create PR3 --stack                    │
+      │  routes ← tests, depends-on=PR2           │
+      │                                           ●  pr stack: the whole chain
+      │                                           ●  approve PR1
+      ●  pr merge PR1: PR2 retargets to main      │
+      ●  pr sync PR2: rebases it onto main        │
+      ●  pr rebase-stack PR2: rebases PR3         │
+      │                                           ●  approve PR2
+      ●  pr merge PR2: PR3 retargets              │
+```
+
+`rebase-stack` rebases every member above the given one and records versions, stopping at the first conflict; `sync-stack` records tips without rebasing. `pr merge` refuses a member whose dependency is unmerged. Stacks span forges, since `depends-on` is a reference, and `gitsocial import review` detects them among imported pull requests by matching base and head branches.
+
+### Other flows
+
+- **Suggestions.** `feedback comment --suggest` carries a replacement in a `suggestion` fence; the author applies it and pushes.
+- **Several reviewers.** With `--reviewers bob,carol`, any `changes-requested` blocks the pull request, and it is ready when every reviewer's latest feedback is `approved`.
+- **Linked issues.** `--closes <issue-ref>,<issue-ref>` closes the issues when the pull request merges.
+- **Discussion.** General comments are social comments on the pull request, `gitsocial social comment <pr-ref> "..."`; replies nest with `reply-to`.
+- **Lifecycle.** `open` becomes `merged` or `closed` by an edit from the base owner. The author withdraws with `retract`. There is no reopen; create a new pull request.
+- **Merge strategies.** `pr merge --strategy fast-forward|squash|rebase|merge`, per pull request; fast-forward is the default. `merge-base` and `merge-head` are recorded before the merge, so the merged diff can be reconstructed. After a merge the base branch is pushed; a failed push is a warning, and the merge stands locally.
+- **Branch sync.** `pr sync` rebases the head onto the base, or merges the base into it with `--strategy merge`, then records the new tips as a version.
+
+## Reference
+
+- Versions and review aggregation: [GITREVIEW.md §1.5](../specs/GITREVIEW.md#15-editing-and-retracting) and [§1.8](../specs/GITREVIEW.md#18-review-aggregation).
+- `pr list` shows this repository's pull requests and those from [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
+- Fork registrations live at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- New fork pull requests, feedback, approvals and change requests raise [notifications](NOTIFICATIONS.md#types), as do branch tips that moved or vanished under an open pull request.
+- In the TUI, `R` opens pull requests ([TUI-KEYS.md](TUI-KEYS.md#review-extension)); the detail view has files changed (`d`), interdiff, history and feedback, and `[` and `]` move through a stack.

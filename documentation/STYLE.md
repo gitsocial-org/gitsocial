@@ -1,8 +1,10 @@
 # Style Guide
 
-One register for everything in this repository: the one `README.md` and `specs/` already use. Short sentences. Say what, not why. Reasons go to the places named in section 1. Applies to new text now; existing text migrates in sweeps.
+One register for everything in this repository, the one `README.md` and `specs/` already use: short sentences that say what, not why.
 
-## 1. Where things go
+[Where things go](#where-things-go) · [Prose rules](#prose-rules) · [Help text](#help-text) · [Documentation](#documentation) · [Comments](#comments) · [Commits](#commits) · [Tests](#tests) · [Checks](#checks)
+
+## Where things go
 
 | Kind of text | Home | Not here |
 |---|---|---|
@@ -10,24 +12,24 @@ One register for everything in this repository: the one `README.md` and `specs/`
 | How to do a task | a guide doc (`SOCIAL.md`, `PM.md`, `REVIEW.md`) | mechanism, rationale |
 | Exact values: keys, layouts, env vars, artifacts | a reference table | prose |
 | Why something is the way it is | the commit body of the change; a constraint the next editor must respect gets one line at the point of constraint | longer comments, help text, subjects, a separate decisions file |
-| What changed and when | the commit body; `STATIC-SITE.md` for the page schema | code comments |
+| What changed and when | the commit body | code comments, changelogs in code |
 | A rule an implementation must follow | `specs/` | documentation |
 
-## 2. Prose rules
+## Prose rules
 
-Apply to help, errors, TUI hints, site strings, log lines, guides, decisions, comments and commit messages.
+Apply to help, errors, TUI hints, site strings, log lines, guides, comments and commit messages.
 
 - One idea per sentence, under 20 words.
 - Imperative for instructions, present tense for behavior.
 - No em-dashes. Use a comma, a colon, or a new sentence.
-- Parentheses only around a literal: a default, a unit, a flag. Never around an aside.
+- Parentheses hold a literal or a short aside, never a second sentence.
 - No intensifiers or narration: exactly, deliberately, silently, loudly, forever, by construction, honest, genuinely, precisely, the whole.
 - "never" and "always" only in a rule, not in a description.
 - Name a file, function or flag when the reader has to go there. Otherwise say it in words.
 - Counts and sizes go in tables; defaults go in flag help; prose carries neither.
 - No "we", no "note that", no rhetorical questions.
 
-## 3. Help text
+## Help text
 
 | Field | Rule | Limit |
 |---|---|---|
@@ -74,31 +76,32 @@ Examples:
 See documentation/S3.md for remotes and thin fork buckets.
 ```
 
-The current text's explanations (the remote heuristic, the thin-fork escape hatch, why gitmsg branches merge cleanly) move to `S3.md` as guide steps, reference rows and decisions.
+The current text's explanations (the remote heuristic, the thin-fork escape hatch, why gitmsg branches merge cleanly) become guide steps and reference rows in `S3.md`; the rest goes.
 
-## 4. Documentation
+## Documentation
 
-Two kinds of doc. A file is one kind.
+Two kinds of doc. A file is a guide, a reference, or a guide that ends with a Reference section of tables.
 
 | Kind | Purpose | Shape | Examples |
 |---|---|---|---|
-| Guide | do a task | steps and commands in the order a user meets them; under 150 lines | `SOCIAL.md`, `PM.md`, `REVIEW.md` |
-| Reference | look a value up | tables: keys, flags, layouts, env vars, artifacts | `SETTINGS.md`, the layout and env sections of `S3.md` |
+| Guide | do a task | steps and commands in the order a user meets them | `SOCIAL.md`, `PM.md`, `STATIC-SITE.md` |
+| Reference | look a value up | tables: keys, flags, layouts, env vars, artifacts | `SETTINGS.md`, the Reference section of `STATIC-SITE.md` |
 
 Rules:
 
 - A guide sentence tells the reader what to type or what they will see. A sentence that starts with "because", "so that" or "the reason" belongs in the commit body, or goes.
 - A reference row is one line. If it needs a paragraph, it is two rows or a guide sentence.
 - Specs keep the RFC register and never reference this implementation.
-- Every doc opens with one sentence saying what it covers. A table of contents only past 150 lines.
+- Every doc opens with one sentence saying what it covers; the site uses it as the page's description. One line of section links follows it, README style. The first section starts right after, with no other text before it.
+- A term the doc coins is defined where it first appears.
 - Link, do not repeat. One explanation lives in one place.
 
-Example, the `commits/` bullet in `STATIC-SITE.md`, 300 words today, becomes two things. The reasoning (why commits get no page of their own) stays in the commit that introduced the layer.
+Example, the `commits/` bullet in `STATIC-SITE.md`, 300 words before the rewrite, becomes two things. The reasoning (why commits get no page of their own) stays in the commit that introduced the layer.
 
 - Guide: "`commits/` lists the default branch's commits, 100 per page. Commits have no page of their own; each row links to the app's commit view."
 - Reference: `| commits/<n>.html | sealed commits list page | no-cache |`
 
-## 5. Comments
+## Comments
 
 | Place | Rule |
 |---|---|
@@ -108,17 +111,22 @@ Example, the `commits/` bullet in `STATIC-SITE.md`, 300 words today, becomes two
 | package doc | under 10 lines, only for a package with a non-trivial contract |
 | struct field | trailing, one line, only for a unit or a sentinel |
 
-Not in comments: why a design was chosen, what was tried, version history, threat models, invariants restated from another file, the same reasoning twice. When such a block comes out it becomes one of four things: a constraint the next editor must respect, as one line at the point of constraint; how a mechanism works, as a reference row in the owning doc; why this over the alternatives, in the commit body; or nothing, since git history keeps the deleted text.
+Not in comments: why a design was chosen, what was tried, version history, threat models, invariants restated from another file, the same reasoning twice. When such a block comes out it becomes one of four things:
+
+- a constraint the next editor must respect: one line at the point of constraint;
+- how a mechanism works: a reference row in the owning doc;
+- why this over the alternatives: the commit body;
+- nothing, since git history keeps the deleted text.
 
 Examples:
 
-- `site_pages.go`, 89 lines of version history above a constant, becomes `sitePagesVersion = 17 // page schema; history in STATIC-SITE.md`.
+- `site_pages.go`, 89 lines of version history above a constant, becomes `sitePagesVersion = 18 // bump when a page head or its sealed markup changes`.
 - `gs-core.js`, 12 lines above `fetchHTTP` on why 429 and 5xx retry, becomes `// fetchHTTP retries 429, 5xx and header timeouts with jittered backoff; transport errors fail at once.`
 - `index.html`, a 17-line comment on each CSP directive, becomes no comment. The directive list is the documentation; the reasoning is in the commit that set the policy.
 
 The same rules apply to Go, JS, CSS, HTML, shell and tests.
 
-## 6. Commits
+## Commits
 
 - Subject: `Area: what changed`, under 72 characters, one change.
 - Body: why, in two to six lines. Name the user-visible effect if there is one.
@@ -130,13 +138,13 @@ Example. Before, one commit with no body:
 
 After, three commits: `S3: upload bucket writes in parallel with retry`, with a body naming the concurrency default and the retried status codes; `S3: publish the whole site on a first push`; `Push: report maintenance progress`.
 
-## 7. Tests
+## Tests
 
 - Names say the behavior: `TestPush_thinBucketRefusesSite`, not `TestThin3`.
 - Assert on behavior and output, not on source text. A regex over a CSS or JS file tests the file, not the site.
 - One shared fixture per shape. A test does not build a repo it does not need.
 - A test that needs explaining gets one doc line, nothing more.
 
-## 8. Checks
+## Checks
 
-Planned, not yet in the gate: `scripts/prose-check.sh` counts em-dashes outside `specs/`; comment blocks over 3 lines in Go, JS, CSS and HTML outside package docs; `Short` over 50 characters; flag help over 60 characters or containing a parenthesis; commit subjects over 72 characters in the pushed range. The counts are compared with a committed baseline and may only go down. Until the script exists, the reviewer applies the same list by hand.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts em-dashes outside `specs/`, comment blocks over 3 lines in Go, JS, CSS and HTML outside package docs, `Short` over 50 characters, and flag help over 60 characters or containing a parenthesis, and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.

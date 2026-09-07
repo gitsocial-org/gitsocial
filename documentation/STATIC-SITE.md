@@ -1,172 +1,163 @@
 # Static Site
 
-Once enabled, `gitsocial push` publishes a complete, browsable website of your repository (timeline, issues and boards, pull requests, releases, code, search, analytics) into the same S3-compatible bucket that hosts the repo, alongside the repo data — plus an optional crawlable HTML page layer (see [HTML pages](#html-pages)).
+`gitsocial mirror` and `gitsocial push` publish a browsable website of the repository into a bucket, as static files the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics.
 
-The site is plain static files read directly by the browser: no server, no build step, no dependencies, and nothing for visitors to install. Anyone with the bucket's public URL can follow the project without a forge account, and the site stays current automatically because every later `gitsocial push` refreshes the data it reads.
+[Mirror](#mirror) · [Publish](#publish) · [Customization](#customization) · [HTML pages](#html-pages) · [Testing](#testing) · [Reference](#reference)
 
-> Transport: [S3.md](S3.md) owns the remote helper, URL normalization, [bucket layout](S3.md#bucket-layout), ref-update modes, cache policy, and environment variables.
+## Mirror
+
+For a project hosted on a forge, one command clones it, imports its issues, pull requests, releases and discussions, and publishes data, code and the site:
+
+```bash
+gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix> --url https://your-domain/
+gitsocial mirror                       # later, from the workspace: refresh
+```
+
+- `--url` is the site's public address and turns the [HTML pages](#html-pages) on; the other flags are in [CLI.md](CLI.md#gitsocial-mirror).
+- Re-running refreshes. It is safe from cron, and a crashed run resumes.
+- Creating the bucket, allowing public reads and attaching the domain are provider dashboard steps; `--dry-run` prints the checklist.
 
 ## Publish
 
-The site is **off by default** and enabled per repo by the `publish` guard, stored in the site config so the decision travels with the repo:
-
 ```bash
-gitsocial remote add s3://<endpoint>/<bucket>/<prefix>   # once: bucket as a remote (see S3.md)
-gitsocial config site set publish true                   # master switch for the static site
-gitsocial push                                           # publish repo data + the browsable website
+gitsocial remote add s3://<endpoint>/<bucket>/<prefix>   # once, see S3.md
+gitsocial config site set publish true
+gitsocial push
 ```
 
-`publish` gates everything the site consists of — the shell, `refs.json`, the pm/site config artifacts, the items/bodies/code indexes, and the HTML pages. Unset or false, `gitsocial push` and plain `git push` move repo data only; a bucket that already carries a site (created before the guard existed, or by another clone) is left untouched with a one-line hint naming the config to set. Because the guard lives in the pushed config ref (`refs/gitmsg/core/config`), a plain `git push` that carries it maintains — and on a fresh bucket creates — the site too.
-
-`--no-site` skips the site step for one push, and `git config gitsocial.pushSite false` opts a machine out persistently. Both remain force-offs on top of the guard, never enablers: `site.publish=true` is the only thing that turns the site on.
-
-`gitsocial push --site-only [remote...]` is the **explicit site refresh**: it re-derives the whole site without pushing data, and is the "catch up now" command right after enabling the guards on an already-pushed repo — nothing is re-pushed, since every artifact derives from bucket + local state under the existing budgets. Because the request is explicit, it fails loudly when `site.publish` is off (a plain push skips quietly). It resolves its targets exactly like `gitsocial push` — positional remotes, else the multi-valued [push remote](S3.md#push-remote-resolution) defaults — so with several configured mirrors every bucket refreshes.
-
-**Thin fork buckets publish no site.** A [thin bucket](S3.md#thin-fork-buckets) carries only the fork's own objects, so a site read straight from it would be missing most of what it renders. `PushSite` and `gitsocial push --site-only` refuse against any bucket carrying the `.gitsocial/upstream` marker — read from the bucket, so the refusal holds from any clone — and post-push maintenance skips the site block with a one-line stderr hint. A site the bucket already carries is left in place (maintenance never deletes keys it did not generate for this purpose), just unmaintained; `gitsocial push --full` detaches the bucket and brings the site back.
-
-The bucket (or its public domain, e.g. r2.dev or a custom domain on Cloudflare R2) must allow public reads. Once the bucket carries the site, every subsequent push maintains the data artifacts it reads, and a push from a binary carrying a newer embedded site re-uploads the shell itself (tracked by `.gitsocial/site/version`), so the page keeps working without a manual refresh.
-
-## HTML pages
-
-A second guard adds a crawlable, no-JS HTML layer at the prefix root — real pages for every item, readable by any crawler or text browser and unfurling with OG cards:
-
-```bash
-gitsocial config site set pages true
-gitsocial config site set url "https://example.com/"    # absolute base: canonicals, OG and the sitemap need it
-```
-
-Effective only when all three hold: `publish=true`, `pages=true`, and a valid `url`. Every push then maintains, next to `index.html`:
-
-- `i/<shorthash>.html` — one page per top-level gitmsg item, its thread inlined: replies in timestamp order, resolved edits with an "edited" marker, tombstones for retractions, PR review-state chips and `file:line` feedback anchors, release artifact blocks. Threads cap at ~100 replies / ~200 KB with an explicit "N more replies" marker.
-- `issues/ prs/ posts/ releases/ memos/` — per-type list pages: a mutable `index.html` head plus immutable sealed `<n>.html` pages (100 entries each), chained "older →". Milestones and sprints fold into `issues`.
-- `commits/` — the **commits list**, the same head + sealed-page layout over the DEFAULT BRANCH's commits, one metadata row each (subject, author, date, sha; no diffs). Code commits get no page of their own — a page per commit would make object count scale with history rather than items, and 100k one-line pages are mass-produced thin content a search engine discounts — so this list is where a commit's text lives somewhere crawlable, and each row carries an `id="c-<sha12>"` giving it a citable URL (`commits/7.html#c-<sha12>`). The rows are projected from the [code items index](#how-it-works), so "default branch" means what that index says it means; the subject links into the app's commit view, which is the rich surface. Two contracts differ from the type lists, both because a commits page is re-derivable rather than immutable-by-protocol: no per-type Atom feed (the code corpus carries no bodies to syndicate), and sealed `commits/<n>.html` pages are stored `no-cache` rather than `immutable`. That second one is what makes the guard below effective at all.
-- `f/<repo path>.html` — one **file page** per prose document on the default branch, keyed by the repo path with its extension swapped for `.html` (`f/specs/GITMSG.html`, `f/docs/api/index.html`). Path-mirroring is the only collision-free key for an arbitrary tree, and it maps 1:1 onto the app's own `file:<path>@<branch>` route, which the page stamps as its `gs-route` boot hook: the document a crawler reads is the document the upgrade opens. Markdown renders through the [shared renderer](#the-readme-is-pre-rendered) with no 8 KB cap (that cap is the front page's README *excerpt*; a file page is the whole document) under a 256 KB ceiling cut at a line boundary. An extensionless convention document (LICENSE and its siblings) renders preformatted, because inventing markdown structure for a source that has none is worse than showing it as written. **Known divergence:** the app's file view renders markdown for `.md` and `.markdown` only, so an `.mdx` or `.mdown` page renders as prose before the boot and as raw source after it, which is precisely the visible swap this layer is built to avoid. The two surfaces have to agree; today they do not. `f/index.html` lists the published documents and is linked from every sidebar, but only once the layer has pages, so a repo with no documents grows no dead nav item. Pages are `no-cache` (a file is mutable in a way a protocol item is not) and incremental: the manifest records each published path's blob sha, so a pass over an unchanged tree writes nothing, an edited document rewrites its page alone, and a document that leaves the tree has its page swept. Without this layer a young repo's whole indexable site is its protocol items: on the repo this was measured on, eighty near-duplicate release notes, with ~55,000 words of prose behind app hash routes (`index.html#file:<path>@<branch>`), which render for a reader but collapse to a single URL for a crawler, since a fragment never reaches the server. The layer does not make those documents reachable, it gives each one an address.
-- `index.html` — the **generated front page**: the same landing the app renders on the home route (the default-branch strip with its tip commit, the root file listing capped at the app's first three rows behind a "Show all N" link, the default branch's README [pre-rendered](#the-readme-is-pre-rendered) at an ~8 KB cap, then a **recent-activity** section of the newest 10 entries, items and code commits merged). The landing content is read from the pusher's local odb; the activity rows are a projection of the items and code metadata indexes (subject, type, author, time — no bodies, no object reads), rendered as the app's own cards: leading type glyph, type chip, subject, author/time meta, closed by a "See more" link on to the posts archive (the served page for the app's `/timeline`). The glyphs are plain text characters, which is how the no-JS page carries exactly what the app paints. Item rows link to that item's own `i/<short>.html` page, which is what keeps the site root a crawlable hub; code commits have no page, so those rows deep-link into the app. Replies are excluded: they have no page of their own. The merge is not cosmetic: without code commits a repo whose gitmsg corpus is mostly one extension advertises a months-old list as its recent activity while its daily commits stay invisible. There is no per-type quota — the newest 10 are whatever they are, so a repo that commits daily can legitimately show 10 commits and no crawlable item links. Because the page-entry upgrade replaces this body with the app's own home render, the two are deliberately the same content in the same order, and the app's `homeActivity` mirrors this selection, cap, order and card shape exactly. The upgrade no longer shows this body before swapping it, so a divergence is no longer a visible flash — it is now the site disagreeing with itself about what it is: this page is what a crawler indexes, what a no-JS reader gets, and what a failed boot restores. Since the entry flip, the pages maintainer OWNS `index.html` while the page layer is effective; when the page layer is off, `index.html` is the embedded SPA shell instead (see [Progressive enhancement](#progressive-enhancement-the-pages-are-the-site)). The pre-flip `timeline.html` key is retired and swept on every push.
-- Styling rides the shell's own two sheets rather than a page-layer object: every page inlines the embedded `pages-core.css` (tokens, theme gates, reset, body base, and the page-structural rules scoped under `#gs-page`) into its `<head>` — the same file the shell links, so the pre-boot page and the booted app share one base by construction, and a saved or curl'ed copy reads decently on its own — and links the shell's `pages-full.css` for the class vocabulary (chips, cards, markdown) plus the webfonts. Both are embedded assets, so they are folded into the shell version and a stylesheet-only change is never skipped as up to date; a core change additionally means a `sitePagesVersion` bump, since every page's head carries its bytes. The old generated `pages.css` key is retired (swept on disable, otherwise left stale and unreferenced).
-- The chrome is the app's own, not a page-layer variant. The sidebar (repo title, sections, per-item glyphs, active item, brand credit) and the front page's recent-activity block (its heading, the cards, the centered chevron "See more" control) are declared once in `pages-core.css` and consumed by both surfaces, so a served page renders them fully before `pages-full.css` arrives. A page's sidebar carries only the destinations that have generated pages (home, the five type lists, commits), so every link a crawler follows is a real document; the app's extra tabs stay app-only. Two naming details make the coexistence safe: the page's nav element takes `.nav-list` rather than the app's `id="nav"` (during boot the staged app chrome sits in the DOM beside the served markup, where a duplicate id would answer the app's own `getElementById`), and the column is `.page-nav` rather than `.nav`, which keeps `pages-full.css`'s sticky-column rules and the app's `.nav` queries off it. Without JS at phone widths there is no drawer, so the sidebar leads the page as a wrapped row of the same items; nothing is hidden.
-- `sitemap.xml` + `robots.txt` — the site root, every item page **that can be indexed**, the type-list index pages that have something to list with `<lastmod>` from their latest activity, the commits list (its head with the newest commit's date, plus every sealed page), and the file pages (the list page plus every published document, each dated by the last commit that touched its path); past ~40K URLs the sitemap becomes an index over immutable `sitemap-<n>.xml` parts plus a rewritten `sitemap-head.xml` (the list pages always ride the head part — their positions would shift as items append). Two exclusions, both the same rule: a sitemap is a claim that a URL is worth crawling, and a URL submitted only to be refused is spent crawl budget plus a worse ratio to be judged on. A retracted root keeps its page (see below) but is not submitted, though its retraction still dates the site root, because the site did change. A type list whose visible entries are zero (no items yet, or only tombstones, which the lists hide) keeps its page too, since the sidebar links it and it is correct the moment a first item lands, but until then it renders "nothing here yet" and stays unsubmitted. A file page under the 100-word floor is the third case: it stays published and linked so nothing that references it breaks, but a forty-word document is not a claim worth making.
-- `feed.xml` — an Atom 1.0 feed of the newest ~50 non-retracted top-level items (memo excluded, code commits absent): title, canonical link, author, type category, created/updated times, plus the item's own body (subject stripped, replies excluded, ~4 KB cap) as escaped-HTML content. Every generated page's `<head>` carries the autodiscovery `<link rel="alternate" type="application/atom+xml">`. Each type directory additionally gets its own `<dir>/feed.xml` mirroring its list page (memos included), advertised by a second autodiscovery link on that type's list pages.
-
-**Sealing the commits list needs a guard the type lists do not.** A `gitmsg/*` branch is append-only by protocol, which is exactly why an immutable page of items stays true forever; the default branch can be rebased or force-pushed, so a sealed commits page can silently describe history that no longer exists. So the manifest records the commits layer's published partition (total, sealed page count, and the `frontier` — the sha12 of the newest sealed row), and every pass re-locates that frontier in the current list before sealing onward. Still present with the same number of rows below it means the sealed region is intact and the pass only seals what has overflowed the head; anything else means history moved and the layer re-derives its whole sealed chain from the current corpus. A git sha commits to its entire ancestry, so a frontier that is still in the list proves every row below it is unchanged; the row count catches the other way the region can move (the code index rebuilding and re-attributing older commits onto the default branch). The check is one scan of a list the pass has already read, so it costs no extra bucket request. Sealing additionally waits until the code index itself is complete — while that corpus is still bootstrapping older history, today's oldest row is not the oldest row, and page 1 must be the oldest hundred forever. The same manifest fields are what the booted app reads for its `/commits` route: publishing the partition rather than having each side derive it is what makes the two agree by construction, including mid-bootstrap when the pages deliberately seal nothing. It is a fast path and not proof — a bucket with no page layer, or a layout the corpus no longer matches, falls back to deriving the partition from the whole list.
-
-Pages are a projection of the push's own index artifacts, with **one deliberate exception**: file discovery. The front page's landing content (tip commit, root tree, README) was already a shallow odb read; the file layer widens that to a recursive walk of the whole default-branch tree from the pusher's local odb. The rule is not being bent quietly, so here is why it has to give. The index artifacts carry *commits*, and a repo's files are not in them at any depth: there is no projection of an items index that can answer "what documents does this branch have", so the tree is the only source, and the layer is worth more than the purity of the rule. The cost is bounded and local (no bucket request, no network), and it degrades the way the front page's read does: an odb that cannot serve the tree (no local repo, a shallow clone) is read as *unknown*, never as *no documents*, so the published set carries forward untouched rather than being swept. Item bodies render as escaped plain text (no markdown, no highlighting: the SPA remains the rich surface); the front page's README is the one exception and is [pre-rendered](#the-readme-is-pre-rendered). Maintenance is incremental: a reply regenerates only its thread's page, the affected list heads, the front page, the sitemap and the feed. First-time generation is budgeted (~5000 pages per push, `GITSOCIAL_SITE_PAGES_BUDGET` override) and resumes across pushes — a partial set is a valid newest-first prefix, and list pages and the sitemap claim only what exists. The commits layer seals against whatever is left of that budget after the item pages (items first: a bucket without them has no crawlable items at all), oldest page first, and the frontier advances only over pages actually written — so a budget that runs out mid-seal leaves a valid, merely larger head rather than a half-written chain, and the manifest's `pending` flag brings the next push straight back to it. Setting `pages false` (or removing `url`) deletes the whole page layer on the next push and **restores the embedded SPA shell at `index.html`** (index.html is dual-owned, never deleted). Machine state lives at `.gitsocial/site/pages.json`; the page keys are part of the [reserved root namespace](S3.md#bucket-layout).
-
-### The README is pre-rendered
-
-The front page's README is rendered to HTML at push time (`core/objstore/site_markdown.go`), not served as its own source. A README is the one file in a repo reliably full of markdown and raw HTML (hero divs, badge rows, `<img>` logos, `<details>`, tables), so as escaped text the front page's first indexable content was its own markup: a crawler indexed `<div align="center">` and `## About` as what the project is, and the boot then rewrote that markup into prose, the most jarring version of a first-load swap.
-
-The grammar is a port of the reader's own (`parseMarkdown`/`parseInline` in `gs-core.js`, `renderInline`/`renderBlocksInto`/`sanitizeInert` in `gs-render.js`), so the served page and the app's home render agree block for block: headings (with the same `md-<slug>` anchor ids), paragraphs, nested and task lists, GFM tables, fenced code, blockquotes, thematic breaks, links, images, emphasis and the raw-HTML allowlist. Go only, stdlib only. `verify_upgrade_boot.js` asserts the two against each other, so a divergence fails the suite rather than shipping as a visible swap.
-
-**The policy is per tier, and the tiers do not share one.** The README is the bucket owner's own repo content, so its sanitizer is hygiene (never execute a `<script>` someone pasted into their own README) rather than an adversarial boundary: a malicious pusher does not need an XSS vector, they can serve anything. Item bodies come from forks, imports and other people, stay escaped plain text, and are deliberately NOT routed through the renderer. Concretely, on the README path: raw HTML is lexed and rebuilt against the reader's element/attribute allowlist, `script`/`iframe`/`object`/`style`/`svg`/`form` vanish subtree and all, unknown tags unwrap to their children, and event handlers, `style` and `javascript:` targets have no way through because the attribute allowlist does not carry them. The pages already ship a strict CSP; the renderer is correct on its own rather than relying on it.
-
-Two things a static page cannot do the way the app does:
-
-- **Repo-relative images degrade to their alt text.** The app resolves them by fetching the blob and building a `blob:` URL; a bucket serves objects by sha, not by path, so a static page has no src for them and must not emit one that would 404 or reach off-site. An absolute `https://` src (badge rows, shields) renders as a real `<img>` with its attributes. Images the app can resolve appearing on boot is now the only visible delta left in this section.
-- **In-page anchors are rewritten onto the rendered heading ids.** The app intercepts a README's `#about` link in script; the served page cannot, so the href is rewritten to the `md-` prefixed id the same heading carries on both surfaces, and a repo-relative link resolves to the app's file route.
-
-The ~8 KB cap applies to the SOURCE and is pulled back to the last line boundary, so the renderer is never handed half a line; whatever the cut leaves open (a fence, a list, a hero div) the renderer closes, so a truncated README is still a well-formed document.
-
-### Which files get a page
-
-The rule has to be right on a repo the library has never seen. `core/objstore` ships to every repo that pushes a site, so a rule that only produces the right answer on the repo it was written against is the wrong rule, and discovery therefore names no path, directory or filename any particular project uses. It walks the whole default-branch tree and publishes a blob when:
-
-- its extension is markdown (`.md`/`.markdown`/`.mdown`/`.mdx`), or it has no extension and its name is one of the universal convention documents (LICENSE, NOTICE, AUTHORS, CONTRIBUTING, CHANGELOG and their usual siblings, rendered preformatted);
-- it is not under a dotdir or a dependency/fixture tree (`node_modules/`, `vendor/`, `testdata/`, `third_party/`, `fixtures/`, `golden/`, `corpus/`, `snapshots/`, `__snapshots__/`), and is not a submodule or a symlink (whose blob is a target path, not a document);
-- it is not the root README, which the [front page](#html-pages) already renders: a fact about the site, true for every repo;
-- its path can be both a URL and a `file:` route (no space, and none of `@ : # ? %`), since a path that cannot round-trip would publish a page whose own boot hook points elsewhere.
-
-**Markdown only, and a word floor, because both were measured.** An earlier draft also took `.txt`, `.rst`, `.adoc` and `.org` as prose. Run against two unrelated public repos it was 84% wrong on one of them: of 309 pages, 235 were ASCII-art animation frames compiled into a binary, alongside a colour database, a lorem-ipsum fixture and four `CMakeLists.txt`. Not one `.txt` in either repo was prose. The same run published nothing at all from the other repo, whose entire 142,000-word corpus is `.mdx`. So the extension set is the markdown family, which is the only extension that reliably means "someone wrote this to be read", and `.mdx` is in it: its ES `import`/`export` lines and standalone JSX element lines are stripped before rendering, since the grammar here has no rule for them. A format this package cannot parse is better skipped than published as preformatted noise. On top of that, a document under 100 words is published and linked but carries `noindex` and stays out of the sitemap: half the surviving documents in that same repo were under that floor, and shipping a pile of forty-word pages recreates the thin-content problem this layer exists to solve.
-
-Two globs override it. `filesExclude` withholds what the rule took; `filesInclude` publishes a file whose extension the rule does not know, preformatted, since the extension is what says a file is markdown and an include glob does not. They are the escape hatch and they are load-bearing rather than a nicety: a heuristic this general misclassifies somewhere, and a repo has to be able to say so without patching the library. The archetypal case is prose that is really program data, such as help text compiled into a binary. The library cannot know what it is, and the fix is one exclude glob in that repo's config, not a special case in the layer.
-
-A pass is bounded by the shared page budget, spent after the item pages and before the commits sealing: few pages, the richest content on the site, but a bucket without item pages has no crawlable items at all. A document set larger than the budget publishes a path-ordered prefix and resumes on the next push, exactly as the item pages do. The order is by path rather than newest-first, because sorting by date would need every file's history before the budget could cut the list. Dates come from ONE `git log --name-only` walk of the branch, newest commit first, keeping the first time each path appears. Asking git per path instead was measured 44x slower on a real repo (17.6s against 0.4s for 309 files), and the first pass, the one that has every page to write, is exactly the pass that would pay it.
-
+- `publish` is off by default. It lives in the pushed config ref, so a plain `git push` that carries it maintains the site too.
+- `--no-site` skips the site for one push. `git config gitsocial.pushSite false` opts a machine out. Neither turns the site on.
+- `gitsocial push --site-only [remote...]` rebuilds the site without pushing data. It fails when `publish` is off or the remote is not s3.
+- The site needs public reads on the bucket or the domain in front of it. A private bucket still works as a remote, without a site.
+- A push from a newer binary re-uploads the [shell](#shell), the app's own files.
+- A [thin fork bucket](S3.md#thin-fork-buckets) gets no site. `gitsocial push --full` detaches it and the site returns.
 ## Customization
 
-The site can be branded per repo. Values are stored in the `site` sub-object of the core config (`refs/gitmsg/core/config`) and published to the bucket as `.gitsocial/site/site-config.json` on the next push. Set them with the CLI or in the TUI under Configuration → Site:
-
 ```bash
-gitsocial config site set title "My Project"
-gitsocial config site set accent "#0a7"                # strict #rgb / #rrggbb hex
-gitsocial config site set accentDark "#0dd"            # optional dark-mode accent
-gitsocial config site set favicon @path/to/icon.png    # or a data: URI directly
-gitsocial config site set image og-card.png            # og:image social card (upload with `gitsocial remote put`)
+gitsocial config site set <key> <value>    # or in the TUI under Configuration, Site
 gitsocial config site list
 ```
 
-| Field | Validation |
-|-------|------------|
-| `title` | plain string, trimmed, ≤ 200 chars |
-| `accent`, `accentDark` | strict `#rgb` / `#rrggbb` hex |
-| `favicon` | `data:image/png|webp|svg+xml` URI, ≤ 32 KB (the CLI converts an `@path` for you) |
-| `image` | social-card image every HTML page stamps as `og:image`/`twitter:image` (card style flips to `summary_large_image`): a bucket key relative to the site root or an absolute `https://` URL, ≤ 500 chars |
-| `url` | absolute `https://` base URL (`http://` only for localhost), no query/fragment, trailing slash normalized, ≤ 500 chars |
-| `description` | plain string, trimmed, ≤ 300 chars (front-page meta/OG description) |
-| `publish`, `pages` | `true` / `false`, both default false — the [site](#publish) and [HTML page](#html-pages) guards |
-| `filesInclude`, `filesExclude` | comma-separated repo-relative path globs (a `**` segment spans any number of segments), the [file pages'](#which-files-get-a-page) escape hatch; a leading `/` or a `..` segment is dropped |
+Values live in the `site` object of the core config ref and reach the bucket as `.gitsocial/site/site-config.json` on the next push. A value that fails validation falls back to its default. The last four keys belong to the [HTML pages](#html-pages).
 
-Both the writer and the reader validate every field with the same rules, so a bad config never breaks the page; if nothing survives validation the artifact is deleted and the site falls back to its defaults. The `.gitsocial/site/assets/` prefix is reserved for future binary assets; nothing reads or writes it today.
+| Key | Example | Validation |
+|---|---|---|
+| `title` | `"My Project"` | plain string, trimmed, up to 200 characters |
+| `description` | `"One sentence for the front page"` | plain string, trimmed, up to 300 characters |
+| `accent`, `accentDark` | `"#0a7"` | `#rgb` or `#rrggbb` |
+| `favicon` | `@icon.png` | `data:image/png`, `webp` or `svg+xml` URI, up to 32 KB; `@path` is converted |
+| `image` | `og-card.png` | `og:image` for every page: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
+| `url` | `https://example.com/` | absolute `https://` base (`http://` for localhost only), no query or fragment, up to 500 characters |
+| `publish`, `pages` | `true` | `true` or `false`, both default false |
+| `filesInclude`, `filesExclude` | `"internal/**"` | comma-separated repo-relative globs; `**` spans segments; a leading `/` or a `..` segment is dropped |
 
 ### Per-remote overrides
 
-The three **deployment** keys — `url`, `publish`, `pages` — can be overridden per remote, so one repo can publish to two buckets each stamping its own identity (a repo published to two buckets otherwise stamps one bucket's URL into the other's canonicals, OG tags, and feed). Overrides are machine-local git config on the remote definition, `remote.<name>.gitsocial-site-{url,publish,pages}`, set with `--remote`:
+Only `url`, `publish` and `pages` can differ per remote; the other keys travel with the repo. An override lives in local git config as `remote.<name>.gitsocial-site-<key>`, regenerates that remote's site in full on the next push, and applies to pushes by remote name, not by URL.
 
 ```bash
-gitsocial config site set url https://r2.example.com/ --remote r2   # this bucket's own canonical URL
-gitsocial config site set publish false --remote backup             # backup bucket carries data but no site
-gitsocial config site get url --remote r2                            # effective (override, else config ref)
-gitsocial config site list --remote r2                              # effective merged view
+gitsocial config site set publish false --remote backup
+gitsocial config site list --remote backup     # effective values
 ```
 
-Only the deployment keys are overridable; identity keys (`title`, `description`, `accent`, `favicon`, `image`) travel with the repo in the config ref and are never per-remote (a relative `image` key resolves against each remote's effective `url`, so per-bucket cards need no override — each bucket serves its own copy). The override is applied over the config ref's `site` sub-object at a single resolution boundary (`readSiteCustomization`), so every consumer agrees on the effective value: the publish/pages guards, the absolute-URL page artifacts (canonicals, OG, sitemap, the Atom feed), the page-set `siteHash`, and the `site-config.json` artifact the SPA reads. An overridden `url` goes through the same `NormalizeSiteURL` validation as the shared key. Since a changed override is invisible to the bucket refs, it is folded into the push-state skip digest, so setting or changing an override triggers a full regen of exactly that bucket on the next push. The git remote helper reads the same keys from git config, so a plain `git push <remote>` honors the override too; an anonymous-URL invocation (no remote name) gets no overrides.
+## HTML pages
 
-## How it works
-
-The whole site lives in `core/objstore/site/`, embedded in the binary via `SiteFiles`: `index.html`, the reader JS (`gs-core.js` / `gs-render.js` / `gs-app.js`), the page-entry boot layer `gs-upgrade.js`, the vendored file-icon set `icons.js`, the webfonts under `fonts/` (SIL OFL 1.1: EB Garamond as one variable-weight 400–800 file, IBM Plex Mono as four static weights fetched only when rendered; declared via `@font-face` by `pages-full.css` alone, and stored raw since woff2 is already compressed), and the two app stylesheets `pages-core.css` (the shared base — tokens, theme gates, reset, page-structural rules — inlined into every generated page's head and linked by the shell, so one set of bytes governs both) and `pages-full.css` (everything else, linked by the shell and by every generated page), which reads the [bucket layout](S3.md#bucket-layout) directly and re-implements gitmsg message parsing in JS. Layout or protocol changes must touch it too, and editing a file under `core/objstore/site/` requires rebuilding the binary before `push --site-only`. `SiteFiles` ships every file under `site/` recursively (subdirectories included), so `uploadSiteFiles` publishes the whole shell — including the syntax-highlighting grammars under `site/grammars/`.
-
-**Stored compression.** A bucket does no content negotiation: an object's `Content-Encoding` is fixed at upload and served to every client whatever its `Accept-Encoding` asked for. The shell assets (every `.js`, `.css`, `.html` and `.json` under `site/`) are therefore uploaded brotli-compressed at quality 11 with `Content-Encoding: br`, paid once per shell version, so a bare bucket with no compressing CDN in front still serves the reader small (the shell's three big assets drop from ~514 KB to ~139 KB). Only assets no non-browser client fetches qualify: the generated HTML pages, the sitemap, `robots.txt` and the Atom feed stay plain, since those are the documents crawlers and unfurl scrapers fetch directly and being legible to them is the whole point of the page layer. Nothing git's dumb-HTTP transport reads (`objects/**`, `refs/**`, `HEAD`, `info/refs`, `objects/info/packs`) ever carries an encoding: git's walker inflates what it gets as zlib. The shell version marker hashes the raw asset bytes, so a change in compression settings never masquerades as a content change.
-
-Syntax highlighting is Prism (`prism.js` bundles the common grammars: go/js/ts/json/yaml/bash/markdown/markup/css/diff). `prism.js` is **not** part of the boot: it is ~12 kB most routes never use (every list, the board, search, analytics, config), so `ensurePrism` in `gs-render.js` fetches it the first time a render actually asks for highlighting and shares it for the session. It is fetched-and-evaluated rather than appended as a `<script src>`, for the same reason the grammar components are — the CSP allows `connect-src https:` but not `script-src https:`, so a script tag would break the cross-bucket override — and `Prism.manual` is set before evaluation so its tail can never auto-highlight a page the reader has not replaced. Two places make the deferral invisible rather than merely recoverable: a page entry's reveal handshake waits on `highlightsSettled()` (the prism-driven upgrades only, never the lazy grammars, and for a lazy grammar only the `prism.js` load itself), so an upgraded page still shows one finished view; and a file view starts the fetch alongside the blob's own, so a whole screen of code renders highlighted the first time. Both waits are bounded by a 2s deadline: an optional tokenizer that stalls must degrade to plain text, never hold a route open or strand a reveal behind the boot watchdog. Everywhere else renders plain and upgrades in place. Every other language ships as its own `site/grammars/prism-<lang>.js` file (regenerate with `scripts_gen_grammars.sh` from the vendored `prismcomp/` 1.30.0 build); the reader lazy-loads one on first use (`ensureGrammar` in `gs-render.js`), loading any dependency chain first (e.g. `cpp`→`c`), caching per session, and upgrading the already-rendered plain text in place. A code block renders un-highlighted immediately and never blocks on the fetch; a missing grammar file stays plain text. The reader picks a grammar by file extension (`EXT_LANG`), by exact basename first for extensionless files (`BASENAME_LANG`, e.g. `Dockerfile`/`Makefile`/`CMakeLists.txt`), or by a Markdown fence's info string (`FENCE_LANG`); languages with no official Prism grammar (`.vue`, `.svelte`) fall back to `markup`. This replaces the old push-time tree scan that published a per-repo `prism-extra.js` bundle — `push --site-only` (and any shell re-upload) now deletes that obsolete key best-effort.
-
-Pushes maintain a set of read-optimized data artifacts under `.gitsocial/site/`: `refs.json` (ref discovery without bucket listing; written from the bucket's full ref list, so it also tells the reader which refs to expect. It is a **fast path, never proof of absence**: it is written best-effort by whichever pusher last succeeded, so a refname it omits is probed live — once per session, with the miss remembered on the page context. That keeps the well-known extension branches a repo happens not to use from costing a 404 body per *route*, without a failed manifest write making a whole extension branch read as empty forever), and per-extension items/bodies indexes in an append-only sharded layout (immutable brotli-compressed shards plus a small mutable head and manifest). Items shards carry metadata and subjects only; full message bodies live in a separate corpus loaded on demand. A single **code items index** (`.gitsocial/site/items/code/`) mirrors that layout for plain (non-gitmsg) commits: one merged, deduped corpus across every code branch, each entry attributed to a branch (the default branch when the commit is reachable from it, else the first code branch that reached it), so the timeline sources its interleaved code commits from the index instead of walking loose objects. The code corpus is **metadata-only — no bodies corpus**: a code card shows subject + author/time/hash, and the full commit message is only needed on the detail view (which hydrates the loose object), so bodies would bloat the bucket for content the timeline never renders. Maintenance is incremental: a push appends the new commits, repairs an interrupted write, or, on very large branches, bootstraps the index over multiple pushes (a partial index is always a valid newest-first prefix, so the timeline works from the first push). A code-branch force-push/rebase that drops indexed commits is repaired by rebuilding the affected shards (the corpus is defined as "reachable from any current code tip"). Artifacts carry a format version (gitmsg items/bodies: 4; the code corpus: 5, whose entries also carry each commit's parent shas so the repository graph renders its DAG from the index). A reader that sees an unknown version — or no code index at all (an older bucket) — ignores the artifacts and falls back to a bounded loose-object walk; a push onto a v4-code-corpus bucket re-seals the code index at v5 (the schema version salts the shard keys).
-
-Almost every surface is served from the index, never a per-object history walk: the timeline, the default-branch log, all the list tabs (issues/board/milestones/sprints/prs/releases/memos), search (gitmsg items plus plain code commits — code matches at subject/author level, mirroring the core search's coverage; the code corpus deliberately carries no message bodies), item and merged-PR detail (a merged PR's merge-base/merge-head short shas resolve by prefix over the code index rather than a base-branch walk), analytics, and the commit graph (the v5 code corpus carries parent shas, so the DAG renders from the index; on an indexed bucket the graph covers code branches only — `gitmsg/*` data branches appear only under the loose-walk fallback for pre-v5 buckets) all read the index slice plus the rendered slice. Graph rows are decorated `git log --decorate` style from already-fetched data: live branch-tip chips (the default branch marked), lightweight-tag chips from `refs.json` (annotated tags point at their tag object, which never matches a row — no peel fetches), and dimmed historical chips for merged-PR head branches (recovered from merged-PR headers in the review index's eager set, linked to the PR detail; branches merged without a PR stay unlabeled). Only the surfaces that need topology the index cannot answer walk loose objects deliberately, bounded: compare and a non-default-branch log (index attribution can't answer reachability off the default line), plus code/file browsing (tree objects are an inherent per-navigation cost). A request-budget test suite (`sitetest/verify_request_budget.js`) pins a per-route fetch ceiling on the fully-indexed fixture so a regression into a walk fails the test suite.
-
-### Packed objects
-
-The reader fetches git objects straight from the bucket, which stores them either as loose keys or inside [packfiles](S3.md#packfiles), never both for the same object. `objects/info/packs` says which shape the bucket is in before the first object read (it is on the pack path anyway, and a bucket written by gitsocial always has it), so a packed bucket goes to the packs first instead of paying a 404 per object to discover itself, and a bucket with no packs goes to the loose key first. That listing only **orders** the two lookups: like `refs.json` it is a fast path and not proof of absence, since it is rewritten best-effort on every push. A miss on the shape it named still tries the other, so a bucket whose pack listing failed to publish still renders off its pack map rather than rendering nothing. State-ref objects pack like everything else (a bucket sealed by an older binary may still carry them loose until its next seal), so a sha no pack carries still falls back to its loose key.
-
-Two pack paths, split by cost:
-
-- **Commits and tags** (every item detail, and every code commit, since the items index carries the subject but not the body) resolve through the pack map, `.gitsocial/packmap/<xx>.json`: one shard per two-hex sha prefix, giving `[packIndex, offset, size]`. The map is written sparsely (a shard exists only where a mapped object shares its prefix), so a lookup that cannot be in it is not merely a miss but often a full 404 body: a read whose caller already knows the sha is a tree or a blob (it came from a tree entry's mode or a commit's tree field) skips the map entirely and goes straight to the index. The read is a single Range GET of a self-contained zlib stream, since the commits pack is written with `--depth=0` and has no deltas. Cold, a detail route pays one shard plus one range where an all-loose bucket paid one object GET; a shard covers 1/256 of history and is cached for the session, so the amortized cost is lower. `verify_request_budget.js` ceilings are unchanged, and `verify_packfiles.js` pins the packed detail route against the same ceiling.
-- **Trees and blobs** (file views, diffs) have no map entry and go through `objects/pack/<name>.idx`, which is **range-read, never downloaded**. A v2 index opens with a 256-entry fanout whose entry *b* counts the objects whose first sha byte is at most *b*, so a sha can only live in one 1/256th slice of the sorted sha table. A lookup reads the index head (4 KB — the fanout, and the whole index when the pack is small enough for it to fit), then that slice (a few hundred bytes), then on a hit the 4-byte offset table with its 8-byte large-offset overflow, which is what bounds each entry's byte range and every delta base's. Head, slices and offsets are cached per session, so a second lookup into the same pack is one small range and a miss the fanout can rule out is free. On a production-scale bucket this turns a 111 KB index download into about 20 KB, and the saving grows with history because the index is searched in log time.
-
-Both paths verify nothing themselves — `verify_packfiles.js` checks every reconstructed object **content-addressed** (the sha-1 of `"<type> <len>\0" + body` must be the sha that was asked for), across the map path, the index path, `OFS_DELTA` and `REF_DELTA` chains past depth 1, and a loose object on the same packed bucket.
-
-Because delta resolution is confined to content reads, a slow pack read cannot degrade the timeline, item detail, search, or the graph.
-
-### Page heads and the favicon
-
-**A head is what a search engine reads first, so nothing in it may repeat across pages.** Three rules hold that:
-
-- **Every `<title>` is unique.** A duplicate title tells a crawler two URLs are the same document, and the corpus produces duplicates naturally: a tag reused across branches gives several releases the subject `v0.6.0`, and every tombstone would otherwise be titled `retracted release`. A subject only one item carries is used as it is; a subject two items share takes that item's date, and its short ref when the date repeats too. The short ref *is* the page key, so the disambiguation always terminates. A tombstone additionally names its tag (`retracted release v0.10.1`), the only thing left on the page that says which release it marks. Only the `<title>` is disambiguated: the page's own heading and its `og:title` keep the plain subject, which may legitimately repeat.
-- **Every `<meta name="description">` is prose, not source.** A description is printed verbatim in a search result, so a body opening with `**Full Changelog**:` would ship literal asterisks. The text is run through the same `parseSiteMarkdown` grammar the [README renderer](#the-readme-is-pre-rendered) walks (block syntax and inline markup drop, link text and image alt text survive), rather than through a second stripper that could drift from it.
-- **A page with nothing worth indexing carries `<meta name="robots" content="noindex,follow">`.** Two carry it: a retraction tombstone, and a file page under the word floor. The page stays: it is a stable answer to "what happened to v0.10.1", and deleting it would 404 links that already exist. But it holds one fixed sentence and nothing to index, so it asks not to be. `follow`, not `nofollow`, because it still links to its type list and the front page and that link equity should flow. Every other page carries no robots tag at all, which is the indexable default.
-
-Every generated page declares `<link rel="icon">` in its head. A page that declares none makes the browser request `/favicon.ico` at the **origin root**, which for a site served under a bucket prefix is a key outside the site altogether: no push can make it resolve, and on R2 it costs a ~27 KB error body on every page view. The href is a `data:` URI, so it needs no bucket object and cannot itself 404 — the configured `site.favicon` when one is set and small enough to repeat per page (the page layer stamps one head per page, where the shell stamps one), else the shell's own icon, read out of the embedded `index.html` so the SPA and the pages cannot drift apart. Either way the upgrade layer applies the configured favicon on boot exactly as it does in the shell, so an oversized one is still what a visitor ends up seeing.
-
-Visitor cost stays flat as history grows: opening the site downloads the fixed ~150 KB shell plus the newest slice of the index, under half a megabyte even at 100K commits. Everything else loads on demand; the timeline fetches 50 items at a time as you scroll, deeper search shows its download size before fetching (about 2.4 MB of full-text at 100K commits), and loads are guarded (progress checks, a boot watchdog) so a broken or partial bucket surfaces an error instead of an eternal "Loading…". On the bucket, collaboration data costs about 1 KB per message; code costs roughly its packed clone size once a push is large enough to [pack](S3.md#packfiles), or 2-7x that while it is still stored as individual loose objects. None of that reaches the visitor. A 100K-commit index bootstraps over two `push --site-only` runs, and the timeline is already servable after the first.
-
-## Local development & testing
-
-The site can be served by the disk-backed local S3 server used for the transport (`library/core/objstore/locals3`; see [S3.md § Local development](S3.md#local-development)), so a locally built site is browsable exactly as it would be from a real bucket.
-
-`scripts/site-test.sh` is the entry point, and `go test -tags sitetest -timeout 30m ./library/core/objstore/` runs the same battery from `go test` (skipped when `node` is absent). It is tag-gated because one run builds the whole fixture; nothing else in `go test ./...` covers the browser side, so a change to `gs-upgrade.js` or the pack reader passes every default test with the reader broken.
+Crawlable pages that read without JS: one per item, plus lists, commits, files, a front page, a sitemap and feeds. With JS on, a page boots into the app in place.
 
 ```bash
-scripts/site-test.sh                                            # the whole default battery
-go test -tags sitetest -timeout 30m ./library/core/objstore/    # the same, from go test
+gitsocial config site set pages true
+gitsocial config site set url "https://example.com/"   # absolute base for canonicals, OG tags and the sitemap
+```
+
+Effective when `publish`, `pages` and a valid `url` are all set. Every push then maintains the [page keys](#page-keys):
+
+- An item page inlines its thread: replies in time order, edits resolved with an "edited" marker, tombstones for retractions, review chips and `file:line` feedback on pull requests, artifact blocks on releases. A thread caps at about 100 replies or 200 KB with a "N more replies" marker.
+- A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Milestones and sprints fold into `issues`.
+- The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Sealed commits pages are re-derived after a rebase or force-push.
+- A file page renders one prose document on the default branch at `f/<path>.html` (`f/specs/GITMSG.html`). A document qualifies when:
+  - it is markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) or an extensionless convention document (LICENSE, NOTICE, AUTHORS, CONTRIBUTING, CHANGELOG and their siblings, shown preformatted);
+  - it is not under a dotdir, `node_modules/`, `vendor/`, `testdata/`, `third_party/`, `fixtures/`, `golden/`, `corpus/`, `snapshots/` or `__snapshots__/`, and is not a submodule, a symlink or the root README;
+  - its path has no space and none of `@ : # ? %`.
+- File pages follow the tree: a document that leaves it loses its page, one under 100 words stays out of the sitemap, and any renders whole up to 256 KB. `filesInclude` and `filesExclude` override the selection rule.
+- The front page: the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app.
+- `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
+- `feed.xml` is Atom 1.0 with the newest 50 non-retracted top-level items, memos excluded. Each type directory has its own `feed.xml`.
+
+The README is rendered with the app's own markdown grammar (`site_markdown.go` is a port of it), so the page and the app agree block for block; raw HTML is rebuilt against an allowlist. Two differences from the app: repo-relative images degrade to their alt text, and in-page anchors are rewritten to the rendered heading ids.
+
+Rules that hold on every page:
+
+- Every `<title>` is unique (a shared subject gets the item's date, then its short ref) and every `<meta name="description">` is prose with the markdown syntax stripped.
+- Retraction tombstones and file pages under the word floor carry `noindex,follow`. The page stays, so existing links keep working.
+- Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer.
+- First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
+- Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
+
+Known divergence: the app renders markdown for `.md` and `.markdown` only, so an `.mdx` page reads as prose before the boot and as source after it.
+
+## Testing
+
+```bash
+scripts/site-test.sh                                              # the browser battery
+go test -tags sitetest -timeout 30m ./library/core/objstore/      # the same from go test; skipped without node
 GS_SITE_LEGACY_ORIGIN=http://localhost:8000 scripts/site-test.sh  # plus the legacy tier
+bin/locals3 -root <dir>                                           # serve a pushed site locally, see S3.md
 ```
 
-`library/core/objstore/sitetest` is the harness underneath it: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real bucket cache/`Content-Encoding` headers, and `runner.js` drives the browser-side suites (writer/reader parity, interrupted and partial-bootstrap pushes, the feature verifiers under `verify_*.js`, and the HTML page layer via `verify_html_pages.js`). The buckets are `thread-demo` (the showcase: guards enabled, and the only one carrying the HTML page layer), `other-demo`, `interrupted-demo` / `healed-demo`, `partial-demo` / `extended-demo`, `sparse-demo`, `merged-demo`, `packed-demo` (built with `GITSOCIAL_S3_PACK_THRESHOLD=1` so every object lives in a packfile) and `refdelta-demo` (the same objects hand-packed with `pack.useDeltaBaseOffset=false`, the only `REF_DELTA` coverage there is). A built fixture is reused only while a stamp over the embedded site assets, the site generator sources and `fixture.sh` itself is unchanged — otherwise the suites would validate HTML a previous binary wrote, and their negative assertions would pass against content nothing under test produced. The `GITSOCIAL_SITE_SHARD_COUNT` / `GITSOCIAL_SITE_WALK_BUDGET` / `GITSOCIAL_SITE_PAGES_BUDGET` / `GITSOCIAL_SITE_SITEMAP_PART` overrides shrink shard sizes, walk/page budgets and the sitemap part size so bootstrap and sharding paths are exercised on small fixtures; `GITSOCIAL_S3_PACK_THRESHOLD` does the same for packing. Both dev servers answer `Range` requests with `206` + `Content-Range`, so the pack reader behaves as it would against a real bucket.
+The harness is `library/core/objstore/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
+
+## Reference
+
+### Shell
+
+`core/objstore/site/`, embedded in the binary and uploaded whenever the shell version changes:
+
+| File | Role |
+|---|---|
+| `index.html` | the app shell, and the front page while the page layer is off |
+| `gs-core.js`, `gs-render.js`, `gs-app.js` | the app |
+| `gs-upgrade.js` | boots the app from a generated page; a failed boot restores the static page |
+| `pages-core.css` | tokens, theme gates, reset, page structure; inlined into every generated page |
+| `pages-full.css` | the component vocabulary and the webfonts |
+| `prism.js`, `grammars/` | the base grammars and 47 lazy-loaded ones |
+| `icons.js`, `fonts/` | file-type icons; EB Garamond and IBM Plex Mono |
+
+`.js`, `.css`, `.html` and `.json` under `site/` upload brotli-compressed with `Content-Encoding: br`. Generated HTML, the sitemap, `robots.txt` and the feeds upload plain. Git objects never carry an encoding.
+
+A grammar is chosen by file extension, then basename (`Dockerfile`, `Makefile`, `CMakeLists.txt`), then a fence's info string, with `markup` as the fallback. Code renders plain first and highlights when the grammar arrives.
+
+### Page keys
+
+At the prefix root, next to the shell; the cache classes are defined in [S3.md](S3.md#cache-policy):
+
+| Key | Content | Cache |
+|---|---|---|
+| `index.html` | front page while the page layer is on, else the shell | no-cache |
+| `i/<short>.html` | one page per top-level item, thread inlined | no-cache |
+| `issues/`, `prs/`, `posts/`, `releases/`, `memos/` | `index.html` head plus sealed `<n>.html`, 100 entries each | head no-cache, sealed immutable |
+| `commits/index.html`, `commits/<n>.html` | default-branch commit list, 100 rows each | no-cache |
+| `f/<path>.html`, `f/index.html` | file pages and their list | no-cache |
+| `sitemap.xml`, `sitemap-head.xml`, `sitemap-<n>.xml` | sitemap; an index over parts past about 40,000 URLs | head no-cache, parts immutable |
+| `robots.txt` | `Allow: /` and the sitemap location | no-cache |
+| `feed.xml`, `<dir>/feed.xml` | Atom feeds, 50 entries | no-cache |
+
+Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push.
+
+### Artifacts
+
+Under `.gitsocial/site/`, read by the app in place of object walks:
+
+| Key | Content |
+|---|---|
+| `version` | shell version marker, a hash of the raw assets |
+| `refs.json` | the bucket's ref list; a refname it omits is probed live once per session |
+| `items/<ext>/` | per-extension metadata index: immutable brotli shards, a mutable head, a manifest; format 4 |
+| `bodies/<ext>/` | message bodies, loaded on demand; format 4 |
+| `items/code/` | one deduped index of plain commits across code branches, with parent shas; format 5; no bodies |
+| `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions |
+| `site-config.json` | the customization values |
+| `pm-config.json` | the resolved PM board |
+| `stats.json` | a small stats blob written by the CLI from the workdir |
+| `push-state` | skip digest for push-time site maintenance |
+
+A first view stays under half a megabyte at 100,000 commits: the shell is about 150 KB, the timeline loads 50 items per scroll, and deep search states its download size before fetching. On a large repository the index bootstraps over several pushes.

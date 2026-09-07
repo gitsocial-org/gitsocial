@@ -2,7 +2,7 @@
 
 ## Shared Navigation
 
-### CardList (used by: Timeline, Notifications, Repository, My Repository, List Posts, Memos, Issues, Milestones, Sprints, Releases, Pull Requests)
+### CardList (used by: Timeline, Notifications, Repository, My Repository, List Posts, Memos, Inherited Memos, Personal Memos, Issues, Milestones, Sprints, Releases, Pull Requests)
 
 | Key | Action |
 |-----|--------|
@@ -61,7 +61,6 @@
 | `%` | Analytics | Everywhere except Analytics |
 | `!` | Errors | Everywhere except Error Log |
 | `f` | Fetch updates | Everywhere except Detail/Thread/History |
-| `I` | Import from origin (GitHub/GitLab) | Timeline, PM lists, Review PRs, Releases, Memos |
 | `/` | Search | Everywhere except Search |
 | `tab` | Toggle nav/content focus | Global |
 | `q` | Quit | Global |
@@ -97,6 +96,7 @@
 | `l` | Lists |
 | `r` | Refresh |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -272,6 +272,19 @@
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
+### Explore
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open |
+| `r` | Related |
+| `j` | Down |
+| `k` | Up |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
 ### History
 
 | Key | Action |
@@ -304,8 +317,7 @@
 
 | Key | Action |
 |-----|--------|
-| `n` | Quick create |
-| `N` | New |
+| `n` | New |
 | `m` | Mine |
 | `x` | Collapse col |
 | `s` | Swimlanes |
@@ -315,10 +327,12 @@
 | `down` | Down |
 | `left` | Prev col |
 | `right` | Next col |
+| `</>` | Move |
 | `home` | First |
 | `end` | Last |
 | `p` | Push |
 | `!` | Errors |
+| `I` | Import |
 | `/` | Search |
 | `tab` | Focus |
 | `shift+tab` | Focus |
@@ -328,14 +342,14 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
-| `n` | Quick create |
-| `N` | New |
+| `n` | New |
 | `F` | Filter |
 | `m` | Mine |
 | `K` | Forks |
 | `r` | Refresh |
 | `p` | Push |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -345,7 +359,7 @@
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
 | `c` | Comment |
-| `n` | New sub-issue (workspace issues only) |
+| `n` | Sub-issue |
 | `e` | Edit |
 | `m` | Milestone |
 | `s` | Sprint |
@@ -367,6 +381,8 @@
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
 | `d` | Version diff |
+| `A` | Accept |
+| `X` | Decline |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -396,6 +412,7 @@
 | `r` | Refresh |
 | `p` | Push |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -424,6 +441,8 @@
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
 | `d` | Version diff |
+| `A` | Accept |
+| `X` | Decline |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -453,6 +472,7 @@
 | `r` | Refresh |
 | `p` | Push |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -480,6 +500,8 @@
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
 | `d` | Version diff |
+| `A` | Accept |
+| `X` | Decline |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -524,6 +546,7 @@
 | `r` | Refresh |
 | `p` | Push |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -536,12 +559,10 @@
 | `r` | Review |
 | `c` | Comment |
 | `C` | Close |
-| `D` | Draft |
 | `e` | Edit |
-| `u` | Update tips |
+| `a` | Actions |
 | `h` | History |
 | `v` | Raw |
-| `X` | Retract |
 | `A` | Apply suggestion |
 | `/` | Search |
 | `left` | Prev |
@@ -558,7 +579,10 @@
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
 | `d` | Version diff |
+| `A` | Accept |
+| `X` | Decline |
 | `i` | Interdiff |
+| `p` | Push |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -572,6 +596,7 @@
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
+| `p` | Push |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -617,8 +642,10 @@
 | `n` | New |
 | `r` | Refresh |
 | `p` | Push |
+| `l` | Check lfs |
 | `L` | Push lfs |
 | `!` | Errors |
+| `I` | Import |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
@@ -658,6 +685,8 @@
 |-----|--------|
 | VersionPicker navigation | (see Shared Navigation) |
 | `d` | Version diff |
+| `A` | Accept |
+| `X` | Decline |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -685,8 +714,32 @@
 | Key | Action |
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
+| `n` | New |
 | `r` | Refresh |
+| `!` | Errors |
+| `I` | Import |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Inherited Memos
+
+| Key | Action |
+|-----|--------|
+| CardList navigation | (see Shared Navigation) |
 | `m` | Manage |
+| `r` | Refresh |
+| `!` | Errors |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Personal Memos
+
+| Key | Action |
+|-----|--------|
+| CardList navigation | (see Shared Navigation) |
+| `n` | New |
+| `p` | Push |
+| `r` | Refresh |
 | `!` | Errors |
 | `tab` | Focus |
 | `shift+tab` | Focus |
@@ -697,6 +750,7 @@
 |-----|--------|
 | `enter` | Open |
 | `n` | New |
+| `p` | Push |
 | `d` | Gc |
 | `j` | Down |
 | `k` | Up |
@@ -725,6 +779,7 @@
 | SectionList navigation | (see Shared Navigation) |
 | `c` | Comment |
 | `e` | Edit |
+| `>` | Promote |
 | `X` | Retract |
 | `h` | History |
 | `v` | Raw |
@@ -750,10 +805,10 @@
 
 | Key | Action |
 |-----|--------|
+| `e/E` | Expand |
 | `[/]` | Shift pair |
 | `,/.` | From anchor |
 | `</>` | To anchor |
-| `e/E` | Expand |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |
@@ -871,6 +926,16 @@
 | Key | Action |
 |-----|--------|
 | `d` | Toggle DNS verification |
+| `r` | Resolve email |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Site
+
+| Key | Action |
+|-----|--------|
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |

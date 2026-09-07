@@ -1,187 +1,149 @@
 # GitSocial Architecture
 
-Single Go library with thin clients: CLI/TUI (direct) and JSON-RPC (stdio).
+Single Go library implementing [GITMSG.md](../specs/GITMSG.md), with thin clients: the [CLI](CLI.md) and the TUI call it directly, JSON-RPC serves it over stdio, and the [static site](STATIC-SITE.md) reads the bucket it publishes to over the [S3 remote](S3.md).
 
-[Development](#development) • [Directory Structure](#directory-structure) • [Package Reference](#package-reference) • [Cache Architecture](#cache-architecture) • [S3 Remote Backend](#s3-remote-backend) • [CLI Commands](#cli-commands) • [TUI](#tui)
-
----
+[Development](#development) · [Code Rules](#code-rules) · [Directory Structure](#directory-structure) · [Package Reference](#package-reference) · [Cache](#cache) · [TUI](#tui)
 
 ## Development
 
-### Branching & Builds
+### Branching and builds
 
-Trunk-based: `main` is the integration branch and stays clean. Develop each feature on a `feature/<name>` branch; rebase on `main` and fast-forward merge so history stays linear.
-
-```bash
-git switch main && git pull --ff-only        # refresh before branching and after any merge
-git switch -c feature/<name>                 # start a feature
-git fetch origin && git rebase main          # keep current with main
-git switch main && git merge --ff-only feature/<name>   # integrate
-git branch -d feature/<name>                 # clean up
-```
-
-- `gitmsg/*` and `gitsocial` are protocol/data branches — not for feature work.
-
-Build, test & run:
+Trunk-based. `main` is the integration branch and stays linear; each feature lives on a `feature/<name>` branch, rebased on `main` and merged fast-forward.
 
 ```bash
-go build -o bin/gitsocial ./cli/gitsocial     # Build CLI
-go build -o bin/ ./...                        # Compile-check everything (all mains land in bin/, never the repo root)
-go test ./...                                 # Run tests
-bin/gitsocial social timeline                 # Run command
-bin/gitsocial tui                             # Launch TUI
+git switch main && git pull --ff-only                    # refresh before branching and after any merge
+git switch -c feature/<name>
+git fetch origin && git rebase main                      # keep current with main
+git switch main && git merge --ff-only feature/<name>    # integrate
+git branch -d feature/<name>
 ```
-
-- Use distinct build output names so a parallel build or `main`'s binary don't clobber each other (mains land in `bin/`, never the repo root).
-- Schema-changing branches must run with a separate `--cache-dir` (e.g. `--cache-dir /tmp/gs-<name>`): the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it in place, after which older binaries (other branches, `main`) refuse it. Delete the cache to rebuild.
-
-### Test & Lint
-
-**The gate is `scripts/check.sh`**, in two tiers. `scripts/check.sh --quick` runs the prose check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push (about 90 s warm when every package reruns, less after a change in one package). `scripts/check.sh` runs the same with `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too (about 4 min warm); run it before merging to `main` and at release. Stages run in order, the failing stage is named, and any failure exits non-zero. A missing `golangci-lint` fails unless `--skip-lint` is passed.
-
-Guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release (`scripts/release.sh` preflight). `-short` skips 66 real-git subtests and is a local smoke run, never a tier.
-
-`scripts/prose-check.sh` is stage 0. It counts STYLE.md violations (em-dashes, comment blocks over three lines, long `Short` and flag help) and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts the current counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 
 ```bash
-scripts/check.sh --quick         # the push tier
-scripts/check.sh                 # the full tier
-scripts/check.sh --skip-lint     # golangci-lint not installed (not a gate run)
-scripts/check.sh -short ./...    # extra args go to the test stage (smoke run, not a gate run)
-git config core.hooksPath scripts/hooks   # install the pre-push hook (once per clone)
-GITSOCIAL_SKIP_GATE=1 git push   # skip the gate once
+go build -o bin/gitsocial ./cli/gitsocial     # the CLI
+go build -o bin/ ./...                        # compile-check everything; mains land in bin/, never the repo root
+bin/gitsocial tui
 ```
 
-**Coverage** (`scripts/coverage.sh`, writes `.test-artifacts/coverage/`): runs `go test ./... -coverpkg=./...` so code exercised by another package's integration tests gets credit, then reports the statement-weighted total (not a mean of per-package percentages), a ranked per-package table including packages with no test files of their own, and every function at 0.0%. The total is a **floor**: coverage cannot see the S3 helper tests (they run the helper as a child process, so `helper_push.go` / `thin.go` look untested) or the ~40 browser suites behind `-tags sitetest` (`site_pages*.go`).
+- `gitmsg/*` and `gitsocial` are protocol and data branches, not feature branches.
+- Give parallel builds distinct output names so they do not clobber each other.
+- A branch that changes the cache schema runs with its own `--cache-dir`: the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it, and older binaries then refuse it. Delete the cache to rebuild.
+
+### Test and lint
+
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push, about 90 s warm when every package reruns and less after a change in one package. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, about 4 min warm; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
+
+The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release from `scripts/release.sh`. `-short` skips 66 real-git subtests and is a local smoke run, never a tier.
+
+`scripts/prose-check.sh` is stage 0. It counts [STYLE.md](STYLE.md) violations and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts lowered counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 
 ```bash
-go test ./...                    # All tests
-go test ./library/core/cache     # Specific package
-go test -v ./...                 # Verbose output
-go test -race ./...              # Race detector
-go test -cover ./...             # Coverage summary
-golangci-lint run --fix ./...    # Lint & fix code
-
-scripts/test.sh                  # Streams per-test progress; wraps `go test -json` (accepts the same args, e.g. `scripts/test.sh -race ./...`)
-
-go test ./library/tui/test/...   # Headless TUI suite (smoke/display/golden/nav/sequence; see TUI-TESTS.md)
-
-go test -tags sitetest -timeout 30m ./library/core/objstore/   # Static-site browser suites (wraps scripts/site-test.sh; needs node; see STATIC-SITE.md)
+scripts/check.sh --quick                    # the push tier
+scripts/check.sh                            # the full tier
+scripts/check.sh -short ./...               # extra args go to the test stage; a smoke run, not a gate run
+git config core.hooksPath scripts/hooks     # install the pre-push hook, once per clone
+GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
+scripts/test.sh -run TestSmoke ./library/tui/test/          # go test -json with streamed per-test progress
+scripts/coverage.sh                         # statement-weighted coverage with -coverpkg=./..., into .test-artifacts/coverage/
+go test -tags sitetest -timeout 30m ./library/core/objstore/   # the browser site battery; needs node
 ```
 
-### Code Rules
+Coverage is a floor: the S3 helper tests run the helper as a child process, and the browser suites run under node, so neither is credited.
 
-#### Layer Dependencies
+## Code Rules
 
-```
-library/extensions/* → library/core/* → stdlib only
-          ↓                 ↓
-  cli/gitsocial/        (no circular refs)
-  library/tui/
-  library/rpc/
-  library/import/  → library/extensions/* + library/core/protocol
-```
-
-#### Do
-
-- Read relevant specs first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`
-- Follow `documentation/STYLE.md` (prose, help text, comments, commits)
-- Optionally read relevant `documentation/` files
-- Add a brief comment at the top of each file (e.g., `// commits.go - Git commit operations`)
-- Add a one-liner comment above each function
-- Use functional patterns (no methods on structs unless implementing interfaces)
-- Wrap errors with context: `fmt.Errorf("context: %w", err)`
-- Use `cache.ExecLocked`/`QueryLocked` for all DB operations
-- Check existing types before creating new ones
-
-#### Never
-
-- Access git directly from extensions (use `core/git`)
-- Create one-off types for single use
-- Use global mutable state
-- Skip error handling
-
-### Code Patterns
-
-#### Error Handling by Layer
+### Layers
 
 ```
-Core packages (cache, git, protocol)  → return error (idiomatic Go)
-Extension public API (social.*)       → return Result[T] (user-facing codes)
-Internal helpers                      → return error
+cli/gitsocial
+  library/tui, library/rpc
+    library/clientfetch, library/clientpush, library/import, library/proposals
+      library/extensions/*
+        library/core/*
+          stdlib and the modules in go.mod
 ```
 
-**Rules:**
-1. Always wrap errors: `fmt.Errorf("operation: %w", err)`
-2. At API boundaries, convert to `Result[T]` for user-friendly error codes
-3. For batch operations that continue on failure, log instead of returning
-4. Intentional suppressions must be commented
+Each layer imports only the layers below it. `core` imports nothing above itself. Two standing exceptions:
 
-#### Common patterns (see code for examples)
+- Extensions import each other: `pm`, `review`, `release` and `memo` import `social` for comments, and `review` imports `pm` for the issues a pull request closes.
+- Each extension's `nav.go` imports `tui/tuicore` to register its navigation items. Nothing else in `extensions` imports `tui`.
 
-- **Cache access** — wrap every DB op in `cache.QueryLocked` / `ExecLocked`; example: `library/extensions/social/`.
-- **Extension API** — public extension funcs return `Result[T]`, built with `result.Ok` / `result.Err`; example: `library/extensions/social/`.
-- **CLI command** — one `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
-- **TUI view** — implement the `View` interface (`Update`/`Render`); example: `library/tui/tuicore/`.
+### Do
 
----
+- Read the relevant spec first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`.
+- Follow [STYLE.md](STYLE.md) for prose, help text, comments and commits.
+- Start each file with a one-line header comment (`// commits.go - Git commit operations`) and each function with a one-line comment.
+- Prefer functions to methods. Methods are for interfaces and for Bubbletea models in `tui`.
+- Wrap errors with context: `fmt.Errorf("context: %w", err)`.
+- Use `cache.ExecLocked` and `cache.QueryLocked` for every database operation.
+- Check for an existing type or function before adding one.
+
+### Never
+
+- Run git from an extension; use `core/git`.
+- Create a type for a single use.
+- Add package-level mutable state. The per-workdir caches in `core/gitmsg` and the in-flight map in `core/identity` are the standing exceptions.
+- Skip error handling.
+
+### Patterns
+
+```
+Core packages (cache, git, protocol)  return error
+Extension public API (social.*)       return Result[T], built with result.Ok and result.Err
+Internal helpers                      return error
+```
+
+- Convert to `Result[T]` at the API boundary, where the CLI, TUI and RPC read user-facing error codes.
+- A batch operation that continues on failure logs the failure instead of returning it.
+- An intentionally ignored error carries a comment.
+- One `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
+- A TUI view implements the `View` interface (`Update`, `Render`); examples in `library/tui/tuicore/`.
 
 ## Directory Structure
 
 ```
 gitsocial/                     # module github.com/gitsocial-org/gitsocial
-├── cli/gitsocial/             # CLI thin client; builds the binary
-├── library/                   # Go library — single source of truth
-│   ├── core/                  # Shared infrastructure
-│   │   ├── git/               # Git operations
-│   │   ├── protocol/          # GitMsg protocol parsing
-│   │   ├── gitmsg/            # Protocol-level storage
-│   │   ├── cache/             # SQLite operations
-│   │   ├── storage/           # Bare repo management
-│   │   ├── objstore/          # S3 remote backend (stdlib client + git remote helper)
-│   │   ├── fetch/             # Fetch orchestration + processing
-│   │   ├── identity/          # Identity declarations + verification
-│   │   │   └── forge/         # Forge adapters (GitHub, …)
-│   │   ├── notifications/     # Notification aggregation
-│   │   ├── search/            # Cross-extension search
-│   │   ├── settings/          # User settings + config paths
-│   │   ├── log/               # Structured logging
-│   │   ├── text/              # String helpers
-│   │   └── result/            # Result[T] type
-│   ├── extensions/
-│   │   ├── social/            # Posts, lists, timeline
-│   │   ├── pm/                # Issues, milestones, sprints
-│   │   ├── release/           # Releases, versions, artifacts
-│   │   ├── review/            # Pull requests, code reviews
-│   │   └── memo/              # Tiered memos (knowledge as commits)
-│   ├── proposals/             # Cross-repo proposals (gate; accept + decline engine)
-│   ├── import/                # Platform import pipeline
-│   │   ├── github/            # GitHub adapter (gh CLI)
-│   │   └── gitlab/            # GitLab adapter
-│   ├── clientfetch/           # Thin-client fetch orchestration (CLI/TUI)
-│   ├── rpc/                   # JSON-RPC server (stdio) — thin-client surface
-│   └── tui/                   # TUI views — thin client
-├── documentation/             # Protocol + architecture docs
-├── scripts/                   # Build/release/test scripts (release.sh, install.sh, test.sh, site-test.sh)
-└── specs/                     # Protocol specifications
+├── cli/gitsocial/             # the CLI; builds the binary
+├── library/
+│   ├── core/
+│   │   ├── git/               # git operations
+│   │   ├── protocol/          # GitMsg parsing and refs
+│   │   ├── gitmsg/            # protocol-level storage (config refs, lists, forks, push)
+│   │   ├── cache/             # SQLite
+│   │   ├── storage/           # bare repo management
+│   │   ├── objstore/          # S3 client, remote helper, static site
+│   │   ├── fetch/             # fetch orchestration and processing
+│   │   ├── identity/          # identity verification; forge/ holds the forge adapters
+│   │   ├── notifications/     # notification aggregation
+│   │   ├── search/            # cross-extension search
+│   │   ├── settings/          # user settings and config paths
+│   │   ├── log/, text/, result/
+│   ├── extensions/            # social, pm, release, review, memo
+│   ├── proposals/             # cross-repo proposals: accept and decline
+│   ├── import/                # forge import; github/ and gitlab/ adapters
+│   ├── clientfetch/           # fetch orchestration for the thin clients
+│   ├── clientpush/            # push orchestration for the thin clients
+│   ├── rpc/                   # JSON-RPC server
+│   ├── tui/                   # TUI
+│   └── internal/testutil/     # shared test fixtures
+├── documentation/
+├── scripts/                   # check.sh, prose-check.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh
+└── specs/
 ```
 
-**Outside the repo tree:**
+Outside the tree:
 
 ```
-~/.config/gitsocial/           # User config; honors `XDG_CONFIG_HOME`
-├── settings.json              # Machine-specific settings
-└── personal/                  # Personal-tier bare repo (override: `GITSOCIAL_PERSONAL_REPO`)
+~/.config/gitsocial/           # honors XDG_CONFIG_HOME
+├── credentials.json           # S3 credentials per endpoint host
+└── personal/                  # the personal bare repo: settings and personal memos (GITSOCIAL_PERSONAL_REPO overrides)
 
-~/.cache/gitsocial/            # Cache dir, `--cache-dir` overrides
-├── cache.db                   # SQLite (commits + extension tables)
-├── repositories/              # Bare git clones (cleaned up periodically)
-├── forks/                     # Fork bare clones
-├── imports/                   # Import mapping files (per repo URL slug)
-└── memo/session/              # Per-session memo bare repos
+~/.cache/gitsocial/            # --cache-dir overrides
+├── cache.db                   # SQLite
+├── repositories/              # bare clones of followed repositories
+├── forks/                     # bare clones of registered forks
+├── imports/                   # import mapping files, one per repository URL
+└── memo/session/              # session memo repos
 ```
-
----
 
 ## Package Reference
 
@@ -190,214 +152,127 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 | `core/git`<br>Git operations | `Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `CreateSignedCommitTree`, `VerifyCommitSignature`, `GetCommitSignerKey` |
 | `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `IsClosingTrailer` |
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
-| `core/gitmsg`<br>Protocol-level storage | — | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
-| `core/storage`<br>Bare repo management | — | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/objstore`<br>S3 remote backend (see [S3 Remote Backend](#s3-remote-backend)) | `Client`, `Config`, `Capability`, `HelperEnv` | `NewClient`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `PushSite`, `PushArtifactObjects`, `PutObjectToRemote` |
-| `core/fetch`<br>Fetch orchestration | — | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
-| `core/settings`<br>User settings | — | `Get`, `Set`, `ListAll` |
-| `core/search`<br>Cross-extension search | — | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
+| `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
+| `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
+| `core/objstore`<br>S3 remote and site | `Client`, `Config`, `Capability`, `HelperEnv` | `NewClient`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `PushSite`, `PushArtifactObjects`, `PutObjectToRemote` |
+| `core/fetch`<br>Fetch orchestration | | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
+| `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
+| `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result`<br>Result type | `Result[T]`, `Error` | `Ok`, `Err`, `ErrWithDetails` |
 | `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
-| `core/identity/forge`<br>Forge adapters for identity verification | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
-| `extensions/social`<br>Social layer | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
-| `extensions/pm`<br>Project management | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `MessageToPMItem`, `FetchRepository`, `Processors` |
-| `extensions/release`<br>Release management | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
-| `extensions/review`<br>Code review | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
-| `extensions/memo`<br>Tiered memos (knowledge as commits) | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
+| `core/identity/forge`<br>Forge adapters | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
+| `extensions/social`<br>Posts, lists, timeline | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `GetTimeline`, `Fetch` |
+| `extensions/pm`<br>Issues, milestones, sprints | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `MessageToPMItem`, `FetchRepository`, `Processors` |
+| `extensions/release`<br>Releases | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
+| `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
+| `extensions/memo`<br>Memos across tiers | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
 | `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
-| `import`<br>Platform import pipeline | `SourceAdapter`, `ImportPlan`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
-| `import/github`<br>GitHub adapter | — | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
-
-### Terminology
+| `import`<br>Forge import | `SourceAdapter`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
+| `import/github`<br>GitHub adapter | | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
 
 | Term | Context | Meaning |
 |------|---------|---------|
-| `original` | GITSOCIAL field | Post being commented/reposted/quoted |
-| `canonical` | Versioning | First version of a message (before edits) |
-| `edits` | GITMSG field | Reference to canonical version being edited |
+| `original` | GITSOCIAL field | the post being commented on, reposted or quoted |
+| `canonical` | versioning | the first version of a message |
+| `edits` | GITMSG field | the reference to the canonical version an edit replaces |
 
----
+## Cache
 
-## Cache Architecture
+Storage under `repositories/` can be deleted at any time; what to fetch is decided from `cache.db`, not from storage. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is marked `stale_since` by `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo`; stale commits leave timeline and list queries but stay visible, dimmed, in thread and detail views.
 
-**Key principle**: Storage (repositories/) can be deleted anytime. Fetch strategy is determined by cache.db metadata, not storage state.
-
-**Staleness**: The cache is append-only, but commits that no longer exist in their source branch (e.g., after rebase or force-push) are marked with a `stale_since` timestamp via `cache.MarkCommitsStale()` (single-branch) or `cache.MarkCommitsStaleByRepo()` (all-branch). Stale commits are excluded from timeline and list queries but remain visible (dimmed) in thread and detail views to preserve discussion context.
-
-**SQLite tuning**: WAL mode, 64MB cache (`_cache_size=-65536`), memory temp store, 16 max connections, 256MB mmap.
+SQLite: WAL, 64 MB page cache, temp store in memory, 16 connections, 256 MB mmap.
 
 ### Schema
 
-**Core tables:**
-- `core_commits(repo_url, hash, branch, author_name, author_email, message, timestamp, edits, is_virtual, origin_author_name, origin_author_email)` - PK: `(repo_url, hash, branch)`
-- `core_commits_version(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)` - PK: `(edit_repo_url, edit_hash, edit_branch)`
-- `core_repositories(url, branch, storage_path, is_followed, last_fetch)` - PK: `url`
-- `core_lists(id, name, source, version, workdir)` - PK: `id`
-- `core_list_repositories(list_id, repo_url, branch)` - PK: `(list_id, repo_url)`
-- `core_fetch_ranges(id, repo_url, range_start, range_end, status, fetched_at, commit_count, error_message)`
-- `core_notification_reads(repo_url, hash, branch, read_at)` - PK: `(repo_url, hash, branch)`
-- `core_mentions(repo_url, hash, branch, email)` - PK: `(repo_url, hash, branch, email)`
-- `core_trailer_refs(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key, trailer_value)` - PK: `(repo_url, hash, branch, ref_repo_url, ref_hash, ref_branch, trailer_key)`
-- `core_identity_dns(email, key, repo, resolved_at)` - PK: `email` — caches DNS well-known lookups (24h TTL).
-- `core_verified_bindings(key_fingerprint, email, source, forge_host, forge_account, verified, resolved_at)` - PK: `(key_fingerprint, email, source, forge_host)` — caches per-source attestations. See [Identity Verification](IDENTITY.md) for the trust model and source list.
-- `core_edit_acceptances(edit_repo_url, edit_hash, edit_branch)` - PK: `(edit_repo_url, edit_hash, edit_branch)` — derived index that a cross-repo proposal was accepted, populated from the mirror edit's `accepts=` header on every fetch path. Read only as a NOT EXISTS marker (clears the proposed-edit ✎) and for accept idempotency.
-- `core_edit_declines(edit_repo_url, edit_hash, edit_branch)` - PK: `(edit_repo_url, edit_hash, edit_branch)` — the owner declined a cross-repo proposal. Durable and published at `refs/gitmsg/core/declines/*` so the proposer learns and the choice survives a re-clone; clears the proposed-edit marker (accept takes precedence).
+Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits` and carries the extension's prefix. Column lists are in `core/cache/db.go` and each extension's `schema.go`.
 
-**Social extension:**
-- `social_items(repo_url, hash, branch, type, original_*, reply_to_*)` - PK: `(repo_url, hash, branch)`
-- `social_interactions(repo_url, hash, branch, comments, refs)` - PK: `(repo_url, hash, branch)`
-- `social_followers(repo_url, workspace_url, detected_at, list_id, commit_hash)` - PK: `(repo_url, workspace_url)`
+- `core_commits(repo_url, hash, branch, author_name, author_email, message, timestamp, edits, is_virtual, origin_author_name, origin_author_email, ...)` plus the generated `effective_*` columns
+- `core_commits_version(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)`: edit to canonical, authoritative for versioning
+- `core_repositories`, `core_repository_meta`, `core_sync_tips`: followed and workspace repositories, their metadata, and the last synced tips
+- `core_lists`, `core_list_repositories`: lists and their members
+- `core_fetch_ranges`: fetched time windows per repository
+- `core_notification_reads`, `core_mentions`, `core_labels`, `core_trailer_refs`: read markers, `@` mentions, labels, and `Closes:`/`Refs:` trailers per commit
+- `core_identity_dns` (24 h TTL), `core_verified_bindings`: identity caches; see [IDENTITY.md](IDENTITY.md)
+- `core_edit_acceptances`, `core_edit_declines`: outcomes of cross-repo proposals
+- `social_items`, `social_interactions`, `social_followers`, `social_repo_lists`, `social_repo_list_repositories`, `social_counted_sources`, `social_notification_reads`
+- `pm_items`, `pm_assignees`, `pm_links` (blocks, blocked-by, related)
+- `review_items`, `review_reviewers`, `review_branch_observations` (live tips of every branch an open PR points at, refreshed after fetch)
+- `release_items`, `release_sbom_cache`
+- `memo_items`
 
-**Release extension:**
-- `release_items(repo_url, hash, branch, tag, version, prerelease, artifacts, artifact_url, checksums, signed_by, sbom)` - PK: `(repo_url, hash, branch)`
+`core_commits.edits` stores the raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical` and `cache.GetLatestVersion`.
 
-**Review extension:**
-- `review_items(repo_url, hash, branch, type, state, base, base_tip, head, head_tip, depends_on, closes, reviewers, pull_request_*, commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)` - PK: `(repo_url, hash, branch)`
-- `review_branch_observations(repo_url, branch, tip, branch_exists, observed_at)` - PK: `(repo_url, branch)` — transient cache of the live remote tip for every branch any open PR's head or base points at, across the workspace and registered forks. Refreshed by `RefreshOpenPRBranches` after fetch; consumed by the `head-advanced` / `head-deleted` / `base-advanced` / `base-deleted` notifications.
+Edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit is an inert proposal until the owner acts. `proposals.Accept` writes the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and derives `core_edit_acceptances` on processing. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the proposer's marker; accept takes precedence.
 
-**Versioning:** `core_commits.edits` stores raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical()` / `cache.GetLatestVersion()`.
+### Resolved views
 
-**Cross-repo proposals:** edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit (e.g. a fork editing your issue) is an inert *proposal* until the owner acts. `proposals.Accept` applies it as the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and, on processing, derives `core_edit_acceptances`; the proposer learns via that mirror on the gitmsg data branch, so acceptance needs no published marker. `proposals.Decline` publishes a durable marker at `refs/gitmsg/core/declines/*` so the proposer learns and the owner's choice survives a re-clone. Both clear the proposer's ✎ marker; accept takes precedence over decline.
-
-### Resolved Views
-
-`core_commits` carries `effective_*` generated columns (`effective_message`, `effective_author_name`, `effective_author_email`, `effective_timestamp`) that COALESCE the latest edit's content (`resolved_message`) and origin-author/origin-time (set on imported content) over the raw fields. Each extension has a `*_items_resolved` view that joins its tables onto `core_commits` and projects the generated columns under the legacy display names:
+`core_commits` carries generated `effective_message`, `effective_author_name`, `effective_author_email` and `effective_timestamp` columns that take the latest edit's content and the origin fields over the raw ones. Each extension has a `<ext>_items_resolved` view joining its table onto `core_commits` and projecting those columns under the display names:
 
 ```sql
 CREATE VIEW {ext}_items_resolved AS
-SELECT
-    c.effective_message AS resolved_message,
-    c.effective_author_name AS author_name,
-    c.effective_timestamp AS timestamp,
-    ...,
-    COALESCE(e.type, 'default') as type, e.field1, ...
+SELECT c.effective_message AS resolved_message, c.effective_author_name AS author_name, c.effective_timestamp AS timestamp, ...,
+       COALESCE(e.type, 'default') AS type, e.field1, ...
 FROM core_commits c
 LEFT JOIN {ext}_items e ON c.repo_url = e.repo_url AND c.hash = e.hash AND c.branch = e.branch;
 ```
 
-This ensures items are found regardless of whether they have extension-specific records. The denormalized resolved-state columns (`resolved_message`, `has_edits`, `is_retracted`) are written exclusively by `applyEditToCanonical` (`core/cache/versions.go`).
+The denormalized columns `resolved_message`, `has_edits` and `is_retracted` are written only by `applyEditToCanonical` in `core/cache/versions.go`.
 
-**When to bypass the view:** the `*_items_resolved` views are right for typical list/show queries where the WHERE clause is on `core_commits` columns (timestamp, repo_url, etc.) and the result needs every commit-as-an-item. Bypass them — JOIN `core_commits` directly to the extension table — when:
+Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise the planner scans `core_commits`. `social.GetThread` and `social.GetNotifications` are the examples.
 
-- The WHERE clause is highly selective on extension columns (e.g., `pm_items.state = 'open'`, `social_items.original_*`). Driving from the small extension table avoids a planner mishap where `core_commits` (millions of rows) becomes the outer table.
-- The query uses a recursive CTE over extension relationships (e.g., walking `social_items.reply_to_*`).
+### Refs and keys
 
-Examples already in the codebase: `social.GetThread` (recursive CTE on `social_items`), `social.GetNotifications` (drives from `social_items` joined to `core_commits`). Both bypass the resolved view because the view forced a full scan on a 1M-commit cache.
+References are `[repo_url]#<type>:<value>`: `https://github.com/user/repo#commit:abc123def456` or, workspace-relative, `#commit:abc123def456`. Types: `commit`, `branch`, `tag`, `file`, `list`.
 
-### Refs and Keys
+A virtual commit is one referenced by a `GitMsg-Ref` trailer but not yet fetched; it is stored with `is_virtual = 1` and full metadata, and flips to `0` when fetched.
 
-**Ref format**: `[repo_url]#type:value`
-- `https://github.com/user/repo#commit:abc123def456` - full ref
-- `#commit:abc123def456` - workspace-relative ref
-- Types: `commit`, `branch`, `tag`, `file`, `list`
+State refs under `refs/gitmsg/`:
 
-**Virtual commits**: Referenced in `GitMsg-Ref` but not yet fetched. Stored with `is_virtual = 1` and full metadata. When fetched, `is_virtual` flips to `0`.
+- `refs/gitmsg/<ext>/config`: per-extension JSON config
+- `refs/gitmsg/core/forks/<urlHash>`: one ref per registered fork
+- `refs/gitmsg/core/declines/<hash>`: one ref per declined proposal, subject is the proposal ref
+- `refs/gitmsg/<ext>/lists/<name>/_meta` and `.../items/<refHash>`: list metadata and one ref per member
 
-**Workspace refs (`refs/gitmsg/*`)**: extension data branches (`gitmsg/<ext>`) and these classes of state refs:
-- `refs/gitmsg/<ext>/config` — per-extension JSON config (single ref)
-- `refs/gitmsg/core/forks/<urlHash>` — one ref per registered fork (per-element layout, no shared write target — concurrent fork adds across clones don't collide)
-- `refs/gitmsg/core/declines/<hash>` — one ref per declined cross-repo proposal (subject = the proposal ref); published so the proposer's ✎ marker clears on their next fetch and the owner's decline survives a re-clone (acceptance needs no marker: it rides the owner's mirror edit)
-- `refs/gitmsg/<ext>/lists/<name>/_meta` + `.../items/<refHash>` — list metadata at `_meta`, members as per-element refs (same rationale; metadata lives under `_meta` because git refuses to create child refs while a same-named parent ref exists)
+Per-element refs have no shared write target, so concurrent adds from several clones do not collide. Metadata lives under `_meta` because git refuses a child ref under a same-named parent ref.
 
-### Fetch Rules
+### Fetch rules
 
-| Repo Type | Cache (core_commits) | Storage (repositories/) |
-|-----------|---------------------|------------------------|
-| Workspace | Full history, all branches (`*`) | N/A (uses workdir) |
-| Followed (`*`) | Full history, all branches | Persistent |
-| Followed (specific branch) | Full history, incremental | Persistent |
-| Non-followed | 30-day window | Can be deleted anytime |
+| Repository | Cache | Storage |
+|---|---|---|
+| Workspace | full history, all branches | the workdir |
+| Followed with `#branch:*` | full history, all branches | persistent |
+| Followed on one branch | full history, incremental | persistent |
+| Not followed | a 30-day window | may be deleted at any time |
 
-**All-branch following (`branch = "*"`)**: Commits are stored with their actual git refname (e.g., `main`, `gitmsg/social`, `feature/x`). The workspace always uses all-branch semantics. Deduplication and stale marking operate at the repo level via `FilterUnfetchedCommitsByRepo` / `MarkCommitsStaleByRepo`.
+All-branch following stores each commit under its real refname. The workspace always follows all branches. Deduplication and stale marking work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`; the next fetch rebuilds it.
 
-**Switching modes**: `cache.ResetRepositoryData()` clears old commits and extension items when switching between specific branch and `*`. Next fetch rebuilds with correct branches.
+### Extension rules
 
-### Extension Guidelines
-
-- Tables MUST use `{extension_name}_` prefix
-- Core tables are read-only (use cache APIs)
-- Link to git via `(repo_url, hash)` composite FK to `core_commits`
-- Use `cache.ExecLocked`/`QueryLocked` for DB access
-
-### Known Limitations
-
-1. `storage.GetStorageDir()` hashes URL only; same URL with different branches shares storage
-2. Check `meta.HasCommits` before using timestamps (zero-value edge case)
-
----
-
-## S3 Remote Backend
-
-Any S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, MinIO, etc.) can be a git remote via the `s3://` remote helper in `core/objstore` (per [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections)). The only stored URL shape is `s3://<endpoint>/<bucket>/<prefix>`. `gitsocial push` (or an explicit `gitsocial push --site-only`) also uploads a browser-only static site alongside the repo, served straight from the bucket layout.
-
-Two docs split by surface:
-
-- **[S3.md](S3.md)** — the transport: URL normalization, bucket layout, ref-update modes (etag/generation), cache policy, helper discovery, the local dev server, environment variables, and manual provider testing.
-- **[STATIC-SITE.md](STATIC-SITE.md)** — the browser static site: the site shell, the sharded index/search artifacts (gitmsg v4, code v5), site config, self-refresh versioning, and site testing.
-
----
-
-## CLI Commands
-
-Cobra-generated — run `gitsocial --help` or `gitsocial <group> --help` for the authoritative, current list.
-
-- **Top-level:** `status`, `fetch`, `config`, `settings`, `log`, `search`, `show`, `explore`, `history`, `notifications`, `fork`, `id`, `tui`
-- **Import:** `import {all,pm,release,review,social}`
-- **Extensions:** `social`, `pm`, `release`, `review`, `memo` — each adds `status`/`config` + its own verbs (and `init`, except `memo`, which inits per-tier)
-
-**Planned extensions**: cicd, ops, security, dm, portfolio
-
----
+- Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
+- Core tables are read-only for extensions; use the cache APIs.
+- Known limits: `storage.GetStorageDir` hashes the URL only, so one URL on two branches shares storage; check `meta.HasCommits` before reading timestamps.
 
 ## TUI
 
-Two-panel layout using Bubbletea: Nav (left) + Content (right). See `documentation/TUI-KEYS.md` for key bindings.
-
-```
-┌─ Navigation ────────────┐┌─ Content ────────────────────────────────┐
-│   Search                ││                                          │
-│   Notifications (3)     ││  Timeline / Post / Repository / Search   │
-│ ─────────────────────── ││                                          │
-│ ▸ Social                ││  View content based on selection         │
-│   PM                    ││                                          │
-│ ─────────────────────── ││                                          │
-│   Settings              ││                                          │
-├─────────────────────────┤├──────────────────────────────────────────┤
-│ Current dir             ││ Context-sensitive keybindings            │
-└─────────────────────────┘└──────────────────────────────────────────┘
-```
-
-### Structure
+Two panels on Bubbletea: navigation on the left, content on the right. Keys are in [TUI-KEYS.md](TUI-KEYS.md), layouts in [TUI-DIAGRAMS.md](TUI-DIAGRAMS.md), the headless test suite in [TUI-TESTS.md](TUI-TESTS.md).
 
 ```
 library/tui/
-├── app.go / host.go     # main tea.Model + view dispatch / shared state
-├── tuicore/             # infrastructure + core views (view_/component_/registry_/util_/bus)
-├── tuisocial/           # social views
-├── tuipm/               # PM views
-├── tuirelease/          # release views
-├── tuireview/           # review views
-├── tuimemo/             # memo views
-└── test/                # headless integration tests (see TUI-TESTS.md)
+├── app.go, host.go      # the tea.Model, view dispatch, shared state
+├── tuicore/             # infrastructure and core views
+├── tuisocial/, tuipm/, tuirelease/, tuireview/, tuimemo/, tuiproposal/
+├── tuikeydoc/           # keybinding documentation generator
+└── test/                # headless integration tests
 ```
 
-### File Naming Convention
+| Prefix | Purpose | Example |
+|--------|---------|---------|
+| `view_` | a routable view | `view_timeline.go` |
+| `component_` | a reusable stateful component | `component_nav_panel.go` |
+| `registry_` | a global registry | `registry_nav.go` |
+| `form_` | a modal form | `form_issue.go` |
+| `version_item_` | a history-picker version item | `version_item_issue.go` |
+| `util_` | stateless helpers | `util_render.go` |
 
-| Prefix | Purpose | Examples |
-|--------|---------|----------|
-| `view_` | Routable views | `view_timeline.go`, `view_issues.go` |
-| `component_` | Reusable stateful components | `component_nav_panel.go` |
-| `registry_` | Global registries | `registry_nav.go` |
-| `form_` | Modal form overlays | `form_issue.go` |
-| `version_item_` | History-picker version items (hero-card detail render) | `version_item_issue.go` |
-| `util_` | Stateless utilities | `util_render.go`, `util_keys.go` |
-
-### Adding a New Extension
-
-1. Create `tui/tuiXX/` directory
-2. Add views as `view_*.go` files
-3. Add `util_register.go` with `Register(host)` function
-4. Call from `app.go`
-
-If more ceremony needed, we over-engineered.
+A new extension gets a `tui/tui<ext>/` directory with its `view_*.go` files and a `util_register.go` exposing `Register(host)`, called from `app.go`.

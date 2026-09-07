@@ -1,75 +1,33 @@
 # GitSocial JSON-RPC Protocol
 
-JSON-RPC 2.0 interface for editor and client integration. Launched via `gitsocial rpc`.
+`gitsocial rpc` serves the library over JSON-RPC 2.0 on stdio, for editors and other clients.
 
-## Table of Contents
-
-- [1. Transport](#1-transport)
-  - [1.1. Message Format](#11-message-format)
-  - [1.2. Batching](#12-batching)
-- [2. Lifecycle](#2-lifecycle)
-  - [2.1. Startup](#21-startup)
-  - [2.2. Initialize](#22-initialize)
-  - [2.3. Shutdown](#23-shutdown)
-  - [2.4. Ping](#24-ping)
-- [3. Error Codes](#3-error-codes)
-- [4. Methods](#4-methods)
-  - [4.1. Social](#41-social)
-  - [4.2. PM](#42-pm)
-  - [4.3. Review](#43-review)
-  - [4.4. Release](#44-release)
-  - [4.5. Core](#45-core)
-  - [4.6. Search](#46-search)
-- [5. Server Notifications](#5-server-notifications)
-  - [5.1. Subscribe](#51-subscribe)
-  - [5.2. Unsubscribe](#52-unsubscribe)
-  - [5.3. Fetch Events](#53-fetch-events)
-  - [5.4. Notification Events](#54-notification-events)
-  - [5.5. Workspace Events](#55-workspace-events)
-- [6. Type Reference](#6-type-reference)
-- [7. Implementation Notes](#7-implementation-notes)
-  - [7.1. Concurrency](#71-concurrency)
-  - [7.2. Workspace Scope](#72-workspace-scope)
-  - [7.3. Serialization](#73-serialization)
-  - [7.4. Extension Registration](#74-extension-registration)
-  - [7.5. Package Structure](#75-package-structure)
-
----
+[Transport](#1-transport) · [Lifecycle](#2-lifecycle) · [Error codes](#3-error-codes) · [Methods](#4-methods) · [Notifications](#5-server-notifications) · [Types](#6-type-reference) · [Notes](#7-implementation-notes)
 
 ## 1. Transport
 
 Communication uses JSON-RPC 2.0 over stdio (stdin/stdout). Each message is a single line of JSON terminated by `\n`. Stderr is reserved for logging.
 
-```
-Client (editor)                    gitsocial rpc
-     │                                    │
-     │ ── request (stdin) ──────────────► │
-     │                                    │
-     │ ◄── response (stdout) ─────────── │
-     │                                    │
-     │ ◄── notification (stdout) ──────── │  (server-initiated, no id)
-```
-
 ### 1.1. Message Format
 
 Requests and responses follow JSON-RPC 2.0. All messages MUST be valid JSON on a single line.
 
-**Request:**
+Request:
 ```json
 {"jsonrpc":"2.0","id":1,"method":"social.getPosts","params":{"scope":"timeline","limit":50}}
 ```
 
-**Success response:**
+Success response:
 ```json
 {"jsonrpc":"2.0","id":1,"result":[...]}
 ```
 
-**Error response:**
+Error response:
 ```json
 {"jsonrpc":"2.0","id":1,"error":{"code":-32001,"message":"not found","data":{"appCode":"NOT_FOUND"}}}
 ```
 
-**Server notification (no id):**
+Server notification (no id):
 ```json
 {"jsonrpc":"2.0","method":"notifications.changed","params":{"unreadCount":3}}
 ```
@@ -77,8 +35,6 @@ Requests and responses follow JSON-RPC 2.0. All messages MUST be valid JSON on a
 ### 1.2. Batching
 
 Clients MAY send JSON-RPC batch requests (array of request objects). The server MUST respond with a batch response in the same order.
-
----
 
 ## 2. Lifecycle
 
@@ -92,15 +48,13 @@ The first request MUST be `initialize`. The server opens the cache, resolves the
 
 **Method:** `initialize`
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `workdir` | string | yes | Absolute path to the git repository working directory |
-| `cacheDir` | string | no | Cache directory (default: `~/.cache/gitsocial`) |
-| `clientName` | string | no | Client identifier (e.g., `"vscode"`, `"neovim"`) |
-| `clientVersion` | string | no | Client version |
+Params:
+- `workdir` (string, required): Absolute path to the git repository working directory
+- `cacheDir` (string): Cache directory (default: `~/.cache/gitsocial`)
+- `clientName` (string): Client identifier (e.g., `"vscode"`, `"neovim"`)
+- `clientVersion` (string): Client version
 
-**Result:**
+Result:
 ```json
 {
   "version": "0.1.0",
@@ -118,7 +72,7 @@ The first request MUST be `initialize`. The server opens the cache, resolves the
 
 **Method:** `shutdown`
 
-**Params:** none
+Params: none
 
 The server closes the cache, flushes pending writes, and exits with code 0. Clients SHOULD send `shutdown` before killing the process.
 
@@ -126,13 +80,11 @@ The server closes the cache, flushes pending writes, and exits with code 0. Clie
 
 **Method:** `ping`
 
-**Params:** none
+Params: none
 
-**Result:** `"pong"`
+Result: `"pong"`
 
 For keepalive and health checks.
-
----
 
 ## 3. Error Codes
 
@@ -166,11 +118,9 @@ Error responses include the application code in `data.appCode` for programmatic 
 {"code":-32001,"message":"post not found","data":{"appCode":"NOT_FOUND"}}
 ```
 
----
-
 ## 4. Methods
 
-Methods are namespaced as `namespace.method`. The `workdir` set during `initialize` is implicit — individual methods do not accept it.
+Methods are namespaced as `namespace.method`. The `workdir` set during `initialize` is implicit; individual methods do not accept it.
 
 ### 4.1. Social
 
@@ -178,416 +128,327 @@ Methods are namespaced as `namespace.method`. The `workdir` set during `initiali
 
 Returns posts for a given scope.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `scope` | string | yes | `"timeline"`, `"workspace"`, `"mine"`, `"repo:<url>"`, `"list:<id>"`, `"post:<ref>"`, `"thread:<ref>"` |
-| `limit` | int | no | Max posts to return (0 = all) |
-| `types` | string[] | no | Filter by type: `"post"`, `"comment"`, `"repost"`, `"quote"` |
-| `since` | string | no | ISO 8601 timestamp lower bound |
-| `until` | string | no | ISO 8601 timestamp upper bound |
-| `sort` | string | no | Sort order: `"newest"` (default), `"oldest"` |
+Params:
+- `scope` (string, required): `"timeline"`, `"workspace"`, `"mine"`, `"repo:<url>"`, `"list:<id>"`, `"post:<ref>"`, `"thread:<ref>"`
+- `limit` (int): Max posts to return (0 = all)
+- `types` (string[]): Filter by type: `"post"`, `"comment"`, `"repost"`, `"quote"`
+- `since` (string): ISO 8601 timestamp lower bound
+- `until` (string): ISO 8601 timestamp upper bound
+- `sort` (string): Sort order: `"newest"` (default), `"oldest"`
 
-**Result:** `Post[]`
-
-```json
-[{
-  "id": "#commit:abc123456789@gitmsg/social",
-  "repository": "https://github.com/user/repo",
-  "branch": "gitmsg/social",
-  "author": {"name": "Alice", "email": "alice@example.com"},
-  "timestamp": "2025-01-06T10:00:00Z",
-  "content": "Hello world",
-  "type": "post",
-  "interactions": {"comments": 2, "reposts": 1, "quotes": 0},
-  "isEdited": false,
-  "isRetracted": false
-}]
-```
+Result: `Post[]`
 
 #### social.createPost
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `content` | string | yes | Post body |
+Params:
+- `content` (string, required): Post body
 
-**Result:** `Post`
+Result: `Post`
 
 #### social.editPost
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Post ref to edit |
-| `content` | string | yes | New content |
+Params:
+- `ref` (string, required): Post ref to edit
+- `content` (string, required): New content
 
-**Result:** `Post`
+Result: `Post`
 
 #### social.retractPost
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Post ref to retract |
+Params:
+- `ref` (string, required): Post ref to retract
 
-**Result:** `true`
+Result: `true`
 
 #### social.createComment
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `target` | string | yes | Ref of post to comment on |
-| `content` | string | yes | Comment body |
+Params:
+- `target` (string, required): Ref of post to comment on
+- `content` (string, required): Comment body
 
-**Result:** `Post`
+Result: `Post`
 
 #### social.createRepost
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `target` | string | yes | Ref of post to repost |
+Params:
+- `target` (string, required): Ref of post to repost
 
-**Result:** `Post`
+Result: `Post`
 
 #### social.createQuote
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `target` | string | yes | Ref of post to quote |
-| `content` | string | yes | Quote body |
+Params:
+- `target` (string, required): Ref of post to quote
+- `content` (string, required): Quote body
 
-**Result:** `Post`
+Result: `Post`
 
 #### social.getLists
 
-**Params:** none
+Params: none
 
-**Result:** `List[]`
+Result: `List[]`
 
 #### social.getList
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | List ID |
+Params:
+- `id` (string, required): List ID
 
-**Result:** `List`
+Result: `List`
 
 #### social.createList
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | List ID (slug) |
-| `name` | string | yes | Display name |
+Params:
+- `id` (string, required): List ID (slug)
+- `name` (string, required): Display name
 
-**Result:** `List`
+Result: `List`
 
 #### social.deleteList
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | yes | List ID |
+Params:
+- `id` (string, required): List ID
 
-**Result:** `true`
+Result: `true`
 
 #### social.addToList
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `listId` | string | yes | List ID |
-| `repoURL` | string | yes | Repository URL to add |
-| `branch` | string | no | Branch (uses default if omitted) |
-| `allBranches` | boolean | no | Follow all branches (stores `branch:*`). Mutually exclusive with `branch`. |
+Params:
+- `listId` (string, required): List ID
+- `repoURL` (string, required): Repository URL to add
+- `branch` (string): Branch (uses default if omitted)
+- `allBranches` (boolean): Follow all branches (stores `branch:*`). Mutually exclusive with `branch`.
 
-**Result:** `string` (added repo URL)
+Result: `string` (added repo URL)
 
 #### social.removeFromList
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `listId` | string | yes | List ID |
-| `repoURL` | string | yes | Repository URL to remove |
+Params:
+- `listId` (string, required): List ID
+- `repoURL` (string, required): Repository URL to remove
 
-**Result:** `true`
+Result: `true`
 
 #### social.getRepositories
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `scope` | string | no | `"all"` (default), `"list:<id>"` |
+Params:
+- `scope` (string): `"all"` (default), `"list:<id>"`
 
-**Result:** `Repository[]`
+Result: `Repository[]`
 
 #### social.getLogs
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `scope` | string | no | Scope filter |
-| `limit` | int | no | Max entries |
-| `types` | string[] | no | Filter by log entry type |
-| `author` | string | no | Filter by author |
-| `after` | string | no | ISO 8601 lower bound |
-| `before` | string | no | ISO 8601 upper bound |
+Params:
+- `scope` (string): Scope filter
+- `limit` (int): Max entries
+- `types` (string[]): Filter by log entry type
+- `author` (string): Filter by author
+- `after` (string): ISO 8601 lower bound
+- `before` (string): ISO 8601 upper bound
 
-**Result:** `LogEntry[]`
-
----
+Result: `LogEntry[]`
 
 ### 4.2. PM
 
 #### pm.getIssues
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | no | Repository URL (default: workspace) |
-| `branch` | string | no | Branch |
-| `states` | string[] | no | Filter: `"open"`, `"closed"`, `"canceled"` |
-| `limit` | int | no | Max results |
+Params:
+- `repoURL` (string): Repository URL (default: workspace)
+- `branch` (string): Branch
+- `states` (string[]): Filter: `"open"`, `"closed"`, `"canceled"`
+- `limit` (int): Max results
 
-**Result:** `Issue[]`
+Result: `Issue[]`
 
 #### pm.getIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Issue ref |
+Params:
+- `ref` (string, required): Issue ref
 
-**Result:** `Issue`
+Result: `Issue`
 
 #### pm.createIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `subject` | string | yes | Issue title |
-| `body` | string | no | Issue description |
-| `state` | string | no | Initial state (default: `"open"`) |
-| `assignees` | string[] | no | Assignee emails |
-| `due` | string | no | ISO 8601 due date |
-| `milestone` | string | no | Milestone ref |
-| `sprint` | string | no | Sprint ref |
-| `parent` | string | no | Parent issue ref. `root` is derived from it per GITPM.md §1.7, so a client normally sends this alone. |
-| `root` | string | no | Top-level ancestor ref. Only send this to override the derivation; sending `parent` alone is the usual case. |
-| `labels` | Label[] | no | `[{"scope":"priority","value":"high"}]` |
+Params:
+- `subject` (string, required): Issue title
+- `body` (string): Issue description
+- `state` (string): Initial state (default: `"open"`)
+- `assignees` (string[]): Assignee emails
+- `due` (string): ISO 8601 due date
+- `milestone` (string): Milestone ref
+- `sprint` (string): Sprint ref
+- `parent` (string): Parent issue ref. `root` is derived from it per GITPM.md §1.7, so a client normally sends this alone.
+- `root` (string): Top-level ancestor ref. Only send this to override the derivation; sending `parent` alone is the usual case.
+- `labels` (Label[]): `[{"scope":"priority","value":"high"}]`
 
-**Result:** `Issue`
+Result: `Issue`
 
 #### pm.updateIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Issue ref |
-| `subject` | string | no | New title |
-| `body` | string | no | New description |
-| `state` | string | no | New state |
-| `assignees` | string[] | no | New assignees |
-| `due` | string | no | New due date |
-| `milestone` | string | no | New milestone ref |
-| `sprint` | string | no | New sprint ref |
-| `parent` | string | no | New parent ref. Sending it without `root` re-derives the root; sending `""` clears both. |
-| `root` | string | no | Top-level ancestor ref. Only send this to override the derivation. |
-| `labels` | Label[] | no | New labels |
+Params:
+- `ref` (string, required): Issue ref
+- `subject` (string): New title
+- `body` (string): New description
+- `state` (string): New state
+- `assignees` (string[]): New assignees
+- `due` (string): New due date
+- `milestone` (string): New milestone ref
+- `sprint` (string): New sprint ref
+- `parent` (string): New parent ref. Sending it without `root` re-derives the root; sending `""` clears both.
+- `root` (string): Top-level ancestor ref. Only send this to override the derivation.
+- `labels` (Label[]): New labels
 
-**Result:** `Issue`
+Result: `Issue`
 
 #### pm.closeIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Issue ref |
+Params:
+- `ref` (string, required): Issue ref
 
-**Result:** `Issue`
+Result: `Issue`
 
 #### pm.reopenIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Issue ref |
+Params:
+- `ref` (string, required): Issue ref
 
-**Result:** `Issue`
+Result: `Issue`
 
 #### pm.retractIssue
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Issue ref |
+Params:
+- `ref` (string, required): Issue ref
 
-**Result:** `true`
+Result: `true`
 
 #### pm.getMilestones
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | no | Repository URL (default: workspace) |
-| `branch` | string | no | Branch |
-| `states` | string[] | no | Filter by state |
-| `limit` | int | no | Max results |
+Params:
+- `repoURL` (string): Repository URL (default: workspace)
+- `branch` (string): Branch
+- `states` (string[]): Filter by state
+- `limit` (int): Max results
 
-**Result:** `Milestone[]`
+Result: `Milestone[]`
 
 #### pm.getMilestone
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Milestone ref |
+Params:
+- `ref` (string, required): Milestone ref
 
-**Result:** `Milestone`
+Result: `Milestone`
 
 #### pm.createMilestone
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | yes | Milestone title |
-| `body` | string | no | Description |
-| `state` | string | no | Initial state |
-| `due` | string | no | ISO 8601 due date |
+Params:
+- `title` (string, required): Milestone title
+- `body` (string): Description
+- `state` (string): Initial state
+- `due` (string): ISO 8601 due date
 
-**Result:** `Milestone`
+Result: `Milestone`
 
 #### pm.updateMilestone
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Milestone ref |
-| `title` | string | no | New title |
-| `body` | string | no | New description |
-| `state` | string | no | New state |
-| `due` | string | no | New due date |
+Params:
+- `ref` (string, required): Milestone ref
+- `title` (string): New title
+- `body` (string): New description
+- `state` (string): New state
+- `due` (string): New due date
 
-**Result:** `Milestone`
+Result: `Milestone`
 
 #### pm.closeMilestone / pm.reopenMilestone / pm.cancelMilestone
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Milestone ref |
+Params:
+- `ref` (string, required): Milestone ref
 
-**Result:** `Milestone`
+Result: `Milestone`
 
 #### pm.retractMilestone
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Milestone ref |
+Params:
+- `ref` (string, required): Milestone ref
 
-**Result:** `true`
+Result: `true`
 
 #### pm.getMilestoneIssues
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Milestone ref |
-| `states` | string[] | no | Filter by state |
+Params:
+- `ref` (string, required): Milestone ref
+- `states` (string[]): Filter by state
 
-**Result:** `Issue[]`
+Result: `Issue[]`
 
 #### pm.getSprints
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | no | Repository URL (default: workspace) |
-| `branch` | string | no | Branch |
-| `states` | string[] | no | Filter: `"planned"`, `"active"`, `"completed"`, `"canceled"` |
-| `limit` | int | no | Max results |
+Params:
+- `repoURL` (string): Repository URL (default: workspace)
+- `branch` (string): Branch
+- `states` (string[]): Filter: `"planned"`, `"active"`, `"completed"`, `"canceled"`
+- `limit` (int): Max results
 
-**Result:** `Sprint[]`
+Result: `Sprint[]`
 
 #### pm.getSprint
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Sprint ref |
+Params:
+- `ref` (string, required): Sprint ref
 
-**Result:** `Sprint`
+Result: `Sprint`
 
 #### pm.createSprint
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | yes | Sprint title |
-| `body` | string | no | Description |
-| `state` | string | no | Initial state (default: `"planned"`) |
-| `start` | string | no | ISO 8601 start date |
-| `end` | string | no | ISO 8601 end date |
+Params:
+- `title` (string, required): Sprint title
+- `body` (string): Description
+- `state` (string): Initial state (default: `"planned"`)
+- `start` (string): ISO 8601 start date
+- `end` (string): ISO 8601 end date
 
-**Result:** `Sprint`
+Result: `Sprint`
 
 #### pm.updateSprint
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Sprint ref |
-| `title` | string | no | New title |
-| `body` | string | no | New description |
-| `state` | string | no | New state |
-| `start` | string | no | New start date |
-| `end` | string | no | New end date |
+Params:
+- `ref` (string, required): Sprint ref
+- `title` (string): New title
+- `body` (string): New description
+- `state` (string): New state
+- `start` (string): New start date
+- `end` (string): New end date
 
-**Result:** `Sprint`
+Result: `Sprint`
 
 #### pm.activateSprint / pm.completeSprint / pm.cancelSprint
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Sprint ref |
+Params:
+- `ref` (string, required): Sprint ref
 
-**Result:** `Sprint`
+Result: `Sprint`
 
 #### pm.retractSprint
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Sprint ref |
+Params:
+- `ref` (string, required): Sprint ref
 
-**Result:** `true`
+Result: `true`
 
 #### pm.getSprintIssues
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Sprint ref |
-| `states` | string[] | no | Filter by state |
+Params:
+- `ref` (string, required): Sprint ref
+- `states` (string[]): Filter by state
 
-**Result:** `Issue[]`
+Result: `Issue[]`
 
 #### pm.getBoardView
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `boardId` | string | no | Board ID (default: first configured board) |
+Params:
+- `boardId` (string): Board ID (default: first configured board)
 
-**Result:** `BoardView`
+Result: `BoardView`
 
 ```json
 {
@@ -602,215 +463,175 @@ Returns posts for a given scope.
 
 #### pm.commentOnItem
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Item ref (issue, milestone, or sprint) |
-| `content` | string | yes | Comment body |
+Params:
+- `ref` (string, required): Item ref (issue, milestone, or sprint)
+- `content` (string, required): Comment body
 
-**Result:** `Post` (social comment)
+Result: `Post` (social comment)
 
 #### pm.getItemComments
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Item ref |
+Params:
+- `ref` (string, required): Item ref
 
-**Result:** `Post[]`
+Result: `Post[]`
 
 #### pm.getLinks
 
 Returns the link graph around an item: what it blocks, what blocks it, and what it relates to.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Item ref |
+Params:
+- `ref` (string, required): Item ref
 
-**Result:** `{"blocks": Issue[], "blockedBy": Issue[], "related": Issue[]}`
+Result: `{"blocks": Issue[], "blockedBy": Issue[], "related": Issue[]}`
 
 #### pm.isBlocked
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Item ref |
+Params:
+- `ref` (string, required): Item ref
 
-**Result:** `bool`
-
----
+Result: `bool`
 
 ### 4.3. Review
 
 #### review.getPullRequests
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | no | Repository URL (default: workspace) |
-| `branch` | string | no | Branch |
-| `states` | string[] | no | Filter: `"open"`, `"merged"`, `"closed"` |
-| `includeForks` | bool | no | Include PRs from registered forks |
-| `limit` | int | no | Max results |
+Params:
+- `repoURL` (string): Repository URL (default: workspace)
+- `branch` (string): Branch
+- `states` (string[]): Filter: `"open"`, `"merged"`, `"closed"`
+- `includeForks` (bool): Include PRs from registered forks
+- `limit` (int): Max results
 
-**Result:** `PullRequest[]`
+Result: `PullRequest[]`
 
 #### review.getPR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.createPR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `subject` | string | yes | PR title |
-| `body` | string | no | PR description |
-| `base` | string | yes | Base branch ref |
-| `head` | string | yes | Head branch ref |
-| `closes` | string[] | no | Issue refs to close on merge |
-| `reviewers` | string[] | no | Reviewer emails |
+Params:
+- `subject` (string, required): PR title
+- `body` (string): PR description
+- `base` (string, required): Base branch ref
+- `head` (string, required): Head branch ref
+- `closes` (string[]): Issue refs to close on merge
+- `reviewers` (string[]): Reviewer emails
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.updatePR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `subject` | string | no | New title |
-| `body` | string | no | New description |
-| `state` | string | no | New state |
-| `base` | string | no | New base |
-| `head` | string | no | New head |
-| `closes` | string[] | no | New close refs |
-| `reviewers` | string[] | no | New reviewers |
+Params:
+- `ref` (string, required): PR ref
+- `subject` (string): New title
+- `body` (string): New description
+- `state` (string): New state
+- `base` (string): New base
+- `head` (string): New head
+- `closes` (string[]): New close refs
+- `reviewers` (string[]): New reviewers
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.mergePR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `strategy` | string | no | Merge strategy: `ff` (default), `squash`, `rebase`, `merge` |
+Params:
+- `ref` (string, required): PR ref
+- `strategy` (string): Merge strategy: `ff` (default), `squash`, `rebase`, `merge`
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.markReady
 
 Takes a draft PR out of draft state.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.convertToDraft
 
 Puts an open PR back into draft state.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.closePR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.retractPR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `true`
+Result: `true`
 
 #### review.getFeedbackForPR
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `Feedback[]`
+Result: `Feedback[]`
 
 #### review.createFeedback
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `content` | string | yes | Feedback body |
-| `pullRequest` | string | yes | PR ref |
-| `commit` | string | no | Commit hash (12 chars) |
-| `file` | string | no | File path |
-| `oldLine` | int | no | Line in old file |
-| `newLine` | int | no | Line in new file |
-| `oldLineEnd` | int | no | End line in old file |
-| `newLineEnd` | int | no | End line in new file |
-| `reviewState` | string | no | `"approved"` or `"changes-requested"` |
-| `suggestion` | bool | no | Body contains ` ```suggestion ``` ` block |
+Params:
+- `content` (string, required): Feedback body
+- `pullRequest` (string, required): PR ref
+- `commit` (string): Commit hash (12 chars)
+- `file` (string): File path
+- `oldLine` (int): Line in old file
+- `newLine` (int): Line in new file
+- `oldLineEnd` (int): End line in old file
+- `newLineEnd` (int): End line in new file
+- `reviewState` (string): `"approved"` or `"changes-requested"`
+- `suggestion` (bool): Body contains ` ```suggestion ``` ` block
 
-**Result:** `Feedback`
+Result: `Feedback`
 
 #### review.updateFeedback
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Feedback ref |
-| `content` | string | no | New content |
-| `reviewState` | string | no | New review state |
+Params:
+- `ref` (string, required): Feedback ref
+- `content` (string): New content
+- `reviewState` (string): New review state
 
-**Result:** `Feedback`
+Result: `Feedback`
 
 #### review.retractFeedback
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Feedback ref |
+Params:
+- `ref` (string, required): Feedback ref
 
-**Result:** `true`
+Result: `true`
 
 #### review.applySuggestion
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Feedback ref containing suggestion |
+Params:
+- `ref` (string, required): Feedback ref containing suggestion
 
-**Result:** `string` (applied file path)
+Result: `string` (applied file path)
 
 #### review.getDiff
 
 Returns the diff between a PR's base and head.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `FileDiff[]`
+Result: `FileDiff[]`
 
 ```json
 [{
@@ -830,12 +651,10 @@ Returns the diff between a PR's base and head.
 
 #### review.getDiffStats
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `DiffStats`
+Result: `DiffStats`
 
 ```json
 {"filesChanged": 5, "insertions": 120, "deletions": 45}
@@ -843,227 +662,187 @@ Returns the diff between a PR's base and head.
 
 #### review.getFileDiff
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `file` | string | yes | File path |
+Params:
+- `ref` (string, required): PR ref
+- `file` (string, required): File path
 
-**Result:** `FileDiff`
+Result: `FileDiff`
 
 #### review.getFileContent
 
 Returns file content at a specific ref.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `file` | string | yes | File path |
-| `side` | string | yes | `"base"` or `"head"` |
+Params:
+- `ref` (string, required): PR ref
+- `file` (string, required): File path
+- `side` (string, required): `"base"` or `"head"`
 
-**Result:** `string` (file contents)
+Result: `string` (file contents)
 
 #### review.getPRComments
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `Post[]`
+Result: `Post[]`
 
 #### review.getForks
 
 Returns registered fork URLs (stored in core config, shared across all extensions).
 
-**Params:** none
+Params: none
 
-**Result:** `string[]` (fork URLs)
+Result: `string[]` (fork URLs)
 
 #### review.addFork
 
 Registers a fork URL in the core config (shared across all extensions).
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `url` | string | yes | Fork repository URL |
+Params:
+- `url` (string, required): Fork repository URL
 
-**Result:** `true`
+Result: `true`
 
 #### review.removeFork
 
 Removes a fork URL from the core config.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `url` | string | yes | Fork repository URL |
+Params:
+- `url` (string, required): Fork repository URL
 
-**Result:** `true`
+Result: `true`
 
 #### review.updatePRTips
 
 Re-snapshots the PR's base and head tips from the live branches.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.syncPRBranch
 
 Brings the head branch up to date with the base, then re-snapshots the tips.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `strategy` | string | no | `rebase` (default) or `merge` |
+Params:
+- `ref` (string, required): PR ref
+- `strategy` (string): `rebase` (default) or `merge`
 
-**Result:** `PullRequest`
+Result: `PullRequest`
 
 #### review.getPRVersions
 
 Lists every version of the PR, oldest first.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `PRVersion[]`
+Result: `PRVersion[]`
 
 #### review.comparePRVersions
 
 Range-diffs two versions of the PR.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
-| `from` | int | yes | Version number to compare from |
-| `to` | int | yes | Version number to compare to |
+Params:
+- `ref` (string, required): PR ref
+- `from` (int, required): Version number to compare from
+- `to` (int, required): Version number to compare to
 
-**Result:** string (the range-diff)
+Result: string (the range-diff)
 
 #### review.getVersionAwareReviews
 
 Each reviewer's latest review tagged with the version it was left against, so a
 client can tell a stale approval from a current one.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | PR ref |
+Params:
+- `ref` (string, required): PR ref
 
-**Result:** `VersionAwareReview[]`
-
----
+Result: `VersionAwareReview[]`
 
 ### 4.4. Release
 
 #### release.getReleases
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | no | Repository URL (default: workspace) |
-| `branch` | string | no | Branch |
-| `limit` | int | no | Max results |
+Params:
+- `repoURL` (string): Repository URL (default: workspace)
+- `branch` (string): Branch
+- `limit` (int): Max results
 
-**Result:** `Release[]`
+Result: `Release[]`
 
 #### release.getRelease
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
+Params:
+- `ref` (string, required): Release ref
 
-**Result:** `Release`
+Result: `Release`
 
 #### release.createRelease
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `subject` | string | yes | Release title |
-| `body` | string | no | Release notes |
-| `tag` | string | no | Git tag |
-| `version` | string | no | Version string |
-| `prerelease` | bool | no | Pre-release flag |
-| `artifacts` | string[] | no | Artifact names |
-| `artifactURL` | string | no | Download URL |
-| `checksums` | string | no | Checksum data |
-| `signedBy` | string | no | GPG signer |
-| `sbom` | string | no | SBOM filename (e.g., `sbom.spdx.json`) |
+Params:
+- `subject` (string, required): Release title
+- `body` (string): Release notes
+- `tag` (string): Git tag
+- `version` (string): Version string
+- `prerelease` (bool): Pre-release flag
+- `artifacts` (string[]): Artifact names
+- `artifactURL` (string): Download URL
+- `checksums` (string): Checksum data
+- `signedBy` (string): GPG signer
+- `sbom` (string): SBOM filename (e.g., `sbom.spdx.json`)
 
-**Result:** `Release`
+Result: `Release`
 
 #### release.editRelease
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
-| `subject` | string | no | New title |
-| `body` | string | no | New notes |
-| `tag` | string | no | New tag |
-| `version` | string | no | New version |
-| `prerelease` | bool | no | New pre-release flag |
-| `artifacts` | string[] | no | New artifacts |
-| `artifactURL` | string | no | New download URL |
-| `checksums` | string | no | New checksums |
-| `signedBy` | string | no | New signer |
-| `sbom` | string | no | New SBOM filename |
+Params:
+- `ref` (string, required): Release ref
+- `subject` (string): New title
+- `body` (string): New notes
+- `tag` (string): New tag
+- `version` (string): New version
+- `prerelease` (bool): New pre-release flag
+- `artifacts` (string[]): New artifacts
+- `artifactURL` (string): New download URL
+- `checksums` (string): New checksums
+- `signedBy` (string): New signer
+- `sbom` (string): New SBOM filename
 
-**Result:** `Release`
+Result: `Release`
 
 #### release.retractRelease
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
+Params:
+- `ref` (string, required): Release ref
 
-**Result:** `true`
+Result: `true`
 
 #### release.getReleaseComments
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
+Params:
+- `ref` (string, required): Release ref
 
-**Result:** `Post[]`
+Result: `Post[]`
 
 #### release.getSBOM
 
 Returns parsed SBOM summary for a release (format, package count, licenses, generator).
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
+Params:
+- `ref` (string, required): Release ref
 
-**Result:** `SBOMSummary`
+Result: `SBOMSummary`
 
 #### release.getSBOMRaw
 
 Returns the raw SBOM file content as a JSON string.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Release ref |
+Params:
+- `ref` (string, required): Release ref
 
-**Result:** `string` (raw SBOM JSON content)
-
----
+Result: `string` (raw SBOM JSON content)
 
 ### 4.5. Core
 
@@ -1071,12 +850,10 @@ Returns the raw SBOM file content as a JSON string.
 
 Fetches updates from all subscribed repositories. Returns immediately with a fetch ID. Progress and completion are reported via server notifications.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `listId` | string | no | Fetch only repositories in this list |
+Params:
+- `listId` (string): Fetch only repositories in this list
 
-**Result:**
+Result:
 ```json
 {"fetchId": "f-1"}
 ```
@@ -1087,12 +864,10 @@ The server sends `fetch.progress` and `fetch.complete` notifications for this `f
 
 Pushes local changes to the remote.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `extensions` | string[] | no | Extensions to push (default: all initialized) |
+Params:
+- `extensions` (string[]): Extensions to push (default: all initialized)
 
-**Result:**
+Result:
 ```json
 {"pushed": ["social", "pm"]}
 ```
@@ -1101,9 +876,9 @@ Pushes local changes to the remote.
 
 Returns workspace and extension status.
 
-**Params:** none
+Params: none
 
-**Result:**
+Result:
 ```json
 {
   "workdir": "/path/to/repo",
@@ -1121,94 +896,69 @@ Returns workspace and extension status.
 
 Reads extension configuration.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `extension` | string | yes | Extension name |
+Params:
+- `extension` (string, required): Extension name
 
-**Result:** `object` (extension-specific config JSON)
+Result: `object` (extension-specific config JSON)
 
 #### core.setConfig
 
 Writes extension configuration.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `extension` | string | yes | Extension name |
-| `config` | object | yes | Config object to write |
+Params:
+- `extension` (string, required): Extension name
+- `config` (object, required): Config object to write
 
-**Result:** `true`
+Result: `true`
 
 #### core.initExtension
 
 Initializes an extension in the workspace.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `extension` | string | yes | Extension name |
-| `branch` | string | no | Custom branch name |
+Params:
+- `extension` (string, required): Extension name
+- `branch` (string): Custom branch name
 
-**Result:** `true`
+Result: `true`
 
 #### core.getNotifications
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `unreadOnly` | bool | no | Only unread (default: false) |
-| `types` | string[] | no | Filter by type |
-| `limit` | int | no | Max results |
+Params:
+- `unreadOnly` (bool): Only unread (default: false)
+- `types` (string[]): Filter by type
+- `limit` (int): Max results
 
-**Result:** `Notification[]`
-
-```json
-[{
-  "repoURL": "https://github.com/user/repo",
-  "hash": "abc123456789",
-  "branch": "gitmsg/social",
-  "type": "comment",
-  "source": "social",
-  "actor": {"name": "Bob", "email": "bob@example.com"},
-  "timestamp": "2025-01-06T10:00:00Z",
-  "isRead": false
-}]
-```
+Result: `Notification[]`
 
 #### core.getUnreadCount
 
-**Params:** none
+Params: none
 
-**Result:** `int`
+Result: `int`
 
 #### core.markAsRead
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `repoURL` | string | yes | Notification repo URL |
-| `hash` | string | yes | Notification hash |
-| `branch` | string | yes | Notification branch |
+Params:
+- `repoURL` (string, required): Notification repo URL
+- `hash` (string, required): Notification hash
+- `branch` (string, required): Notification branch
 
-**Result:** `true`
+Result: `true`
 
 #### core.markAllAsRead
 
-**Params:** none
+Params: none
 
-**Result:** `true`
+Result: `true`
 
 #### core.getHistory
 
 Returns edit history for any item (post, issue, PR, release, etc.).
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `ref` | string | yes | Item ref |
+Params:
+- `ref` (string, required): Item ref
 
-**Result:** `MessageVersion[]`
+Result: `MessageVersion[]`
 
 ```json
 [
@@ -1219,9 +969,9 @@ Returns edit history for any item (post, issue, PR, release, etc.).
 
 #### core.getSettings
 
-**Params:** none
+Params: none
 
-**Result:** `KeyValue[]`
+Result: `KeyValue[]`
 
 ```json
 [
@@ -1232,15 +982,11 @@ Returns edit history for any item (post, issue, PR, release, etc.).
 
 #### core.setSetting
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `key` | string | yes | Setting key |
-| `value` | string | yes | Setting value |
+Params:
+- `key` (string, required): Setting key
+- `value` (string, required): Setting value
 
-**Result:** `true`
-
----
+Result: `true`
 
 ### 4.6. Search
 
@@ -1251,21 +997,19 @@ real name: it spans every extension, so filing it under `social.` would
 misdescribe it. `social.search` is registered as an alias for clients written
 against the name this document used to give, and dispatches to the same handler.
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | no | Free-text query |
-| `author` | string | no | Filter by author email |
-| `repo` | string | no | Filter by repository URL |
-| `type` | string | no | Filter by type: `post`, `comment`, `repost`, `quote`, `issue`, `milestone`, `sprint`, `pr`, `feedback`, `release` |
-| `hash` | string | no | Filter by commit-hash prefix |
-| `after` | string | no | ISO 8601 timestamp lower bound |
-| `before` | string | no | ISO 8601 timestamp upper bound |
-| `limit` | int | no | Max results (default: 20) |
-| `scope` | string | no | `timeline` (default), `list:<id>`, `repository:<url>`, `repos:<csv>` |
-| `sort` | string | no | `score` (default) or `date` |
+Params:
+- `query` (string): Free-text query
+- `author` (string): Filter by author email
+- `repo` (string): Filter by repository URL
+- `type` (string): Filter by type: `post`, `comment`, `repost`, `quote`, `issue`, `milestone`, `sprint`, `pr`, `feedback`, `release`
+- `hash` (string): Filter by commit-hash prefix
+- `after` (string): ISO 8601 timestamp lower bound
+- `before` (string): ISO 8601 timestamp upper bound
+- `limit` (int): Max results (default: 20)
+- `scope` (string): `timeline` (default), `list:<id>`, `repository:<url>`, `repos:<csv>`
+- `sort` (string): `score` (default) or `date`
 
-**Result:** `SearchResult`
+Result: `SearchResult`
 
 ```json
 {
@@ -1278,8 +1022,6 @@ against the name this document used to give, and dispatches to the same handler.
 }
 ```
 
----
-
 ## 5. Server Notifications
 
 Server-initiated notifications (no `id` field) pushed to the client. Clients opt in by sending `subscribe` after initialization.
@@ -1288,23 +1030,19 @@ Server-initiated notifications (no `id` field) pushed to the client. Clients opt
 
 **Method:** `subscribe`
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `events` | string[] | yes | Events to subscribe to: `"fetch"`, `"notifications"`, `"workspace"` |
+Params:
+- `events` (string[], required): Events to subscribe to: `"fetch"`, `"notifications"`, `"workspace"`
 
-**Result:** `true`
+Result: `true`
 
 ### 5.2. Unsubscribe
 
 **Method:** `unsubscribe`
 
-**Params:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `events` | string[] | yes | Events to unsubscribe from |
+Params:
+- `events` (string[], required): Events to unsubscribe from
 
-**Result:** `true`
+Result: `true`
 
 ### 5.3. Fetch Events
 
@@ -1363,8 +1101,6 @@ Sent when the server detects changes to gitmsg branches in the workspace (via fi
   "branches": ["gitmsg/social", "gitmsg/pm"]
 }}
 ```
-
----
 
 ## 6. Type Reference
 
@@ -1611,44 +1347,10 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
 }
 ```
 
----
-
 ## 7. Implementation Notes
 
-### 7.1. Concurrency
-
-The server MUST handle concurrent requests. Long-running operations (`core.fetch`) run asynchronously and report progress via notifications. Read operations (`getPosts`, `getIssues`, etc.) MUST NOT block on writes.
-
-The cache layer already serializes DB access via `ExecLocked`/`QueryLocked`. The RPC server adds no additional locking.
-
-### 7.2. Workspace Scope
-
-All methods operate on the workspace set during `initialize`. To switch workspaces, the client shuts down and spawns a new server. Multi-root editors spawn one server per workspace.
-
-### 7.3. Serialization
-
-- Go `time.Time` serializes as ISO 8601 string
-- Go `nil` pointers are omitted from JSON (not `null`)
-- `Result[T]` maps to JSON-RPC: a successful result (`result.Ok`) becomes `result`, a failed one (`result.Err`) becomes `error`
-- Refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` format
-
-### 7.4. Extension Registration
-
-Methods are registered per extension. If an extension is not initialized, its methods return `-32003 NOT_INITIALIZED`. Clients check `initialize` response to know which extensions are available.
-
-### 7.5. Package Structure
-
-```
-library/rpc/
-├── server.go           # Stdio read loop, JSON-RPC dispatch
-├── handler.go          # Method registration, param unmarshaling
-├── methods_social.go   # social.* method handlers
-├── methods_pm.go       # pm.* method handlers
-├── methods_review.go   # review.* method handlers
-├── methods_release.go  # release.* method handlers
-├── methods_core.go     # core.* + lifecycle method handlers
-├── methods_search.go   # top-level search method handler
-└── types.go            # Request/response param structs, subscription events
-```
-
-Each method handler is a function that unmarshals params, calls the existing extension API, and returns the result. No business logic lives in the RPC layer.
+- Requests run concurrently. `core.fetch` returns at once and reports through notifications; reads never wait on writes. The cache serializes database access, and the server adds no locking of its own.
+- A server serves the workspace given at `initialize`. For another workspace, shut down and spawn a new server; multi-root editors run one per workspace.
+- Times serialize as ISO 8601 strings, nil pointers are omitted, refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` form, and a `Result[T]` maps to `result` or `error`.
+- Methods of an extension that is not initialized return `-32003 NOT_INITIALIZED`; the `initialize` response says which extensions are available.
+- Handlers live in `library/rpc/methods_*.go`, one file per namespace; each unmarshals its params, calls the extension API and returns the result. No business logic lives in the RPC layer.

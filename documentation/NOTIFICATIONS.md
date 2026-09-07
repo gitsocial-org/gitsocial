@@ -1,52 +1,40 @@
 # Notifications
 
-Notifications aggregate events from all extensions into a single feed, sorted by timestamp (descending). Read state is tracked per-notification in `core_notification_reads`.
+Notifications gather events from every extension into one feed, newest first, with read state kept per notification in `core_notification_reads`.
 
-## Scopes
+[Commands](#commands) · [Types](#types)
 
-Where the notification data lives:
+## Commands
 
-- **Workspace** — your own repo
-- **Forks** — registered fork repos
-- **Followed** — repos in your lists
-- **Any** — any repo in the cache, regardless of relationship
+```
+gitsocial notifications [--all] [--type mention,follow] [--limit <n>]
+gitsocial notifications count
+gitsocial notifications read <id> | read-all
+gitsocial notifications unread <id> | unread-all
+```
 
-All types exclude self-authored actions.
+`gitsocial fetch` reports the unread count when it finishes. In the TUI, `@` opens the feed.
 
-## Notification Types
+## Types
 
-| Source | Type | Scope | Trigger |
-|--------|------|-------|---------|
-| Core | `mention` | Any | Your email is @-mentioned in a commit message |
-| Core | `edit` | Any | Someone other than you authored an edit (or retraction) of an item whose canonical was authored by you. Surfaces across all extensions — issues, PRs, posts, releases, memos. |
-| Social | `comment` | Workspace + Followed | Someone comments on your post or a thread you participated in |
-| Social | `repost` | Workspace + Followed | Someone reposts your post or a post in a thread you participated in |
-| Social | `quote` | Workspace + Followed | Someone quotes your post or a post in a thread you participated in |
-| Social | `follow` | Workspace | Someone follows your repository |
-| PM | `issue-assigned` | Any | An issue is assigned to your email |
-| PM | `issue-closed` | Any | An issue assigned to you is closed by someone else |
-| PM | `issue-reopened` | Any | An issue assigned to you is reopened by someone else |
-| Review | `fork-pr` | Forks | A non-draft PR is opened on a registered fork targeting your repo |
-| Review | `review-requested` | Any | You are added as a reviewer on an open, non-draft PR |
-| Review | `feedback` | Workspace + Any | Someone leaves feedback on a PR in your workspace or a PR you authored |
-| Review | `approved` | Workspace + Any | Someone approves a PR in your workspace or a PR you authored |
-| Review | `changes-requested` | Workspace + Any | Someone requests changes on a PR in your workspace or a PR you authored |
-| Review | `pr-merged` | Any | A PR you authored is merged by someone else |
-| Review | `pr-closed` | Any | A PR you authored is closed by someone else |
-| Review | `pr-ready` | Forks | A draft PR on a registered fork is marked ready for review |
-| Review | `head-advanced` | Workspace + Forks | An open PR's head branch advanced on its remote past the stored `head-tip` (run `pr update` to refresh) |
-| Review | `base-advanced` | Workspace + Forks | An open PR's base branch advanced on its remote past the stored `base-tip` |
-| Review | `head-deleted` | Workspace + Forks | An open PR's head branch no longer exists on its remote |
-| Review | `base-deleted` | Workspace + Forks | An open PR's base branch no longer exists on its remote |
-| Release | `new-release` | Followed | A repo in your lists publishes a release |
-| gitmsg-divergence | `branch-diverged` | Workspace | A local `gitmsg/<ext>` branch has unpushed commits and diverges from origin (`gitsocial push` would be rejected; run rebase) |
+Scopes: the workspace is your repository, forks are registered forks, followed are the repositories in your lists, and any is every repository in the cache. Your own actions never notify you.
 
-The four `*-advanced` / `*-deleted` notifications are computed from
-`review_branch_observations` (refreshed after each `gitsocial fetch`) compared
-against the PR's stored tips. They self-clear once the PR catches up — no
-explicit "mark as read" needed. Audience is the PR author and listed
-reviewers.
+| Type | Scope | Trigger |
+|---|---|---|
+| `mention` | any | your email is mentioned in a commit message |
+| `edit` | any | someone else edits or retracts an item you authored, in any extension |
+| `comment`, `repost`, `quote` | workspace, followed | on your post, or on a thread you took part in |
+| `follow` | workspace | a repository adds yours to a list |
+| `issue-assigned` | any | an issue is assigned to you |
+| `issue-closed`, `issue-reopened` | any | someone else closes or reopens an issue assigned to you |
+| `fork-pr` | forks | a non-draft pull request on a registered fork targets your repository |
+| `review-requested` | any | you are added as a reviewer on an open, non-draft pull request |
+| `feedback`, `approved`, `changes-requested` | workspace, any | on a pull request in your workspace or one you authored |
+| `pr-merged`, `pr-closed` | any | someone else merges or closes a pull request you authored |
+| `pr-ready` | forks | a draft pull request on a registered fork is marked ready |
+| `head-advanced`, `base-advanced` | workspace, forks | an open pull request's branch moved past its recorded tip; `pr update` records the new one |
+| `head-deleted`, `base-deleted` | workspace, forks | an open pull request's branch is gone from its remote |
+| `new-release` | followed | a repository in your lists publishes a release |
+| `branch-diverged` | workspace | a local `gitmsg/<ext>` branch has unpushed commits and diverges from origin |
 
-The `branch-diverged` notification is computed on each poll from
-`git.ValidatePushPreconditions` and self-clears once the rebase + push
-lands.
+The four branch notifications come from `review_branch_observations` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), refreshed after each fetch, go to the pull request's author and reviewers, and clear on their own once the pull request catches up. `branch-diverged` clears once the branch is reconciled and pushed.
