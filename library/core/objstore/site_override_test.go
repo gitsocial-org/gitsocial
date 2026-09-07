@@ -164,7 +164,7 @@ func TestSitePush_PublishOverrideDisablesPagesOnly(t *testing.T) {
 			t.Errorf("publish-override off must delete the page set: %s survived", key)
 		}
 	}
-	if !keyExists(client, siteManifestKey) {
+	if !keyExists(client, bucketRefsKey) {
 		t.Error("the data refs manifest must survive a page-set-only disable")
 	}
 }

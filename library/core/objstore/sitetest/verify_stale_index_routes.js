@@ -85,7 +85,7 @@ function buildBucket(name, mode) {
   const site = path.join(bucket, ".gitsocial", "site");
   fs.mkdirSync(site, { recursive: true });
   fs.writeFileSync(path.join(bucket, ".gitsocial", "ref-mode"), "etag");
-  fs.writeFileSync(path.join(site, "refs.json"), JSON.stringify({
+  fs.writeFileSync(path.join(bucket, ".gitsocial", "refs.json"), JSON.stringify({
     "refs/heads/master": master.tip,
     "refs/heads/gitmsg/pm": pm.tip,
     "refs/heads/gitmsg/review": review.tip,

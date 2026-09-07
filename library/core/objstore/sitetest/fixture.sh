@@ -15,7 +15,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$here/../../../.." && pwd)
 out="${1:-$here/.fixture}"
 served="$out/served"
-marker="$served/thread-demo/.gitsocial/site/refs.json"
+marker="$served/thread-demo/.gitsocial/refs.json"
 stampfile="$out/.stamp"
 HOST=fake.example.com
 

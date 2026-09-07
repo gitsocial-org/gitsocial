@@ -403,7 +403,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       if (now - lastCheck < 30000) return;
       lastCheck = now;
       let cur = null;
-      try { cur = await NS.fetchText(ctx.base, ".gitsocial/site/refs.json"); } catch { return; }
+      try { cur = await NS.fetchText(ctx.base, ".gitsocial/refs.json"); } catch { return; }
       if (cur === null) return;
       if (baseline === null) baseline = cur;
       else if (cur !== baseline) showPill();

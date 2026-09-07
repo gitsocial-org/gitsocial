@@ -100,8 +100,8 @@ fs.mkdirSync(indexed, { recursive: true });
 fs.mkdirSync(walkOnly, { recursive: true });
 const repoI = buildRepo(indexed);
 const repoW = buildRepo(walkOnly);
-fs.writeFileSync(path.join(indexed, ".gitsocial", "site", "refs.json"), JSON.stringify(repoI.refs));
-fs.writeFileSync(path.join(walkOnly, ".gitsocial", "site", "refs.json"), JSON.stringify(repoW.refs));
+fs.writeFileSync(path.join(indexed, ".gitsocial", "refs.json"), JSON.stringify(repoI.refs));
+fs.writeFileSync(path.join(walkOnly, ".gitsocial", "refs.json"), JSON.stringify(repoW.refs));
 writeCodeIndex(indexed, repoI);
 // walk-only: NO items/code index at all -> the reader falls back to the loose walk.
 

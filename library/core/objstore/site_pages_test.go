@@ -1262,11 +1262,16 @@ func TestPostPushMaintenance_PublishGuard(t *testing.T) {
 	client, _ := testClient(t)
 	shas := seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "helper post"}})
 	h := &remoteHelper{client: client, prefix: ""}
-	h.postPushMaintenance("", true, map[string]string{"social": shas[0]})
-	for _, key := range []string{siteManifestKey, siteVersionKey, "index.html", siteItemsManifestKey("social")} {
+	h.postPushMaintenance("", map[string]string{"refs/heads/main": shaA}, map[string]string{"social": shas[0]})
+	for _, key := range []string{siteVersionKey, "index.html", siteItemsManifestKey("social")} {
 		if keyExists(client, key) {
 			t.Errorf("guard off: helper must not write %s", key)
 		}
+	}
+	// The ref manifest is not a site artifact: readers without listing rights
+	// depend on it, so every ref-moving push writes it, guard or not.
+	if !keyExists(client, bucketRefsKey) {
+		t.Errorf("guard off: helper must still write %s", bucketRefsKey)
 	}
 
 	// Guard pushed: the same plain push creates the shell and maintains the
@@ -1275,8 +1280,8 @@ func TestPostPushMaintenance_PublishGuard(t *testing.T) {
 	shas2 := seedSocialMessages(t, client2, "", []pageMsgSpec{{msg: "helper post"}})
 	seedPagesConfig(t, client2, map[string]any{"publish": "true"})
 	h2 := &remoteHelper{client: client2, prefix: ""}
-	h2.postPushMaintenance("", true, map[string]string{"social": shas2[0]})
-	for _, key := range []string{siteManifestKey, siteVersionKey, "index.html", siteItemsManifestKey("social")} {
+	h2.postPushMaintenance("", map[string]string{"refs/heads/main": shaA}, map[string]string{"social": shas2[0]})
+	for _, key := range []string{bucketRefsKey, siteVersionKey, "index.html", siteItemsManifestKey("social")} {
 		if !keyExists(client2, key) {
 			t.Errorf("guard on: helper must write %s", key)
 		}

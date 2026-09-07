@@ -1114,9 +1114,11 @@
     return await fetchText(base, ".gitsocial/ref-mode");
   }
 
-  // MANIFEST_KEY is the push-maintained refs manifest (refname → sha), written
-  // from the bucket's full ref list on every push.
-  const MANIFEST_KEY = ".gitsocial/site/refs.json";
+  // MANIFEST_KEY is the push-maintained refs manifest (refname → sha), rebuilt
+  // from the bucket's ref list on every push. LEGACY_MANIFEST_KEY is its older
+  // site copy, all a bucket not pushed since carries.
+  const MANIFEST_KEY = ".gitsocial/refs.json";
+  const LEGACY_MANIFEST_KEY = ".gitsocial/site/refs.json";
 
   // manifestFor memoizes the refs manifest per context, keeping the raw body
   // beside the parsed map: every caller shared the memo already, and the
@@ -1130,6 +1132,7 @@
     if (ctx.manifest === undefined) {
       ctx.manifest = (async () => {
         ctx.manifestText = await fetchText(ctx.base, MANIFEST_KEY);
+        if (ctx.manifestText === null) ctx.manifestText = await fetchText(ctx.base, LEGACY_MANIFEST_KEY);
         if (!ctx.manifestText) return null;
         try { return JSON.parse(ctx.manifestText); } catch { return null; }
       })();

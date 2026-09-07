@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// writeManifest publishes a refs.json (refname → sha) exactly as putSiteManifest
+// writeManifest publishes a refs.json (refname → sha) the way publishRefManifest
 // does (plain JSON, no compression).
 func writeManifest(t *testing.T, client *Client, claims map[string]string) {
 	t.Helper()
@@ -19,7 +19,7 @@ func writeManifest(t *testing.T, client *Client, claims map[string]string) {
 	if err != nil {
 		t.Fatalf("marshal manifest: %v", err)
 	}
-	if err := client.Put(siteManifestKey, data); err != nil {
+	if err := client.Put(bucketRefsKey, data); err != nil {
 		t.Fatalf("put manifest: %v", err)
 	}
 }
@@ -44,7 +44,7 @@ func TestRefsVerify_NoPerRefGETOnConsistentManifest(t *testing.T) {
 			t.Errorf("ref %s: got %q want %q", ref, got[ref], sha)
 		}
 	}
-	if n := bucket.getCount(siteManifestKey); n != 1 {
+	if n := bucket.getCount(bucketRefsKey); n != 1 {
 		t.Errorf("refs.json GETs = %d, want exactly 1", n)
 	}
 	for ref := range want {

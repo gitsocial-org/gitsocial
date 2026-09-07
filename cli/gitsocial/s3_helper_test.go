@@ -515,10 +515,10 @@ func TestS3Helper_pushReportsBeforeSiteMaintenance(t *testing.T) {
 
 	fixture := &s3Fixture{bucket: "report-bucket", objects: map[string][]byte{}, unblock: make(chan struct{})}
 	// Mark the bucket as site-enabled so post-push maintenance runs, and freeze
-	// its first write (the refs manifest) so maintenance cannot progress.
+	// its ref advertisement write so maintenance cannot progress.
 	fixture.putObject("myrepo/.gitsocial/site/version", []byte("test\n"))
 	fixture.mu.Lock()
-	fixture.blockKey = "myrepo/.gitsocial/site/refs.json"
+	fixture.blockKey = "myrepo/info/refs"
 	fixture.mu.Unlock()
 	server := httptest.NewServer(fixture)
 	defer server.Close()
@@ -1149,8 +1149,18 @@ func TestS3Helper_realBucket(t *testing.T) {
 	if !ok {
 		region = "us-east-1"
 	}
+	// The cleanup client signs with an env pair (the credentials file is not
+	// consulted here), so an incomplete pair skips rather than leaking test keys.
+	access, secret := os.Getenv("GITSOCIAL_S3_ACCESS_KEY"), os.Getenv("GITSOCIAL_S3_SECRET_KEY")
+	if access == "" || secret == "" {
+		access, secret = os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY")
+	}
+	if access == "" || secret == "" {
+		t.Skip("set GITSOCIAL_S3_ACCESS_KEY + GITSOCIAL_S3_SECRET_KEY (or the AWS_* pair) in env for the real-bucket cleanup")
+	}
 	client, err := objstore.NewClient(objstore.Config{
 		Endpoint: "https://" + host, Region: region, Bucket: bucket,
+		AccessKey: access, SecretKey: secret,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -1,53 +1,61 @@
-// client_test.go - Credential resolution tests
+// client_test.go - Client credential modes
 package objstore
 
 import (
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 )
 
-func TestNewClient_credentialPrecedence(t *testing.T) {
-	t.Setenv("AWS_ACCESS_KEY_ID", "aws-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
+// TestNewClient_credentialModes pins the three ways a config resolves: a full
+// pair signs, no pair reads unsigned, half a pair is a typo. The env vars are
+// set to show NewClient ignores them; resolveCredentials is the one resolver.
+func TestNewClient_credentialModes(t *testing.T) {
 	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "gs-key")
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "gs-secret")
+	t.Setenv("AWS_ACCESS_KEY_ID", "aws-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
 
-	client, err := NewClient(Config{Bucket: "b"})
+	client, err := NewClient(Config{Bucket: "b", AccessKey: "explicit", SecretKey: "explicit-secret"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.cfg.AccessKey != "gs-key" || client.cfg.SecretKey != "gs-secret" {
-		t.Errorf("creds = (%s, %s), want the GITSOCIAL_S3_* overrides", client.cfg.AccessKey, client.cfg.SecretKey)
+	if client.cfg.AccessKey != "explicit" || client.Anonymous() {
+		t.Errorf("creds = %q, anonymous = %v; want the config pair, signed", client.cfg.AccessKey, client.Anonymous())
 	}
 
-	// Explicit config still wins over both.
-	client, err = NewClient(Config{Bucket: "b", AccessKey: "explicit", SecretKey: "explicit-secret"})
+	// No credentials in the config is anonymous, not an error: an unsigned client
+	// reads a bucket that grants public GetObject. Writes name the missing pairs.
+	client, err = NewClient(Config{Bucket: "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.cfg.AccessKey != "explicit" {
-		t.Errorf("explicit config overridden by env: %s", client.cfg.AccessKey)
+	if !client.Anonymous() {
+		t.Error("client with no credentials in its config is not anonymous")
+	}
+	_, err = client.do(http.MethodPut, "k", nil, []byte("x"), nil)
+	if !errors.Is(err, ErrCredentialsRequired) || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
+		t.Errorf("anonymous write error = %v, want it to name both variable sets", err)
+	}
+
+	// Half a pair is a typo, not a request for anonymous access.
+	if _, err = NewClient(Config{Bucket: "b", AccessKey: "only-access"}); !errors.Is(err, ErrCredentialsRequired) {
+		t.Errorf("half credential pair error = %v, want ErrCredentialsRequired", err)
 	}
 }
 
-func TestNewClient_credentialFallbackAndError(t *testing.T) {
-	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "")
-	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "")
-	t.Setenv("AWS_ACCESS_KEY_ID", "aws-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
-
-	client, err := NewClient(Config{Bucket: "b"})
+// TestClientForRemote_strayHalfPairStaysAnonymous pins that a lone AWS_* variable
+// exported for other tooling leaves an anonymous read anonymous.
+func TestClientForRemote_strayHalfPairStaysAnonymous(t *testing.T) {
+	clearCredentialEnv(t)
+	setCredentialsFile(t, "")
+	t.Setenv("AWS_ACCESS_KEY_ID", "stray")
+	client, _, _, err := clientForRemote("s3://s3.example.com/bucket/repo", HelperEnv{})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("clientForRemote: %v", err)
 	}
-	if client.cfg.AccessKey != "aws-key" {
-		t.Errorf("fallback creds = %s, want the AWS_* pair", client.cfg.AccessKey)
-	}
-
-	t.Setenv("AWS_ACCESS_KEY_ID", "")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
-	_, err = NewClient(Config{Bucket: "b"})
-	if err == nil || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
-		t.Errorf("missing-credentials error = %v, want it to name both variable sets", err)
+	if !client.Anonymous() {
+		t.Error("a stray half env pair must leave the client anonymous")
 	}
 }

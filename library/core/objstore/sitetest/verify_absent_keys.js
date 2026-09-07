@@ -4,7 +4,7 @@
 // more than the page they are part of.
 //
 // Three cases, each with a source of truth the page already holds:
-//   - an extension branch absent from .gitsocial/site/refs.json. The manifest is
+//   - an extension branch absent from .gitsocial/refs.json. The manifest is
 //     the fast path and NOT proof of absence — it is written best-effort by
 //     whichever pusher last succeeded, so treating its silence as authoritative
 //     would make a whole extension branch read as empty forever, with no error
@@ -57,7 +57,7 @@ async function main() {
   await drain(); // the auto-run init home route
 
   // ---- 1. an ext branch the manifest omits costs one probe per context ----
-  const listed = JSON.parse(await GS.fetchText(TD, ".gitsocial/site/refs.json"));
+  const listed = JSON.parse(await GS.fetchText(TD, ".gitsocial/refs.json"));
   const absent = Object.values(GS.EXT_BRANCHES).filter((r) => !listed[r]);
   const present = Object.values(GS.EXT_BRANCHES).filter((r) => listed[r]);
   ok("the fixture has an extension branch its manifest omits", absent.length > 0, "all " + present.length + " listed");

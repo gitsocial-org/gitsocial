@@ -45,7 +45,7 @@ async function checkPartialServable(base, label) {
   ok(label + ": manifest is a valid newest-first prefix", manifest && prefixContiguous(manifest));
   const cursor = await fetchJSON(base, ".gitsocial/site/items/social/cursor.json");
   ok(label + ": a bootstrap cursor is present", cursor && cursor.version === 4 && /^[0-9a-f]{40}$/.test(cursor.oldestIndexed || ""), JSON.stringify(cursor && { v: cursor.version }));
-  const refs = await fetchJSON(base, ".gitsocial/site/refs.json");
+  const refs = await fetchJSON(base, ".gitsocial/refs.json");
   const tip = refs && refs["refs/heads/gitmsg/social"];
   ok(label + ": manifest tip = branch tip", manifest && tip && manifest.tip === tip, "manifest=" + (manifest && manifest.tip) + " ref=" + tip);
   const bodies = await fetchJSON(base, ".gitsocial/site/bodies/social/manifest.json");

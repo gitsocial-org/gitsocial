@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +25,84 @@ const (
 	genDir   = "/.gen/"
 	genWidth = 10 // zero-padded decimal; ~10 updates/s for 30 years before overflow
 )
+
+// bucketRefsKey holds refname → sha for the whole bucket, the ref source for a
+// reader without ListBucket (git through the helper, or the browser).
+// legacySiteManifestKey is its pre-manifest site copy: read as a fallback, never written.
+const (
+	bucketRefsKey         = ".gitsocial/refs.json"
+	legacySiteManifestKey = ".gitsocial/site/refs.json"
+)
+
+// publishRefManifest writes refs as the ref manifest, in etag mode conditional
+// on etag ("" = absent), and returns the new ETag. ErrPreconditionFailed means
+// the document moved, so the caller re-derives refs and tries again. An empty
+// mode reads the bucket's marker.
+func publishRefManifest(client *Client, prefix, mode string, refs map[string]string, etag string) (string, error) {
+	if mode == "" {
+		var err error
+		if mode, err = readRefModeMarker(client, prefix); err != nil {
+			return "", err
+		}
+	}
+	data, err := json.Marshal(refs)
+	if err != nil {
+		return "", fmt.Errorf("marshal ref manifest: %w", err)
+	}
+	if mode == refModeGeneration {
+		return "", withRetry(func() error { return putObject(client, prefix, bucketRefsKey, data, "application/json") })
+	}
+	newETag, err := putRefManifestConditional(client, prefix+bucketRefsKey, data, etag)
+	if err != nil && !errors.Is(err, ErrPreconditionFailed) {
+		return "", fmt.Errorf("upload %s: %w", bucketRefsKey, err)
+	}
+	return newETag, err
+}
+
+// rebuildRefManifest republishes the manifest from a fresh listing, leaving a
+// matching one alone, and returns the refs. The ETag is read before the listing,
+// so a manifest written between the two fails the write instead of hiding a ref.
+func rebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
+	for attempt := 0; attempt < maxCASRetries; attempt++ {
+		stored, etag, err := readClaimsWithETag(client, prefix+bucketRefsKey)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		refs, err := readRemoteRefsProgress(client, prefix, progress)
+		if err != nil {
+			return nil, fmt.Errorf("read refs: %w", err)
+		}
+		if stored != nil && maps.Equal(stored, refs) {
+			return refs, nil
+		}
+		if _, err = publishRefManifest(client, prefix, "", refs, etag); err == nil {
+			return refs, nil
+		} else if !errors.Is(err, ErrPreconditionFailed) {
+			return nil, err
+		}
+	}
+	return nil, fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
+}
+
+// putRefManifestConditional writes the manifest only while the key still carries
+// etag, or (empty etag) only while it is still absent, and returns the new ETag.
+func putRefManifestConditional(client *Client, key string, data []byte, etag string) (string, error) {
+	headers := map[string]string{"Content-Type": "application/json", "If-Match": etag}
+	if etag == "" {
+		headers = map[string]string{"Content-Type": "application/json", "If-None-Match": "*"}
+	}
+	var newETag string
+	err := withRetry(func() error {
+		resp, err := client.do(http.MethodPut, key, nil, data, headers)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+		newETag = resp.Header.Get("ETag")
+		return nil
+	})
+	return newETag, err
+}
 
 // genKey builds the bucket key for one generation of a ref.
 func genKey(prefix, refName string, gen uint64) string {
@@ -90,6 +170,9 @@ func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) 
 // Buckets with no refs.json (a plain git remote) skip the optimization entirely.
 func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	listed, err := client.ListWithETags(prefix + "refs/")
+	if errors.Is(err, ErrAccessDenied) {
+		return readRefsWithoutListing(client, prefix, progress)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("list remote refs: %w", err)
 	}
@@ -106,7 +189,10 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 			chains[refName] = gen
 		}
 	}
-	manifest := readManifestClaims(client, prefix)
+	manifest, found := readClaimsDoc(client, prefix+bucketRefsKey)
+	if !found {
+		manifest, _ = readClaimsDoc(client, prefix+legacySiteManifestKey)
+	}
 	// Resolve plain refs that the manifest+ETag prove up front; only the
 	// unverified remainder becomes GET jobs.
 	out := map[string]string{}
@@ -151,22 +237,118 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 	return out, nil
 }
 
-// readManifestClaims fetches the site refs.json manifest (refname → sha) so the
-// caller can ETag-verify plain refs without a per-ref GET. It returns nil (never
-// an error) when the manifest is absent (a plain git remote, no site) or
-// unreadable: the manifest is only an optimization input, and every claim is
-// still ETag-verified before use, so a bad manifest degrades to a full GET, never
-// a wrong value.
-func readManifestClaims(client *Client, prefix string) map[string]string {
-	data, err := client.GetRetry(prefix + siteManifestKey)
+// readRefsWithoutListing discovers refs for a reader that cannot list: a
+// push-maintained document supplies the names, and in etag mode each name's own
+// key its value; a generation chain has no such key, so there the claim is the value.
+func readRefsWithoutListing(client *Client, prefix string, progress Progress) (map[string]string, error) {
+	claims, found := readRefClaims(client, prefix)
+	if !found {
+		return nil, noRefSourceError(client, prefix)
+	}
+	mode, err := readRefModeMarker(client, prefix)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	claimWins := mode == refModeGeneration
+	names := make([]string, 0, len(claims))
+	for refName := range claims {
+		names = append(names, refName)
+	}
+	refs := readRefJobs(len(names), progress, func(ctx context.Context, refName string) (string, string, error) {
+		if claimWins {
+			return refName, claims[refName], nil
+		}
+		value, err := withReadRetry(ctx, func() ([]byte, error) { return client.Get(prefix + refName) })
+		if errors.Is(err, ErrNotFound) {
+			return refName, "", nil // deleted since the document was written
+		}
+		if err != nil {
+			return "", "", fmt.Errorf("read ref %s: %w", refName, err)
+		}
+		sha, err := refSHA(refName, value)
+		return refName, sha, err
+	}, names)
+	if refs.err != nil {
+		return nil, refs.err
+	}
+	for refName, sha := range refs.out {
+		if sha == "" {
+			delete(refs.out, refName)
+		}
+	}
+	return refs.out, nil
+}
+
+// readRefClaims returns the first ref document the bucket publishes, freshest
+// source first: bucketRefsKey, info/refs, then the pre-manifest site copy, which
+// older pushes rewrote only while the site was published. found=false means none
+// is there; a document that is present and empty is found, with no refs.
+func readRefClaims(client *Client, prefix string) (map[string]string, bool) {
+	if claims, found := readClaimsDoc(client, prefix+bucketRefsKey); found {
+		return claims, true
+	}
+	if claims, found := readInfoRefsClaims(client, prefix); found {
+		return claims, true
+	}
+	return readClaimsDoc(client, prefix+legacySiteManifestKey)
+}
+
+// noRefSourceError diagnoses a bucket publishing no ref document: a readable
+// ref-mode marker or HEAD means a bucket last pushed by an older gitsocial,
+// neither readable means the bucket is private to this reader or still empty.
+func noRefSourceError(client *Client, prefix string) error {
+	for _, key := range []string{refModeKey, "HEAD"} {
+		_, err := client.Get(prefix + key)
+		if err == nil {
+			return fmt.Errorf("bucket denies listing and publishes no ref manifest: ask its owner to push once with a current gitsocial, or use credentials carrying s3:ListBucket (`gitsocial config credentials set <remote>`)")
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return fmt.Errorf("read %s: %w", key, err)
+		}
+	}
+	if client.Anonymous() {
+		return fmt.Errorf("%w: every read was denied, so the bucket is private or nothing has been pushed to it yet", ErrCredentialsRequired)
+	}
+	return fmt.Errorf("the credentials for this remote can neither list the bucket nor read its refs: the bucket is empty, or the key lacks s3:GetObject and s3:ListBucket")
+}
+
+// readRefModeMarker returns the bucket's recorded ref mode, "" when no push has
+// pinned one yet.
+func readRefModeMarker(client *Client, prefix string) (string, error) {
+	value, err := client.Get(prefix + refModeKey)
+	if errors.Is(err, ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read ref-mode marker: %w", err)
+	}
+	mode := strings.TrimSpace(string(value))
+	if mode != refModeETag && mode != refModeGeneration {
+		return "", fmt.Errorf("unrecognized ref mode %q in bucket marker (written by a newer gitsocial or a foreign tool?)", mode)
+	}
+	return mode, nil
+}
+
+// readClaimsDoc reads one refname → sha JSON document. found=false means the key
+// is absent or unreadable; a present empty document is found with zero refs.
+func readClaimsDoc(client *Client, key string) (map[string]string, bool) {
+	claims, _, err := readClaimsWithETag(client, key)
+	return claims, err == nil && claims != nil
+}
+
+// readClaimsWithETag is readClaimsDoc plus the stored ETag a conditional rewrite
+// compares against. A present document that does not parse is nil claims with
+// its ETag and no error, so a rewrite can still replace it.
+func readClaimsWithETag(client *Client, key string) (map[string]string, string, error) {
+	data, etag, err := client.GetWithETag(key)
+	if err != nil {
+		return nil, "", err
 	}
 	var claims map[string]string
 	if json.Unmarshal(data, &claims) != nil {
-		return nil
+		return nil, etag, nil
 	}
-	return claims
+	return claims, etag, nil
 }
 
 // etagMatchesRef reports whether a listing ETag proves a plain ref holds sha:

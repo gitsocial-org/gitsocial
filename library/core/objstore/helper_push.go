@@ -70,8 +70,13 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		}
 		fmt.Fprint(w, "\n")
 	}
-	// Resolve how this bucket stores refs before any write — a bucket that
-	// can't CAS at all is rejected loudly rather than racing silently.
+	// No credentials, so every write below would be refused one object at a time.
+	if h.client.Anonymous() {
+		failAll(ErrCredentialsRequired)
+		return nil
+	}
+	// Resolve how this bucket stores refs before any write: a bucket that
+	// cannot CAS at all is rejected up front rather than racing silently.
 	if err := h.resolveRefMode(); err != nil {
 		failAll(err)
 		return nil
@@ -83,7 +88,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	}
 
 	branchPushed := ""
-	refsMoved := false
+	updates := map[string]string{}   // dst -> new sha ("" = deleted)
 	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
 	// The writes run concurrently, the bookkeeping does not: each command targets
 	// its own key (no two commands in a batch share a write target), so the CAS
@@ -104,7 +109,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		}
 		sha := shas[i]
 		fmt.Fprintf(w, "ok %s\n", cmd.dst)
-		refsMoved = true
+		updates[cmd.dst] = sha
 		if h.remoteRefs != nil {
 			if cmd.src == "" {
 				delete(h.remoteRefs, cmd.dst)
@@ -138,7 +143,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 			return err
 		}
 	}
-	h.postPushMaintenance(branchPushed, refsMoved, extPushed)
+	h.postPushMaintenance(branchPushed, updates, extPushed)
 	return nil
 }
 
@@ -147,7 +152,18 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 // static read surface's artifacts. It runs only AFTER the push report has been
 // flushed to git (see push): none of this is part of git's ref-update contract,
 // so a slow or failed maintenance pass must never delay or fail the push itself.
-func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, extPushed map[string]string) {
+func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPushed map[string]string) {
+	// The manifest follows every ref-moving transfer, deferred or not: a later
+	// transfer in the same run may move nothing and never reach the maintenance
+	// below. manifestOK withholds the site marker, which is keyed on the refs digest.
+	refsMoved := len(updates) > 0
+	manifestOK := true
+	if refsMoved {
+		if err := h.publishRefManifest(updates); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: ref manifest: %v\n", err)
+			manifestOK = false
+		}
+	}
 	// A gitsocial push is several git pushes in a row (code branches, tags, data
 	// branches, state refs) and every one of them lands here, so the same ref
 	// listing, HEAD check, sealing pass and site refresh would run four or five
@@ -179,16 +195,18 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 		return
 	}
 	// The refs the bucket now carries drive both the dumb-HTTP transport surface
-	// and the site read artifacts; read them once. Best-effort — a read failure
-	// only skips this push's maintenance, never the git push itself.
-	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
+	// and the site read artifacts; every step of the pass reads this one view.
+	// Best-effort — a read failure only skips this push's maintenance, never the
+	// git push itself.
+	if h.remoteRefs == nil {
+		refs, err := readRemoteRefs(h.client, h.prefix)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: post-push maintenance: %v\n", err)
 			return
 		}
+		h.remoteRefs = refs
 	}
+	refs := h.remoteRefs
 	// One local commit source serves the whole maintenance pass: the transport
 	// rewrite (the local odb peels an annotated tag whose bucket copy is packed)
 	// and every config-commit read below, which prefers the local odb over a
@@ -250,9 +268,6 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion, h.override)
 	}
 	shellUploaded := false
-	// manifestOK gates the marker below: the manifest is the read surface's only
-	// listing, and the marker is what decides whether a later push rewrites it.
-	manifestOK := true
 	if !upToDate {
 		// Shell first (creation on a guard-enabled bucket, or the self-refresh to
 		// this binary's embedded version), so a reader never sees data artifacts
@@ -261,7 +276,6 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 		if shellUploaded, err = ensureSiteShell(h.client, h.prefix); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
 		}
-		manifestOK = h.writeSiteManifest()
 		h.writeSitePMConfig(src)
 		h.writeSiteCustomization(src)
 	}
@@ -288,10 +302,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	// when a shell-upload reclaim of index.html FAILED: sitePagesState inspects the
 	// manifest/tips, not index.html's content, so a stamped marker would let the
 	// next push skip and leave index.html stranded as the embedded shell. And
-	// withheld when the refs manifest did not land, for the same reason: the
-	// marker is keyed on the refs digest, so stamping it would make every later
-	// push with these refs skip the rewrite and leave the site's only listing
-	// describing an older ref set.
+	// withheld when the refs manifest did not land (manifestOK above).
 	if !upToDate && reclaimOK && manifestOK {
 		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override, src)
 		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
@@ -300,49 +311,12 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, refsMoved bool, 
 	}
 }
 
-// writeSiteManifest publishes refname → sha as the site refs manifest after
-// every push, so the static read surface discovers refs without bucket listing
-// (public domains don't expose it) and resolves generation-mode refs. It reports
-// whether the manifest on the bucket now describes these refs.
-//
-// The caller must withhold the skip marker when it does not. The write itself is
-// still best-effort (a failed manifest never fails a push), but it does NOT
-// degrade only "until the next push": the marker is keyed on the refs digest, so
-// stamping it after a failed write makes every later push with the same refs
-// skip this block entirely, and the manifest stays stale until refs happen to
-// move again. On a quiet repo that is indefinite, and the symptom is silent — a
-// refname the manifest omits reads as an empty extension branch, which is why
-// the browser probes an omitted refname rather than trusting the omission
-// (gs-core.js refTip).
-func (h *remoteHelper) writeSiteManifest() bool {
-	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
-			return false
-		}
-	}
-	if err := putSiteManifest(h.client, h.prefix, refs); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site manifest: %v\n", err)
-		return false
-	}
-	return true
-}
-
 // writeSitePMConfig publishes the resolved PM board config after every push, so
 // the static site's board honors the repo's refs/gitmsg/pm/config. Best-effort,
 // same contract as the manifest: a failure only leaves the board on the kanban
 // default until the next push.
 func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
-			return
-		}
-	}
 	if err := writeSitePMConfig(h.client, h.prefix, refs, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
 	}
@@ -354,13 +328,6 @@ func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 // the site on its built-in defaults until the next push.
 func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
 	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
-			return
-		}
-	}
 	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
 	}
@@ -445,19 +412,44 @@ func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localC
 // post-push state) and the pushing repo's HEAD. Best-effort, same contract.
 func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
 	refs := h.remoteRefs
-	if refs == nil {
-		var err error
-		if refs, err = readRemoteRefs(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: code index refs: %v\n", err)
-			return
-		}
-	}
 	defaultBranch := strings.TrimPrefix(localDefaultBranchRef(), "refs/heads/")
 	tips := codeBranchTips(refs, defaultBranch)
 	sp := &siteProgress{progress: h.progress, ext: siteCodeExt, src: src}
 	if err := updateSiteCodeIndex(h.client, h.prefix, tips, defaultBranch, sp); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: code index: %v\n", err)
 	}
+}
+
+// publishRefManifest writes the helper's ref view as the manifest after a push.
+// When the document moved since list, the view is re-derived from a listing with
+// this batch's own updates laid over it, so a pusher that cannot list keeps its refs.
+func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
+	for attempt := 0; attempt < maxCASRetries; attempt++ {
+		etag, err := publishRefManifest(h.client, h.prefix, h.refMode, h.remoteRefs, h.manifestETag)
+		if err == nil {
+			h.manifestETag = etag
+			return nil
+		}
+		if !errors.Is(err, ErrPreconditionFailed) {
+			return err
+		}
+		if _, h.manifestETag, err = readClaimsWithETag(h.client, h.prefix+bucketRefsKey); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		refs, err := readRemoteRefs(h.client, h.prefix)
+		if err != nil {
+			return fmt.Errorf("read refs: %w", err)
+		}
+		for ref, sha := range updates {
+			if sha == "" {
+				delete(refs, ref)
+			} else {
+				refs[ref] = sha
+			}
+		}
+		h.remoteRefs = refs
+	}
+	return fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
 }
 
 // maxCASRetries bounds the read-check-write loop; contention on GitSocial's
@@ -703,7 +695,7 @@ func (h *remoteHelper) resolveRefMode() error {
 	if h.refMode != "" {
 		return nil
 	}
-	mode, err := h.readRefModeMarker()
+	mode, err := readRefModeMarker(h.client, h.prefix)
 	if err != nil {
 		return err
 	}
@@ -720,22 +712,6 @@ func (h *remoteHelper) resolveRefMode() error {
 	}
 	h.refMode = mode
 	return nil
-}
-
-// readRefModeMarker fetches the bucket's recorded ref mode ("" when absent).
-func (h *remoteHelper) readRefModeMarker() (string, error) {
-	value, err := h.client.Get(h.prefix + refModeKey)
-	if errors.Is(err, ErrNotFound) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("read ref-mode marker: %w", err)
-	}
-	mode := strings.TrimSpace(string(value))
-	if mode != refModeETag && mode != refModeGeneration {
-		return "", fmt.Errorf("unrecognized ref mode %q in bucket marker (written by a newer gitsocial or a foreign tool?)", mode)
-	}
-	return mode, nil
 }
 
 // refModeFromCapability picks the ref mode for a fresh bucket, probing the
@@ -823,7 +799,7 @@ func (h *remoteHelper) probeCapability() (Capability, error) {
 func (h *remoteHelper) publishRefMode(mode string) (string, error) {
 	err := h.client.PutIfAbsent(h.prefix+refModeKey, []byte(mode+"\n"))
 	if errors.Is(err, ErrPreconditionFailed) {
-		existing, err := h.readRefModeMarker()
+		existing, err := readRefModeMarker(h.client, h.prefix)
 		if err != nil {
 			return "", err
 		}
@@ -1229,16 +1205,13 @@ func uploadEncodedObjects(client *Client, prefix string, concurrency, total int,
 	return firstErr
 }
 
-// putObjectWithRetry retries a failed object PUT so a transient fault (a
-// killed connection, a throttle) costs one retried object instead of failing
-// the whole push — objects are content-addressed, so re-PUTs are idempotent.
-// Persistent failures still surface after the attempts run out, and the pool
-// context aborts the wait when a peer has already failed the push. It shares
-// retryBackoff (client.go) with the read retries.
+// putObjectWithRetry retries an object PUT past a transient fault, so a killed
+// connection costs one retried object rather than the push. Objects are
+// content-addressed, so a re-PUT is idempotent; a refusal surfaces at once.
 func putObjectWithRetry(ctx context.Context, client *Client, key string, body []byte) error {
 	var err error
 	for attempt := 0; ; attempt++ {
-		if err = client.Put(key, body); err == nil || attempt >= len(retryBackoff) {
+		if err = client.Put(key, body); err == nil || attempt >= len(retryBackoff) || !isTransientFault(err) {
 			return err
 		}
 		select {

@@ -27,21 +27,20 @@ type Config struct {
 
 // Client is a minimal S3 client over stdlib HTTP + SigV4.
 type Client struct {
-	cfg  Config
-	http *http.Client
+	cfg       Config
+	http      *http.Client
+	anonymous bool // no credentials: unsigned, read-only
 }
 
-// NewClient builds a client. Credentials resolve from GITSOCIAL_S3_ACCESS_KEY /
-// GITSOCIAL_S3_SECRET_KEY first (so a non-AWS bucket never silently picks up
-// real AWS credentials exported for other tooling), then fall back to the
-// S3-ecosystem-standard AWS env vars.
+// Anonymous reports whether the client has no credentials, so callers can name
+// the reason a write is impossible before attempting one.
+func (c *Client) Anonymous() bool { return c.anonymous }
+
+// NewClient builds a client from a resolved config. Credentials come from the
+// caller (resolveCredentials is the one resolver, see credentials.go); a config
+// carrying neither half builds an anonymous client: unsigned, read-only, for a
+// bucket granting public GetObject.
 func NewClient(cfg Config) (*Client, error) {
-	if cfg.AccessKey == "" {
-		cfg.AccessKey = firstEnv("GITSOCIAL_S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID")
-	}
-	if cfg.SecretKey == "" {
-		cfg.SecretKey = firstEnv("GITSOCIAL_S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY")
-	}
 	if cfg.Region == "" {
 		cfg.Region = "us-east-1"
 	}
@@ -51,10 +50,15 @@ func NewClient(cfg Config) (*Client, error) {
 	if cfg.Bucket == "" {
 		return nil, fmt.Errorf("objstore: bucket required")
 	}
-	if cfg.AccessKey == "" || cfg.SecretKey == "" {
-		return nil, fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
+	// Half a pair is a typo, not a request for anonymous access.
+	if (cfg.AccessKey == "") != (cfg.SecretKey == "") {
+		return nil, ErrCredentialsRequired
 	}
-	return &Client{cfg: cfg, http: &http.Client{Timeout: 60 * time.Second, Transport: newTransport()}}, nil
+	return &Client{
+		cfg:       cfg,
+		http:      &http.Client{Timeout: 60 * time.Second, Transport: newTransport()},
+		anonymous: cfg.AccessKey == "",
+	}, nil
 }
 
 // newTransport returns an HTTP transport sized for the concurrent push
@@ -68,16 +72,6 @@ func newTransport() *http.Transport {
 	t.MaxIdleConnsPerHost = 64
 	t.MaxConnsPerHost = 128
 	return t
-}
-
-// firstEnv returns the first non-empty value among the named env vars.
-func firstEnv(names ...string) string {
-	for _, name := range names {
-		if v := os.Getenv(name); v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // objectURL builds the request URL for a key (or the bucket root when key is "").
@@ -109,6 +103,12 @@ func (c *Client) objectURL(key string) (*url.URL, error) {
 var (
 	ErrNotFound           = fmt.Errorf("objstore: not found")
 	ErrPreconditionFailed = fmt.Errorf("objstore: precondition failed")
+	// ErrAccessDenied is a 403 on a read. It wraps ErrNotFound because a bucket
+	// that denies listing answers 403 for absent keys too, so the two are one
+	// fact to a reader without s3:ListBucket; ref discovery matches it to fall back.
+	ErrAccessDenied = fmt.Errorf("%w (access denied)", ErrNotFound)
+	// ErrCredentialsRequired replaces the 403 an unsigned write would earn.
+	ErrCredentialsRequired = fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
 )
 
 // httpStatusError carries a non-2xx HTTP status code so callers (the GET retry)
@@ -124,22 +124,20 @@ type httpStatusError struct {
 func (e *httpStatusError) Error() string { return e.err.Error() }
 func (e *httpStatusError) Unwrap() error { return e.err }
 
-// isTransientFault reports whether a failed request is worth retrying:
-// a 5xx or 429 status (the provider is momentarily unavailable or throttling —
-// e.g. Cloudflare's transient 503) or a transport-level error with no status
-// (a dropped connection, a DNS/TLS blip). A 404/403/412 or any other 4xx is a
-// definite answer and never retried. GETs are idempotent, so a retry is always
-// safe.
+// isTransientFault reports whether a failed request is worth retrying: a 429 or
+// 5xx status, or a transport-level error carrying no status. A 404, 403, 412,
+// any other 4xx and a refused unsigned write are definite answers.
 func isTransientFault(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPreconditionFailed) {
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPreconditionFailed) || errors.Is(err, ErrCredentialsRequired) {
 		return false
 	}
 	var se *httpStatusError
 	if errors.As(err, &se) {
-		return se.code == 429 || (se.code >= 500 && se.code <= 599)
+		// AWS answers a stalled upload with a 400 it documents as retryable.
+		return se.code == 429 || (se.code >= 500 && se.code <= 599) || (se.code == 400 && strings.Contains(se.err.Error(), "RequestTimeout"))
 	}
 	// No HTTP status reached us: a transport-level failure (connection reset,
 	// timeout, DNS). Idempotent read, so retry.
@@ -147,6 +145,10 @@ func isTransientFault(err error) bool {
 }
 
 func (c *Client) do(method, key string, query url.Values, body []byte, headers map[string]string) (*http.Response, error) {
+	// Refuse an unsigned write here, so the caller reports the cause not a 403.
+	if c.anonymous && method != http.MethodGet && method != http.MethodHead {
+		return nil, ErrCredentialsRequired
+	}
 	u, err := c.objectURL(key)
 	if err != nil {
 		return nil, err
@@ -184,7 +186,9 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 		if method == http.MethodPut && req.Header.Get("Cache-Control") == "" {
 			req.Header.Set("Cache-Control", cacheControlForKey(key))
 		}
-		signRequest(req, c.cfg.AccessKey, c.cfg.SecretKey, c.cfg.Region, "s3", payloadHash, time.Now())
+		if !c.anonymous {
+			signRequest(req, c.cfg.AccessKey, c.cfg.SecretKey, c.cfg.Region, "s3", payloadHash, time.Now())
+		}
 		if debug {
 			fmt.Fprintf(os.Stderr, "objstore> %s %s\n", method, u.String())
 			for name, values := range req.Header {
@@ -212,6 +216,17 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 	if resp.StatusCode == http.StatusNotFound {
 		resp.Body.Close()
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, key)
+	}
+	// See ErrAccessDenied: a no-listing bucket spells "absent" as 403. A signed
+	// reader folds only a denial, so a rejected credential keeps its error code;
+	// a denied write stays a hard error, so a CAS or delete never reads as success.
+	if resp.StatusCode == http.StatusForbidden && (method == http.MethodGet || method == http.MethodHead) {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		if c.anonymous || method == http.MethodHead || strings.Contains(string(respBody), "AccessDenied") {
+			return nil, fmt.Errorf("%w: %s", ErrAccessDenied, key)
+		}
+		return nil, &httpStatusError{code: resp.StatusCode, err: fmt.Errorf("objstore: %s %s: HTTP 403: %s", method, key, strings.TrimSpace(string(respBody)))}
 	}
 	// 412 = failed If-Match / If-None-Match; 409 = AWS's concurrent
 	// conditional-write conflict. Both mean "re-read and retry" to a CAS caller.

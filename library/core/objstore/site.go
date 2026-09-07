@@ -21,10 +21,6 @@ var siteFiles embed.FS
 
 // Site state keys under the dot-prefixed namespace no git ref can collide with.
 const (
-	// siteManifestKey is the push-maintained refs manifest (refname → sha) the
-	// static site reads instead of listing the bucket (public domains don't
-	// expose listing, and generation-mode refs can't be resolved without it).
-	siteManifestKey = ".gitsocial/site/refs.json"
 	// siteVersionKey records the hash of the shipped site files so pushes can
 	// skip the refresh when the bucket's copy is already current.
 	siteVersionKey = ".gitsocial/site/version"
@@ -250,20 +246,6 @@ func readSiteDefaultBranch(client *Client, prefix string) string {
 	return strings.TrimPrefix(strings.TrimSpace(ref), "refs/heads/")
 }
 
-// putSiteManifest writes the refname → sha map as the site refs manifest.
-func putSiteManifest(client *Client, prefix string, refs map[string]string) error {
-	data, err := json.Marshal(refs)
-	if err != nil {
-		return fmt.Errorf("marshal site manifest: %w", err)
-	}
-	resp, err := client.do(http.MethodPut, prefix+siteManifestKey, nil, data, map[string]string{"Content-Type": "application/json"})
-	if err != nil {
-		return fmt.Errorf("upload %s: %w", siteManifestKey, err)
-	}
-	resp.Body.Close()
-	return nil
-}
-
 // SetRemoteHead points the bucket's HEAD symref at the given branch, so git
 // clone and the browser code view use the repo's real default branch (e.g.
 // "master") rather than an assumed "main" or whatever branch happened to be
@@ -381,12 +363,11 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	if err := uploadSiteFiles(client, prefix); err != nil {
 		return false, err
 	}
-	refs, err := readRemoteRefsProgress(client, prefix, progress)
+	// The manifest is the site's listing of the bucket; publishing it here also
+	// heals one an interrupted push left behind.
+	refs, err := rebuildRefManifest(client, prefix, progress)
 	if err != nil {
-		return false, fmt.Errorf("read refs for site manifest: %w", err)
-	}
-	if err := putSiteManifest(client, prefix, refs); err != nil {
-		return false, err
+		return false, fmt.Errorf("site manifest: %w", err)
 	}
 	// The explicit site refresh re-derives the read surface from the bucket's
 	// refs; keep the dumb-HTTP transport surface (info/refs + objects/info/packs)

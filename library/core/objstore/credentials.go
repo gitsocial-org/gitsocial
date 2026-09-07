@@ -118,11 +118,11 @@ func HasCredentials(endpointHost string) bool {
 // resolveCredentials returns the key pair to sign requests to an endpoint
 // host, by precedence: the GITSOCIAL_S3_* env pair (explicit override), the
 // credentials-file entry for the host, then the AWS_* env pair. Each tier
-// applies only when both halves are present, so a stray single variable can't
-// mix tiers. Returns empty strings when nothing resolves (the client build
-// then fails with its credentials-required error). A malformed credentials
-// file warns once on stderr and falls through — a broken file must not break
-// pushes that were working off env vars.
+// applies only when both halves are present, so a stray single variable cannot
+// mix tiers. Returns empty strings when nothing resolves, which builds an
+// anonymous client: unsigned, read-only. A malformed credentials file warns once
+// on stderr and falls through, so a broken file does not break a push that was
+// working off env vars.
 func resolveCredentials(endpointHost string) (access, secret string) {
 	if a, s := os.Getenv("GITSOCIAL_S3_ACCESS_KEY"), os.Getenv("GITSOCIAL_S3_SECRET_KEY"); a != "" && s != "" {
 		return a, s

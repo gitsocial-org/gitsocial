@@ -62,7 +62,7 @@ fs.writeFileSync(path.join(bucket, "refs", "heads", "gitmsg", "pm"), pmTip + "\n
 const site = path.join(bucket, ".gitsocial", "site");
 fs.mkdirSync(site, { recursive: true });
 fs.writeFileSync(path.join(bucket, ".gitsocial", "ref-mode"), "etag");
-fs.writeFileSync(path.join(site, "refs.json"), JSON.stringify({
+fs.writeFileSync(path.join(bucket, ".gitsocial", "refs.json"), JSON.stringify({
   "refs/heads/master": masterTip,
   "refs/heads/gitmsg/review": reviewTip,
   "refs/heads/gitmsg/pm": pmTip,

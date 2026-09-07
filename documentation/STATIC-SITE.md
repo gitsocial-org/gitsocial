@@ -145,12 +145,11 @@ Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `
 
 ### Artifacts
 
-Under `.gitsocial/site/`, read by the app in place of object walks:
+Under `.gitsocial/site/`, read by the app in place of object walks, together with the bucket's ref list at `.gitsocial/refs.json` (see [S3.md](S3.md#keys)); a refname that list omits is probed live once per session:
 
 | Key | Content |
 |---|---|
 | `version` | shell version marker, a hash of the raw assets |
-| `refs.json` | the bucket's ref list; a refname it omits is probed live once per session |
 | `items/<ext>/` | per-extension metadata index: immutable brotli shards, a mutable head, a manifest; format 4 |
 | `bodies/<ext>/` | message bodies, loaded on demand; format 4 |
 | `items/code/` | one deduped index of plain commits across code branches, with parent shas; format 5; no bodies |

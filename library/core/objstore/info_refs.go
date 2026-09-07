@@ -213,3 +213,22 @@ func logDumbTransportInfo(client *Client, prefix string, src *localCommitSource,
 		fmt.Fprintf(os.Stderr, "gitsocial s3: dumb-http info: %v\n", err)
 	}
 }
+
+// readInfoRefsClaims reads the ref advertisement as refname → sha, the last
+// listing-free ref source (see readRefsWithoutListing). Peel lines name a tag's
+// target, so they are skipped; found=false when the key is absent (thin buckets).
+func readInfoRefsClaims(client *Client, prefix string) (map[string]string, bool) {
+	body, err := client.GetRetry(prefix + infoRefsKey)
+	if err != nil {
+		return nil, false
+	}
+	claims := map[string]string{}
+	for _, line := range strings.Split(string(body), "\n") {
+		sha, name, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if !ok || len(sha) != 40 || strings.HasSuffix(name, "^{}") {
+			continue
+		}
+		claims[name] = sha
+	}
+	return claims, true
+}

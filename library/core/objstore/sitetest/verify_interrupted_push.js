@@ -39,7 +39,7 @@ async function main() {
     const base = ORIGIN + "/healed-demo/";
     const manifest = await fetchJSON(base, ".gitsocial/site/items/social/manifest.json");
     ok("healed: items manifest restored", manifest !== null && manifest.version === 4, JSON.stringify(manifest && { version: manifest.version }));
-    const refs = await fetchJSON(base, ".gitsocial/site/refs.json");
+    const refs = await fetchJSON(base, ".gitsocial/refs.json");
     const tip = refs && refs["refs/heads/gitmsg/social"];
     ok("healed: manifest tip matches the branch tip", manifest && tip && manifest.tip === tip, "manifest.tip=" + (manifest && manifest.tip) + " ref=" + tip);
     const bodies = await fetchJSON(base, ".gitsocial/site/bodies/social/manifest.json");

@@ -221,7 +221,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const otherIndex = await get(OTHER + "index.html");
   ok("other-demo still carries the SPA shell at index.html", otherIndex.status === 200);
   ok("other-demo index.html is the shell, not a generated front page", !/name="gs-route"/.test(otherIndex.text));
-  ok("other-demo still carries its data artifacts", (await get(OTHER + ".gitsocial/site/refs.json")).status === 200);
+  ok("other-demo still carries its data artifacts", (await get(OTHER + ".gitsocial/refs.json")).status === 200);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/url"
 	"os"
@@ -113,7 +114,8 @@ type remoteHelper struct {
 	fetched        map[string]bool    // object SHAs confirmed present this session
 	capability     Capability         // provider's declared conditional-write support
 	refMode        string             // resolved lazily on first push (refModeETag/refModeGeneration)
-	remoteRefs     map[string]string  // ref state from list, kept current by push for the site manifest
+	remoteRefs     map[string]string  // ref state from list, kept current by push for the maintenance pass
+	manifestETag   string             // the ref manifest as list for-push observed it ("" = absent); bounds remoteRefs' freshness
 	leases         map[string]string  // refname → expected oid ("" = must not exist), recorded by `option cas` (--force-with-lease)
 	progress       Progress           // stderr progress hook (nil = silent)
 	override       SiteOverride       // per-remote site deployment overrides (read from git config)
@@ -215,7 +217,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 		case strings.HasPrefix(line, "option "):
 			fmt.Fprintf(w, "%s\n", h.option(strings.TrimPrefix(line, "option ")))
 		case line == "list", line == "list for-push":
-			if err := h.list(w); err != nil {
+			if err := h.list(w, line == "list for-push"); err != nil {
 				return err
 			}
 		case strings.HasPrefix(line, "push "):
@@ -281,13 +283,29 @@ func (h *remoteHelper) option(spec string) string {
 	return "ok"
 }
 
-// list prints every ref (resolving generation chains) and the HEAD symref.
-func (h *remoteHelper) list(w io.Writer) error {
+// list prints every ref (resolving generation chains) and the HEAD symref. Before
+// a push it also notes the ref manifest's ETag and brings a missing or stale
+// manifest up to this listing, which a push that moves nothing would never do.
+func (h *remoteHelper) list(w io.Writer, forPush bool) error {
 	refs, err := readRemoteRefs(h.client, h.prefix)
 	if err != nil {
 		return err
 	}
 	h.remoteRefs = refs
+	if forPush && !h.client.Anonymous() {
+		stored, etag, err := readClaimsWithETag(h.client, h.prefix+bucketRefsKey)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return fmt.Errorf("read ref manifest: %w", err)
+		}
+		h.manifestETag = etag
+		if stored == nil || !maps.Equal(stored, refs) {
+			if newETag, err := publishRefManifest(h.client, h.prefix, "", refs, etag); err != nil {
+				fmt.Fprintf(os.Stderr, "gitsocial s3: ref manifest: %v\n", err)
+			} else {
+				h.manifestETag = newETag
+			}
+		}
+	}
 	names := make([]string, 0, len(refs))
 	for name := range refs {
 		names = append(names, name)

@@ -47,7 +47,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	if _, ok := readSitePushState(client, ""); !ok {
 		t.Fatal("first push must leave a push-state marker")
 	}
-	manifestPuts := bucket.putCount(siteManifestKey)
+	manifestPuts := bucket.putCount(bucketRefsKey)
 	if manifestPuts == 0 {
 		t.Fatal("first push must have written the refs manifest")
 	}
@@ -56,7 +56,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	// per-ref GET counters before, and assert nothing moves.
 	putsBefore := bucket.totalPuts()
 	socRefGetsBefore := bucket.getCount("refs/heads/gitmsg/social")
-	manifestPutsBefore := bucket.putCount(siteManifestKey)
+	manifestPutsBefore := bucket.putCount(bucketRefsKey)
 	listsBefore := bucket.listCount()
 
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
@@ -73,7 +73,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	if got := bucket.getCount("refs/heads/gitmsg/social"); got != socRefGetsBefore {
 		t.Errorf("second push issued %d per-ref GETs, want 0 (skip)", got-socRefGetsBefore)
 	}
-	if got := bucket.putCount(siteManifestKey); got != manifestPutsBefore {
+	if got := bucket.putCount(bucketRefsKey); got != manifestPutsBefore {
 		t.Errorf("second push rewrote the refs manifest, want a skip")
 	}
 
@@ -83,11 +83,11 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	if err := client.Put("refs/heads/gitmsg/social", []byte(newTip+"\n")); err != nil {
 		t.Fatalf("advance social ref: %v", err)
 	}
-	manifestBefore := bucket.putCount(siteManifestKey)
+	manifestBefore := bucket.putCount(bucketRefsKey)
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("third pushSite: %v", err)
 	}
-	if got := bucket.putCount(siteManifestKey); got == manifestBefore {
+	if got := bucket.putCount(bucketRefsKey); got == manifestBefore {
 		t.Error("third push after a ref change must rewrite the refs manifest (marker invalidated)")
 	}
 }
@@ -133,13 +133,14 @@ func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	if upToDate {
 		t.Fatal("a corrupt marker must never report up-to-date (would skip work wrongly)")
 	}
-	// The full pass must run and rewrite the marker to a valid one.
-	manifestBefore := bucket.putCount(siteManifestKey)
+	// The full pass must run (it re-reads the manifest it left correct, and
+	// rewrites nothing else) and rewrite the marker to a valid one.
+	manifestGetsBefore := bucket.getCount(bucketRefsKey)
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("second pushSite after corruption: %v", err)
 	}
-	if got := bucket.putCount(siteManifestKey); got == manifestBefore {
-		t.Error("push after a corrupt marker must rewrite the refs manifest (full pass)")
+	if got := bucket.getCount(bucketRefsKey); got == manifestGetsBefore {
+		t.Error("push after a corrupt marker must run the full pass")
 	}
 	if _, ok := readSitePushState(client, ""); !ok {
 		t.Fatal("the recovery push must rewrite a valid marker")
