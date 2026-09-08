@@ -267,7 +267,7 @@
      .markdown, .show-more, …) deliberately is NOT restated here — it comes
      from pages-full.css, so the pages render the app's own treatment by
      construction. */
-  :where(#gs-page) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
+  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: 0.2rem 0 0.4rem; }
   :where(#gs-page) p { margin: 1rem 0; }
   :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }

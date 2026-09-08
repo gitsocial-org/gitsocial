@@ -4220,6 +4220,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
+  // LIST_HEADINGS is each list route's heading, the nav label verbatim.
+  const LIST_HEADINGS = { issues: "Issues", milestones: "Milestones", sprints: "Sprints", prs: "Pull Requests", timeline: "Timeline", releases: "Releases", memos: "Memos", commits: "Commits" };
+
+  // listHeading renders a list route's h1.
+  function listHeading(tab) {
+    return el("h1", {}, [LIST_HEADINGS[tab]]);
+  }
+
   // countHead renders a view's total-count line ("42 branches") in the shared
   // section-label voice, one treatment across the branches/tags/releases pages.
   function countHead(n, singular, plural) {
@@ -4427,14 +4435,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   async function commitsView(ctx, page) {
     const r = await loadCommitsPage(ctx, page);
     const wrap = el("div", { class: "detail" }, []);
-    wrap.append(el("div", { class: "subject" }, ["commits"]));
     const bits = r.page > 0
       ? [r.rows.length + " commits", r.branch, "older page " + r.page]
       : [r.total + " commits", r.branch, "newest first"];
     wrap.append(el("div", { class: "meta" }, [bits.filter(Boolean).join(" · ")]));
     if (!r.rows.length) {
       wrap.append(el("div", { class: "empty" }, [r.missing ? "No such commits page." : "No commits on the default branch."]));
-      return [wrap];
+      return [listHeading("commits"), wrap];
     }
     for (const c of r.rows) wrap.append(commitCard(c, r.branch, { id: "c-" + c.short, time: utcDate(c.authorTime), refSha: c.short }));
     const links = [];
@@ -4442,7 +4449,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const older = r.page > 0 ? r.page - 1 : r.sealed;
     if (older > 0) links.push(el("a", { class: "action-link", href: "#/commits/" + older }, ["older →"]));
     if (links.length) wrap.append(el("div", { class: "page-actions" }, links));
-    return [wrap];
+    return [listHeading("commits"), wrap];
   }
 
   // branchLogView renders a branch's commit log, paged: the first WALK_CAP window
@@ -4922,6 +4929,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const readme = findReadme(entries);
     const commitObj = await getObject(ctx, head.sha);
     const latest = commitObj && commitObj.type === "commit" ? parseCommit(head.sha, commitObj.body) : null;
+    const site = await loadSiteCustomization(ctx);
+    if (site && typeof site.description === "string" && site.description.trim()) wrap.append(el("p", { class: "meta" }, [site.description.trim()]));
     const strip = el("div", { class: "meta-strip" }, []);
     strip.append(el("span", { class: "chip" }, [branch]));
     strip.append(el("a", { class: "chip", href: "#/branches" }, [branches.length + (branches.length === 1 ? " branch" : " branches")]));
@@ -5009,6 +5018,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { LIST_HEADINGS, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

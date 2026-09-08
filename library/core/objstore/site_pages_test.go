@@ -355,10 +355,13 @@ func TestSitePages_SealedListOverflow(t *testing.T) {
 	// Sealed AND head list pages carry both autodiscovery links: the global feed
 	// and their own type feed.
 	globalLink := `<link rel="alternate" type="application/atom+xml" title="Pages Test" href="https://example.com/feed.xml">`
-	typeLink := `<link rel="alternate" type="application/atom+xml" title="posts · Pages Test" href="https://example.com/posts/feed.xml">`
+	typeLink := `<link rel="alternate" type="application/atom+xml" title="Timeline · Pages Test" href="https://example.com/posts/feed.xml">`
 	for name, page := range map[string]string{"posts/index.html": head, "posts/1.html": page1} {
 		if !strings.Contains(page, globalLink) || !strings.Contains(page, typeLink) {
 			t.Errorf("%s must carry both the global and type feed autodiscovery links", name)
+		}
+		if !strings.Contains(page, "<h1>Timeline</h1>") {
+			t.Errorf("%s must head with the nav label", name)
 		}
 	}
 	if !strings.Contains(page1, "post number 000") || !strings.Contains(page1, "post number 099") {
@@ -856,6 +859,9 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	if start < 0 {
 		t.Fatal("front page carries no README section")
 	}
+	if strings.Contains(front[:start], "<h1") {
+		t.Error("front page must carry no heading of its own above the README")
+	}
 	readme := front[start : start+strings.Index(front[start:], "</section>")]
 	for _, want := range []string{
 		`<div align="center">`,                     // the hero survives the allowlist
@@ -1200,7 +1206,7 @@ func TestSitePages_TypeFeeds(t *testing.T) {
 	if err := xml.Unmarshal([]byte(issuesFeed), &f); err != nil {
 		t.Fatalf("issues feed not well-formed: %v", err)
 	}
-	if f.ID != "https://example.com/issues/feed.xml" || f.Title != "issues · Pages Test" {
+	if f.ID != "https://example.com/issues/feed.xml" || f.Title != "Issues · Pages Test" {
 		t.Errorf("issues feed identity wrong: id=%q title=%q", f.ID, f.Title)
 	}
 	if feedLink(f, "self") != "https://example.com/issues/feed.xml" || feedLink(f, "alternate") != "https://example.com/issues/index.html" {
@@ -1221,7 +1227,7 @@ func TestSitePages_TypeFeeds(t *testing.T) {
 	}
 
 	// Item pages and the front page carry only the global autodiscovery link.
-	typeLink := `title="issues · Pages Test" href="https://example.com/issues/feed.xml"`
+	typeLink := `title="Issues · Pages Test" href="https://example.com/issues/feed.xml"`
 	if front := getKey(t, client, sitePagesFrontKey); strings.Contains(front, "issues/feed.xml") {
 		t.Error("the front page must carry only the global feed link")
 	}
@@ -1494,10 +1500,11 @@ func TestSitePages_CrawlHygiene(t *testing.T) {
 		}
 	}
 
-	// Empty type lists: generated, sidebar-linked, unsubmitted.
-	for _, dir := range []string{"issues", "prs", "memos"} {
-		if !keyExists(client, dir+"/index.html") {
-			t.Errorf("%s/index.html must still be generated", dir)
+	// Empty type lists: generated, sidebar-linked, unsubmitted, headed with the nav label.
+	for dir, label := range map[string]string{"issues": "Issues", "prs": "Pull Requests", "memos": "Memos"} {
+		page := getKey(t, client, dir+"/index.html")
+		if !strings.Contains(page, "<h1>"+label+"</h1>") || !strings.HasPrefix(pageTitleOf(t, page), label+" · ") {
+			t.Errorf("%s/index.html must head and title with %q", dir, label)
 		}
 		if strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
 			t.Errorf("empty list %s/index.html must stay out of the sitemap", dir)

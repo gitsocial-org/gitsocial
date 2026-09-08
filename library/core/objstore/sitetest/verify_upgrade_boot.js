@@ -599,7 +599,8 @@ async function main() {
     // padding) so the boot and the app that follows read as one design.
     ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*content:\s*"Loading…"[^}]*text-align:\s*center/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
     // The whole point of the no-JS contract: the page still reads.
-    ok("the served page is complete without JS (content in the body as served)", /<h1>/.test(front.text) && /Recent activity/.test(front.text));
+    ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /Recent activity/.test(front.text));
+    ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<p class="meta">README</p>'));
 
     // The cloak is conditional, so the condition is worth RUNNING rather than
     // reading. The script is executed here against a stub document/window for
@@ -819,7 +820,7 @@ async function main() {
   // upgrade visibly swapping one changelog for another.
   {
     const page = await get(base + "commits/index.html");
-    ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>commits<\/h1>/.test(page.text));
+    ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>Commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(page.text));
     // The row leads with the commit glyph, the same one the app's code card paints.
     const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([^<]*)<\/span><\/div>/g)]
@@ -857,7 +858,7 @@ async function main() {
       "page=" + JSON.stringify(rows.map((r) => r.id + "|" + r.subject + "|" + r.meta)) + " app=" + JSON.stringify(painted.map((p) => p.id + "|" + p.subject + "|" + p.meta)));
     // The head's own meta line is part of the same agreement: the total is what
     // the writer published, not what the reader happened to drain.
-    const pageMeta = /<p class="meta">([^<]*)<\/p>/.exec(page.text.slice(page.text.indexOf("<h1>commits</h1>")));
+    const pageMeta = /<p class="meta">([^<]*)<\/p>/.exec(page.text.slice(page.text.indexOf("<h1>Commits</h1>")));
     const appMeta = global.__shim.textOf(findClass(view, "meta")[0] || null).trim();
     ok("both surfaces head the list with the same count/branch/order line", !!pageMeta && unesc(pageMeta[1]).trim() === appMeta, "page=" + (pageMeta && pageMeta[1]) + " app=" + appMeta);
 

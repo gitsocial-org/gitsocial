@@ -696,12 +696,12 @@ func buildSiteFilesIndexPage(site sitePageSite, state *siteFilesState, branch st
 	if branch != "" {
 		metaBits = append(metaBits, branch)
 	}
-	d := siteChainedListPage(siteFilesList.Label, entries, append(metaBits, "by path"), 0, 0)
+	d := siteChainedListPage(siteFilesList.NavLabel, entries, append(metaBits, "by path"), 0, 0)
 	d.Chrome = sitePageChrome{
-		Title:       siteFilesList.Label + " · " + site.Title,
+		Title:       siteFilesList.NavLabel + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,
-		Description: sitePageDescription(sitePageListDescription(siteFilesList, site), ""),
-		OGTitle:     siteFilesList.Label + " · " + site.Title,
+		Description: sitePageDescription(siteFilesList.NavLabel+" of "+site.Title+", by path.", ""),
+		OGTitle:     siteFilesList.NavLabel + " · " + site.Title,
 		SiteTitle:   site.Title,
 		Canonical:   site.URL + sitePagesFilesDir + "/index.html",
 		Route:       siteFilesList.Route,

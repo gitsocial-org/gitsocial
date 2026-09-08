@@ -39,5 +39,15 @@
       "expectSubject": "Windows checkout",
       "expectHeader": "GitMsg: ext=\"memo\" v=\"1\" type=\"memo\""
     }
-  ]
+  ],
+  "listHeadings": {
+    "issues": "Issues",
+    "milestones": "Milestones",
+    "sprints": "Sprints",
+    "prs": "Pull Requests",
+    "timeline": "Timeline",
+    "releases": "Releases",
+    "memos": "Memos",
+    "commits": "Commits"
+  }
 }

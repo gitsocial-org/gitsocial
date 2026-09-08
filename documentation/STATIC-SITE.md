@@ -79,7 +79,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
   - it is not under a dotdir, `node_modules/`, `vendor/`, `testdata/`, `third_party/`, `fixtures/`, `golden/`, `corpus/`, `snapshots/` or `__snapshots__/`, and is not a submodule, a symlink or the root README;
   - its path has no space and none of `@ : # ? %`.
 - File pages follow the tree: a document that leaves it loses its page, one under 100 words stays out of the sitemap, and any renders whole up to 256 KB. `filesInclude` and `filesExclude` override the selection rule.
-- The front page: the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app.
+- The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app. The page has no heading of its own; the README's headings stand as written and the repo title is the `<title>` and the sidebar.
 - `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
 - `feed.xml` is Atom 1.0 with the newest 50 non-retracted top-level items, memos excluded. Each type directory has its own `feed.xml`.
 
@@ -90,6 +90,7 @@ Rules that hold on every page:
 - Every `<title>` is unique (a shared subject gets the item's date, then its short ref) and every `<meta name="description">` is prose with the markdown syntax stripped.
 - Retraction tombstones and file pages under the word floor carry `noindex,follow`. The page stays, so existing links keep working.
 - Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer.
+- A list page heads with its sidebar label (Issues, Pull Requests, Timeline), and so do its `<title>`, description and feed title. The app heads the same routes with the same label from one table, pinned by `sitetest/parity_fixtures.json`, so the boot swap moves no heading. The one exception is `f/index.html`, which boots into the tree view.
 - First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 

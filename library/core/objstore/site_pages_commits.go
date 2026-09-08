@@ -263,8 +263,8 @@ func buildSiteCommitsHeadPage(site sitePageSite, head []siteMetaEntry, branch st
 		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, siteCommitsList.Label), branch, "newest first"}
-	d := siteChainedListPage(siteCommitsList.Label, entries, metaBits, 0, sealed)
-	d.Chrome = siteCommitsChrome(site, siteCommitsList.Label+" · "+site.Title, site.URL+siteCommitsDir+"/index.html", siteCommitsRoute)
+	d := siteChainedListPage(siteCommitsList.NavLabel, entries, metaBits, 0, sealed)
+	d.Chrome = siteCommitsChrome(site, siteCommitsList.NavLabel+" · "+site.Title, site.URL+siteCommitsDir+"/index.html", siteCommitsRoute)
 	return d
 }
 
@@ -277,8 +277,8 @@ func buildSiteCommitsSealedPage(site sitePageSite, segment []siteMetaEntry, bran
 		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), siteCommitsList.Label), branch, fmt.Sprintf("older page %d", n)}
-	d := siteChainedListPage(siteCommitsList.Label, entries, metaBits, n, sealed)
-	title := fmt.Sprintf("%s · page %d · %s", siteCommitsList.Label, n, site.Title)
+	d := siteChainedListPage(siteCommitsList.NavLabel, entries, metaBits, n, sealed)
+	title := fmt.Sprintf("%s · page %d · %s", siteCommitsList.NavLabel, n, site.Title)
 	d.Chrome = siteCommitsChrome(site, title, site.URL+siteCommitsDir+"/"+strconv.Itoa(n)+".html", siteCommitsRoute+"/"+strconv.Itoa(n))
 	return d
 }

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,7 @@ type parityRawObjectCase struct {
 type parityFixtures struct {
 	MessageCases   []parityMessageCase   `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase `json:"rawObjectCases"`
+	ListHeadings   map[string]string     `json:"listHeadings"`
 }
 
 // loadParityFixtures reads the shared JSON fixtures the JS half also consumes.
@@ -70,6 +72,19 @@ func TestParitySubjectHeader(t *testing.T) {
 				t.Errorf("extractHeaderLine = %q, want %q", got, c.ExpectHeader)
 			}
 		})
+	}
+}
+
+// TestParityListHeadings pins every list page's heading to the fixture the app's
+// LIST_HEADINGS is checked against (unit_parity.js); the app heads two more routes.
+func TestParityListHeadings(t *testing.T) {
+	f := loadParityFixtures(t)
+	lists := append(append([]sitePageList(nil), sitePageLists...), siteCommitsList)
+	for _, list := range lists {
+		tab := strings.TrimPrefix(list.Route, "/")
+		if want, ok := f.ListHeadings[tab]; !ok || want != list.NavLabel {
+			t.Errorf("%s: heading %q, fixture %q", tab, list.NavLabel, want)
+		}
 	}
 }
 

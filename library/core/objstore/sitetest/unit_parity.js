@@ -57,5 +57,10 @@ for (const c of FIX.rawObjectCases) {
   eq(subj, c.expectSubject, c.name + ": parseCommit subject");
 }
 
+require("../site/gs-render.js");
+const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
+const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
+eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

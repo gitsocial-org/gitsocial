@@ -181,13 +181,13 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // page, and the href is just a link back to the app.
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
-  ok("commits page reads without JS (heading + card rows)", /<h1>commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
+  ok("commits page reads without JS (heading + card rows)", /<h1>Commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
   ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.
   ok("commits page is default-branch only", !commits.text.includes("Expand and edit notes"), "the feature branch's commit leaked into the list");
-  ok("commits page carries the meta line (count · branch · order)", /<p class="meta">\d+ commits · main · newest first<\/p>/.test(commits.text), commits.text.slice(commits.text.indexOf("<h1>commits</h1>"), commits.text.indexOf("<h1>commits</h1>") + 200));
+  ok("commits page carries the meta line (count · branch · order)", /<p class="meta">\d+ commits · main · newest first<\/p>/.test(commits.text), commits.text.slice(commits.text.indexOf("<h1>Commits</h1>"), commits.text.indexOf("<h1>Commits</h1>") + 200));
   ok("the fixture stays under one commits page (no dangling older link)", !/older →/.test(commits.text));
   // The list has no Atom feed of its own (the code corpus carries no bodies), but
   // it still advertises the site feed like every other page.
@@ -207,7 +207,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // The README is the front page's, so it gets no second page of its own.
   ok("the root README gets no file page", (await get(TD + "f/README.html")).status === 404);
   const fileIndex = await get(TD + "f/index.html");
-  ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>files<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
+  ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>Files<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
   ok("every page's sidebar links the file index", /href="\.\/f\/index\.html"/.test(front.text) && /href="\.\.\/f\/index\.html"/.test(posts.text));
   // notes.txt is under the 100-word floor: its page exists and carries
   // noindex,follow, and only the file index reaches the sitemap.

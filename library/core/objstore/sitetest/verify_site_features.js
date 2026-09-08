@@ -367,6 +367,14 @@ async function main() {
     ok("index-sourced code items carry their subject + branch", r.items.length > 0 && r.items.every((i) => i.content.length > 0 && typeof i._branch === "string"), "count=" + r.items.length);
   }
 
+  for (const [tab, label] of Object.entries(GS.LIST_HEADINGS)) {
+    await route("#/" + tab, true);
+    const first = (viewNode._children || [])[0];
+    ok("/" + tab + " opens with its nav label as the h1", !!first && first.tagName === "H1" && textOf(first) === label, first ? first.tagName + ":" + textOf(first) : "empty view");
+  }
+  await route("#/", true);
+  ok("home renders no h1 of its own (the README's stand)", (viewNode._children || []).every((c) => c.tagName !== "H1"));
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

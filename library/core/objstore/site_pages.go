@@ -153,7 +153,7 @@ const (
 	// sidebar gains the Files entry once the layer has pages, and item pages and
 	// sealed list pages are never rewritten outside a full regen, so a v17 bucket
 	// would link the new directory from nothing but the pages written after it.
-	sitePagesVersion = 18
+	sitePagesVersion = 19
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -1284,12 +1284,12 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		metaBits = append(metaBits, fmt.Sprintf("%d open", openCount))
 	}
 	metaBits = append(metaBits, "newest first")
-	d := siteChainedListPage(list.Label, entries, metaBits, 0, sealed)
+	d := siteChainedListPage(list.NavLabel, entries, metaBits, 0, sealed)
 	d.Chrome = sitePageChrome{
-		Title:         list.Label + " · " + site.Title,
+		Title:         list.NavLabel + " · " + site.Title,
 		AccentCSS:     site.AccentCSS,
 		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
-		OGTitle:       list.Label + " · " + site.Title,
+		OGTitle:       list.NavLabel + " · " + site.Title,
 		SiteTitle:     site.Title,
 		Canonical:     site.URL + list.Dir + "/index.html",
 		Route:         list.Route,
@@ -1312,12 +1312,12 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		entries = append(entries, buildSiteListEntry(it, "../", sitePageDefaultTypes[list.Ext]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
-	d := siteChainedListPage(list.Label, entries, metaBits, n, sealed)
+	d := siteChainedListPage(list.NavLabel, entries, metaBits, n, sealed)
 	d.Chrome = sitePageChrome{
-		Title:         fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
+		Title:         fmt.Sprintf("%s · page %d · %s", list.NavLabel, n, site.Title),
 		AccentCSS:     site.AccentCSS,
 		Description:   sitePageDescription(sitePageListDescription(list, site), ""),
-		OGTitle:       fmt.Sprintf("%s · page %d · %s", list.Label, n, site.Title),
+		OGTitle:       fmt.Sprintf("%s · page %d · %s", list.NavLabel, n, site.Title),
 		SiteTitle:     site.Title,
 		Canonical:     site.URL + list.Dir + "/" + strconv.Itoa(n) + ".html",
 		Route:         list.Route,
@@ -1334,7 +1334,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 
 // sitePageListDescription words a type list's meta description.
 func sitePageListDescription(list sitePageList, site sitePageSite) string {
-	return strings.ToUpper(list.Label[:1]) + list.Label[1:] + " of " + site.Title + ", newest first."
+	return list.NavLabel + " of " + site.Title + ", newest first."
 }
 
 // writeSiteFrontPage writes the front page: the repo landing the booted app
@@ -1348,19 +1348,14 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 	if err != nil {
 		return err
 	}
-	var metaBits []string
-	if site.Description != "" {
-		metaBits = append(metaBits, site.Description)
-	}
 	description := site.Description
 	if description == "" {
 		description = site.Title + ": code, issues, pull requests, posts and releases."
 	}
 	d := siteFrontPageData{
-		Heading:  site.Title,
-		MetaBits: metaBits,
-		Home:     home,
-		Activity: buildSiteFrontActivity(roots, done, code, site),
+		Description: site.Description,
+		Home:        home,
+		Activity:    buildSiteFrontActivity(roots, done, code, site),
 	}
 	if len(d.Activity) > 0 {
 		d.ActivityMoreHref, d.ActivityMoreLabel = siteActivityMoreKey, siteActivityMoreLabel

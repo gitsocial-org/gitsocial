@@ -330,8 +330,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<footer><a href="{{.Chrome.Base}}f/index.html">← files</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
-<h1>{{.Heading}}</h1>
-{{if .MetaBits}}<p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+{{if .Description}}<p class="meta">{{.Description}}</p>
 {{end}}{{with .Home}}{{if .Branch}}<p class="meta"><span class="chip">{{.Branch}}</span> <a class="chip" href="{{.BranchesHref}}">{{.Branches}}</a>{{with .Latest}} {{.Subject}} · {{.Date}} · <a href="{{.Href}}">{{.Short}}</a>{{end}}</p>
 {{end}}{{if .Files}}<ul class="files">
 {{range .Files}}<li><a href="{{.Href}}">{{.Name}}</a></li>
@@ -493,8 +492,7 @@ type siteListPageData struct {
 // siteFrontPageData feeds the "front" template (index.html).
 type siteFrontPageData struct {
 	Chrome            sitePageChrome
-	Heading           string
-	MetaBits          []string
+	Description       string
 	Home              *siteFrontHome
 	Activity          []sitePageActivityRow
 	ActivityMoreHref  string // crawlable destination for the section's trailing link ("" — no rows)
@@ -594,7 +592,7 @@ type sitePageList struct {
 // has no posts-only surface). Routes match gs-core.js parseRoute's INDEX_TABS.
 var sitePageLists = []sitePageList{
 	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○", Section: "PM"},
-	{Ext: "review", Dir: "prs", Label: "prs", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂", Section: "Repository"},
+	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂", Section: "Repository"},
 	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱", Section: "Social"},
 	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases", NavLabel: "Releases", Glyph: "⏏"},
 	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos", NavLabel: "Memos", Glyph: "☞"},
@@ -1054,7 +1052,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	}
 	d := siteItemPageData{
 		ListDir:   list.Dir,
-		ListLabel: list.Label,
+		ListLabel: list.NavLabel,
 		Subject:   sitePageItemSubject(it),
 		Chip:      sitePageItemChip(it),
 		Meta:      siteItemPageMeta(it),
@@ -1630,7 +1628,7 @@ func siteTypeFeedKey(list sitePageList) string {
 // siteTypeFeedTitle words a type feed's display title, distinct from the main
 // feed's so reader pickers tell them apart.
 func siteTypeFeedTitle(list sitePageList, site sitePageSite) string {
-	return list.Label + " · " + site.Title
+	return list.NavLabel + " · " + site.Title
 }
 
 // writeSiteTypeFeeds writes the per-type Atom feeds: every type directory's
