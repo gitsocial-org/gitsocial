@@ -262,6 +262,9 @@ gg config site set favicon "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAA
 # site-config.json rather than hardcoding it.
 gg config site set publish true >/dev/null
 gg config site set pages true >/dev/null
+# notes.txt is not a document by the selection rule (markdown or a convention
+# name), so the file pages the suites expect come through the include override.
+gg config site set filesInclude "*.txt" >/dev/null
 gg config site set url "http://127.0.0.1:$port/thread-demo/" >/dev/null
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
 gg push --site-only >/dev/null

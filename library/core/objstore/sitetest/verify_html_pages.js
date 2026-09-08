@@ -209,7 +209,10 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const fileIndex = await get(TD + "f/index.html");
   ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>files<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
   ok("every page's sidebar links the file index", /href="\.\/f\/index\.html"/.test(front.text) && /href="\.\.\/f\/index\.html"/.test(posts.text));
-  ok("sitemap covers the file pages, dated by their last commit", locs.includes(cfg.url + "f/index.html") && locs.includes(cfg.url + "f/notes.html"), JSON.stringify(locs.filter((l) => l.includes("/f/"))));
+  // notes.txt is under the 100-word floor: its page exists and carries
+  // noindex,follow, and only the file index reaches the sitemap.
+  ok("sitemap covers the file index but not a page under the word floor", locs.includes(cfg.url + "f/index.html") && !locs.includes(cfg.url + "f/notes.html"), JSON.stringify(locs.filter((l) => l.includes("/f/"))));
+  ok("a file page under the word floor carries noindex,follow", /<meta name="robots" content="noindex,follow">/.test(doc.text));
 
   console.log("\n--- Guards off: zero page keys, shell index.html intact ---");
   for (const key of ["timeline.html", "sitemap.xml", "robots.txt", "pages.css", "posts/index.html", "issues/index.html", "commits/index.html", "f/index.html"]) {
