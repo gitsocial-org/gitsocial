@@ -200,12 +200,16 @@ preflight() {
     printf '    [dry-run] GITSOCIAL_TEST_FULL=1 go test -race ./...\n'
     printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/objstore/\n'
   else
-    info "running go test -race ./... (this can take a while)"
-    GITSOCIAL_TEST_FULL=1 go test -race ./... >/dev/null || die "go test -race ./... failed"
+    # Output goes to a log, not the terminal: a failing test is named from it,
+    # and an intermittent one has to be, since it may not fail on the rerun.
+    mkdir -p .test-artifacts
+    info "running go test -race ./... (this can take a while; log: .test-artifacts/release-race.log)"
+    GITSOCIAL_TEST_FULL=1 go test -race ./... >.test-artifacts/release-race.log 2>&1 \
+      || die "go test -race ./... failed: $(grep -E '^(--- FAIL|FAIL|panic:)|DATA RACE' .test-artifacts/release-race.log | head -5 | tr '\n' ';')"
     info "tests green (race)"
-    info "running the site battery (go test -tags sitetest ./library/core/objstore/)"
-    go test -tags sitetest -timeout 30m ./library/core/objstore/ >/dev/null \
-      || die "site battery failed (rerun without >/dev/null to see which suite)"
+    info "running the site battery (log: .test-artifacts/release-site.log)"
+    go test -tags sitetest -timeout 30m ./library/core/objstore/ >.test-artifacts/release-site.log 2>&1 \
+      || die "site battery failed: $(grep -E 'FAIL' .test-artifacts/release-site.log | head -5 | tr '\n' ';')"
     info "site battery green"
   fi
 }
