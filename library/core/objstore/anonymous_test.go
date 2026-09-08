@@ -13,17 +13,23 @@ import (
 // publicNoListBucket answers like a public bucket does to an unsigned reader:
 // GETs served, listing denied, and an absent key 403 rather than 404.
 func publicNoListBucket(t *testing.T, seed map[string]string) string {
+	return publicBucket(t, seed, http.StatusForbidden)
+}
+
+// publicBucket serves GETs and answers listings and absent keys with status: 403
+// from a bucket's own endpoint, 404 from a web domain in front of it.
+func publicBucket(t *testing.T, seed map[string]string, status int) string {
 	t.Helper()
 	mem := newMemBucket()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Has("list-type") {
-			http.Error(w, "AccessDenied", http.StatusForbidden)
+			http.Error(w, "AccessDenied", status)
 			return
 		}
 		rec := httptest.NewRecorder()
 		mem.ServeHTTP(rec, r)
 		if rec.Code == http.StatusNotFound {
-			http.Error(w, "AccessDenied", http.StatusForbidden)
+			http.Error(w, "AccessDenied", status)
 			return
 		}
 		for k, vs := range rec.Header() {
@@ -189,5 +195,33 @@ func TestSigned_RejectedCredentialKeepsItsError(t *testing.T) {
 	_, err = client.Get(prefix + "HEAD")
 	if errors.Is(err, ErrNotFound) || err == nil || !strings.Contains(err.Error(), "SignatureDoesNotMatch") {
 		t.Errorf("err = %v, want the provider's 403 code", err)
+	}
+}
+
+func TestAnon_WebDomainAnswers404(t *testing.T) {
+	// A public web domain in front of the bucket has no list API and answers 404
+	// for it, as for absent keys; the manifest path still resolves the refs.
+	url := publicBucket(t, map[string]string{
+		bucketRefsKey:     `{"refs/heads/main":"` + shaA + `"}`,
+		"refs/heads/main": shaA + "\n",
+	}, http.StatusNotFound)
+	client, prefix := anonClient(t, url)
+	refs, err := readRemoteRefs(client, prefix)
+	if err != nil || refs["refs/heads/main"] != shaA {
+		t.Errorf("refs = %v, err = %v", refs, err)
+	}
+}
+
+func TestGetWithETag_WeakETagIsStripped(t *testing.T) {
+	// A CDN compressing the response marks the ETag weak; If-Match needs the
+	// strong value inside.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `W/"abc"`)
+		w.Write([]byte("{}"))
+	}))
+	t.Cleanup(srv.Close)
+	client, prefix := anonClient(t, "s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo")
+	if _, etag, err := client.GetWithETag(prefix + bucketRefsKey); err != nil || etag != `"abc"` {
+		t.Errorf("etag = %q, err = %v, want the strong value", etag, err)
 	}
 }

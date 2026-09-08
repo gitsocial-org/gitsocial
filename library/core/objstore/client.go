@@ -357,7 +357,9 @@ func (c *Client) GetWithETag(key string) ([]byte, string, error) {
 		if data, err = io.ReadAll(resp.Body); err != nil {
 			return fmt.Errorf("objstore: read %s: %w", key, err)
 		}
-		etag = resp.Header.Get("ETag")
+		// A CDN that compresses a response on the fly marks its ETag weak (W/"..."),
+		// which If-Match never matches; the value inside is still the object's own.
+		etag = strings.TrimPrefix(resp.Header.Get("ETag"), "W/")
 		return nil
 	})
 	return data, etag, err

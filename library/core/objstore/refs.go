@@ -170,7 +170,8 @@ func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) 
 // Buckets with no refs.json (a plain git remote) skip the optimization entirely.
 func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	listed, err := client.ListWithETags(prefix + "refs/")
-	if errors.Is(err, ErrAccessDenied) {
+	// A public web domain in front of a bucket answers a list request with 404.
+	if errors.Is(err, ErrAccessDenied) || (client.Anonymous() && errors.Is(err, ErrNotFound)) {
 		return readRefsWithoutListing(client, prefix, progress)
 	}
 	if err != nil {
