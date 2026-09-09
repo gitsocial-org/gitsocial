@@ -2901,7 +2901,6 @@
     "gitmsg/release": { ext: "release", tab: "releases", label: "Release" },
     "gitmsg/memo": { ext: "memo", tab: "memos", label: "Memo" },
   };
-  const TAB_BRANCH = { timeline: "gitmsg/social", issues: "gitmsg/pm", prs: "gitmsg/review", releases: "gitmsg/release", memos: "gitmsg/memo" };
   const LEGACY_BRANCH = { issue: "gitmsg/pm", pr: "gitmsg/review", release: "gitmsg/release", commit: "" };
   const INDEX_TABS = { timeline: 1, issues: 1, prs: 1, releases: 1, memos: 1, milestones: 1, sprints: 1 };
 
