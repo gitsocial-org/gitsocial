@@ -1,7 +1,4 @@
-// gs-render.js - DOM rendering layer: el() and the sanitizer, markdown-to-DOM,
-// cards, metaRow, views (home/tree/blob/branches/analytics/memos/detail/diff/
-// thread/fullscreen), and the icon DOM builders. Extends the shared GS namespace
-// defined by gs-core.js.
+// gs-render.js - DOM rendering: el and the sanitizer, markdown, cards, views and icon builders on the GS namespace
 
 if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
@@ -9,15 +6,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const NS = root.GS || (root.GS = {});
   const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, WALK_CAP, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, effectiveTime, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItems, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, countsFor, fullSearchBytes, mergeBase, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolveHead, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
-  // BACK_ROUTES are the in-app route types a detail page's "back" may return to
-  // (a list/board/search the user came from). Detail routes (commit/tag) are
-  // excluded so back never bounces detail→detail.
+  // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
 
-  // detailBackHref returns a detail page's back-link target: the route the user
-  // navigated FROM (ctx.backFrom) when it was an in-app list/board/search route,
-  // else the view's own default. This makes "back" return to a board/milestone/
-  // sprint/search when the user came from one, not always the fixed index tab.
+  // detailBackHref returns the in-app list route the reader came from, else the view's default.
   function detailBackHref(ctx, defaultHash) {
     const from = ctx && ctx.backFrom;
     if (from) {
@@ -29,6 +21,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Rendering (browser only; never invoked from Node) ----
 
+  // relTime formats a unix timestamp as a coarse "N ago" string.
   function relTime(unixSeconds) {
     const diff = Date.now() / 1000 - unixSeconds;
     const units = [["y", 31536000], ["mo", 2592000], ["d", 86400], ["h", 3600], ["m", 60]];
@@ -39,10 +32,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return "just now";
   }
 
-  // tzAbbrev returns the reader's local timezone label for a date: the short
-  // zone name ("PST", "GMT+2") via Intl when available, else a "UTC±HH:MM"
-  // offset. Appended to the precise-time tooltip so an absolute time is
-  // unambiguous across zones.
+  // tzAbbrev returns the reader's short timezone name, or a UTC offset when Intl is unavailable.
   function tzAbbrev(d) {
     try {
       const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" }).formatToParts(d);
@@ -56,8 +46,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return "UTC" + sign + p(Math.floor(abs / 60)) + ":" + p(abs % 60);
   }
 
-  // preciseTime formats a unix-seconds timestamp as a local "YYYY-MM-DD HH:MM TZ"
-  // string (date + time + timezone) for the hover tooltip on relative-time spans.
+  // preciseTime formats a unix timestamp as a local "YYYY-MM-DD HH:MM TZ" string.
   function preciseTime(unixSeconds) {
     const d = new Date(unixSeconds * 1000);
     if (isNaN(d.getTime())) return "";
@@ -66,20 +55,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return stamp + " " + tzAbbrev(d);
   }
 
-  // timeEl returns a span showing the relative time with the precise local
-  // date+time+timezone in its title attribute, so every rendered "N ago" reveals
-  // the exact moment on hover. This is the single shared time helper; using it at
-  // every relTime call site (cards, meta rows, threads, versions, analytics) is
-  // what gives every timestamp the tooltip for free.
+  // timeEl returns a relative-time span with the precise local time as its title.
   function timeEl(unixSeconds) {
     return el("span", { class: "reltime", title: preciseTime(unixSeconds) }, [relTime(unixSeconds)]);
   }
 
-  // authorEl returns a span showing an author's display name with their email in
-  // its title attribute, so hovering any rendered author name reveals the email.
-  // The single shared author helper: routing every author render through it gives
-  // every card/detail/thread the tooltip for free. The tooltip is omitted when no
-  // email is known or the name already IS the email (no redundant hover).
+  // authorEl returns an author span with the email as its title when it differs from the label.
   function authorEl(name, email) {
     const label = name || email || "unknown";
     const attrs = { class: "author" };
@@ -87,17 +68,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", attrs, [label]);
   }
 
-  // commitAuthorEl renders the author for a raw git commit (graph, branch log,
-  // compare list, commit detail), preferring the origin author when the commit
-  // carries GitMsg origin-* provenance (imported content) and otherwise the git
-  // `author` line — never the committer (parseCommit never reads committer). This
-  // is the single authorship helper those views share, matching effectiveAuthor
-  // for gitmsg item cards.
+  // commitAuthorEl renders a commit's author: origin provenance first, then the git author, never the committer.
   function commitAuthorEl(c) {
     const header = (c && c.gitmsg) || null;
     return authorEl(effectiveAuthor(c, header), effectiveAuthorEmail(c, header));
   }
 
+  // el creates an element with attributes and appended children.
   function el(tag, attrs, children) {
     const node = document.createElement(tag);
     if (attrs) for (const k in attrs) {
@@ -108,20 +85,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return node;
   }
 
-  // gsIcons returns the vendored icon set (window.GSIcons from icons.js), or
-  // null when it is absent (old bucket copies, Node without the shim global).
+  // gsIcons returns the vendored icon set, or null when icons.js is absent.
   function gsIcons() {
     if (typeof window !== "undefined" && window.GSIcons) return window.GSIcons;
     if (typeof GSIcons !== "undefined") return GSIcons;
     return null;
   }
 
-  // iconTemplate parses one trusted vendored SVG string once through an inert
-  // DOMParser (text/html, so the HTML parser assigns the SVG namespace and the
-  // clone renders) and caches the resulting node; null when the key is unknown
-  // or parsing fails. The SVGs are trusted assets, never user content, so this
-  // path is deliberately separate from the untrusted-HTML sanitizer.
   const iconTemplates = new Map();
+  // iconTemplate parses a vendored SVG once through DOMParser and caches the node; null when unknown.
   function iconTemplate(key) {
     if (iconTemplates.has(key)) return iconTemplates.get(key);
     const set = gsIcons();
@@ -138,9 +110,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return node;
   }
 
-  // iconEl clones a cached icon template into a themed <span>. Returns null when
-  // the icon set is absent or the key is unknown, so every call site falls back
-  // to its prior text glyph.
+  // iconEl clones a cached icon template into a themed span, or null so callers fall back to text.
   function iconEl(key, cls) {
     const tpl = iconTemplate(key);
     if (!tpl) return null;
@@ -155,20 +125,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
 
   // ---- Syntax highlighting via Prism (browser only, no innerHTML) ----
-  //
-  // Prism is off the boot path entirely: prism.js is fetched the first time a
-  // render actually asks for highlighting (see ensurePrism), so the many routes
-  // with no code on them — every list, the board, search, analytics, config —
-  // never pay for the tokenizer. Everything below therefore has to work with
-  // Prism absent and upgrade in place when it arrives, which is the same shape
-  // the lazy grammars already had.
 
-  // File-extension → Prism grammar name. The base grammars (go/js/ts/json/yaml/
-  // bash/markdown/markup/css/diff) ship in prism.js; the rest (python/rust/c/...)
-  // are lazy-loaded from grammars/prism-<lang>.js the first time a file/block in
-  // that language is rendered (see ensureGrammar), so the shell stays small and a
-  // repo pays only for the languages a visitor actually opens. A missing grammar
-  // file degrades to plain text.
+  // EXT_LANG maps a file extension to its Prism grammar; non-base grammars lazy-load from grammars/.
   const EXT_LANG = {
     go: "go", js: "javascript", mjs: "javascript", ts: "typescript",
     json: "json", yaml: "yaml", yml: "yaml", sh: "bash", bash: "bash",
@@ -195,17 +153,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     tex: "latex", sty: "latex", bat: "batch", cmd: "batch",
     vim: "vim", vue: "markup", svelte: "markup",
   };
-  // BASENAME_LANG maps an exact filename (which EXT_LANG's extension lookup can't
-  // key on) to a Prism grammar, consulted before EXT_LANG in langForPath so files
-  // like Dockerfile/Makefile highlight (docker was otherwise unreachable here).
+  // BASENAME_LANG maps exact filenames to a grammar; consulted before EXT_LANG.
   const BASENAME_LANG = {
     Dockerfile: "docker", Makefile: "makefile", GNUmakefile: "makefile",
     makefile: "makefile", "CMakeLists.txt": "cmake", Jenkinsfile: "groovy",
     Gemfile: "ruby", Rakefile: "ruby", "nginx.conf": "nginx",
     ".vimrc": "vim", vimrc: "vim",
   };
-  // Markdown fence tag (and its common aliases) → Prism grammar name. Non-base
-  // grammars are lazy-loaded on first use (see ensureGrammar / EXT_LANG).
+  // FENCE_LANG maps a Markdown fence tag or alias to its Prism grammar.
   const FENCE_LANG = {
     go: "go", golang: "go", js: "javascript", javascript: "javascript",
     mjs: "javascript", jsx: "jsx", ts: "typescript", typescript: "typescript",
@@ -235,36 +190,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     vue: "markup", svelte: "markup",
   };
 
-  // BASE_GRAMMARS are the grammars already bundled in prism.js (and its clike
-  // base), so once prism.js is in they are highlighted synchronously and never
-  // fetched as a separate grammar file.
+  // BASE_GRAMMARS ship inside prism.js and are never fetched as a grammar file.
   const BASE_GRAMMARS = {
     markup: 1, css: 1, clike: 1, javascript: 1, typescript: 1, json: 1,
     yaml: 1, bash: 1, go: 1, markdown: 1, diff: 1,
   };
-  // GRAMMAR_DEPS lists, for each lazy-loaded grammar, the OTHER lazy-loaded
-  // grammars it extends and that must therefore load first (deps before the
-  // dependent). Grammars that extend only a base grammar (clike/markup/css,
-  // already in prism.js) have no entry. Ported from prismGrammars in the retired
-  // site_prism.go. A grammar not listed here has no lazy-load dependencies.
+  // GRAMMAR_DEPS lists the lazy grammars each lazy grammar extends; dependencies load first.
   const GRAMMAR_DEPS = {
     cpp: ["c"], tsx: ["jsx"], objectivec: ["c"], scala: ["java"], crystal: ["ruby"],
   };
 
-  // grammarBase is the bucket base URL (trailing slash) grammar files are fetched
-  // relative to, set once at boot by setGrammarBase(deriveBase(location)). "" when
-  // unset (the loader then no-ops and highlighting stays base-only).
   let grammarBase = "";
+  // setGrammarBase records the bucket base URL grammar files load from; "" disables the loader.
   function setGrammarBase(base) { grammarBase = base || ""; }
 
-  // grammarState caches per-session grammar loads: a grammar name maps to a
-  // Promise that resolves true once loaded (or false on a quiet failure), so a
-  // grammar file is fetched at most once and concurrent requests share it.
+  // grammarState caches one load Promise per grammar name.
   const grammarState = new Map();
 
-  // fetchAsset GETs a shell asset relative to grammarBase and returns its source
-  // text, or null on any failure (404, network, no fetch/base) — every one a
-  // quiet fallback to plain text, never an error.
+  // fetchAsset GETs a shell asset relative to grammarBase; null on any failure.
   async function fetchAsset(rel) {
     if (!grammarBase || typeof fetch !== "function") return null;
     try {
@@ -277,21 +220,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // fetchGrammarText GETs grammars/prism-<name>.js relative to grammarBase.
   function fetchGrammarText(name) { return fetchAsset("grammars/prism-" + name + ".js"); }
 
-  // prismState caches the one-shot prism.js load. prism.js is NOT part of the
-  // boot: it is 12 kB of tokenizer that most routes (every list, board, search,
-  // analytics, config) never use, so it is fetched the first time something
-  // actually asks to be highlighted and shared from here after that.
+  // prismState caches the one-shot prism.js load.
   let prismState = null;
 
-  // ensurePrism loads prism.js into the page on demand and resolves whether a
-  // tokenizer is available. It is fetched-and-evaluated rather than appended as
-  // a <script src>, for the same reason the grammar components are: the shell's
-  // CSP allows connect-src https: but not script-src https:, so a <script> tag
-  // would break under the ?base=/?repo= cross-bucket override while a fetch does
-  // not. Manual mode is set BEFORE evaluation (prism-core reads window.Prism.manual
-  // as it initializes) so prism's tail can never run an unmanaged highlightAll()
-  // over a page the reader has not replaced yet. Any failure resolves false and
-  // the reader keeps plain text.
+  // ensurePrism fetches and evaluates prism.js on demand; false when unavailable.
   function ensurePrism() {
     if (getPrism()) return Promise.resolve(true);
     if (prismState) return prismState;
@@ -301,8 +233,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       try {
         if (typeof window !== "undefined") {
           window.Prism = window.Prism || {};
+          // Set before evaluation: prism-core reads Prism.manual as it initializes.
           window.Prism.manual = true;
         }
+        // Evaluated rather than appended as a script tag: the CSP allows connect-src https: but not script-src https:.
         // eslint-disable-next-line no-new-func
         new Function(src)();
       } catch (e) { return false; }
@@ -311,23 +245,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return prismState;
   }
 
-  // prismPending holds the in-flight highlight upgrades that are waiting on
-  // prism.js ITSELF (never a lazy grammar): a page entry's reveal handshake
-  // awaits them so the visitor still gets ONE finished view instead of plain code
-  // that highlights a beat later. Grammar-only upgrades stay off this list —
-  // they were always progressive, and holding a reveal for one would make a file
-  // view in a lazy language slower to appear for no gain.
+  // prismPending holds upgrades waiting on prism.js itself, never on a lazy grammar; the reveal awaits them.
   const prismPending = new Set();
 
-  // PRISM_DEADLINE_MS bounds how long anything may wait on the tokenizer. prism.js
-  // is an optional enhancement whose every consumer already renders plain text and
-  // upgrades in place, so a stalled fetch must degrade to plain text rather than
-  // hold a reveal (where the boot watchdog would discard a working app over it) or
-  // a file route open indefinitely.
+  // PRISM_DEADLINE_MS bounds every wait on the tokenizer; a stalled fetch degrades to plain text.
   const PRISM_DEADLINE_MS = 2000;
 
-  // withPrismDeadline resolves when `p` settles or the deadline passes, whichever
-  // comes first, and never rejects.
+  // withPrismDeadline resolves when p settles or the deadline passes, and never rejects.
   function withPrismDeadline(p) {
     const done = Promise.resolve(p).then(() => undefined, () => undefined);
     if (typeof setTimeout !== "function") return done;
@@ -337,18 +261,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
-  // highlightsSettled resolves once every prism-driven upgrade started so far has
-  // re-rendered, or the deadline passes. Read by the boot handshake (gs-app
-  // signalFirstView).
+  // highlightsSettled resolves once every pending prism upgrade re-rendered or the deadline passed.
   function highlightsSettled() {
     if (!prismPending.size) return Promise.resolve();
     return withPrismDeadline(Promise.all(Array.from(prismPending)));
   }
 
-  // prismUpgrade resolves true when the highlighting available for `lang` has
-  // IMPROVED on what the caller's synchronous render already had, so the caller
-  // knows to re-render: it loads prism.js when absent, then the grammar when that
-  // is the missing piece. False means nothing changed and the plain text stands.
+  // prismUpgrade resolves true when highlighting for lang improved on the synchronous render.
   async function prismUpgrade(lang) {
     if (!lang) return false;
     const had = !!getPrism();
@@ -356,20 +275,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const P = getPrism();
     if (!P) return false;
     const loaded = () => !!(P.languages && P.languages[lang]);
-    // Prism just arrived: a base grammar came with it, so the plain render is now
-    // stale even though no grammar file was fetched.
+    // Prism just arrived with a base grammar, so the plain render is stale.
     if (loaded()) return !had;
     // A base grammar that is somehow not registered has no file to fetch.
     if (BASE_GRAMMARS[lang]) return false;
     return await ensureGrammar(lang);
   }
 
-  // trackUpgrade runs a prismUpgrade→re-render pair, registering it on
-  // prismPending while prism itself is the thing being waited for. For a base
-  // grammar the whole chain IS the prism phase, so the re-render is what gets
-  // registered; a lazy grammar continues into a second serial round trip that was
-  // always progressive, so only the prism.js load is, and the reveal is not held
-  // for the grammar fetch.
+  // trackUpgrade runs an upgrade and re-render, registering only the prism.js phase on prismPending.
   function trackUpgrade(lang, rerender) {
     const tracked = !getPrism();
     const done = prismUpgrade(lang).then((ok) => { if (ok) rerender(); }).catch(() => {});
@@ -379,11 +292,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     phase.then(() => prismPending.delete(phase));
   }
 
-  // evalGrammar runs a fetched grammar component with Prism in scope, so its
-  // `Prism.languages.X = ...` / `!function(e){...}(Prism)` body registers the
-  // grammar on the shared Prism global. Returns true when Prism.languages gained
-  // the language, false otherwise. Grammar files are trusted vendored assets
-  // (shipped in the shell), never visitor content.
+  // evalGrammar runs a fetched grammar component with Prism in scope; true when the language registered.
   function evalGrammar(name, src) {
     const P = getPrism();
     if (!P || !src) return false;
@@ -394,12 +303,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return !!(P.languages && P.languages[name]);
   }
 
-  // ensureGrammar loads the grammar `name` (and its dependency chain, deps first)
-  // into Prism.languages, returning a Promise<boolean> for whether it is now
-  // available. Base grammars resolve true immediately; an already-loaded (or
-  // in-flight) grammar reuses its cached Promise; a missing grammar file or a
-  // failed dependency resolves false (the caller keeps plain text). Browser-only:
-  // absent fetch/Prism/base it resolves whether the grammar happens to be present.
+  // ensureGrammar loads a grammar and its dependencies into Prism.languages, resolving whether it is available.
   function ensureGrammar(name) {
     const P = getPrism();
     if (!name || !P || (P.languages && P.languages[name])) return Promise.resolve(!!(P && P.languages && P.languages[name]));
@@ -417,21 +321,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return load;
   }
 
-  // lazyHighlight renders `lang`-highlighted content into a freshly-emptied
-  // parent NOW (synchronously) via `render`, then — when prism.js or the grammar
-  // is not loaded yet — kicks off the load and, on success, re-renders in place
-  // so the plain text upgrades to highlighted without ever blocking. A no-op
-  // re-render when nothing loadable is missing (parent keeps its plain text).
-  // Used by every highlight entry point so lazy loading is uniform.
+  // lazyHighlight renders now, then re-renders in place once the missing tokenizer or grammar loads.
   function lazyHighlight(parent, lang, render) {
     render();
     if (!lang || !parent) return;
     trackUpgrade(lang, () => { parent.replaceChildren(); render(); });
   }
 
-  // langForPath returns the Prism grammar name for a file path, or null. An exact
-  // basename match (BASENAME_LANG, e.g. Dockerfile/Makefile) wins over the
-  // extension lookup so extensionless-but-known files still highlight.
+  // langForPath returns the Prism grammar for a path; an exact basename wins over the extension.
   function langForPath(path) {
     const p = path || "";
     const base = p.slice(p.lastIndexOf("/") + 1);
@@ -446,17 +343,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return FENCE_LANG[(tag || "").toLowerCase().split(/\s+/)[0]] || null;
   }
 
-  // getPrism returns the loaded Prism global, or null when prism.js is absent
-  // (Node tests, older bucket copies). typeof guards keep it ReferenceError-safe.
+  // getPrism returns the loaded Prism global, or null.
   function getPrism() {
     if (typeof window !== "undefined" && window.Prism && window.Prism.tokenize) return window.Prism;
     if (typeof Prism !== "undefined" && Prism.tokenize) return Prism;
     return null;
   }
 
-  // tokenLeaves flattens a Prism token stream (strings, or {type, content,
-  // alias} where content recurses) into flat { text, cls } leaves, cls being the
-  // space-joined token classes accumulated down the tree ("" for plain text).
+  // tokenLeaves flattens a Prism token stream into { text, cls } leaves.
   function tokenLeaves(tokens, cls, out) {
     out = out || [];
     for (const t of tokens) {
@@ -470,10 +364,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // highlightNow appends `lang`-highlighted DOM for `code` to `parent` using only
-  // the grammars currently loaded (no lazy load): tokenized spans when the
-  // grammar is present, else a single plain text node. The escaping invariant
-  // holds (el()/text nodes, never innerHTML). Returns parent.
+  // highlightNow appends highlighted DOM for code using only loaded grammars, else a text node.
   function highlightNow(parent, code, lang) {
     const P = getPrism();
     const grammar = P && lang && P.languages ? P.languages[lang] : null;
@@ -488,18 +379,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return parent;
   }
 
-  // highlightTo appends syntax-highlighted DOM for `code` to `parent`, lazy-
-  // loading the grammar when needed: it renders plain text now and upgrades it
-  // in place once grammars/prism-<lang>.js loads (progressive enhancement, never
-  // blocking; a missing grammar stays plain). Returns parent.
+  // highlightTo appends highlighted DOM for code, upgrading in place when the grammar loads.
   function highlightTo(parent, code, lang) {
     lazyHighlight(parent, lang, () => highlightNow(parent, code, lang));
     return parent;
   }
 
-  // linesFor splits a whole-text Prism tokenization into one { text, cls }
-  // segment array per source line (splitting token leaves on newlines), or plain
-  // per-line segments when the grammar is absent.
+  // linesFor splits a tokenization into one { text, cls } segment array per source line.
   function linesFor(code, lang) {
     const P = getPrism();
     const grammar = P && lang && P.languages ? P.languages[lang] : null;
@@ -519,16 +405,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return lines;
   }
 
-  // highlightLines returns one { text, cls } segment array per source line for a
-  // blob view, using only currently-loaded grammars. The blob view (rawBlobPane)
-  // lazy-loads the grammar itself and rebuilds its rows on load, so this stays a
-  // pure synchronous helper.
+  // highlightLines returns per-line segments for a blob using only loaded grammars.
   function highlightLines(code, lang) {
     return linesFor(code, lang);
   }
 
-  // appendSegments fills a container with { text, cls } segments as escaped
-  // spans / text nodes.
+  // appendSegments fills a container with { text, cls } segments as spans and text nodes.
   function appendSegments(container, segs) {
     for (const s of segs) {
       if (s.cls) container.append(el("span", { class: s.cls }, [s.text]));
@@ -537,6 +419,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return container;
   }
 
+  // metaRow renders an item's author, time and hash link with its edit chips.
   function metaRow(item, branch) {
     const c = item.commit;
     const when = item.effectiveTime || c.authorTime;
@@ -548,11 +431,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // stateChip renders a colored state pill. Every known state maps to a
-  // background class so the chip's white text always has a solid fill behind it
-  // (an unmapped state would fall back to the translucent --chip background, on
-  // which white text is unreadable). Milestone/sprint lifecycle
-  // states (planned/active/completed/canceled) get their own accents.
+  // stateChip renders a state pill; each state needs a solid background class for its white text.
   function stateChip(state) {
     const map = {
       open: "open", closed: "closed", merged: "merged",
@@ -563,17 +442,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "chip state " + cls }, [state || "?"]);
   }
 
-  // headerChips builds the enrichment chips a pm/review card shows from its
-  // already-published header (labels/assignees/priority — all in the GitMsg line
-  // the metadata index carries, so no corpus fetch): a priority/* label as a
-  // tinted priority chip, each assignee as a "☛ name" chip, and every other
-  // scoped/unscoped label (except status/priority, already shown as glyph/chip)
-  // as a plain label chip. Mirrors the TUI issue/PR card stats, kept tasteful:
-  // status labels drive the board column, priority gets its own accent, the rest
-  // ride as muted chips. Returns an array of chip nodes (possibly empty).
-  // originChip returns a "↗ platform" badge for imported content (an item whose
-  // header carries origin-* provenance, GITMSG §1.9), else null. The glyph marks
-  // the item as mirrored from an external platform; the title names the source.
+  // originChip returns an "↗ platform" badge for imported content, else null.
   function originChip(header) {
     const h = header || {};
     if (!h["origin-platform"] && !h["origin-url"] && !h["origin-author-name"]) return null;
@@ -581,23 +450,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "chip chip-origin", title: h["origin-url"] || label }, ["↗ " + label]);
   }
 
-  // BOT_EMAIL_RE recognizes an automation's identity in the origin author email
-  // the import records: GitHub marks an App with the "app/" prefix
-  // ("app/dependabot@…", "app/github-actions@…"), and the services that comment
-  // through a plain account are matched by their own address. Imported CI chatter
-  // is the bulk of a mirrored repository's social branch — 187 of ~250 comments
-  // on one real import — so a reader skimming needs to know which rows are
-  // machine-written without opening them.
-  // An automation is named in either half of the address: the LOGIN half for an
-  // App ("app/dependabot", "…[bot]") or a service account ("vercel@users.
-  // noreply.github.com"), and the DOMAIN half for a service that comments from
-  // its own address ("support@coderabbit.ai"), which the login half alone
-  // misses — 46 of one import's comments.
+  // BOT_LOGINS and BOT_DOMAINS match an automation in either half of the origin author email.
   const BOT_LOGINS = /^(app\/.+|.+\[bot\]|dependabot|dependabot-preview|vercel|netlify|claassistant|cla-bot|github-actions|codecov|codecov-commenter|renovate|renovate-bot|sonarcloud|sonarqubecloud|greptileai|coderabbitai|copilot|copilot-pull-request-reviewer|semantic-release-bot|allcontributors|imgbot|snyk-bot|mergify)$/i;
   const BOT_DOMAINS = /(^|\.)(coderabbit\.ai|dependabot\.com|renovateapp\.com|greptile\.com|codecov\.io|mergify\.com)$/i;
 
-  // botChip marks an item whose origin author is an automation, else null. The
-  // login half drops GitHub's numeric id prefix ("12345+login@…") first.
+  // botChip marks an item whose origin author is an automation, else null; the login drops GitHub's numeric id prefix.
   function botChip(header) {
     const h = header || {};
     const email = (h["origin-author-email"] || "").trim().toLowerCase();
@@ -609,6 +466,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return isBot ? el("span", { class: "chip chip-bot", title: h["origin-author-email"] || "automated author" }, ["⚙ bot"]) : null;
   }
 
+  // headerChips builds the chips a card shows from its header and optional interaction counts.
   function headerChips(header, counts) {
     const h = header || {};
     const chips = [];
@@ -628,9 +486,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (l.scope === "priority" || l.scope === "status") continue;
       chips.push(el("span", { class: "chip chip-label" }, [l.scope ? l.scope + "/" + l.value : l.value]));
     }
-    // Interaction/review counts (from cross-branch corpora when the view supplies
-    // them). Kept compact: a comment count, repost/quote counts (posts), and a
-    // PR review summary (✓N ✗N). Absent counts render nothing.
     if (counts) {
       if (counts.approved || counts.changesRequested) {
         const rs = el("span", { class: "chip chip-review" }, []);
@@ -646,35 +501,23 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return chips;
   }
 
-  // assigneeLabel shortens an assignee email to its local part for a compact chip
-  // (a full email overflows the card head); a non-email value renders verbatim.
+  // assigneeLabel shortens an assignee email to its local part.
   function assigneeLabel(a) {
     const at = a.indexOf("@");
     return at > 0 ? a.slice(0, at) : a;
   }
 
-  // appendChipRow appends a wrapping chip row (`.card-chips`) to a card when the
-  // chip list is non-empty, so a card without enrichment carries no extra row.
+  // appendChipRow appends a chip row to a card when there are chips.
   function appendChipRow(card, chips) {
     if (chips && chips.length) card.append(el("div", { class: "card-chips" }, chips));
   }
 
-  // retractedChip returns a "retracted" marker chip when the item's header marks
-  // it retracted (derivable without a fetch), else null. Retracted items are
-  // dropped from lists by resolveItems, so this only surfaces on a permalink.
+  // retractedChip returns a "retracted" chip when the header marks the item retracted, else null.
   function retractedChip(header) {
     return (header && header.retracted === "true") ? el("span", { class: "chip chip-retracted" }, ["retracted"]) : null;
   }
 
-  // typeGlyphEl renders an item's leading type glyph (matching the TUI card icons)
-  // as a titled span. One consistent scheme across every view: a state-bearing item
-  // (issue, pull-request) tints its glyph by state (tg-open/closed/merged); every
-  // pure type glyph (post, release, milestone, sprint, memo, …) falls through to the
-  // single muted --type-glyph color. Null when the type has no glyph.
-  //
-  // A state-bearing glyph names its state in the title. The tint is the only
-  // state cue a card carries (the chip that used to repeat it is gone), and a
-  // cue carried by color alone is no cue at all for a reader who cannot see it.
+  // typeGlyphEl renders the type glyph; a state-bearing glyph is tinted and names its state in the title.
   function typeGlyphEl(item, ext) {
     const g = typeGlyph(item, ext);
     if (!g) return null;
@@ -684,18 +527,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const mod = stateful ? glyphStateClass(h.state) : t;
     return el("span", { class: "type-glyph tg-" + mod, title: stateful ? t + " · " + (h.state || "open") : t }, [g]);
   }
-  // glyphStateClass maps an item state to its glyph tint class (open/closed/merged);
-  // unknown or absent states default to open, matching the item-list default.
+  // glyphStateClass maps an item state to its glyph tint class; unknown states are open.
   function glyphStateClass(state) {
     if (state === "merged") return "merged";
     if (state === "closed" || state === "canceled" || state === "cancelled" || state === "completed") return "closed";
     return "open";
   }
-  // prependGlyph puts an item's type glyph at the front of a card head or, on the
-  // cards that have no head (post, comment, memo), of the meta row itself. A meta
-  // row is indented to sit under a head's SUBJECT, so a glyph leading one would
-  // land 1.75rem right of every other card's glyph — .meta-lead drops the indent
-  // for exactly that case, keeping one glyph column down the whole list.
+  // prependGlyph puts the type glyph before a card head, or before a headless card's meta row with .meta-lead.
   function prependGlyph(head, item, ext) {
     const g = typeGlyphEl(item, ext);
     if (!g) return;
@@ -703,23 +541,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (head.classList && head.classList.contains("meta")) head.classList.add("meta-lead");
   }
 
-  // subjectBody splits content into its first line and the rest, after dropping
-  // any link reference definitions (gs-core stripLinkRefDefs). A bot marker at
-  // the top is invisible on the platform the content came from, so it must not
-  // become the item's subject here — nor lead its body, which renders the same
-  // definitions away.
+  // subjectBody splits content into its first line and the rest after dropping link reference definitions.
   function subjectBody(content) {
     const text = stripLinkRefDefs(content || "");
     const nl = text.indexOf("\n");
     return nl < 0 ? [text, ""] : [text.slice(0, nl), text.slice(nl + 1).trim()];
   }
 
-  // cardNav makes a whole item card navigate to its #commit: detail route on a
-  // click anywhere in it, while leaving inner links and text selection intact: a
-  // click inside an <a> keeps that link's own behavior, and a click is ignored
-  // while a selection is active. Navigation sets location.hash so history/back
-  // works. Keyboard users still reach the item through the inner subject/hash
-  // links, so the card takes no tabindex.
+  // cardNav makes a whole card navigate to its detail route, sparing inner links and active selections.
   function cardNav(card, hash, branch) {
     card.className = card.className + " clickable";
     card.addEventListener("click", (e) => {
@@ -731,23 +560,19 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
+  // renderList maps items to cards, or renders an empty notice.
   function renderList(items, mapItem, emptyText) {
     if (!items.length) return [el("div", { class: "empty" }, [emptyText])];
     return items.map(mapItem);
   }
 
-  // pagedListView renders a walk-backed list with a "Load more" control shown
-  // whenever the history walk was truncated (unwalked commits remain). `initial`
-  // is { items, truncated }; drawBody(items, container) fills the list from the
-  // ACCUMULATED item set (filters and counts recompute from it); loadMore()
-  // resolves the next { items, truncated } window — its items supersede the prior
-  // array, since resolveItems re-ran over the larger commit set (so an edit whose
-  // canonical was out of window stops looking like a duplicate). Returns [wrap].
+  // pagedListView renders a walk-backed list with a "Load more" control while the walk is truncated.
   function pagedListView(initial, drawBody, loadMore) {
     const wrap = el("div", {}, []);
     const body = el("div", {}, []);
     wrap.append(body);
     let moreWrap = null;
+    // draw fills the body and refreshes the Load more control.
     function draw(items, truncated) {
       drawBody(items, body);
       if (moreWrap) { moreWrap.remove(); moreWrap = null; }
@@ -765,19 +590,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // autoScrollListView renders a walk-backed list that advances by infinite
-  // autoscroll instead of a button (used by the merged timeline, whose window is
-  // bounded to keep body hydration small). An IntersectionObserver watches a
-  // bottom sentinel and, when it nears the viewport, loads the next window and
-  // appends to the ACCUMULATED set; a `loading` guard drops overlapping fires and
-  // the observer disconnects once the walk is exhausted (truncated false). After
-  // each load it re-observes the sentinel so a short list still filling the
-  // viewport keeps advancing. `initial` is { items, truncated }; drawBody(items,
-  // container) fills the list from the accumulated set (its items supersede the
-  // prior array, resolveItems having re-run over the larger commit set); loadMore()
-  // resolves the next { items, truncated } window. In an observer-less headless
-  // environment there is no auto-advance — wrap.__loadNext() drives one window
-  // advance directly (also the tests' hook). Returns [wrap].
+  // autoScrollListView renders a walk-backed list advancing on a sentinel observer; wrap.__loadNext advances one window.
   function autoScrollListView(initial, drawBody, loadMore) {
     const wrap = el("div", {}, []);
     const body = el("div", {}, []);
@@ -787,6 +600,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     let loading = false;
     let observer = null;
     drawBody(initial.items, body);
+    // advance loads the next window once, re-observing the sentinel after.
     async function advance() {
       if (loading || !truncated) return;
       loading = true;
@@ -810,19 +624,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // clampNode wraps a content node in a ~10-line CSS clamp (.body-clamp:
-  // max-height + mask fade) with a "Show more"/"Show less" toggle. Overflow can
-  // only be measured once the node is laid out, and attachment timing varies:
-  // list cards attach within a frame of build, but detail views (reply-context
-  // cards) build first and attach only after further async work. So the check
-  // polls one frame at a time until the node reports layout (clientHeight > 0),
-  // giving up after a few seconds by removing the clamp class — content is
-  // never left hidden without a toggle. A node that fits loses the clamp class
-  // and gets no toggle. Expansion is an ephemeral in-DOM class flip (no route
-  // change); the toggle stops propagation so it never triggers a surrounding
-  // cardNav navigation. Used by list-card bodies and the permalink
-  // reply-context cards; thread comments and the item's own detail body stay
-  // unclamped — they never come through here.
+  // clampNode wraps a node in a CSS clamp with a Show more toggle, polling for layout before measuring.
   function clampNode(node) {
     node.classList.add("body-clamp");
     const wrap = el("div", { class: "body-clamp-wrap" }, [node]);
@@ -849,34 +651,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // clampedBody builds a LIST-card raw pre-wrap text body under the clamp.
-  // clampedBody renders a card's message body as MARKDOWN under the clamp — the
-  // same render the item's own detail page uses (renderCommitBody), so a card
-  // and the detail it opens show one thing. As plain text a card printed every
-  // imported comment's source at the reader: raw "[![badge](src)](href)", the
-  // <br/> and <hr/> tags GitHub's own bots emit, and HTML comments that are
-  // invisible upstream. The markdown pipeline already drops those comments,
-  // resolves reference links, and renders the rest.
+  // clampedBody renders a card body as markdown under the clamp, matching the detail page render.
   function clampedBody(text) {
     return clampNode(el("div", { class: "body body-md" }, [renderCommitBody(text)]));
   }
 
-  // replyQuoteBlock renders what a reply answers, from the excerpt the reply's
-  // own commit carries (gs-core parentQuote) — no fetch, no parent lookup. The
-  // TUI nests the parent card the same way (tuisocial PostToCardWithOptions):
-  // dimmed under a comment or quote, undimmed under a repost, whose own content
-  // is empty because the original IS the item. Where the TUI caps at 5 lines,
-  // this uses the site's own clamp, which measures the rendered height and
-  // offers "Show more" — the excerpts run to 387 lines on real imports, so the
-  // cap is the normal case, not a safeguard. Null when the item carries none.
+  // replyQuoteBlock renders the excerpt a reply answers from its own commit, else null.
   function replyQuoteBlock(item, dimmed) {
     const q = parentQuote(item);
     if (!q) return null;
     const box = el("div", { class: "reply-quote" + (dimmed ? " dimmed" : "") }, []);
-    // No "in reply to" label: the quoted treatment (indent rule, dimmed body,
-    // its own author line) already says what this block is, and the label had
-    // to be read to learn nothing. The head starts at the block's own left edge
-    // — .meta indents to clear a card's glyph column, which does not exist here.
     const who = el("div", { class: "reply-quote-head meta meta-lead" }, [authorEl(q.author || "unknown", q.email)]);
     if (q.time) who.append(" · ", timeEl(Math.floor(Date.parse(q.time) / 1000) || 0));
     const h = refHash(q.ref);
@@ -884,16 +668,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (sameRepo) who.append(" · ", el("a", { class: "hash", href: commitRef(h, refBranch(q.ref)) }, [h.slice(0, 12)]));
     box.append(who);
     box.append(clampNode(el("div", { class: "body reply-quote-body" }, [q.quoted])));
-    // The block navigates to the PARENT, not to the card that contains it: the
-    // outer cardNav would otherwise swallow every click here and send a reader
-    // who clicked the quoted parent to the reply they were already looking at.
-    // Propagation stops for that reason; inner links and the clamp toggle keep
-    // their own behavior, and a cross-repo parent (no object in this bucket)
-    // stays unclickable rather than routing to a hash that resolves to nothing.
+    // Navigates to the parent, so propagation stops before the outer cardNav.
     if (sameRepo) {
       box.classList.add("clickable");
-      // Named, not just tinted: the card around this one opens the reply, so a
-      // reader needs to be told this block opens something else before clicking.
       box.setAttribute("title", "Open what this replies to");
       box.addEventListener("click", (ev) => {
         if (ev.target && ev.target.closest && ev.target.closest("a, button")) return;
@@ -906,6 +683,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
+  // socialCard renders a post, comment, quote or repost card.
   function socialCard(item, counts) {
     const [subject, body] = subjectBody(item.content);
     const type = (item.header && item.header.type) || "post";
@@ -915,8 +693,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     card.append(el("div", {}, [meta]));
     const text = subject + (body ? "\n" + body : "");
     if (text) card.append(clampedBody(text));
-    // A reply without what it answers reads as an answer to nothing ("Makes
-    // sense, thanks."), which is most of a merged timeline's social rows.
     const quote = type === "comment" || type === "quote" || type === "repost"
       ? replyQuoteBlock(item, type !== "repost") : null;
     if (quote) card.append(quote);
@@ -924,8 +700,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/social");
   }
 
-  // issueCard renders an issue list card. `subCount` (a parent issue's direct
-  // child count) adds a "n sub" chip mirroring the TUI sub-issue indicator.
+  // issueCard renders an issue card; subCount adds an "n sub" chip.
   function issueCard(item, subCount, counts) {
     const subject = itemSubject(item);
     const card = el("div", { class: "card" }, []);
@@ -940,6 +715,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/pm");
   }
 
+  // prCard renders a pull request card with its head to base flow.
   function prCard(item, counts) {
     const subject = itemSubject(item);
     const h = item.header || {};
@@ -959,6 +735,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/review");
   }
 
+  // releaseCard renders a release card with tag, version, prerelease and asset chips.
   function releaseCard(item) {
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
@@ -966,9 +743,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const head = el("div", { class: "card-head" }, []);
     prependGlyph(head, item, "release");
     head.append(el("a", { class: "subject", href: commitRef(item.commit.hash, "gitmsg/release") }, [h.tag || subject || h.version || "(release)"]));
-    // Release-specific chips stay in the head (version, prerelease, asset count);
-    // the shared enrichment row (labels, origin ↗, retracted) renders below like
-    // issue/PR cards.
     if (h.version) head.append(el("span", { class: "chip" }, ["v" + h.version]));
     if (h.prerelease === "true") head.append(el("span", { class: "chip pre state" }, ["prerelease"]));
     const assets = releaseAssets(h);
@@ -980,10 +754,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/release");
   }
 
-  // memoCard renders a memo (gitmsg/memo): the subject linking to its detail, the
-  // author/time meta (with edited / edited-by chips), the shared enrichment chip
-  // row (labels, origin ↗, retracted — same conventions as issue/PR cards), and
-  // the body.
+  // memoCard renders a memo card.
   function memoCard(item) {
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
@@ -999,9 +770,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/memo");
   }
 
-  // timelineCard dispatches a merged-timeline item to the card matching its
-  // source extension, so each entry keeps its native shape (issue / PR / release
-  // / post) while interleaving by effective time.
+  // timelineCard dispatches a merged-timeline item to the card for its extension.
   function timelineCard(item, counts) {
     if (item._ext === "code") return commitCard(item.commit, item._branch || "", { chip: true });
     if (item._ext === "pm") return issueCard(item, 0, counts);
@@ -1010,19 +779,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return socialCard(item, counts);
   }
 
-  // versionLabel names a version by its position in the canonical-first list:
-  // the last entry is "current", the first "original", middle entries "v<N>"
-  // (mirroring the TUI VersionLabel, inverted for the ASC list).
+  // versionLabel names a version by its position: original, v<N>, current.
   function versionLabel(i, total) {
     if (i === total - 1) return "current";
     if (i === 0) return "original";
     return "v" + (i + 1);
   }
 
-  // versionMetaRow renders a version's author/time/hash meta with its own state
-  // pill and edited / edited-by chips (metaRow's shape, from a version entry).
-  // The state is that VERSION's, not the item's resolved one, so selecting an
-  // older version in the history picker shows the state it carried then.
+  // versionMetaRow renders a version's meta row with that version's own state pill.
   function versionMetaRow(v, branch) {
     const when = v.effectiveTime || (v.commit && v.commit.authorTime);
     const row = el("span", { class: "meta" }, [authorEl(v.author || "unknown", effectiveAuthorEmail(v.commit, v.header)), " · ", timeEl(when), " · "]);
@@ -1033,16 +797,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // VERSION_DELTA_SKIP are header keys a version-to-version delta never reports:
-  // the protocol version, and `edits` (every edit carries it by construction —
-  // it names the canonical, it is not a change to the item).
+  // VERSION_DELTA_SKIP are header keys a version delta never reports.
   const VERSION_DELTA_SKIP = { v: 1, edits: 1 };
 
-  // headerDelta lists the header fields that differ between two versions, as
-  // {key, from, to} ("" for an absent side). This is where a GitMsg lifecycle
-  // transition lives: closing an issue or merging a PR is an edit whose body is
-  // identical and whose header carries the new `state`, so a body-only diff
-  // reports "no changes" for the very commit that closed the item.
+  // headerDelta lists the header fields that differ between two versions as {key, from, to}.
   function headerDelta(prev, cur) {
     const a = (prev && prev.header) || {}, b = (cur && cur.header) || {};
     const out = [];
@@ -1055,9 +813,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // headerDeltaPanel renders header deltas as one "key: from → to" row each,
-  // with `state` rendering as its colored pills so a close/merge reads at a
-  // glance; an absent side shows as "—" (a field the edit added or dropped).
+  // headerDeltaPanel renders header deltas as "key: from → to" rows, with state as pills.
   function headerDeltaPanel(deltas) {
     const side = (key, val) => val === "" ? el("span", { class: "version-delta-none" }, ["—"])
       : key === "state" ? stateChip(val)
@@ -1072,13 +828,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return panel;
   }
 
-  // versionDiffPanel renders what changed between two versions (previous vs
-  // current): the header deltas first, then a unified text diff of the message
-  // bodies — pure presentation over the in-memory commits, no fetches. Header
-  // first because most edits in a mirrored corpus are state transitions whose
-  // body never moves; reporting only the body diff made those edits read as
-  // empty. A notice when the pair is too large to diff; "No changes." only when
-  // neither side moved.
+  // versionDiffPanel renders the header deltas, then a unified body diff, between two versions.
   function versionDiffPanel(prev, cur) {
     const deltas = headerDelta(prev, cur);
     const panel = el("div", { class: "version-diff" }, []);
@@ -1094,10 +844,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return panel;
   }
 
-  // versionRowStateChip returns the state pill a history row shows: the state on
-  // the original (the baseline) and on any version that CHANGED it, nothing on
-  // versions that merely carried it forward — so the close/merge edit stands out
-  // without the same pill repeating down the whole list.
+  // versionRowStateChip returns a state pill only on the original and on versions that changed it.
   function versionRowStateChip(versions, i) {
     const state = (versions[i].header || {}).state;
     if (!state) return null;
@@ -1105,14 +852,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return stateChip(state);
   }
 
-  // versionHistorySection renders the compact "History (N versions)" picker on an
-  // item detail page (TUI VersionPicker-flavored): one row per version, newest
-  // first, each with a label chip + author + relative time + short hash (plus a
-  // state pill where the state changed, and an "edited by" chip when the editor
-  // differs). Clicking a row shows that version's content in the main body pane
-  // via onSelect; each row above the original carries a "diff to previous"
-  // toggle rendering that version's header deltas and message-body diff from
-  // memory (zero new fetches).
+  // versionHistorySection renders the newest-first version picker with per-row diff toggles.
   function versionHistorySection(versions, onSelect) {
     const total = versions.length;
     const wrap = el("div", { class: "version-history" }, []);
@@ -1152,11 +892,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // detailView renders an item detail page. When the item carries more than one
-  // version (an edit chain), a "History" picker lets the reader select any
-  // trailerValue renders one parsed-trailer value: a same-repo original/
-  // reply-to ref links to its commit permalink so the reader can jump to the
-  // parent; cross-repo values (objects not in this bucket) stay plain text.
+  // trailerValue renders one trailer value; a same-repo original or reply-to ref links to its commit.
   function trailerValue(key, val) {
     if ((key === "original" || key === "reply-to") && !refRepoUrl(val)) {
       const h = refHash(val);
@@ -1165,36 +901,22 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return val;
   }
 
-  // shareURL returns the best shareable URL for an item: the canonical PAGE URL
-  // ({site.url}i/<short>.html) when the site config carries a valid url AND the
-  // HTML page layer is enabled (pages === "true") — those are the site's
-  // permanent, crawlable, shared-forever URLs; otherwise the in-app hash URL
-  // (origin + base path + #commit:<short>@<branch>), which always resolves. ctx
-  // carries the site customization loaded once per context (loadSiteCustomization);
-  // it may be absent (a bucket with no site config), in which case the hash URL
-  // is used. `short` is the item's short hash, `branch` its ext data branch.
+  // shareURL returns the item's page URL when the site config enables pages, else the in-app hash URL.
   function shareURL(ctx, short, branch) {
     const cfg = ctx && ctx.siteCustomization;
     if (cfg && cfg.pages === "true" && typeof cfg.url === "string" && /^https?:\/\//.test(cfg.url)) {
       const base = cfg.url.endsWith("/") ? cfg.url : cfg.url + "/";
       return base + "i/" + short + ".html";
     }
-    // Hash URL: the served base directory plus the app hash route. ctx.base is
-    // the absolute site root; strip any trailing "#..." the location may carry.
     const base = (ctx && ctx.base) || "";
     return base + commitRef(short, branch);
   }
 
-  // shareControl renders a minimal copy-link affordance for an item detail: a
-  // mono button that copies shareURL() to the clipboard and flashes "Copied".
-  // The URL is resolved at click time so a site config that loads after the
-  // detail renders is still honored. Clipboard failures fall back silently.
+  // shareControl renders a Copy link button that resolves shareURL at click time.
   function shareControl(ctx, short, branch) {
     const btn = el("button", { class: "share-link", type: "button", title: "Copy a link to this item" }, ["Copy link"]);
     btn.addEventListener("click", async () => {
       let url = shareURL(ctx, short, branch);
-      // The site config may still be loading; a fresh read makes the page URL
-      // available as soon as it lands, without blocking first paint.
       if (ctx && ctx.siteCustomization === undefined && typeof loadSiteCustomization === "function") {
         try { await loadSiteCustomization(ctx); url = shareURL(ctx, short, branch); } catch (e) { /* keep hash URL */ }
       }
@@ -1206,24 +928,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return btn;
   }
 
-  // version; the subject, meta, body (Rendered|Raw), and header fields all repaint
-  // for the selected version. The latest version is shown by default.
+  // detailView renders an item detail page, with a version picker when the item has edits.
   function detailView(item, kind, skipKeys, ctx) {
     const skip = skipKeys || [];
     const versions = (item.versions && item.versions.length) ? item.versions
       : [{ commit: item.commit, header: item.header, content: item.content, rawMessage: item.rawMessage, author: item.author, editorName: item.editorName, edited: item.edited, effectiveTime: item.effectiveTime }];
     const sel = { idx: versions.length - 1 };
-    // A reply (comment, feedback), a repost, or a quote renders whole, with no
-    // heading: the thing above it already names the subject, so its first line
-    // is the opening of a sentence, not a title. A post keeps its heading — it
-    // is the root of its own page and feed entry, and its first line names it
-    // everywhere else. See gs-core.js BODY_ONLY_TYPES.
     const bodyOnly = isBodyOnly(item, (COMMIT_VIEW[kind.branch] || {}).ext);
     const wrap = el("div", { class: "detail" }, []);
-    // Back link plus a copy-link/share affordance handing out the item's page URL
-    // ({site.url}i/<short>.html) when the site config enables the HTML page layer,
-    // else the in-app hash URL. On one row so the share control sits by the back
-    // link without disturbing the meta line below.
     wrap.append(el("div", { class: "detail-topbar" }, [
       el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]),
       shareControl(ctx, item.commit.short, kind.branch),
@@ -1236,6 +948,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(bodyPane);
     const dl = el("dl", {}, []);
     wrap.append(dl);
+    // paint repaints the subject, meta, body and header fields for the selected version.
     function paint() {
       const v = versions[sel.idx];
       const [subject, body] = subjectBody(v.content);
@@ -1256,16 +969,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // resolveCommitRouteSha expands a short route sha to the full sha getObject
-  // addresses. The static pages (front-page activity, commits lists) and shared
-  // links carry sha12, but getObject has no short-sha path on ANY bucket shape:
-  // a short sha builds a malformed loose key (objects/<2>/<38> needs 40 hex) and
-  // the packed path does exact-key lookups (pack map offsets are keyed by full
-  // sha; the pack index binary-searches 20 exact bytes). So: an exact 40-hex sha
-  // passes through, then the code items index answers (complete on index-seeded
-  // buckets, packed or loose — the same resolver PR tips use), then a bounded
-  // walk from the route's branch tip covers index-absent buckets. Null when
-  // nothing matches.
+  // resolveCommitRouteSha expands a short route sha through the index, then a bounded walk; getObject needs full shas.
   async function resolveCommitRouteSha(ctx, hash, branch) {
     if (/^[0-9a-f]{40}$/.test(hash)) return hash;
     const indexed = await resolveShortShaFromIndex(ctx, hash);
@@ -1279,6 +983,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return (commits.find((c) => c.hash.startsWith(hash)) || {}).hash || null;
   }
 
+  // commitDetail renders a raw commit's detail page with its changes.
   async function commitDetail(ctx, hash, branch) {
     const sha = await resolveCommitRouteSha(ctx, hash, branch);
     const obj = sha ? await getObject(ctx, sha) : null;
@@ -1316,52 +1021,43 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Object URLs for in-bucket images (revoked on route change) ----
 
-  // Image extensions this reader can display, mapped to their MIME type. SVG
-  // rides through <img>, so any embedded script stays inert.
+  // IMG_MIME maps displayable image extensions to MIME types; SVG rides through img so scripts stay inert.
   const IMG_MIME = {
     png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
     webp: "image/webp", svg: "image/svg+xml",
   };
+  // imageExt returns a path's displayable image extension, or null.
   function imageExt(path) {
     const d = (path || "").lastIndexOf(".");
     const ext = d >= 0 ? path.slice(d + 1).toLowerCase() : "";
     return IMG_MIME[ext] ? ext : null;
   }
+  // imageMime returns a path's image MIME type, or null.
   function imageMime(path) { const e = imageExt(path); return e ? IMG_MIME[e] : null; }
 
-  // Video extensions this reader can play inline (README demo links), mapped to
-  // their MIME type; anything else stays on the binary path.
+  // VIDEO_MIME maps inline-playable video extensions to their MIME type.
   const VIDEO_MIME = { mp4: "video/mp4", webm: "video/webm" };
+  // videoMime returns a path's video MIME type, or null.
   function videoMime(path) {
     const d = (path || "").lastIndexOf(".");
     const ext = d >= 0 ? path.slice(d + 1).toLowerCase() : "";
     return VIDEO_MIME[ext] || null;
   }
 
-  // Object URLs live on two lifetimes. Ephemeral ones (standalone image/video
-  // blob views, whose bytes are already in hand) go through trackObjectUrl and
-  // are revoked wholesale on the next route() so they do not leak across
-  // navigations. Markdown image URLs (blobObjectUrl) instead persist in
-  // imageUrlCache below, keyed by branch+path and revoked only when the branch
-  // tip moves — rebuilding them per route made the README logo visibly reload
-  // on every navigation.
+  // liveObjectUrls holds the ephemeral object URLs revoked on the next route.
   let liveObjectUrls = [];
+  // trackObjectUrl registers an object URL for revocation on route change.
   function trackObjectUrl(u) { liveObjectUrls.push(u); }
+  // revokeObjectUrls revokes every tracked object URL.
   function revokeObjectUrls() {
     for (const u of liveObjectUrls) { try { URL.revokeObjectURL(u); } catch (e) { /* noop */ } }
     liveObjectUrls = [];
   }
 
-  // Cached markdown-image object URLs: branch + "\0" + path → { tip, url }.
-  // `url` holds the in-flight PROMISE, not the resolved URL (mirrors
-  // ctx.objects): one render resolves several <img> markers concurrently, and
-  // two asking for the same path before either settles would otherwise both
-  // build a blob URL. A null resolution (missing path, not an image, over the
-  // cap) is cached too — it stays wrong until the tip moves anyway.
+  // imageUrlCache maps branch + "\0" + path to { tip, url }, url being the in-flight Promise.
   const imageUrlCache = new Map();
 
-  // joinPath resolves a relative markdown/HTML path against the directory the
-  // document lives in, honoring ./, ../, and a leading / (repo root).
+  // joinPath resolves a relative path against the document's directory, honoring ./, ../ and a leading /.
   function joinPath(dir, rel) {
     rel = (rel || "").replace(/^\.\//, "");
     let parts = (dir ? dir.split("/") : []).filter(Boolean);
@@ -1375,21 +1071,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   const BLOB_CAP = 1048576;
-  // Images get a higher cap than text (8 MiB vs 1 MiB): a browser stream-renders
-  // a multi-MB image cheaply, and README media (demo GIFs, screenshots) routinely
-  // exceed 1 MiB — the text cap silently dropped them. Text stays at BLOB_CAP
-  // (large text truncates/skip-diffs, a different economics).
   const IMG_BLOB_CAP = 8388608;
 
-  // blobObjectUrl fetches an in-bucket blob and wraps it in a same-origin object
-  // URL with an extension-derived MIME, capped at IMG_BLOB_CAP. Returns null when
-  // the path is missing, not an image, or over the cap. The URL is served from
-  // imageUrlCache while the branch tip is unchanged; on tip change the stale URL
-  // is revoked and the entry rebuilt. A caller that already resolved the branch
-  // tip to render its markdown passes it as `tip`: ref keys are no-cache, so the
-  // refTip fallback is a network round trip per image per render — the last
-  // visible repaint — and resolving at the render's own tip also keeps the image
-  // consistent with the text if a push lands mid-session.
+  // blobObjectUrl returns a cached object URL for an in-bucket image, or null; a passed tip skips refTip.
   async function blobObjectUrl(ctx, path, branch, tip) {
     if (!tip) tip = await refTip(ctx, "refs/heads/" + branch);
     if (!tip) return null;
@@ -1409,14 +1093,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return URL.createObjectURL(new Blob([obj.body], { type: mime }));
     })();
     imageUrlCache.set(key, { tip, url });
-    // A rejection is never kept (same rule as ctx.objects): a transient fetch
-    // error would otherwise pin that image broken until the tip moves.
+    // A rejection is never kept, so a transient fetch error does not pin the image broken.
     url.catch(() => { const e = imageUrlCache.get(key); if (e && e.url === url) imageUrlCache.delete(key); });
     return url;
   }
 
-  // bytesObjectUrl wraps already-inflated blob bytes in an object URL for the
-  // standalone image blob view (bytes are in hand, no extra fetch).
+  // bytesObjectUrl wraps already-inflated blob bytes in a tracked object URL, or null.
   function bytesObjectUrl(bytes, path) {
     const mime = imageMime(path);
     if (!mime || bytes.length > IMG_BLOB_CAP) return null;
@@ -1425,11 +1107,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return u;
   }
 
-  // resolveImages resolves the relative <img data-gs-src> markers left by the
-  // sanitizer / markdown image renderer into in-bucket object URLs. Absolute
-  // https images already carry their src. Fire-and-forget after render. `tip`
-  // is the tip the surrounding markdown was rendered at, when the caller has
-  // one (see blobObjectUrl for why it should).
+  // resolveImages turns the sanitizer's relative img data-gs-src markers into in-bucket object URLs.
   async function resolveImages(container, ctx, tip) {
     if (!ctx || !container || !container.querySelectorAll) return;
     for (const img of Array.from(container.querySelectorAll("img[data-gs-src]"))) {
@@ -1444,23 +1122,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Sanitizer: inert-parse then whitelist-rebuild a clean DOM tree ----
 
-  // The whitelist. Allowed elements are rebuilt clean; DROP tags (and their
-  // subtrees) vanish; picture and any other non-whitelisted tag are unwrapped to
-  // their children; <source> is dropped so <picture> degrades to its <img>.
+  // SANITIZE_TAGS are rebuilt clean, SANITIZE_DROP vanish with their subtrees, other tags unwrap to their children.
   const SANITIZE_TAGS = new Set(["div", "span", "p", "br", "hr", "a", "img", "b", "strong", "i", "em", "code", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col", "details", "summary", "center", "sup", "sub", "kbd", "del", "s", "strike", "blockquote", "mark"]);
   const SANITIZE_DROP = new Set(["script", "style", "iframe", "object", "embed", "link", "meta", "noscript", "template", "svg", "math", "form", "input", "button", "textarea", "select", "title", "head", "base", "frame", "frameset", "applet"]);
   const SANITIZE_ATTRS = new Set(["align", "alt", "title", "width", "height", "src", "href", "open"]);
 
-  // hrefOk keeps the today's-gate href set (absolute web/mailto, in-page and
-  // root-relative); bare-relative hrefs go through relativeHref instead.
+  // hrefOk accepts absolute web, mailto, in-page and root-relative hrefs.
   function hrefOk(v) { return /^(https?:|mailto:|#|\/)/i.test(v || ""); }
 
-  // relativeHref resolves a bare-relative markdown/HTML href (e.g. a README's
-  // specs/GITMSG.md#2-lists link) to the in-site file route, against the same
-  // { branch, dir } base the relative-image resolver uses. Schemes,
-  // protocol-relative, in-page, and root-relative hrefs are not its job
-  // (hrefOk gates those). A fragment rides along as a heading-anchor suffix
-  // (:slug); queries are dropped. Returns "" when not resolvable.
+  // relativeHref resolves a bare-relative href to the in-site file route, with a fragment as a :slug suffix.
   function relativeHref(raw, mdctx) {
     if (!raw || !mdctx || !mdctx.branch) return "";
     if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) || raw.startsWith("//") || raw.startsWith("#") || raw.startsWith("/")) return "";
@@ -1472,10 +1142,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return fileRef(joinPath(mdctx.dir || "", path), mdctx.branch) + (slug ? ":" + slug : "");
   }
 
-  // applyImgSrc gates an image source: an absolute https src is kept verbatim
-  // (GitHub parity for badges); a bucket-relative path becomes a data-gs-src
-  // marker resolveImages turns into an object URL; every other scheme
-  // (http:, data:, javascript:, protocol-relative) is dropped.
+  // applyImgSrc keeps an absolute https src, defers a relative path to resolveImages, and drops every other scheme.
   function applyImgSrc(img, rawSrc, alt, mdctx) {
     if (alt) img.setAttribute("alt", alt);
     if (!rawSrc) return;
@@ -1488,13 +1155,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
   }
 
+  // nodeChildren returns a node's child nodes as an array.
   function nodeChildren(n) { return Array.from((n && n.childNodes) || []); }
+  // nodeAttrs returns a node's attributes as an array.
   function nodeAttrs(n) { return Array.from((n && n.attributes) || []); }
 
-  // sanitizeChildren walks an inert node's children and appends a clean, rebuilt
-  // copy to `out`. Only whitelisted tags and attributes survive; event handlers
-  // and style attributes never do (they are not in SANITIZE_ATTRS); DROP tags
-  // are removed subtree-and-all; unknown tags are unwrapped to their children.
+  // sanitizeChildren appends a whitelisted rebuild of a node's children to out.
   function sanitizeChildren(parent, out, mdctx) {
     for (const child of nodeChildren(parent)) {
       const nt = child.nodeType;
@@ -1526,18 +1192,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // sanitizeInert rebuilds a clean node array from an already-parsed inert node
-  // (DOM-shim-testable: pass a synthetic inert body and inspect the output).
+  // sanitizeInert rebuilds a clean node array from an already-parsed inert node.
   function sanitizeInert(inertBody, mdctx) {
     const container = document.createElement("div");
     sanitizeChildren(inertBody, container, mdctx);
     return Array.from(container.childNodes || []);
   }
 
-  // sanitizeHtml is the single HTML gate: parse untrusted HTML into an INERT
-  // document (never attached, so nothing executes), then rebuild a clean node
-  // array against the whitelist. Raw HTML never reaches innerHTML of the live
-  // page.
+  // sanitizeHtml parses untrusted HTML into an inert document and rebuilds it against the whitelist.
   function sanitizeHtml(html, mdctx) {
     let body;
     try { body = new DOMParser().parseFromString(String(html), "text/html").body; }
@@ -1545,8 +1207,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return sanitizeInert(body, mdctx);
   }
 
-  // makeImage builds an <img> for a markdown ![alt](src), gated like a sanitized
-  // one (absolute https kept, relative deferred to resolveImages).
+  // makeImage builds an img for a markdown image, gated like a sanitized one.
   function makeImage(src, alt, mdctx) {
     const img = el("img", {}, []);
     applyImgSrc(img, src, alt || "", mdctx);
@@ -1555,12 +1216,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Fullscreen overlay (pure presentation, no fetches) ----
 
-  // openFullscreen shows `node` in a full-viewport overlay with body scroll
-  // locked; Escape or the close button exits. By default it shows a static clone
-  // (right for a code blob / one diff file / a fenced block). With opts.live it
-  // moves the real node into the overlay and restores it to its original spot on
-  // close, so interactive content (the whole changes section: lazy per-file
-  // expands backed by the shared model cache) stays live inside the overlay.
+  // openFullscreen shows a node in an overlay; opts.live moves the real node and restores it on close.
   function openFullscreen(node, opts) {
     if (!node) return;
     opts = opts || {};
@@ -1573,7 +1229,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const content = el("div", { class: "fs-content" }, [inner]);
     const close = el("button", { class: "fs-close circle", type: "button", "aria-label": "Close fullscreen", title: "Close (Esc)" }, ["✕"]);
     const overlay = el("div", { class: "fs-overlay" }, [content, close]);
+    // shut closes the overlay and restores a live node.
     function shut() { overlay.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); if (restore) restore(); }
+    // onKey closes on Escape.
     function onKey(ev) { if (ev.key === "Escape") shut(); }
     close.addEventListener("click", shut);
     document.addEventListener("keydown", onKey);
@@ -1595,8 +1253,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Markdown rendering (browser only; raw HTML via the sanitizer) ----
 
-  // renderInline turns inline spans into safe DOM nodes. Markdown-native spans
-  // build clean elements directly; rawhtml spans flow through the sanitizer.
+  // renderInline turns inline spans into DOM nodes; rawhtml spans pass through the sanitizer.
   function renderInline(spans, mdctx) {
     const out = [];
     for (const s of spans) {
@@ -1612,8 +1269,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         if (href) a.setAttribute("href", href);
         out.push(a);
       } else if (mdctx && mdctx.hardBreaks && s.value.indexOf("\n") >= 0) {
-        // GitHub comment semantics: a single newline is a hard <br>, so a plain
-        // multi-line message keeps its line structure instead of collapsing.
+        // A single newline is a hard br, as in a GitHub comment.
         const segs = s.value.split("\n");
         segs.forEach((seg, i) => { if (i) out.push(el("br", {}, [])); if (seg) out.push(document.createTextNode(seg)); });
       } else out.push(document.createTextNode(s.value));
@@ -1668,8 +1324,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function renderMdBlock(block, parent, mdctx) {
     if (block.type === "heading") {
       const h = el("h" + block.level, {}, renderInline(block.spans, mdctx));
-      // Headings get md- prefixed slug ids (dedup'd per document) so in-page
-      // anchors have a scroll target; the prefix keeps them clear of app ids.
+      // The md- prefix keeps heading anchor ids clear of app ids.
       const slug = mdSlug(spanText(block.spans));
       if (slug && mdctx.slugs) {
         let id = slug, n = 1;
@@ -1692,10 +1347,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     } else parent.append(el("p", {}, renderInline(block.spans, mdctx)));
   }
 
-  // renderBlocksInto renders a block list into a parent, honoring raw-HTML
-  // wrapper markers: htmlopen pushes a sanitized container that following blocks
-  // (markdown or HTML) nest into, so a <div align="center"> wrapping markdown
-  // renders as GitHub does. The sanitizer is the only path raw HTML takes.
+  // renderBlocksInto renders blocks into a parent, nesting later blocks inside sanitized htmlopen wrappers.
   function renderBlocksInto(parent, blocks, mdctx) {
     const stack = [{ node: parent, tag: null }];
     const cur = () => stack[stack.length - 1].node;
@@ -1706,8 +1358,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         if (container) { cur().append(container); stack.push({ node: container, tag: block.tag }); }
         else for (const n of nodes) cur().append(n);
       } else if (block.type === "htmlclose") {
-        // Pop through to the nearest matching wrapper, discarding unclosed
-        // levels in between (HTML-parser recovery); an unmatched close is ignored.
+        // Pop to the nearest matching wrapper; an unmatched close is ignored.
         for (let d = stack.length - 1; d > 0; d--) {
           if (stack[d].tag === block.tag) { stack.length = d; break; }
         }
@@ -1716,10 +1367,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
   }
 
-  // renderMarkdown builds a sanitized DOM subtree from markdown text. mdctx
-  // carries { ctx, branch, dir } so relative images resolve to in-bucket blobs,
-  // plus { tip } — the tip the text was loaded at — so they resolve without a
-  // fresh refTip and at the same tip as the text (see blobObjectUrl).
+  // renderMarkdown builds a sanitized DOM subtree from markdown; mdctx carries { ctx, branch, dir, tip }.
   function renderMarkdown(text, mdctx) {
     mdctx = mdctx || {};
     if (!mdctx.slugs) mdctx.slugs = new Set();
@@ -1730,12 +1378,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return root;
   }
 
-  // wireInPageAnchors makes plain #fragment links (a document's own TOC) scroll
-  // to their md- slugged heading on click instead of re-routing. The URL is
-  // updated via pushState (no hashchange, no re-render) so the anchor is
-  // shareable: on a file route it becomes the file's heading-anchor form
-  // (#file:path@branch:slug), on home the plain #fragment; a direct load of
-  // either routes back to the document + scrolls (parseRoute).
+  // wireInPageAnchors scrolls plain #fragment links to their md- heading and pushes a shareable URL.
   function wireInPageAnchors(root) {
     if (!root.querySelectorAll) return;
     for (const a of Array.from(root.querySelectorAll('a[href^="#"]'))) {
@@ -1756,21 +1399,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
   }
 
-  // renderCommitBody renders a commit message body (everything after the subject
-  // line) through the same Markdown pipeline the file view uses, with GitHub
-  // comment hard-break semantics: a single newline becomes a <br>, so a plain
-  // multi-line message keeps its line structure (no paragraph collapse) while a
-  // message using real Markdown constructs renders them. Relative images are not
-  // resolved against the commit tree (no mdctx.ctx), so only absolute https
-  // images load here; the sanitizer path is identical to the file view.
+  // renderCommitBody renders a commit body as markdown with hard breaks and no relative image resolution.
   function renderCommitBody(body) {
     return renderMarkdown(body || "", { hardBreaks: true });
   }
 
-  // rawToggle builds the single "Raw" toggle button used everywhere a rendered
-  // view has a verbatim counterpart: unpressed shows the rendered pane, pressed
-  // (.active, aria-pressed) shows the raw one. One control replaces the old
-  // Rendered|Raw button pair; propagation stops so card navigation never fires.
+  // rawToggle builds the Raw toggle button switching between a rendered and a verbatim pane.
   function rawToggle(showRendered, showRaw, initialRaw) {
     const btn = el("button", { class: "view-toggle", type: "button", "aria-pressed": "false", title: "Toggle raw view" }, ["Raw"]);
     let raw = !!initialRaw;
@@ -1784,13 +1418,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return btn;
   }
 
-  // commitBody builds a detail-page commit body with a Raw toggle, returning
-  // { modes, pane } so the caller can place the small toggle on the author/time
-  // meta line (like the blob-head pattern) and the pane below it. Rendered is
-  // the markdown body (subject already shown above); Raw is the FULL VERBATIM
-  // commit message — subject + body + the GitMsg trailer block, exactly as
-  // committed — the protocol-level truth, monospace pre-wrap (mirrors the TUI's
-  // raw view mode). Thread comments keep the plain rendered body, no toggle.
+  // commitBody builds a detail body with a Raw toggle, returning { modes, pane }; Raw is the full verbatim message.
   function commitBody(body, rawMessage) {
     const pane = el("div", {}, []);
     const btn = rawToggle(
@@ -1800,8 +1428,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { modes, pane };
   }
 
-  // breadcrumb renders a path as clickable segments linking into the tree (the
-  // root plus one link per path segment). No leading file-type icon.
+  // breadcrumb renders a path as the root plus one link per segment.
   function breadcrumb(path, branch) {
     const row = el("div", { class: "breadcrumb mono" }, []);
     const rootA = el("a", { href: fileRef("", branch) }, [branch || "root"]);
@@ -1816,9 +1443,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // treeIcon builds a tree-row icon for an entry (or the ".." parent), falling
-  // back to the text glyph when the icon set is absent. An expanded directory
-  // flips to the folder-open icon.
+  // treeIcon builds a tree-row icon for an entry, falling back to a text glyph.
   function treeIcon(entry, open) {
     let key, glyph;
     if (!entry) { key = "folder"; glyph = "📁"; }
@@ -1828,22 +1453,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return iconEl(key, "tree-icon") || el("span", { class: "tree-icon" }, [glyph]);
   }
 
-  // TREE_ENTRY_CAP bounds how many entries a single directory level renders (the
-  // first N, then an "M more not shown" notice), matching the other display caps
-  // (WALK_CAP, DIFF_FILE_CAP). Fan-out is user-driven: expanding a directory is
-  // exactly one tree-object GET, cached in ctx.objects, so re-collapse/re-expand
-  // and full re-renders reuse it with no new fetch.
+  // TREE_ENTRY_CAP bounds the entries one directory level renders.
   const TREE_ENTRY_CAP = 200;
 
-  // TREE_SEARCH_CAP bounds the one-time full-tree walk the in-place search does:
-  // it recurses every directory under the current root exactly once (one tree
-  // GET each, cached in ctx.objects), stopping at this many total entries and
-  // surfacing a "search truncated" notice if hit. Worst-case fan-out for a
-  // search is therefore one GET per directory in the tree, once.
+  // TREE_SEARCH_CAP bounds the one-time full-tree walk behind the in-place search.
   const TREE_SEARCH_CAP = 3000;
 
-  // highlightName splits a name around case-insensitive occurrences of a query,
-  // wrapping each match in a <mark> so results show which substring matched.
+  // highlightName wraps each case-insensitive match of q in a mark.
   function highlightName(name, q) {
     if (!q) return [document.createTextNode(name)];
     const lower = name.toLowerCase();
@@ -1866,32 +1482,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return dirs.concat(files);
   }
 
-  // treeChevron builds a directory-row expand caret from the trusted CHEVRON_SVG
-  // path (rotated right when collapsed, down when open, via the .open class), or
-  // a plain text caret when DOMParser is unavailable.
+  // treeChevron builds a directory expand caret, or a text caret without DOMParser.
   function treeChevron(open) {
     const c = chevronEl("down");
     if (c) { c.className = "gs-icon chevron tree-chevron" + (open ? " open" : ""); return c; }
     return el("span", { class: "tree-chevron" + (open ? " open" : "") }, [open ? "▾" : "▸"]);
   }
 
-  // mountTree renders an in-place, lazily-expanding directory tree into listNode.
-  // Directory rows expand their children inline beneath them on click (one cached
-  // tree GET per expand), files navigate to the blob route. Expansion state lives
-  // in a per-view Set keyed by full path, so collapsing removes a subtree's rows
-  // yet a later re-expand (or a full rerender()) reconstructs it from the Set and
-  // the object cache with no refetch. Returns { expanded, rerender } for tests.
+  // mountTree renders a lazily-expanding directory tree into listNode; returns { expanded, rerender, setFilter, buildIndex }.
   function mountTree(ctx, listNode, rootEntries, rootPath, branch, opts) {
     opts = opts || {};
-    // A shared expansion Set (opts.expanded) lets the content and sidebar trees
-    // track the same open directories; omitted, each mount keeps its own.
     const expanded = opts.expanded || new Set();
-    // activePath marks the currently-viewed file/dir with the active tint (used
-    // by the sidebar tree so the open file is visible in the hierarchy).
     const activePath = opts.activePath || "";
 
-    // indent reserves a plain, rail-free spacer sized by depth (0.9rem per level)
-    // at a row's left, so nesting reads from indentation alone (no vertical guides).
+    // indent builds a depth-sized spacer at a row's left.
     function indent(depth) {
       const box = el("div", { class: "tree-indent" }, []);
       if (depth > 0) box.style.width = (depth * 0.9) + "rem";
@@ -1907,12 +1511,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       ]);
     }
 
-    // dirNode builds a directory as a { node } whose row has split click targets:
-    // the chevron toggles the inline children container (no navigation, no hash
-    // change), while the directory NAME is a real anchor that navigates to the
-    // rooted #file:<dir>@<branch> route (so middle/modified clicks open a tab).
-    // Row keyboard: Enter follows the name (navigate), Space toggles expansion,
-    // ArrowRight expands and ArrowLeft collapses (the cheap keyboard subset).
+    // dirNode builds a directory row: the chevron and row toggle, the name navigates, keys Enter, Space and arrows.
     function dirNode(entry, childPath, depth) {
       const childrenEl = el("div", { class: "tree-children" }, []);
       const dirCls = "tree-row tree-dir" + (childPath === activePath ? " tree-active" : "");
@@ -1921,8 +1520,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       let open = false;
       const navigate = () => { if (typeof location !== "undefined") location.hash = fileRef(childPath, branch); };
       const paint = () => {
-        // No folder icon on dir rows: the rotating chevron already signals a
-        // folder. The chevron is its own toggle target; the name navigates.
         const chevBtn = el("span", {
           class: "tree-chevron-btn", role: "button", tabindex: "-1",
           "aria-label": (open ? "Collapse " : "Expand ") + entry.name,
@@ -1940,22 +1537,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         row.replaceChildren(indent(depth), chevBtn, nameA);
         row.setAttribute("aria-expanded", open ? "true" : "false");
       };
+      // openDir expands the directory, fetching its tree.
       async function openDir() {
         if (open) return;
         open = true; expanded.add(childPath); paint();
         const kids = (await getTree(ctx, entry.sha)) || [];
         await renderLevel(childrenEl, kids, childPath, depth + 1);
       }
+      // closeDir collapses the directory.
       function closeDir() {
         if (!open) return;
         open = false; expanded.delete(childPath);
         childrenEl.replaceChildren();
         paint();
       }
-      // The whole row is a toggle target: a click on the row's padding/indent
-      // (anywhere but the name anchor or chevron, both of which stopPropagation)
-      // expands/collapses the directory, so the full-width hover chip is fully
-      // active — the name still navigates, the chevron still toggles.
       row.addEventListener("click", (ev) => {
         if (ev.target && ev.target.closest && ev.target.closest("a, .tree-chevron-btn")) return;
         open ? closeDir() : openDir();
@@ -1970,9 +1565,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return { node, openDir };
     }
 
-    // renderLevel fills a container with one directory level (capped), then
-    // auto-reopens any directory whose path is still in the expansion Set — the
-    // recursion that reconstructs a saved tree shape from the cache.
+    // renderLevel fills a container with one capped directory level, reopening directories in the expansion Set.
     async function renderLevel(container, entries, parentPath, depth) {
       const all = sortTreeEntries(entries);
       const shown = all.slice(0, TREE_ENTRY_CAP);
@@ -1998,17 +1591,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
     // ---- In-place search (hide non-matches; expand ancestors of matches) ----
 
-    // fullIndex caches the one-time recursive walk of every directory under the
-    // root (bounded at TREE_SEARCH_CAP), so repeat searches refetch nothing.
+    // fullIndex caches the one-time recursive walk under the root.
     let fullIndex = null;
 
-    // buildIndex walks the entire tree once, collecting { path, name, type } for
-    // every entry, capped at TREE_SEARCH_CAP. Each directory is one cached tree
-    // GET; a second search reuses the cache with zero new GETs.
+    // buildIndex walks the whole tree once, collecting { path, name, type } up to TREE_SEARCH_CAP.
     async function buildIndex() {
       if (fullIndex) return fullIndex;
       const all = [];
       const state = { truncated: false };
+      // walk recurses one directory level into all.
       async function walk(entries, parentPath) {
         for (const e of sortTreeEntries(entries)) {
           if (all.length >= TREE_SEARCH_CAP) { state.truncated = true; return; }
@@ -2026,11 +1617,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return fullIndex;
     }
 
-    // renderFiltered draws a static, pre-expanded view: only entries in
-    // visiblePaths render, dirs in forceOpenPaths render expanded (revealing the
-    // matches beneath), and matched substrings are marked. Non-matching siblings
-    // are simply absent. The live `expanded` Set is untouched, so clearing the
-    // query restores the pre-search shape via rerender().
+    // renderFiltered draws only visible paths, with forceOpen directories expanded and matches marked.
     async function renderFiltered(container, entries, parentPath, depth, f) {
       for (const e of sortTreeEntries(entries)) {
         const childPath = parentPath ? parentPath + "/" + e.name : e.name;
@@ -2055,10 +1642,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
     }
 
-    // setFilter applies (or clears) an in-place filter. An empty query restores
-    // the pre-search tree from the untouched expansion Set. Otherwise it walks
-    // the full tree once, keeps every match plus its ancestor chain, auto-expands
-    // those ancestors, and hides the rest.
+    // setFilter shows matches with their ancestor chain expanded; an empty query restores the tree.
     async function setFilter(query) {
       const q = (query || "").trim().toLowerCase();
       if (!q) return rerender();
@@ -2093,19 +1677,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { expanded, rerender, setFilter, buildIndex };
   }
 
-  // lastTreeSearch holds the most recently mounted content-tree search input, so
-  // the Code nav magnifier can focus it without a second search box.
+  // lastTreeSearch is the most recently mounted tree search input.
   let lastTreeSearch = null;
 
-  // focusTreeSearch focuses the current file-tree search input (if one is mounted
-  // and focusable), returning whether it did — used by the Code nav magnifier.
+  // focusTreeSearch focuses the mounted tree search input, returning whether it did.
   function focusTreeSearch() {
     if (lastTreeSearch && lastTreeSearch.focus) { lastTreeSearch.focus(); return true; }
     return false;
   }
 
-  // treeView renders the in-place hierarchical tree: a breadcrumb (which carries
-  // up-navigation, including "..") above the interactive listing rooted at path.
+  // treeView renders a breadcrumb and search input above the interactive tree rooted at path.
   function treeView(ctx, entries, path, branch) {
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(breadcrumb(path, branch));
@@ -2113,9 +1694,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!entries.length) { listNode.append(el("div", { class: "empty" }, ["Empty directory."])); wrap.append(listNode); return [wrap]; }
     const ctrl = mountTree(ctx, listNode, entries, path, branch, { expanded: ctx.treeExpanded });
     wrap.__tree = ctrl;
-    // Search input above the tree: debounced (150ms), Escape clears. Filtering
-    // hides non-matches and auto-expands ancestors of matches (hide-non-matches
-    // mode); clearing restores the pre-search expansion state.
     const input = el("input", { class: "tree-search mono", type: "text", placeholder: "Search files…", "aria-label": "Search files", spellcheck: "false" }, []);
     lastTreeSearch = input;
     let timer = null;
@@ -2136,26 +1714,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return (n / 1048576).toFixed(1) + " MB";
   }
 
-  // blobAnchor holds the last line clicked in the blob view, so a subsequent
-  // shift-click extends a #file:...:L<a>-<b> range (either direction). Reset per
-  // render to the loaded line so a range extends from an opened permalink.
+  // blobAnchor is the last clicked blob line, so a shift-click extends a range.
   let blobAnchor = null;
 
-  // rawBlobPane builds the monospace, line-numbered blob body with whole-file
-  // Prism highlighting and line-number anchors (click sets #file:...:L<n>,
-  // shift-click extends a range). Rows render with whatever grammar is loaded
-  // now, then rebuild in place once the file's lazy-loaded grammar arrives
-  // (progressive enhancement; a missing grammar stays plain). Returns
-  // { code, firstHl }.
+  // rawBlobPane builds the line-numbered blob body with lazy highlighting; returns { code, firstHl }.
   function rawBlobPane(textStr, path, branch, line, lineEnd) {
     const from = line || 0, to = lineEnd || line || 0;
     const lang = langForPath(path);
     blobAnchor = line || null;
     const code = el("div", { class: "blob" }, []);
     let firstHl = null;
-    // build fills `code` with one row per source line, highlighting with the
-    // grammars loaded at call time. Re-runnable so a later grammar load upgrades
-    // the whole pane; firstHl tracks the first highlighted-range row for scroll.
+    // build is re-run when a grammar loads; firstHl is the first highlighted row.
     const build = () => {
       code.replaceChildren();
       firstHl = null;
@@ -2182,13 +1751,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { code, firstHl };
   }
 
-  // blobView renders a file. A known-image extension displays the blob as an
-  // <img> (object URL) BEFORE the NUL-sniff, so images do not fall into the
-  // binary path; a known-video extension plays inline the same way. Otherwise
-  // binary blobs get a note, large blobs truncate, and
-  // text renders monospace with a fullscreen affordance. A .md file gets a
-  // Rendered|Raw toggle (Rendered default; Raw is the line-numbered view, so
-  // line permalinks apply there).
+  // blobView renders a file: images and videos inline before the binary sniff, else text with a Raw toggle for markdown.
   function blobView(bytes, path, branch, line, lineEnd, ctx, tip) {
     const wrap = el("div", { class: "detail" }, []);
     const blobMeta = el("div", { class: "meta blob-meta" }, [humanSize(bytes.length)]);
@@ -2243,24 +1806,22 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   const DIFF_FILE_CAP = 100;
 
-  // getDiffMode / setDiffMode persist the unified|split view mode across the
-  // whole reader in localStorage['diffview']; unified is the default.
+  // getDiffMode reads the unified|split view mode from localStorage; unified is the default.
   function getDiffMode() {
     try { return localStorage.getItem("diffview") === "split" ? "split" : "unified"; } catch { return "unified"; }
   }
+  // setDiffMode persists the diff view mode.
   function setDiffMode(m) { try { localStorage.setItem("diffview", m); } catch { /* private mode */ } }
 
+  // diffStatusLabel maps a file status to its A, D or M letter.
   function diffStatusLabel(s) { return s === "added" ? "A" : s === "deleted" ? "D" : "M"; }
 
+  // hunkHeadText formats a hunk's @@ header.
   function hunkHeadText(h) {
     return "@@ -" + h.oldStart + "," + h.oldCount + " +" + h.newStart + "," + h.newCount + " @@";
   }
 
-  // pairIntra pairs adjacent del/add runs within a hunk's lines index-wise and
-  // returns a Map from each paired line object to its intra-line split
-  // ({ prefix, mid, suffix }) for word-level highlighting. Lines with no
-  // opposite pair, or pairs intraLine skips (identical / >500 chars) or whose
-  // side has no differing middle, are absent from the map.
+  // pairIntra maps paired del/add lines within a hunk to their intra-line { prefix, mid, suffix } split.
   function pairIntra(lines) {
     const map = new Map();
     let i = 0;
@@ -2279,9 +1840,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return map;
   }
 
-  // renderDiffText fills a container for one diff line: Prism syntax highlight,
-  // and when an intra-line split is present the differing middle is wrapped in a
-  // .dw (del) / .aw (add) mark for word-level emphasis over the base row tint.
+  // renderDiffText fills a diff line container, marking an intra-line middle with markCls.
   function renderDiffText(container, lineText, lang, intra, markCls) {
     if (!intra) return highlightTo(container, lineText, lang);
     highlightTo(container, intra.prefix, lang);
@@ -2290,10 +1849,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return container;
   }
 
-  // hunkSeparator builds the collapsed "N unchanged lines" divider shown before
-  // a hunk. Clicking (or Enter/Space) reveals the skipped context lines, which
-  // are already in memory (zero new fetches), by replacing the divider with the
-  // rows rowsFor builds.
+  // hunkSeparator builds the "N unchanged lines" divider that reveals the skipped rows on click.
   function hunkSeparator(skipped, rowsFor) {
     const n = skipped.length;
     const row = el("div", { class: "diff-expand mono", role: "button", tabindex: "0" }, [
@@ -2306,8 +1862,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // unifiedRow builds one unified-diff line row (also reused to reveal skipped
-  // context, all rendered as eq/ctx lines).
+  // unifiedRow builds one unified-diff line row.
   function unifiedRow(l, lang, intra) {
     const cls = l.op === "add" ? "add" : l.op === "del" ? "del" : "ctx";
     const text = renderDiffText(el("span", { class: "dl-text mono" }, []), l.line, lang, intra, l.op === "del" ? "dw" : "aw");
@@ -2319,10 +1874,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]);
   }
 
-  // appendLineFeedback appends inline PR-feedback card rows after a diff line row
-  // when fbCtx.byKey holds feedback anchored to that line (matched by the line's
-  // new-side then old-side key). Deduped so a feedback attaching to a context
-  // line's shared keys renders once.
+  // appendLineFeedback appends the feedback cards anchored to a diff line, deduplicated across its keys.
   function appendLineFeedback(box, l, fbCtx) {
     if (!fbCtx || !fbCtx.byKey) return;
     const seen = new Set();
@@ -2333,9 +1885,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
   }
 
-  // renderHunksUnified renders hunks as a single-column unified diff, with a
-  // collapsed-context divider before each hunk that has skipped lines. When
-  // fbCtx is passed, inline feedback cards render beneath their anchored lines.
+  // renderHunksUnified renders hunks as a unified diff, with inline feedback when fbCtx is passed.
   function renderHunksUnified(hunks, lang, fbCtx) {
     const box = el("div", { class: "diff-body unified" }, []);
     const ctxRows = (lines) => lines.map((l) => unifiedRow(l, lang, null));
@@ -2348,9 +1898,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // splitRows pairs a hunk's lines into two-column rows: equal lines fill both
-  // sides; a run of deletes lines up against the following run of adds, extras
-  // spilling to one side only.
+  // splitRows pairs a hunk's lines into two-column rows, deletes against the following adds.
   function splitRows(lines) {
     const rows = [];
     let i = 0;
@@ -2365,10 +1913,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return rows;
   }
 
-  // splitCells emits the four grid cells (leftNum, leftCode, rightNum, rightCode)
-  // for one split row into `into`. A single grid over the whole hunk body keeps
-  // the four columns aligned and each row's two sides height-locked when one
-  // wraps. intra maps a line object to its word-level split.
+  // splitCells appends one split row's four grid cells; one grid per hunk body keeps both sides height-locked.
   function splitCells(into, r, lang, intra) {
     const cell = (entry, side, markCls) => {
       const sideCls = side === "left" ? "ds-left" : "ds-right";
@@ -2386,10 +1931,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     cell(r.right, "right", "aw");
   }
 
-  // renderHunksSplit renders hunks as one CSS grid (num/code/num/code), old on
-  // the left and new on the right, with hunk heads and collapsed-context
-  // dividers spanning all four columns. When fbCtx is passed, inline feedback
-  // cards render (full-width) after their anchored row.
+  // renderHunksSplit renders hunks as a four-column grid, old left and new right, with inline feedback.
   function renderHunksSplit(hunks, lang, fbCtx) {
     const box = el("div", { class: "diff-body split" }, []);
     const ctxRows = (lines) => {
@@ -2412,8 +1954,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- PR review feedback (inline comments on the diff) ----
 
-  // suggestionBlock renders a suggestion feedback body as a mono code panel with
-  // an "applies to L<n>" note derived from the feedback's line ref (range aware).
+  // suggestionBlock renders a suggestion body as a code panel with an "applies to L<n>" note.
   function suggestionBlock(fb) {
     const h = fb.header || {};
     const line = h["new-line"] || h["old-line"] || "";
@@ -2425,9 +1966,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // feedbackCard renders one PR feedback: a verdict icon (✓ approved / ✗ changes
-  // requested / ↩ comment), the effective author + relative time, and the body
-  // (suggestion bodies as a code panel, otherwise the markdown comment body).
+  // feedbackCard renders one PR feedback: verdict icon, author, time and body.
   function feedbackCard(fb) {
     const h = fb.header || {};
     const state = h["review-state"];
@@ -2445,12 +1984,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
-  // feedbackRow wraps a feedback card as a full-width diff row (spans all split
-  // columns; flows inline in unified mode).
+  // feedbackRow wraps a feedback card as a full-width diff row.
   function feedbackRow(fb) { return el("div", { class: "diff-feedback" }, [feedbackCard(fb)]); }
 
-  // offscreenBlock renders feedback whose anchored line is not present in the
-  // rendered hunks (outdated or context-collapsed), each with its line ref.
+  // offscreenBlock renders feedback whose anchored line is not in the rendered hunks.
   function offscreenBlock(fbList) {
     const box = el("div", { class: "fb-offscreen" }, []);
     box.append(el("div", { class: "fb-offscreen-head mono" }, ["Comments not on visible lines"]));
@@ -2462,46 +1999,38 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // diffSection renders a changed-file list (capped at DIFF_FILE_CAP) with a
-  // unified|split view toggle above it. Each file is collapsible; its blob pair
-  // is fetched and diffed lazily on first expand, and auto-expanded when the
-  // list is small (<= 5). The computed per-file model is cached so toggling the
-  // view mode re-renders without re-fetching.
+  // diffSection renders a capped, collapsible changed-file list with a unified|split toggle; diffs load on first expand.
   function diffSection(ctx, entries, title, caveats, fileFeedback) {
     fileFeedback = fileFeedback || [];
     const shown = entries.slice(0, DIFF_FILE_CAP);
     const extra = entries.length - shown.length;
-    // diffTrees bounded its recursion (over DIFF_FILE_CAP + margin changed paths):
-    // the true count is unknown, so the header reads "N+" and the notice says the
-    // list was truncated rather than an exact "M more not shown".
+    // A truncated scan has no exact count, so the header reads "N+".
     const scanTruncated = !!entries.truncated;
     const countLabel = scanTruncated ? DIFF_FILE_CAP + "+" : String(entries.length);
     const wrap = el("div", { class: "diff-section" }, []);
     const head = el("div", { class: "diff-head" }, [el("span", { class: "subject" }, [title + " (" + countLabel + ")"])]);
     for (const c of caveats || []) head.append(el("span", { class: "chip caveat" }, [c]));
     let mode = getDiffMode();
-    // Single mode toggle: the label names the mode a click switches TO, with a
-    // swap glyph so it reads as an action, never as the current state.
     const modeBtn = el("button", { class: "diff-btn mode-toggle", type: "button" }, []);
-    // Single expand/collapse toggle: the label is recomputed from the actual
-    // per-file state after every change (bulk or manual), so it always names an
-    // action that does something.
     const expandBtn = el("button", { class: "diff-btn expand-toggle", type: "button" }, []);
     const fsBtn = el("button", { class: "diff-btn", type: "button", title: "Fullscreen changes", "aria-label": "Fullscreen changes" }, ["⤢"]);
     head.append(el("div", { class: "diff-controls" }, [expandBtn, modeBtn, fsBtn]));
     wrap.append(head);
     const files = [];
+    // refreshModeBtn labels the toggle with the mode a click switches to.
     function refreshModeBtn() {
       const target = mode === "unified" ? "split" : "unified";
       modeBtn.textContent = "⇄ " + (target === "split" ? "Split" : "Unified");
       modeBtn.setAttribute("title", "Switch to " + target + " view");
       modeBtn.setAttribute("aria-label", "Switch to " + target + " view");
     }
+    // refreshExpandBtn labels the toggle from the per-file state.
     function refreshExpandBtn() {
       if (!files.length) { expandBtn.style.display = "none"; return; }
       const anyCollapsed = files.some((f) => !f.expanded);
       expandBtn.textContent = anyCollapsed ? "⊞ Expand all" : "⊟ Collapse all";
     }
+    // apply repaints every expanded file in the current mode.
     function apply() {
       refreshModeBtn();
       for (const f of files) if (f.expanded && f.model) f.renderBody();
@@ -2511,9 +2040,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       setDiffMode(mode);
       apply();
     });
-    // Expand all fetches the displayed files' diffs concurrently, bounded by the
-    // shared CONCURRENCY limit, reusing each file's cached model (already-open
-    // files are skipped). Only the shown (<= DIFF_FILE_CAP) files are touched.
+    // expandAll expands the collapsed files with CONCURRENCY workers.
     async function expandAll() {
       const pending = files.filter((f) => !f.expanded);
       let idx = 0;
@@ -2593,11 +2120,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // resolveTipCommit resolves a PR tip to a full commit sha in this bucket. It
-  // resolves the branch ref, prefers the exact recorded short tip (matching the
-  // live tip or found in a bounded walk), and otherwise falls back to the live
-  // tip flagged non-exact. Foreign or absent branches yield a status the caller
-  // renders as "tips not present in this bucket".
+  // resolveTipCommit resolves a PR tip to a full sha here, preferring the recorded short tip over the live one.
   async function resolveTipCommit(ctx, field, short) {
     const { url, name } = parseBranchField(field);
     if (url) return { status: "foreign" };
@@ -2606,11 +2129,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!live) return { status: "absent" };
     if (short && live.startsWith(short)) return { status: "ok", sha: live, exact: true };
     if (short) {
-      // Resolve the recorded tip (which can sit far behind the live tip on a
-      // long-running branch) by prefix match over the code items index first —
-      // the branch's commits are in the merged code corpus — falling back to a
-      // bounded loose walk only when the index can't answer (absent/non-v4, or a
-      // sha predating the bootstrap).
+      // The index answers first; the bounded walk covers shas the index lacks.
       const indexed = await resolveShortShaFromIndex(ctx, short);
       if (indexed) return { status: "ok", sha: indexed, exact: true };
       const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
@@ -2620,18 +2139,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { status: "ok", sha: live, exact: false };
   }
 
-  // resolveMergedRefs resolves a merged PR's merge-base / merge-head short shas
-  // to full commit shas present in this bucket. Both are reachable from the PR's
-  // base branch: an imported merge stores the merge commit and its first parent
-  // (both on the base line), a native merge stores the fork-point base and the
-  // head tip (reachable as the merge commit's second parent). Resolves each short
-  // sha by prefix match over the code items index (full sha per code commit,
-  // draining shards newest-first) — the index removes the ~hundreds of loose GETs
-  // the base-branch walk used to cost. Falls back to that bounded walk only for
-  // a short that the index can't answer (index absent/non-v4, or the sha predates
-  // the bootstrap or sits on a non-indexed object). Null when the base is foreign
-  // or absent, or either sha stays unresolved. Ambiguity mirrors the walk: the
-  // first (newest-first) prefix match wins, no uniqueness check.
+  // resolveMergedRefs resolves a merged PR's merge-base and merge-head shorts to full shas, or null.
   async function resolveMergedRefs(ctx, baseField, baseShort, headShort) {
     const { url, name } = parseBranchField(baseField);
     if (url || !name) return null;
@@ -2649,18 +2157,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return baseSha && headSha ? { baseSha, headSha } : null;
   }
 
-  // prDiffSection builds the "Files changed" section for a PR. It resolves both
-  // tips in this bucket, attempts a bounded merge-base for three-dot semantics,
-  // falls back to a raw two-tip diff (with a caveat) when no common ancestor is
-  // reachable, and returns a "tips not present" note when either tip is foreign
-  // or absent. Returns null when the header lacks tip fields.
+  // prDiffSection builds a PR's Files changed section from the merge range, else the resolved tips, or null.
   async function prDiffSection(ctx, header, fileFeedback) {
     if (!header) return null;
-    // Merged PRs: prefer the durable merge-base..merge-head range (parity with
-    // the TUI's resolveMergedDiff). Those commits sit on the base branch even
-    // when the head branch is a foreign fork or was deleted after merge, so a
-    // merged fork/squash PR still diffs where base-tip/head-tip cannot. Fall
-    // through to the tip path when the range can't be resolved in this bucket.
+    // The merge range comes first: it stays on the base branch after the head is deleted.
     if ((header.state || "") === "merged" && header["merge-base"] && header["merge-head"]) {
       const m = await resolveMergedRefs(ctx, header.base, header["merge-base"], header["merge-head"]);
       if (m) {
@@ -2686,8 +2186,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const baseTree = await commitTree(ctx, baseR.sha);
     if (!headTree || !baseTree) return el("div", { class: "diff-section" }, [el("div", { class: "notice" }, ["Tip commit objects are missing from this bucket."])]);
     const caveats = [];
-    // Deep merge-base budget so a deep or stacked PR still gets a true three-dot
-    // diff instead of falling back to the raw two-tip diff where reachable.
     const mb = await resolveMergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
     let leftTree = baseTree;
     if (mb) { leftTree = await commitTree(ctx, mb) || baseTree; }
@@ -2698,11 +2196,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return diffSection(ctx, entries, "Files changed", caveats, fileFeedback);
   }
 
-  // reviewSummarySection renders the PR review strip (GetReviewSummary parity): a
-  // count line (approved / changes-requested / pending) with a Ready-to-merge or
-  // Changes-requested status chip, per-reviewer chips (latest verdict, else
-  // commented), and any verdict/general review feedback bodies. Null when a PR has
-  // no review activity or reviewers.
+  // reviewSummarySection renders the review counts, status chip, reviewer chips and verdict feedback, or null.
   function reviewSummarySection(summary, verdictFeedback) {
     const hasAny = summary.reviewers.length || summary.approved || summary.changesRequested || summary.pending;
     if (!hasAny) return null;
@@ -2729,9 +2223,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // commitChangesSection builds the "Changes" section for a commit: the diff of
-  // its tree against its first parent (empty tree for a root commit; first
-  // parent labeled for a merge).
+  // commitChangesSection builds a commit's Changes section against its first parent.
   async function commitChangesSection(ctx, commit) {
     let parentTree = null;
     if (commit.parents.length) parentTree = await commitTree(ctx, commit.parents[0]);
@@ -2741,11 +2233,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return diffSection(ctx, entries, title, caveats);
   }
 
+  // setView replaces the #view contents.
   function setView(nodes) {
     const view = document.getElementById("view");
     view.replaceChildren(...nodes);
   }
 
+  // highlightNav marks the active nav tab.
   function highlightNav(tab) {
     for (const a of document.querySelectorAll("#nav a[data-nav]")) {
       a.classList.toggle("active", a.getAttribute("data-nav") === tab);
@@ -2757,13 +2251,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const RELEASE_ASSET_KEYS = ["artifacts", "artifact-url", "checksums", "sbom", "signed-by"];
   const ISSUE_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "closed", label: "Closed" }];
   const PR_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "merged", label: "Merged" }, { key: "closed", label: "Closed" }];
-  // In-memory per-tab filter selection (persists across navigations within a
-  // session; deliberately not in the fragment, so the route grammar is intact).
+  // filterState is the per-tab state filter selection, kept out of the route.
   const filterState = { issues: "all", prs: "all" };
 
-  // assetRow renders one artifact/checksums/sbom entry: an external link when a
-  // gated href is present, else selectable mono text (git-stored, unlinkable
-  // in a static reader).
+  // assetRow renders one asset entry: a link when it has a gated href, else selectable mono text.
   function assetRow(name, href, tag) {
     const kids = [el("span", { class: "mono selectable" }, [name])];
     if (tag) kids.push(el("span", { class: "chip" }, [tag]));
@@ -2774,8 +2265,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "asset-row" }, kids);
   }
 
-  // releaseAssetsSection renders a release's artifacts, checksums, SBOM, and
-  // signing key. Returns null when the release carries no asset fields.
+  // releaseAssetsSection renders a release's artifacts, checksums, SBOM and signing key, or null.
   function releaseAssetsSection(header) {
     const a = releaseAssets(header);
     if (!a.artifacts.length && !a.checksums && !a.sbom && !a.signedBy) return null;
@@ -2796,9 +2286,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // embeddedBlock renders the cross-repo context a commit embeds for one
-  // reference: a muted "from <repo>" line, the quoted origin excerpt, and the
-  // origin author/time — the local view of a thread that cannot be fetched.
+  // embeddedBlock renders the cross-repo context a commit embeds for one reference.
   function embeddedBlock(e) {
     const box = el("div", { class: "embedded" }, []);
     box.append(el("div", { class: "embedded-from meta" }, ["from " + e.url]));
@@ -2809,13 +2297,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // commentCard renders one thread comment card (content, author/time meta, and
-  // any cross-repo embedded context the comment itself carries). Indentation is
-  // applied by commentRow, not here. `branch` is the data branch the item's
-  // permalink points at (default gitmsg/social, the comment branch). `clamp`
-  // puts the content under the ~10-line clamp with the meta line (author/time
-  // + Raw toggle) ABOVE it, detail-page style (reply-context ancestors);
-  // thread comments stay plain rendered content-first, no chrome.
+  // commentCard renders one thread comment; clamp gives the meta-first clamped layout, nav makes it clickable.
   function commentCard(item, branch, clamp, nav) {
     const card = el("div", { class: "card comment" }, []);
     const content = item.content ? renderCommitBody(item.content) : el("div", { class: "body" }, ["(no content)"]);
@@ -2831,17 +2313,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       card.append(content, meta);
     }
     for (const e of embeddedRefs(item.commit, item.header)) card.append(embeddedBlock(e));
-    // `nav` makes the whole card open the item it shows. The reply-context cards
-    // want it: they are the ANCESTORS of the page being read, each with a page
-    // of its own, and a reader who clicks the parent means to go there. Thread
-    // comments below the item do not — they are the page's own content, and the
-    // hash in each meta row is their permalink.
     return nav ? cardNav(card, item.commit.hash, branch || "gitmsg/social") : card;
   }
 
-  // commentRow places `depth` rail guides to a comment's left so the reply
-  // hierarchy reads as continuous vertical connector lines (the TUI's indent),
-  // then the comment card. Depth 0 renders the bare card, no rail.
+  // commentRow places depth rail guides to a comment card's left.
   function commentRow(item, depth, branch, clamp, nav) {
     if (depth <= 0) return commentCard(item, branch, clamp, nav);
     const rail = el("div", { class: "thread-rail" }, []);
@@ -2849,9 +2324,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "comment-row" }, [rail, commentCard(item, branch, clamp, nav)]);
   }
 
-  // threadSection renders a grouped comment thread as a flat, chronological list
-  // whose reply hierarchy is drawn with per-depth rail guides (true nesting up to
-  // THREAD_MAX_DEPTH, then indent-capped). Returns null for an empty thread.
+  // threadSection renders a comment thread as a flat chronological list with rail guides, or null.
   function threadSection(thread) {
     const flat = flattenThread(thread);
     if (!flat.length) return null;
@@ -2861,23 +2334,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // itemThreadSection loads same-repo social comments and groups them under the
-  // item. The social walk is deepened to DETAIL_WALK_CAP so comments older than
-  // the first window still attach (bounded, and cached on ctx for the session).
+  // itemThreadSection loads the same-repo comments up to DETAIL_WALK_CAP and groups them under the item.
   async function itemThreadSection(ctx, item) {
     const social = await loadExtItemsUpTo(ctx, "social", DETAIL_WALK_CAP);
     const comments = social.filter((i) => i.header && i.header.original);
     const thread = groupThread(item.commit.short, comments);
-    // The walk seeds comment bodies from the metadata index (body-less); fetch
-    // the loose objects for the comments actually shown in this thread.
     await hydrateItems(ctx, flattenThread(thread).map((r) => r.comment));
     return threadSection(thread);
   }
 
-  // quotedFallbackBlock renders the item's own GitMsg-Ref quoted excerpt for a
-  // same-repo parent that could not be resolved in-bucket — the embedded block
-  // style, with the ref linked so the reader can still try the permalink. Null
-  // when the commit carries no excerpt for that ref.
+  // quotedFallbackBlock renders the item's quoted excerpt for an unresolvable same-repo parent, or null.
   function quotedFallbackBlock(item, ref) {
     const q = quotedRefFor(item.commit, ref);
     if (!q || !q.quoted) return null;
@@ -2893,13 +2359,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // replyContextSection renders the same-repo parent context above a reply's
-  // permalink: the resolved ancestor chain root-first as thread comment cards
-  // (rail-indented like the thread view), preceded — when the deepest reachable
-  // ancestor's own parent is unresolvable — by the commit's quoted excerpt for
-  // that ref. Null when the item is not a same-repo reply or no context can be
-  // shown. Resolution failures (missing object, cap, 403) degrade to the
-  // excerpt fallback rather than failing the already-resolved detail view.
+  // replyContextSection renders a reply's ancestor chain root-first above its permalink, or null.
   async function replyContextSection(ctx, item, branch) {
     if (!parentRef(item.header)) return null;
     let chain = [], missing = null;
@@ -2920,30 +2380,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // enrichDetail runs one background enrichment step and appends its section to
-  // the already-painted detail. Producer returns a node (or null); place is an
-  // optional inserter (default append). A step's own bounded walk (a PR diff's
-  // merge-base search, a thread's social walk) thus runs AFTER first paint, never
-  // gating it — the timeline-bug fix applied to the detail routes: a stale/absent
-  // index degrades to bounded background work, never an eternal "Loading…".
-  // Failures (missing object, cap, transient 403/429 on a bounded walk) are
-  // swallowed so one slow section never blanks the resolved detail.
+  // enrichDetail appends a producer's section after first paint, so no bounded walk gates it; failures are swallowed.
   function enrichDetail(root, producer, place) {
     Promise.resolve().then(producer).then((node) => {
       if (node) (place ? place(node) : root.append(node));
     }).catch(() => { /* enrichment is best-effort; the base detail already painted */ });
   }
 
-  // itemDetail resolves the item matching hash — deepening the history walk up to
-  // DETAIL_WALK_CAP so an old permalink past the first window still resolves (a
-  // "searching history" note shows while it deepens). The commit itself is one
-  // loose GET: it paints the base detail (subject, body, meta, header, embedded
-  // cross-repo context, release assets) as soon as the item resolves, then
-  // enriches progressively in the BACKGROUND — same-repo reply context (parent
-  // chain above the item), pm relations/members, the PR review summary and
-  // files-changed diff, and the comment thread. Each enrichment carries its own
-  // bounded walk, so none of them gates first paint (the class of hang that left
-  // a merged PR's detail on "Loading…" behind a 2000-commit merge-base walk).
+  // itemDetail paints the base detail as soon as the item resolves, then enriches sections in the background.
   async function itemDetail(ctx, hash, branch) {
     const cv = COMMIT_VIEW[branch];
     const onProgress = (visited) => setView([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
@@ -2952,21 +2396,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const skip = cv.ext === "release" ? RELEASE_ASSET_KEYS : [];
     const nodes = detailView(item, { tab: cv.tab, branch }, skip, ctx);
     const root = nodes[0];
-    // Base paint (synchronous, item already hydrated): embedded cross-repo
-    // context and release assets cost no walk, so they land with first paint.
     for (const e of embeddedRefs(item.commit, item.header)) root.append(embeddedBlock(e));
     if (cv.ext === "release") {
       const sec = releaseAssetsSection(item.header);
       if (sec) root.append(sec);
     }
-    // Same-repo reply context (ancestor chain, or the quoted-excerpt fallback)
-    // renders above the item so a bare permalink of a reply still reads as one;
-    // its findRefItem walks are bounded but backgrounded off first paint.
     enrichDetail(root, () => replyContextSection(ctx, item, branch),
       (node) => root.insertBefore(node, root.children[1] || null));
     if (cv.ext === "pm") {
-      // Milestone/sprint member lists + progress, or an issue's parent/milestone/
-      // sprint links and sub-issue list, from the already-resolved pm set.
       enrichDetail(root, async () => {
         const wrap = el("div", {}, []);
         for (const extra of await pmDetailExtras(ctx, item, items)) wrap.append(extra);
@@ -2974,38 +2411,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       });
     }
     if (branch === "gitmsg/review" && (item.header.type || "") === "pull-request") {
-      // Feedback rides gitmsg/review alongside the PR; findItemDeep already walked
-      // it (feedback is newer than its PR, so it is in the accumulated set). The
-      // review summary and the files-changed diff (whose merge-base / tip search
-      // is a bounded but potentially large loose walk) enrich in the background.
       enrichDetail(root, async () => {
         const fb = prFeedback(items, item.commit.short);
-        // Feedback records come body-less from the metadata index; fetch their
-        // loose objects so verdicts, authors, and comment bodies render.
         await hydrateItems(ctx, fb.all);
         const summary = reviewSummary(fb.all, item.header.reviewers || "");
         return reviewSummarySection(summary, fb.nonFile);
       });
       enrichDetail(root, async () => {
         const file = prFeedback(items, item.commit.short).file;
-        // Per-line feedback bodies come body-less from the index; hydrate them so
-        // the diff's anchored comments render.
         await hydrateItems(ctx, file);
         return prDiffSection(ctx, item.header, file);
       });
     }
-    // Comment thread: the social walk is bounded (DETAIL_WALK_CAP) but can be a
-    // large loose walk on an index-absent social branch, so it enriches last.
+    // The social walk can be large, so the thread enriches last.
     enrichDetail(root, () => itemThreadSection(ctx, item));
     return nodes;
   }
 
-  // filteredListView renders a state-filter chip bar (with per-state counts) above
-  // a client-side-filtered, client-paginated item list. Counts are exact — over
-  // the full `items` (the caller passes the complete metadata set, not a window),
-  // so they are correct on first paint. The selection persists in-memory per tab;
-  // clicking a chip re-renders in place, and "Load more" reveals the next page
-  // from memory (no refetch) so a large list stays light in the DOM.
+  // filteredListView renders a state chip bar with exact counts above a client-paginated list.
   function filteredListView(items, cardFn, tab, states, emptyText) {
     const counts = stateCounts(items);
     const PAGE = 100;
@@ -3014,10 +2437,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const outer = el("div", {}, [bar, listBox]);
     const chips = [];
     let moreWrap = null;
+    // render applies the selected state filter.
     function render() {
       const sel = filterState[tab] || "all";
       const shown = sel === "all" ? items : items.filter((it) => ((it.header && it.header.state) || "open") === sel);
       let page = 1;
+      // paint draws the current page with a Load more for the rest.
       function paint() {
         listBox.replaceChildren(...renderList(shown.slice(0, page * PAGE), cardFn, emptyText));
         if (moreWrap) { moreWrap.remove(); moreWrap = null; }
@@ -3044,8 +2469,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [outer];
   }
 
-  // pmGroupCard renders one milestone or sprint with its state/date chips and
-  // the issues bucketed under it.
+  // pmGroupCard renders a milestone or sprint with its chips and member issues.
   function pmGroupCard(item, members, kind) {
     const subject = itemSubject(item);
     const h = item.header || {};
@@ -3071,9 +2495,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
-  // issuesBody renders the state-filtered issue list as a node array (so the paged
-  // list can redraw it from a growing pm item set on "Load more"). Milestones and
-  // sprints have their own nav pages, so they are no longer embedded here.
+  // issuesBody renders the state-filtered issue list as a node array.
   function issuesBody(pmItems, counts) {
     const g = groupPM(pmItems);
     const hier = buildIssueHierarchy(g.issues);
@@ -3081,14 +2503,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return filteredListView(g.issues, card, "issues", ISSUE_STATES, "No issues in this repository.");
   }
 
-  // versionKey extracts a milestone's leading dotted-number version ("1.4.0" ->
-  // [1,4,0], "1.0 Public Release" -> [1,0]); null when the subject carries none.
+  // versionKey extracts a milestone's leading dotted version as numbers, or null.
   function versionKey(item) {
     const m = /(\d+(?:\.\d+)+|\d+)/.exec(itemSubject(item) || "");
     return m ? m[1].split(".").map(Number) : null;
   }
-  // compareVersionDesc orders milestone entries by version, highest first; entries
-  // without a version fall to the end (newest-created among themselves).
+  // compareVersionDesc orders milestones by version, highest first; unversioned ones fall to the end.
   function compareVersionDesc(a, b) {
     const va = versionKey(a.item), vb = versionKey(b.item);
     if (!va && !vb) return (b.item.effectiveTime || 0) - (a.item.effectiveTime || 0);
@@ -3101,11 +2521,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return 0;
   }
 
-  // dedupePmGroups collapses milestone/sprint items that are duplicate imports of
-  // the same upstream object (same origin-url, else same subject) into one entry,
-  // merging the issues bucketed under every duplicate and keeping the newest commit
-  // as the representative. Returns [{ item, members }] sorted by `cmp` (default
-  // newest-created first).
+  // dedupePmGroups merges duplicate imports of a milestone or sprint into [{ item, members }] sorted by cmp.
   function dedupePmGroups(groupItems, byHash, cmp) {
     const byKey = new Map();
     for (const it of groupItems) {
@@ -3127,15 +2543,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // milestonesBody / sprintsBody render the standalone PM milestone / sprint list
-  // views (their own nav destinations): one deduped card per upstream group, newest
-  // first, with its issues merged across duplicate imports; empty-state when none.
+  // milestonesBody renders one deduped card per milestone, highest version first.
   function milestonesBody(pmItems) {
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.milestones, g.byMilestone, compareVersionDesc);
     if (!groups.length) return [el("div", { class: "empty" }, ["No milestones in this repository."])];
     return groups.map((x) => pmGroupCard(x.item, x.members, "milestone"));
   }
+  // sprintsBody renders one deduped card per sprint, newest first.
   function sprintsBody(pmItems) {
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.sprints, g.bySprint);
@@ -3145,9 +2560,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- PM board / milestone-sprint detail / sub-issues ----
 
-  // progressBar renders a compact "n closed of m" completion line with a simple
-  // filled bar (TUI RenderProgressBar parity), using theme tokens. total 0 shows
-  // a neutral "no issues" note.
+  // progressBar renders an "n closed of m" line with a filled bar.
   function progressBar(closed, total) {
     const pct = total ? Math.round((closed / total) * 100) : 0;
     const wrap = el("div", { class: "pm-progress" }, []);
@@ -3156,8 +2569,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // issueMemberRow is a compact state-chip + linked-subject row for an issue
-  // listed under a milestone, sprint, or parent (the .pm-member style).
+  // issueMemberRow renders a state chip and linked subject for a member issue.
   function issueMemberRow(item) {
     const subject = itemSubject(item);
     return el("div", { class: "pm-member" }, [
@@ -3166,9 +2578,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]);
   }
 
-  // pmMembersSection renders a milestone's "Linked Issues" or a sprint's "Sprint
-  // Backlog" member list with a header count and a closed-count progress bar
-  // (mirroring the TUI milestone/sprint detail sections).
+  // pmMembersSection renders a milestone's or sprint's member list with a count and progress bar.
   function pmMembersSection(headLabel, members) {
     const wrap = el("div", { class: "pm-members" }, []);
     wrap.append(el("div", { class: "pm-members-head mono" }, [headLabel + " (" + members.length + ")"]));
@@ -3178,9 +2588,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // subIssuesSection renders an issue's direct children (GITPM 1.7) under a
-  // "Sub-issues (n open, n closed)" header with a closed-count progress bar,
-  // matching the TUI sub-issue section. Null when the issue has no children.
+  // subIssuesSection renders an issue's direct children with a progress bar, or null.
   function subIssuesSection(children) {
     if (!children.length) return null;
     const p = pmProgress(children);
@@ -3192,10 +2600,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // pmRelChip renders a labelled relationship link (parent / milestone / sprint)
-  // on an issue detail: the target's subject linking to its detail page, plus a
-  // state chip when the target is loaded. Falls back to the bare ref hash when the
-  // target is not in the walked set (the link still deep-resolves on navigation).
+  // pmRelChip renders a labelled parent, milestone or sprint link, falling back to the bare hash.
   function pmRelChip(labelText, target, hash) {
     const subject = target ? (subjectBody(target.content)[0] || "(untitled)") : hash;
     const row = el("div", { class: "pm-rel" }, [
@@ -3206,12 +2611,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // pmDetailExtras builds the pm-specific sections appended to an item detail
-  // (issue/milestone/sprint) from the already-resolved pm item set: milestones and
-  // sprints get their member list + progress; an issue gets its parent/milestone/
-  // sprint relationship links and its sub-issue list + progress. Grouping runs off
-  // header fields (present in the metadata index); the few related/member items
-  // whose subjects render are body-hydrated before building the cards.
+  // pmDetailExtras builds the member, relationship and sub-issue sections for a pm item detail.
   async function pmDetailExtras(ctx, item, items) {
     const type = (item.header && item.header.type) || "issue";
     const issues = items.filter((i) => ((i.header && i.header.type) || "issue") === "issue");
@@ -3245,15 +2645,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out.filter(Boolean);
   }
 
-  // boardCard is the compact issue card used in board columns: linked subject plus
-  // any scoped labels (status/priority/kind chips).
+  // boardCard renders the compact issue card used in board columns.
   function boardCard(item) {
     const subject = itemSubject(item);
     const card = el("div", { class: "card board-card" }, []);
-    // Glyph + subject share ONE flex child (a .board-card-title line) so a narrow
-    // 15rem board column wraps the subject TEXT under itself without ever pushing
-    // the glyph onto its own row (the flex-wrap card-head would otherwise split
-    // the glyph from a long unbreakable subject). G8.
+    // Glyph and subject share one flex child so a narrow column wraps the text, not the glyph.
     const titleLine = el("span", { class: "board-card-title" }, [el("a", { class: "subject", href: commitRef(item.commit.hash, "gitmsg/pm") }, [subject || "(untitled)"])]);
     const g = typeGlyphEl(item, "pm");
     if (g) titleLine.prepend(g);
@@ -3268,35 +2664,23 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, "gitmsg/pm");
   }
 
-  // BOARD_ITEM_CAP bounds how many cards a single column-cell shows before a
-  // "show N more" control expands it, so a long column (or a busy swimlane cell)
-  // never pushes the following lanes far down the page.
+  // BOARD_ITEM_CAP bounds the cards a column cell shows before "show N more".
   const BOARD_ITEM_CAP = 7;
 
-  // boardColumnEl renders one board column (header + count + WIP + capped cards)
-  // for a given issue subset — reused by the flat board and each swimlane lane.
-  // `state` carries the session-only board UI state (collapsed columns, hidden
-  // columns, per-cell expand keys). A collapsed or hidden column renders only its
-  // slim header; otherwise the cell shows up to BOARD_ITEM_CAP cards with a "show N
-  // more" control (keyed by `cellKey` so each swimlane cell expands independently).
+  // boardColumnEl renders one board column with its header, count, WIP and capped cards.
   function boardColumnEl(col, issues, state, cellKey, onChange) {
     const column = el("div", { class: "board-col" + (state.collapsedCols.has(col.name) ? " board-col-collapsed" : "") }, []);
     const head = el("div", { class: "board-col-head mono" }, []);
-    // A caret toggles this column collapsed (slim header only) for the whole board.
     const caret = el("button", { class: "board-col-toggle", type: "button", "aria-label": "Collapse column" }, [state.collapsedCols.has(col.name) ? "▸" : "▾"]);
     caret.addEventListener("click", (e) => { e.stopPropagation(); state.toggleCol(col.name); onChange(); });
     head.append(caret, el("span", { class: "board-col-name" }, [col.name + " " + issues.length + (col.wip ? " / " + col.wip : "")]));
     if (col.wip && issues.length > col.wip) head.append(el("span", { class: "chip board-wip-over" }, ["over WIP"]));
-    // A hide control removes the column from the board (restored from the controls
-    // bar); useful for a Done column that accumulates over time.
     const hide = el("button", { class: "board-col-hide", type: "button", "aria-label": "Hide column", title: "Hide column" }, ["✕"]);
     hide.addEventListener("click", (e) => { e.stopPropagation(); state.hideCol(col.name); onChange(); });
     head.append(hide);
     column.append(head);
     if (state.collapsedCols.has(col.name)) return column;
     if (!issues.length) { column.append(el("div", { class: "board-empty mono" }, ["—"])); return column; }
-    // Done-like columns (state:closed filter) start capped even when other columns
-    // aren't expanded, since they grow unbounded; the expand key still overrides.
     const expanded = state.expandedCells.has(cellKey);
     const shown = expanded ? issues : issues.slice(0, BOARD_ITEM_CAP);
     for (const it of shown) column.append(boardCard(it));
@@ -3308,11 +2692,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return column;
   }
 
-  // boardGrid renders the columns × issues layout for a set of columns, each
-  // column drawing from its own bucketed issues (col.issues), or a per-lane subset
-  // when `laneOf` maps a column name to its lane members. Hidden columns are
-  // skipped here (restored from the controls bar). `keyPrefix` namespaces each
-  // cell's expand key so the flat board and every swimlane cell page independently.
+  // boardGrid renders the visible columns, each from its own issues or the lane subset laneOf gives.
   function boardGrid(columns, laneOf, state, keyPrefix, onChange) {
     const grid = el("div", { class: "board" }, []);
     for (const col of columns) {
@@ -3323,9 +2703,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return grid;
   }
 
-  // newBoardState builds the session-only board UI state: collapsed columns,
-  // hidden columns, collapsed swimlanes, and expanded per-cell keys. Not persisted
-  // (mirrors the TUI's in-session UserPrefs), reset on every fresh board render.
+  // newBoardState builds the session-only board UI state.
   function newBoardState() {
     const s = {
       collapsedCols: new Set(), hiddenCols: new Set(), collapsedLanes: new Set(), expandedCells: new Set(),
@@ -3338,13 +2716,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return s;
   }
 
-  // boardBody renders the kanban board (#/board) with a "group by" swimlane
-  // control. Columns come from the repo's resolved config; the group-by
-  // cycles none/priority/kind/assignees/author, defaulting to the board
-  // config's defaultSwimlane, with a session-only override. When a field is set,
-  // issues are grouped into collapsible lane bands (each spanning the columns) in
-  // the TUI's lane order, with a lane index for jumping and per-column-cell item
-  // caps. Column collapse/hide and lane collapse are session-only (G7).
+  // boardBody renders the kanban board with a group-by swimlane control and session-only column state.
   function boardBody(issues, config) {
     const board = buildBoard(issues, config);
     const state = newBoardState();
@@ -3355,15 +2727,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     outer.append(body);
     let field = SWIMLANE_FIELDS.indexOf(board.defaultSwimlane) >= 0 ? board.defaultSwimlane : "";
     const rerender = () => draw();
+    // draw rebuilds the controls and the flat or laned board.
     function draw() {
-      // Group-by control: a labeled row of selectable field chips.
       controls.replaceChildren(el("span", { class: "board-groupby-label mono" }, ["Group by"]));
       for (const f of SWIMLANE_FIELDS) {
         const chip = el("button", { class: "filter-chip" + (f === field ? " active" : ""), type: "button" }, [SWIMLANE_LABELS[f]]);
         chip.addEventListener("click", () => { field = f; draw(); });
         controls.append(chip);
       }
-      // Hidden-column restore control: one chip per hidden column brings it back.
       for (const col of board.columns) {
         if (!state.hiddenCols.has(col.name)) continue;
         const restore = el("button", { class: "filter-chip board-col-restore", type: "button" }, ["+ " + col.name]);
@@ -3373,8 +2744,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (!field) { body.replaceChildren(boardGrid(board.columns, null, state, "flat", rerender)); return; }
       const lanes = swimlaneOrder(issues, field);
       const sections = [el("div", { class: "board-groupby-indicator mono" }, ["grouped by " + field])];
-      // Lane index: a compact list of lane labels + counts that scrolls to a lane
-      // on click, so long lanes don't bury the ones after them.
       const laneMembers = new Map();
       const laneEls = new Map();
       for (const lane of lanes) {
@@ -3386,8 +2755,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
           any += members.length;
           if (!state.hiddenCols.has(col.name)) visibleAny += members.length;
         }
-        // Skip a lane whose members all live in hidden columns (e.g. every issue
-        // of a lane sits in a hidden Done column): its grid would render empty.
+        // A lane whose members all sit in hidden columns would render empty.
         if (visibleAny) laneMembers.set(lane, { laneOf, any });
       }
       if (laneMembers.size > 1) {
@@ -3418,21 +2786,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return outer;
   }
 
-  // boardView renders the pm board (#/board): a client-side kanban regroup of the
-  // walked issue set, with a "Load more" that deepens the pm walk and recounts the
-  // columns. Worst-case fan-out: the same bounded pm walk the Issues tab runs.
+  // boardView loads the full pm set and the board config and renders the board.
   async function boardView(ctx) {
     const issuesOf = (items) => items.filter((i) => ((i.header && i.header.type) || "issue") === "issue");
-    // Full pm set (metadata-only, cheap) so every column's count is exact, not
-    // limited to a first window. The board columns come from the repo's resolved
-    // config (framework or custom), falling back to the kanban default.
     const [all, config] = await Promise.all([loadExtItemsAll(ctx, "pm"), loadSiteConfig(ctx)]);
     return [boardBody(issuesOf(all), config)];
   }
 
-  // highlightFrag splits text around the first case-insensitive occurrence of the
-  // query, wrapping the match in a <mark> (existing search-mark styling). Returns
-  // a child array for el(); the plain string when there is no match.
+  // highlightFrag wraps the first case-insensitive match of query in a mark, returning children for el.
   function highlightFrag(str, query) {
     const s = str || "";
     const q = (query || "").trim();
@@ -3442,10 +2803,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [s.slice(0, idx), el("mark", { class: "search-mark" }, [s.slice(idx, idx + q.length)]), s.slice(idx + q.length)];
   }
 
-  // searchSnippet returns a small highlighted excerpt when the query matched the
-  // item body or its labels rather than the subject (so the reader sees where it
-  // hit); null when the subject already carries the match, or when the match
-  // came from a body-less light-tier field (author) with nothing to excerpt.
+  // searchSnippet returns a highlighted excerpt when the match is in the body or labels, not the subject.
   function searchSnippet(item, query) {
     const q = (query || "").trim().toLowerCase();
     if (!q) return null;
@@ -3462,10 +2820,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "search-snippet meta" }, highlightFrag(frag, query));
   }
 
-  // searchResultCard renders one grouped search hit: the type glyph (tinted by
-  // state on issues/PRs), the highlighted subject (the metadata-index subject
-  // for a body-less light-tier hit) linking to the item detail, a meta row, and
-  // a snippet when the match was in the body/labels.
+  // searchResultCard renders one search hit with its glyph, highlighted subject, meta row and snippet.
   function searchResultCard(item, group, query) {
     const subject = itemSubject(item);
     const h = item.header || {};
@@ -3480,10 +2835,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, group.branch);
   }
 
-  // searchResults renders the result list: by default the flat recency-ordered
-  // lane (each card carries its type glyph, so type stays visible without the
-  // headers); `grouped` switches to the per-extension sections with match
-  // counts. The "no results" empty state names the query.
+  // searchResults renders the flat recency lane, or per-extension sections when grouped.
   function searchResults(res, query, grouped) {
     if (!res.total) {
       const shown = query || res.query;
@@ -3501,10 +2853,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return out;
   }
 
-  // searchHelp is the pre-query help / scope note: what search covers and an
-  // honest statement of the current tier — light (subjects/authors/labels, with
-  // the full-text affordance), truncated fallback walks (the deeper affordance),
-  // or complete coverage.
+  // searchHelp renders the pre-query help and a scope note for the current tier.
   function searchHelp(corpus) {
     const box = el("div", { class: "search-help empty" }, []);
     box.append(el("div", {}, ["Search loaded issues, pull requests, posts, releases, memos, and code commits by subject, content, author, or labels."]));
@@ -3516,29 +2865,19 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // searchInputEl holds the live search box so the `/` shortcut can focus it
-  // without a second control (mirrors the tree-search focus pattern).
+  // searchInputEl is the mounted search box the "/" shortcut focuses.
   let searchInputEl = null;
   // focusSearchInput focuses the current search box if one is mounted.
   function focusSearchInput() { if (searchInputEl && searchInputEl.focus) { searchInputEl.focus(); return true; } return false; }
 
-  // searchView renders the in-bucket item search (#/search): a debounced query
-  // input over the already-walked items of every extension, results recent-first
-  // across all types (a toggle restores per-extension sections), and an honest scope
-  // humanBytes formats a byte count as a compact KB/MB string (one decimal for MB).
+  // humanBytes formats a byte count as a compact KB or MB string.
   function humanBytes(n) {
     if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
     if (n >= 1024) return Math.round(n / 1024) + " KB";
     return n + " B";
   }
 
-  // note. Search is tiered: the light tier answers immediately from the metadata
-  // index (subjects/authors/labels); a "Load full search index" affordance fetches
-  // the bodies corpus and re-runs the query over complete message text. Buckets
-  // without artifacts keep the "Search deeper" affordance that advances every
-  // extension's walk one window and re-runs the query. Escape clears; the input
-  // auto-focuses on mount. Returns synchronously (the corpus loads async and fills
-  // the results), so the box is focusable immediately.
+  // searchView renders the tiered item search synchronously; the corpus loads lane by lane and fills the results.
   function searchView(ctx, initialQuery) {
     const wrap = el("div", { class: "search-view" }, []);
     wrap.append(el("a", { class: "back", href: "#/" }, ["← back"]));
@@ -3551,15 +2890,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const results = el("div", { class: "search-results" }, []);
     wrap.append(results);
     let corpus = null, deeperWrap = null, debounce = null;
-    // Facet state: clicked-chip selections per field (unioned with any typed
-    // filters in the query box) and which facets the user expanded past the cap.
     const filters = { type: new Set(), state: new Set(), author: new Set(), label: new Set() };
     let facetExpanded = {};
     let grouped = false;
     const FACET_UI = [["type", "Type"], ["state", "State"], ["author", "Author"], ["label", "Labels"]];
     const FACET_CAP = 8;
-    // facetChip renders one clickable value chip with its drill-down count; a
-    // click toggles the field's selection and redraws.
+    // facetChip renders one value chip whose click toggles the field's selection.
     function facetChip(field, b) {
       const chip = el("button", { class: "facet-chip" + (b.selected ? " selected" : ""), type: "button" }, [b.value, el("span", { class: "facet-count" }, [String(b.count)])]);
       chip.addEventListener("click", () => {
@@ -3569,10 +2905,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       });
       return chip;
     }
-    // renderFacets builds the Type/State/Author/Labels chip rows above results. A
-    // field shows only when it has ≥2 distinct values (or a live selection), and
-    // caps its chips with a "+N more" expander so a long author/label tail stays
-    // one line until asked for.
+    // renderFacets builds the facet chip rows, capping each field at FACET_CAP with a "+N more" expander.
     function renderFacets(res) {
       const rows = [];
       for (const [key, label] of FACET_UI) {
@@ -3590,6 +2923,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
       return rows.length ? el("div", { class: "search-facets" }, rows) : null;
     }
+    // tierButton loads a deeper search window on click and redraws.
     function tierButton(label, busyLabel, extend, full, older) {
       const btn = el("button", { class: "load-more", type: "button" }, [label]);
       btn.addEventListener("click", async () => {
@@ -3599,16 +2933,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       });
       return btn;
     }
+    // renderDeeper shows the full-index affordance while the settled corpus is incomplete.
     function renderDeeper() {
       if (deeperWrap) { deeperWrap.remove(); deeperWrap = null; }
-      // While lanes are still resolving the coverage flags are not final, so
-      // the tier affordances wait for the settled corpus.
+      // Coverage flags are final only once the corpus settled.
       if (!corpus || corpus.loading) return;
       const kids = [];
-      // One affordance loads everything the current corpus is missing: the bodies
-      // corpus fetches every shard (whole-history full text) for indexed
-      // extensions, and the same click advances any loose-object fallback walk for
-      // an extension without artifacts. It reappears until nothing remains.
       const incomplete = corpus.truncated || ((corpus.light || corpus.hasOlder) && !corpus.full);
       if (incomplete) {
         const note = corpus.partial
@@ -3617,38 +2947,31 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         kids.push(el("div", { class: "search-tier-note" }, [note]));
         const fullBtn = tierButton("Load full search index", "Loading full search index…", true, true, true);
         kids.push(fullBtn);
-        // Append the download size once known (from the loaded metadata indexes),
-        // without blocking the button's appearance; skip if already clicked.
         fullSearchBytes(ctx).then((bytes) => { if (bytes > 0 && !fullBtn.disabled) fullBtn.textContent = "Load full search index (" + humanBytes(bytes) + ")"; }).catch(() => {});
       }
       if (!kids.length) return;
       deeperWrap = el("div", { class: "load-more-wrap" }, kids);
       wrap.append(deeperWrap);
     }
-    // hydrateMatches back-fills the bodies of the top matched results — the
-    // light tier matches on metadata, so a hollow hit renders subject-only —
-    // and redraws once so snippets appear. Bounded to the results a reader
-    // actually sees first, and a no-op once they are full; the token drops a
-    // stale completion when a newer draw superseded it.
     const HYDRATE_MATCHES = 25;
     let hydrateToken = 0;
+    // hydrateMatches back-fills the top hollow results' bodies and redraws once; a superseded completion is dropped.
     function hydrateMatches(res) {
       const targets = (res.flat || []).slice(0, HYDRATE_MATCHES).map((f) => f.item).filter((it) => it.commit && it.commit.hollow);
       if (!targets.length) return;
       const token = ++hydrateToken;
       hydrateItems(ctx, targets).then(() => { if (token === hydrateToken) draw(); }).catch(() => {});
     }
-    // laneProgress is the "searching N of M" suffix while corpus lanes are
-    // still resolving, so a cold search shows life (and partial results)
-    // instead of a bare loading placeholder.
+    // laneProgress is the "searching N of M" suffix while corpus lanes resolve.
     function laneProgress() {
       if (!corpus || !corpus.loading) return "";
       return " · searching " + corpus.loading.done + " of " + corpus.loading.total + " sections…";
     }
+    // draw renders the results for the current query, filters and corpus.
     function draw() {
       if (!corpus) { results.replaceChildren(el("div", { class: "loading" }, ["Loading…"])); return; }
       const res = searchItemsFaceted(input.value || "", corpus.perExt, filters);
-      // No query, no typed filter, no chip: idle → the scope help, no facets.
+      // No facets means no query or filter: show the scope help.
       if (!Object.keys(res.facets).length) {
         status.textContent = laneProgress().replace(/^ · /, "");
         results.replaceChildren(searchHelp(corpus));
@@ -3660,8 +2983,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const nodes = [];
       const facetBox = renderFacets(res);
       if (facetBox) nodes.push(facetBox);
-      // Results are recent-first across all types by default; the toggle
-      // restores the per-extension sections.
       const groupBtn = el("button", { class: "facet-chip" + (grouped ? " selected" : ""), type: "button" }, ["Group by type"]);
       groupBtn.addEventListener("click", () => { grouped = !grouped; draw(); });
       nodes.push(el("div", { class: "facet-row search-sort" }, [groupBtn]));
@@ -3673,9 +2994,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     input.addEventListener("input", () => { if (debounce) clearTimeout(debounce); debounce = setTimeout(draw, 150); });
     input.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { input.value = ""; draw(); } });
     draw();
-    // The corpus loads lane by lane: each resolved extension redraws over the
-    // shared, growing perExt (metadata-first, so results appear as soon as any
-    // lane holds a hit), and the final await settles the coverage flags.
+    // Each resolved lane redraws over the growing perExt; the final await settles the coverage flags.
     (async () => {
       try {
         corpus = await loadSearchWindow(ctx, false, false, false, (perExt, done, total) => {
@@ -3689,17 +3008,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // Analytics series labels + the granularity nouns/order. KIND_LABELS names each
-  // extension series in the summary/legend; GRANS is the toggle order (default
-  // monthly). The activity chart renders the full history at a fixed ~12-periods-
-  // per-view width (never squished) and scrolls horizontally for older periods.
+  // KIND_LABELS names each chart series; GRANS is the granularity toggle order.
   const KIND_LABELS = { commits: "commits", posts: "posts", issues: "issues", prs: "PRs", releases: "releases", memos: "memos" };
   const GRANS = ["weekly", "monthly", "yearly"];
   const GRAN_NOUN = { weekly: "week", monthly: "month", yearly: "year" };
 
-  // analyticsSummary renders the headline stat grid: total items, the per-kind
-  // totals, and the most active period at the current granularity (mostActive may
-  // be null when there is no activity).
+  // analyticsSummary renders the stat grid: total, per-kind totals and the most active period.
   function analyticsSummary(data, mostActive) {
     const wrap = el("div", { class: "analytics-section" }, []);
     wrap.append(el("div", { class: "contrib-head mono" }, ["Summary"]));
@@ -3715,9 +3029,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // chartFilter renders the activity chart's series filter: an "all" chip plus one
-  // per kind (each with its color swatch), doubling as the legend. Clicking a chip
-  // shows just that series; "all" stacks every series.
+  // chartFilter renders the series filter chips, doubling as the legend.
   function chartFilter(kinds, selected, onPick) {
     const row = el("div", { class: "chart-filter mono" }, []);
     const chip = (key, label, swatchKind) => {
@@ -3732,9 +3044,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // granularityToggle renders the Weekly/Monthly/Yearly buttons; clicking one
-  // calls onPick(gran), which re-buckets the already-loaded data in memory (no
-  // refetch). The current granularity's button is marked active.
+  // granularityToggle renders the weekly, monthly and yearly buttons.
   function granularityToggle(current, onPick) {
     const row = el("div", { class: "gran-toggle" }, []);
     for (const g of GRANS) {
@@ -3751,8 +3061,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return String(n);
   }
 
-  // yAxis renders the activity chart's fixed count axis — peak, midpoint, and zero
-  // ticks aligned to the bar area. It sits left of the scrolling bars and stays put.
+  // yAxis renders the fixed count axis with peak, midpoint and zero ticks.
   function yAxis(max) {
     const ticks = max > 1 ? [max, Math.round(max / 2), 0] : [Math.max(max, 1), 0];
     const col = el("div", { class: "activity-yaxis mono" }, []);
@@ -3760,10 +3069,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return col;
   }
 
-  // stackedBars renders the activity chart (CSS only, no chart lib): one column
-  // per period, a full-height stack sized to that period's share of the peak
-  // total, split into per-kind segments (color via akind-<kind>). Exact totals on
-  // column hover, per-kind counts on segment hover.
+  // stackedBars renders one stacked column per period, sized to its share of the peak.
   function stackedBars(model, kinds) {
     const chart = el("div", { class: "activity-chart stacked" }, []);
     for (const b of model.buckets) {
@@ -3783,26 +3089,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return chart;
   }
 
-  // analyticsAuthors renders the top-authors ranking by item count (across every
-  // extension), each with its share of all items, its count, and its email on
-  // hover (via authorEl). Item authorship uses effective/origin authors (imported
-  // content is attributed to the real upstream author), unlike a git-commit count.
-  // authorSearchHref builds a #/search deep-link with the author facet prefilled
-  // by EMAIL (tightest match) when known, else the display name. The search view
-  // initializes from the route query and executes it, so the link lands on the
-  // author's items already filtered.
+  // authorSearchHref builds a #/search link with the author facet prefilled by email, else name.
   function authorSearchHref(a) {
     const token = a.email || a.name || "";
     return "#/search/" + encodeURIComponent("author:" + token);
   }
 
-  // analyticsAuthors renders the top authors by item count in a scrollable
-  // container: a live name/email filter over the FULL ranked list on the heading
-  // line, each author name linking to the prefilled search page, and an infinite
-  // autoscroll window (mirrors autoScrollListView) that reveals PAGE more rows
-  // each time a bottom sentinel nears the viewport, so the list keeps loading past
-  // the first page as the user scrolls instead of capping. The count label
-  // reflects what is shown vs the total distinct authors so it is not misleading.
+  // analyticsAuthors renders the top authors with a live filter and an autoscroll window of PAGE rows.
   function analyticsAuthors(authors, total) {
     const PAGE = 50;
     const wrap = el("div", { class: "contrib" }, []);
@@ -3813,22 +3106,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(head);
     const list = el("div", { class: "contrib-list contrib-scroll" }, []);
     wrap.append(list);
-    // The sentinel lives INSIDE the scrolling list (the list is its own overflow
-    // container, not the page), so the observer roots on `list` to fire as it nears
-    // the list's own bottom; it is re-appended after the rows on every draw.
+    // The list is its own scroll container, so the observer roots on it.
     const sentinel = el("div", { class: "scroll-sentinel", "aria-hidden": "true" }, []);
     let shown = PAGE;
     let observer = null;
+    // matches filters authors by the name or email query.
     function matches() {
       const q = (filter.value || "").trim().toLowerCase();
       if (!q) return authors;
       return authors.filter((a) => (a.name || "").toLowerCase().indexOf(q) !== -1 || (a.email || "").toLowerCase().indexOf(q) !== -1);
     }
+    // draw renders the shown window of matching authors.
     function draw() {
       const all = matches();
       const rows = all.slice(0, shown);
-      // Count label: shown/total while the window (or a filter) hides rows, so
-      // the count never overstates the list; plain total once everything shows.
       label.textContent = rows.length < authors.length ? "Authors " + rows.length + "/" + authors.length : "Authors " + authors.length;
       list.replaceChildren();
       if (!rows.length) { list.append(el("div", { class: "empty" }, ["No authors match “" + filter.value + "”."])); return; }
@@ -3841,6 +3132,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
       if (rows.length < all.length) { list.append(sentinel); if (observer) { observer.unobserve(sentinel); observer.observe(sentinel); } }
     }
+    // advance reveals PAGE more rows.
     function advance() {
       if (shown >= matches().length) return;
       shown += PAGE;
@@ -3855,15 +3147,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // analyticsView is the dedicated stats page. It loads the FULL per-extension
-  // item metadata (uncapped, body-free — timestamps/authors/types all live in the
-  // metadata index, so no loose-object hydration and no 200-item ceiling), then
-  // renders: repo facts (default branch, branch count, latest release); a summary
-  // stat grid (total + per-kind + most active period); an interactive activity
-  // chart broken down by extension with a Weekly/Monthly/Yearly granularity toggle
-  // (default monthly) that re-buckets the already-loaded data in memory; and the
-  // top authors by item count. Worst-case fan-out: one full walk per data branch,
-  // free on an index-seeded bucket (the frontier is already exhausted).
+  // analyticsView renders repo facts, the summary grid, the activity chart and the top authors.
   async function analyticsView(ctx) {
     const head = await headFor(ctx);
     const branch = headBranchName(head);
@@ -3881,10 +3165,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     if (data.latestRelease) facts.append(el("span", { class: "chip" }, ["latest " + data.latestRelease]));
     wrap.append(facts);
-    // On an index-absent or stale-manifest bucket each extension's set is bounded
-    // to its most-recent commits (no unbounded loose walk), so the aggregates
-    // reflect recent activity only — say so, in the search view's voice, rather
-    // than presenting a partial total as complete.
     if (data.partial) wrap.append(el("div", { class: "search-tier-note" }, [
       "Showing recent activity only: this bucket's item index is missing or still building, so analytics cover the most recent items rather than all history. Push with a current gitsocial (or run `gitsocial push --site-only`) to index the full history.",
     ]));
@@ -3902,20 +3182,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     chartSec.append(chartSlot);
     wrap.append(chartSec);
     wrap.append(analyticsAuthors(authors, data.total));
-    // Chart series: the gitsocial item kinds plus a "commits" series from the
-    // push-computed commit times (when present). Filter chips pick "all" (every
-    // series, stacked) or a single series; the granularity toggle re-buckets.
     const commitEntries = (stats && Array.isArray(stats.commitTimes)) ? stats.commitTimes.map((t) => ({ kind: "commits", time: t })) : [];
     const chartKinds = commitEntries.length ? ["commits"].concat(data.kinds) : data.kinds.slice();
     const chartEntries = commitEntries.length ? data.entries.concat(commitEntries) : data.entries;
     let gran = "monthly";
     let selected = "all";
+    // draw re-buckets the loaded data at the current granularity and series and repaints.
     function draw() {
-      // Summary's "most active" is over items only, at the current granularity.
       const itemBuckets = activityBuckets(data.entries, gran, data.kinds).buckets;
       const mostActive = itemBuckets.reduce((best, b) => (b.total > (best ? best.total : -1) ? b : best), null);
       summarySlot.replaceChildren(analyticsSummary(data, mostActive));
-      // Chart: all series stacked, or a single filtered series.
       const kinds = selected === "all" ? chartKinds : [selected];
       const entries = selected === "all" ? chartEntries : chartEntries.filter((e) => e.kind === selected);
       const full = activityBuckets(entries, gran, kinds);
@@ -3928,8 +3204,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       toggleSlot.replaceChildren(granularityToggle(gran, (g) => { gran = g; draw(); }));
       const chart = stackedBars({ buckets, max }, kinds);
       chartSlot.replaceChildren(el("div", { class: "activity-plot" }, [yAxis(max), chart]));
-      // Start scrolled to the most recent (rightmost) periods; deferred until the
-      // chart is mounted and laid out (scrollWidth is 0 before then).
+      // Deferred until the chart is laid out; scrollWidth is 0 before then.
       setTimeout(() => { chart.scrollLeft = chart.scrollWidth; }, 0);
     }
     draw();
@@ -3938,9 +3213,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Lists (#/lists overview + #list:<ext>/<name> detail) ----
 
-  // listMemberRow renders one list member ref: a workspace-relative member links
-  // into this bucket (its ref route); a foreign-repo member renders as labeled
-  // mono text (its objects live in another bucket the reader cannot fetch).
+  // listMemberRow renders one list member: a link when local, labeled mono text when foreign.
   function listMemberRow(member) {
     const m = listMemberRef(member);
     const row = el("div", { class: "tree-row" }, []);
@@ -3954,8 +3227,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // listCardNav makes a lists-overview card navigate to its #list: detail route
-  // on a click anywhere (inner anchors and selections excepted).
+  // listCardNav makes a list card navigate to its #list: route, sparing inner links and selections.
   function listCardNav(card, id) {
     card.className += " clickable";
     card.addEventListener("click", (e) => {
@@ -3967,9 +3239,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
-  // listsView renders the #/lists overview: one card per list (name, extension,
-  // member count, version) linking to its detail. Lists are discovered from the
-  // refs manifest, so a bucket with none shows the standard empty state.
+  // listsView renders one card per list linking to its detail.
   async function listsView(ctx) {
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("div", { class: "subject" }, ["Lists"]));
@@ -3990,8 +3260,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // listDetailView renders one list (#list:<ext>/<name>): its metadata and its
-  // resolved members (workspace-relative as links, foreign repos as labeled text).
+  // listDetailView renders one list's metadata and resolved members.
   async function listDetailView(ctx, id) {
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("a", { class: "back", href: "#/lists" }, ["← back"]));
@@ -4011,20 +3280,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Configuration (#/config) ----
 
-  // prefRow renders one reader-preference control: a label and a button whose
-  // text is the current value; clicking runs onToggle and refreshes the label.
+  // prefRow renders a labelled preference button showing the current value.
   function prefRow(labelText, getValue, onToggle) {
     const btn = el("button", { class: "pref-btn", type: "button" }, [getValue()]);
     btn.addEventListener("click", () => { onToggle(); btn.textContent = getValue(); });
     return el("div", { class: "pref-row" }, [el("span", { class: "pref-label mono" }, [labelText]), btn]);
   }
 
-  // readerPrefsSection is the client-side reader preferences surface: theme,
-  // layout width, sidebar collapse, and diff view mode, each reading/writing the
-  // same localStorage key the header/inline controls use (theme/layout/
-  // navCollapsed/diffview) so the two surfaces stay in sync. Theme/width/collapse
-  // reuse the existing header buttons (keeping their icon state consistent);
-  // diffview is written directly (it has no header control).
+  // readerPrefsSection renders the reader preferences, driving the same localStorage keys as the header controls.
   function readerPrefsSection() {
     const wrap = el("div", { class: "config-section" }, []);
     wrap.append(el("div", { class: "config-head mono" }, ["Reader preferences"]));
@@ -4046,11 +3309,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // siteConfigSection renders the pushed static-site customization
-  // (.gitsocial/site/site-config.json: title/accent/accentDark/favicon), read-only
-  // — the same fields applied to the tab title, accent token, and favicon. Null
-  // when the bucket carries no customization (the reader keeps its defaults), so
-  // the config page shows this section only when a site config was published.
+  // siteConfigSection renders the pushed site customization read-only, or null when none was published.
   async function siteConfigSection(ctx) {
     const cfg = await loadSiteCustomization(ctx);
     if (!cfg || typeof cfg !== "object") return null;
@@ -4071,8 +3330,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // repoConfigSection renders each extension's in-bucket refs/gitmsg/<ext>/config
-  // JSON (read-only) as formatted key/value; an absent config shows "defaults".
+  // repoConfigSection renders each extension's in-bucket config JSON read-only.
   async function repoConfigSection(ctx) {
     const wrap = el("div", { class: "config-section" }, []);
     wrap.append(el("div", { class: "config-head mono" }, ["Repository configuration"]));
@@ -4092,24 +3350,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // forksSection lists the repo's registered forks (mirroring the TUI Config →
-  // Forks view), read from the fork refs in the bucket manifest. Each row shows
-  // the fork's repo URL (scheme stripped, like the TUI), linked for http(s) URLs.
-  // The TUI's commit-count / last-fetch columns are cache-derived and unavailable
-  // to a browser reader, so only URLs show. Null when the bucket has no forks.
-  // FORKS_CAP is how many forks the config page shows before an expand control:
-  // a repo with hundreds of forks (they arrive most-recently-updated first) must
-  // not dump the whole list into the page.
+  // FORKS_CAP is how many forks the config page shows before an expand control.
   const FORKS_CAP = 10;
 
+  // forksSection lists the registered forks, capped, with a Load all control; null when none.
   async function forksSection(ctx) {
-    // The COUNT comes from the manifest's fork refs alone; only the displayed
-    // cap is hydrated up front. Each fork's URL lives in its ref's commit, so
-    // "all forks before anything renders" meant one object read per fork —
-    // on a bucket with thousands of registered forks the config page never
-    // painted. The capped subset is the manifest's (refname-hash) order —
-    // recency ordering over the whole set would need every commit, the exact
-    // cost the cap avoids — sorted most-recently-updated within itself.
+    // Only the displayed cap is hydrated up front; the count comes from the manifest alone.
     const total = forkRefNames(await manifestFor(ctx)).length;
     if (!total) return null;
     let forks = await loadForks(ctx, FORKS_CAP);
@@ -4124,22 +3370,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       else row.append(el("span", { class: "mono selectable" }, [shown]));
       return row;
     };
-    // Under the cap: the plain list, no controls (the common case).
     if (total <= FORKS_CAP) {
       const list = el("div", { class: "tree-list" }, []);
       for (const f of forks) list.append(forkRow(f));
       wrap.append(list);
       return wrap;
     }
-    // Over the cap: the FORKS_CAP loaded forks with a "Load all N" control.
-    // The first expand hydrates the remaining fork commits on demand (bounded
-    // concurrency, ctx-cached, so a RETRY only refetches what failed) and
-    // reveals a filter input over a scrollable list, consistent with the
-    // analytics top-authors surface. Honesty rule: the expanded state is
-    // entered only when the bulk load completed IN FULL — a failed or partial
-    // load keeps the capped list, says so in a note, and keeps the "Load all"
-    // affordance for another attempt, so a 10-row list is never presented as
-    // the full set.
+    // The expanded state is entered only when the bulk load completed in full.
     let expanded = false, loaded = false;
     const list = el("div", { class: "tree-list contrib-scroll" }, []);
     const filter = el("input", { class: "contrib-filter", type: "text", placeholder: "Filter forks…", "aria-label": "Filter forks", autocomplete: "off", spellcheck: "false" }, []);
@@ -4185,22 +3422,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
     filter.addEventListener("input", draw);
     wrap.append(filter, list, note, toggle);
-    // Start collapsed: no scroll region, no filter, just the loaded cap.
     list.classList.remove("contrib-scroll");
     draw();
     return wrap;
   }
 
-  // configView renders the #/config page: the client-side reader preferences
-  // (a second surface over the header toggles), the registered forks (when any),
-  // and the read-only repository configuration (each extension's in-bucket config
-  // JSON). The async sections load CONCURRENTLY and fail independently: the
-  // serial await chain let one stuck or failed section (the forks hydration,
-  // the one with per-object fan-out against a possibly rate-limited host) hold
-  // every later section hostage — the repository-config fetches were never
-  // even issued and the stall watchdog fired over a view that could have
-  // drawn. A failed section renders a small note in its place; a 403 still
-  // rejects the whole view (a private bucket is a page-level condition).
+  // configView renders the config page; its sections load concurrently and fail independently, except a 403.
   async function configView(ctx) {
     const wrap = el("div", { class: "detail config-view" }, []);
     wrap.append(el("div", { class: "subject" }, ["Configuration"]));
@@ -4228,8 +3455,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("h1", {}, [LIST_HEADINGS[tab]]);
   }
 
-  // countHead renders a view's total-count line ("42 branches") in the shared
-  // section-label voice, one treatment across the branches/tags/releases pages.
+  // countHead renders a view's total-count line.
   function countHead(n, singular, plural) {
     return el("div", { class: "view-count" }, [n + " " + (n === 1 ? singular : plural || singular + "s")]);
   }
@@ -4239,8 +3465,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const { branches, defaultBranch } = await listBranches(ctx);
     if (!branches.length) return [el("div", { class: "empty" }, ["No branches in this repository."])];
     const nodes = [countHead(branches.length, "branch", "branches")];
-    // A page-level compare affordance opens the compare picker (default branch as
-    // the base) so the user reaches it without hand-writing a route.
     if (defaultBranch) nodes.push(el("div", { class: "page-actions" }, [
       el("a", { class: "action-link", href: compareRef(defaultBranch, "") }, ["⇄ Compare branches"]),
     ]));
@@ -4248,9 +3472,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const card = el("div", { class: "card" }, []);
       const head = el("div", { class: "card-head" }, [el("a", { class: "subject mono", href: "#branch:" + b.name }, [b.name])]);
       if (b.isDefault) head.append(el("span", { class: "chip" }, ["default"]));
-      // Per-branch compare: base = default branch, head = this branch (the common
-      // "what's on this branch vs main" question); a self-compare on the default
-      // branch is dropped (nothing to compare).
       if (defaultBranch && b.name !== defaultBranch) head.append(el("a", { class: "hash compare-link", href: compareRef(defaultBranch, b.name) }, ["compare"]));
       card.append(head);
       nodes.push(card);
@@ -4258,10 +3479,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return nodes;
   }
 
-  // tagsView renders the tags page (#/tags): every tag in the refs manifest
-  // (refs/tags/*), each a card linking to its resolved commit detail (#tag:<name>)
-  // plus the short target sha. Empty state consistent with the repository
-  // phrasing when no tags were pushed (or the manifest is absent).
+  // tagsView renders one card per tag linking to its commit detail.
   async function tagsView(ctx) {
     const tags = await listTags(ctx);
     if (!tags.length) return [el("div", { class: "empty" }, ["No tags in this repository."])];
@@ -4276,8 +3494,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }));
   }
 
-  // cardTagNav makes a whole tag card navigate to its #tag:<name> route on a
-  // click anywhere in it (inner anchors and active selections excepted).
+  // cardTagNav makes a tag card navigate to its #tag: route, sparing inner links and selections.
   function cardTagNav(card, name) {
     card.className += " clickable";
     card.addEventListener("click", (e) => {
@@ -4289,23 +3506,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return card;
   }
 
-  // parseTagger parses a raw tag-object tagger line value ("Name <email> ts tz")
-  // into { name, email, time }; null when absent or unparseable (lightweight
-  // tags have no tag object, so no tagger).
+  // parseTagger parses a tagger line into { name, email, time }, or null.
   function parseTagger(tagger) {
     const m = /^(.*) <([^>]*)> (\d+) /.exec(tagger || "");
     return m ? { name: m[1], email: m[2], time: parseInt(m[3], 10) } : null;
   }
 
-  // tagDetail renders the tag page (#tag:<name>) milestone-shaped: a tag-centric
-  // header (name, signed chip, annotation message, tagger — or the tagged
-  // commit's author for lightweight tags — and a link row to the tagged commit),
-  // then the commits the tag introduces over the previous tag (version order,
-  // the changelog neighbor), then the file diff against that previous tag —
-  // three-dot semantics like the compare page, not the tagged commit's own
-  // diff. An annotated tag is peeled to its commit (peelTag chases the tag
-  // object's `object` line); a lightweight tag points straight at the commit.
-  // Not found when the tag is absent from the manifest or unreachable.
+  // tagDetail renders a tag page: header, commits since the previous tag, and the three-dot diff against it.
   async function tagDetail(ctx, name) {
     const tags = await listTags(ctx);
     const t = tags.find((x) => x.name === name);
@@ -4318,8 +3525,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/tags") }, ["← back"]));
     const subject = el("div", { class: "subject" }, [name]);
-    // The PGP/SSH signature block is stripped from the annotation (peelTag);
-    // a small unobtrusive chip stands in for it rather than dumping the armor.
     if (peeled.signed) subject.append(" ", el("span", { class: "chip chip-signed" }, ["✓ signed"]));
     wrap.append(subject);
     const meta = el("span", { class: "meta" }, []);
@@ -4340,10 +3545,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]));
     wrap.append(await tagCommitsSection(ctx, prev, prevCommit, peeled.commit));
 
-    // File diff against the previous tag, three-dot like compareView: merge-base
-    // (normally the previous tag itself on linear history) vs this tag's tree.
-    // Skipped for the oldest tag (nothing to diff against) and for a previous
-    // tag on the same commit (empty by definition).
     if (prevCommit && prevCommit !== peeled.commit) {
       const mb = await resolveMergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
       const headTree = await commitTree(ctx, peeled.commit);
@@ -4356,9 +3557,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // commitMemberRow is a compact short-hash + linked-subject one-liner for a
-  // commit listed on the tag page — the milestone member-row style
-  // (issueMemberRow), with the mono hash standing in the state chip's slot.
+  // commitMemberRow renders a short hash and linked subject for a commit on the tag page.
   function commitMemberRow(c) {
     return el("div", { class: "pm-member" }, [
       el("a", { class: "hash mono", href: commitRef(c.hash, "") }, [c.short]),
@@ -4366,13 +3565,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]);
   }
 
-  // tagCommitsSection lists the commits a tag introduces over the previous tag:
-  // commits reachable from the tag's commit but not from the previous tag's,
-  // newest-first, paged, as milestone-style member one-liners under a counted
-  // "Commits since <prev> (n)" header (the count grows with each loaded window;
-  // the Load more control itself signals a deeper history). The oldest tag — or
-  // one whose previous tag can't be peeled to a commit — lists the tag's full
-  // history instead.
+  // tagCommitsSection lists the commits a tag introduces over the previous tag, paged; the oldest tag lists its history.
   async function tagCommitsSection(ctx, prev, prevCommit, commit) {
     const countEl = el("span", {}, ["0"]);
     const label = prevCommit ? "Commits since " + prev.name : "Commits";
@@ -4389,19 +3582,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // commitCard renders a code commit as the app's card: the commit glyph, the
-  // subject linking to the commit detail, and the author/time/hash meta, whole-
-  // card navigable. This is the one code-commit card in the app — the merged
-  // timeline, the branch log and the commits list all render through it, so a
-  // commit reads the same wherever it appears. It carries no GitMsg header, so
-  // no state chips and no interaction counts.
-  //
-  // Options are the deviations the surfaces genuinely need: chip appends the
-  // branch (the timeline mixes branches, the other two are already scoped to
-  // one), and the commits list takes all three of the rest — id gives the row
-  // the citable anchor its generated page gives it, time carries that page's
-  // absolute date so the two renders read the same row for row, and refSha keeps
-  // the links on the sha12 the page links.
+  // commitCard renders the one code-commit card; id, time and refSha keep parity with the generated commits page.
   function commitCard(c, name, opts) {
     const o = opts || {};
     const ref = commitRef(o.refSha || c.hash, name);
@@ -4419,19 +3600,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, c.hash, name);
   }
 
-  // utcDate formats a unix time as the page layer's date form (UTC YYYY-MM-DD,
-  // sitePageDate), the form the generated commits page carries.
+  // utcDate formats a unix time as the page layer's UTC YYYY-MM-DD.
   function utcDate(unixSeconds) {
     if (!unixSeconds) return "";
     const d = new Date(unixSeconds * 1000);
     return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
   }
 
-  // commitsView renders one page of the default branch's commit list
-  // (#/commits, #/commits/<n>) — the app's half of the crawlable commits pages.
-  // Same rows, same order, same count, same chain as the generated page for the
-  // same route, because both project the same code index through the same
-  // published partition.
+  // commitsView renders one commits page, row for row the generated page for the same route.
   async function commitsView(ctx, page) {
     const r = await loadCommitsPage(ctx, page);
     const wrap = el("div", { class: "detail" }, []);
@@ -4452,9 +3628,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [listHeading("commits"), wrap];
   }
 
-  // branchLogView renders a branch's commit log, paged: the first WALK_CAP window
-  // with a "Load more" control that walks the next window when the history runs
-  // deeper.
+  // branchLogView renders a branch's paged commit log.
   async function branchLogView(ctx, name) {
     const first = await loadBranchLogWindow(ctx, name, false);
     if (!first.tip) return [el("div", { class: "err" }, ["Branch not found: " + name])];
@@ -4463,7 +3637,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const actions = el("div", { class: "page-actions" }, [
       el("a", { class: "action-link", href: fileRef("", name) }, ["browse files →"]),
     ]);
-    // Compare this branch against the default branch (base = default, head = this).
     const { defaultBranch } = await listBranches(ctx);
     if (defaultBranch && defaultBranch !== name) actions.append(el("a", { class: "action-link", href: compareRef(defaultBranch, name) }, ["⇄ compare with " + defaultBranch]));
     wrap.append(actions);
@@ -4474,11 +3647,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // comparePicker builds one labeled base/head ref selector: an <optgroup>ed
-  // <select> of the repo's branches then tags, preselecting `current`. Changing
-  // it navigates to the compare route with the other side held fixed. A ref that
-  // is neither a branch nor a tag (a stale/foreign name) still shows as the
-  // selected option so the picker reflects the URL.
+  // comparePicker builds a base or head ref select over branches and tags; changing it navigates.
   function comparePicker(label, current, branches, tags, otherSide, isBase) {
     const sel = el("select", { class: "compare-select mono", "aria-label": label }, []);
     const optFor = (name) => el("option", Object.assign({ value: name }, name === current ? { selected: "selected" } : {}), [name]);
@@ -4500,14 +3669,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("label", { class: "compare-field" }, [el("span", { class: "meta" }, [label]), sel]);
   }
 
-  // compareView renders the branch/tag compare page (#/compare:<base>...<head>).
-  // It offers base/head pickers (branches + tags), resolves both to commits in
-  // this bucket, and shows GitHub-style three-dot semantics: the file diff is
-  // base=merge-base(base,head) vs head (reusing the commit diff renderer), and a
-  // commit list of the head-side commits since the merge-base. Same-ref compares
-  // are an empty state; unrelated histories fall back to a two-dot diff with a
-  // caveat; missing refs surface a clear message. The pickers always render so
-  // the user can pick even when a side is blank or unresolved.
+  // compareView renders the compare page: pickers, head-side commits since the merge-base, and the three-dot diff.
   async function compareView(ctx, baseName, headName) {
     const { branches, defaultBranch } = await listBranches(ctx);
     const tags = await listTags(ctx);
@@ -4532,8 +3694,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       wrap.append(el("div", { class: "empty" }, ["These refs point at the same commit; there is nothing to compare."]));
       return [wrap];
     }
-    // Three-dot semantics: diff the merge-base against head. No common ancestor
-    // (unrelated histories) falls back to a raw two-dot diff with a caveat.
     const mb = await resolveMergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
     const headTree = await commitTree(ctx, headR.sha);
     const baseTree = await commitTree(ctx, baseR.sha);
@@ -4542,8 +3702,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     let leftTree = baseTree;
     if (mb) leftTree = await commitTree(ctx, mb) || baseTree;
     else caveats.push("no common ancestor — raw two-dot diff");
-    // Head-side commit list (commits head has since the merge-base, or since base
-    // when there is no merge base), paged. Rendered above the file diff like a PR.
     const excludeFrom = mb || baseR.sha;
     const first = await loadCompareCommitsWindow(ctx, excludeFrom, headR.sha, false);
     const commitsWrap = el("div", { class: "compare-commits" }, []);
@@ -4558,14 +3716,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // svgEl builds an SVG-namespaced element (document.createElement assigns the
-  // HTML namespace, so SVG children never render — createElementNS is required).
   const SVG_NS = "http://www.w3.org/2000/svg";
+  // svgEl builds an SVG-namespaced element; createElement would assign the HTML namespace and never render.
   function svgEl(tag, attrs, children) {
     const node = document.createElementNS(SVG_NS, tag);
-    // SVGElement.className is a read-only SVGAnimatedString, so set the class via
-    // setAttribute; mirror it onto classList so headless class lookups (_cls) see
-    // it too. Every other attribute is a plain setAttribute.
+    // SVGElement.className is read-only, so class goes through setAttribute and is mirrored onto classList.
     if (attrs) for (const k in attrs) {
       node.setAttribute(k, attrs[k]);
       if (k === "class" && node.classList) for (const c of String(attrs[k]).split(/\s+/).filter(Boolean)) node.classList.add(c);
@@ -4574,21 +3729,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return node;
   }
 
-  // GRAPH_LANE_W / GRAPH_ROW_H / GRAPH_DOT_R set the graph gutter geometry: lane
-  // horizontal pitch, per-row height, and the commit dot radius.
+  // GRAPH_LANE_W, GRAPH_ROW_H and GRAPH_DOT_R set the gutter geometry.
   const GRAPH_LANE_W = 18, GRAPH_ROW_H = 40, GRAPH_DOT_R = 4;
-  // GRAPH_LANE_VARS names the lane palette as the sheet's own tokens: each lane
-  // resolves from the computed custom properties at render time, so the gutter
-  // re-tints with the active theme (dark mode gets the dark --i-* hues) and with
-  // a configured accent (--link). The paired literals are the light-theme
-  // values, the fallback when resolution fails (headless DOM, no stylesheet).
+  // GRAPH_LANE_VARS pairs each lane's theme token with its light-theme fallback.
   const GRAPH_LANE_VARS = [
     ["--link", "#008787"], ["--closed", "#8957e5"], ["--open", "#1f9d55"],
     ["--warn", "#bf8700"], ["--danger", "#cf222e"], ["--i-blue", "#1a85d4"],
     ["--i-vermilion", "#d5512f"], ["--i-indigo", "#693acf"],
   ];
-  // graphLaneColors resolves the lane palette once per gutter render, off body
-  // (where the theme classes land, so the per-theme token values are in effect).
+  // graphLaneColors resolves the lane palette from the body's computed custom properties.
   function graphLaneColors() {
     let cs = null;
     try {
@@ -4601,11 +3750,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
-  // buildGraphGutter draws the lane gutter for the assigned rows as one inline
-  // SVG: a colored dot per commit at its lane, and a line from each commit down to
-  // each loaded parent's lane (a straight drop when the parent stays in-lane, an
-  // elbow when it moves — a fork/merge). Edges to unloaded parents (past the
-  // window) are omitted (the lane simply ends). Returns the <svg>.
+  // buildGraphGutter draws the lane gutter as one SVG: a dot per commit and a line to each loaded parent.
   function buildGraphGutter(rows, laneCount) {
     const laneColors = graphLaneColors();
     const graphLaneColor = (lane) => laneColors[lane % laneColors.length];
@@ -4640,18 +3785,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return svg;
   }
 
-  // graphRefChips returns the ref decoration chips for one graph row (git log
-  // --decorate style): live code-branch tips (the default branch as the solid
-  // `default` variant), tags (lightweight only — an annotated tag's object sha
-  // never matches a commit row; see loadGraphDecorations), and merged-PR
-  // head-branch chips prefix-matched on the recorded merge-head/head-tip short
-  // shas — rendered dashed/dimmed since the ref is historical, linked to the PR
-  // detail when the canonical PR sha is known, and suppressed when the same
-  // name is already on the row as a live tip.
-  // A row keeps at most GRAPH_ROW_CHIPS decorations; the rest fold into one
-  // "+N" chip whose tooltip lists them, so a many-branch mirror (dozens of
-  // bot-branch tips) can't crowd the hash/subject out of the fixed-height row.
+  // GRAPH_ROW_CHIPS caps a row's decorations; the rest fold into one "+N" chip.
   const GRAPH_ROW_CHIPS = 3;
+  // graphRefChips returns a row's branch tip, tag and merged-PR chips, capped at GRAPH_ROW_CHIPS.
   function graphRefChips(hash, decor) {
     if (!decor) return [];
     const chips = [];
@@ -4671,9 +3807,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       .concat(el("span", { class: "chip branch-tip", title: rest.join("\n") }, ["+" + rest.length]));
   }
 
-  // graphRowText builds the text column for one graph row: ref decoration chips
-  // (branch tips / tags / merged-PR branches), short hash (commit link),
-  // subject (also a commit link), author, date.
+  // graphRowText builds a graph row's text column: chips, hash, subject, author and date.
   function graphRowText(r, decor) {
     const c = r.commit;
     const row = el("div", { class: "graph-row-text" }, []);
@@ -4686,8 +3820,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return row;
   }
 
-  // graphBody renders the assigned rows: an SVG lane gutter beside a stacked list
-  // of per-row text lines (fixed GRAPH_ROW_H each so they align with the gutter).
+  // graphBody renders the SVG gutter beside GRAPH_ROW_H-tall text rows.
   function graphBody(rows, laneCount, decor) {
     const gutter = buildGraphGutter(rows, laneCount);
     const textCol = el("div", { class: "graph-text-col" }, []);
@@ -4699,25 +3832,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "graph-body" }, [el("div", { class: "graph-gutter-wrap" }, [gutter]), textCol]);
   }
 
-  // graphView renders the repository commit DAG (#/graph): a multi-branch,
-  // time-ordered commit graph over the newest window of history (GRAPH_WINDOW
-  // commits across all branch heads), with a "Load more" that walks the next
-  // window and re-lays the lanes over the grown set. The lane gutter is inline SVG
-  // (colored lane lines, fork/merge elbows, dots); each row shows ref decoration
-  // chips (branch tips, tags, merged-PR branches — graphRefChips), the short
-  // hash (commit link), subject, author, date. Empty when the repository has no
-  // commits.
+  // graphView renders the multi-branch commit graph over the newest window with a Load more.
   async function graphView(ctx) {
     let data = await loadGraphWindow(ctx, false);
     const wrap = el("div", { class: "detail graph" }, []);
     wrap.append(el("div", { class: "subject" }, ["Commit graph"]));
     if (!data.commits.length) { wrap.append(el("div", { class: "empty" }, ["No commits in this repository."])); return [wrap]; }
-    // The gutter+text are re-rendered from scratch on each window (lanes shift as
-    // parents that were off-window become present), so a load-more redraws the
-    // whole graph rather than appending — correct over clever, per the brief. The
-    // horizontal-scroll wrapper keeps the lane gutter usable on narrow screens.
+    // Lanes shift as off-window parents arrive, so a load-more redraws the whole graph.
     const scroll = el("div", { class: "graph-scroll" }, []);
     let moreWrap = null;
+    // render lays out lanes over the loaded commits and refreshes Load more.
     function render() {
       const { rows, laneCount } = assignGraphLanes(data.commits);
       scroll.replaceChildren(graphBody(rows, laneCount, data.decor));
@@ -4747,14 +3871,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const entries = await getTree(ctx, node.sha);
       return treeView(ctx, entries || [], path, branch);
     }
-    // A file view is a whole screen of code, the one surface where upgrading
-    // plain text after the fact is worth avoiding. The path already says whether
-    // it highlights, so the tokenizer's fetch starts HERE and is awaited just
-    // before the pane is built: it rides alongside the blob's own fetch and the
-    // pane renders highlighted the first time. Everywhere else keeps the
-    // render-now/upgrade-in-place path, which costs nothing to start. The wait is
-    // bounded because the pane has that path too (rawBlobPane tracks its own
-    // upgrade), so a stalled tokenizer costs a late highlight, never the file.
+    // A file view awaits the tokenizer, bounded, so the pane renders highlighted the first time.
     const prismReady = langForPath(path) ? ensurePrism() : null;
     const obj = await getContentObject(ctx, node.sha);
     if (!obj) return [el("div", { class: "err" }, ["Object not found."])];
@@ -4781,22 +3898,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return null;
   }
 
-  // homeView is the repo landing page: README (minimal Markdown) above a
-  // metadata strip (default branch, latest commit, branch count).
+  // HOME_FILE_LIMIT is how many root entries Home shows before the Show all control.
   const HOME_FILE_LIMIT = 3;
 
-  // CHEVRON_SVG holds the two inline chevron glyphs (down = expand, up =
-  // collapse) drawn to match the vendored icons' 16x16 viewBox. They are
-  // trusted static assets, so they parse through the same inert DOMParser path
-  // as the icon set, never the untrusted-HTML sanitizer.
+  // CHEVRON_SVG holds the trusted inline chevron glyphs, parsed like the icon set.
   const CHEVRON_SVG = {
     down: "<svg fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m3.5 6 4.5 4.5L12.5 6\"/></svg>",
     up: "<svg fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m3.5 10 4.5-4.5L12.5 10\"/></svg>",
   };
   const chevronTemplates = new Map();
 
-  // chevronEl clones one chevron glyph into a themed span (iconEl's output
-  // shape), or null when DOMParser is unavailable so callers can fall back.
+  // chevronEl clones one chevron glyph into a themed span, or null without DOMParser.
   function chevronEl(dir) {
     if (!chevronTemplates.has(dir)) {
       let node = null;
@@ -4814,14 +3926,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "gs-icon chevron" }, [svg]);
   }
 
-  // SEARCH_SVG is the Code nav item's magnifier glyph (16x16, currentColor),
-  // parsed through the same trusted DOMParser template path as the icon set and
-  // chevrons, never the untrusted-HTML sanitizer.
+  // SEARCH_SVG is the trusted magnifier glyph for the Code nav item.
   const SEARCH_SVG = "<svg fill=\"none\" viewBox=\"0 0 16 16\"><circle cx=\"7\" cy=\"7\" r=\"4.25\" stroke=\"currentColor\" stroke-width=\"1.5\"/><path stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" d=\"m10.5 10.5 3 3\"/></svg>";
   let searchTemplate;
 
-  // searchIconEl clones the magnifier into a themed span (iconEl's output shape),
-  // or null when DOMParser is unavailable so the caller can fall back to a glyph.
+  // searchIconEl clones the magnifier into a themed span, or null without DOMParser.
   function searchIconEl() {
     if (searchTemplate === undefined) {
       let node = null;
@@ -4838,12 +3947,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "gs-icon nav-search-icon" }, [svg]);
   }
 
-  // homeFileList renders the root entries (directories first, then files) as a
-  // GitHub-style file listing on Home. A long listing collapses to the first
-  // HOME_FILE_LIMIT rows behind a centered chevron control (down = "Show all N",
-  // up = "Show less"), with a gradient fade over the last visible row so the
-  // truncation reads. The fade layer takes no pointer events, so the visible
-  // rows stay clickable through it.
+  // homeFileList renders the root entries, collapsing past HOME_FILE_LIMIT behind a chevron toggle.
   function homeFileList(entries, branch) {
     const dirs = entries.filter((e) => e.type === "tree").sort((a, b) => a.name.localeCompare(b.name));
     const files = entries.filter((e) => e.type !== "tree").sort((a, b) => a.name.localeCompare(b.name));
@@ -4874,17 +3978,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // homeActivityRow renders one recent-activity row as the same card the rest of
-  // the app uses: the leading type glyph, the subject linking to the item detail,
-  // and the author/time meta. Every field comes from the metadata index (no body
-  // is hydrated), and the row mirrors the static front page's own row
-  // (site_pages_html.go sitePageActivityRow) down to the glyph character, which
-  // the page layer can carry because the glyphs are plain text.
-  //
-  // No row carries a type chip. Each type has its own glyph character (○/● issue,
-  // ⑂ pull request, ◇ milestone, ◷ sprint, • post, ⏏ release, ☞ memo, ◦ commit)
-  // and every glyph is titled with its type, so a chip beside it only said the
-  // same thing twice — the code row already dropped it for exactly that reason.
+  // homeActivityRow renders a recent-activity card from index metadata, mirroring the static front page's row.
   function homeActivityRow(item) {
     const branch = item._branch || "";
     const code = item._ext === "code";
@@ -4901,20 +3995,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return cardNav(card, item.commit.hash, branch);
   }
 
-  // homeActivityMore is the section's trailing link to the full timeline, built
-  // as the same centered chevron control the root file listing's "Show all N"
-  // uses. The static front page carries the same label over its own crawlable
-  // destination (the posts archive, which IS the page for /timeline).
+  // homeActivityMore renders the trailing link to the full timeline.
   function homeActivityMore() {
     const glyph = el("span", { class: "show-more-icon" }, [chevronEl("down") || document.createTextNode("⌄")]);
     return el("a", { class: "show-more", href: "#/timeline" }, [glyph, el("span", { class: "show-more-label" }, ["See more"])]);
   }
 
-  // homeView is the GitHub-familiar repo landing: a metadata strip (branch,
-  // branch count, latest commit), the root file listing (directories first), the
-  // rendered README below it when present, and the newest items as a recent-
-  // activity section. The commit-count/contributor summary lives on its own
-  // Analytics page (analyticsView), not here.
+  // homeView renders the landing: metadata strip, root files, README and recent activity.
   async function homeView(ctx) {
     const head = await headFor(ctx);
     const branch = headBranchName(head);
@@ -4945,22 +4032,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const obj = await getContentObject(ctx, readme.sha);
       if (obj) wrap.append(renderMarkdown(new TextDecoder().decode(obj.body), { ctx, branch, dir: "", tip: head.sha }));
     }
-    // Recent activity closes the landing, below the README on both surfaces: the
-    // static front page carries the same rows, so the upgrade re-renders them
-    // rather than swapping content in. It is metadata-only (no body hydration),
-    // which is what keeps home off the timeline's per-item object reads. Filled
-    // in AFTER the view is returned, so the strip/files/README in the viewport
-    // paint on the landing's own fetches and the section lands a beat later,
-    // below the fold — never delaying first paint behind the index reads.
     const activity = el("div", { class: "home-activity" }, []);
     wrap.append(activity);
-    // NOT published as the view's settle promise. It was, back when a page entry
-    // held the static page on screen: the rows were already visible there, so
-    // waiting for them cost nothing and avoided a gap after the swap. A page
-    // entry now shows a loading state instead, so waiting buys nothing visible
-    // and costs the section's index reads, roughly two thirds of home's fetches
-    // and about 1.9s of the boot. The landing paints on its own fetches and the
-    // section lands below the fold a beat later, exactly as in the plain shell.
+    // Not awaited and not the settle promise: the section lands below the fold after first paint.
     loadHomeActivity(ctx).then((items) => {
       if (!items.length) return;
       activity.append(el("h2", { class: "home-activity-head" }, ["Recent activity"]));
@@ -4970,10 +4044,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // codeSidebarTarget maps a route to the sidebar file tree's active repo path,
-  // or null when the route is not a code-browsing context (so every other route
-  // keeps the plain nav). #/code and directory routes highlight a directory;
-  // blob routes highlight the open file.
+  // codeSidebarTarget maps a code or file route to the sidebar tree's active path, else null.
   function codeSidebarTarget(r) {
     if (!r) return null;
     if (r.type === "code") return { path: "", branch: null };
@@ -4981,14 +4052,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return null;
   }
 
-  // updateCodeSidebar fills (or clears) #nav-tree-slot with a repo file tree
-  // whenever the route is a code/dir/blob context, so files stay navigable from
-  // the sidebar without walking back through breadcrumbs (the GitHub code-view
-  // file panel). It shares ctx.treeExpanded and the ctx object cache with the
-  // content-pane tree, so expanding is reflected across both and it issues no
-  // GETs beyond the ancestor trees resolvePath already warmed for the content.
-  // The active path is highlighted and its ancestors auto-expanded. Any failure
-  // just clears the slot; it never disturbs the content route.
+  // updateCodeSidebar fills or clears the sidebar file tree for the route; any failure clears the slot.
   async function updateCodeSidebar(ctx, r) {
     const slot = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-tree-slot") : null;
     if (!slot) return;
@@ -5003,8 +4067,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const rootNode = await resolvePath(ctx, tip, "");
       const rootEntries = rootNode && (await getTree(ctx, rootNode.sha));
       if (!rootEntries) { slot.replaceChildren(); return; }
-      // Auto-expand the active path's ancestor directories (and the target dir
-      // itself) so the active row is visible in the sidebar hierarchy.
+      // Ancestors auto-expand so the active row is visible.
       const parts = target.path ? target.path.split("/") : [];
       for (let n = 1; n < parts.length; n++) ctx.treeExpanded.add(parts.slice(0, n).join("/"));
       if (parts.length) {
