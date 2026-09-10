@@ -715,7 +715,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       prependGlyph(meta, item, "social");
       const text = subject + (body ? "\n" + body : "");
       return card({
-        parts: [el("div", {}, [meta]), chips, text ? clampedBody(text) : null, quote],
+        parts: [meta, chips, text ? clampedBody(text) : null, quote],
         nav: { hash: item.commit.hash, branch: "gitmsg/social" },
       });
     }
