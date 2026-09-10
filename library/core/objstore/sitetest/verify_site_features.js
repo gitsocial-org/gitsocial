@@ -367,6 +367,28 @@ async function main() {
     ok("index-sourced code items carry their subject + branch", r.items.length > 0 && r.items.every((i) => i.content.length > 0 && typeof i._branch === "string"), "count=" + r.items.length);
   }
 
+  {
+    // The fixture carries no draft pull request and no prerelease, so the two
+    // chips the page leads its head with are checked on constructed items.
+    const headOrder = (node) => {
+      const head = (node._children || []).find((c) => c && c._cls && c._cls.has("card-head"));
+      return (head._children || []).map((c) => (c._cls && c._cls.has("chip") ? "chip:" : c.tagName === "A" ? "subject:" : "glyph:") + textOf(c).trim());
+    };
+    const commit = { hash: "b".repeat(40), short: "bbbbbbbbbbbb", authorName: "Ada", authorTime: 1757000000 };
+    const draft = GS.prCard({ header: { type: "pull-request", state: "open", draft: "true", head: "feat", base: "main" }, content: "Add the thing", commit }, null);
+    ok("a draft pull request leads its head with the draft chip", JSON.stringify(headOrder(draft)) === JSON.stringify(["glyph:⑂", "chip:draft", "subject:Add the thing"]), JSON.stringify(headOrder(draft)));
+    const pre = GS.releaseCard({ header: { type: "release", tag: "v2.0.0", version: "2.0.0", prerelease: "true" }, content: "v2.0.0", commit });
+    ok("a prerelease leads its head with the prerelease chip", headOrder(pre)[1] === "chip:prerelease" && headOrder(pre)[2] === "subject:v2.0.0", JSON.stringify(headOrder(pre)));
+    const stable = GS.releaseCard({ header: { type: "release", tag: "v1.0.0", version: "1.0.0" }, content: "v1.0.0", commit });
+    ok("a stable release leads its head with the subject", headOrder(stable)[1] === "subject:v1.0.0", JSON.stringify(headOrder(stable)));
+    const post = GS.timelineCard({ header: { type: "post" }, content: "First line\n\nRest", commit }, null);
+    ok("a post promotes its first line to the subject", headOrder(post)[1] === "subject:First line", JSON.stringify(headOrder(post)));
+    for (const type of ["comment", "repost", "quote"]) {
+      const node = GS.timelineCard({ header: { type }, content: "Opening of a sentence", commit }, null);
+      ok("a " + type + " renders whole, with no promoted subject", !(node._children || []).some((c) => c && c._cls && c._cls.has("card-head")));
+    }
+  }
+
   for (const [tab, label] of Object.entries(GS.LIST_HEADINGS)) {
     await route("#/" + tab, true);
     const first = (viewNode._children || [])[0];

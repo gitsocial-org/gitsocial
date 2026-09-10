@@ -515,10 +515,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return spec.nav ? cardNav(node, spec.nav.hash, spec.nav.branch) : node;
   }
 
-  // cardHead builds a .card-head: an optional type glyph, the subject link, then head chips.
-  function cardHead(glyph, href, text, chips) {
+  // cardHead builds a .card-head: a type glyph, the chip the page leads with, the subject link, then trailing chips.
+  function cardHead(glyph, href, text, chips, lead) {
     const head = el("div", { class: "card-head" }, []);
     if (glyph) head.append(glyph);
+    if (lead) head.append(lead);
     head.append(el("a", { class: "subject", href }, Array.isArray(text) ? text : [text]));
     for (const chip of chips || []) if (chip) head.append(chip);
     return head;
@@ -704,13 +705,23 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function socialCard(item, counts) {
     const [subject, body] = subjectBody(item.content);
     const type = (item.header && item.header.type) || "post";
-    const meta = metaRow(item, "gitmsg/social");
-    prependGlyph(meta, item, "social");
-    const text = subject + (body ? "\n" + body : "");
     const quote = type === "comment" || type === "quote" || type === "repost"
       ? replyQuoteBlock(item, type !== "repost") : null;
+    const chips = chipRow(headerChips(item.header, counts));
+    // A comment, repost and quote render whole (BODY_ONLY_TYPES): their first line
+    // opens a sentence under the thing they answer, and is never a title.
+    if (isBodyOnly(item, "social")) {
+      const meta = metaRow(item, "gitmsg/social");
+      prependGlyph(meta, item, "social");
+      const text = subject + (body ? "\n" + body : "");
+      return card({
+        parts: [el("div", {}, [meta]), chips, text ? clampedBody(text) : null, quote],
+        nav: { hash: item.commit.hash, branch: "gitmsg/social" },
+      });
+    }
+    const head = cardHead(typeGlyphEl(item, "social"), commitRef(item.commit.hash, "gitmsg/social"), subject || "(untitled)");
     return card({
-      parts: [el("div", {}, [meta]), text ? clampedBody(text) : null, quote, chipRow(headerChips(item.header, counts))],
+      parts: [head, metaRow(item, "gitmsg/social"), chips, body ? clampedBody(body) : null, quote],
       nav: { hash: item.commit.hash, branch: "gitmsg/social" },
     });
   }
@@ -730,10 +741,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function prCard(item, counts) {
     const subject = itemSubject(item);
     const h = item.header || {};
-    const head = cardHead(typeGlyphEl(item, "review"), commitRef(item.commit.hash, "gitmsg/review"), subject || "(untitled)");
+    const head = cardHead(typeGlyphEl(item, "review"), commitRef(item.commit.hash, "gitmsg/review"), subject || "(untitled)",
+      null, h.draft === "true" ? el("span", { class: "chip" }, ["draft"]) : null);
     const row = metaRow(item, "gitmsg/review");
     row.append(el("span", { class: "chip" }, [(h.head || "?") + " → " + (h.base || "?")]));
-    if (h.draft === "true") row.append(el("span", { class: "chip" }, ["draft"]));
     if (h["depends-on"]) row.append(el("span", { class: "chip" }, ["stacked"]));
     return card({
       parts: [head, row, chipRow(headerChips(h, counts))],
@@ -748,9 +759,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const assets = releaseAssets(h);
     const head = cardHead(typeGlyphEl(item, "release"), commitRef(item.commit.hash, "gitmsg/release"), h.tag || subject || h.version || "(release)", [
       h.version ? el("span", { class: "chip" }, ["v" + h.version]) : null,
-      h.prerelease === "true" ? el("span", { class: "chip pre state" }, ["prerelease"]) : null,
       assets.artifacts.length ? el("span", { class: "chip" }, [assets.artifacts.length + (assets.artifacts.length === 1 ? " asset" : " assets")]) : null,
-    ]);
+    ], h.prerelease === "true" ? el("span", { class: "chip pre state" }, ["prerelease"]) : null);
     const showBody = subject && subject !== h.tag;
     return card({
       parts: [head, metaRow(item, "gitmsg/release"), chipRow(headerChips(h)), showBody ? clampedBody(subject + (body ? "\n" + body : "")) : null],
@@ -2310,7 +2320,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         () => pane.replaceChildren(el("div", { class: "body raw-body" }, [item.rawMessage || ""])))]);
       parts = [el("div", { class: "detail-meta" }, [meta, modes]), clampNode(pane)];
     } else {
-      parts = [content, meta];
+      parts = [meta, content];
     }
     for (const e of embeddedRefs(item.commit, item.header)) parts.push(embeddedBlock(e));
     return card({ variant: "comment", parts, nav: nav ? { hash: item.commit.hash, branch: target } : null });
