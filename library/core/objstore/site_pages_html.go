@@ -340,9 +340,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="meta">… truncated — full README in the repository</p>
 {{end}}</section>
 {{end}}{{end}}{{if .Activity}}<div class="home-activity"><h2 class="home-activity-head">Recent activity</h2>
-{{range .Activity}}<div class="card"><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}<a class="subject" href="{{.Href}}">{{.Subject}}</a></div>
-<span class="meta">{{.Author}} · {{.Date}}{{if .Sha}} · {{.Sha}}{{end}}</span></div>
-{{end}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
+{{template "entries" .Activity}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
 {{end}}</div>
 {{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
 {{template "foot"}}{{end}}`
@@ -494,32 +492,9 @@ type siteFrontPageData struct {
 	Chrome            sitePageChrome
 	Description       string
 	Home              *siteFrontHome
-	Activity          []sitePageActivityRow
+	Activity          []sitePageListEntry
 	ActivityMoreHref  string // crawlable destination for the section's trailing link ("" — no rows)
 	ActivityMoreLabel string // its label, shared with the app's control (siteActivityMoreLabel)
-}
-
-// sitePageActivityRow is one row of the front page's recent-activity section:
-// the metadata the items index already carries, linking to the item's own
-// crawlable page. The app's homeActivity renders the same fields in the same
-// order (gs-render.js homeActivityRow), as the same card — glyph, subject,
-// meta — which the no-JS page can carry verbatim because the type glyphs are
-// plain text characters.
-//
-// No row carries a type chip: each type has its own glyph character and every
-// glyph is titled with its type, so a chip beside it only repeated the glyph.
-type sitePageActivityRow struct {
-	Href    string
-	Subject string
-	Author  string
-	Date    string
-	// Sha is the commit's short sha, appended to a code row's meta so the row
-	// carries the commit's identity the way the commit card does. Empty on item
-	// rows, which are identified by the item page they link to.
-	Sha        string
-	Glyph      string // leading type glyph ("" — this type has none)
-	GlyphClass string // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
-	GlyphTitle string // the glyph's title attribute (sitePageGlyphTitle)
 }
 
 // siteFrontHome is the front page's body: the repo landing the booted app
@@ -1158,7 +1133,7 @@ func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageList
 
 // siteFrontActivityEntry pairs a rendered activity row with its sort key.
 type siteFrontActivityEntry struct {
-	row sitePageActivityRow
+	row sitePageListEntry
 	ts  int64
 	sha string
 }
@@ -1173,7 +1148,7 @@ type siteFrontActivityEntry struct {
 // Item rows link to their own crawlable page; code commits have none, so those
 // link into the app. The app's loadHomeActivity mirrors this selection, cap and
 // order, so the upgrade re-renders the same rows.
-func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]int, code []siteMetaEntry, site sitePageSite) []sitePageActivityRow {
+func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]int, code []siteMetaEntry, site sitePageSite) []sitePageListEntry {
 	var merged []siteFrontActivityEntry
 	for _, e := range code {
 		short := e.SHA
@@ -1181,12 +1156,10 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			short = short[:12]
 		}
 		glyph, glyphClass := sitePageGlyph("commit", "commit", "")
-		row := sitePageActivityRow{
+		row := sitePageListEntry{
 			Href:       sitePageAppURL(site, "commit:"+short+"@"+e.Branch),
-			Subject:    e.Subject,
-			Author:     e.Author,
-			Date:       sitePageDate(e.TS),
-			Sha:        short,
+			Title:      e.Subject,
+			Meta:       []string{e.Author, sitePageDate(e.TS), short},
 			Glyph:      glyph,
 			GlyphClass: glyphClass,
 			GlyphTitle: "commit",
@@ -1207,11 +1180,10 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			classType := sitePageGlyphClassType(it)
 			state := pageItemField(it, "state")
 			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
-			row := sitePageActivityRow{
+			row := sitePageListEntry{
 				Href:       "./i/" + it.Msg.Short + ".html",
-				Subject:    subject,
-				Author:     name,
-				Date:       sitePageDate(pageEffectiveTime(it.Msg)),
+				Title:      subject,
+				Meta:       []string{name, sitePageDate(pageEffectiveTime(it.Msg))},
 				Glyph:      glyph,
 				GlyphClass: glyphClass,
 				GlyphTitle: sitePageGlyphTitle(classType, state),
@@ -1228,7 +1200,7 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 	if len(merged) > sitePagesHomeActivity {
 		merged = merged[:sitePagesHomeActivity]
 	}
-	rows := make([]sitePageActivityRow, 0, len(merged))
+	rows := make([]sitePageListEntry, 0, len(merged))
 	for _, m := range merged {
 		rows = append(rows, m.row)
 	}
