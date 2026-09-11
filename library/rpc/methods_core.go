@@ -9,16 +9,13 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/gitsocial-org/gitsocial/library/clientfetch"
-	"github.com/gitsocial-org/gitsocial/library/clientpush"
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
-	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 type Session struct {
@@ -107,7 +104,7 @@ func initializeHandler(s *Server, version string) HandlerFunc {
 		if err := cache.Open(cacheDir); err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("open cache: %s", err))
 		}
-		if err := fetch.SyncWorkspace(p.Workdir); err != nil {
+		if err := client.SyncWorkspace(p.Workdir); err != nil {
 			log.Printf("sync workspace: %s", err)
 		}
 		repoURL := gitmsg.ResolveRepoURL(p.Workdir)
@@ -350,13 +347,13 @@ func corePush(s *Server) HandlerFunc {
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		opts := clientpush.Options{
+		opts := client.Options{
 			Remote:      p.Remote,
 			NoCode:      p.NoCode,
 			NoSite:      p.NoSite,
 			AllBranches: p.AllBranches,
 		}
-		result, err := clientpush.Publish(s.session.Workdir, opts, nil, nil)
+		result, err := client.Publish(s.session.Workdir, opts, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}
@@ -379,11 +376,10 @@ func coreFetch(s *Server) HandlerFunc {
 		cacheDir := s.session.CacheDir
 		fetchAllBranches := resolveRPCWorkspaceMode(workdir)
 		go func() {
-			opts := &social.FetchOptions{
+			opts := client.FetchOptions{
 				ListID:           p.ListID,
 				Parallel:         p.Parallel,
 				FetchAllBranches: fetchAllBranches,
-				ExtraProcessors:  clientfetch.ExtraProcessors(),
 				OnProgress: func(repoURL string, processed, total int) {
 					s.Emit("fetch", "fetch.progress", map[string]any{
 						"fetchId":   fetchID,
@@ -393,11 +389,7 @@ func coreFetch(s *Server) HandlerFunc {
 					})
 				},
 			}
-			result := social.Fetch(workdir, cacheDir, opts)
-			if err := fetch.SyncWorkspace(workdir); err != nil {
-				log.Printf("sync workspace: %s", err)
-			}
-			clientfetch.FetchForks(workdir, cacheDir)
+			result, _ := client.Fetch(workdir, cacheDir, opts)
 			if result.Success {
 				errCount := len(result.Data.Errors)
 				s.Emit("fetch", "fetch.complete", map[string]any{

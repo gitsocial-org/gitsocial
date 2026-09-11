@@ -1,8 +1,5 @@
-// reconcile_test.go - the git-side of the push-path tracking-ref reconcile: a
-// deleted bucket ref with an intact tracking ref must delete the stale tracking
-// ref (so the next count restores the branch), a differing bucket ref updates
-// the tracking ref, and gitmsg state refs map into the tracking namespace.
-package clientpush
+// reconcile_test.go - tests for the push-path tracking-ref reconcile against the bucket listing.
+package client
 
 import (
 	"strings"

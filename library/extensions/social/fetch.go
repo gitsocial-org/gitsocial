@@ -72,25 +72,11 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 	if len(opts.ExtraProcessors) > 0 {
 		processors = append(processors, opts.ExtraProcessors...)
 	}
-	hooks := socialHooks()
+	hooks := Hooks()
 	if len(opts.ExtraHooks) > 0 {
 		hooks = append(hooks, opts.ExtraHooks...)
 	}
 	return fetch.FetchAll(workdir, cacheDir, coreOpts, repos, processors, hooks)
-}
-
-// FetchRepositoryRange fetches a repository with explicit date range (for "load more" pagination).
-func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL string) fetch.Result {
-	return fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, Processors(), socialHooks())
-}
-
-// FetchRepository fetches complete history for a repository.
-func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, extraProcessors ...fetch.CommitProcessor) fetch.Result {
-	processors := Processors()
-	if len(extraProcessors) > 0 {
-		processors = append(processors, extraProcessors...)
-	}
-	return fetch.FetchRepository(cacheDir, repoURL, branch, workspaceURL, processors, socialHooks())
 }
 
 // CacheExternalRepoLists fetches and caches lists defined by an external repository.
@@ -113,8 +99,8 @@ func BackfillSpec() fetch.ExtBackfillSpec {
 	return fetch.ExtBackfillSpec{Extension: "social", ItemsTable: "social_items"}
 }
 
-// socialHooks returns the post-fetch hooks for the social extension.
-func socialHooks() []fetch.PostFetchHook {
+// Hooks returns the post-fetch hooks for the social extension.
+func Hooks() []fetch.PostFetchHook {
 	return []fetch.PostFetchHook{fetchSocialListRefs, checkIfRepoFollowsWorkspace, cacheExternalRepoLists}
 }
 

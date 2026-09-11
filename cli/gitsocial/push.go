@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/library/clientpush"
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -113,10 +113,10 @@ Examples:
 
 			// Push each remote in turn: report per remote, continue past a failure,
 			// and exit non-zero if any failed. Sequential keeps progress readable.
-			results := make([]*clientpush.Result, 0, len(remotes))
+			results := make([]*client.Result, 0, len(remotes))
 			failed := false
 			for _, remote := range remotes {
-				opts := clientpush.Options{
+				opts := client.Options{
 					Remote:      remote,
 					DryRun:      dryRun,
 					NoCode:      noCode,
@@ -126,17 +126,17 @@ Examples:
 					Full:        full,
 				}
 				if !cfg.JSONOutput && !dryRun {
-					resolved := clientpush.ResolveRemote(cfg.WorkDir, remote)
+					resolved := client.ResolveRemote(cfg.WorkDir, remote)
 					fmt.Printf("Pushing to %s ...\n", resolved)
 					if gitmsg.RemoteIsEmpty(cfg.WorkDir, resolved) {
 						fmt.Printf("Publishing to empty remote %q ...\n", resolved)
 					}
 				}
-				result, err := clientpush.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
+				result, err := client.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
 				if err != nil {
 					failed = true
 					if !cfg.JSONOutput {
-						PrintError(cmd, fmt.Sprintf("push to %s: %v", clientpush.ResolveRemote(cfg.WorkDir, remote), err))
+						PrintError(cmd, fmt.Sprintf("push to %s: %v", client.ResolveRemote(cfg.WorkDir, remote), err))
 					}
 					continue
 				}
@@ -175,7 +175,7 @@ Examples:
 }
 
 // printPushResult renders the combined data + site publish result for humans.
-func printPushResult(result *clientpush.Result, dryRun bool) {
+func printPushResult(result *client.Result, dryRun bool) {
 	p := result.Push
 	nothing := p.Commits == 0 && p.CodeCommits == 0 && p.Refs == 0 && p.Tags == 0 && p.AllBranches == 0
 	if nothing && !result.Site.Published {

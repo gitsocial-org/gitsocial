@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
@@ -223,7 +224,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	if !cfg.JSONOutput {
 		fmt.Printf("Fetching latest updates...\n")
 	}
-	runFullFetch(cfg, nil, f.yes, f.allBranches)
+	runFullFetch(cfg, client.FetchOptions{}, f.yes, f.allBranches)
 	// Count items and show confirmation prompt
 	if !cfg.JSONOutput {
 		fmt.Printf("Counting items...\n")
@@ -295,7 +296,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		if !cfg.JSONOutput {
 			fmt.Printf("\nFetching latest updates...\n")
 		}
-		runFullFetch(cfg, nil, f.yes, f.allBranches)
+		runFullFetch(cfg, client.FetchOptions{}, f.yes, f.allBranches)
 	}
 	mapPath := importpkg.ResolveMappingPath(cfg.CacheDir, repoURL, f.mapFile)
 	if cfg.JSONOutput {

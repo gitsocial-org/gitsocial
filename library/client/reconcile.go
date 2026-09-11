@@ -1,12 +1,5 @@
 // reconcile.go - push-path tracking-ref reconcile against the s3 bucket.
-//
-// The offline push preview counts unpushed work against the remote's tracking
-// refs, a cache of the bucket. When that cache drifts from the bucket (a
-// recreated bucket, or pushes by a pre-tracking-fix binary), branches are
-// silently skipped and the bucket quietly stays stale. Before a real push this
-// syncs the tracking refs to the bucket's actual refs/ listing (the observable
-// truth), so the existing counting is correct by construction.
-package clientpush
+package client
 
 import (
 	"log/slog"

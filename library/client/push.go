@@ -1,5 +1,5 @@
-// clientpush.go - Publish orchestration for the thin clients: the data push, then the site
-package clientpush
+// push.go - Publish orchestration for the thin clients: the data push, then the site
+package client
 
 import (
 	"errors"

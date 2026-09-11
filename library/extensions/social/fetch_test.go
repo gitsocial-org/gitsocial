@@ -22,13 +22,13 @@ func TestSocialProcessors_returnsSlice(t *testing.T) {
 }
 
 func TestSocialHooks_returnsSlice(t *testing.T) {
-	hooks := socialHooks()
+	hooks := Hooks()
 	if len(hooks) != 3 {
-		t.Errorf("socialHooks() returned %d, want 3", len(hooks))
+		t.Errorf("Hooks() returned %d, want 3", len(hooks))
 	}
 	for i, h := range hooks {
 		if h == nil {
-			t.Errorf("socialHooks()[%d] should not be nil", i)
+			t.Errorf("Hooks()[%d] should not be nil", i)
 		}
 	}
 }

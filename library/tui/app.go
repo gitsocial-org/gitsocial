@@ -16,8 +16,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/gitsocial-org/gitsocial/library/clientfetch"
-	"github.com/gitsocial-org/gitsocial/library/clientpush"
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -132,7 +131,7 @@ func (m *Model) maybeLocalSync() tea.Cmd {
 	m.lastLocalSync = now
 	workdir := m.workdir
 	return func() tea.Msg {
-		changed, err := fetch.SyncWorkspaceLocal(workdir)
+		changed, err := client.SyncWorkspaceLocal(workdir)
 		if err != nil {
 			log.Debug("local workspace sync failed", "error", err)
 		}
@@ -456,17 +455,17 @@ func (m Model) initWorkspace() tea.Cmd {
 	workdir := m.workdir
 	ch := m.bgSyncCh
 	return func() tea.Msg {
-		quickErr := fetch.SyncWorkspaceQuick(workdir)
+		quickErr := client.SyncWorkspaceQuick(workdir)
 		go func() {
 			defer close(ch)
-			err := fetch.SyncWorkspaceContinue(workdir, func(p fetch.SyncProgress) {
+			err := client.SyncWorkspaceContinue(workdir, func(p fetch.SyncProgress) {
 				select {
 				case ch <- bgSyncProgressMsg{Processed: p.Processed, Total: p.Total}:
 				default:
 					// Channel full — drop progress update; final completion still arrives.
 				}
 			})
-			fetch.BackfillWorkspaceIdentity(workdir)
+			client.BackfillWorkspaceIdentity(workdir)
 			ch <- bgSyncCompletedMsg{Err: err}
 		}()
 		return tuicore.WorkspaceInitializedMsg{Err: quickErr}
@@ -1159,21 +1158,11 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 			log.Warn("failed to open cache before fetch", "error", err)
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("cache open: %w", err), Auto: auto}
 		}
-		opts := &social.FetchOptions{
-			FetchAllBranches: allBranches,
-			ExtraProcessors:  clientfetch.ExtraProcessors(),
-		}
 		// Snapshot per-branch commit counts so the summary can break down what
 		// this fetch brought in across all sources (followed repos, forks, and
 		// the workspace re-sync) rather than just the social total.
 		before, _ := cache.CountCommitsByBranch()
-		result := social.Fetch(m.workdir, m.cacheDir, opts)
-		// Fetch all gitmsg data from registered forks (full processor set + backfill)
-		forkStats := clientfetch.FetchForks(m.workdir, m.cacheDir)
-		// Re-sync all workspace extension branches to cache
-		if err := fetch.SyncWorkspace(m.workdir); err != nil {
-			log.Debug("post-fetch workspace sync failed", "error", err)
-		}
+		result, forkStats := client.Fetch(m.workdir, m.cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
 		if !result.Success {
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message), Auto: auto}
 		}
@@ -1252,7 +1241,7 @@ func (m *Model) showPushRemotePicker(s3 []string) tea.Cmd {
 // an empty preview (tags are uncountable offline); the confirm is always
 // offered so a tags-only push still happens.
 func (m *Model) showPushConfirm(remote string) tea.Cmd {
-	preview, resolved, err := clientpush.Preview(m.workdir, clientpush.Options{Remote: remote})
+	preview, resolved, err := client.Preview(m.workdir, client.Options{Remote: remote})
 	if err != nil {
 		return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 	}
@@ -1274,7 +1263,7 @@ func (m *Model) showPushConfirm(remote string) tea.Cmd {
 	return nil
 }
 
-// startPush publishes to remote via clientpush.Publish (data push + browser
+// startPush publishes to remote via client.Publish (data push + browser
 // site, mirroring the CLI). Code branches go first (so the gitmsg/review push
 // records PRs whose head is reachable), then gitmsg/* branches auto-merge on
 // divergence, then — for s3 remotes not opted out — the site. Per-branch
@@ -1298,7 +1287,7 @@ func (m *Model) startPush(remote string) tea.Cmd {
 			default:
 			}
 		}
-		result, err := clientpush.Publish(workdir, clientpush.Options{Remote: remote}, onBranch, siteProgress)
+		result, err := client.Publish(workdir, client.Options{Remote: remote}, onBranch, siteProgress)
 		if err != nil {
 			ch <- tuisocial.PushCompletedMsg{Err: err}
 		} else {
@@ -1548,7 +1537,7 @@ func (m Model) fetchAddedRepo(repoRef string) tea.Cmd {
 		// Parse repo URL to extract base URL and branch
 		id := protocol.ParseRepositoryID(repoRef)
 		// Fetch complete history (regardless of what's already cached)
-		result := social.FetchRepository(cacheDir, id.Repository, id.Branch, workspaceURL)
+		result := client.FetchRepository(cacheDir, id.Repository, id.Branch, workspaceURL)
 		if !result.Success {
 			return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Err: fmt.Errorf("%s", result.Error.Message)}
 		}
@@ -1880,7 +1869,7 @@ func (m *Model) startImport(adapter importpkg.SourceAdapter, repoURL string, cou
 		// up in the cache-backed views without waiting for a manual fetch.
 		var syncErr error
 		if err == nil {
-			syncErr = fetch.SyncWorkspace(workdir)
+			syncErr = client.SyncWorkspace(workdir)
 		}
 		// Stop the spinner ticker and wait for it to exit before closing
 		// the channel — prevents the ticker from sending on a closed chan.

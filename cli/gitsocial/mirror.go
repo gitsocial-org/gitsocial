@@ -16,13 +16,11 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/library/clientfetch"
-	"github.com/gitsocial-org/gitsocial/library/clientpush"
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
-	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
@@ -533,14 +531,14 @@ func plural(n int) string {
 // mirrorFetch refreshes the workspace: origin when fetchOrigin, and forks and lists under --full-fetch.
 func mirrorFetch(cfg *Config, f *mirrorFlags, fetchOrigin bool) {
 	if f.fullFetch {
-		runFullFetch(cfg, nil, true, !f.defaultBranchOnly)
+		runFullFetch(cfg, client.FetchOptions{}, true, !f.defaultBranchOnly)
 		return
 	}
 	if fetchOrigin {
 		opts := &fetch.Options{FetchAllBranches: !f.defaultBranchOnly}
-		fetch.SyncWorkspaceOrigin(cfg.WorkDir, opts, clientfetch.ExtraProcessors(), review.PostFetchHooks())
+		client.SyncWorkspaceOrigin(cfg.WorkDir, opts)
 	}
-	if _, err := fetch.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+	if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: workspace sync: %v\n", err)
 	}
 }
@@ -804,7 +802,7 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 		if siteProgress != nil {
 			onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
 		}
-		opts := clientpush.Options{
+		opts := client.Options{
 			Remote:      t.name,
 			NoCode:      f.noCode,
 			NoSite:      f.noSite,
@@ -813,7 +811,7 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 		if !cfg.JSONOutput {
 			fmt.Printf("Pushing to %s (%s) ...\n", t.name, t.url)
 		}
-		result, err := clientpush.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
+		result, err := client.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
 		if err != nil {
 			failed = true
 			fmt.Fprintf(os.Stderr, "error: push to %s: %v\n", t.name, err)
@@ -848,7 +846,7 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 // state is the one the run actually left behind.
 func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress) (bool, error) {
 	for pass := 0; pass < mirrorSitePassCap; pass++ {
-		result, err := clientpush.Publish(cfg.WorkDir, clientpush.Options{Remote: remote, SiteOnly: true}, nil, progress)
+		result, err := client.Publish(cfg.WorkDir, client.Options{Remote: remote, SiteOnly: true}, nil, progress)
 		if err != nil {
 			return false, err
 		}

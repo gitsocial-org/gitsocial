@@ -1,8 +1,5 @@
-// clientpush_test.go - Orchestration tests for the publish (data + site) flow.
-// Site publication over a real bucket is covered by core/objstore; here we
-// exercise the orchestrator's decisions: remote resolution, the site-gate
-// (non-s3 / opt-out / dry-run skip), and combined-result shape.
-package clientpush
+// push_test.go - tests for the publish flow: remote resolution, the site gate and the result shape.
+package client
 
 import (
 	"testing"

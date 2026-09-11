@@ -11,16 +11,13 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
-	"github.com/gitsocial-org/gitsocial/library/clientfetch"
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
-	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
-	"github.com/gitsocial-org/gitsocial/library/extensions/review"
-	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // newFetchCmd creates the command for fetching updates from subscribed repositories.
@@ -55,12 +52,11 @@ For extension-specific options, use the extension's fetch command directly:
 			if len(args) == 1 {
 				repoURL := args[0]
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-				extraProcessors := clientfetch.ExtraProcessors()
 				countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
 				if err != nil {
 					slog.Debug("get unread count", "error", err)
 				}
-				result := social.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL, extraProcessors...)
+				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Message)
 					os.Exit(ExitCode(result.Error.Code))
@@ -87,7 +83,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 			}
 
-			result, forkStats := runFullFetch(cfg, &social.FetchOptions{
+			result, forkStats := runFullFetch(cfg, client.FetchOptions{
 				ListID:   listID,
 				Parallel: parallel,
 			}, false, allBranches)
@@ -177,22 +173,9 @@ func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches boo
 }
 
 // runFullFetch fetches the subscribed repos, the registered forks and the workspace.
-func runFullFetch(cfg *Config, opts *social.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
-	if opts == nil {
-		opts = &social.FetchOptions{}
-	}
+func runFullFetch(cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
 	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
-	opts.ExtraProcessors = clientfetch.ExtraProcessors()
-	opts.ExtraHooks = review.PostFetchHooks()
-	result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
-	forkStats := clientfetch.FetchForks(cfg.WorkDir, cfg.CacheDir)
-	if err := fetch.SyncWorkspace(cfg.WorkDir); err != nil {
-		slog.Debug("workspace sync", "error", err)
-	}
-	if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
-		slog.Debug("memo tier sync", "error", err)
-	}
-	return result, forkStats
+	return client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 }
 
 // printNotificationDelta prints new notification count if it increased after fetch.

@@ -1,12 +1,5 @@
-// clientfetch_test.go - tests for the shared thin-client fetch wiring: which
-// extension processors each set carries, which items tables the post-fetch
-// backfill scans, and which repos it scans them for.
-//
-// The processor sets are asserted by running them over a real temp cache and
-// looking for the rows they must produce, not by counting functions: the drift
-// this package exists to prevent (a fork fetch without social.Processors, so
-// fork comments never got a social_items row) is exactly a missing row.
-package clientfetch
+// fetch_test.go - tests for the shared fetch wiring: the processor sets, the workspace syncs, the backfill specs and the repos it scans.
+package client
 
 import (
 	"database/sql"
@@ -50,9 +43,15 @@ func seedCommit(t *testing.T, commit git.Commit, branch string) {
 // rowCount returns how many rows a table holds for one commit hash.
 func rowCount(t *testing.T, table, hash string) int {
 	t.Helper()
+	return rowCountForRepo(t, table, testRepoURL, hash)
+}
+
+// rowCountForRepo returns how many rows a table holds for one repository's commit.
+func rowCountForRepo(t *testing.T, table, repoURL, hash string) int {
+	t.Helper()
 	count, err := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		n := 0
-		err := db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE repo_url = ? AND hash = ?", testRepoURL, hash).Scan(&n)
+		err := db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE repo_url = ? AND hash = ?", repoURL, hash).Scan(&n)
 		return n, err
 	})
 	if err != nil {
@@ -61,23 +60,21 @@ func rowCount(t *testing.T, table, hash string) int {
 	return count
 }
 
-// TestForkProcessorsIncludeSocial pins the split the package documents: social
-// commits reached over a fork fetch get their social_items row only because
-// ForkProcessors carries social.Processors, while the workspace set leaves them
-// to social.Fetch. A fork set without it is the drift that once made fork
-// comments invisible to threads.
+// TestForkProcessorsIncludeSocial pins the split between the two sets: a fork
+// commit gets its social_items row from the full set, while the extra set
+// leaves social to social.Fetch.
 func TestForkProcessorsIncludeSocial(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 	fields := map[string]string{"type": "post"}
 
-	viaExtra := dispatch(t, ExtraProcessors(), "aaaa000000000000000000000000000000000001", "social", fields)
+	viaExtra := dispatch(t, extraProcessors(), "aaaa000000000000000000000000000000000001", "social", fields)
 	if got := rowCount(t, "social_items", viaExtra); got != 0 {
-		t.Errorf("ExtraProcessors wrote %d social_items rows, want 0 (social.Fetch adds social.Processors itself)", got)
+		t.Errorf("extraProcessors wrote %d social_items rows, want 0 (social.Fetch adds social.Processors itself)", got)
 	}
 
-	viaFork := dispatch(t, ForkProcessors(), "aaaa000000000000000000000000000000000002", "social", fields)
+	viaFork := dispatch(t, processors(), "aaaa000000000000000000000000000000000002", "social", fields)
 	if got := rowCount(t, "social_items", viaFork); got != 1 {
-		t.Errorf("ForkProcessors wrote %d social_items rows for a fork post, want 1", got)
+		t.Errorf("processors wrote %d social_items rows for a fork post, want 1", got)
 	}
 }
 
@@ -100,8 +97,8 @@ func TestProcessorSetsCoverEveryExtension(t *testing.T) {
 		name       string
 		processors []fetch.CommitProcessor
 	}{
-		{"ExtraProcessors", ExtraProcessors()},
-		{"ForkProcessors", ForkProcessors()},
+		{"extraProcessors", extraProcessors()},
+		{"processors", processors()},
 	}
 	next := 0
 	for _, set := range sets {
@@ -113,6 +110,9 @@ func TestProcessorSetsCoverEveryExtension(t *testing.T) {
 			}
 		}
 	}
+	if got := len(workspaceSyncs()); got != len(cases)+1 {
+		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension)", got, len(cases)+1)
+	}
 }
 
 // TestExtraProcessorsRecordMentions checks the notification processors travel
@@ -123,7 +123,7 @@ func TestExtraProcessorsRecordMentions(t *testing.T) {
 	commit := git.Commit{Hash: "cccc000000000000000000000000000000000001", Message: "ping @grace@example.com", Author: "Ada", Email: "ada@example.com", Timestamp: time.Now(), Refname: "gitmsg/social"}
 	seedCommit(t, commit, "gitmsg/social")
 	msg := &protocol.Message{Content: commit.Message, Header: protocol.Header{Ext: "social", V: "1", Fields: map[string]string{"type": "post"}}}
-	for _, process := range ExtraProcessors() {
+	for _, process := range extraProcessors() {
 		process(commit, msg, testRepoURL, "gitmsg/social")
 	}
 	if got := rowCount(t, "core_mentions", commit.Hash); got != 1 {
@@ -161,6 +161,9 @@ func TestBackfillSpecsCoverEveryExtension(t *testing.T) {
 		}
 		seen[s.Extension] = true
 	}
+	if got := len(workspaceSyncs()); got != len(want) {
+		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension)", got, len(want))
+	}
 }
 
 // TestBackfillReposListsWorkspaceThenForks checks the backfill's repo set is
@@ -193,5 +196,71 @@ func TestBackfillReposListsWorkspaceThenForks(t *testing.T) {
 		if !found[fork] {
 			t.Errorf("backfillRepos = %v, missing registered fork %q", repos, fork)
 		}
+	}
+}
+
+// TestFetch_everyExtensionIngests runs the whole sequence over a workspace
+// carrying one item per extension and one registered fork, and looks for the
+// row each extension owes: the drift this package exists to close is a fetch
+// path that leaves an item table empty.
+func TestFetch_everyExtensionIngests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real git")
+	}
+	testutil.OpenTempCache(t, "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	template, err := testutil.NewRepoTemplate()
+	if err != nil {
+		t.Fatalf("repo template: %v", err)
+	}
+	workdir := testutil.CopyRepo(t, template)
+	items := []struct {
+		ext    string
+		table  string
+		header string
+	}{
+		{"social", "social_items", `GitMsg: ext="social"; type="post"; v="0.1.0"`},
+		{"pm", "pm_items", `GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`},
+		{"review", "review_items", `GitMsg: ext="review"; type="pr"; state="open"; v="0.1.0"`},
+		{"release", "release_items", `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`},
+		{"memo", "memo_items", `GitMsg: ext="memo"; type="memo"; v="0.1.0"`},
+	}
+	hashes := make(map[string]string, len(items))
+	for _, item := range items {
+		hash, err := git.CreateCommitOnBranch(workdir, "gitmsg/"+item.ext, item.ext+" item\n\n"+item.header)
+		if err != nil {
+			t.Fatalf("create %s commit: %v", item.ext, err)
+		}
+		hashes[item.ext] = hash
+	}
+
+	forkDir := t.TempDir()
+	if _, err := git.ExecGit(forkDir, []string{"init", "--bare"}); err != nil {
+		t.Fatalf("init fork: %v", err)
+	}
+	for _, cfg := range [][]string{{"user.name", "Test"}, {"user.email", "test@example.com"}} {
+		if _, err := git.ExecGit(forkDir, []string{"config", cfg[0], cfg[1]}); err != nil {
+			t.Fatalf("configure fork: %v", err)
+		}
+	}
+	forkHash, err := git.CreateCommitOnBranch(forkDir, "gitmsg/pm", "fork issue\n\n"+`GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`)
+	if err != nil {
+		t.Fatalf("create fork commit: %v", err)
+	}
+	if err := gitmsg.AddFork(workdir, forkDir); err != nil {
+		t.Fatalf("add fork: %v", err)
+	}
+
+	Fetch(workdir, t.TempDir(), FetchOptions{})
+
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	for _, item := range items {
+		if n := rowCountForRepo(t, item.table, workspaceURL, hashes[item.ext]); n != 1 {
+			t.Errorf("Fetch wrote %d %s rows for the workspace %s item, want 1", n, item.table, item.ext)
+		}
+	}
+	if n := rowCountForRepo(t, "pm_items", forkDir, forkHash); n != 1 {
+		t.Errorf("Fetch wrote %d pm_items rows for the fork issue, want 1", n)
 	}
 }

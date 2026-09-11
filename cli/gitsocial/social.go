@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
@@ -754,7 +755,7 @@ Examples:
 			if len(args) == 1 {
 				repoURL := args[0]
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-				result := social.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
+				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Message)
 					os.Exit(ExitCode(result.Error.Code))
@@ -768,7 +769,7 @@ Examples:
 				return
 			}
 
-			opts := &social.FetchOptions{
+			opts := client.FetchOptions{
 				ListID:   listID,
 				Parallel: parallel,
 			}
@@ -781,7 +782,7 @@ Examples:
 				}
 			}
 
-			result := social.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
+			result, _ := client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
 				os.Exit(ExitCode(result.Error.Code))

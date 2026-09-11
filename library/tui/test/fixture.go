@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
@@ -480,7 +480,7 @@ func resetTimestampsPanic() {
 }
 
 func syncAllPanic(workdir string) {
-	_ = fetch.SyncWorkspace(workdir)
+	_ = client.SyncWorkspace(workdir)
 }
 
 // mustSucceed panics if result failed — for use outside tests.

@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
@@ -273,7 +274,7 @@ func (v *RepositoryView) fetchInitialMonths(state *tuicore.State) tea.Cmd {
 		var totalPosts int
 		var fetchedMonths []string
 		for _, m := range months {
-			result := social.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
+			result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 			if result.Success {
 				totalPosts += result.Data.Items
 				fetchedMonths = append(fetchedMonths, social.YearMonthFromRange(m))
@@ -300,7 +301,7 @@ func (v *RepositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
 	branch := v.branch
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	return func() tea.Msg {
-		result := social.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
+		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
 			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
@@ -337,7 +338,7 @@ func (v *RepositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
 	branch := v.branch
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	return func() tea.Msg {
-		result := social.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
+		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
 			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
 		}
