@@ -58,16 +58,6 @@ const (
 	SiteOverridePagesKey   = "gitsocial-site-pages"
 )
 
-// SiteOverride carries a remote's per-remote deployment-key overrides; each ""
-// field means "not overridden" (the repo config value stands). Applied over
-// readSiteCustomization's result at that single boundary so every consumer
-// (guards, canonical/OG URL, siteHash, site-config.json) sees effective values.
-type SiteOverride struct {
-	URL     string
-	Publish string
-	Pages   string
-}
-
 // applySiteOverride overlays a remote's deployment overrides onto a resolved
 // customization, normalizing each override the same way the shared keys are
 // (url through NormalizeSiteURL, publish/pages through siteBoolString). An

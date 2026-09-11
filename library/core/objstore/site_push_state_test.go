@@ -1,4 +1,4 @@
-// push_state_test.go - the site push-state skip marker: a second push against an
+// site_push_state_test.go - the site push-state skip marker: a second push against an
 // unchanged bucket skips the whole maintenance pass (no refs GETs, no artifact
 // writes); a ref change invalidates the marker; a corrupt marker falls back to a
 // full pass.

@@ -1249,6 +1249,16 @@ func oneLine(err error) string {
 	return strings.ReplaceAll(err.Error(), "\n", " ")
 }
 
+// SiteOverride carries a remote's per-remote deployment-key overrides; each ""
+// field means "not overridden" (the repo config value stands). Applied over
+// readSiteCustomization's result at that single boundary so every consumer
+// (guards, canonical/OG URL, siteHash, site-config.json) sees effective values.
+type SiteOverride struct {
+	URL     string
+	Publish string
+	Pages   string
+}
+
 // readRemoteSiteOverride reads a remote's per-remote site deployment overrides
 // from git config (remote.<name>.gitsocial-site-{url,publish,pages}), using the
 // GIT_DIR git handed the helper. An empty name (anonymous-URL invocation) or an
