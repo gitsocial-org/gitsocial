@@ -2,7 +2,6 @@
 package fetch
 
 import (
-	"sort"
 	"strings"
 	"sync"
 
@@ -69,45 +68,25 @@ func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 	for ext := range procs {
 		branches[ext] = gitmsg.GetExtBranch(workdir, ext)
 	}
-	names := make([]string, 0, len(branches))
-	for name := range branches {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	tipParts := make([]string, 0, len(branches)*2+1)
-	for _, name := range names {
-		branch := branches[name]
-		tip, _ := git.ReadRef(workdir, branch)
-		tipParts = append(tipParts, tip)
-		remoteTip, _ := git.ReadRef(workdir, "origin/"+branch)
-		tipParts = append(tipParts, remoteTip)
-	}
-	// Also fold in every remote tracking ref under refs/remotes/origin/ so a
-	// push to a feature branch (which doesn't appear in the per-branch loop
-	// above) invalidates the sync cache and forces re-ingest. Without this,
-	// `gitsocial fetch` short-circuits when `main` and the gitmsg/* branches
-	// haven't moved, leaving feature-branch commits out of core_commits and
-	// off the timeline.
+	// Every tip the gate watches, local and remote tracking: the timeline shows
+	// commits from all branches, so a push or a local commit on any of them has
+	// to invalidate the sync cache. for-each-ref output is sorted.
+	tipParts := make([]string, 2)
 	if result, err := git.ExecGit(workdir, []string{
 		"for-each-ref", "--format=%(objectname)", "refs/remotes/origin/",
 	}); err == nil {
-		tipParts = append(tipParts, strings.TrimSpace(result.Stdout))
+		tipParts[0] = strings.TrimSpace(result.Stdout)
 	}
-	// Also fold in every local branch tip so a commit on a feature branch that
-	// was never pushed still invalidates the sync cache and gets ingested — the
-	// timeline shows commits from all branches, so the gate must watch them all.
 	if result, err := git.ExecGit(workdir, []string{
 		"for-each-ref", "--format=%(objectname)", "refs/heads/",
 	}); err == nil {
-		tipParts = append(tipParts, strings.TrimSpace(result.Stdout))
+		tipParts[1] = strings.TrimSpace(result.Stdout)
 	}
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
 
-	if combinedTip != "" {
-		if persisted, err := cache.GetSyncTip(tipKey); err == nil && persisted == combinedTip {
-			return nil
-		}
+	if persisted, err := cache.GetSyncTip(tipKey); err == nil && persisted == combinedTip {
+		return nil
 	}
 
 	_ = cache.InsertRepository(cache.Repository{URL: repoURL, Branch: "*", StoragePath: workdir})
@@ -202,17 +181,9 @@ func SyncWorkspaceLocal(workdir string) (bool, error) {
 	return true, SyncWorkspaceContinue(workdir, nil)
 }
 
-// BackfillWorkspaceIdentity runs the slow identity work for the workspace —
-// signer-key extraction via git log and binding verification via forge HTTPS
-// calls. Used to live inline in processCommitBatch but blocked the TUI on a
-// fresh cache (the forge round-trips dominate); interactive callers (TUI) now
-// run this in a background goroutine after the timeline has already rendered.
+// BackfillWorkspaceIdentity extracts signer keys for the workspace and verifies their bindings.
 func BackfillWorkspaceIdentity(workdir string) {
-	repoURL := gitmsg.ResolveRepoURL(workdir)
-	if repoURL == "" {
-		return
-	}
-	backfillRepoSignerKeys(workdir, repoURL)
+	backfillRepoSignerKeys(workdir, gitmsg.ResolveRepoURL(workdir))
 }
 
 // SyncWorkspaceQuick processes the most recent quickPassLimit commits and
@@ -288,8 +259,6 @@ func finalizeWorkspaceSync(ctx *workspaceSyncContext, allCommits []git.Commit) e
 		liveHashes[c.Hash] = true
 	}
 	_, _ = cache.MarkCommitsStaleByRepo(ctx.repoURL, liveHashes)
-	if ctx.combinedTip != "" {
-		_ = cache.SetSyncTip(ctx.tipKey, ctx.combinedTip)
-	}
+	_ = cache.SetSyncTip(ctx.tipKey, ctx.combinedTip)
 	return nil
 }

@@ -1299,6 +1299,74 @@ func TestFetchAll_workspaceSync(t *testing.T) {
 	}
 }
 
+func TestSyncWorkspaceOrigin_gitmsgBranches(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	t.Parallel()
+	repoDir, _ := initTestRepo(t, 1)
+	for _, branch := range []string{"gitmsg/social/posts", "gitmsg/review/prs"} {
+		git.ExecGit(repoDir, []string{"checkout", "-b", branch, "main"})
+		if _, err := git.CreateCommit(repoDir, git.CommitOptions{Message: branch, AllowEmpty: true}); err != nil {
+			t.Fatalf("CreateCommit(%s) error = %v", branch, err)
+		}
+	}
+	git.ExecGit(repoDir, []string{"checkout", "main"})
+	bareDir := t.TempDir()
+	git.ExecGit(bareDir, []string{"init", "--bare"})
+	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
+	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+
+	ws := t.TempDir()
+	if err := git.Init(ws, "main"); err != nil {
+		t.Fatalf("git.Init() error = %v", err)
+	}
+	git.ExecGit(ws, []string{"config", "user.email", "test@test.com"})
+	git.ExecGit(ws, []string{"config", "user.name", "Test User"})
+	git.ExecGit(ws, []string{"remote", "add", "origin", bareDir})
+
+	// Absent locally: the fetch creates both branches at origin's tip.
+	SyncWorkspaceOrigin(ws, nil, nil, nil)
+	for _, branch := range []string{"gitmsg/social/posts", "gitmsg/review/prs"} {
+		local, _ := git.ReadRef(ws, branch)
+		remote, _ := git.ReadRef(repoDir, branch)
+		if local == "" || local != remote {
+			t.Errorf("%s created at %q, want origin's tip %q", branch, local, remote)
+		}
+	}
+
+	// Diverged: a local-only commit on one branch must survive the next fetch.
+	base, _ := git.ReadRef(ws, "gitmsg/review/prs")
+	diverged, err := git.CreateCommitTree(ws, "local only\n", base)
+	if err != nil {
+		t.Fatalf("CreateCommitTree() error = %v", err)
+	}
+	if err := git.WriteRef(ws, "refs/heads/gitmsg/review/prs", diverged); err != nil {
+		t.Fatalf("WriteRef() error = %v", err)
+	}
+	diverged, _ = git.ReadRef(ws, "gitmsg/review/prs")
+	for _, branch := range []string{"gitmsg/social/posts", "gitmsg/review/prs"} {
+		git.ExecGit(repoDir, []string{"checkout", branch})
+		if _, err := git.CreateCommit(repoDir, git.CommitOptions{Message: "more " + branch, AllowEmpty: true}); err != nil {
+			t.Fatalf("CreateCommit(%s) error = %v", branch, err)
+		}
+	}
+	git.ExecGit(repoDir, []string{"checkout", "main"})
+	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+
+	SyncWorkspaceOrigin(ws, nil, nil, nil)
+
+	// Ancestor locally: the fetch fast-forwards to origin's new tip.
+	local, _ := git.ReadRef(ws, "gitmsg/social/posts")
+	remote, _ := git.ReadRef(repoDir, "gitmsg/social/posts")
+	if local != remote {
+		t.Errorf("gitmsg/social/posts = %q, want fast-forward to %q", local, remote)
+	}
+	if local, _ := git.ReadRef(ws, "gitmsg/review/prs"); local != diverged {
+		t.Errorf("gitmsg/review/prs = %q, want the diverged local commit %q", local, diverged)
+	}
+}
+
 func TestFetchAll_workspaceSyncCustomBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

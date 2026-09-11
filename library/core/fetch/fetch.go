@@ -2,9 +2,7 @@
 package fetch
 
 import (
-	"database/sql"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -86,8 +84,11 @@ func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProce
 		if err := git.FetchRefspec(workdir, "origin", gitmsg.TrackingRefspec("origin")); err != nil {
 			log.Debug("fetch gitmsg tracking refs", "error", err)
 		}
-		// Fast-forward local gitmsg branches from remote
-		syncGitmsgBranches(workdir)
+		// No leading "+": git creates missing gitmsg branches, fast-forwards the
+		// rest, and leaves a diverged local branch alone.
+		if err := git.FetchRefspec(workdir, "origin", "refs/heads/gitmsg/*:refs/heads/gitmsg/*"); err != nil {
+			log.Debug("fast-forward gitmsg branches", "error", err)
+		}
 		// Optionally fetch all upstream branches
 		if opts.FetchAllBranches {
 			if err := git.FetchRefspec(workdir, "origin", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
@@ -336,23 +337,12 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 	return count, nil
 }
 
-// deleteHEADBranchCommits removes commits stored with branch="HEAD" (a symbolic ref, not a real branch).
-func deleteHEADBranchCommits(repoURL string) {
-	if err := cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`DELETE FROM core_commits WHERE repo_url = ? AND branch = 'HEAD'`, repoURL)
-		return err
-	}); err != nil {
-		log.Debug("delete HEAD branch commits", "error", err)
-	}
-}
-
 // fetchFullHistoryAllBranches retrieves and processes all commits with per-commit branch tracking.
 func fetchFullHistoryAllBranches(storageDir, repoURL, fallbackBranch string, processors []CommitProcessor) (int, error) {
 	gitCommits, err := git.GetCommits(storageDir, &git.GetCommitsOptions{All: true})
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
-	deleteHEADBranchCommits(repoURL)
 	count, err := processAllBranchCommits(storageDir, gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err
@@ -389,7 +379,6 @@ func fetchIncrementalAllBranches(storageDir, repoURL, fallbackBranch string, sin
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
-	deleteHEADBranchCommits(repoURL)
 	count, err := processAllBranchCommits(storageDir, gitCommits, repoURL, fallbackBranch, processors)
 	if err != nil {
 		return 0, err
@@ -461,59 +450,3 @@ func runHooks(hooks []PostFetchHook, storageDir, repoURL, branch, workspaceURL s
 	}
 }
 
-// syncGitmsgBranches fast-forwards local gitmsg branches to match remote tracking refs.
-func syncGitmsgBranches(workdir string) {
-	branches := make(map[string]bool)
-	for _, b := range gitmsg.GetExtBranches(workdir) {
-		branches[b] = true
-	}
-	for _, b := range listRemoteGitmsgBranches(workdir) {
-		branches[b] = true
-	}
-	for branch := range branches {
-		syncBranchFromRemote(workdir, branch)
-	}
-}
-
-// syncBranchFromRemote creates or fast-forwards a local branch from its remote tracking ref.
-func syncBranchFromRemote(workdir, branch string) {
-	localRef := "refs/heads/" + branch
-	remoteRef := "refs/remotes/origin/" + branch
-	remoteResult, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", remoteRef})
-	if err != nil {
-		return
-	}
-	remoteHash := strings.TrimSpace(remoteResult.Stdout)
-	localResult, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", localRef})
-	if err != nil {
-		// Local doesn't exist — create from remote
-		_, _ = git.ExecGit(workdir, []string{"update-ref", localRef, remoteHash})
-		return
-	}
-	localHash := strings.TrimSpace(localResult.Stdout)
-	if localHash == remoteHash {
-		return
-	}
-	// Fast-forward only if local is ancestor of remote
-	if _, err := git.ExecGit(workdir, []string{"merge-base", "--is-ancestor", localHash, remoteHash}); err != nil {
-		return
-	}
-	_, _ = git.ExecGit(workdir, []string{"update-ref", localRef, remoteHash})
-}
-
-// listRemoteGitmsgBranches returns gitmsg/* branches from origin's remote tracking refs.
-func listRemoteGitmsgBranches(workdir string) []string {
-	result, err := git.ExecGit(workdir, []string{
-		"for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin/gitmsg/",
-	})
-	if err != nil || result.Stdout == "" {
-		return nil
-	}
-	var branches []string
-	for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
-		if line != "" {
-			branches = append(branches, "gitmsg/"+line)
-		}
-	}
-	return branches
-}
