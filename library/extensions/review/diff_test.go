@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
@@ -27,22 +28,22 @@ func TestBranchValue_otherType(t *testing.T) {
 	}
 }
 
-func TestUrlHash_consistent(t *testing.T) {
-	h1 := urlHash("https://github.com/user/repo")
-	h2 := urlHash("https://github.com/user/repo")
+func TestURLHash_consistent(t *testing.T) {
+	h1 := fetch.URLHash("https://github.com/user/repo")
+	h2 := fetch.URLHash("https://github.com/user/repo")
 	if h1 != h2 {
-		t.Errorf("urlHash not consistent: %q != %q", h1, h2)
+		t.Errorf("fetch.URLHash not consistent: %q != %q", h1, h2)
 	}
 	if len(h1) != 8 {
-		t.Errorf("urlHash length = %d, want 8", len(h1))
+		t.Errorf("fetch.URLHash length = %d, want 8", len(h1))
 	}
 }
 
-func TestUrlHash_different(t *testing.T) {
-	h1 := urlHash("https://github.com/user/repo1")
-	h2 := urlHash("https://github.com/user/repo2")
+func TestURLHash_different(t *testing.T) {
+	h1 := fetch.URLHash("https://github.com/user/repo1")
+	h2 := fetch.URLHash("https://github.com/user/repo2")
 	if h1 == h2 {
-		t.Error("urlHash should differ for different URLs")
+		t.Error("fetch.URLHash should differ for different URLs")
 	}
 }
 

@@ -86,8 +86,8 @@ func TestFetchForks(t *testing.T) {
 
 	t.Run("noForks", func(t *testing.T) {
 		stats := fetch.FetchForks(dir, t.TempDir(), Processors())
-		if stats.Forks != 0 {
-			t.Errorf("Forks = %d, want 0", stats.Forks)
+		if stats.Repositories != 0 {
+			t.Errorf("Repositories = %d, want 0", stats.Repositories)
 		}
 		if stats.Items != 0 {
 			t.Errorf("Items = %d, want 0", stats.Items)
@@ -114,8 +114,8 @@ func TestFetchForks(t *testing.T) {
 		})
 
 		stats := fetch.FetchForks(dir, cacheDir, Processors())
-		if stats.Forks != 1 {
-			t.Errorf("Forks = %d, want 1", stats.Forks)
+		if stats.Repositories != 1 {
+			t.Errorf("Repositories = %d, want 1", stats.Repositories)
 		}
 		if stats.Items < 1 {
 			t.Errorf("expected at least 1 item, got %d", stats.Items)
@@ -140,8 +140,8 @@ func TestFetchForks(t *testing.T) {
 		})
 
 		stats := fetch.FetchForks(errDir, cacheDir, Processors())
-		if stats.Forks != 1 {
-			t.Errorf("Forks = %d, want 1", stats.Forks)
+		if stats.Repositories != 1 {
+			t.Errorf("Repositories = %d, want 1", stats.Repositories)
 		}
 		if len(stats.Errors) != 1 {
 			t.Errorf("len(Errors) = %d, want 1", len(stats.Errors))

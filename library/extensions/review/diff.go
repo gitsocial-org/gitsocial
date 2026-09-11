@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
@@ -89,18 +90,18 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 		if baseLocal {
 			ctx.Base = "refs/workspace/" + baseBranch
 			if !headLocal {
-				upstreamRef := "refs/fork/" + urlHash(wsURL) + "/" + baseBranch
+				upstreamRef := "refs/fork/" + fetch.URLHash(wsURL) + "/" + baseBranch
 				if _, err := git.ReadRef(dir, upstreamRef); err == nil {
 					ctx.Base = upstreamRef
 				}
 			}
 		} else {
-			ctx.Base = "refs/fork/" + urlHash(baseParsed.Repository) + "/" + baseBranch
+			ctx.Base = "refs/fork/" + fetch.URLHash(baseParsed.Repository) + "/" + baseBranch
 		}
 		if headLocal {
 			ctx.Head = "refs/workspace/" + headBranch
 		} else {
-			ctx.Head = "refs/fork/" + urlHash(headParsed.Repository) + "/" + headBranch
+			ctx.Head = "refs/fork/" + fetch.URLHash(headParsed.Repository) + "/" + headBranch
 		}
 		var missing []string
 		if ok, objectMissing := refResolves(dir, ctx.Base); !ok {
@@ -189,7 +190,7 @@ func fetchFromUpstream(forkDir, repoURL, branch string) error {
 	if _, ok := fetchedRefs.Load(key); ok {
 		return nil
 	}
-	hash := urlHash(repoURL)
+	hash := fetch.URLHash(repoURL)
 	remoteName := "remote-" + hash
 	if _, err := git.ExecGit(forkDir, []string{"remote", "add", remoteName, repoURL}); err != nil {
 		log.Debug("add fork remote (may already exist)", "remote", remoteName, "error", err)
@@ -384,13 +385,4 @@ func qualifyPRRefs(workdir string, pr *PullRequest) (baseRef, headRef string) {
 		headRef = prURL + headRef
 	}
 	return
-}
-
-// urlHash returns a short hash for differentiating remote names.
-func urlHash(url string) string {
-	h := uint32(0)
-	for _, c := range url {
-		h = h*31 + uint32(c)
-	}
-	return fmt.Sprintf("%08x", h)
 }

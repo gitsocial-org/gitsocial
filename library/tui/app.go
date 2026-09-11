@@ -1181,9 +1181,7 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		breakdown := fetchBreakdown(before, after)
 		stats := result.Data
 		stats.Items = breakdownTotal(breakdown)
-		for _, e := range forkStats.Errors {
-			stats.Errors = append(stats.Errors, fetch.Error{Repository: e.ForkURL, Error: e.Error})
-		}
+		stats.Errors = append(stats.Errors, forkStats.Errors...)
 		return tuisocial.FetchCompletedMsg{Stats: stats, Breakdown: breakdown, Auto: auto}
 	}
 }

@@ -26,21 +26,33 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 	if err != nil {
 		return 0, err
 	}
+	return insertAndDispatch(storageDir, repoURL, keepUnfetched(gitCommits, unfetchedHashes), func(git.Commit) string {
+		return branch
+	}, processors)
+}
+
+// keepUnfetched returns the commits whose hash is in the unfetched set.
+func keepUnfetched(gitCommits []git.Commit, unfetchedHashes []string) []git.Commit {
 	unfetchedSet := make(map[string]bool, len(unfetchedHashes))
 	for _, h := range unfetchedHashes {
 		unfetchedSet[h] = true
 	}
-
-	newGitCommits := make([]git.Commit, 0, len(gitCommits))
-	newHashes := make([]string, 0, len(unfetchedHashes))
+	kept := make([]git.Commit, 0, len(unfetchedHashes))
 	for _, gc := range gitCommits {
-		if !unfetchedSet[gc.Hash] {
-			continue
+		if unfetchedSet[gc.Hash] {
+			kept = append(kept, gc)
 		}
-		newGitCommits = append(newGitCommits, gc)
-		newHashes = append(newHashes, gc.Hash)
 	}
+	return kept
+}
 
+// insertAndDispatch inserts new commits under the branch branchOf gives each
+// one, verifies their signers, then runs the processors over them.
+func insertAndDispatch(storageDir, repoURL string, newGitCommits []git.Commit, branchOf func(git.Commit) string, processors []CommitProcessor) (int, error) {
+	newHashes := make([]string, len(newGitCommits))
+	for i, gc := range newGitCommits {
+		newHashes[i] = gc.Hash
+	}
 	signerKeys, lookedUp := lookupSignerKeys(storageDir, newHashes)
 	newCommits := make([]cache.Commit, 0, len(newGitCommits))
 	candidates := make([]identity.VerifyCandidate, 0, len(newGitCommits))
@@ -54,7 +66,7 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 		newCommits = append(newCommits, cache.Commit{
 			Hash:        gc.Hash,
 			RepoURL:     repoURL,
-			Branch:      branch,
+			Branch:      branchOf(gc),
 			AuthorName:  gc.Author,
 			AuthorEmail: gc.Email,
 			Message:     gc.Message,
@@ -78,11 +90,10 @@ func ProcessCommits(storageDir string, gitCommits []git.Commit, repoURL, branch 
 	identity.VerifyCandidates(candidates, 4)
 	backfillRepoSignerKeys(storageDir, repoURL)
 
-	// Dispatch to extension processors
 	for _, gc := range newGitCommits {
 		msg := protocol.ParseMessage(gc.Message)
 		for _, proc := range processors {
-			proc(gc, msg, repoURL, branch)
+			proc(gc, msg, repoURL, branchOf(gc))
 		}
 	}
 
@@ -122,73 +133,12 @@ func processAllBranchCommits(storageDir string, gitCommits []git.Commit, repoURL
 	if err != nil {
 		return 0, err
 	}
-	unfetchedSet := make(map[string]bool, len(unfetchedHashes))
-	for _, h := range unfetchedHashes {
-		unfetchedSet[h] = true
-	}
-
-	newGitCommits := make([]git.Commit, 0, len(gitCommits))
-	commitBranches := make(map[string]string, len(gitCommits))
-	newHashes := make([]string, 0, len(unfetchedHashes))
-	for _, gc := range gitCommits {
-		branch := CleanRefname(gc.Refname)
-		if branch == "" {
-			branch = fallbackBranch
+	return insertAndDispatch(storageDir, repoURL, keepUnfetched(gitCommits, unfetchedHashes), func(gc git.Commit) string {
+		if branch := CleanRefname(gc.Refname); branch != "" {
+			return branch
 		}
-		commitBranches[gc.Hash] = branch
-		if !unfetchedSet[gc.Hash] {
-			continue
-		}
-		newGitCommits = append(newGitCommits, gc)
-		newHashes = append(newHashes, gc.Hash)
-	}
-
-	signerKeys, lookedUp := lookupSignerKeys(storageDir, newHashes)
-	newCommits := make([]cache.Commit, 0, len(newGitCommits))
-	candidates := make([]identity.VerifyCandidate, 0, len(newGitCommits))
-	for _, gc := range newGitCommits {
-		var signerPtr *string
-		var signer string
-		if lookedUp {
-			signer = identity.NormalizeSignerKey(signerKeys[gc.Hash])
-			signerPtr = &signer
-		}
-		newCommits = append(newCommits, cache.Commit{
-			Hash:        gc.Hash,
-			RepoURL:     repoURL,
-			Branch:      commitBranches[gc.Hash],
-			AuthorName:  gc.Author,
-			AuthorEmail: gc.Email,
-			Message:     gc.Message,
-			Timestamp:   gc.Timestamp,
-			SignerKey:   signerPtr,
-		})
-		if signer != "" && gc.Email != "" {
-			candidates = append(candidates, identity.VerifyCandidate{
-				RepoURL:   repoURL,
-				Hash:      gc.Hash,
-				SignerKey: signer,
-				Email:     gc.Email,
-			})
-		}
-	}
-
-	if err := cache.InsertCommits(newCommits); err != nil {
-		return 0, err
-	}
-
-	identity.VerifyCandidates(candidates, 4)
-	backfillRepoSignerKeys(storageDir, repoURL)
-
-	for _, gc := range newGitCommits {
-		branch := commitBranches[gc.Hash]
-		msg := protocol.ParseMessage(gc.Message)
-		for _, proc := range processors {
-			proc(gc, msg, repoURL, branch)
-		}
-	}
-
-	return len(newCommits), nil
+		return fallbackBranch
+	}, processors)
 }
 
 // backfillRepoSignerKeys scans for legacy NULL-signer_key rows in this repo,

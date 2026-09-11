@@ -38,7 +38,7 @@ func ForkProcessors() []fetch.CommitProcessor {
 // backfills any extension items row missed by dedup. Fetch and backfill are
 // paired in one call so a fork commit can't linger in core_commits without its
 // extension row (which the dedup would then skip forever).
-func FetchForks(workdir, cacheDir string) fetch.FetchForkStats {
+func FetchForks(workdir, cacheDir string) fetch.Stats {
 	procs := ForkProcessors()
 	stats := fetch.FetchForks(workdir, cacheDir, procs)
 	fetch.BackfillExtensionItems(backfillRepos(workdir), backfillSpecs(), procs)

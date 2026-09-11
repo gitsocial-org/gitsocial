@@ -53,9 +53,18 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func cloneFixture(t *testing.T) string {
+// pushToBare creates a bare repo, adds it as repoDir's origin and pushes to it.
+func pushToBare(t *testing.T, repoDir string, all bool) string {
 	t.Helper()
-	return testutil.CopyRepo(t, baseRepoDir)
+	bareDir := t.TempDir()
+	git.ExecGit(bareDir, []string{"init", "--bare"})
+	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
+	refspec := "main"
+	if all {
+		refspec = "--all"
+	}
+	git.ExecGit(repoDir, []string{"push", "origin", refspec})
+	return bareDir
 }
 
 // setupTestCache initializes a fresh cache database in a temp directory.
@@ -69,7 +78,7 @@ func initTestRepo(t *testing.T, commitCount int) (string, []git.Commit) {
 	t.Helper()
 	var dir string
 	if commitCount == 3 {
-		dir = cloneFixture(t)
+		dir = testutil.CopyRepo(t, baseRepoDir)
 	} else {
 		dir = t.TempDir()
 		if err := git.Init(dir, "main"); err != nil {
@@ -473,7 +482,7 @@ func TestCacheErrorPaths(t *testing.T) {
 			t.Error("expected error with insert trigger")
 		}
 	})
-	t.Run("FetchFullHistoryAllBranches_processError", func(t *testing.T) {
+	t.Run("FetchAllBranches_fullProcessError", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping integration test")
 		}
@@ -483,12 +492,12 @@ func TestCacheErrorPaths(t *testing.T) {
 			_, err := db.Exec(`CREATE TRIGGER block_commit_insert BEFORE INSERT ON core_commits BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
 			return err
 		})
-		_, err := fetchFullHistoryAllBranches(dir, "https://example.com/proc-err", "main", nil)
+		_, err := fetchAllBranches(dir, "https://example.com/proc-err", "main", nil, nil)
 		if err == nil {
 			t.Error("expected error from processCommits")
 		}
 	})
-	t.Run("FetchIncrementalAllBranches_processError", func(t *testing.T) {
+	t.Run("FetchAllBranches_incrementalProcessError", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping integration test")
 		}
@@ -499,7 +508,7 @@ func TestCacheErrorPaths(t *testing.T) {
 			return err
 		})
 		sinceTime := time.Now().AddDate(0, 0, -1)
-		_, err := fetchIncrementalAllBranches(dir, "https://example.com/incr-err", "main", sinceTime, nil)
+		_, err := fetchAllBranches(dir, "https://example.com/incr-err", "main", &sinceTime, nil)
 		if err == nil {
 			t.Error("expected error from processCommits")
 		}
@@ -531,10 +540,7 @@ func TestCacheErrorPaths(t *testing.T) {
 			return err
 		})
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		cacheDir := t.TempDir()
 		_, err := fetchRepository(cacheDir, bareDir, "main", false, "", "", "", nil, nil)
 		if err == nil {
@@ -547,10 +553,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 2)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		// Block INSERT on core_commits: processCommits fails → error propagates through fetchRepository
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_commit_insert BEFORE INSERT ON core_commits BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -569,11 +572,8 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
-		// Block INSERT on core_commits → fetchFullHistory → processCommits fails → PROCESS_ERROR
+		bareDir := pushToBare(t, repoDir, false)
+		// Block INSERT on core_commits so commit processing fails.
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_commit_insert BEFORE INSERT ON core_commits BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
 			return err
@@ -583,8 +583,8 @@ func TestCacheErrorPaths(t *testing.T) {
 		if res.Success {
 			t.Error("expected failure")
 		}
-		if res.Error.Code != "PROCESS_ERROR" {
-			t.Errorf("code = %q, want PROCESS_ERROR", res.Error.Code)
+		if res.Error.Code != "FETCH_ERROR" {
+			t.Errorf("code = %q, want FETCH_ERROR", res.Error.Code)
 		}
 	})
 	t.Run("FetchRepository_cacheLogErrors", func(t *testing.T) {
@@ -593,10 +593,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		// Block INSERT/UPDATE on core_repositories to make InsertRepository and UpdateLastFetch fail (logged only)
 		cache.ExecLocked(func(db *sql.DB) error {
 			db.Exec(`CREATE TRIGGER block_repo_insert BEFORE INSERT ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -615,10 +612,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		// Block INSERT/UPDATE on core_repositories
 		cache.ExecLocked(func(db *sql.DB) error {
 			db.Exec(`CREATE TRIGGER block_repo_insert BEFORE INSERT ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -638,10 +632,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 2)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		pushToBare(t, repoDir, false)
 		// Block INSERT on core_repositories to trigger InsertRepository error logging
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_repo_insert BEFORE INSERT ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -661,10 +652,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 2)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		pushToBare(t, repoDir, false)
 		// Only block UPDATE: InsertRepository succeeds (row exists), UpdateLastFetch fails
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_repo_update BEFORE UPDATE ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -681,10 +669,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		// Only block UPDATE: InsertRepository succeeds, UpdateLastFetch fails
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_repo_update BEFORE UPDATE ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -702,10 +687,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		}
 		setupTestCache(t)
 		repoDir, _ := initTestRepo(t, 1)
-		bareDir := t.TempDir()
-		git.ExecGit(bareDir, []string{"init", "--bare"})
-		git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-		git.ExecGit(repoDir, []string{"push", "origin", "main"})
+		bareDir := pushToBare(t, repoDir, false)
 		// Only block UPDATE
 		cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`CREATE TRIGGER block_repo_update BEFORE UPDATE ON core_repositories BEGIN SELECT RAISE(ABORT, 'blocked'); END`)
@@ -736,9 +718,9 @@ func TestFetchFullHistory(t *testing.T) {
 	dir, commits := initTestRepo(t, 3)
 	repoURL := "https://example.com/fullhistory"
 
-	count, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
+	count, err := fetchAllBranches(dir, repoURL, "main", nil, nil)
 	if err != nil {
-		t.Fatalf("fetchFullHistoryAllBranches() error = %v", err)
+		t.Fatalf("fetchAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -782,9 +764,9 @@ func TestFetchFullHistory_withProcessor(t *testing.T) {
 	var processed int
 	proc := func(commit git.Commit, msg *protocol.Message, rURL, b string) { processed++ }
 
-	count, err := fetchFullHistoryAllBranches(dir, repoURL, "main", []CommitProcessor{proc})
+	count, err := fetchAllBranches(dir, repoURL, "main", nil, []CommitProcessor{proc})
 	if err != nil {
-		t.Fatalf("fetchFullHistoryAllBranches() error = %v", err)
+		t.Fatalf("fetchAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -802,14 +784,14 @@ func TestFetchFullHistory_idempotent(t *testing.T) {
 	dir, _ := initTestRepo(t, 3)
 	repoURL := "https://example.com/fullhistory-idem"
 
-	count1, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
+	count1, err := fetchAllBranches(dir, repoURL, "main", nil, nil)
 	if err != nil {
-		t.Fatalf("first fetchFullHistoryAllBranches() error = %v", err)
+		t.Fatalf("first fetchAllBranches() error = %v", err)
 	}
 
-	count2, err := fetchFullHistoryAllBranches(dir, repoURL, "main", nil)
+	count2, err := fetchAllBranches(dir, repoURL, "main", nil, nil)
 	if err != nil {
-		t.Fatalf("second fetchFullHistoryAllBranches() error = %v", err)
+		t.Fatalf("second fetchAllBranches() error = %v", err)
 	}
 	if count2 != 0 {
 		t.Errorf("second fetch count = %d, want 0 (all already cached)", count2)
@@ -831,9 +813,9 @@ func TestFetchIncremental(t *testing.T) {
 
 	// Use yesterday to ensure all today's commits are included (git --since uses date granularity)
 	sinceTime := time.Now().AddDate(0, 0, -1)
-	count, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
+	count, err := fetchAllBranches(dir, repoURL, "main", &sinceTime, nil)
 	if err != nil {
-		t.Fatalf("fetchIncrementalAllBranches() error = %v", err)
+		t.Fatalf("fetchAllBranches() error = %v", err)
 	}
 	if count != len(commits) {
 		t.Errorf("count = %d, want %d", count, len(commits))
@@ -850,9 +832,9 @@ func TestFetchIncremental_onlyNewCommits(t *testing.T) {
 
 	// Fetch all first (use yesterday to avoid date boundary issues)
 	sinceTime := time.Now().AddDate(0, 0, -1)
-	_, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
+	_, err := fetchAllBranches(dir, repoURL, "main", &sinceTime, nil)
 	if err != nil {
-		t.Fatalf("first fetchIncrementalAllBranches() error = %v", err)
+		t.Fatalf("first fetchAllBranches() error = %v", err)
 	}
 
 	// Add a new commit
@@ -861,9 +843,9 @@ func TestFetchIncremental_onlyNewCommits(t *testing.T) {
 	}
 
 	// Fetch again — only the new commit should be counted
-	count, err := fetchIncrementalAllBranches(dir, repoURL, "main", sinceTime, nil)
+	count, err := fetchAllBranches(dir, repoURL, "main", &sinceTime, nil)
 	if err != nil {
-		t.Fatalf("second fetchIncrementalAllBranches() error = %v", err)
+		t.Fatalf("second fetchAllBranches() error = %v", err)
 	}
 	if count != 1 {
 		t.Errorf("count = %d, want 1 (only the new commit)", count)
@@ -976,10 +958,7 @@ func TestFetchAll_progressCallback(t *testing.T) {
 
 	// Create a bare repo to fetch from
 	repoDir, _ := initTestRepo(t, 2)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	repos := []RepoInfo{{URL: bareDir, Branch: "main"}}
 	cacheDir := t.TempDir()
@@ -1018,10 +997,7 @@ func TestFetchRepositoryRange_defaultBranch(t *testing.T) {
 	git.CreateCommit(repoDir, git.CommitOptions{Message: "gitmsg post", AllowEmpty: true})
 	git.ExecGit(repoDir, []string{"checkout", "main"})
 
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 
 	cacheDir := t.TempDir()
 	since := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
@@ -1045,10 +1021,7 @@ func TestFetchRepository_defaultBranch(t *testing.T) {
 	t.Parallel()
 
 	repoDir, _ := initTestRepo(t, 2)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	cacheDir := t.TempDir()
 	res := FetchRepository(cacheDir, bareDir, "", "", nil, nil)
@@ -1070,10 +1043,7 @@ func TestFetchRepository_runsHooks(t *testing.T) {
 	t.Parallel()
 
 	repoDir, _ := initTestRepo(t, 1)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	hookCalled := false
 	hook := func(storageDir, repoURL, branch, workspaceURL string) {
@@ -1097,10 +1067,7 @@ func TestFetchRepository_runsProcessors(t *testing.T) {
 	t.Parallel()
 
 	repoDir, _ := initTestRepo(t, 2)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	var processed int
 	proc := func(commit git.Commit, msg *protocol.Message, rURL, b string) { processed++ }
@@ -1124,8 +1091,8 @@ func TestFetchRepository_storageError(t *testing.T) {
 	if res.Success {
 		t.Error("expected failure for invalid cache dir")
 	}
-	if res.Error.Code != "STORAGE_ERROR" {
-		t.Errorf("code = %q, want STORAGE_ERROR", res.Error.Code)
+	if res.Error.Code != "FETCH_ERROR" {
+		t.Errorf("code = %q, want FETCH_ERROR", res.Error.Code)
 	}
 }
 
@@ -1153,10 +1120,7 @@ func TestFetchRepository_followedNoCommits(t *testing.T) {
 	}
 	t.Parallel()
 	repoDir, _ := initTestRepo(t, 3)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	cacheDir := t.TempDir()
 	// isFollowed=true, no commits in cache → takes full history path
@@ -1180,10 +1144,7 @@ func TestFetchRepository_followedIncremental(t *testing.T) {
 	git.CreateCommit(repoDir, git.CommitOptions{Message: "gitmsg data", AllowEmpty: true})
 	git.ExecGit(repoDir, []string{"checkout", "main"})
 
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 
 	cacheDir := t.TempDir()
 	// First fetch: full history (populates cache, meta.HasCommits becomes true)
@@ -1252,10 +1213,7 @@ func TestFetchRepository_withHooksAndProcessors(t *testing.T) {
 	git.CreateCommit(repoDir, git.CommitOptions{Message: "gitmsg data", AllowEmpty: true})
 	git.ExecGit(repoDir, []string{"checkout", "main"})
 
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 
 	hookCalled := false
 	hook := func(storageDir, repoURL, branch, workspaceURL string) { hookCalled = true }
@@ -1284,10 +1242,7 @@ func TestFetchAll_workspaceSync(t *testing.T) {
 	}
 	t.Parallel()
 	repoDir, _ := initTestRepo(t, 2)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	pushToBare(t, repoDir, false)
 
 	// Workspace with valid origin exercises the origin sync block
 	res := FetchAll(repoDir, t.TempDir(), &Options{}, nil, nil, nil)
@@ -1312,10 +1267,7 @@ func TestSyncWorkspaceOrigin_gitmsgBranches(t *testing.T) {
 		}
 	}
 	git.ExecGit(repoDir, []string{"checkout", "main"})
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 
 	ws := t.TempDir()
 	if err := git.Init(ws, "main"); err != nil {
@@ -1373,10 +1325,7 @@ func TestFetchAll_workspaceSyncCustomBranch(t *testing.T) {
 	}
 	t.Parallel()
 	repoDir, _ := initTestRepo(t, 1)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	pushToBare(t, repoDir, false)
 
 	// Explicit WorkspaceBranch exercises the branch != "" path
 	res := FetchAll(repoDir, t.TempDir(), &Options{WorkspaceBranch: "develop"}, nil, nil, nil)
@@ -1419,10 +1368,7 @@ func TestFetchAll_withRealRepos(t *testing.T) {
 	git.CreateCommit(repoDir, git.CommitOptions{Message: "gitmsg data", AllowEmpty: true})
 	git.ExecGit(repoDir, []string{"checkout", "main"})
 
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 
 	repos := []RepoInfo{{URL: bareDir, Branch: "main"}}
 	cacheDir := t.TempDir()
@@ -1442,10 +1388,7 @@ func TestFetchAll_followedViaListID(t *testing.T) {
 	t.Parallel()
 	wsDir, _ := initTestRepo(t, 1)
 	repoDir, _ := initTestRepo(t, 2)
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "main"})
+	bareDir := pushToBare(t, repoDir, false)
 
 	// ListID makes isFollowed=true, exercising the followed fetch strategy in goroutine
 	repos := []RepoInfo{{URL: bareDir, Branch: "main", ListID: "test-list"}}
@@ -1512,10 +1455,7 @@ func TestFetchRepository_followedIncrementalFetchFail(t *testing.T) {
 	git.ExecGit(repoDir, []string{"checkout", "-b", "gitmsg/ext/data"})
 	git.CreateCommit(repoDir, git.CommitOptions{Message: "gitmsg data", AllowEmpty: true})
 	git.ExecGit(repoDir, []string{"checkout", "main"})
-	bareDir := t.TempDir()
-	git.ExecGit(bareDir, []string{"init", "--bare"})
-	git.ExecGit(repoDir, []string{"remote", "add", "origin", bareDir})
-	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
+	bareDir := pushToBare(t, repoDir, true)
 	cacheDir := t.TempDir()
 	// First fetch: full history
 	_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)

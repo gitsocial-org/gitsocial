@@ -105,13 +105,11 @@ func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProce
 			}
 			meta, metaErr := cache.GetRepositoryFetchMeta(originURL)
 			if metaErr == nil {
-				var wsCount int
-				var wsErr error
-				if !meta.HasCommits {
-					wsCount, wsErr = fetchFullHistoryAllBranches(workdir, originURL, wsBranch, processors)
-				} else {
-					wsCount, wsErr = fetchIncrementalAllBranches(workdir, originURL, wsBranch, meta.NewestCommitTime, processors)
+				var since *time.Time
+				if meta.HasCommits {
+					since = &meta.NewestCommitTime
 				}
+				wsCount, wsErr := fetchAllBranches(workdir, originURL, wsBranch, since, processors)
 				if wsErr != nil {
 					log.Warn("workspace commit processing failed", "url", originURL, "error", wsErr)
 				} else {
@@ -217,44 +215,16 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 	return result.Ok(stats)
 }
 
-// FetchRepository fetches complete history for a single repository.
+// FetchRepository fetches a followed repository's history.
 func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, processors []CommitProcessor, hooks []PostFetchHook) result.Result[Stats] {
 	if branch == "" {
 		branch = "main"
 	}
 
-	storageDir, err := storage.EnsureRepository(cacheDir, repoURL, branch, &storage.EnsureOptions{
-		IsPersistent: true,
-	})
+	count, err := fetchRepository(cacheDir, repoURL, branch, true, "", "", workspaceURL, processors, hooks)
 	if err != nil {
-		return result.ErrWithDetails[Stats]("STORAGE_ERROR", "Failed to ensure repository", err)
-	}
-
-	if err := cache.InsertRepository(cache.Repository{
-		URL:         repoURL,
-		Branch:      branch,
-		StoragePath: storageDir,
-	}); err != nil {
-		log.Debug("insert repository to cache failed", "url", repoURL, "error", err)
-	}
-
-	if err := storage.FetchRepository(storageDir, branch, nil); err != nil {
 		return result.ErrWithDetails[Stats]("FETCH_ERROR", "Failed to fetch repository", err)
 	}
-
-	// storage.FetchRepository pulls all gitmsg/* refs regardless of `branch`, so
-	// git log --all returns commits across multiple branches. Use per-commit
-	// branch tracking so each commit is stored under its actual refname rather
-	// than lumped under `branch`.
-	count, err := fetchFullHistoryAllBranches(storageDir, repoURL, branch, processors)
-	if err != nil {
-		return result.ErrWithDetails[Stats]("PROCESS_ERROR", "Failed to process commits", err)
-	}
-
-	if err := cache.UpdateRepositoryLastFetch(repoURL); err != nil {
-		log.Debug("update last fetch failed", "url", repoURL, "error", err)
-	}
-	runHooks(hooks, storageDir, repoURL, branch, workspaceURL)
 
 	return result.Ok(Stats{
 		Repositories: 1,
@@ -310,13 +280,13 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 			if err := storage.FetchRepository(storageDir, branch, nil); err != nil {
 				return 0, fmt.Errorf("fetch full: %w", err)
 			}
-			count, err = fetchFullHistoryAllBranches(storageDir, repoURL, branch, processors)
+			count, err = fetchAllBranches(storageDir, repoURL, branch, nil, processors)
 		} else {
 			fetchOpts := &storage.FetchOptions{Since: meta.NewestCommitTime.Format("2006-01-02")}
 			if err := storage.FetchRepository(storageDir, branch, fetchOpts); err != nil {
 				log.Debug("incremental fetch failed, continuing with cached data", "url", repoURL, "error", err)
 			}
-			count, err = fetchIncrementalAllBranches(storageDir, repoURL, branch, meta.NewestCommitTime, processors)
+			count, err = fetchAllBranches(storageDir, repoURL, branch, &meta.NewestCommitTime, processors)
 		}
 	} else {
 		fetchOpts := &storage.FetchOptions{Since: defaultSince}
@@ -337,9 +307,9 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 	return count, nil
 }
 
-// fetchFullHistoryAllBranches retrieves and processes all commits with per-commit branch tracking.
-func fetchFullHistoryAllBranches(storageDir, repoURL, fallbackBranch string, processors []CommitProcessor) (int, error) {
-	gitCommits, err := git.GetCommits(storageDir, &git.GetCommitsOptions{All: true})
+// fetchAllBranches processes commits with per-commit branch tracking, from since when it is set.
+func fetchAllBranches(storageDir, repoURL, fallbackBranch string, since *time.Time, processors []CommitProcessor) (int, error) {
+	gitCommits, err := git.GetCommits(storageDir, &git.GetCommitsOptions{All: true, Since: since})
 	if err != nil {
 		return 0, fmt.Errorf("get commits: %w", err)
 	}
@@ -347,48 +317,19 @@ func fetchFullHistoryAllBranches(storageDir, repoURL, fallbackBranch string, pro
 	if err != nil {
 		return 0, err
 	}
-	liveHashes := make(map[string]bool, len(gitCommits))
-	for _, c := range gitCommits {
-		liveHashes[c.Hash] = true
-	}
-	if staled, err := cache.MarkCommitsStaleByRepo(repoURL, liveHashes); err != nil {
+	if liveHashes, err := git.GetAllCommitHashes(storageDir); err != nil {
+		log.Warn("list live commits", "error", err, "repo", repoURL)
+	} else if staled, err := cache.MarkCommitsStaleByRepo(repoURL, liveHashes); err != nil {
 		log.Warn("mark stale commits", "error", err, "repo", repoURL)
 	} else if staled > 0 {
 		log.Debug("marked stale commits", "repo", repoURL, "count", staled)
 	}
 	startDate := time.Now().Format("2006-01-02")
-	if len(gitCommits) > 0 {
-		oldest := gitCommits[len(gitCommits)-1].Timestamp
-		startDate = oldest.Format("2006-01-02")
+	if since != nil {
+		startDate = since.Format("2006-01-02")
+	} else if len(gitCommits) > 0 {
+		startDate = gitCommits[len(gitCommits)-1].Timestamp.Format("2006-01-02")
 	}
-	endDate := time.Now().Format("2006-01-02")
-	if rangeID, err := cache.InsertFetchRange(repoURL, startDate, endDate); err == nil {
-		if err := cache.UpdateFetchRangeStatus(rangeID, "complete", count, ""); err != nil {
-			log.Debug("update fetch range status", "error", err, "rangeID", rangeID)
-		}
-	}
-	return count, nil
-}
-
-// fetchIncrementalAllBranches retrieves and processes commits since sinceTime with per-commit branches.
-func fetchIncrementalAllBranches(storageDir, repoURL, fallbackBranch string, sinceTime time.Time, processors []CommitProcessor) (int, error) {
-	gitCommits, err := git.GetCommits(storageDir, &git.GetCommitsOptions{
-		All:   true,
-		Since: &sinceTime,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("get commits: %w", err)
-	}
-	count, err := processAllBranchCommits(storageDir, gitCommits, repoURL, fallbackBranch, processors)
-	if err != nil {
-		return 0, err
-	}
-	if liveHashes, err := git.GetAllCommitHashes(storageDir); err == nil {
-		if staled, err := cache.MarkCommitsStaleByRepo(repoURL, liveHashes); err == nil && staled > 0 {
-			log.Debug("marked stale commits", "repo", repoURL, "count", staled)
-		}
-	}
-	startDate := sinceTime.Format("2006-01-02")
 	endDate := time.Now().Format("2006-01-02")
 	if rangeID, err := cache.InsertFetchRange(repoURL, startDate, endDate); err == nil {
 		if err := cache.UpdateFetchRangeStatus(rangeID, "complete", count, ""); err != nil {
@@ -449,4 +390,3 @@ func runHooks(hooks []PostFetchHook, storageDir, repoURL, branch, workspaceURL s
 		hook(storageDir, repoURL, branch, workspaceURL)
 	}
 }
-

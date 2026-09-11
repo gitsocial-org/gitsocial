@@ -96,7 +96,7 @@ For extension-specific options, use the extension's fetch command directly:
 				Parallel: parallel,
 			}, false, allBranches)
 			if !cfg.JSONOutput && forkStats.Items > 0 {
-				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Forks)
+				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Repositories)
 			}
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
@@ -185,7 +185,7 @@ func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches boo
 // runFullFetch performs a full workspace fetch: subscribed repos, forks, and workspace sync.
 // If opts is nil, defaults are used. The caller can pre-populate opts with CLI-specific fields
 // (ListID, Since, Before, Parallel); this function fills in processors and branch mode.
-func runFullFetch(cfg *Config, opts *social.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.FetchForkStats) {
+func runFullFetch(cfg *Config, opts *social.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
 	if opts == nil {
 		opts = &social.FetchOptions{}
 	}

@@ -14,30 +14,17 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
 )
 
-// FetchForkError records a per-fork fetch failure.
-type FetchForkError struct {
-	ForkURL string
-	Error   string
-}
-
-// FetchForkStats contains aggregate stats from fetching all registered forks.
-type FetchForkStats struct {
-	Forks  int
-	Items  int
-	Errors []FetchForkError
-}
-
 // FetchForks fetches all gitmsg branches from registered forks concurrently,
 // processing commits through all registered extension processors.
-func FetchForks(workdir, cacheDir string, processors []CommitProcessor) FetchForkStats {
+func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
 	forks := gitmsg.GetForks(workdir)
 	if len(forks) == 0 {
-		return FetchForkStats{}
+		return Stats{}
 	}
 	wsURL := gitmsg.ResolveRepoURL(workdir)
 	forkDir, err := storage.EnsureForkRepository(cacheDir, wsURL)
 	if err != nil {
-		return FetchForkStats{Forks: len(forks), Errors: []FetchForkError{{ForkURL: wsURL, Error: err.Error()}}}
+		return Stats{Repositories: len(forks), Errors: []Error{{Repository: wsURL, Error: err.Error()}}}
 	}
 	stats, missingObject := fetchForksInto(forkDir, forks, processors)
 	if !missingObject {
@@ -57,8 +44,8 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) FetchFor
 
 // fetchForksInto fetches every fork into one bare repo, reporting whether any
 // failure named a missing or bad object.
-func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor) (FetchForkStats, bool) {
-	stats := FetchForkStats{Forks: len(forks)}
+func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor) (Stats, bool) {
+	stats := Stats{Repositories: len(forks)}
 	missingObject := false
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -73,7 +60,7 @@ func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor
 			mu.Lock()
 			if fetchErr != nil {
 				log.Debug("fork fetch failed", "fork", url, "error", fetchErr)
-				stats.Errors = append(stats.Errors, FetchForkError{ForkURL: url, Error: fetchErr.Error()})
+				stats.Errors = append(stats.Errors, Error{Repository: url, Error: fetchErr.Error()})
 				missingObject = missingObject || storage.IsMissingObjectError(fetchErr)
 			} else {
 				stats.Items += count
@@ -108,7 +95,7 @@ func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, erro
 		return 0, fmt.Errorf("list fork refs: %w", err)
 	}
 	totalCount := 0
-	for _, ref := range splitNonEmpty(refList.Stdout) {
+	for _, ref := range strings.Fields(refList.Stdout) {
 		branch := ref[len(fmt.Sprintf("refs/forks/%s/", hash)):]
 		gitCommits, err := git.GetCommits(forkDir, &git.GetCommitsOptions{Branch: ref})
 		if err != nil {
@@ -158,8 +145,8 @@ func syncForkDeclines(forkDir, hash string) {
 	if err != nil || out.Stdout == "" {
 		return
 	}
-	for _, line := range splitNonEmpty(out.Stdout) {
-		p := protocol.ParseRef(strings.TrimSpace(line))
+	for _, line := range strings.Fields(out.Stdout) {
+		p := protocol.ParseRef(line)
 		if p.Value == "" {
 			continue
 		}
@@ -174,32 +161,4 @@ func URLHash(url string) string {
 		h = h*31 + uint32(c)
 	}
 	return fmt.Sprintf("%08x", h)
-}
-
-func splitNonEmpty(s string) []string {
-	var result []string
-	for _, line := range splitLines(s) {
-		if line != "" {
-			result = append(result, line)
-		}
-	}
-	return result
-}
-
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	lines := make([]string, 0)
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
 }
