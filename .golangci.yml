@@ -5,9 +5,16 @@ linters:
     - prealloc
     - unconvert
     - unparam
+    - funlen
+    - gocognit
   settings:
     misspell:
       locale: US
+    funlen:
+      lines: 331
+      statements: 221
+    gocognit:
+      min-complexity: 116
   exclusions:
     generated: lax
     presets:
@@ -20,6 +27,8 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
+          - funlen
+          - gocognit
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

@@ -38,6 +38,8 @@ The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequen
 
 `scripts/import-graph.sh --check` is stage 1. It fails on an upward import edge missing from `scripts/import-baseline.txt`, and on a package over 15,000 non-test lines; `--update` accepts the current edges. With no argument it prints the per-package size, fan-in, fan-out and churn report.
 
+`funlen` and `gocognit` in `.golangci.yml` hold today's largest function and highest complexity, and a threshold only moves down.
+
 ```bash
 scripts/check.sh --quick                    # the push tier
 scripts/check.sh                            # the full tier
