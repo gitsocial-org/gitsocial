@@ -1,0 +1,126 @@
+{
+  ".card": [
+    {
+      "shape": "div.card-head > div.board-card-labels",
+      "padding": "8px 9.6px",
+      "margin": "0px 0px 8px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "borderRadius": "10px"
+    },
+    {
+      "shape": "div.card-head",
+      "padding": "8px 9.6px",
+      "margin": "0px 0px 8px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "borderRadius": "10px"
+    }
+  ],
+  ".card.board-card": [
+    {
+      "shape": "div.card-head > div.board-card-labels",
+      "padding": "8px 9.6px",
+      "margin": "0px 0px 8px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "borderRadius": "10px"
+    },
+    {
+      "shape": "div.card-head",
+      "padding": "8px 9.6px",
+      "margin": "0px 0px 8px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "borderRadius": "10px"
+    }
+  ],
+  ".card-head": [
+    {
+      "shape": "span.board-card-title",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(26, 26, 26)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".chip": [
+    {
+      "shape": "",
+      "padding": "0.8px 8px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "srgb(0.1 0.1 0.1 / 0.09)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "999px"
+    }
+  ],
+  ".subject": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(0, 170, 119)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 170, 119)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".type-glyph": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 7.2px 0px 0px",
+      "fontSize": "24px",
+      "color": "rgb(137, 87, 229)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(137, 87, 229)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 7.2px 0px 0px",
+      "fontSize": "24px",
+      "color": "rgb(31, 157, 85)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(31, 157, 85)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".filter-chip": [
+    {
+      "shape": "",
+      "padding": "2.4px 11.2px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.1 0.1 0.1 / 0.09)",
+      "borderLeftColor": "rgb(0, 170, 119)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "",
+      "padding": "2.4px 11.2px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "srgb(0.93 0.89 0.8)",
+      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "borderRadius": "999px"
+    }
+  ]
+}

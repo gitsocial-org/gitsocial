@@ -7,6 +7,11 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// probeSource is injected into an HTML response carrying ?probe=1, so
+// verify_styles.js can read computed styles out of a real browser.
+let probeSource = "";
+try { probeSource = fs.readFileSync(path.join(__dirname, "probe.js"), "utf8"); } catch (_) { /* probe optional */ }
+
 // cacheControlFor mirrors the upload-time classification (objstore/cache_control.go):
 // content-addressed loose objects (objects/<xx>/<38-hex>), packfiles and their
 // indexes (objects/pack/pack-<hash>.{pack,idx}), sealed shards of either corpus
@@ -50,6 +55,15 @@ function createServer(root) {
     if (!file.startsWith(root)) { res.writeHead(403); res.end(); return; }
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); res.end("not found"); return; }
+      // The probe is injected before the hash, and its response never
+      // revalidates: a 304 would carry no script and the run would silently
+      // measure an unprobed page.
+      if (probeSource && /probe=1/.test(req.url) && path.extname(file) === ".html") {
+        const probed = data.toString().replace("</head>", "<script>" + probeSource + "</scr" + "ipt></head>");
+        res.writeHead(200, { "Content-Type": TYPES[".html"], "Cache-Control": "no-store" });
+        res.end(probed);
+        return;
+      }
       const etag = '"' + crypto.createHash("md5").update(data).digest("hex") + '"';
       const headers = {
         "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",

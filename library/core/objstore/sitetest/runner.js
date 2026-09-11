@@ -42,6 +42,7 @@ const DEFAULT = [
   "verify_absent_keys.js",
   "verify_prism_deadline.js",
   "verify_request_budget.js",
+  "verify_styles.js",
 ];
 
 // Legacy battery: needs the original frozen buckets (hardcoded commit hashes,

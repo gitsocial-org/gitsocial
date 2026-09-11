@@ -1,0 +1,60 @@
+{
+  ".card": [
+    {
+      "shape": "div > div.meta",
+      "padding": "12px 14.4px",
+      "margin": "0px 0px 11.2px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "srgb(0.03 0.04 0.13)",
+      "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
+      "borderRadius": "10px"
+    }
+  ],
+  ".meta": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 0px 0px 28px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.54 0.56 0.61)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".chip": [
+    {
+      "shape": "",
+      "padding": "0.8px 8px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.54 0.56 0.61)",
+      "backgroundColor": "srgb(0.79 0.82 0.85 / 0.09)",
+      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "999px"
+    }
+  ],
+  ".subject": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 0px 4.8px",
+      "fontSize": "24px",
+      "color": "rgb(0, 221, 221)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 221, 221)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 0px 4.8px",
+      "fontSize": "36px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
+    }
+  ]
+}

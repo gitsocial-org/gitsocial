@@ -151,6 +151,11 @@ preflight() {
   for tool in git go goreleaser syft rcodesign curl node; do
     have "$tool" || fail "required tool not found on PATH: $tool"
   done
+  # Chrome backs the style-assertion suite and is never on PATH by name, so it
+  # resolves the way the suite does.
+  node "$root/library/core/objstore/sitetest/chrome.js" >/dev/null 2>&1
+  [ -n "$(node -e 'process.stdout.write(require("'"$root"'/library/core/objstore/sitetest/chrome.js").find())')" ] \
+    || fail "Chrome not found for the style-assertion suite; set CHROME to its path"
   info "tools checked: git go goreleaser syft rcodesign curl node"
 
   # Credentials (documented in the header). Report everything missing at once.
