@@ -947,7 +947,7 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 func sitePageItemSubject(it *sitePageItem) string {
 	if !it.Retracted {
 		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-		return siteSubjectText(subject)
+		return sitePageSubjectOrPlaceholder(subject)
 	}
 	subject := "retracted " + sitePageTypeLabel(pageItemType(it))
 	if tag := pageItemField(it, "tag"); tag != "" {
@@ -1017,7 +1017,7 @@ func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
 // buildSiteItemPage assembles one root's full item-page data: chrome, meta
 // line, escaped-text body (or tombstone), release extras, and the thread
 // sections in timestamp order up to the reply/byte cap. title is the site-unique
-// <title> subject; headings and the OG card keep the plain subject.
+// <title> subject; every other promoted subject is markdown-stripped.
 func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, title string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
@@ -1034,7 +1034,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	}
 	robots := ""
 	if !bodyOnly {
-		d.Heading = subject
+		d.Heading = sitePageSubjectOrPlaceholder(subject)
 	}
 	if it.Retracted {
 		// A tombstone IS the page's own words, not the item's, so it heads every
@@ -1098,11 +1098,6 @@ func sitePageListChip(it *sitePageItem) *sitePageChip {
 	return chip
 }
 
-// buildSiteListEntry renders one root as a list/front row. base is the page's
-// relative path to the site root; defaultType suppresses the redundant type
-// bit on a type's own list (an issue row on the issues list). The row leads with
-// the app's own type glyph, so the booted app re-renders the row rather than
-// replacing a chip-and-subject line with a glyph card.
 // sitePageSubjectOrPlaceholder strips a promoted first line to its words, or
 // falls back, since a row's subject anchor is its only link to the item.
 func sitePageSubjectOrPlaceholder(subject string) string {
@@ -1111,6 +1106,12 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 	}
 	return "(untitled)"
 }
+
+// buildSiteListEntry renders one root as a list/front row. base is the page's
+// relative path to the site root; defaultType suppresses the redundant type
+// bit on a type's own list (an issue row on the issues list). The row leads with
+// the app's own type glyph, so the booted app re-renders the row rather than
+// replacing a chip-and-subject line with a glyph card.
 
 func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
@@ -1510,7 +1511,7 @@ func buildSiteFeedEntries(items []*sitePageItem, site sitePageSite) []siteFeedEn
 	entries := make([]siteFeedEntry, 0, len(items))
 	for _, it := range items {
 		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-		if subject == "" {
+		if subject = siteSubjectText(subject); subject == "" {
 			subject = sitePageTypeLabel(pageItemType(it))
 		}
 		name, _ := pageDisplayAuthor(it.Msg)

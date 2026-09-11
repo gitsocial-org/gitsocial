@@ -60,6 +60,30 @@
       "message": "Nothing to strip here\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
       "expectSubject": "Nothing to strip here",
       "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: inline html",
+      "message": "<b>_bold_</b> ships\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "bold ships",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: html wrapping a heading",
+      "message": "<p># Title</p>\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "Title",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: link beside html emphasis",
+      "message": "[x](y) <em>_z_</em>\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "x z",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: markup only",
+      "message": "<br/>\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
     }
   ],
   "rawObjectCases": [

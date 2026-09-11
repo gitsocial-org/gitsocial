@@ -961,7 +961,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     function paint() {
       const v = versions[sel.idx];
       const [subject, body] = subjectBody(v.content);
-      if (subjectEl) subjectEl.textContent = subject || "(untitled)";
+      if (subjectEl) subjectEl.textContent = subjectText(subject) || "(untitled)";
       const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage);
       metaSlot.replaceChildren(versionMetaRow(v, kind.branch), cb.modes);
       bodyPane.replaceChildren(cb.pane);
@@ -3966,7 +3966,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const branch = item._branch || "";
     const code = item._ext === "code";
     const glyph = code ? el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]) : typeGlyphEl(item, item._ext);
-    const head = cardHead(glyph, commitRef(item.commit.hash, branch), itemSubject(item));
+    const head = cardHead(glyph, commitRef(item.commit.hash, branch), itemSubject(item) || "(untitled)");
     const meta = el("span", { class: "meta" }, [item.author || "", " · ", timeEl(item.effectiveTime)]);
     if (code) meta.append(" · ", el("a", { class: "hash", href: commitRef(item.commit.hash, branch) }, [item.commit.short]));
     return card({ parts: [head, meta], nav: { hash: item.commit.hash, branch } });

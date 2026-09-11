@@ -216,6 +216,7 @@ var siteSubjectUnwrap = []struct {
 	{regexp.MustCompile(`(^|[\s(])__([^\s_][^_]*)__($|[\s).,;:!?])`), "${1}${2}${3}"},
 	{regexp.MustCompile(`(^|[\s(])_([^\s_][^_]*)_($|[\s).,;:!?])`), "${1}${2}${3}"},
 	{regexp.MustCompile("`([^`]+)`"), "$1"},
+	{siteSubjectInlineHTML, " "},
 }
 
 var siteSubjectSpace = regexp.MustCompile(`\s+`)
@@ -235,7 +236,6 @@ func siteSubjectText(line string) string {
 			out = rule.re.ReplaceAllString(out, rule.to)
 		}
 	}
-	out = siteSubjectInlineHTML.ReplaceAllString(out, " ")
 	return strings.TrimSpace(siteSubjectSpace.ReplaceAllString(out, " "))
 }
 
