@@ -35,14 +35,7 @@ type VirtualCommit struct {
 	Timestamp   time.Time
 }
 
-// UpsertVirtualCommit inserts a placeholder commit (is_virtual=1) when no row
-// for (repo_url, hash, branch) exists. Existing rows are left untouched: a real
-// fetched row outranks any snapshot, and an already-present virtual row is
-// kept (first snapshot wins to avoid thrash from competing references).
-//
-// Callers must already hold the cache write lock (e.g. via ExecLocked) and
-// pass the locked *sql.DB so the upsert participates in the surrounding
-// operation rather than racing for its own connection.
+// UpsertVirtualCommit inserts a placeholder commit under the caller's write lock, keeping any existing row.
 func UpsertVirtualCommit(db *sql.DB, vc VirtualCommit) error {
 	if vc.RepoURL == "" || vc.Hash == "" || vc.Branch == "" {
 		return fmt.Errorf("upsert virtual commit: repo/hash/branch required")

@@ -1,21 +1,4 @@
-// provider.go - Memo notification provider.
-//
-// Two notification flows:
-//
-//   - "memo-comment" — someone left a comment on a memo authored by the
-//     current user. Fills the gap that social.GetNotifications leaves: the
-//     social provider only surfaces comments on threads the user has already
-//     participated in, so a fresh comment on an authored-but-unengaged memo
-//     would otherwise pass silently.
-//
-//   - "inherited-policy" — an inherited source pushed a memo with
-//     priority/critical. The whole point of binding inherited sources is that
-//     their policies override local preferences; users should know when those
-//     policies change without polling `memo list --tier inherited` by hand.
-//
-// Mentions in memo bodies are already handled by the core
-// notifications.MentionProcessor (wired into fetch), so no memo-specific code
-// is needed for "@you got mentioned in a memo."
+// provider.go - Memo notification provider
 package memo
 
 import (

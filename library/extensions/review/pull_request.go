@@ -270,14 +270,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	return result.Ok(ReviewItemToPullRequest(*item))
 }
 
-// MergePR merges the head branch into the base branch, then updates PR state to merged.
-// homeForkPR adopts a fork-authored PR onto the workspace review branch so a
-// base-owner landing edit (merge or close) lands as a self-contained, same-repo
-// record rather than an inert cross-repo edit (proposals only resolve same-repo
-// under the acceptance gating). The copy carries a GitMsg-Ref back to the fork
-// original, preserving author identity and surviving fork deletion (GITREVIEW
-// §1.5). Returns the workspace-homed PR ref, or prRef unchanged when the PR
-// already lives in this workspace.
+// homeForkPR copies a fork-authored pull request onto the workspace review branch and returns its ref.
 func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullRequest) (string, error) {
 	if existing.RepoURL == repoURL {
 		return prRef, nil
@@ -324,6 +317,7 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 	return hash, nil
 }
 
+// MergePR merges the head branch into the base branch, then updates PR state to merged.
 func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)

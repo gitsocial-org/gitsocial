@@ -1,16 +1,4 @@
-// refs.go - Symmetric branch-tip resolution for any repo URL.
-//
-// `ResolveBranchTip` is the single entry point for "what is the current tip
-// of branch X on remote Y." It treats the workspace's origin and any
-// registered fork uniformly: a local remote-tracking ref wins when one of
-// the workdir's git remotes points at the URL; otherwise we ls-remote
-// against the URL. Strictly remote — refs/heads/<branch> is never
-// consulted, so observation paths can rely on this returning an error
-// when a branch has been deleted on the remote (no local-fallback masking).
-// `resolveTipForWrite` adds the local-ref fallback for write paths that
-// want to capture unpushed work when the remote is unreachable.
-// `resolveTipForAuthor` flips the preference so CreatePR records the
-// author's working tip even when refs/remotes/origin/* is behind.
+// refs.go - Branch-tip resolution for the workspace and for fork URLs
 package review
 
 import (
@@ -22,25 +10,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// ResolveBranchTip returns the current remote tip of `branch` in `repoURL`.
-//
-// Resolution depends on whether repoURL refers to the workspace's own
-// origin or to a separate (fork) URL:
-//
-//   - Workspace URL: read refs/remotes/origin/<branch> only. Never runs
-//     ls-remote — the user already has a fast local cache populated by
-//     `gitsocial fetch` / `git fetch origin`. Forcing a network round-trip
-//     here would surprise interactive callers (`pr create`, `pr update`)
-//     and burn time against unreachable hosts in tests / offline use.
-//   - Cross-fork URL: prefer a local remote-tracking ref when any of the
-//     workdir's git remotes happens to point at repoURL; otherwise
-//     ls-remote against the URL. Network is the only authoritative source
-//     for forks the user hasn't checked out.
-//
-// Returns an error when no source resolves the branch — including when the
-// branch was deleted on the remote. Callers that want a local-ref fallback
-// (e.g., CreatePR / UpdatePRTips capturing unpushed work) must apply it
-// explicitly via resolveTipForWrite.
+// ResolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error.
 func ResolveBranchTip(workdir, repoURL, branch string) (string, error) {
 	if branch == "" {
 		return "", errors.New("branch required")

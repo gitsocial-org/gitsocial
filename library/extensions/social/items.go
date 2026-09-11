@@ -81,12 +81,8 @@ var baseSelectFromView = `
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
-// baseDirectSelect bypasses the social_items_resolved view, joining
-// core_commits directly. Resolved-state fields (resolved_message,
-// is_retracted, has_edits) are read from inline columns on core_commits, kept
-// in sync by applyEditToCanonical on every edit insert + reconcile pass.
-// Column order matches scanResolvedRow.
-// Caller binds: workspace_url (for sf join), then WHERE params.
+// baseDirectSelect joins core_commits directly instead of social_items_resolved.
+// Binds workspace_url first, then the WHERE params; column order matches scanResolvedRow.
 var baseDirectSelect = `
 	SELECT c.repo_url, c.hash, c.branch,
 	       COALESCE(c.origin_author_name, c.author_name),

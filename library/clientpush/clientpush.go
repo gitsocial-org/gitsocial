@@ -1,22 +1,4 @@
-// clientpush.go - Shared publish orchestration (data push + browser site) for
-// the thin clients (CLI, TUI, RPC). Centralized so the three can't drift on how
-// a `gitsocial push` publishes: they all resolve code branches the same way,
-// push the gitmsg data, and — for s3 remotes with the site.publish guard on —
-// publish the site.
-//
-// Why here and not in core/gitmsg: objstore already imports gitmsg (site
-// customization / config readers), so gitmsg.Push MUST NOT call objstore (import
-// cycle). This package sits a layer up, importing both gitmsg and objstore, and
-// wires push-then-site as one user-visible operation. Site failure after a
-// successful data push is a WARNING on the result, never an error: the data push
-// stands (spec decision).
-//
-// Site gate: the `site.publish` config guard (default off) is the only enabler —
-// objstore.PushSite reads it from the workspace and skips everything when it is
-// not "true". `--no-site` and `git config gitsocial.pushSite false` remain
-// per-push/per-machine force-offs on top. The git remote helper's OWN post-push
-// maintenance (core/objstore helper_push.go) applies the same guard bucket-side,
-// so a plain `git push` respects it too.
+// clientpush.go - Publish orchestration for the thin clients: the data push, then the site
 package clientpush
 
 import (

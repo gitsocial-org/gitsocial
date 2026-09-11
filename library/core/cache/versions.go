@@ -55,24 +55,7 @@ var editableExtensionTables = []struct {
 	},
 }
 
-// applyEditToCanonical is the single writer of denormalized resolved state.
-// Given a canonical's coordinates, it picks the latest edit from
-// core_commits_version + core_commits and propagates that edit's content into:
-//
-//   - core_commits.has_edits / resolved_message / is_retracted / labels (the
-//     canonical's row)
-//   - core_commits.is_edit_commit (the edit's row, defensive — insertCommitsTxn
-//     already sets this on insert)
-//   - mutable extension columns on review_items / pm_items / release_items
-//     (canonical's row, copied from the edit's row in a single UPDATE per table)
-//   - core_fts (canonical's row, replaced with the edit's content)
-//
-// Only same-repo edits (edit_repo_url == canonical_repo_url) are authoritative;
-// cross-repo edits (proposals from forks) are excluded from resolution.
-// No-op when the canonical has no edits in core_commits_version yet.
-// Idempotent: repeated calls converge to the same state. All write paths
-// (insertCommitsTxn, InsertVersion, ReconcileVersions, SyncEditExtensionFields)
-// route through this function — no other code should write the columns above.
+// applyEditToCanonical writes a canonical's resolved state from its latest same-repo edit.
 func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canonicalBranch string) error {
 	var editRepoURL, editHash, editBranch string
 	var editMessage, editAuthorName, editAuthorEmail string

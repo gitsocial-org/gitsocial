@@ -89,6 +89,7 @@ Labels are the core `<scope>/<value>` field ([GITMSG.md §1.7](../specs/GITMSG.m
 
 - Versions follow [GITMSG.md §1.5](../specs/GITMSG.md#15-versioning) and labels [§1.7](../specs/GITMSG.md#17-labels).
 - `memo list` excludes retracted memos, expired ones (`--include-expired` shows them, `--expired` shows only them), other sessions, the external tier, and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)). Order: tier, then `priority/` rank, then recency.
+- A comment on a memo you authored, and a `priority/critical` memo on an inherited source, raise [notifications](NOTIFICATIONS.md).
 - [`gitsocial search`](CLI.md#gitsocial-search) `--type memo` applies the same defaults; `--tier` scopes it.
 - `GITSOCIAL_PERSONAL_REPO` overrides the personal repository, `MEMO_SESSION_DIR` the sessions directory and `MEMO_SESSION_ID` the session, all from the environment only ([SETTINGS.md](SETTINGS.md#environment)).
 - In the TUI, `M` opens memos, grouped by tier ([TUI-KEYS.md](TUI-KEYS.md#memo-extension)).

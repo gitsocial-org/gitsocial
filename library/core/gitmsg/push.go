@@ -29,11 +29,10 @@ func execGitTransfer(workdir string, args []string, more bool) (*git.ExecResult,
 	// our stderr through so that work is visible as it happens rather than being
 	// captured and dropped on success. The pushes themselves run --quiet so what
 	// comes through is the helper's progress and any real failure, not git's
-	// per-ref listing — a repo with one state ref per fork would otherwise print
+	// per-ref listing: a repo with one state ref per fork would otherwise print
 	// hundreds of "[new reference]" lines over the top of it.
-	// more == this transfer is followed by another in the same push run, so the
-	// helper's end-of-push bucket maintenance waits for the last one.
 	var extra []string
+	// more means another transfer follows, so defer the helper's bucket maintenance.
 	if more {
 		extra = append(extra, git.DeferMaintenanceEnv+"=1")
 	}

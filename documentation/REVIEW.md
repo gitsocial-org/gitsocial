@@ -165,5 +165,6 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
 - Versions and review aggregation: [GITREVIEW.md §1.5](../specs/GITREVIEW.md#15-editing-and-retracting) and [§1.8](../specs/GITREVIEW.md#18-review-aggregation).
 - `pr list` shows this repository's pull requests and those from [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations live at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- Branch tips come from the remote: `refs/remotes/origin/<branch>` for this repository, `git ls-remote` for a fork with no tracking ref. A branch gone from its remote fails to resolve, which is how `head-deleted` and `base-deleted` are raised.
 - New fork pull requests, feedback, approvals and change requests raise [notifications](NOTIFICATIONS.md#types), as do branch tips that moved or vanished under an open pull request.
 - In the TUI, `R` opens pull requests ([TUI-KEYS.md](TUI-KEYS.md#review-extension)); the detail view has files changed (`d`), interdiff, history and feedback, and `[` and `]` move through a stack.

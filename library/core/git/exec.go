@@ -187,15 +187,8 @@ func DefaultExec(ctx context.Context, workdir string, args []string) (*ExecResul
 	}, nil
 }
 
-// DeferMaintenanceEnv names the environment variable a transfer sets when more
-// transfers follow it in the same push run. The s3 remote helper ends every
-// push with bucket maintenance (ref advertisement, HEAD, pack sealing, site
-// artifacts), and a gitsocial push is several git pushes in a row, so without
-// this each one maintains a bucket the next is about to change again. Set on
-// every transfer but the last; the last runs the maintenance once, against the
-// final state. Defined here, next to the rest of the environment handed to git,
-// because the setter (core/gitmsg) and the reader (core/objstore) cannot import
-// each other.
+// DeferMaintenanceEnv tells the s3 remote helper to skip its end-of-push bucket
+// maintenance. Set on every transfer of a push run but the last, which runs it once.
 const DeferMaintenanceEnv = "GITSOCIAL_S3_DEFER_MAINTENANCE"
 
 // ExecGitTransferContext runs a transfer command (push/fetch) with the child's

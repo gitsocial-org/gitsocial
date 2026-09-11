@@ -530,14 +530,7 @@ func plural(n int) string {
 	return "s"
 }
 
-// mirrorFetch refreshes the workspace for a publish run. By default that is the
-// workspace's own origin and its commit ingestion, deliberately NOT a full
-// fetch: registered forks, followed repos and the forge identity backfill feed
-// local viewing and reach nothing mirror publishes (fork registrations ride the
-// import, and the site is built from git refs, never the cache). A mirror
-// workspace someone also browses gets the whole thing back with --full-fetch.
-// fetchOrigin is false for the post-import pass, where nothing upstream can have
-// moved since the pass a moment earlier and only the new commits need ingesting.
+// mirrorFetch refreshes the workspace: origin when fetchOrigin, and forks and lists under --full-fetch.
 func mirrorFetch(cfg *Config, f *mirrorFlags, fetchOrigin bool) {
 	if f.fullFetch {
 		runFullFetch(cfg, nil, true, !f.defaultBranchOnly)
