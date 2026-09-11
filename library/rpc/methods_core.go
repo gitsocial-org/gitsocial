@@ -368,8 +368,6 @@ func coreFetch(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
 			ListID   string `json:"listId"`
-			Since    string `json:"since"`
-			Before   string `json:"before"`
 			Parallel int    `json:"parallel"`
 		}](raw)
 		if rpcErr != nil {
@@ -383,8 +381,6 @@ func coreFetch(s *Server) HandlerFunc {
 		go func() {
 			opts := &social.FetchOptions{
 				ListID:           p.ListID,
-				Since:            p.Since,
-				Before:           p.Before,
 				Parallel:         p.Parallel,
 				FetchAllBranches: fetchAllBranches,
 				ExtraProcessors:  clientfetch.ExtraProcessors(),

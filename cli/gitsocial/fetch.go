@@ -26,8 +26,6 @@ import (
 // newFetchCmd creates the command for fetching updates from subscribed repositories.
 func newFetchCmd() *cobra.Command {
 	var listID string
-	var since string
-	var before string
 	var parallel int
 	var allBranches bool
 
@@ -91,8 +89,6 @@ For extension-specific options, use the extension's fetch command directly:
 
 			result, forkStats := runFullFetch(cfg, &social.FetchOptions{
 				ListID:   listID,
-				Since:    since,
-				Before:   before,
 				Parallel: parallel,
 			}, false, allBranches)
 			if !cfg.JSONOutput && forkStats.Items > 0 {
@@ -125,8 +121,6 @@ For extension-specific options, use the extension's fetch command directly:
 	}
 
 	cmd.Flags().StringVarP(&listID, "list", "l", "", "Fetch only repos from this list")
-	cmd.Flags().StringVar(&since, "since", "", "Fetch posts since date (YYYY-MM-DD, default: 30 days ago)")
-	cmd.Flags().StringVar(&before, "before", "", "Fetch posts before date (YYYY-MM-DD, default: today)")
 	cmd.Flags().IntVarP(&parallel, "parallel", "p", 4, "Number of concurrent fetches")
 	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "First-run fetch mode: track all upstream branches (skips the prompt)")
 
@@ -182,9 +176,7 @@ func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches boo
 	return mode == "*"
 }
 
-// runFullFetch performs a full workspace fetch: subscribed repos, forks, and workspace sync.
-// If opts is nil, defaults are used. The caller can pre-populate opts with CLI-specific fields
-// (ListID, Since, Before, Parallel); this function fills in processors and branch mode.
+// runFullFetch fetches the subscribed repos, the registered forks and the workspace.
 func runFullFetch(cfg *Config, opts *social.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
 	if opts == nil {
 		opts = &social.FetchOptions{}

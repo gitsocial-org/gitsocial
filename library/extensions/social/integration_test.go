@@ -3306,11 +3306,7 @@ func TestFetchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		cacheDir := t.TempDir()
-		result := Fetch(workdir, cacheDir, &FetchOptions{
-			Since:    "2020-01-01",
-			Before:   "2030-12-31",
-			Parallel: 2,
-		})
+		result := Fetch(workdir, cacheDir, &FetchOptions{Parallel: 2})
 		// May succeed or fail depending on fetch infrastructure, but exercises the code path
 		_ = result
 	})

@@ -31,8 +31,6 @@ type Error struct {
 // Options controls fetch behavior.
 type Options struct {
 	WorkspaceBranch  string
-	Since            string
-	Before           string
 	Parallel         int
 	FetchAllBranches bool
 	OnProgress       func(repoURL string, processed, total int)
@@ -136,12 +134,9 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 	if opts.Parallel == 0 {
 		opts.Parallel = 4
 	}
-	if opts.Since == "" {
-		opts.Since = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
-	}
 
 	start := time.Now()
-	log.Info("fetch started", "since", opts.Since)
+	log.Info("fetch started")
 
 	stats := Stats{}
 
@@ -174,9 +169,8 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			isFollowed := r.ListID != "" || cache.IsRepositoryInAnyList(r.URL, workdir)
-
-			count, err := fetchRepository(cacheDir, r.URL, r.Branch, isFollowed, opts.Since, opts.Before, workspaceURL, processors, hooks)
+			// Every repo here comes from a list, so it takes the followed path.
+			count, err := fetchRepository(cacheDir, r.URL, r.Branch, true, "", "", workspaceURL, processors, hooks)
 
 			mu.Lock()
 			if err != nil {

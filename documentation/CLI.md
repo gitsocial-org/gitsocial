@@ -45,7 +45,6 @@ Fetches followed repositories, registered forks and identity bindings, then repo
 gitsocial fetch                      # everything
 gitsocial fetch <url>                # one repository
 gitsocial fetch --list reading       # one list
-gitsocial fetch --since 2026-01-01
 ```
 
 The first fetch in a workspace asks whether to track the default branch only or every upstream branch. `--all-branches`, `--json` or a non-interactive stdin answer without asking. The answer is saved per workspace.

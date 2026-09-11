@@ -17,8 +17,6 @@ import (
 // FetchOptions controls social fetch behavior.
 type FetchOptions struct {
 	ListID           string
-	Since            string
-	Before           string
 	Parallel         int
 	FetchAllBranches bool
 	ExtraProcessors  []fetch.CommitProcessor
@@ -65,8 +63,6 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 
 	coreOpts := &fetch.Options{
 		WorkspaceBranch:  gitmsg.GetExtBranch(workdir, "social"),
-		Since:            opts.Since,
-		Before:           opts.Before,
 		Parallel:         opts.Parallel,
 		FetchAllBranches: opts.FetchAllBranches,
 		OnProgress:       opts.OnProgress,

@@ -732,7 +732,6 @@ func newSocialListRemoveCmd() *cobra.Command {
 // newSocialFetchCmd creates the command to fetch social updates from repositories.
 func newSocialFetchCmd() *cobra.Command {
 	var listID string
-	var since string
 	var parallel int
 
 	cmd := &cobra.Command{
@@ -771,7 +770,6 @@ Examples:
 
 			opts := &social.FetchOptions{
 				ListID:   listID,
-				Since:    since,
 				Parallel: parallel,
 			}
 
@@ -810,7 +808,6 @@ Examples:
 	}
 
 	cmd.Flags().StringVarP(&listID, "list", "l", "", "Fetch only repos from this list")
-	cmd.Flags().StringVar(&since, "since", "", "Fetch posts since date (YYYY-MM-DD, default: 30 days ago)")
 	cmd.Flags().IntVarP(&parallel, "parallel", "p", 4, "Number of concurrent fetches")
 
 	return cmd
