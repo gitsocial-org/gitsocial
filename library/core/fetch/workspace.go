@@ -11,30 +11,11 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
-// quickPassLimit is how many of the most-recent commits the quick sync
-// pass loads before returning. Sized to be enough for an immediately useful
-// timeline / extension view (~screenful x N) without making the first launch
-// slow on large repos like the Linux kernel (1.4M commits). The remaining
-// history is processed in a background goroutine afterwards.
+// quickPassLimit is how many recent commits the quick pass loads before the background pass takes the rest.
 const quickPassLimit = 10000
 
-// WorkspaceSyncFunc processes pre-fetched commits for an extension.
-// workdir is the git working directory, extBranch is the extension-specific
-// branch (e.g. "gitmsg/pm"), defaultBranch is the repo default (e.g. "main").
-type WorkspaceSyncFunc func(commits []git.Commit, workdir, repoURL, extBranch, defaultBranch string)
-
-var (
-	processorMu sync.RWMutex
-	processors  = map[string]WorkspaceSyncFunc{}
-)
-
-// RegisterProcessor registers an extension's workspace sync processor.
-// Extensions call this in init() to participate in unified workspace sync.
-func RegisterProcessor(ext string, fn WorkspaceSyncFunc) {
-	processorMu.Lock()
-	defer processorMu.Unlock()
-	processors[ext] = fn
-}
+// WorkspaceSyncFunc processes pre-fetched workspace commits for one extension, which resolves its own branch.
+type WorkspaceSyncFunc func(commits []git.Commit, workdir, repoURL, defaultBranch string)
 
 // workspaceSyncContext bundles the resolved state shared between the quick
 // pass and the background continuation.
@@ -42,32 +23,20 @@ type workspaceSyncContext struct {
 	workdir       string
 	repoURL       string
 	defaultBranch string
-	branches      map[string]string
-	procs         map[string]WorkspaceSyncFunc
+	procs         []WorkspaceSyncFunc
 	combinedTip   string
 	tipKey        string
 }
 
 // resolveWorkspaceSyncContext gathers the per-sync state once. Returns nil
 // when no work is needed (tips unchanged since last full sync).
-func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
-	processorMu.RLock()
-	procs := make(map[string]WorkspaceSyncFunc, len(processors))
-	for k, v := range processors {
-		procs[k] = v
-	}
-	processorMu.RUnlock()
-
+func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *workspaceSyncContext {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	defaultBranch, _ := git.GetDefaultBranch(workdir)
 	if defaultBranch == "" {
 		defaultBranch = "main"
 	}
 
-	branches := map[string]string{"default": defaultBranch}
-	for ext := range procs {
-		branches[ext] = gitmsg.GetExtBranch(workdir, ext)
-	}
 	// Every tip the gate watches, local and remote tracking: the timeline shows
 	// commits from all branches, so a push or a local commit on any of them has
 	// to invalidate the sync cache. for-each-ref output is sorted.
@@ -95,7 +64,6 @@ func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 		workdir:       workdir,
 		repoURL:       repoURL,
 		defaultBranch: defaultBranch,
-		branches:      branches,
 		procs:         procs,
 		combinedTip:   combinedTip,
 		tipKey:        tipKey,
@@ -103,7 +71,7 @@ func resolveWorkspaceSyncContext(workdir string) *workspaceSyncContext {
 }
 
 // processCommitBatch inserts a batch of git commits into the cache and runs
-// each registered extension processor against them.
+// each extension sync against them.
 func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
 	if len(commits) == 0 {
 		return nil
@@ -130,55 +98,41 @@ func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) error {
 	if _, err := cache.ReconcileVersions(); err != nil {
 		log.Debug("workspace sync reconcile failed", "error", err)
 	}
-	// Identity backfill (signer-key extraction + binding verification) used to
-	// run inline here. On a fresh cache it took tens of seconds for moderate
-	// repos (forge HTTPS round-trips dominate) and blocked the TUI's empty
-	// timeline. Callers that want the enrichment now invoke
-	// BackfillWorkspaceIdentity from a background goroutine after the cache is
-	// populated; the timeline renders immediately and verification badges
-	// appear once bindings resolve.
+	// Identity backfill runs in BackfillWorkspaceIdentity, off this path: it waits on forge round-trips.
 	var wg sync.WaitGroup
-	for ext, proc := range ctx.procs {
-		ext := ext
+	for _, proc := range ctx.procs {
 		proc := proc
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			proc(commits, ctx.workdir, ctx.repoURL, ctx.branches[ext], ctx.defaultBranch)
+			proc(commits, ctx.workdir, ctx.repoURL, ctx.defaultBranch)
 		}()
 	}
 	wg.Wait()
 	return nil
 }
 
-// SyncWorkspace runs the full sync — quick pass plus background continuation
-// plus identity backfill inline. Use this from non-interactive callers (CLI,
-// tests) that should only return when the cache is fully populated. On a repo
-// where there's nothing new since the last full sync, returns immediately.
-func SyncWorkspace(workdir string) error {
-	if err := SyncWorkspaceQuick(workdir); err != nil {
+// SyncWorkspace runs the quick pass, the background continuation and the identity backfill, and returns when the cache is current.
+func SyncWorkspace(workdir string, procs []WorkspaceSyncFunc) error {
+	if err := SyncWorkspaceQuick(workdir, procs); err != nil {
 		return err
 	}
-	if err := SyncWorkspaceContinue(workdir, nil); err != nil {
+	if err := SyncWorkspaceContinue(workdir, procs, nil); err != nil {
 		return err
 	}
 	BackfillWorkspaceIdentity(workdir)
 	return nil
 }
 
-// SyncWorkspaceLocal runs the workspace sync (quick pass + continuation) without
-// the network identity backfill, returning whether it ingested anything. It is
-// tip-gated — a cheap no-op when no branch tip (local or remote) has moved since
-// the last sync — so it is safe to run on UI interactions (e.g. view activation)
-// to surface commits made outside the TUI without a manual fetch.
-func SyncWorkspaceLocal(workdir string) (bool, error) {
-	if resolveWorkspaceSyncContext(workdir) == nil {
+// SyncWorkspaceLocal runs the sync without the network identity backfill and reports whether it ingested anything.
+func SyncWorkspaceLocal(workdir string, procs []WorkspaceSyncFunc) (bool, error) {
+	if resolveWorkspaceSyncContext(workdir, procs) == nil {
 		return false, nil
 	}
-	if err := SyncWorkspaceQuick(workdir); err != nil {
+	if err := SyncWorkspaceQuick(workdir, procs); err != nil {
 		return true, err
 	}
-	return true, SyncWorkspaceContinue(workdir, nil)
+	return true, SyncWorkspaceContinue(workdir, procs, nil)
 }
 
 // BackfillWorkspaceIdentity extracts signer keys for the workspace and verifies their bindings.
@@ -186,15 +140,9 @@ func BackfillWorkspaceIdentity(workdir string) {
 	backfillRepoSignerKeys(workdir, gitmsg.ResolveRepoURL(workdir))
 }
 
-// SyncWorkspaceQuick processes the most recent quickPassLimit commits and
-// returns. Use from interactive callers (TUI startup) that need the cache
-// populated enough to render an immediately useful view; pair with a
-// background SyncWorkspaceContinue for the rest of history.
-//
-// Returns nil without touching the cache when nothing has changed since
-// the last full sync.
-func SyncWorkspaceQuick(workdir string) error {
-	ctx := resolveWorkspaceSyncContext(workdir)
+// SyncWorkspaceQuick processes the most recent quickPassLimit commits and returns, for callers that need a view to render.
+func SyncWorkspaceQuick(workdir string, procs []WorkspaceSyncFunc) error {
+	ctx := resolveWorkspaceSyncContext(workdir, procs)
 	if ctx == nil {
 		return nil // tips unchanged
 	}
@@ -212,15 +160,11 @@ type SyncProgress struct {
 	Total     int
 }
 
-// SyncWorkspaceContinue processes commits older than what SyncWorkspace
-// loaded. Runs in chunks so the cache write lock releases between batches and
-// the UI stays responsive. Calls onProgress (non-blocking) after each chunk.
-// Records the sync tip only after the full pass completes, so an interrupted
-// background sync resumes correctly on next launch.
-func SyncWorkspaceContinue(workdir string, onProgress func(SyncProgress)) error {
-	ctx := resolveWorkspaceSyncContext(workdir)
+// SyncWorkspaceContinue processes the commits older than the quick pass in chunks, calling onProgress after each one.
+func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress func(SyncProgress)) error {
+	ctx := resolveWorkspaceSyncContext(workdir, procs)
 	if ctx == nil {
-		return nil // tips unchanged — quick pass already covered everything
+		return nil // tips unchanged, the quick pass covered everything
 	}
 
 	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true})
@@ -251,8 +195,7 @@ func SyncWorkspaceContinue(workdir string, onProgress func(SyncProgress)) error 
 	return finalizeWorkspaceSync(ctx, commits)
 }
 
-// finalizeWorkspaceSync runs the per-sync wrap-up: stale-marking against the
-// full live hash set, plus tip recording so subsequent syncs short-circuit.
+// finalizeWorkspaceSync marks commits that left the repo stale and records the sync tip.
 func finalizeWorkspaceSync(ctx *workspaceSyncContext, allCommits []git.Commit) error {
 	liveHashes := make(map[string]bool, len(allCommits))
 	for _, c := range allCommits {

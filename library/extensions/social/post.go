@@ -16,11 +16,10 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-func init() {
-	fetch.RegisterProcessor("social", func(commits []git.Commit, workdir, repoURL, _, defaultBranch string) {
-		ProcessWorkspaceBatch(commits, repoURL, defaultBranch)
-		SyncListsToCache(workdir)
-	})
+// SyncWorkspaceBatch ingests pre-fetched workspace commits and the workspace lists.
+func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, defaultBranch string) {
+	ProcessWorkspaceBatch(commits, repoURL, defaultBranch)
+	SyncListsToCache(workdir)
 }
 
 // SyncWorkspaceToCache synchronizes workspace commits and lists to the cache.

@@ -10,10 +10,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-func init() {
-	fetch.RegisterProcessor("pm", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
-		ProcessWorkspaceBatch(commits, repoURL, extBranch)
-	})
+// SyncWorkspaceBatch ingests pre-fetched workspace commits from the pm branch.
+func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, _ string) {
+	ProcessWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "pm"))
 }
 
 // SyncWorkspaceToCache synchronizes PM commits from the workspace to the cache.

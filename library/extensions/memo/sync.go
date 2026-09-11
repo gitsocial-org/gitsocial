@@ -11,10 +11,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
-func init() {
-	fetch.RegisterProcessor("memo", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
-		ProcessWorkspaceBatch(commits, repoURL, extBranch)
-	})
+// SyncWorkspaceBatch ingests pre-fetched workspace commits from the memo branch.
+func SyncWorkspaceBatch(commits []git.Commit, _, repoURL, _ string) {
+	ProcessWorkspaceBatch(commits, repoURL, MemoBranch)
 }
 
 // Processors returns the commit processors for the memo extension. Wired into

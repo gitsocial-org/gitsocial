@@ -10,10 +10,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-func init() {
-	fetch.RegisterProcessor("review", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
-		ProcessWorkspaceBatch(commits, repoURL, extBranch)
-	})
+// SyncWorkspaceBatch ingests pre-fetched workspace commits from the review branch.
+func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, _ string) {
+	ProcessWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "review"))
 }
 
 // SyncWorkspaceToCache synchronizes review commits from the workspace to the cache.
