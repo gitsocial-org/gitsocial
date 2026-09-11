@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check.sh - the gate: prose check, go vet, golangci-lint, then go test.
+# check.sh - the gate: prose check, import graph, go vet, golangci-lint, then go test.
 #
 # Usage:
 #   scripts/check.sh --quick       # push tier: every test except those guarded by GITSOCIAL_TEST_FULL
@@ -29,15 +29,19 @@ log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die() { printf '\n\033[31mFAILED at %s\033[0m\n' "$*" >&2; exit 1; }
 
-log "0/3 scripts/prose-check.sh"
+log "0/4 scripts/prose-check.sh"
 "$root/scripts/prose-check.sh" || die "prose-check"
 info "prose at or below baseline"
 
-log "1/3 go vet ./..."
+log "1/4 scripts/import-graph.sh --check"
+"$root/scripts/import-graph.sh" --check || die "import-graph"
+info "imports at or below baseline"
+
+log "2/4 go vet ./..."
 go vet ./... || die "go vet"
 info "vet clean"
 
-log "2/3 golangci-lint run ./..."
+log "3/4 golangci-lint run ./..."
 if command -v golangci-lint >/dev/null 2>&1; then
 	golangci-lint run ./... || die "golangci-lint"
 	info "lint clean"
@@ -48,10 +52,10 @@ else
 fi
 
 if $QUICK; then
-	log "3/3 go test ./... (quick tier)"
+	log "4/4 go test ./... (quick tier)"
 	unset GITSOCIAL_TEST_FULL
 else
-	log "3/3 go test ./... (full tier)"
+	log "4/4 go test ./... (full tier)"
 	export GITSOCIAL_TEST_FULL=1
 fi
 "$root/scripts/test.sh" "${TEST_ARGS[@]}" || die "go test"

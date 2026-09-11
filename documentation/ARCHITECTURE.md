@@ -30,11 +30,13 @@ bin/gitsocial tui
 
 ### Test and lint
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push, about 90 s warm when every package reruns and less after a change in one package. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, about 4 min warm; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push, about 90 s warm when every package reruns and less after a change in one package. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, about 4 min warm; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
 
 The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release from `scripts/release.sh`. `-short` skips 66 real-git subtests and is a local smoke run, never a tier.
 
 `scripts/prose-check.sh` is stage 0. It counts [STYLE.md](STYLE.md) violations and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts lowered counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
+
+`scripts/import-graph.sh --check` is stage 1. It fails on an upward import edge missing from `scripts/import-baseline.txt`, and on a package over 15,000 non-test lines; `--update` accepts the current edges. With no argument it prints the per-package size, fan-in, fan-out and churn report.
 
 ```bash
 scripts/check.sh --quick                    # the push tier
@@ -44,6 +46,7 @@ git config core.hooksPath scripts/hooks     # install the pre-push hook, once pe
 GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
 scripts/test.sh -run TestSmoke ./library/tui/test/          # go test -json with streamed per-test progress
 scripts/coverage.sh                         # statement-weighted coverage with -coverpkg=./..., into .test-artifacts/coverage/
+scripts/import-graph.sh                     # the per-package size, fan-in, fan-out and churn report
 go test -tags sitetest -timeout 30m ./library/core/objstore/   # the browser site battery; needs node
 ```
 
@@ -137,7 +140,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   ├── tui/                   # TUI
 │   └── internal/testutil/     # shared test fixtures
 ├── documentation/
-├── scripts/                   # check.sh, prose-check.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh
+├── scripts/                   # check.sh, prose-check.sh, import-graph.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh
 └── specs/
 ```
 

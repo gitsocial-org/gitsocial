@@ -1,0 +1,7 @@
+library/extensions/memo library/tui/tuicore
+library/extensions/pm library/tui/tuicore
+library/extensions/release library/tui/tuicore
+library/extensions/review library/tui/tuicore
+library/extensions/social library/tui/tuicore
+library/internal/testutil library/core/cache
+library/internal/testutil library/core/git
