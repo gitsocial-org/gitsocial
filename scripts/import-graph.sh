@@ -29,7 +29,7 @@ layer() {
 	case "$1" in
 	cli/*) LAYER=6 ;;
 	library/tui* | library/rpc*) LAYER=5 ;;
-	library/clientfetch* | library/clientpush* | library/import* | library/proposals*) LAYER=4 ;;
+	library/client* | library/import* | library/proposals*) LAYER=4 ;;
 	library/extensions/*) LAYER=3 ;;
 	library/core/*) LAYER=2 ;;
 	library/internal/*) LAYER=1 ;;

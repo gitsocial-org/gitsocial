@@ -71,7 +71,7 @@ Go back to the note instead of another fix when a function is about to be rewrit
 ```
 cli/gitsocial
   library/tui, library/rpc
-    library/clientfetch, library/clientpush, library/import, library/proposals
+    library/client, library/import, library/proposals
       library/extensions/*
         library/core/*
           stdlib and the modules in go.mod
@@ -136,8 +136,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   ├── extensions/            # social, pm, release, review, memo
 │   ├── proposals/             # cross-repo proposals: accept and decline
 │   ├── import/                # forge import; github/ and gitlab/ adapters
-│   ├── clientfetch/           # fetch orchestration for the thin clients
-│   ├── clientpush/            # push orchestration for the thin clients
+│   ├── client/                # the fetch and push sequences the thin clients run
 │   ├── rpc/                   # JSON-RPC server
 │   ├── tui/                   # TUI
 │   └── internal/testutil/     # shared test fixtures
@@ -266,6 +265,7 @@ All-branch following stores each commit under its real refname. The workspace al
 ### Extension rules
 
 - Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
+- An extension joins the fetch in `library/client`, the one place listing its `Processors`, its `SyncWorkspaceBatch` and its `BackfillSpec`.
 - Core tables are read-only for extensions; use the cache APIs.
 - Known limits: `storage.GetStorageDir` hashes the URL only, so one URL on two branches shares storage; check `meta.HasCommits` before reading timestamps.
 
