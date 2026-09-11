@@ -24,6 +24,42 @@
       "message": "Plain commit with no trailer\n\nJust a body.",
       "expectSubject": "Plain commit with no trailer",
       "expectHeader": ""
+    },
+    {
+      "name": "subject strip: heading",
+      "message": "# Shipping the reader\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "Shipping the reader",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: emphasis",
+      "message": "**Shipping v2** and _soon_\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "Shipping v2 and soon",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: link",
+      "message": "See [the notes](https://example.com/x) now\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "See the notes now",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: image",
+      "message": "![a logo](logo.png) ships\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "a logo ships",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: inline code",
+      "message": "Use `gitsocial push` first\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "Use gitsocial push first",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
+    },
+    {
+      "name": "subject strip: plain already",
+      "message": "Nothing to strip here\n\nbody\nGitMsg: ext=\"social\" v=\"1\" type=\"post\"",
+      "expectSubject": "Nothing to strip here",
+      "expectHeader": "GitMsg: ext=\"social\" v=\"1\" type=\"post\""
     }
   ],
   "rawObjectCases": [

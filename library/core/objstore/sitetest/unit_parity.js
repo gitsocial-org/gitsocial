@@ -13,14 +13,13 @@ const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, "parity_fixtures.jso
 let pass = 0, fail = 0;
 function eq(a, b, msg) { if (a === b) { pass++; } else { fail++; console.log("FAIL", msg, "got", JSON.stringify(a), "want", JSON.stringify(b)); } }
 
-// readerSubject mirrors the reader's subject derivation (itemSubject /
-// subjectBody): cleanContent strips the trailer, the first line trimmed is the
-// subject.
+// readerSubject mirrors the reader's subject derivation: cleanContent strips the
+// trailer, the first line goes through subjectText, as itemSubject does.
 function readerSubject(message) {
   const content = GS.cleanContent(message).trim();
   if (!content) return "";
   const nl = content.indexOf("\n");
-  return (nl < 0 ? content : content.slice(0, nl)).trim();
+  return GS.subjectText(nl < 0 ? content : content.slice(0, nl));
 }
 
 // splitCommitMessage mirrors the loose-object header/message split both the Go

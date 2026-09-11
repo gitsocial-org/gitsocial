@@ -4216,9 +4216,9 @@
   // A post is NOT here, and neither are the roots generally: a post is the root
   // of its own page, feed entry and OG card, with nothing above it, and its
   // first line already names it everywhere else (list row, feed title, <title>).
-  // A repost joins them because it is created with EMPTY content (social
-  // CreateRepost) — a heading there renders a literal "(untitled)" over nothing,
-  // while the embedded original carries the item; a quote is commentary written
+  // A repost joins them because its content is generated, not written: social's
+  // CreateRepost fills it with a heading naming the original's author and first
+  // line, so the embedded original is the item; a quote is commentary written
   // about that embedded original, which is the reply shape again.
   const BODY_ONLY_TYPES = { comment: 1, feedback: 1, repost: 1, quote: 1 };
 

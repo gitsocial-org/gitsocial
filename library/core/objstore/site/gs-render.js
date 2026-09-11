@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -719,7 +719,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         nav: { hash: item.commit.hash, branch: "gitmsg/social" },
       });
     }
-    const head = cardHead(typeGlyphEl(item, "social"), commitRef(item.commit.hash, "gitmsg/social"), subject || "(untitled)");
+    const head = cardHead(typeGlyphEl(item, "social"), commitRef(item.commit.hash, "gitmsg/social"), subjectText(subject) || "(untitled)");
     return card({
       parts: [head, metaRow(item, "gitmsg/social"), chips, body ? clampedBody(body) : null, quote],
       nav: { hash: item.commit.hash, branch: "gitmsg/social" },
@@ -757,7 +757,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
     const assets = releaseAssets(h);
-    const head = cardHead(typeGlyphEl(item, "release"), commitRef(item.commit.hash, "gitmsg/release"), h.tag || subject || h.version || "(release)", [
+    const head = cardHead(typeGlyphEl(item, "release"), commitRef(item.commit.hash, "gitmsg/release"), h.tag || subjectText(subject) || h.version || "(release)", [
       h.version ? el("span", { class: "chip" }, ["v" + h.version]) : null,
       assets.artifacts.length ? el("span", { class: "chip" }, [assets.artifacts.length + (assets.artifacts.length === 1 ? " asset" : " assets")]) : null,
     ], h.prerelease === "true" ? el("span", { class: "chip pre state" }, ["prerelease"]) : null);
@@ -772,7 +772,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function memoCard(item) {
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
-    const head = cardHead(typeGlyphEl(item, "memo"), commitRef(item.commit.hash, "gitmsg/memo"), subject || "(untitled)");
+    const head = cardHead(typeGlyphEl(item, "memo"), commitRef(item.commit.hash, "gitmsg/memo"), subjectText(subject) || "(untitled)");
     return card({
       parts: [head, metaRow(item, "gitmsg/memo"), chipRow(headerChips(h)), body ? clampedBody(body) : null],
       nav: { hash: item.commit.hash, branch: "gitmsg/memo" },

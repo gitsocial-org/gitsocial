@@ -947,7 +947,7 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 func sitePageItemSubject(it *sitePageItem) string {
 	if !it.Retracted {
 		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-		return subject
+		return siteSubjectText(subject)
 	}
 	subject := "retracted " + sitePageTypeLabel(pageItemType(it))
 	if tag := pageItemField(it, "tag"); tag != "" {
@@ -1103,9 +1103,19 @@ func sitePageListChip(it *sitePageItem) *sitePageChip {
 // bit on a type's own list (an issue row on the issues list). The row leads with
 // the app's own type glyph, so the booted app re-renders the row rather than
 // replacing a chip-and-subject line with a glyph card.
+// sitePageSubjectOrPlaceholder strips a promoted first line to its words, or
+// falls back, since a row's subject anchor is its only link to the item.
+func sitePageSubjectOrPlaceholder(subject string) string {
+	if stripped := siteSubjectText(subject); stripped != "" {
+		return stripped
+	}
+	return "(untitled)"
+}
+
 func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+	subject = sitePageSubjectOrPlaceholder(subject)
 	name, _ := pageDisplayAuthor(it.Msg)
 	var meta []string
 	if t != defaultType {
@@ -1175,6 +1185,7 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 				continue
 			}
 			subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+			subject = sitePageSubjectOrPlaceholder(subject)
 			name, _ := pageDisplayAuthor(it.Msg)
 			itemType := pageItemType(it)
 			classType := sitePageGlyphClassType(it)
