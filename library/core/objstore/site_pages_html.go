@@ -308,11 +308,16 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}<h1>{{.Heading}}</h1>
 {{end}}{{template "metaline" .}}
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "paras" .Paras}}{{end}}{{range .Sections}}<section>
-{{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "metaline" .}}
+{{else}}{{template "paras" .Paras}}{{end}}{{with .Artifacts}}<section>
+{{template "metaline" .}}
 {{if .Pre}}<pre>{{.Pre}}</pre>
-{{end}}{{template "paras" .Paras}}{{end}}</section>
+{{end}}{{template "paras" .Paras}}</section>
+{{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
+{{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card comment">
+{{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
+{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+{{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
+{{end}}</div>
 {{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
@@ -427,6 +432,22 @@ type sitePageSection struct {
 	Tomb  string
 }
 
+// sitePageReply is one thread reply, rendered as the app's comment card.
+type sitePageReply struct {
+	Chip       *sitePageChip
+	Glyph      string
+	GlyphClass string
+	GlyphTitle string
+	Depth      int
+	Meta       []string
+	Paras      [][]string
+	Tomb       string
+}
+
+// Rail returns one entry per depth level, so the template can emit the app's
+// rail guides without an index loop.
+func (r sitePageReply) Rail() []struct{} { return make([]struct{}, r.Depth) }
+
 // siteItemPageData feeds the "item" template.
 type siteItemPageData struct {
 	Chrome    sitePageChrome
@@ -436,14 +457,15 @@ type siteItemPageData struct {
 	// Heading is what the page itself shows, and stays EMPTY on a body-only type
 	// (sitePageBodyOnly), whose first line is prose the body renders in full —
 	// mirroring the app's detail (gs-render.js detailView).
-	Subject  string
-	Heading  string
-	Chip     *sitePageChip
-	Meta     []string
-	Paras    [][]string
-	Tomb     string
-	Sections []sitePageSection
-	Omitted  int
+	Subject   string
+	Heading   string
+	Chip      *sitePageChip
+	Meta      []string
+	Paras     [][]string
+	Tomb      string
+	Artifacts *sitePageSection // a release's artifact block, the only section with a Pre slot
+	Replies   []sitePageReply
+	Omitted   int
 }
 
 // sitePageNavLink is one sidebar entry: the app's nav item, pointed at this
@@ -893,11 +915,19 @@ func sitePageFeedbackAnchor(r *sitePageItem) string {
 
 // buildSiteReplySection renders one thread reply into its section data (a
 // tombstone line when the reply was retracted).
-func buildSiteReplySection(r *sitePageItem) sitePageSection {
+func buildSiteReply(r *sitePageItem) sitePageReply {
 	if r.Retracted {
-		return sitePageSection{Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
+		return sitePageReply{Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
 	}
-	s := sitePageSection{Meta: []string{sitePageAuthorBit(r.Msg), sitePageDate(pageEffectiveTime(r.Msg))}}
+	t := pageMsgType(r.Msg)
+	glyph, glyphClass := sitePageGlyph(t, t, "")
+	s := sitePageReply{
+		Depth:      r.Depth,
+		Glyph:      glyph,
+		GlyphClass: glyphClass,
+		GlyphTitle: t,
+		Meta:       []string{sitePageAuthorBit(r.Msg), sitePageDate(pageEffectiveTime(r.Msg))},
+	}
 	if pageMsgType(r.Msg) == "feedback" {
 		s.Chip = sitePageFeedbackChip(r)
 		if anchor := sitePageFeedbackAnchor(r); anchor != "" {
@@ -1063,9 +1093,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		Nav:         sitePageSidebar("../", list.Dir, site.Files),
 	}
 	if pageItemType(it) == "release" {
-		if s := buildSiteReleaseArtifacts(it); s != nil {
-			d.Sections = append(d.Sections, *s)
-		}
+		d.Artifacts = buildSiteReleaseArtifacts(it)
 	}
 	threadBytes := 0
 	for i, r := range it.Replies {
@@ -1073,7 +1101,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 			d.Omitted = len(it.Replies) - i
 			break
 		}
-		d.Sections = append(d.Sections, buildSiteReplySection(r))
+		d.Replies = append(d.Replies, buildSiteReply(r))
 		threadBytes += len(pageItemBody(r))
 	}
 	return d

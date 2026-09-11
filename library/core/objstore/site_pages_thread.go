@@ -63,7 +63,9 @@ type sitePageItem struct {
 	Edited    bool
 	Retracted bool
 	InReplyTo string          // author of the parent comment a nested reply answers ("" = replies to the root)
-	Replies   []*sitePageItem // for roots: the thread, ascending by effective time
+	Depth     int             // visual indent of a nested reply, capped at sitePageThreadMaxDepth
+	parent    *sitePageItem   // the reply this one answers, nil when it answers the root
+	Replies   []*sitePageItem // for roots: the thread, parent before children, siblings by time
 }
 
 // sitePageDefaultTypes mirrors the shell's EXT_DEFAULT_TYPE: the item type
@@ -227,6 +229,7 @@ func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageI
 			if parentHash := pageLocalCommitHash(pageHeaderField(it.Msg, "reply-to")); parentHash != "" {
 				if parent := byShort[parentHash]; parent != nil && parent != root {
 					it.InReplyTo, _ = pageDisplayAuthor(parent.Msg)
+					it.parent = parent
 				}
 			}
 			root.Replies = append(root.Replies, it)
@@ -234,13 +237,7 @@ func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageI
 	}
 	for ext := range roots {
 		for _, r := range roots[ext] {
-			sort.Slice(r.Replies, func(i, j int) bool {
-				ti, tj := pageEffectiveTime(r.Replies[i].Msg), pageEffectiveTime(r.Replies[j].Msg)
-				if ti != tj {
-					return ti < tj
-				}
-				return r.Replies[i].Msg.SHA < r.Replies[j].Msg.SHA
-			})
+			r.Replies = pageOrderThread(r.Replies)
 		}
 		rs := roots[ext]
 		sort.Slice(rs, func(i, j int) bool {
@@ -252,6 +249,58 @@ func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageI
 		})
 	}
 	return roots
+}
+
+// sitePageThreadMaxDepth caps a nested reply's visual indent, mirroring
+// gs-core.js THREAD_MAX_DEPTH so page and app indent a thread alike.
+const sitePageThreadMaxDepth = 4
+
+// pageOrderThread flattens a root's replies the way gs-core.js groupThread and
+// flattenThread do: a reply follows the one it answers, siblings run oldest
+// first, and depth is capped. A reply whose parent is missing is a root.
+func pageOrderThread(replies []*sitePageItem) []*sitePageItem {
+	children := map[*sitePageItem][]*sitePageItem{}
+	var roots []*sitePageItem
+	present := make(map[*sitePageItem]bool, len(replies))
+	for _, r := range replies {
+		present[r] = true
+	}
+	for _, r := range replies {
+		if r.parent != nil && present[r.parent] {
+			children[r.parent] = append(children[r.parent], r)
+			continue
+		}
+		roots = append(roots, r)
+	}
+	byTime := func(list []*sitePageItem) {
+		sort.Slice(list, func(i, j int) bool {
+			ti, tj := pageEffectiveTime(list[i].Msg), pageEffectiveTime(list[j].Msg)
+			if ti != tj {
+				return ti < tj
+			}
+			return list[i].Msg.SHA < list[j].Msg.SHA
+		})
+	}
+	out := make([]*sitePageItem, 0, len(replies))
+	seen := map[*sitePageItem]bool{}
+	var walk func(list []*sitePageItem, depth int)
+	walk = func(list []*sitePageItem, depth int) {
+		byTime(list)
+		for _, r := range list {
+			if seen[r] {
+				continue
+			}
+			seen[r] = true
+			r.Depth = depth
+			if r.Depth > sitePageThreadMaxDepth {
+				r.Depth = sitePageThreadMaxDepth
+			}
+			out = append(out, r)
+			walk(children[r], depth+1)
+		}
+	}
+	walk(roots, 0)
+	return out
 }
 
 // pageResolveRoot follows a reply reference to its top-level item: `original`

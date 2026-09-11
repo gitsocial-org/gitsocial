@@ -153,7 +153,7 @@ const (
 	// sidebar gains the Files entry once the layer has pages, and item pages and
 	// sealed list pages are never rewritten outside a full regen, so a v17 bucket
 	// would link the new directory from nothing but the pages written after it.
-	sitePagesVersion = 20
+	sitePagesVersion = 21
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
