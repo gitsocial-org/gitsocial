@@ -39,9 +39,7 @@ func (m MemoVersionItem) RenderListEntry(index, total int, label string, selecte
 		if excerpt == "" {
 			excerpt = strings.TrimSpace(m.Version.Content)
 		}
-		if len(excerpt) > 100 {
-			excerpt = excerpt[:100] + "..."
-		}
+		excerpt = tuicore.TruncateToWidth(excerpt, 100)
 		b.WriteString("    " + excerpt)
 	}
 	if len(m.Version.Labels) > 0 {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 var mdImageRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?`)
@@ -69,9 +70,7 @@ func FormatPost(post Post) string {
 		}
 		return "[" + label + "] (" + subs[2] + ")"
 	})
-	if len(content) > 200 {
-		content = content[:200] + "..."
-	}
+	content = text.Truncate(content, 200)
 	lines = append(lines, content)
 
 	if len(post.Labels) > 0 {

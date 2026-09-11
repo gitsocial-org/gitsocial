@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 // FormatResult formats search results for CLI text display.
@@ -34,9 +36,7 @@ func formatItem(item ScoredItem) string {
 	lines = append(lines, header)
 
 	content := strings.TrimSpace(item.Content)
-	if len(content) > 200 {
-		content = content[:200] + "..."
-	}
+	content = text.Truncate(content, 200)
 	lines = append(lines, content)
 
 	// Extension-specific metadata
@@ -153,9 +153,7 @@ func truncateStrings(ss []string, n int) []string {
 	result := make([]string, limit)
 	for i := 0; i < limit; i++ {
 		s := ss[i]
-		if len(s) > 50 {
-			s = s[:50] + "..."
-		}
+		s = text.Truncate(s, 50)
 		result[i] = s
 	}
 	return result

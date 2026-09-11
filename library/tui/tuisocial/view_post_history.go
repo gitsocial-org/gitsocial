@@ -70,9 +70,7 @@ func (p PostVersionItem) RenderListEntry(index, total int, label string, selecte
 		b.WriteString(tuicore.Dim.Render("    [deleted]"))
 	} else {
 		content := strings.TrimSpace(p.Post.Content)
-		if len(content) > 100 {
-			content = content[:100] + "..."
-		}
+		content = tuicore.TruncateToWidth(content, 100)
 		b.WriteString("    " + content)
 	}
 	b.WriteString("\n")

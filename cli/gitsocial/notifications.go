@@ -10,6 +10,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
@@ -310,9 +311,7 @@ func formatNotification(n notifications.Notification) string {
 		if rn, ok := n.Item.(review.ReviewNotification); ok {
 			if rn.Content != "" {
 				content := strings.TrimSpace(rn.Content)
-				if len(content) > 150 {
-					content = content[:150] + "..."
-				}
+				content = text.Truncate(content, 150)
 				lines = append(lines, content)
 			}
 			lines = append(lines, fmt.Sprintf("  %s", rn.ID))
@@ -338,9 +337,7 @@ func formatNotification(n notifications.Notification) string {
 			}
 			if rn.Subject != "" {
 				subject := rn.Subject
-				if len(subject) > 150 {
-					subject = subject[:150] + "..."
-				}
+				subject = text.Truncate(subject, 150)
 				lines = append(lines, fmt.Sprintf("  %s", subject))
 			}
 			lines = append(lines, fmt.Sprintf("  %s", rn.ID))
@@ -348,9 +345,7 @@ func formatNotification(n notifications.Notification) string {
 	default:
 		if sn, ok := n.Item.(social.Notification); ok && sn.Item != nil {
 			content := strings.TrimSpace(sn.Item.Content)
-			if len(content) > 150 {
-				content = content[:150] + "..."
-			}
+			content = text.Truncate(content, 150)
 			if content != "" {
 				lines = append(lines, content)
 			}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 // validGroupByFields lists fields that can be used with --group-by.
@@ -311,9 +312,7 @@ func toGroupedItem(item ScoredItem, groupField string) GroupedItem {
 	if idx := strings.IndexByte(subject, '\n'); idx >= 0 {
 		subject = subject[:idx]
 	}
-	if len(subject) > 100 {
-		subject = subject[:100] + "..."
-	}
+	subject = text.Truncate(subject, 100)
 
 	gi := GroupedItem{
 		Hash:      item.Hash[:12],

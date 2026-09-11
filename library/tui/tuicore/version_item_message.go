@@ -79,9 +79,7 @@ func (v MessageVersionItem) RenderListEntry(index, total int, label string, sele
 		b.WriteString(Dim.Render("    [deleted]"))
 	} else {
 		subject := v.subject()
-		if len(subject) > 80 {
-			subject = subject[:80] + "..."
-		}
+		subject = TruncateToWidth(subject, 80)
 		b.WriteString("    " + subject)
 	}
 	b.WriteString("\n")

@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 type GetLogsOptions struct {
@@ -188,9 +189,7 @@ func detectLogEntryType(commit git.Commit, msg *protocol.Message, refMap map[str
 // formatLogDetails creates a summary string for a log entry.
 func formatLogDetails(commit git.Commit, _ *protocol.Message, entryType LogEntryType) string {
 	content := protocol.ExtractCleanContent(commit.Message)
-	if len(content) > 80 {
-		content = content[:77] + "..."
-	}
+	content = text.Truncate(content, 77)
 	content = strings.ReplaceAll(content, "\n", " ")
 
 	switch entryType {
