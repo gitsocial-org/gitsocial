@@ -35,9 +35,8 @@
     }).join(" > ");
   }
 
-  // collect records the DISTINCT variants a selector renders, sorted, rather
-  // than whichever element happens to be first. A fixture rebuild reorders
-  // lists, so a first-match reading diffs on churn instead of on a change.
+  // collect records the distinct variants a selector renders, not whichever
+  // element is first: a fixture rebuild reorders lists.
   function collect() {
     var out = {};
     for (var i = 0; i < SELECTORS.length; i++) {
@@ -56,10 +55,8 @@
     return out;
   }
 
-  // One theme per run: the browser's colour-scheme flag is the only thing that
-  // flips the whole palette. Stamping the light class moves the text colour but
-  // leaves the derived panel fills dark, so it would bake a theme that exists
-  // nowhere.
+  // One theme per run: only the browser's colour-scheme flag flips the whole
+  // palette. Stamping the light class moves text but leaves panel fills dark.
   function emit() {
     document.documentElement.setAttribute("data-gs-styles", JSON.stringify(collect()));
   }

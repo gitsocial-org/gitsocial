@@ -120,7 +120,7 @@ Not in comments: why a design was chosen, what was tried, version history, threa
 
 Examples:
 
-- `site_pages.go`, 89 lines of version history above a constant, becomes `sitePagesVersion = 18 // bump when a page head or its sealed markup changes`.
+- `site_pages.go`, 94 lines of version history above a constant, became a two-line comment saying when to bump it.
 - `gs-core.js`, 12 lines above `fetchHTTP` on why 429 and 5xx retry, becomes `// fetchHTTP retries 429, 5xx and header timeouts with jittered backoff; transport errors fail at once.`
 - `index.html`, a 17-line comment on each CSP directive, becomes no comment. The directive list is the documentation; the reasoning is in the commit that set the policy.
 

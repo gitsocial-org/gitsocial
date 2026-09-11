@@ -913,8 +913,8 @@ func sitePageFeedbackAnchor(r *sitePageItem) string {
 	return file + ":" + line
 }
 
-// buildSiteReplySection renders one thread reply into its section data (a
-// tombstone line when the reply was retracted).
+// buildSiteReply renders one thread reply as a comment card (a tombstone line
+// when the reply was retracted).
 func buildSiteReply(r *sitePageItem) sitePageReply {
 	if r.Retracted {
 		return sitePageReply{Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}

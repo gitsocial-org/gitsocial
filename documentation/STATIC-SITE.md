@@ -93,6 +93,7 @@ Rules that hold on every page:
 - A list page heads with its sidebar label (Issues, Pull Requests, Timeline), and so do its `<title>`, description and feed title. The app heads the same routes with the same label from one table, pinned by `sitetest/parity_fixtures.json`, so the boot swap moves no heading. The one exception is `f/index.html`, which boots into the tree view.
 - Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is the one card the page layer and the app still shape differently.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item.
+- A thread reply is a comment card in both renderers, under a `Comments (N)` heading, with its type glyph leading the meta row and one rail per depth level. Ordering is the app's: a reply follows the one it answers, siblings run oldest first, depth caps at four. The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
 - First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 
@@ -103,11 +104,18 @@ Known divergence: the app renders markdown for `.md` and `.markdown` only, so an
 ```bash
 scripts/site-test.sh                                              # the browser battery
 go test -tags sitetest -timeout 30m ./library/core/objstore/      # the same from go test; skipped without node
-GS_SITE_LEGACY_ORIGIN=http://localhost:8000 scripts/site-test.sh  # plus the legacy tier
 bin/locals3 -root <dir>                                           # serve a pushed site locally, see S3.md
 ```
 
 The harness is `library/core/objstore/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
+
+Every suite but one runs under a DOM shim that computes no styles. `verify_styles.js` is the exception: it drives a real Chrome, reads computed styles and child structure for a fixed selector list on ten routes in both themes, and compares them to the baselines in `sitetest/styles/`. Chrome resolves through `chrome.js` (a `CHROME` override, then a candidate list; never a bare name on PATH), the suite skips with a notice when there is none, and `release.sh` preflights the same resolver so a release cannot ship with the gate skipped.
+
+```bash
+GS_STYLES_UPDATE=1 node library/core/objstore/sitetest/verify_styles.js   # recapture the baselines
+```
+
+A baseline records the distinct variants a selector renders, not whichever element is first, because a fixture rebuild reorders lists. Type classes are dropped from the structure fingerprint for the same reason; their tints still show as colours on their own variants. A visual change ships with its baseline update in the same commit.
 
 ## Reference
 
@@ -144,7 +152,7 @@ At the prefix root, next to the shell; the cache classes are defined in [S3.md](
 | `robots.txt` | `Allow: /` and the sitemap location | no-cache |
 | `feed.xml`, `<dir>/feed.xml` | Atom feeds, 50 entries | no-cache |
 
-Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push.
+Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push. A manifest at any other version reads as absent, so a bump is a full regen under the per-push page budget.
 
 ### Artifacts
 
