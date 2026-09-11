@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -16,8 +15,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
-
-var lastSyncedTip sync.Map
 
 func init() {
 	fetch.RegisterProcessor("social", func(commits []git.Commit, workdir, repoURL, _, defaultBranch string) {
@@ -39,11 +36,11 @@ func SyncWorkspaceToCache(workdir string) error {
 	defaultTip, _ := git.ReadRef(workdir, defaultBranch)
 	combinedTip := socialTip + "\x00" + defaultTip
 	key := workdir + "\x00" + repoURL
-	if prev, ok := lastSyncedTip.Load(key); ok && prev.(string) == combinedTip {
+	if prev, ok := gitmsg.SyncedTip(workdir, repoURL); ok && prev == combinedTip {
 		return nil
 	}
 	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == combinedTip {
-		lastSyncedTip.Store(key, combinedTip)
+		gitmsg.SetSyncedTip(workdir, repoURL, combinedTip)
 		return nil
 	}
 	if err := cache.InsertRepository(cache.Repository{
@@ -115,7 +112,7 @@ func SyncWorkspaceToCache(workdir string) error {
 	}
 	_, _ = cache.MarkCommitsStaleByRepo(repoURL, liveHashes)
 	SyncListsToCache(workdir)
-	lastSyncedTip.Store(key, combinedTip)
+	gitmsg.SetSyncedTip(workdir, repoURL, combinedTip)
 	_ = cache.SetSyncTip(key, combinedTip)
 	return nil
 }

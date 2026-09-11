@@ -2,8 +2,6 @@
 package release
 
 import (
-	"sync"
-
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -11,8 +9,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
-
-var lastSyncedTip sync.Map
 
 func init() {
 	fetch.RegisterProcessor("release", func(commits []git.Commit, _, repoURL, extBranch, _ string) {
@@ -30,11 +26,11 @@ func SyncWorkspaceToCache(workdir string) error {
 		return nil
 	}
 	key := workdir + "\x00" + branch
-	if prev, ok := lastSyncedTip.Load(key); ok && prev.(string) == tip {
+	if prev, ok := gitmsg.SyncedTip(workdir, branch); ok && prev == tip {
 		return nil
 	}
 	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == tip {
-		lastSyncedTip.Store(key, tip)
+		gitmsg.SetSyncedTip(workdir, branch, tip)
 		return nil
 	}
 
@@ -78,7 +74,7 @@ func SyncWorkspaceToCache(workdir string) error {
 	// canonical's raw row is inserted after its edit was applied, clobbering
 	// the propagated fields.
 	cache.SyncEditExtensionFields(editKeys)
-	lastSyncedTip.Store(key, tip)
+	gitmsg.SetSyncedTip(workdir, branch, tip)
 	_ = cache.SetSyncTip(key, tip)
 	return nil
 }
