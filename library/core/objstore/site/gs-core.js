@@ -937,6 +937,14 @@
     return m ? m[1].slice(0, 12) : null;
   }
 
+  // anyRefHash pulls the hash out of a ref of ANY type ("[url]#<type>:<hash>"),
+  // not just commit: a relation field can carry "#unknown:<hash>", which
+  // StripRepoFromRef writes for a bare id, so a commit-only parse misses it.
+  function anyRefHash(ref) {
+    const m = /[#:]([0-9a-f]{7,40})(?:@|$)/.exec(ref || "");
+    return m ? m[1].slice(0, 12) : refHash(ref);
+  }
+
   // parseBranchField splits a PR base/head field ("[url]#branch:<name>") into
   // its repo url ("" for workspace-relative) and branch name.
   function parseBranchField(field) {
@@ -4087,14 +4095,6 @@
       if (!r) { r = { comments: 0, reposts: 0, quotes: 0, approved: 0, changesRequested: 0 }; counts.set(short, r); }
       r[key]++;
     };
-    // anyRefHash extracts the 7-40 hex hash from a ref of ANY type
-    // ("[url]#<type>:<hash>[@branch]"), not just commit: — a relation trailer can
-    // carry a non-commit ref type ("#unknown:<hash>"), so the commit-only refHash
-    // would miss it. Falls back to refHash's commit form.
-    const anyRefHash = (ref) => {
-      const m = /[#:]([0-9a-f]{7,40})(?:@|$)/.exec(ref || "");
-      return m ? m[1].slice(0, 12) : refHash(ref);
-    };
     const [social, review] = await Promise.all([
       loadExtItemsForCounts(ctx, "social").catch(() => []),
       loadExtItemsForCounts(ctx, "review").catch(() => []),
@@ -4652,7 +4652,7 @@
   // resolved review item set, splitting file-anchored feedback (inline, carries
   // `file`) from the rest (verdicts and general review feedback).
   function prFeedback(reviewItems, prShort) {
-    const all = reviewItems.filter((i) => i.header && i.header.type === "feedback" && hashEq(refHash(i.header["pull-request"]), prShort));
+    const all = reviewItems.filter((i) => i.header && i.header.type === "feedback" && hashEq(anyRefHash(i.header["pull-request"]), prShort));
     const file = all.filter((i) => i.header.file);
     const nonFile = all.filter((i) => !i.header.file);
     return { all, file, nonFile };

@@ -389,6 +389,20 @@ async function main() {
     }
   }
 
+  {
+    // A feedback item's pull-request field carries whatever ref type the writer
+    // produced; StripRepoFromRef writes "#unknown:<hash>" for a bare id, and
+    // every published bucket already has it, so matching is by hash.
+    const fb = (prRef) => ({ header: { type: "feedback", "pull-request": prRef }, commit: { short: "ffffffffffff" } });
+    const PR = "56ba42e1ca50";
+    for (const [name, ref] of [["unknown", "#unknown:" + PR], ["commit", "#commit:" + PR + "@gitmsg/review"], ["url-prefixed", "https://example.com/r#commit:" + PR]]) {
+      const got = GS.prFeedback([fb(ref)], PR);
+      ok("prFeedback matches a " + name + " pull-request ref", got.all.length === 1, JSON.stringify(ref) + " -> " + got.all.length);
+    }
+    const other = GS.prFeedback([fb("#unknown:aaaaaaaaaaaa")], PR);
+    ok("prFeedback ignores feedback for another pull request", other.all.length === 0, "matched " + other.all.length);
+  }
+
   for (const [tab, label] of Object.entries(GS.LIST_HEADINGS)) {
     await route("#/" + tab, true);
     const first = (viewNode._children || [])[0];
