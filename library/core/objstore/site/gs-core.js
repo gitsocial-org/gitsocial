@@ -1,9 +1,4 @@
-// gs-core.js - DOM-free core: fetch/inflate/parse of git loose objects and
-// gitmsg headers, refs/manifest resolution, history walk, tree/path, diff engine,
-// markdown/GFM AST, thread grouping, edit resolution, authorship, aggregation
-// helpers, route parsing, icon-name mapping, and constants. Node-importable
-// (module.exports = GS namespace); in the browser it defines the shared window.GS
-// namespace the render and app layers extend.
+// gs-core.js - DOM-free core: object reads, gitmsg parsing, history walks, diff, markdown, routing, on the shared GS namespace
 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
@@ -18,26 +13,13 @@
     memo: "refs/heads/gitmsg/memo",
   };
   const WALK_CAP = 200;
-  // DETAIL_WALK_CAP bounds the deeper, single-target walks: the item-detail
-  // permalink lookup, the thread-source walk, and a PR's merge-base / tip search.
-  // A permalink or deep PR keeps walking history in WALK_CAP windows until the
-  // target is reached or this many commits have been visited.
+  // DETAIL_WALK_CAP bounds the deep single-target walks: item permalinks, thread sources, a PR's merge-base search.
   const DETAIL_WALK_CAP = 2000;
   const CONCURRENCY = 6;
-  // HYDRATE_CONCURRENCY bounds the body-hydration fan-out (hydrateItems). It is
-  // deliberately higher than the walk's CONCURRENCY: hydration is a flat list of
-  // independent small reads against one host (h2/h3 multiplexes them on a few
-  // connections), and 6 left a 50-card window paying ~9 serial rounds of RTTs.
+  // HYDRATE_CONCURRENCY bounds the body-hydration fan-out; higher than CONCURRENCY, since hydration is a flat list of small reads.
   const HYDRATE_CONCURRENCY = 16;
 
-  // deriveBase returns the absolute directory the repo is served from. A
-  // ?base=/?repo= query param overrides; otherwise it is the page's own
-  // directory, so the site works under any bucket prefix. When gs-upgrade.js
-  // boots the app from a generated page (an item page under i/, a type list
-  // under a type dir), the page's own directory is NOT the site root, so the
-  // upgrade layer resolves the artifact base from the page's data-base attribute
-  // (honoring the ?base=/?repo= override) and publishes it as window.__gsBase;
-  // deriveBase prefers it so every artifact fetch stays anchored at the root.
+  // deriveBase returns the absolute directory the repo is served from: the ?base=/?repo= override, then window.__gsBase, then the page's own directory.
   function deriveBase(loc) {
     const params = new URLSearchParams(loc.search || "");
     const override = params.get("base") || params.get("repo");
@@ -48,25 +30,11 @@
     return (loc.origin || "") + dir;
   }
 
-  // FETCH_TRIES / FETCH_HEADERS_MS bound fetchHTTP's resilience: total attempts
-  // per request, and how long one attempt may go without response HEADERS
-  // before it is aborted and retried (bodies are never deadline-bounded — a
-  // big, slow range read on 4G must not be cut mid-transfer).
+  // FETCH_TRIES bounds attempts per request; FETCH_HEADERS_MS bounds one attempt's wait for response headers, not its body.
   const FETCH_TRIES = 4;
   const FETCH_HEADERS_MS = 20000;
 
-  // fetchHTTP wraps the global fetch for bucket reads with bounded retry.
-  // Every read here is an idempotent GET/HEAD, and two server-side conditions
-  // are transient by nature: rate limiting (a public dev domain like r2.dev
-  // answers bursts with 429 — one such response used to fail a whole bulk
-  // hydration) and 5xx blips; a connection can also stall without ever
-  // resolving, which used to hold a route until the stall watchdog fired.
-  // Those three — 429/5xx responses and this function's own headers-deadline
-  // abort — back off (with jitter, so a throttled burst does not retry as a
-  // burst) and retry up to FETCH_TRIES attempts. A genuine transport failure
-  // still surfaces immediately: callers' contract (a rejection is never
-  // cached; the next call recovers) stays exactly as it was, and the final
-  // response/error reaches them unchanged.
+  // fetchHTTP retries 429, 5xx and header timeouts with jittered backoff; transport errors fail at once.
   async function fetchHTTP(url, opts) {
     for (let attempt = 1; ; attempt++) {
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -85,16 +53,9 @@
     }
   }
 
-  // fetchBytes GETs a bucket key relative to base. A 404 means the object is
-  // absent (null, so a single missing object degrades quietly). A 401/403 means
-  // the bucket's public read is denied — a whole-site condition, not a missing
-  // object — so it throws a `forbidden`-tagged error the app surfaces as one
-  // clear page instead of an empty/"not found" view.
+  // fetchBytes GETs a bucket key relative to base: null on 404, a forbidden-tagged throw on 401 and 403.
   async function fetchBytes(base, key) {
-    // Default cache mode: honor the server's Cache-Control. Immutable loose
-    // objects are served from disk with no network; mutable keys (refs, HEAD,
-    // index artifacts) carry no-cache, so the browser revalidates them every
-    // time (If-None-Match -> 304) and never serves a stale ref tip.
+    // The default cache mode honors the server's Cache-Control: immutable objects come from disk, mutable keys revalidate.
     const res = await fetchHTTP(base + key);
     if (res.status === 404) return null;
     if (res.status === 401 || res.status === 403) {
@@ -106,24 +67,20 @@
     return new Uint8Array(await res.arrayBuffer());
   }
 
-  // fetchText GETs a key and returns trimmed text; null on 404.
-  // keyExists answers whether a key is there without paying for its body. Only a
-  // 404 counts as absent: a 403, a 5xx or anything else is "do not conclude
-  // absence from this", so the caller falls through to the real read and its
-  // error handling rather than caching a transient failure as a fact.
+  // keyExists answers whether a key is there without paying for its body; only a 404 counts as absent.
   async function keyExists(base, key) {
     const res = await fetchHTTP(base + key, { method: "HEAD" });
     return res.status !== 404;
   }
 
+  // fetchText GETs a key and returns trimmed text; null on 404.
   async function fetchText(base, key) {
     const bytes = await fetchBytes(base, key);
     if (bytes === null) return null;
     return new TextDecoder().decode(bytes).trim();
   }
 
-  // inflate zlib-decompresses git loose-object bytes (the 'deflate' format in
-  // the compression-streams API is zlib-wrapped, which is what git writes).
+  // inflate zlib-decompresses git loose-object bytes.
   async function inflate(bytes) {
     const ds = new DecompressionStream("deflate");
     const writer = ds.writable.getWriter();
@@ -132,8 +89,7 @@
     return new Uint8Array(await new Response(ds.readable).arrayBuffer());
   }
 
-  // parseLooseObject splits a decompressed object into its "<type> <size>\0"
-  // header and raw body bytes.
+  // parseLooseObject splits a decompressed object into its type header and its raw body bytes.
   function parseLooseObject(raw) {
     let nul = -1;
     for (let i = 0; i < raw.length; i++) {
@@ -150,94 +106,44 @@
     return "objects/" + sha.slice(0, 2) + "/" + sha.slice(2);
   }
 
-  // getObject fetches, inflates, and caches one git object. A bucket stores an
-  // object loose or inside a packfile, never both (see documentation/S3.md), and
-  // objects/info/packs — fetched on the pack path anyway — says which shape the
-  // bucket is in BEFORE the first read, so a packed bucket never pays a 404 to
-  // discover itself. That listing only ORDERS the two lookups, though: it is
-  // rewritten best-effort on every push, so an empty one is not proof the bucket
-  // is loose — a miss on the shape it named still tries the other, and a bucket
-  // whose pack listing failed to publish still renders off its pack map.
-  // `content` is an optional hint that the caller already knows the sha names a
-  // tree or a blob (see getContentObject); it only reorders the lookup and is
-  // never required for correctness.
+  // getObject fetches, inflates and caches one git object; the pack listing orders the loose and packed lookups, and each falls back to the other.
   async function getObject(ctx, sha, content) {
     if (ctx.objects.has(sha)) return ctx.objects.get(sha);
-    // The cache holds the in-flight PROMISE, not the resolved object: hydration
-    // runs CONCURRENCY workers, and two of them asking for the same sha before
-    // either resolves would otherwise both fetch it. Costlier now that a miss
-    // can mean a pack map shard plus a range read rather than one GET.
+    // The cache holds the in-flight promise, so concurrent readers of one sha share a single fetch.
     const pending = (async () => {
       if (await bucketIsPacked(ctx)) {
         const packed = await getPackedObject(ctx, sha, content);
-        // A miss in every pack still has a loose key to try: a bucket may carry
-        // objects loose until its next seal (a small push, or history a state
-        // ref reaches that predates state objects packing).
+        // A miss in every pack still has a loose key to try: a bucket may carry objects loose until its next seal.
         return packed !== null ? packed : getLooseObject(ctx, sha);
       }
       const loose = await getLooseObject(ctx, sha);
       return loose !== null ? loose : getPackedObject(ctx, sha, content);
     })();
     ctx.objects.set(sha, pending);
-    // A rejection is never kept: a transient 500 on one blob would otherwise
-    // break that sha in every view for the rest of the session, with no network
-    // activity left to recover from.
+    // A rejection is not cached, so a transient failure recovers on the next call.
     pending.catch(() => { if (ctx.objects.get(sha) === pending) ctx.objects.delete(sha); });
     return pending;
   }
 
-  // getContentObject fetches a sha the caller already knows is a tree or a blob,
-  // because it came from a tree entry's mode or a commit's tree field. The pack
-  // map indexes commits and tags only, so consulting it for content is a
-  // guaranteed miss — and the map is sparse (a shard exists only where a mapped
-  // object shares its sha prefix), so that miss can cost a whole 404 body rather
-  // than nothing. Skipping it drops the request outright.
+  // getContentObject fetches a sha known to be a tree or a blob; the pack map indexes commits and tags only, so it is skipped.
   function getContentObject(ctx, sha) {
     return getObject(ctx, sha, true);
   }
 
   // getStateObject fetches a sha a state ref points at (config, lists, forks).
-  // State objects pack and seal like every other object now, so the lookup is
-  // plain getObject in the same packed-first order — a state commit resolves
-  // off the pack map in one range read, and the loose fallback covers a bucket
-  // that still carries them loose (not yet sealed by a current binary). The
-  // name is kept for what it documents at the call sites.
   function getStateObject(ctx, sha) {
     return getObject(ctx, sha);
   }
 
-  // getLooseObject fetches and inflates one loose object, or null when the bucket
-  // carries no loose key for it.
+  // getLooseObject fetches and inflates one loose object, or null when the bucket carries no loose key for it.
   async function getLooseObject(ctx, sha) {
     const compressed = await fetchBytes(ctx.base, objectKey(sha));
     return compressed === null ? null : parseLooseObject(await inflate(compressed));
   }
 
-  // ---- Packfile reader ----
-  //
-  // Two entry points into a pack, by cost. A packed commit or tag is located by
-  // the pack map (.gitsocial/packmap/<xx>.json, one shard per two-hex sha
-  // prefix): the shard carries the exact byte range, so the read is one Range
-  // GET of a self-contained zlib stream — the commits pack is written with
-  // --depth=0, so a commit body never resolves a delta chain. Trees and blobs
-  // (file views, diffs) have no map and go through the pack index, which is
-  // range-read rather than downloaded: the v2 index opens with a 256-entry
-  // fanout that bounds a sha to one 1/256th slice of the sorted sha table, so a
-  // lookup reads the head, that slice, and the offset table instead of the whole
-  // .idx. Every artifact is cached on the context, so a session pays for each at
-  // most once.
-  //
-  // The map deliberately stops at commits and tags. Extending it to trees and
-  // blobs would remove the index from the last hot path, but a shard holds
-  // 1/256th of every packed object: a repo with a million of them would grow
-  // each shard past the size of the ranged index reads it replaced, and every
-  // push re-reads and rewrites all 256. The index path scales with log(objects)
-  // where the map scales with objects, so the map stays scoped to history.
+  // ---- Packfile reader (see documentation/STATIC-SITE.md) ----
 
-  // fetchRange GETs a byte range of a bucket key, returning the bytes and the
-  // object's total size. end is exclusive; null means "to the end of the
-  // object". A server that ignores Range answers 200 with the whole body, which
-  // is sliced locally so the reader stays correct either way.
+  // fetchRange GETs a byte range of a bucket key and returns the bytes with the object's total size; end is exclusive, null runs to the end.
   async function fetchRange(base, key, start, end) {
     const spec = "bytes=" + start + "-" + (end === null ? "" : end - 1);
     const res = await fetchHTTP(base + key, { headers: { Range: spec } });
@@ -250,8 +156,7 @@
     return { bytes: body.subarray(start, end === null ? body.length : end), total: body.length };
   }
 
-  // packNames lists the bucket's packs from objects/info/packs (git's own
-  // update-server-info listing), cached per context. Empty on an all-loose bucket.
+  // packNames lists the bucket's packs from objects/info/packs, cached per context.
   async function packNames(ctx) {
     if (ctx.packs.names) return ctx.packs.names;
     const text = await fetchText(ctx.base, "objects/info/packs");
@@ -264,11 +169,7 @@
     return names;
   }
 
-  // bucketIsPacked resolves once per context: a non-empty pack listing means the
-  // bucket keeps its objects in packfiles, so a read starts there instead of
-  // paying a 404 to find out. Held as a promise, so the concurrent readers of a
-  // first hydration batch all wait on the one listing rather than each probing a
-  // loose key that is not there.
+  // bucketIsPacked resolves once per context from the pack listing, held as a promise so concurrent readers share it.
   function bucketIsPacked(ctx) {
     if (!ctx.packs.packed) {
       const pending = packNames(ctx).then((names) => names.length > 0);
@@ -278,8 +179,7 @@
     return ctx.packs.packed;
   }
 
-  // packMapShard loads the pack map shard covering a sha (null when absent or
-  // written by another schema version), cached per context.
+  // packMapShard loads the pack map shard covering a sha, cached per context; null when absent or written by another schema version.
   async function packMapShard(ctx, sha) {
     const name = sha.slice(0, 2);
     if (ctx.packs.maps.has(name)) return ctx.packs.maps.get(name);
@@ -295,19 +195,12 @@
     return promise;
   }
 
-  // IDX_HEAD_BYTES is the leading slice a pack index is opened with: the magic,
-  // the version and the 256-entry fanout need 1032 bytes, and reading a little
-  // more costs nothing while delivering a small pack's index whole in the same
-  // request, so a bucket of tiny packs still pays exactly one fetch per pack.
+  // IDX_HEAD_BYTES is the leading slice a pack index is opened with, sized so a small index arrives whole in that one request.
   const IDX_HEAD_BYTES = 4096;
-  // IDX_SHA_START is where a v2 index's sorted sha table begins (magic, version,
-  // fanout). The CRC table follows it, then the 4-byte offsets and their
-  // large-offset overflow.
+  // IDX_SHA_START is where a v2 index's sorted sha table begins.
   const IDX_SHA_START = 8 + 256 * 4;
 
-  // parsePackIdxHead reads a v2 index's fixed head: the 256-entry fanout, whose
-  // entry b is the number of objects whose first sha byte is <= b, so a sha's
-  // whole search space is one slice of the sorted sha table.
+  // parsePackIdxHead reads a v2 index's fanout, which bounds a sha to one slice of the sorted sha table.
   function parsePackIdxHead(bytes, total) {
     if (bytes.length < IDX_SHA_START) throw new Error("pack index: truncated head");
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -318,9 +211,7 @@
     return { count, fanout, total, ofsStart: IDX_SHA_START + count * 24, shas: null, offsets: null, sorted: null, slices: new Map(), ofsSlices: new Map() };
   }
 
-  // setPackIdxOffsets decodes the offset table (and the 8-byte large-offset
-  // overflow behind it) from the index tail starting at ofsStart, and keeps the
-  // offsets sorted ascending so an entry's end is the next entry's start.
+  // setPackIdxOffsets decodes the offset table and its large-offset overflow, keeping the offsets sorted ascending.
   function setPackIdxOffsets(idx, tail) {
     const dv = new DataView(tail.buffer, tail.byteOffset, tail.byteLength);
     const bigStart = idx.count * 4;
@@ -333,9 +224,7 @@
     idx.sorted = offsets.slice().sort((a, b) => a - b);
   }
 
-  // packIdxOpen reads a pack index's head, cached per context. An index that
-  // fits in the head request arrives whole and is adopted as such, so every
-  // later lookup into that pack is local.
+  // packIdxOpen reads a pack index's head, cached per context; an index that fits in the head request is adopted whole.
   async function packIdxOpen(ctx, name) {
     if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
     const promise = (async () => {
@@ -352,12 +241,7 @@
     return promise;
   }
 
-  // packIdxOfsSlice returns the offset-table slice covering the objects whose
-  // first sha byte is `first` (4 bytes per entry, lo..hi), one small Range GET
-  // cached per first byte — mirroring packIdxSlice over the sha table. Reading
-  // per slice instead of the whole table matters: the offsets tail grows
-  // linearly with the pack (356 KB at ~89K objects) and used to gate the first
-  // object read of every commit/code/file route behind one big download.
+  // packIdxOfsSlice returns the offset-table slice for one first sha byte, a small Range GET cached per byte.
   function packIdxOfsSlice(ctx, idx, name, first, lo, hi) {
     if (idx.ofsSlices.has(first)) return idx.ofsSlices.get(first);
     const promise = (async () => {
@@ -369,9 +253,7 @@
     return promise;
   }
 
-  // packIdxOfsAt decodes one entry of an offset-table slice, following the
-  // MSB-flagged 8-byte large-offset overflow (packs past 2 GB) with its own
-  // tiny range read. null when the overflow entry cannot be read.
+  // packIdxOfsAt decodes one offset-table entry, following the large-offset overflow with its own range read.
   async function packIdxOfsAt(ctx, idx, name, ofsBytes, at) {
     const dv = new DataView(ofsBytes.buffer, ofsBytes.byteOffset, ofsBytes.byteLength);
     const raw = dv.getUint32(at * 4);
@@ -383,8 +265,7 @@
     return Number(bdv.getBigUint64(0));
   }
 
-  // packIdxSlice returns the slice of the sorted sha table holding every object
-  // whose first sha byte is `first`, one small Range GET cached per first byte.
+  // packIdxSlice returns the sorted-sha-table slice for one first sha byte, a small Range GET cached per byte.
   async function packIdxSlice(ctx, idx, name, first, lo, hi) {
     if (idx.shas) return idx.shas.subarray(lo * 20, hi * 20);
     if (idx.slices.has(first)) return idx.slices.get(first);
@@ -396,8 +277,7 @@
     return promise;
   }
 
-  // packIdxFind binary-searches a 20-byte-per-entry sha table slice, returning
-  // the sha's position within the slice, or -1.
+  // packIdxFind binary-searches a 20-byte-per-entry sha table slice and returns the position within it, or -1.
   function packIdxFind(shas, count, sha) {
     const want = new Uint8Array(20);
     for (let i = 0; i < 20; i++) want[i] = parseInt(sha.slice(i * 2, i * 2 + 2), 16);
@@ -412,15 +292,7 @@
     return -1;
   }
 
-  // packIdxLookup locates a sha in one pack and returns its entry's byte range,
-  // or null when the pack does not carry it. The fanout alone rules most misses
-  // out with no further fetch at all. When the whole index is resident (a small
-  // pack delivered inside the head request) the entry's exact end is known (the
-  // next pack-order offset); otherwise only the slice's offsets are ranged in —
-  // in parallel with the sha slice, since both depend only on the fanout — and
-  // `end` is undefined: the offset table is sha-ordered, so a slice cannot name
-  // the next pack-order entry, and readPackEntry bounds the read from the
-  // entry's own header instead.
+  // packIdxLookup locates a sha in one pack and returns its byte range; end is undefined when a per-slice read cannot name it, and readPackEntry bounds the read instead.
   async function packIdxLookup(ctx, name, sha) {
     const opened = await packIdxOpen(ctx, name);
     if (!opened) return null;
@@ -444,10 +316,7 @@
     return offset === null ? null : { offset, end: undefined };
   }
 
-  // packEntryEnd returns the exclusive end offset of the entry at offset,
-  // which is the next entry's start, or null for the last entry (whose data
-  // runs to the pack's 20-byte trailing checksum). Only answerable when the
-  // whole offset table is resident (idx.sorted).
+  // packEntryEnd returns an entry's exclusive end, the next entry's start; null for the last entry, and answerable only with the whole offset table resident.
   function packEntryEnd(idx, offset) {
     const s = idx.sorted;
     let lo = 0, hi = s.length - 1, at = -1;
@@ -460,27 +329,14 @@
     return s[at + 1];
   }
 
-  // PACK_TYPES maps a pack entry's 3-bit type code to a git object type;
-  // 6 (OFS_DELTA) and 7 (REF_DELTA) are deltas and resolve against a base.
+  // PACK_TYPES maps a pack entry's 3-bit type code to a git object type; 6 and 7 are deltas.
   const PACK_TYPES = { 1: "commit", 2: "tree", 3: "blob", 4: "tag" };
 
-  // PACK_WINDOW_BYTES is the aligned granule pack data is range-read in.
-  // Entries written together cluster tightly in the pack (git orders objects by
-  // type then recency), and one multi-KB range costs the same round trip as 400
-  // bytes — so bounded entry reads fetch the fixed aligned window(s) covering
-  // them, cached per pack on the context, and a burst of small clustered reads
-  // (a diff's tree descent, a card-hydration batch) collapses into a few shared
-  // window GETs instead of one request per object. Spans past PACK_SPAN_MAX
-  // skip the cache and go straight to one exact range (a large blob does not
-  // belong in the window cache — its parsed object is cached by sha anyway).
+  // PACK_WINDOW_BYTES is the aligned granule pack data is range-read in, so clustered reads share window GETs; a span over PACK_SPAN_MAX reads one exact range.
   const PACK_WINDOW_BYTES = 16384;
   const PACK_SPAN_MAX = PACK_WINDOW_BYTES * 4;
 
-  // packWindow fetches one aligned window of a packfile, cached as an in-flight
-  // promise so concurrent readers share the request. The bytes may be shorter
-  // than a full window at the pack's tail; null marks a window known to lie
-  // past the end of the pack (or an absent pack). A rejection is not kept, so a
-  // transient failure does not poison the window for the session.
+  // packWindow fetches one aligned window of a packfile, cached as an in-flight promise; null past the end of the pack.
   function packWindow(ctx, name, winStart) {
     let wins = ctx.packs.windows.get(name);
     if (!wins) { wins = new Map(); ctx.packs.windows.set(name, wins); }
@@ -497,10 +353,7 @@
     return promise;
   }
 
-  // packRange reads [start, end) of a packfile through the window cache,
-  // assembling the span from its aligned windows (fetched in parallel).
-  // Returns { bytes, total } like fetchRange; bytes may be shorter than the
-  // span when the pack ends inside it, and null means the pack is absent.
+  // packRange reads [start, end) through the window cache and returns { bytes, total }; null when the pack is absent.
   async function packRange(ctx, name, start, end) {
     if (end - start > PACK_SPAN_MAX) return fetchRange(ctx.base, "objects/pack/" + name + ".pack", start, end);
     const first = Math.floor(start / PACK_WINDOW_BYTES) * PACK_WINDOW_BYTES;
@@ -539,13 +392,7 @@
     return { bytes: out, total };
   }
 
-  // tryInflate feeds `bytes` to one DecompressionStream and reads output until
-  // `expectedSize` bytes have been produced or the stream ends. Returns the
-  // output on success, "small" when the stream needed more input, or "big" when
-  // bytes after the stream's real end errored it before the output could be
-  // read. Engines differ on trailing bytes — some deliver the full output
-  // anyway (then "big" never surfaces), others discard everything queued — and
-  // inflateBounded handles both.
+  // tryInflate inflates until expectedSize bytes are produced: the output, "small" when the stream needed more input, or "big" when trailing bytes errored it.
   async function tryInflate(bytes, expectedSize) {
     const ds = new DecompressionStream("deflate");
     const writer = ds.writable.getWriter();
@@ -572,15 +419,7 @@
     return out.subarray(0, expectedSize);
   }
 
-  // inflateBounded inflates a zlib stream that starts at bytes[0] but may not
-  // END at bytes.length: with per-slice index offsets an entry's end offset is
-  // unknown, so the read over-approximates it, bounded via the header's
-  // inflated size. The fast path hands the whole buffer to tryInflate; when
-  // the engine rejects the trailing bytes instead of ignoring them, the exact
-  // stream end is binary-searched — every cut before it yields short output,
-  // every cut past it errors — in log2(len) local re-inflations, no fetches.
-  // Returns the inflated bytes, "small" when even the whole buffer is too
-  // short (the caller extends the read), or throws for a corrupt entry.
+  // inflateBounded inflates a zlib stream whose end is unknown, binary-searching the stream end when the engine rejects the trailing bytes.
   async function inflateBounded(bytes, expectedSize) {
     const whole = await tryInflate(bytes, expectedSize);
     if (whole !== "big") return whole;
@@ -595,11 +434,7 @@
     throw new Error("pack entry: could not locate stream end");
   }
 
-  // parsePackEntryHead decodes a pack entry's type/size varint header, plus an
-  // OFS_DELTA's back-offset or a REF_DELTA's base sha, returning
-  // { type, size, dataStart, back, baseSha } — dataStart is where the entry's
-  // zlib stream begins and size its INFLATED length (for a delta, the delta
-  // stream's own inflated length).
+  // parsePackEntryHead decodes a pack entry's type and size varint header plus a delta's base reference; size is the inflated length.
   function parsePackEntryHead(raw) {
     let i = 0;
     let b = raw[i++];
@@ -618,10 +453,7 @@
     return { type, size, dataStart: i, back, baseSha };
   }
 
-  // finishPackEntry resolves a parsed entry whose data is already inflated:
-  // a delta resolves against its base (an OFS_DELTA base's exact end is known
-  // only when the whole offset table is resident, else the scan path bounds
-  // it), everything else is the object itself.
+  // finishPackEntry resolves a parsed entry whose data is inflated, applying a delta against its base.
   async function finishPackEntry(ctx, name, offset, head, body) {
     if (head.type === 6) {
       const baseOffset = offset - head.back;
@@ -640,14 +472,7 @@
     return { type: PACK_TYPES[head.type], body };
   }
 
-  // readPackEntry reads one pack entry and returns the inflated object,
-  // resolving a delta chain against its base. `end` is the entry's exclusive
-  // end when known (pack map range, or a fully-resident index), null for the
-  // last entry in the pack (data runs to the 20-byte trailing checksum; the
-  // pack's size, learned from the first Range response, is remembered so later
-  // reads of that last entry need no extra request), or undefined when the
-  // per-slice index read cannot name it — then the entry's own header bounds
-  // the read (readPackEntryScan).
+  // readPackEntry reads one pack entry and resolves its delta chain; end is the exclusive end, null for the last entry, undefined when unknown.
   async function readPackEntry(ctx, name, offset, end) {
     if (end === undefined) return readPackEntryScan(ctx, name, offset);
     const known = ctx.packs.size.get(name) || 0;
@@ -663,11 +488,7 @@
     return finishPackEntry(ctx, name, offset, head, await inflate(raw.subarray(head.dataStart)));
   }
 
-  // readPackEntryScan reads an entry whose end offset is unknown: it fetches
-  // the window at the entry's offset (which usually holds the whole entry),
-  // parses the header for the inflated size, extends the read to the zlib
-  // worst-case bound over that size when needed, and lets inflateBounded stop
-  // at the stream's real end inside the over-read.
+  // readPackEntryScan reads an entry of unknown end, bounding the read from the header's inflated size.
   async function readPackEntryScan(ctx, name, offset) {
     const got = await packRange(ctx, name, offset, offset + PACK_WINDOW_BYTES);
     if (got === null || !got.bytes.length) return null;
@@ -688,19 +509,13 @@
       }
       const body = await inflateBounded(raw.subarray(head.dataStart), head.size);
       if (body !== "small") return finishPackEntry(ctx, name, offset, head, body);
-      // raw.length < want means the pack itself ended short of the bound: no
-      // further byte exists to extend with, so the entry is truncated/corrupt.
+      // A short read means the pack ended before the bound, so the entry is truncated.
       if (raw.length < want || raw.length >= cap) throw new Error("pack entry: truncated stream at " + offset);
       want = Math.min(Math.max(want * 2, raw.length + PACK_WINDOW_BYTES), cap);
     }
   }
 
-  // applyDelta reconstructs an object from a base and git's delta encoding:
-  // two varint sizes, then copy-from-base (0x80) and insert-literal instructions.
-  // Sizes and copy offsets are assembled with 32-bit shifts, so a base or target
-  // at or above 2 GB would overflow. Git never deltifies objects that large
-  // (core.bigFileThreshold stops at 512 MB by default), and a browser could not
-  // hold one anyway.
+  // applyDelta reconstructs an object from a base and git's delta encoding: copy-from-base and insert-literal instructions.
   function applyDelta(base, delta) {
     let i = 0;
     const varint = () => {
@@ -728,18 +543,12 @@
         throw new Error("pack delta: reserved instruction 0");
       }
     }
-    // A short instruction stream would otherwise return a silently zero-padded
-    // object: the allocation comes from the delta's own target-size varint, so
-    // only this check ties the reconstruction back to it.
+    // The reconstructed length ties back to the delta's own target-size varint.
     if (at !== out.length) throw new Error("pack delta: reconstructed " + at + " of " + out.length + " bytes");
     return out;
   }
 
-  // getPackedObject resolves one object out of the bucket's packfiles: the pack
-  // map first (commits and tags, one Range GET), then each pack's index for
-  // everything else. null when no pack carries the sha. `content` skips the map
-  // for a sha the caller already knows is a tree or a blob, which the map never
-  // indexes.
+  // getPackedObject resolves one object out of the packfiles: the pack map for commits and tags, then each pack's index for the rest.
   async function getPackedObject(ctx, sha, content) {
     const map = content ? null : await packMapShard(ctx, sha);
     const at = map && map.offsets[sha];
@@ -747,11 +556,7 @@
       const name = map.packs[at[0]];
       if (name) return readPackEntry(ctx, name, at[1], at[1] + at[2]);
     }
-    // Trees and blobs have no map entry, so the packs are probed by index. Try
-    // the pack that answered last first: content reads cluster (a file view walks
-    // one commit's tree), and a pack ruled out still costs its index head.
-    // Sealing rounds accumulate packs over a bucket's life, so the probe order is
-    // what keeps a cold file view from opening all of them.
+    // Trees and blobs have no map entry; the pack that answered last is probed first, since content reads cluster.
     const names = await packNames(ctx);
     const ordered = ctx.packs.lastHit ? [ctx.packs.lastHit, ...names.filter((n) => n !== ctx.packs.lastHit)] : names;
     for (const name of ordered) {
@@ -763,8 +568,7 @@
     return null;
   }
 
-  // parseCommit turns a commit object into structured fields plus its clean
-  // content and parsed gitmsg header.
+  // parseCommit turns a commit object into structured fields plus its clean content and parsed gitmsg header.
   function parseCommit(sha, body) {
     const text = new TextDecoder().decode(body);
     const split = text.indexOf("\n\n");
@@ -799,8 +603,7 @@
     return content.replace(/\r/g, "").trim();
   }
 
-  // parseGitmsg extracts the GitMsg trailer into a flat key->value map (ext, v,
-  // type, state, ...), or null when the commit carries no header.
+  // parseGitmsg extracts the GitMsg trailer into a flat key to value map, or null when the commit carries no header.
   function parseGitmsg(message) {
     let idx = -1;
     if (message.startsWith("GitMsg: ")) idx = 0;
@@ -815,11 +618,7 @@
     return header;
   }
 
-  // parseRefs extracts GitMsg-Ref trailers with their ` > `-quoted origin
-  // content from a commit message. Each ref carries the embedded context a
-  // commit keeps about content it references (ext, type, author, email, time,
-  // ref, and the quoted excerpt), which is the only view a single-bucket reader
-  // has of a cross-repo original whose remote thread it cannot fetch.
+  // parseRefs extracts GitMsg-Ref trailers with their quoted origin content, the only view a reader has of a cross-repo original.
   function parseRefs(message) {
     const lines = (message || "").replace(/\r/g, "").split("\n");
     const refs = [];
@@ -840,9 +639,7 @@
     return refs;
   }
 
-  // refRepoUrl returns the repo-url prefix of a "[url]#type:value" ref, or ""
-  // for a workspace-relative ref. A non-empty URL marks a cross-repo reference
-  // whose target objects are not in this bucket.
+  // refRepoUrl returns the repo-url prefix of a "[url]#type:value" ref, or "" for a workspace-relative one.
   function refRepoUrl(ref) {
     const s = ref || "";
     const h = s.indexOf("#");
@@ -856,8 +653,7 @@
     return /^[0-9a-f]{40}$/.test(text) ? text : null;
   }
 
-  // resolveHead reads the HEAD symref ("ref: refs/heads/<branch>\n") and
-  // returns { branch, sha } for the default branch it points at.
+  // resolveHead reads the HEAD symref and returns { branch, sha } for the default branch it points at.
   async function resolveHead(base) {
     const text = await fetchText(base, "HEAD");
     if (!text) return null;
@@ -868,30 +664,18 @@
     return /^[0-9a-f]{40}$/.test(text) ? { branch: null, sha: text } : null;
   }
 
-  // headFor memoizes resolveHead per context. HEAD plus its ref tip are two
-  // fetches, and a route that both renders the default branch and enumerates
-  // branches (home, analytics) resolved it twice, paying them twice for a value
-  // that cannot change mid-render. Same lifetime and staleness contract as the
-  // ctx.manifest / ctx.refMode memos: one page session, with the freshness watch
-  // surfacing a push that moved anything.
-  // The memo holds the in-flight PROMISE, so concurrent first callers share the
-  // one resolution instead of each paying for HEAD and its ref key.
+  // headFor memoizes resolveHead per context, holding the in-flight promise so concurrent callers share one resolution.
   function headFor(ctx) {
     if (ctx.head === undefined) ctx.head = resolveHead(ctx.base);
     return ctx.head;
   }
 
-  // A resumable history walk. startWalk seeds a walk state at a tip; walkStep
-  // advances it by up to `windowCap` more commits (BFS over parent pointers with
-  // bounded concurrency), appending to state.commits and preserving state.frontier
-  // / state.visited so a later step continues the NEXT window without refetching
-  // (objects already fetched sit in ctx.objects). An empty state.frontier means
-  // the history is fully walked. This underlies both the one-shot walkHistory and
-  // the "Load more" / deep-lookup paging that accumulates across windows on ctx.
+  // startWalk seeds a resumable history walk at a tip; an empty frontier means the history is fully walked.
   function startWalk(tipSha) {
     return { visited: new Set(), frontier: [tipSha], commits: [] };
   }
 
+  // walkStep advances a walk by up to windowCap commits, breadth-first over parents with bounded concurrency.
   async function walkStep(ctx, state, windowCap) {
     windowCap = windowCap || WALK_CAP;
     const start = state.commits.length;
@@ -915,38 +699,31 @@
     return state;
   }
 
-  // walkedCommits returns a newest-first copy of a walk state's accumulated
-  // commits; list building and edit resolution re-run over this growing set.
+  // walkedCommits returns a newest-first copy of a walk state's accumulated commits.
   function walkedCommits(state) {
     return state.commits.slice().sort((a, b) => b.authorTime - a.authorTime);
   }
 
-  // walkHistory walks parent pointers from a tip in a single window, capped,
-  // deduped, returned newest-first by author time — the one-shot form used where
-  // paging is not needed (branch log first window, analytics, PR tip search).
+  // walkHistory walks parent pointers from a tip in one capped window, newest-first by author time.
   async function walkHistory(ctx, tipSha, cap = WALK_CAP) {
     const state = startWalk(tipSha);
     await walkStep(ctx, state, cap);
     return walkedCommits(state).slice(0, cap);
   }
 
-  // refHash pulls the 12-hex commit hash out of a gitmsg ref value
-  // ("[url]#commit:<hash>@<branch>").
+  // refHash pulls the 12-hex commit hash out of a gitmsg ref value.
   function refHash(ref) {
     const m = /commit:([0-9a-f]{7,40})/.exec(ref || "");
     return m ? m[1].slice(0, 12) : null;
   }
 
-  // anyRefHash pulls the hash out of a ref of ANY type ("[url]#<type>:<hash>"),
-  // not just commit: a relation field can carry "#unknown:<hash>", which
-  // StripRepoFromRef writes for a bare id, so a commit-only parse misses it.
+  // anyRefHash pulls the hash out of a ref of any type, which a relation field may carry.
   function anyRefHash(ref) {
     const m = /[#:]([0-9a-f]{7,40})(?:@|$)/.exec(ref || "");
     return m ? m[1].slice(0, 12) : refHash(ref);
   }
 
-  // parseBranchField splits a PR base/head field ("[url]#branch:<name>") into
-  // its repo url ("" for workspace-relative) and branch name.
+  // parseBranchField splits a PR base or head field into its repo url and branch name.
   function parseBranchField(field) {
     const s = field || "";
     const hash = s.indexOf("#");
@@ -956,27 +733,17 @@
     return { url, name: m ? m[1] : "" };
   }
 
-  // effectiveTime returns an item's display/sort timestamp (unix seconds),
-  // COALESCEing an imported item's `origin-time` (the real upstream publish
-  // time) over the git commit's author time, mirroring the cache's
-  // `effective_timestamp` generated column. Imported content (GitHub releases,
-  // issues, …) is committed in a single synthetic run whose author times reflect
-  // import order, not the real chronology, so sorting on author time alone puts
-  // the oldest upstream item first; the origin-time fallback fixes the order.
+  // effectiveTime returns an item's display timestamp, preferring an imported item's origin-time over the git author time.
   function effectiveTime(commit, header) {
     const ot = header && header["origin-time"];
     if (ot) { const ms = Date.parse(ot); if (!isNaN(ms)) return Math.floor(ms / 1000); }
     return (commit && commit.authorTime) || 0;
   }
 
-  // Origin provenance fields (GITMSG §1.9). Fixed at import; MUST NOT change on
-  // edit, so an edit's content override never carries these over the canonical.
+  // ORIGIN_KEYS are the provenance fields fixed at import (GITMSG 1.9); an edit leaves them as the canonical set them.
   const ORIGIN_KEYS = ["origin-author-name", "origin-author-email", "origin-platform", "origin-time", "origin-url"];
 
-  // originHandle derives an @handle from an origin author email, mirroring
-  // protocol.OriginDisplayAuthor: GitHub's "id+login@users.noreply.github.com"
-  // (and plain "login@users.noreply.github.com") yield "@login"; any other email
-  // yields "@<local-part>".
+  // originHandle derives an @handle from an origin author email, mirroring protocol.OriginDisplayAuthor.
   function originHandle(email) {
     if (!email) return "";
     if (email.endsWith("@users.noreply.github.com")) {
@@ -989,12 +756,7 @@
     return "@" + (at > 0 ? email.slice(0, at) : email);
   }
 
-  // effectiveAuthor returns an item's display author, COALESCEing an imported
-  // item's origin author (origin-author-name, else an @handle from
-  // origin-author-email) over the git commit author — mirroring the cache's
-  // effective_author_name generated column. Imported content (GitHub issues,
-  // releases, PRs, …) is committed by the importer but carries the real upstream
-  // author in origin-* fields, so display must prefer the origin author.
+  // effectiveAuthor returns an item's display author, preferring the origin author over the git commit author.
   function effectiveAuthor(commit, header) {
     header = header || {};
     if (header["origin-author-name"]) return header["origin-author-name"];
@@ -1003,9 +765,7 @@
     return (commit && (commit.authorName || commit.authorEmail)) || "unknown";
   }
 
-  // effectiveAuthorEmail returns the identity email an item is attributed to
-  // (origin email over git email), so an edit's editor can be told apart from
-  // the original author.
+  // effectiveAuthorEmail returns the identity email an item is attributed to, origin email over git email.
   function effectiveAuthorEmail(commit, header) {
     header = header || {};
     return header["origin-author-email"] || (commit && commit.authorEmail) || "";
@@ -1014,23 +774,12 @@
   // eqFold compares two strings case-insensitively after trimming.
   function eqFold(a, b) { return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase(); }
 
-  // makeVersion builds one entry of an item's version list: the commit, its
-  // resolved header at that point, its displayed content and verbatim raw
-  // message, the attributed author (canonical/origin author, shared across
-  // versions), an "edited by" editor name when the editor differs, and the
-  // version's own real timestamp. Pure data, DOM-free.
+  // makeVersion builds one entry of an item's version list.
   function makeVersion(commit, header, isEdit, author, editorName, effTime, content) {
     return { commit, header, content, rawMessage: commit.rawMessage, author, editorName, edited: isEdit, effectiveTime: effTime };
   }
 
-  // buildVersions returns the ordered version list for one item: the canonical
-  // first, then each edit chronologically (oldest edit first, so the last entry
-  // is the latest/displayed version). Edit headers merge over the canonical but
-  // keep its origin provenance (GITMSG §1.9); an edit's own timestamp is its real
-  // edit time (edits carry no origin-time). The author is the canonical/origin
-  // author for every row; edit rows carry an editorName only when the editor
-  // differs. The data is already in the walked commit set, so a version list
-  // grows (canonical + N edits) exactly as more history is walked in.
+  // buildVersions returns an item's ordered version list: the canonical first, then each edit oldest first.
   function buildVersions(canon, canonHeader, edits, author) {
     const canonEmail = effectiveAuthorEmail(canon, canonHeader);
     const mergeHeader = (own) => {
@@ -1048,16 +797,7 @@
     return out;
   }
 
-  // resolveItems applies same-repo edit resolution: latest edit per canonical
-  // wins (overriding header fields and content), retractions drop the item.
-  // Commits arrive newest-first, so it iterates oldest-first to let the latest
-  // edit land last. An edit whose canonical is not reachable in this bucket
-  // (rebuilt history, or a canonical under a URL-qualified origin ref) is
-  // promoted to a standalone item so the latest state still renders. Items are
-  // ordered newest-first by effectiveTime so imported content sorts by real
-  // upstream time, not import order. Each item carries a `versions` list (the
-  // full edit chain, canonical first) built from the same walked commit set, so
-  // it deepens along with the walk.
+  // resolveItems applies same-repo edit resolution: the latest edit per canonical wins, a retraction drops the item, an orphan edit stands alone.
   function resolveItems(commits) {
     const chron = commits.slice().reverse();
     const editsFor = new Map();
@@ -1084,13 +824,11 @@
         edited = true;
         consumed.add(c.short);
         Object.assign(header, edit.gitmsg);
-        // Origin provenance is fixed at import and MUST NOT change on edit
-        // (GITMSG §1.9): keep the canonical's origin author/time for display.
+        // Origin provenance is fixed at import (GITMSG 1.9): keep the canonical's origin fields.
         for (const k of ORIGIN_KEYS) { if (canonHeader[k] !== undefined) header[k] = canonHeader[k]; else delete header[k]; }
         if (edit.gitmsg.retracted === "true") retracted = true;
         if (edit.content) content = edit.content;
-        // Raw view shows the protocol truth of the commit whose content is
-        // displayed — the edit commit when an edit overrides the canonical.
+        // The raw view shows the commit whose content is displayed, the edit when one overrides the canonical.
         rawMessage = edit.rawMessage;
         // Show "edited by" only when the editor differs from the original author.
         if (!eqFold(effectiveAuthorEmail(edit, edit.gitmsg), effectiveAuthorEmail(c, canonHeader))) {
@@ -1107,8 +845,7 @@
       if (edit.gitmsg.retracted === "true") continue;
       const h = Object.assign({}, edit.gitmsg);
       const author = effectiveAuthor(edit, edit.gitmsg);
-      // Orphan edits (canonical out of this bucket): the collected edits become
-      // the version chain, the first standing in for the missing canonical.
+      // Orphan edits: the collected edits become the version chain, the first standing in for the missing canonical.
       const orphans = allEditsFor.get(target) || [edit];
       const versions = buildVersions(orphans[0], orphans[0].gitmsg || {}, orphans.slice(1), author);
       items.push({ commit: edit, header: h, content: edit.content, rawMessage: edit.rawMessage, edited: true, editorName: "", author, effectiveTime: effectiveTime(edit, h), versions });
@@ -1122,20 +859,11 @@
     return await fetchText(base, ".gitsocial/ref-mode");
   }
 
-  // MANIFEST_KEY is the push-maintained refs manifest (refname → sha), rebuilt
-  // from the bucket's ref list on every push. LEGACY_MANIFEST_KEY is its older
-  // site copy, all a bucket not pushed since carries.
+  // MANIFEST_KEY is the push-maintained refs manifest; LEGACY_MANIFEST_KEY is its older site copy.
   const MANIFEST_KEY = ".gitsocial/refs.json";
   const LEGACY_MANIFEST_KEY = ".gitsocial/site/refs.json";
 
-  // manifestFor memoizes the refs manifest per context, keeping the raw body
-  // beside the parsed map: every caller shared the memo already, and the
-  // freshness watch re-fetched the same key seconds after boot only to
-  // establish a baseline the context was already holding. Same lifetime and
-  // staleness contract as the ctx.head / ctx.refMode memos. null when the
-  // bucket predates the manifest or serves an unparseable one. The memo holds
-  // the in-flight PROMISE, so the concurrent first callers of a route (two
-  // branches both descending to refTip) share one GET of a no-cache key.
+  // manifestFor memoizes the refs manifest per context, keeping the raw body beside the parsed map; null when absent or unparseable.
   function manifestFor(ctx) {
     if (ctx.manifest === undefined) {
       ctx.manifest = (async () => {
@@ -1148,29 +876,13 @@
     return ctx.manifest;
   }
 
-  // refTip resolves a ref tip. The manifest is the fast path, not proof of
-  // absence: it is written best-effort by whichever pusher last succeeded, so a
-  // refname it omits is PROBABLY absent but may simply have missed a failed or
-  // skipped manifest write, and treating its silence as authoritative would make
-  // a whole extension branch read as empty forever with no error anywhere. So an
-  // omitted refname is probed live exactly once per session and the miss is
-  // remembered — the well-known extension branches are asked for on every route,
-  // and a repo with no gitmsg/social used to pay a full 404 body per route to be
-  // told so. When the manifest does carry the ref the live plain key still wins
-  // (authoritative in etag mode, absent in generation mode); a bucket with no
-  // manifest at all keeps probing, since nothing else lists its refs.
+  // refTip resolves a ref tip. The manifest is a fast path, not proof of absence: a refname it omits is probed live once per session.
   async function refTip(ctx, refName) {
     const manifest = await manifestFor(ctx);
     const listed = manifest ? manifest[refName] : null;
     if (manifest && !listed) {
       if (ctx.refMisses.has(refName)) return null;
-      // Existence first, and by HEAD: the probe only needs one bit, and a 404
-      // from an object store is a full error document (R2 serves ~27 KB of it).
-      // A repo missing two of the well-known extension branches was paying ~54 KB
-      // per session to be told they are still missing, on a page whose own
-      // transfer is ~18 KB. The GET below is reached only when the ref turns out
-      // to exist, which is the case this probe is here for: the manifest write
-      // failed or was skipped and the branch is real.
+      // Existence first, and by HEAD: a 404 from an object store carries a full error document.
       if (!(await keyExists(ctx.base, refName))) {
         ctx.refMisses.add(refName);
         return null;
@@ -1182,11 +894,7 @@
     return listed && /^[0-9a-f]{40}$/.test(listed) ? listed : null;
   }
 
-  // walkStateFor returns the resumable walk cached on ctx under `key`, seeded at
-  // `tip`; a changed tip (a push moved the branch) discards the stale walk. The
-  // cache lets a tab revisited within a session continue where it left off (and a
-  // detail deep-lookup share the deepened history with its list), while a fresh
-  // page load builds a fresh ctx and so a fresh walk.
+  // walkStateFor returns the resumable walk cached on ctx under key, seeded at tip; a changed tip discards the stale walk.
   function walkStateFor(ctx, key, tip) {
     const prev = ctx.walks[key];
     if (prev && prev.tip === tip) return prev;
@@ -1195,19 +903,7 @@
     return fresh;
   }
 
-  // loadItemsIndex fetches the push-maintained metadata index for one extension
-  // (.gitsocial/site/items/<ext>/, version 4, brotli — decoded transparently by
-  // the browser via Content-Encoding: br) once per context; null when the bucket
-  // carries none or only an older-version manifest (the miss is remembered, so a
-  // 404 is never refetched). Mirrors loadBodyIndexSharded: the manifest lists
-  // immutable sealed shards (browser-cached across pushes) oldest-first plus the
-  // no-cache head. Only the EAGER set is fetched here — the head and the newest
-  // sealed shard — which covers the timeline window and recent light search; the
-  // remaining older shards load on demand (loadOlderItemShards). The returned
-  // index carries: tip, complete (whether the manifest covers to the branch
-  // root), bodiesBytes (the full-search download size), the eager `items`
-  // (newest-first), a `residentShas` set, the pending older-shard keys
-  // (newest→oldest), the corpus dir, and whether every shard is already resident.
+  // loadItemsIndex fetches an extension's metadata index once per context, the eager set only; null when the bucket carries none.
   async function loadItemsIndex(ctx, ext) {
     if (!ctx.itemsIndex) ctx.itemsIndex = {};
     if (ctx.itemsIndex[ext] !== undefined) return ctx.itemsIndex[ext];
@@ -1219,13 +915,7 @@
     return idx;
   }
 
-  // loadItemsIndexSharded reads the manifest, then fetches only the eager set
-  // (newest sealed shard + head) and returns the index object. Null when the
-  // bucket carries no manifest or an unknown version (4 is the shared gitmsg
-  // schema; 5 is the code corpus whose entries also carry parents — the
-  // returned index's `version` tells the graph whether the DAG is present).
-  // The eager items are newest-first (head newest→oldest, then the newest
-  // shard newest→oldest).
+  // loadItemsIndexSharded reads the manifest and fetches the eager set, the newest sealed shard plus the head, newest-first; null on an unknown version.
   async function loadItemsIndexSharded(ctx, ext) {
     const dir = ".gitsocial/site/items/" + ext + "/";
     const mtext = await fetchText(ctx.base, dir + "manifest.json");
@@ -1234,10 +924,7 @@
     try { m = JSON.parse(mtext); } catch { return null; }
     if (!m || (m.version !== 4 && m.version !== 5) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(m.shards)) return null;
     const newest = m.shards.length ? m.shards[m.shards.length - 1] : null;
-    // Oldest-first ingestion order is: sealed shards (oldest→newest), then the
-    // head (newest overall). The eager set is the newest sealed shard + head, so
-    // assemble them oldest-first (shard THEN head) before reversing to the
-    // newest-first order resolveItems expects — matching loadBodyIndexSharded.
+    // Assemble oldest-first (shard, then head) before reversing to the newest-first order resolveItems expects.
     const eagerKeys = [];
     if (newest) eagerKeys.push(dir + newest.key);
     eagerKeys.push(dir + "head.json");
@@ -1259,11 +946,7 @@
     };
   }
 
-  // loadOlderItemShards fetches every not-yet-resident older shard of `ext`'s
-  // metadata index (immutable, browser-cached), concatenates them oldest→newest,
-  // and merges them into the loaded index (newest-first). Idempotent: once every
-  // shard is resident it is a no-op. Invoked by scroll-back past the eager window
-  // and by the "search older items" affordance.
+  // loadOlderItemShards merges every not-yet-resident older shard into the loaded index; idempotent.
   async function loadOlderItemShards(ctx, ext) {
     const idx = await loadItemsIndex(ctx, ext);
     if (!idx || idx.allResident || !idx.olderShards.length) return idx;
@@ -1284,15 +967,7 @@
     return idx;
   }
 
-  // metaCommit converts one metadata-index entry into the commit-record shape
-  // parseCommit produces, but body-less: only the `GitMsg:` header line is known
-  // (parsed with the same code, so relations/type/state/origin-* resolve), the
-  // message body/content and cross-repo ref excerpts are absent. The index's
-  // subject line is kept on the record (light search + result display) but never
-  // in `content`, so rendering paths that expect real content stay body-less
-  // until hydration. Marked `hollow` so a view that renders the item fetches its
-  // loose object and hydrates the body on demand (hydrateItem). Tree/parents are
-  // absent; detail walks fetch the loose object as before.
+  // metaCommit converts one metadata-index entry into a body-less commit record, marked hollow until hydrateItem fills it.
   function metaCommit(e) {
     const header = String(e.header || "");
     return {
@@ -1303,10 +978,7 @@
     };
   }
 
-  // indexCommit converts one full-message entry (the bodies search corpus) into
-  // the commit-record shape parseCommit produces, so resolveItems and search are
-  // agnostic to the source. Tree/parents are absent; not hollow (the body is
-  // present).
+  // indexCommit converts one full-message entry of the bodies corpus into a commit record.
   function indexCommit(e) {
     const msg = String(e.message || "");
     return {
@@ -1319,10 +991,7 @@
     };
   }
 
-  // hydrateCommit fills a hollow commit record (built from the metadata index)
-  // from its loose object: the message body/content, cross-repo ref excerpts,
-  // tree and parents. A no-op for a full record. On a missing/foreign object the
-  // record is left body-less but no longer hollow (no repeated refetch).
+  // hydrateCommit fills a hollow commit record from its loose object; a missing object clears hollow without a refetch.
   async function hydrateCommit(ctx, commit) {
     if (!commit || !commit.hollow) return;
     const obj = await getObject(ctx, commit.hash);
@@ -1340,10 +1009,7 @@
     commit.hollow = false;
   }
 
-  // hydrateItem fetches the bodies of an item's version commits (canonical +
-  // edits, usually one) and recomputes its displayed and per-version content
-  // from them — mirroring resolveItems' content selection (latest edit's body
-  // over the canonical). Idempotent: once the commits are full it is a no-op.
+  // hydrateItem fetches an item's version commit bodies and recomputes its displayed content; idempotent.
   async function hydrateItem(ctx, item) {
     if (!item) return;
     const versions = item.versions || [];
@@ -1366,9 +1032,7 @@
     }
   }
 
-  // hydrateItems hydrates a set of items' bodies with bounded concurrency (the
-  // handful actually about to render) — the lazy body fetch that keeps the
-  // metadata index small. Full records (non-index buckets) short-circuit.
+  // hydrateItems hydrates a set of items' bodies with bounded concurrency.
   async function hydrateItems(ctx, items) {
     const list = (items || []).filter(Boolean);
     let i = 0;
@@ -1376,10 +1040,7 @@
     await Promise.all(Array.from({ length: Math.min(HYDRATE_CONCURRENCY, list.length) }, worker));
   }
 
-  // bridgeToIndex walks from the live tip toward an index's recorded history,
-  // stopping descent at indexed shas, and returns the gap commits once the
-  // index tip is reached. Null when the tip is never met within WALK_CAP
-  // (rewritten history, or a huge gap) — the caller falls back to a full walk.
+  // bridgeToIndex returns the commits between a live tip and an index's tip; null when that tip is not met within WALK_CAP.
   async function bridgeToIndex(ctx, tip, idx, known) {
     const visited = new Set();
     let frontier = [tip];
@@ -1399,15 +1060,7 @@
     return metTip && !frontier.length ? out : null;
   }
 
-  // seedWalkFromIndex primes a fresh ext walk state from the items index's EAGER
-  // set (newest shard + head): with a current index the timeline window loads
-  // from a couple of JSON fetches; with an advanced live tip the gap is bridged
-  // to the manifest tip first. The state is born fully walked (empty frontier)
-  // ONLY when the manifest is complete AND every shard is already resident (a
-  // short branch); otherwise older shards stay pending on the state (w.older) and
-  // are loaded one at a time by stepExtWalk as paging/deep lookups need them,
-  // with the loose-object walk as the final fallback. A missing index, or a
-  // bridge that never meets it, leaves the state untouched (full walk as before).
+  // seedWalkFromIndex primes a fresh ext walk from the index's eager set, bridging a live tip that has moved ahead of it.
   async function seedWalkFromIndex(ctx, ext, w) {
     const idx = await loadItemsIndex(ctx, ext);
     if (!idx || w.state.commits.length) return;
@@ -1426,18 +1079,12 @@
     }
     w.older = idx.olderShards.slice();
     w.ext = ext;
-    // A complete, fully-resident index is exhausted; otherwise leave the frontier
-    // empty (metaCommits carry no parents) so stepExtWalk drains older shards
-    // before it would fall to a loose walk.
+    // metaCommits carry no parents, so the frontier stays empty and stepExtWalk drains older shards before a loose walk.
     state.frontier = [];
     w.indexBacked = true;
   }
 
-  // loadNextItemShard pulls the next-older pending shard onto an index-seeded
-  // walk state (its metadata entries become body-less metaCommits), returning
-  // true when a shard was loaded. Older shards are consumed newest→oldest, so a
-  // scroll-back or deep lookup deepens history one immutable, browser-cached
-  // shard at a time.
+  // loadNextItemShard pulls the next-older pending shard onto an index-seeded walk, consumed newest to oldest.
   async function loadNextItemShard(ctx, w) {
     if (!w.older || !w.older.length) return false;
     const key = w.older.shift();
@@ -1445,9 +1092,7 @@
     if (!text) return true;
     let doc;
     try { doc = JSON.parse(text); } catch { return true; }
-    // Shard docs store their members oldest-first; push newest-first so
-    // state.commits stays uniformly newest-first (matching the eager set and the
-    // loose walk), keeping same-timestamp tie order stable across shard seams.
+    // Shard docs store their members oldest-first; push newest-first so state.commits stays uniformly newest-first.
     const entries = (doc && Array.isArray(doc.items)) ? doc.items.slice().reverse() : [];
     for (const e of entries) {
       if (w.state.visited.has(e.sha)) continue;
@@ -1457,56 +1102,36 @@
     return true;
   }
 
-  // stepExtWalk advances an ext walk state by one window: an index-seeded state
-  // drains its next-older shard (cheap, immutable) before it would touch the
-  // per-commit loose walk; a non-index walk steps as before. Returns whether the
-  // history is exhausted (no pending shards and an empty frontier).
+  // stepExtWalk advances an ext walk by one window, draining an older shard before it would touch the loose walk.
   async function stepExtWalk(ctx, w, cap) {
     if (w.older && w.older.length) { await loadNextItemShard(ctx, w); return; }
     if (w.state.frontier.length) await walkStep(ctx, w.state, cap);
   }
 
-  // extWalkExhausted reports whether an ext walk has nothing left to load (no
-  // pending older shards and an empty loose frontier).
+  // extWalkExhausted reports whether an ext walk has no pending shards and an empty frontier.
   function extWalkExhausted(w) {
     return !(w.older && w.older.length) && !w.state.frontier.length;
   }
 
-  // extSetComplete reports whether `ext`'s already-loaded walk covers its WHOLE
-  // history — true for an index-seeded walk (its item set came from the metadata
-  // shards, complete regardless of the loose bound) or a genuinely exhausted loose
-  // walk; false when a loose walk stopped at the COUNTS_WALK_CAP bound (an
-  // index-absent or stale-manifest bucket). Callers that ran loadExtItemsAll use
-  // it to decide whether to note limited coverage. Returns true when the branch is
-  // absent (nothing to cover). Reads the cached walk; drives no fetches.
+  // extSetComplete reports whether an ext's loaded walk covers its whole history; it reads the cached walk and drives no fetches.
   async function extSetComplete(ctx, ext) {
     const w = await extWalkState(ctx, ext);
     if (!w) return true;
     return !!w.indexBacked || extWalkExhausted(w);
   }
 
-  // extWalkState returns an extension branch's resumable walk (null when the
-  // branch is absent), seeding a fresh state from the items index once per
-  // tip so list, detail, and thread paths share the index-backed set.
+  // extWalkState returns an extension branch's resumable walk, seeded from the items index once per tip; null when the branch is absent.
   async function extWalkState(ctx, ext) {
     const tip = await refTip(ctx, EXT_BRANCHES[ext]);
     if (!tip) return null;
     const w = walkStateFor(ctx, "ext:" + ext, tip);
-    // Seed exactly once per walk: memoize the in-flight seed promise so a second
-    // caller racing in (e.g. the timeline's parallel loadTimelineWindow +
-    // loadInteractionCounts) awaits the SAME seed rather than proceeding over a
-    // half-seeded state (the old boolean flag flipped before the await resolved).
+    // Memoize the in-flight seed, so a second caller awaits it instead of proceeding over a half-seeded state.
     if (!w.seedPromise) w.seedPromise = seedWalkFromIndex(ctx, ext, w);
     await w.seedPromise;
     return w;
   }
 
-  // withWalkLock serializes async operations that mutate one shared walk state.
-  // Multiple consumers reference the same per-ext `w` (list, timeline, counts,
-  // detail), and each advances it across `await` points by shifting w.older and
-  // pushing into w.state — interleaving two of them corrupts progress (items are
-  // dropped, or the walk wedges on "Loading…"). Every consumer runs its body
-  // through this per-`w` promise chain so they execute one after another.
+  // withWalkLock serializes the async operations that mutate one shared walk state.
   function withWalkLock(w, fn) {
     const prev = w.lock || Promise.resolve();
     let release;
@@ -1514,14 +1139,7 @@
     return prev.then(fn).finally(release);
   }
 
-  // loadExtItemsWindow returns a bounded, body-hydrated render window of `ext`'s
-  // resolved items. It grows a `shown` cursor by WALK_CAP per call (extend), walks
-  // enough history to fill it (a no-op for an index-seeded walk, whose full item
-  // set loads from the metadata index), resolves over the FULL accumulated commit
-  // set (so edit/retraction resolution improves as windows deepen), then fetches
-  // the loose-object bodies for ONLY the items in this window — the metadata index
-  // carries no bodies. truncated marks that more items remain (unwalked history OR
-  // beyond the cursor), which the "Load more" affordance reflects.
+  // loadExtItemsWindow returns a bounded, body-hydrated render window of an ext's resolved items, growing a cursor by WALK_CAP per call.
   async function loadExtItemsWindow(ctx, ext, extend) {
     const w = await extWalkState(ctx, ext);
     if (!w) return { items: [], truncated: false };
@@ -1537,17 +1155,12 @@
     });
   }
 
-  // loadExtItems returns an extension branch's resolved items, backed by the
-  // resumable walk cache (at least one window). The array-returning form the
-  // timeline, detail, and thread paths call; empty when the branch is absent.
+  // loadExtItems returns an extension branch's resolved items, at least one window; empty when the branch is absent.
   async function loadExtItems(ctx, ext) {
     return (await loadExtItemsWindow(ctx, ext, false)).items;
   }
 
-  // loadExtItemsUpTo deepens `ext`'s walk until the history is exhausted or
-  // `budget` commits have been visited, then returns the resolved items — used by
-  // the detail thread-source walk so comments beyond the first window attach.
-  // Index-seeded walks are already exhausted, so this costs no object fetches.
+  // loadExtItemsUpTo deepens an ext walk to budget visited commits, then returns the resolved items.
   async function loadExtItemsUpTo(ctx, ext, budget) {
     const w = await extWalkState(ctx, ext);
     if (!w) return [];
@@ -1558,13 +1171,7 @@
     });
   }
 
-  // findItemDeep resolves one item by hash within `ext`, deepening the resumable
-  // walk one window at a time until the item is found or DETAIL_WALK_CAP commits
-  // have been visited. A full-hash permalink additionally fetches its target
-  // object directly up front, so the item resolves without deepening even when
-  // no index covers it. onProgress(visited) fires before each extra window so the
-  // caller can show a "searching history" note. Returns { item, items }; item is
-  // null when the target is unreachable within the budget.
+  // findItemDeep resolves one item by hash, deepening the walk a window at a time up to DETAIL_WALK_CAP; onProgress fires before each extra window.
   async function findItemDeep(ctx, ext, hash, onProgress) {
     const w = await extWalkState(ctx, ext);
     if (!w) return { item: null, items: [] };
@@ -1597,16 +1204,7 @@
     });
   }
 
-  // loadBranchLogWindow is the resumable branch-log walk: a paged commit list
-  // (newest-first accumulated commits) with truncated marking unwalked history.
-  // For the DEFAULT branch, when the bucket carries the v4 code items index, the
-  // log is served from the index metadata (loadBranchLogIndexed) with NO
-  // per-commit loose-object GET: a commit reachable from the default tip always
-  // attributes to the default branch (site_code_index.go: "default wins"), so
-  // entry.branch === defaultBranch is exactly the default branch's log, already
-  // newest-first. Non-default branches (the index can't answer reachability for
-  // them — shared ancestors attribute to default) and index-absent/non-v4 buckets
-  // fall through to the loose walk unchanged.
+  // loadBranchLogWindow pages a branch log; the default branch is served from the code items index when the bucket carries one.
   async function loadBranchLogWindow(ctx, name, extend) {
     const indexed = await loadBranchLogIndexed(ctx, name, extend);
     if (indexed) return indexed;
@@ -1617,20 +1215,7 @@
     return { tip, items: walkedCommits(w.state), truncated: w.state.frontier.length > 0 };
   }
 
-  // loadBranchLogIndexed serves the DEFAULT branch's log from the code items
-  // index, or returns null so loadBranchLogWindow falls back to the loose walk.
-  // Null when: the branch is not the bucket's default, or no v4 code index is
-  // present. It reuses the timeline's index machinery (codeIndexWalkState +
-  // loadNextCodeShard) so shard paging is not duplicated — the same immutable,
-  // browser-cached shards the code timeline reads. The default branch's commits
-  // are the index entries attributed to it (default wins over any feature
-  // attribution), already newest-first; a `shown` cursor grows WALK_CAP per
-  // extend, draining older shards until it is filled or every shard is resident,
-  // so autoscroll/Load-more paging extends the log one shard page at a time. Like
-  // the code timeline this simply serves the index state — an in-flight push whose
-  // live default tip is ahead of the index shows the last-indexed state and the
-  // next push closes the gap (the code corpus manifest tip is a synthetic digest,
-  // not a real commit sha, so a live-tip-to-index bridge is not available here).
+  // loadBranchLogIndexed serves the default branch's log from the code items index, or null so the caller falls back to the loose walk.
   async function loadBranchLogIndexed(ctx, name, extend) {
     const { defaultBranch } = await listBranches(ctx);
     if (!defaultBranch || name !== defaultBranch) return null;
@@ -1642,9 +1227,7 @@
     return withWalkLock(w, async () => {
       b.shown = extend ? b.shown + WALK_CAP : Math.max(b.shown, WALK_CAP);
       const filtered = () => w.items.filter((c) => (c._branch || "") === defaultBranch);
-      // Drain older shards until the default-branch slice fills the cursor or no
-      // pending shard remains (progress-guarded: a shard that adds nothing stops
-      // the loop rather than spinning).
+      // Drain older shards until the slice fills the cursor or no pending shard remains, guarded against a shard that adds nothing.
       let guard = (w.older || []).length, stall = 0;
       while ((w.older && w.older.length) && filtered().length < b.shown) {
         await loadNextCodeShard(ctx, w);
@@ -1659,13 +1242,7 @@
     });
   }
 
-  // startExcludingWalk seeds a resumable walk at `tip` whose visited set is
-  // pre-seeded with every ancestor of `baseSha` (bounded by cap), so the walk
-  // never descends into or emits commits reachable from base. This yields the
-  // head-side-only commits of a compare (the commits `head` has that `base`
-  // lacks), in the same resumable shape as startWalk so it pages with walkStep.
-  // The exclusion walk fetches in CONCURRENCY batches like walkStep — awaiting
-  // one ancestor at a time made it a pure chain of RTTs.
+  // startExcludingWalk seeds a walk at tip whose visited set holds every ancestor of baseSha, yielding a compare's head-side commits.
   async function startExcludingWalk(ctx, tip, baseSha, cap) {
     cap = cap || DETAIL_WALK_CAP;
     const visited = new Set();
@@ -1684,18 +1261,11 @@
         if (obj && obj.type === "commit") for (const p of parseCommit(batch[i], obj.body).parents) frontier.push(p);
       }
     }
-    // The base commit itself is excluded (its ancestors already are); seed the
-    // walk at the head tip with that exclusion set as the visited frontier guard.
+    // The base commit itself is excluded; the walk starts at the head tip with that exclusion set.
     return { visited, frontier: [tip], commits: [] };
   }
 
-  // loadCompareCommitsWindow pages the head-side commits of a compare: the
-  // commits reachable from `headSha` but not from `baseSha` (base's ancestors
-  // are excluded up front), newest-first, WALK_CAP per window. When the code
-  // ancestry index covers both endpoints the whole set comes from it with no
-  // object reads (indexCompareCommits) and only the `shown` cursor pages;
-  // otherwise the loose excluding walk pages as before. The result is cached
-  // on ctx keyed by the pair so "Load more" continues without refetching.
+  // loadCompareCommitsWindow pages a compare's head-side commits, from the ancestry index when it covers both endpoints; cached on ctx per pair.
   async function loadCompareCommitsWindow(ctx, baseSha, headSha, extend) {
     const key = "compare:" + baseSha + ".." + headSha;
     let entry = ctx.walks[key];
@@ -1715,31 +1285,13 @@
   // GRAPH_WINDOW is the number of commits the repository graph loads per window.
   const GRAPH_WINDOW = 150;
 
-  // loadGraphDecorations gathers the graph's ref decorations (git log
-  // --decorate style) once per context, from data the route already has or a
-  // fixed few index fetches — never a per-commit object GET. Returns:
-  //   tips — full sha -> [live code-branch names] (gitmsg/* excluded, matching
-  //          the code-branches-only graph), defaultBranch — HEAD's branch (its
-  //          chip renders as the solid `default` variant);
-  //   tags — raw refs.json tag sha -> [tag names]. No peeling (same rule as the
-  //          tags LIST, which also never fetches tag objects): a lightweight
-  //          tag's sha is its commit and lands on a row; an annotated tag's sha
-  //          is its TAG object and never matches, so it simply doesn't badge;
-  //   merged — [{ short, name, prSha }] from merged-PR headers in the review
-  //          index's RESIDENT eager set (manifest + newest shard + head — older
-  //          merged PRs stay unlabeled rather than draining the corpus): the
-  //          recorded merge-head / head-tip short shas mark the rows carrying a
-  //          (possibly deleted) head branch's work; prSha is the canonical PR's
-  //          full sha when resident, for a chip link to the PR detail.
-  // Cached as a promise on ctx.walks so the indexed and loose paths, and every
-  // load-more, share one load.
+  // loadGraphDecorations gathers the graph's ref decorations once per context: branch tips, tags and merged-PR labels, from data the route already holds.
   async function loadGraphDecorations(ctx) {
     const key = "graphDecor";
     if (ctx.walks[key]) return ctx.walks[key];
     const load = (async () => {
       const { branches, defaultBranch } = await listBranches(ctx);
-      // Branch tips, the tag list, and the review index are independent reads;
-      // the per-branch refTips are independent of each other too — all one batch.
+      // Branch tips, the tag list and the review index are independent reads, so they go out in one batch.
       const code = branches.filter((b) => !b.name.startsWith("gitmsg/"));
       const [tipShas, tagList, idx] = await Promise.all([
         Promise.all(code.map((b) => refTip(ctx, b.ref))),
@@ -1760,8 +1312,7 @@
         if (!h || h.ext !== "review" || h.type !== "pull-request" || h.state !== "merged") continue;
         const name = parseBranchField(h.head).name;
         if (!name || name.startsWith("gitmsg/")) continue;
-        // The canonical PR sha (a merged state rides on an edit whose `edits`
-        // names the canonical) — resolved within the resident set only.
+        // A merged state rides on an edit, so the canonical PR sha comes from that edit's edits field.
         const canonShort = refHash(h.edits || "");
         const canon = canonShort ? idx.items.find((x) => String(x.sha || "").startsWith(canonShort)) : e;
         for (const short of [h["merge-head"], h["head-tip"]]) {
@@ -1776,26 +1327,7 @@
     return load;
   }
 
-  // orderGraphWindow emits up to `cap` resident code-index commits in the loose
-  // graph walk's order: seed the resident DAG's heads, repeatedly pop the
-  // newest-authorTime frontier entry (the FIRST such entry wins a tie, so equal
-  // timestamps keep a stable order), emit it, and push its resident parents.
-  // The result is topological (a parent never precedes the child that reached
-  // it) yet time-interleaved across branches — exactly what assignGraphLanes
-  // needs. A plain ts-desc sort is NOT that: rebases preserve author dates, so
-  // a linear first-parent chain can be ts-non-monotonic, and every inversion
-  // split the chain into a phantom parallel lane. Heads are derived from the
-  // resident set itself (entries no resident entry names as a parent) rather
-  // than the live branch refs, so the graph serves the last-indexed state even
-  // when a ref moved ahead of the index (matching loadBranchLogIndexed); the
-  // resident set is a prefix of the writer's tip-seeded walk, so every resident
-  // entry is reachable from a resident head. Parents outside the resident set
-  // are not pushed — they join the frontier once an older shard drains, and the
-  // emitted window's edges to them stay absent (the lane simply ends). Returns
-  // { commits, more } — more is true when resident entries remain beyond the
-  // cap. Deterministic and recomputed per window: draining older shards only
-  // APPENDS older entries (never a new child of a resident one), so a grown
-  // window keeps the previous window as its exact prefix.
+  // orderGraphWindow emits resident code-index commits in the loose walk's order: topological, yet interleaved by time, which is what assignGraphLanes needs.
   function orderGraphWindow(items, cap) {
     const byHash = new Map();
     for (const c of items) if (!byHash.has(c.hash)) byHash.set(c.hash, c);
@@ -1823,17 +1355,7 @@
     return { commits, more: frontier.some((h) => !visited.has(h)) };
   }
 
-  // loadGraphWindowIndexed serves the repository graph from the code items index
-  // when its entries carry parents (corpus v5), or returns null so
-  // loadGraphWindow falls back to the loose walk (an absent index, or a v4
-  // bucket pushed before parents existed). The resident index entries — shared
-  // with the timeline/branch-log walk, so shards load once — are ordered by the
-  // in-memory frontier-pop walk (orderGraphWindow, the loose walk's order) and
-  // cut to a `shown` cursor that grows GRAPH_WINDOW per extend, draining older
-  // shards until it is filled, mirroring loadBranchLogIndexed's paging. The
-  // indexed graph covers CODE branches only (the corpus's membership): gitmsg/*
-  // data branches, which the loose walk used to interleave, are omitted —
-  // decorations are filtered to match so no label points at an absent row.
+  // loadGraphWindowIndexed serves the graph from a v5 code items index, or null so loadGraphWindow falls back to the loose walk.
   async function loadGraphWindowIndexed(ctx, extend) {
     const w = await codeIndexWalkState(ctx);
     if (!w || !w.hasParents) return null;
@@ -1842,8 +1364,7 @@
     const decor = await loadGraphDecorations(ctx);
     return withWalkLock(w, async () => {
       g.shown = extend ? g.shown + GRAPH_WINDOW : Math.max(g.shown, GRAPH_WINDOW);
-      // Drain older shards until the window fills or no pending shard remains
-      // (progress-guarded, matching loadBranchLogIndexed).
+      // Drain older shards until the window fills or no pending shard remains, guarded like loadBranchLogIndexed.
       let guard = (w.older || []).length, stall = 0;
       while ((w.older && w.older.length) && w.items.length < g.shown) {
         await loadNextCodeShard(ctx, w);
@@ -1857,18 +1378,7 @@
     });
   }
 
-  // loadGraphWindow walks the commit DAG across all branch heads, newest-first by
-  // committer/author time, GRAPH_WINDOW commits per window with resumable
-  // load-more. When the bucket carries a v5 code items index (entries with
-  // parents) the window is served from the index with no per-commit object GET
-  // (loadGraphWindowIndexed); otherwise it seeds a max-heap-like frontier from
-  // every branch tip and pops the newest commit, expanding its parents, so a
-  // merged multi-branch history is interleaved in time order (what a graph needs
-  // for stable lane assignment). Returns { commits, truncated, decor } where
-  // commits carry { hash, short, parents, authorName, authorEmail, authorTime,
-  // content } and decor is the loadGraphDecorations ref map (branch tips, tags,
-  // merged-PR labels) the renderer badges rows from. The walk state is cached
-  // on ctx so load-more continues without refetching.
+  // loadGraphWindow walks the commit DAG across all branch heads, newest-first, GRAPH_WINDOW per window; returns { commits, truncated, decor }.
   async function loadGraphWindow(ctx, extend) {
     const indexed = await loadGraphWindowIndexed(ctx, extend);
     if (indexed) return indexed;
@@ -1888,18 +1398,10 @@
     return { commits: entry.state.commits.slice(), truncated: entry.state.frontier.length > 0, decor };
   }
 
-  // graphWalkStep advances a graph walk by up to `windowCap` more commits. Unlike
-  // the plain BFS walkStep, it always expands the NEWEST unvisited frontier commit
-  // (a time-ordered priority pop), so the emitted sequence is a global newest-
-  // first interleave across branches — the order a lane-assigning graph renderer
-  // consumes. Fetches the popped commit, appends it, and merges its parents into
-  // the frontier. Bounded concurrency is unnecessary here (one pop at a time keeps
-  // the time order exact); objects already in ctx.objects cost no fetch.
+  // graphWalkStep advances a graph walk, always expanding the newest frontier commit, so the sequence interleaves branches in time order.
   async function graphWalkStep(ctx, state, windowCap) {
     const start = state.commits.length;
-    // Resolve author times for the current frontier so the newest can be popped.
-    // Times are cached on the walk to avoid re-fetching when the frontier is
-    // re-scanned across steps.
+    // Author times for the frontier are cached on the walk, so a re-scan across steps costs no fetch.
     state.times = state.times || new Map();
     const timeOf = async (h) => {
       if (state.times.has(h)) return state.times.get(h);
@@ -1925,16 +1427,10 @@
       if (!obj || obj.type !== "commit") continue;
       const c = parseCommit(h, obj.body);
       state.commits.push(c);
-      // Branch attribution for the code-timeline walk: a tip is reached via its
-      // own branch; every parent inherits the branch it was first reached from,
-      // except the default branch always wins (a commit on main shows "main",
-      // not a feature branch that happens to be walked first). Inert for the
-      // graph walk (no tipBranch/reachedVia on its state).
+      // Branch attribution for the code timeline: a parent inherits the branch it was first reached from, and the default branch wins.
       if (state.reachedVia) {
         const tb = state.tipBranch && state.tipBranch[h];
-        // A commit that IS a branch tip is attributed to that branch (the default
-        // branch wins over an already-assigned feature attribution); otherwise it
-        // keeps the branch it was first reached from.
+        // A branch tip is attributed to that branch; the default branch wins over a feature attribution.
         const via = (tb === state.defaultBranch ? tb : (state.reachedVia[h] || tb)) || "";
         if (via) state.reachedVia[h] = via;
         const isDefault = via && via === state.defaultBranch;
@@ -1945,16 +1441,7 @@
     return state;
   }
 
-  // assignGraphLanes assigns each commit (in the given newest-first order) a lane
-  // index and computes the parent edges for an inline-SVG DAG render. It is the
-  // standard "parent-following" lane algorithm: a set of active lanes each hold
-  // the sha the lane is currently waiting to draw; a commit takes the leftmost
-  // lane already waiting for it (else a new lane), then its first parent inherits
-  // that lane and any additional parents (a merge) open/claim further lanes.
-  // Returns { rows, laneCount } where each row is { commit, lane, parents:
-  // [{ sha, lane }], present } — `present` flags a parent that is within the
-  // loaded window (an edge is only drawn to a loaded parent; an unloaded
-  // parent claims no lane at all). Deterministic and DOM-free.
+  // assignGraphLanes assigns each commit a lane and its parent edges for the SVG DAG; a parent outside the window claims no lane.
   function assignGraphLanes(commits) {
     const index = new Map();
     commits.forEach((c, i) => index.set(c.hash, i));
@@ -1972,23 +1459,16 @@
       let lane = -1;
       for (let i = 0; i < lanes.length; i++) if (lanes[i] === c.hash) { lane = i; break; }
       if (lane < 0) lane = claim(c.hash);
-      // Free the commit's lane before re-assigning to parents so the first parent
-      // can inherit exactly this lane (a straight line down the mainline).
+      // Free the commit's lane first, so the first parent can inherit it.
       lanes[lane] = null;
       const parents = [];
       c.parents.forEach((p, pi) => {
-        // Drawable only when the parent is emitted BELOW this row: an absent
-        // parent never appears, and a time-skewed parent already emitted above
-        // has no downward edge. Claiming a lane for either would leave that
-        // lane waiting forever; record them on the child's lane with
-        // present=false so no edge is drawn and no lane is held.
+        // A parent is drawable only when it is emitted below this row; the rest record present=false and hold no lane.
         const present = index.has(p) && index.get(p) > rows.length;
         let pl;
         if (!present) pl = lane;
         else if (pi === 0) {
-          // If another child already left a lane waiting for this parent,
-          // merge into it instead of double-booking a second lane — the parent
-          // emits in its unique waiting lane, so every edge ends at its dot.
+          // Merge into a lane already waiting for this parent rather than double-booking a second one.
           let waiting = -1;
           for (let i = 0; i < lanes.length; i++) if (lanes[i] === p) { waiting = i; break; }
           if (waiting >= 0) pl = waiting;
@@ -2005,27 +1485,13 @@
   }
 
   function newContext(base) {
-    // treeExpanded is the directory-expansion Set shared by the content-pane
-    // file tree and the code-context sidebar tree, so expanding in one is
-    // reflected in the other on the next render (both key by full repo path).
-    // walks caches resumable history walks per ext/branch (see walkStateFor) so
-    // "Load more" and deep lookups accumulate across a session, not per view.
-    // packs caches the bucket's packfile reader state (the objects/info/packs
-    // listing, whether that listing made this a packed bucket, pack map shards,
-    // opened index heads with their fetched slices, aligned data windows, and
-    // each pack's size) so a session pays for each artifact at most once.
-    // refMisses remembers the refnames the manifest omits AND a live probe found
-    // absent (see refTip), so the fallback probe the manifest's best-effort
-    // writes make necessary costs one 404 per refname per session, not per route.
+    // newContext builds the per-session read context: the object cache, ref misses, tree expansion, walk states and the packfile reader state.
     return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), lastHit: null } };
   }
 
   // ---- Trees, paths, branches (DOM-free, testable) ----
 
-  // parseTree parses a git tree object body: repeated entries of
-  // "<octal mode> <name>\0<20 raw sha bytes>". Mode is ASCII octal (no
-  // padding), name is raw UTF-8 bytes, sha is 20 raw bytes rendered hex.
-  // Type is derived from the mode: 40000 = tree, 160000 = gitlink, else blob.
+  // parseTree parses a git tree object body; the entry type comes from its mode.
   function parseTree(body) {
     const entries = [];
     const dec = new TextDecoder();
@@ -2056,10 +1522,7 @@
     return parseTree(obj.body);
   }
 
-  // resolvePath walks tree entries level by level from a commit's root tree
-  // down a "/"-separated path. Returns { type:'tree'|'blob'|'commit', sha,
-  // mode } for the resolved entry, the root tree for an empty path, or null
-  // when any segment is missing or descends through a non-tree.
+  // resolvePath walks tree entries down a "/"-separated path from a commit's root tree; null when a segment is missing.
   async function resolvePath(ctx, commitSha, path) {
     const obj = await getObject(ctx, commitSha);
     if (!obj || obj.type !== "commit") return null;
@@ -2082,9 +1545,7 @@
     return head && head.branch ? head.branch.replace(/^refs\/heads\//, "") : null;
   }
 
-  // listBranches enumerates branches: refs/heads/* from the manifest when
-  // present, else the well-known extension branches plus HEAD's branch. The
-  // default branch is HEAD's symref target.
+  // listBranches enumerates branches from the manifest, else the well-known extension branches plus HEAD's branch.
   async function listBranches(ctx) {
     const head = await headFor(ctx);
     const defaultBranch = headBranchName(head);
@@ -2104,13 +1565,7 @@
     return { defaultBranch, branches };
   }
 
-  // peelTag resolves a ref sha to its underlying commit: a lightweight tag (or a
-  // branch) points straight at a commit, so the sha is returned as-is; an
-  // annotated tag points at a tag object whose body carries an `object <sha>`
-  // line naming the tagged object, which is followed (chasing nested tag objects)
-  // until a commit is reached. Returns { sha, commit, tagger, message } — commit
-  // is the peeled commit sha (null when unreachable), tagger/message come from
-  // the annotated tag object when present (empty for a lightweight tag).
+  // peelTag resolves a ref sha to its commit, following annotated tag objects; tagger and message come from the tag object.
   async function peelTag(ctx, sha) {
     let cur = sha, tagger = "", message = "", signed = false, guard = 0;
     while (cur && guard++ < 8) {
@@ -2137,22 +1592,14 @@
     return { sha, commit: null, tagger, message, signed };
   }
 
-  // stripSignatureBlock removes a trailing PGP/SSH signature block from an
-  // annotated tag (or signed commit) message body. Git appends the ASCII-armored
-  // signature after the annotation, e.g. "-----BEGIN PGP SIGNATURE----- … -----END
-  // PGP SIGNATURE-----"; it is noise for a reader. Returns { text, signed } so a
-  // small "signed" note can stand in for the removed block.
+  // stripSignatureBlock removes a trailing PGP or SSH signature block and reports whether one was there.
   function stripSignatureBlock(body) {
     const re = /-----BEGIN (?:PGP|SSH) SIGNATURE-----[\s\S]*?-----END (?:PGP|SSH) SIGNATURE-----\s*/g;
     const signed = re.test(body);
     return { text: signed ? body.replace(re, "").replace(/\s+$/, "") : body, signed };
   }
 
-  // listTags enumerates the bucket's tags from the refs manifest (refs/tags/*),
-  // mirroring listBranches. Each entry carries the tag name and its raw ref sha
-  // (a lightweight tag's commit, or an annotated tag's tag object — peeled to a
-  // commit on demand by the tag detail view). Empty when the manifest is absent
-  // or carries no tags (tags weren't pushed).
+  // listTags enumerates the bucket's tags from the refs manifest, each with its raw ref sha, unpeeled.
   async function listTags(ctx) {
     const manifest = await manifestFor(ctx);
     const tags = [];
@@ -2168,22 +1615,13 @@
     return tags;
   }
 
-  // tagVersionKey extracts a tag name's dotted version as a number array,
-  // v-prefix aware ("v1.2.0" -> [1,2,0], "1.0-light" -> [1,0]); null when the
-  // name carries no leading numeric version. A trailing pre-release suffix
-  // (e.g. "-rc1") is ignored for ordering — good enough for descending display.
+  // tagVersionKey extracts a tag name's dotted version as a number array; null when the name carries none.
   function tagVersionKey(name) {
     const m = /^v?(\d+(?:\.\d+)*)/.exec(String(name || ""));
     return m ? m[1].split(".").map(Number) : null;
   }
 
-  // compareTagsDesc orders tags version-aware, highest version first (semver-style
-  // numeric compare, GitLab-like). Non-version tags fall after all versioned ones
-  // and sort by name descending (a deterministic, listing-only fallback that needs
-  // no per-tag object fetch). A shorter version prefix that is otherwise equal is
-  // the lower version ("1.0" < "1.0.1"). When two names share the same numeric
-  // version, a plain release outranks one carrying a suffix (semver: "1.0" >
-  // "1.0-light"/"1.0-rc1"), then shorter-name-first as a deterministic tiebreak.
+  // compareTagsDesc orders tags highest version first, non-version tags after them by name descending.
   function compareTagsDesc(a, b) {
     const va = tagVersionKey(a.name), vb = tagVersionKey(b.name);
     if (va && vb) {
@@ -2201,23 +1639,12 @@
     return b.name.localeCompare(a.name);
   }
 
-  // tagVersionSuffix returns the trailing text after a tag name's leading numeric
-  // version ("v1.0-light" -> "-light", "v1.0" -> ""), so a plain release can be
-  // ranked above a pre-release/variant of the same version.
+  // tagVersionSuffix returns the text after a tag name's leading numeric version.
   function tagVersionSuffix(name) {
     return String(name || "").replace(/^v?\d+(?:\.\d+)*/, "");
   }
 
-  // resolveCompareRef resolves a compare side (a branch or tag name) to a commit
-  // sha in this bucket. It prefers a branch of that name (refs/heads/<name>),
-  // falls back to a tag (refs/tags/<name>, peeled through annotated tag objects
-  // to a commit), and returns { sha, kind:'branch'|'tag', name } or null when the
-  // name matches neither ref (or its object is unreachable). When the refs
-  // manifest lists the TAG and omits the branch, the tag resolves first: the
-  // branch-first probe cost a 404 body per compare side for what is
-  // overwhelmingly a picker-chosen tag. The manifest stays a fast path, not
-  // proof — a same-named branch it missed is still probed once the tag path
-  // comes up empty, and a name in neither form probes both as before.
+  // resolveCompareRef resolves a compare side to a commit sha, branch first unless the manifest lists only the tag.
   async function resolveCompareRef(ctx, name) {
     if (!name) return null;
     const manifest = await manifestFor(ctx);
@@ -2240,18 +1667,13 @@
 
   // ---- Markdown (GFM subset; parse step is DOM-free and testable) ----
 
-  // Void/self-closing HTML tags: they carry no closing tag, so line- and
-  // inline-level detection treats them as standalone elements, never wrappers.
+  // VOID_HTML are the self-closing tags, treated as standalone elements rather than wrappers.
   const VOID_HTML = new Set(["br", "hr", "img", "source", "col", "input", "wbr", "area"]);
 
-  // Inline-level HTML tags: a line leading with one of these continues the
-  // current paragraph (CommonMark inline flow) instead of breaking it, so a
-  // <br />-separated link row renders on one line like GitHub does.
+  // INLINE_HTML are the tags a line may lead with and still continue the current paragraph.
   const INLINE_HTML = new Set(["a", "b", "i", "em", "strong", "code", "kbd", "sup", "sub", "span", "img", "br", "del", "s", "strike", "mark", "small", "picture", "input"]);
 
-  // matchDelim returns the index of the delimiter that closes the one at
-  // `start`, counting nesting, or -1. Lets [![alt](img)](link) badges parse:
-  // the outer ] and ) are matched past the inner image's brackets/parens.
+  // matchDelim returns the index of the delimiter closing the one at start, counting nesting, or -1.
   function matchDelim(text, start, open, close) {
     let depth = 0;
     for (let i = start; i < text.length; i++) {
@@ -2261,20 +1683,10 @@
     return -1;
   }
 
-  // LINK_REF_DEF_RE matches a CommonMark link reference definition line —
-  // "[label]: destination" with an optional title. GitHub renders NOTHING for
-  // one whose label is never referenced, which is how bots hide state in a
-  // comment body: Vercel's "[vc]: #<digest>:<base64 json>", the "[//]: # (…)"
-  // marker. Without this the whole marker reads as a paragraph of base64.
+  // LINK_REF_DEF_RE matches a CommonMark link reference definition line, which renders as nothing when its label is unreferenced.
   const LINK_REF_DEF_RE = /^ {0,3}\[([^\]]{1,128})\]:\s*(\S+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*$/;
 
-  // collectLinkRefDefs finds the link reference definitions in a document: the
-  // lines matching LINK_REF_DEF_RE at a BLOCK start (start of input, after a
-  // blank line, or after another definition) and outside fenced code, which is
-  // exactly where CommonMark allows one — the same shape of line inside a
-  // paragraph is ordinary text, and inside a fence it is a code sample.
-  // Returns the label→destination map (first definition of a label wins, as in
-  // CommonMark) and the set of line indices the block parser must not render.
+  // collectLinkRefDefs returns the label to destination map and the line indices the block parser must skip.
   function collectLinkRefDefs(lines) {
     const defs = {}, skip = new Set();
     let fenced = false, atBlockStart = true;
@@ -2292,12 +1704,7 @@
     return { defs, skip };
   }
 
-  // stripLinkRefDefs removes what renders as nothing upstream — link reference
-  // definitions and HTML comments — from raw content, for the callers that read
-  // text rather than render it. Both are how bots carry state in a comment
-  // body, and both land on an item's FIRST line, which is its subject: without
-  // this a list row reads "[vc]: #<base64…>" or "<!-- auto-generated … -->".
-  // Mirrors site_items.go siteStripLinkRefDefs.
+  // stripLinkRefDefs removes link reference definitions and HTML comments from raw content, mirroring site_items.go siteStripLinkRefDefs.
   function stripLinkRefDefs(content) {
     const lines = (content || "").replace(/\r/g, "").replace(HTML_COMMENT_RE, "").split("\n");
     const { skip } = collectLinkRefDefs(lines);
@@ -2305,58 +1712,36 @@
     return kept.join("\n").replace(/^\n+/, "");
   }
 
-  // HTML_COMMENT_RE matches an HTML comment, the OTHER thing that renders as
-  // nothing upstream and as noise here: "<!-- auto-generated by … -->" wrapping
-  // a bot's state, section markers like "<!-- review_stack_entry_start -->".
+  // HTML_COMMENT_RE matches an HTML comment, the other thing that renders as nothing upstream.
   const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 
-  // SUBJECT_UNWRAP are the markdown constructs a SUBJECT reduces to its text.
-  // A subject is a name — for a list row, a feed entry, a page title, an OG
-  // card — where markup cannot render, so "[![CLA assistant check](badge.svg)]
-  // (cla-assistant.io/…)" must read as "CLA assistant check" rather than as its
-  // own source. Applied to the subject only; the body renders the real thing.
-  // Every rule here is written so RE2 accepts it too — no backreference, no
-  // lookaround — because site_items.go siteSubjectText must produce the same
-  // title from the same line, and Go's regexp engine has neither.
+  // SUBJECT_UNWRAP reduces a subject to its text; every rule stays RE2-compatible, so site_items.go siteSubjectText mirrors it.
   const SUBJECT_UNWRAP = [
     [/^\s{0,3}(?:#{1,6}\s+|>\s?)/, ""],   // a leading heading or blockquote marker
     [/\*\*([^*]+)\*\*/g, "$1"],           // bold
     [/\*([^\s*][^*]*)\*/g, "$1"],          // italic
-    // Underscore emphasis is word-BOUNDED, per CommonMark: snake_case_name is a
-    // name, not emphasis. The boundary is captured and re-emitted rather than
-    // looked around, which RE2 (the Go mirror's engine) cannot do.
+    // Underscore emphasis is word-bounded per CommonMark; the boundary is captured and re-emitted, which RE2 allows.
     [/(^|[\s(])__([^\s_][^_]*)__($|[\s).,;:!?])/g, "$1$2$3"],
     [/(^|[\s(])_([^\s_][^_]*)_($|[\s).,;:!?])/g, "$1$2$3"],
     [/`([^`]+)`/g, "$1"],                  // code span
-    // The inline HTML a comment body may carry (a bot's "<br/>", "<sup>"): the
-    // renderer shows these, a title cannot.
+    // The inline HTML a comment body may carry: the renderer shows these, a title cannot.
     [/<\/?(?:br|hr|p|div|span|b|i|em|strong|code|kbd|sup|sub|img|a|details|summary)(?:\s[^<>]*)?\/?>/gi, " "],
   ];
 
-  // SUBJECT_LINK unwraps "[text](href)" and "![alt](src)" to their words. Run
-  // first and repeatedly, so a badge nested in a link ("[![alt](src)](href)")
-  // reduces from the inside out.
+  // SUBJECT_LINK unwraps a link or image to its words; run repeatedly, so a nested badge reduces from the inside out.
   const SUBJECT_LINK = /!?\[([^\]]*)\]\([^)]*\)/g;
 
-  // subjectText projects a raw first line to the text a title should show:
-  // markdown constructs unwrapped to their words, whitespace collapsed. Mirrors
-  // site_items.go siteSubjectText so the index, the served page and the app
-  // name an item the same way.
+  // subjectText projects a raw first line to the text a title shows, mirroring site_items.go siteSubjectText.
   function subjectText(line) {
     let out = line || "";
     for (let pass = 0; pass < 3 && SUBJECT_LINK.test(out); pass++) { SUBJECT_LINK.lastIndex = 0; out = out.replace(SUBJECT_LINK, "$1"); }
     SUBJECT_LINK.lastIndex = 0;
-    // Twice: a boundary character consumed by one match is the boundary the next
-    // one needs ("_a_ _b_"), so a single pass can leave the second unwrapped.
+    // Twice: a boundary character consumed by one match is the one the next match needs.
     for (let pass = 0; pass < 2; pass++) for (const [re, to] of SUBJECT_UNWRAP) out = out.replace(re, to);
     return out.replace(/\s+/g, " ").trim();
   }
 
-  // linkRefTarget resolves a reference link or image at `close` (the index of
-  // the "]" closing its text) against the collected definitions: the full form
-  // [text][label], the collapsed [text][], and the shortcut [text]. Returns
-  // { href, next } or null, in which case the brackets stay literal text — the
-  // behavior of every unresolvable bracket run before references existed.
+  // linkRefTarget resolves a reference link or image against the collected definitions; null leaves the brackets as literal text.
   function linkRefTarget(text, close, label, defs) {
     if (!defs) return null;
     let end = close + 1, key = label;
@@ -2371,12 +1756,7 @@
     return href ? { href, next: end } : null;
   }
 
-  // parseInline tokenizes a line into inline spans: code (`x`), images
-  // (![a](u)), links ([t](u)), autolinks (<url> and bare https URLs), bold
-  // (**x**), strikethrough (~~x~~), italic (*x* / _x_), a whitelisted raw-HTML
-  // subset (<b>…</b>, <kbd>…, <sup>…, <br>, …) captured verbatim for the
-  // sanitizer, and plain text. Markdown-native spans render through safe DOM
-  // builders; only rawhtml spans reach the sanitizer.
+  // parseInline tokenizes a line into inline spans; markdown-native spans render through safe DOM builders, and only rawhtml spans reach the sanitizer.
   function parseInline(text, defs) {
     const spans = [];
     let buf = "";
@@ -2455,9 +1835,7 @@
     return spans;
   }
 
-  // spanHasText reports whether an inline span carries anything a reader can
-  // see: text with a non-space character, any embedded span that does, or a
-  // non-text span (an image, a rule, raw HTML) which is visible by being there.
+  // spanHasText reports whether an inline span carries anything a reader can see.
   function spanHasText(span) {
     if (!span) return false;
     if (span.type === "text") return /\S/.test(span.value || "");
@@ -2465,16 +1843,14 @@
     return true;
   }
 
-  // indentWidth counts a line's leading whitespace (a tab counts as two), used
-  // to decide list nesting.
+  // indentWidth counts a line's leading whitespace, a tab as two, to decide list nesting.
   function indentWidth(line) {
     let n = 0;
     for (const c of line) { if (c === " ") n++; else if (c === "\t") n += 2; else break; }
     return n;
   }
 
-  // splitTableRow splits a Markdown table row into trimmed cell strings,
-  // dropping the optional leading/trailing pipes.
+  // splitTableRow splits a Markdown table row into trimmed cells, dropping the optional outer pipes.
   function splitTableRow(line) {
     let s = line.trim();
     if (s.startsWith("|")) s = s.slice(1);
@@ -2495,10 +1871,7 @@
     return l && r ? "center" : r ? "right" : l ? "left" : "";
   }
 
-  // parseList consumes an indentation-delimited list starting at `start` and
-  // returns { block, next }. Items carry parsed inline spans, an optional task
-  // checkbox state, and nested child lists (deeper-indented items attach to the
-  // preceding item). Blank lines end the list (tight lists only).
+  // parseList consumes an indentation-delimited list and returns { block, next }; a blank line ends it.
   function parseList(lines, start, defs) {
     const base = indentWidth(lines[start]);
     const ordered = /^\s*\d+[.)]\s+/.test(lines[start]);
@@ -2526,34 +1899,22 @@
     return { block: { type: "list", ordered, items }, next: i };
   }
 
-  // isThematicBreak recognizes a *** / --- / ___ rule line (3+ markers, spaces
-  // allowed between). A `---` directly under paragraph text is a setext h2
-  // instead; parseMarkdown checks that first.
+  // isThematicBreak recognizes a rule line; parseMarkdown checks for a setext h2 first.
   function isThematicBreak(line) {
     return /^ {0,3}([-*_])( *\1){2,} *$/.test(line);
   }
 
-  // breaksParagraph reports whether a trimmed `<`-leading line ends the
-  // current paragraph: closing tags and block-level tags do; a line leading
-  // with an inline-level tag joins the paragraph and flows through
-  // parseInline's rawhtml handling (CommonMark inline flow).
+  // breaksParagraph reports whether a trimmed <-leading line ends the current paragraph.
   function breaksParagraph(t) {
     const m = /^<(\/?)([a-zA-Z][\w-]*)/.exec(t);
     if (!m) return false;
     return m[1] === "/" || !INLINE_HTML.has(m[2].toLowerCase());
   }
 
-  // parseMarkdown parses text into a block list: heading (ATX + setext),
-  // paragraph, fenced code, list (nested, task-aware), blockquote (recursive),
-  // table, thematic break, and raw HTML (htmlopen/htmlclose wrapper markers
-  // and self-contained html lines). Markdown-native blocks are plain data the
-  // DOM renderer turns into safe nodes; html blocks carry verbatim source for
-  // the sanitizer.
+  // parseMarkdown parses text into a block list; markdown-native blocks are plain data, and html blocks carry verbatim source for the sanitizer.
   function parseMarkdown(text) {
     const lines = (text || "").replace(/\r/g, "").split("\n");
-    // Definitions are collected in a pass of their own because a document may
-    // reference a label before defining it (badges at the top, destinations at
-    // the bottom is the common README shape).
+    // Definitions are collected in a pass of their own: a document may reference a label before defining it.
     const { defs, skip } = collectLinkRefDefs(lines);
     const blocks = [];
     let i = 0;
@@ -2568,10 +1929,7 @@
         blocks.push({ type: "code", lang, text: body.join("\n") });
         continue;
       }
-      // A collected definition renders nothing, as on GitHub. Only lines at a
-      // block start are in `skip`, so the paragraph accumulator below can never
-      // reach one: a definition-shaped line inside a paragraph is text, and
-      // collectLinkRefDefs left it alone.
+      // A collected definition renders nothing; only block-start lines are in skip, so a definition-shaped line inside a paragraph stays text.
       if (skip.has(i)) { i++; continue; }
       const t = line.trim();
       const closeM = /^<\/([a-zA-Z][\w-]*)\s*>$/.exec(t);
@@ -2617,10 +1975,7 @@
       }
       const spans = parseInline(para.join("\n"), defs);
       if (setext) blocks.push({ type: "heading", level: setext, spans });
-      // A paragraph whose spans carry no visible text is not a paragraph: it is
-      // what an HTML comment leaves behind once parseInline eats it (a bot's
-      // "<!-- auto-generated -->" line yields a lone "\n" span), and rendering
-      // it opens a blank gap where the reader sees nothing to explain it.
+      // A paragraph whose spans carry no visible text is what an HTML comment leaves behind, so it is dropped.
       else if (spans.some(spanHasText)) blocks.push({ type: "paragraph", spans });
     }
     return blocks;
@@ -2630,16 +1985,10 @@
 
   const MAX_DIFF_LINES = 5000;
   const DIFF_BLOB_CAP = 1048576;
-  // DIFF_TREE_SCAN_CAP bounds diffTrees' recursion: it stops descending once this
-  // many changed paths are collected, so a huge commit does not fetch every
-  // changed subtree before the display cap (DIFF_FILE_CAP=100) applies. The margin
-  // over the display cap is enough to report "over 100 files changed"; commits
-  // under the cap are unaffected (out.truncated stays false).
+  // DIFF_TREE_SCAN_CAP bounds diffTrees' recursion, with enough margin over the display cap to report that more files changed.
   const DIFF_TREE_SCAN_CAP = 120;
 
-  // splitLines splits text into lines, dropping the trailing empty element a
-  // final newline produces so line counts match git's (a blob ending in "\n"
-  // is N lines, not N+1). An empty string is zero lines.
+  // splitLines splits text into lines, dropping the empty element a final newline produces.
   function splitLines(text) {
     if (text === "") return [];
     const lines = text.split("\n");
@@ -2647,11 +1996,7 @@
     return lines;
   }
 
-  // diffLines runs a Myers O(ND) diff over two texts and returns an ordered
-  // edit script of { op: 'eq'|'add'|'del', line }. Returns null when the pair
-  // is too large (> MAX_DIFF_LINES total), so callers fall back to a plain
-  // "too large to diff" notice rather than an O(N*D) blow-up; `force` skips the
-  // cap for an explicit user opt-in ("Diff anyway").
+  // diffLines runs a Myers O(ND) diff and returns an edit script; null past MAX_DIFF_LINES unless force is set.
   function diffLines(aText, bText, force) {
     const a = splitLines(aText);
     const b = splitLines(bText);
@@ -2694,10 +2039,7 @@
     return ops;
   }
 
-  // buildHunks groups an edit script into unified-diff hunks with `context`
-  // (default 3) lines of surrounding context, merging change regions separated
-  // by <= 2*context equal lines. Each hunk carries @@ header numbers and its
-  // annotated lines ({ op, line, oldN, newN }).
+  // buildHunks groups an edit script into unified-diff hunks with context lines around each change region.
   function buildHunks(ops, context) {
     context = context == null ? 3 : context;
     let oldN = 0, newN = 0;
@@ -2738,12 +2080,7 @@
     return hunks;
   }
 
-  // intraLine computes a char-level word-diff split for one paired del/add line:
-  // the common prefix and suffix (shared by both sides by construction) and the
-  // differing middle of each side. Pure presentation over diffLines output, so a
-  // renderer can wrap the changed middle in a word-level mark. Returns null when
-  // the lines are identical (nothing to mark) or either exceeds 500 chars (skip
-  // the pair, too costly and too noisy to be useful).
+  // intraLine returns the shared prefix and suffix and each side's differing middle; null for identical or over-long lines.
   function intraLine(delLine, addLine) {
     const a = delLine == null ? "" : String(delLine);
     const b = addLine == null ? "" : String(addLine);
@@ -2762,12 +2099,7 @@
     };
   }
 
-  // diffTrees recursively compares two git trees (shaA / shaB, either may be
-  // null for the empty tree) and returns changed paths as { path, status:
-  // 'added'|'deleted'|'modified', shaA, shaB, modeA, modeB }. No rename
-  // detection: a moved file surfaces as a delete plus an add. A directory
-  // replaced by a file (or vice versa) expands to deletes of the old subtree
-  // plus the add. The result is sorted by path.
+  // diffTrees compares two git trees and returns the changed paths sorted by path; there is no rename detection.
   async function diffTrees(ctx, shaA, shaB, prefix) {
     const out = [];
     const state = { truncated: false };
@@ -2777,20 +2109,10 @@
     return out;
   }
 
-  // DIFF_TREE_CONCURRENCY bounds diffCollect's parallel tree fetches. The
-  // descent used to await one tree object at a time, which made a commit diff a
-  // pure serial chain of ~50 range reads at one RTT each; a bounded pool reads
-  // the two sides and the changed subtrees together (and the window cache
-  // coalesces their clustered pack ranges into shared GETs).
+  // DIFF_TREE_CONCURRENCY bounds diffCollect's parallel tree fetches.
   const DIFF_TREE_CONCURRENCY = 8;
 
-  // diffCollect is diffTrees' bounded worker: a breadth-first descent over
-  // tree PAIRS, processed in batches of DIFF_TREE_CONCURRENCY (each pair
-  // fetches its two sides in parallel and enqueues the changed subtrees). It
-  // appends changed paths to `out` and flips state.truncated (halting further
-  // descent) once DIFF_TREE_SCAN_CAP paths are collected, so the fan-out stays
-  // bounded; a concurrent batch can overshoot the cap by a few records, which
-  // the cap's consumers (a "N+" header, DIFF_FILE_CAP display slice) absorb.
+  // diffCollect is diffTrees' bounded worker; a concurrent batch can overshoot DIFF_TREE_SCAN_CAP by a few records.
   async function diffCollect(ctx, shaA, shaB, prefix, out, state) {
     const push = (rec) => { if (state.truncated) return; out.push(rec); if (out.length >= DIFF_TREE_SCAN_CAP) state.truncated = true; };
     const queue = [{ shaA, shaB, prefix }];
@@ -2841,12 +2163,7 @@
     return parseCommit(sha, obj.body).tree;
   }
 
-  // mergeBase walks ancestors of two commits with a shared, bounded budget
-  // (cap total visited at `cap`, default WALK_CAP) over the shared object
-  // cache, and returns the first common ancestor closest to base, or null when
-  // none is reachable within the cap. Both phases fetch in CONCURRENCY batches
-  // (batch entries are consecutive frontier positions processed in order, so
-  // the BFS visit sequence — and thus the answer — matches the serial walk).
+  // mergeBase walks both ancestries under one bounded budget and returns the first common ancestor closest to base.
   async function mergeBase(ctx, headSha, baseSha, cap) {
     cap = cap || WALK_CAP;
     let visited = 0;
@@ -2878,11 +2195,7 @@
     return null;
   }
 
-  // fileDiff fetches the blob pair for one changed entry and produces a diff
-  // model: { binary } for NUL-sniffed content, { tooLarge } for blobs over the
-  // cap or line-diffs past MAX_DIFF_LINES, else { hunks, adds, dels }. Fetch is
-  // lazy: callers invoke this only when a file is expanded. `force` bypasses
-  // both size caps (the "Diff anyway" opt-in); binary stays binary.
+  // fileDiff fetches one changed entry's blob pair and produces its diff model; force bypasses both size caps.
   async function fileDiff(ctx, entry, force) {
     const aObj = entry.shaA ? await getContentObject(ctx, entry.shaA) : null;
     const bObj = entry.shaB ? await getContentObject(ctx, entry.shaB) : null;
@@ -2899,9 +2212,7 @@
 
   // ---- Routing (DOM-free, testable) ----
 
-  // Extension items are commits on well-known data branches, so an item
-  // permalink is a workspace-relative gitmsg ref (#commit:<hash>@<branch>).
-  // These maps translate between a branch, its extension, and its index tab.
+  // An item permalink is a workspace-relative gitmsg ref, so these maps translate between a branch, its extension and its index tab.
   const COMMIT_VIEW = {
     "gitmsg/social": { ext: "social", tab: "timeline", label: "Post" },
     "gitmsg/pm": { ext: "pm", tab: "issues", label: "Issue" },
@@ -2917,41 +2228,23 @@
     return "#commit:" + hash + "@" + (branch || "");
   }
 
-  // compareRef builds a compare route fragment (#/compare:<base>...<head>) with
-  // each side URL-encoded so branch/tag names carrying "/" or other reserved
-  // characters round-trip through parseRoute.
+  // compareRef builds a compare route fragment with each side URL-encoded.
   function compareRef(base, head) {
     return "#/compare:" + encodeURIComponent(base || "") + "..." + encodeURIComponent(head || "");
   }
 
-  // legacyCommit resolves a legacy detail route to its #commit: target and
-  // records the canonical fragment so the router can location.replace to it.
+  // legacyCommit resolves a legacy detail route to its #commit: target and records the canonical fragment.
   function legacyCommit(hash, branch) {
     const clean = hash.toLowerCase();
     return { type: "commit", hash: clean, branch, canonical: commitRef(clean, branch), legacy: true };
   }
 
-  // parseRoute maps a location.hash fragment to a route descriptor. Two
-  // families: friendly/legacy routes start with "/" (tabs and the old
-  // #/issue|pr|release|commit/<hash> permalinks, which resolve to a #commit:
-  // canonical); everything else is gitmsg ref grammar (<type>:<value>).
-  // Fragments carry ":" "@" "/" unencoded, so parsing is positional: split the
-  // reference type at the first ":", the hash/path from its branch at the first
-  // "@", and (files only) a trailing ":L<n>[-<m>]" line suffix (branch names
-  // cannot contain ":", so it delimits cleanly).
+  // parseRoute maps a location.hash fragment to a route descriptor; fragments carry ":" "@" "/" unencoded, so parsing is positional.
   function parseRoute(rawHash) {
     const frag = (rawHash || "").replace(/^#/, "");
     if (frag === "" || frag === "/") return { type: "home" };
     if (frag[0] === "/") {
-      // #/compare:<base>...<head> — each side URL-encoded, so no unencoded "/"
-      // survives to be mis-split by the tab parser. Parse it off the full
-      // fragment before the "/"-split path grammar.
-      // #/commits[/<n>][:<anchor>] — the commits list, whose ROWS have anchors of
-      // their own (`c-<sha12>`) because each is a citable place on a real page.
-      // The anchor is a first-class suffix in the grammar, like file:…:slug, so
-      // the citable URL a generated commits page hands out survives the upgrade
-      // instead of being dropped as an unroutable fragment. Parsed off the full
-      // fragment before the "/"-split path grammar, which would mis-split "/commits:…".
+      // The commits route carries a row anchor as a first-class suffix, so both are parsed off the full fragment before the "/"-split grammar.
       if (frag === "/commits" || frag.startsWith("/commits/") || frag.startsWith("/commits:")) {
         const cm = /^\/commits(?:\/(\d+))?(?::([A-Za-z0-9][\w.-]*))?$/.exec(frag);
         if (!cm) return { type: "notfound" };
@@ -2984,8 +2277,7 @@
       if (rest && head in LEGACY_BRANCH) return legacyCommit(rest, LEGACY_BRANCH[head]);
       return { type: "notfound" };
     }
-    // A plain fragment (#quick-start) is an in-page anchor into the home
-    // README: route home and scroll to its md- slugged heading after render.
+    // A plain fragment is an in-page anchor into the home README.
     if (/^[A-Za-z0-9][\w.-]*$/.test(frag)) return { type: "home", anchor: frag };
     const colon = frag.indexOf(":");
     if (colon <= 0) return { type: "notfound" };
@@ -2999,9 +2291,7 @@
       return { type: "commit", hash, branch };
     }
     if (reftype === "compare") {
-      // #/compare:<base>...<head>, each side URL-encoded (branch/tag names carry
-      // "/" and other reserved chars). A missing/empty side is left blank so the
-      // compare page opens with its pickers for the user to fill.
+      // Each compare side is URL-encoded; a missing side stays blank, so the page opens with its pickers.
       const dots = value.indexOf("...");
       const rawBase = dots < 0 ? value : value.slice(0, dots);
       const rawHead = dots < 0 ? "" : value.slice(dots + 3);
@@ -3015,8 +2305,7 @@
       const at = value.indexOf("@");
       const path = at < 0 ? value : value.slice(0, at);
       let branch = at < 0 ? "" : value.slice(at + 1);
-      // Branch names cannot contain ":", so anything after it is a suffix:
-      // ":L<n>[-<m>]" is a line anchor, any other slug shape a heading anchor.
+      // Branch names cannot contain ":", so a suffix after it is a line anchor or a heading anchor.
       let line = null, lineEnd = null, anchor = "";
       const lc = branch.indexOf(":");
       if (lc >= 0) {
@@ -3035,11 +2324,7 @@
 
   // ---- PM aggregation (DOM-free, testable) ----
 
-  // releaseAssets turns a release header's asset fields into structured entries:
-  // artifact/checksums/sbom filenames each paired with an external href derived
-  // from `artifact-url` (`<artifact-url>/<name>`) when present, else null for
-  // git-stored artifacts a static reader cannot link. `signed-by` rides along
-  // as plain text.
+  // releaseAssets turns a release header's asset fields into entries, with external hrefs when artifact-url is set.
   function releaseAssets(header) {
     header = header || {};
     const base = (header["artifact-url"] || "").replace(/\/$/, "");
@@ -3050,37 +2335,23 @@
     return { artifactUrl: base, artifacts, checksums, sbom, signedBy: header["signed-by"] || "" };
   }
 
-  // stateCounts tallies items by their header `state` (defaulting to "open"),
-  // returning a total and a per-state map for the open/closed/merged filters.
+  // stateCounts tallies items by header state and returns the total with a per-state map.
   function stateCounts(items) {
     const byState = {};
     for (const it of items) { const s = (it.header && it.header.state) || "open"; byState[s] = (byState[s] || 0) + 1; }
     return { total: items.length, byState };
   }
 
-  // hashEq compares two short/long commit hashes by prefix (refs may be 7-40
-  // hex, item shorts are 12), tolerating either being the longer.
+  // hashEq compares two commit hashes by prefix, tolerating either being the longer.
   function hashEq(a, b) { return !!a && !!b && (a === b || a.startsWith(b) || b.startsWith(a)); }
 
-  // THREAD_MAX_DEPTH caps the *visual* indent of a comment thread. The tree is
-  // built to full logical depth from the reply-to chain; indentation stops
-  // increasing past this level while tree order is preserved (the TUI caps at
-  // maxThreadDepth=8 with indentPerLevel=4; the narrower web column caps sooner).
+  // THREAD_MAX_DEPTH caps a thread's visual indent; the tree keeps its full logical depth.
   const THREAD_MAX_DEPTH = 4;
 
-  // threadTime returns a comment's chronological sort key: effectiveTime
-  // (origin-time over git author time) so imported conversations order by real
-  // upstream time, falling back to git author time for native comments.
+  // threadTime returns a comment's chronological sort key, origin time over git author time.
   function threadTime(item) { return item.effectiveTime || (item.commit && item.commit.authorTime) || 0; }
 
-  // groupThread builds a comment tree under an item: comments whose `original`
-  // references the item are thread members; a member's `reply-to` naming another
-  // member nests it under that member to full logical depth; otherwise (reply-to
-  // the item itself, or a parent outside this thread) it is a top-level node.
-  // Returns top-level nodes { comment, depth, replies:[node…] }; `depth` is the
-  // render-indent level, capped at THREAD_MAX_DEPTH. Ordering is chronological by
-  // effectiveTime at every level. Reference fields consulted: `original`
-  // (membership) then `reply-to` (nesting), per GITSOCIAL 1.3.
+  // groupThread builds a comment tree under an item: original decides membership, reply-to decides nesting, per GITSOCIAL 1.3.
   function groupThread(itemShort, comments) {
     const mine = comments.filter((c) => hashEq(refHash(c.header.original), itemShort));
     const byShort = new Map();
@@ -3111,24 +2382,14 @@
     return roots;
   }
 
-  // flattenThread walks a thread node tree depth-first in chronological order
-  // into a flat [{ comment, depth }] list (depth already indent-capped) — the
-  // shape the renderer draws with per-depth rail guides, mirroring the TUI's
-  // flat parents+anchor+children list with a per-post Depth.
+  // flattenThread walks a thread node tree depth-first into a flat [{ comment, depth }] list.
   function flattenThread(nodes, out) {
     out = out || [];
     for (const n of nodes) { out.push({ comment: n.comment, depth: n.depth }); flattenThread(n.replies, out); }
     return out;
   }
 
-  // TIMELINE_SPECS lists the extension data branches the merged timeline walks,
-  // with an optional item-type filter. Mirrors the TUI/library timeline, which
-  // reads the social_items_resolved view across data branches (every commit as an
-  // item) rather than the social branch alone — so a repo with no posts but many
-  // imported issues/PRs still shows a full, interleaved feed. review/release are
-  // type-filtered to their reviewable/published units (line-level feedback and
-  // draft-tag commits are not standalone timeline entries). Memo is excluded:
-  // it is a distinct extension with its own view, not part of the social feed.
+  // TIMELINE_SPECS lists the data branches the merged timeline walks, with the item-type filter each carries; memo is excluded.
   const TIMELINE_SPECS = [
     { ext: "social", branch: "gitmsg/social", type: null },
     { ext: "pm", branch: "gitmsg/pm", type: null },
@@ -3136,13 +2397,7 @@
     { ext: "release", branch: "gitmsg/release", type: "release" },
   ];
 
-  // TIMELINE_WINDOW caps how many merged items the timeline renders and hydrates
-  // per autoscroll step. The metadata index carries no bodies, so the cost that
-  // must stay bounded is body hydration (one loose-object GET per rendered item):
-  // merging is metadata-only and cheap, but rendering N items fetches N bodies.
-  // Only this many are rendered+hydrated at a time; the sentinel/observer advances
-  // by another window as the reader scrolls. Kept well under WALK_CAP (200) so the
-  // first paint is ~50 GETs, not the whole feed.
+  // TIMELINE_WINDOW caps how many merged items the timeline renders and hydrates per autoscroll step.
   const TIMELINE_WINDOW = 50;
 
   // timelineTyped applies a spec's optional item-type filter to resolved items.
@@ -3151,13 +2406,7 @@
     return items.filter((it) => ((it.header && it.header.type) || "") === spec.type);
   }
 
-  // loadTimelineItems builds the merged, newest-first timeline feed across every
-  // extension data branch present in the bucket. Each item is tagged with its
-  // source ext/branch so the renderer can pick the matching card. Worst-case
-  // fan-out: one bounded walk (WALK_CAP each) per data branch (four), sharing the
-  // ctx object cache — the same walks the per-tab views already run. Un-windowed
-  // (hydrates every item), so it is used only where the full feed is wanted at
-  // once (analytics/tests); the interactive route uses loadTimelineWindow.
+  // loadTimelineItems builds the whole merged timeline feed and hydrates every item; the interactive route uses loadTimelineWindow.
   async function loadTimelineItems(ctx) {
     const out = [];
     const [lanes, code] = await Promise.all([
@@ -3175,23 +2424,13 @@
     return out;
   }
 
-  // resolveExtItems returns `ext`'s resolved items metadata-only (UN-hydrated:
-  // no body fetches), walking history just far enough to surface at least `need`
-  // items or exhaust the branch — the k-way-merge input the timeline window sorts
-  // across branches before hydrating only the slice it renders. An index-seeded
-  // walk surfaces the eager set (newest shard + head) with no object fetches, and
-  // deepens by pulling older metadata shards on demand; a non-index bucket walks
-  // at most ~need commits (min one WALK_CAP window), matching loadExtItemsWindow's
-  // bound rather than a full walk. `more` reports that unwalked history remains.
+  // resolveExtItems returns an ext's resolved items un-hydrated, walking far enough to surface need items or exhaust the branch.
   async function resolveExtItems(ctx, ext, need) {
     const w = await extWalkState(ctx, ext);
     if (!w) return { items: [], more: false };
     return withWalkLock(w, async () => {
       if (w.state.commits.length === 0) await stepExtWalk(ctx, w, WALK_CAP);
-      // Progress-guarded loop: each step must add commits or drain an older shard;
-      // if a step makes NO forward progress (a malformed shard/manifest, or a walk
-      // that can't advance), break rather than spin forever (the timeline would
-      // otherwise hang on "Loading…" with no error). See stepGuard.
+      // Progress guard: a step that adds no commits and drains no shard breaks the loop rather than spinning.
       let guardN = w.state.commits.length, guardShards = (w.older || []).length, stall = 0;
       while (!extWalkExhausted(w) && w.state.commits.length < need) {
         await stepExtWalk(ctx, w, WALK_CAP);
@@ -3203,12 +2442,7 @@
     });
   }
 
-  // codeCommitItem wraps one plain default-branch commit as a timeline item in
-  // the same shape resolveItems produces (commit / header / content /
-  // effectiveTime / versions), so the merge, sort, and card dispatch treat it
-  // uniformly. A code commit carries no GitMsg header (header is {}), so
-  // timelineTyped's type filter, loadInteractionCounts, and edit resolution all
-  // no-op for it. Its effectiveTime is the git author time (no origin-time).
+  // codeCommitItem wraps a plain commit as a timeline item in the shape resolveItems produces.
   function codeCommitItem(commit, branch) {
     return {
       commit, header: {}, content: commit.content, rawMessage: commit.rawMessage,
@@ -3217,15 +2451,7 @@
     };
   }
 
-  // codeMetaCommit converts one code items-index entry into a body-less commit
-  // record for the timeline. Unlike a gitmsg metaCommit, a code entry carries a
-  // real subject and its attributed branch but NO GitMsg header; the commit card
-  // renders subject + author/time/hash only, so `content` is set to the subject
-  // (subjectBody's first line) and the record is NOT marked hollow — the timeline
-  // never fetches the loose object for a code card, which is exactly the ~50 GETs
-  // the index removes. `branch` rides on the record so codeCommitItem links it
-  // under the attributed branch route, and `parents` (v5 entries) carries the
-  // DAG edges the graph renders. Detail views still fetch the loose object.
+  // codeMetaCommit converts one code index entry into a body-less commit record carrying its subject, branch and parents.
   function codeMetaCommit(e) {
     return {
       hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "",
@@ -3236,14 +2462,7 @@
     };
   }
 
-  // codeWalkState returns the single resumable walk over EVERY pushed code branch
-  // (refs/heads/* except the gitmsg/* data branches), seeded at all their tips at
-  // once. Matching the TUI's all-branch timeline, this interleaves plain commits
-  // from the default branch and every feature branch in one newest-first stream,
-  // deduped by hash (a commit reachable from several branches appears once). Null
-  // when the repo has no code branches (a data-only bucket). The walk records the
-  // branch every tip belongs to (state.tipBranch) so a commit's card links under
-  // the branch whose walk reached it first (graphWalkStep records reachedVia).
+  // codeWalkState returns the single resumable walk over every pushed code branch, seeded at all their tips; null on a data-only bucket.
   async function codeWalkState(ctx) {
     const key = "codeTimeline";
     let w = ctx.walks[key];
@@ -3263,18 +2482,7 @@
     return w;
   }
 
-  // resolveCodeItems returns plain commits across all code branches as timeline
-  // items (newest-first), advancing just far enough to surface at least `need`
-  // items or exhaust the history, in step with the timeline window. When the
-  // bucket carries the push-maintained code items index (.gitsocial/site/items/
-  // code/, v4), items are sourced from it metadata-only — the newest shard + head
-  // cover the first window with a couple of JSON fetches and NO per-commit
-  // loose-object GET (a code card renders subject + meta, so no body hydration),
-  // and older shards page in on demand exactly like the ext items. Absent (or
-  // non-v4) index buckets fall back to the loose graph walk below, which is
-  // unchanged so old buckets keep working. Each item is attributed to a real
-  // branch (the index carries it; the loose walk derives reachedVia). `more`
-  // reports unwalked/older history remains.
+  // resolveCodeItems returns plain commits across the code branches as timeline items, from the code index when the bucket carries one.
   async function resolveCodeItems(ctx, need) {
     const indexed = await resolveCodeItemsIndexed(ctx, need);
     if (indexed) return indexed;
@@ -3288,14 +2496,7 @@
     });
   }
 
-  // resolveCodeItemsIndexed sources the timeline's code commits from the code
-  // items index when present, returning null (no index → caller uses the loose
-  // walk). It seeds a resumable index walk from the eager set (newest shard +
-  // head) once, then drains older metadata shards until at least `need` items are
-  // surfaced or every shard is resident — mirroring resolveExtItems' shard paging,
-  // but building code items (subject-only metaCommits, no hydration). `more` is
-  // true while older shards remain unloaded OR the manifest is an incomplete
-  // bootstrap (older history still to be indexed).
+  // resolveCodeItemsIndexed sources the timeline's code commits from the code index, or null when the bucket carries none.
   async function resolveCodeItemsIndexed(ctx, need) {
     const w = await codeIndexWalkState(ctx);
     if (!w) return null;
@@ -3313,13 +2514,7 @@
     });
   }
 
-  // codeIndexWalkState returns the resumable index-backed code walk (null when the
-  // bucket carries no code items index, so the caller falls back to the loose
-  // walk). Seeded once per context from the code corpus's eager set (newest shard
-  // + head, newest-first), with the remaining older shards pending on w.older for
-  // on-demand paging — the same shape seedWalkFromIndex builds for an extension.
-  // `hasParents` marks a v5 corpus (entries carry parent shas) so the graph
-  // knows the DAG is servable from the index.
+  // codeIndexWalkState returns the resumable index-backed code walk; hasParents marks a v5 corpus, whose entries carry parent shas.
   async function codeIndexWalkState(ctx) {
     const key = "codeIndex";
     if (ctx.walks[key] !== undefined) return ctx.walks[key];
@@ -3334,11 +2529,7 @@
     return w;
   }
 
-  // loadNextCodeShard pulls the next-older pending shard of the code index onto
-  // the index-backed code walk (its metadata entries become subject-only
-  // codeMetaCommits). Older shards are consumed newest→oldest, deepening the
-  // timeline one immutable, browser-cached shard at a time. Mirrors
-  // loadNextItemShard for the ext corpora.
+  // loadNextCodeShard pulls the next-older pending shard onto the index-backed code walk.
   async function loadNextCodeShard(ctx, w) {
     if (!w.older || !w.older.length) return false;
     const keyName = w.older.shift();
@@ -3355,13 +2546,7 @@
     return true;
   }
 
-  // codeAncestry drains the code items index and returns a hash → commit-record
-  // Map for ancestry questions — merge bases, tag and compare commit ranges —
-  // answered with NO per-object reads: the v5 corpus carries every commit's
-  // parent shas (the same data the graph renders its DAG from), and the drained
-  // shards are immutable and browser-cached. Null when the bucket has no v5
-  // code corpus. Cached on ctx.walks as a promise, so the tag, compare, and PR
-  // diff surfaces share one drain.
+  // codeAncestry drains the code index into a hash to commit Map for ancestry questions; null without a v5 corpus.
   function codeAncestry(ctx) {
     const key = "codeAncestry";
     if (ctx.walks[key] !== undefined) return ctx.walks[key];
@@ -3385,10 +2570,7 @@
     return load;
   }
 
-  // indexAncestors collects every ancestor of `sha` present in an ancestry map
-  // (the sha itself included). Descent simply stops at parents outside the map
-  // (an incomplete bootstrap prefix), so the set is a subset of the truth —
-  // callers treat a miss as "fall back", never as proof.
+  // indexAncestors collects every ancestor of sha present in an ancestry map; descent stops at parents outside it, so the set is a subset of the truth.
   function indexAncestors(map, sha) {
     const seen = new Set();
     const frontier = sha && map.has(sha) ? [sha] : [];
@@ -3402,11 +2584,7 @@
     return seen;
   }
 
-  // resolveMergeBase returns the merge base of two commits: from the code
-  // ancestry index when it covers both endpoints (no object reads — the per-
-  // commit loose walk is what held the tag and compare routes for ~40 s), else
-  // the bounded loose walk. Same first-common-ancestor-closest-to-base rule as
-  // mergeBase; null when nothing common is reachable either way.
+  // resolveMergeBase returns the merge base from the ancestry index when it covers both endpoints, else from the bounded loose walk.
   async function resolveMergeBase(ctx, headSha, baseSha, cap) {
     const map = await codeAncestry(ctx);
     if (map && map.has(headSha) && map.has(baseSha)) {
@@ -3421,17 +2599,12 @@
         const c = map.get(h);
         if (c) for (const p of c.parents || []) frontier.push(p);
       }
-      // Fall through: an incomplete corpus can hide the common ancestor even
-      // with both endpoints indexed.
+      // Fall through: an incomplete corpus can hide the common ancestor even with both endpoints indexed.
     }
     return mergeBase(ctx, headSha, baseSha, cap);
   }
 
-  // indexCompareCommits returns the head-side commits of a compare (reachable
-  // from head, not from base) from the code ancestry index, newest-first, with
-  // no object reads. Null when the index cannot answer (no v5 corpus, or an
-  // endpoint outside it) — the caller falls back to the loose excluding walk.
-  // An empty baseSha (the oldest tag's "Commits" section) excludes nothing.
+  // indexCompareCommits returns a compare's head-side commits from the ancestry index; null when the index cannot answer.
   async function indexCompareCommits(ctx, baseSha, headSha) {
     const map = await codeAncestry(ctx);
     if (!map || !map.has(headSha) || (baseSha && !map.has(baseSha))) return null;
@@ -3452,15 +2625,7 @@
     return out;
   }
 
-  // resolveShortShaFromIndex resolves a SHORT commit sha to its full sha using
-  // the code items index (every code commit's full sha), draining older shards
-  // newest-first until a prefix match is found or every shard is resident.
-  // Returns the full sha, or null when the index is absent or the prefix is not
-  // present (the caller then falls back to a loose-object walk — the sha may
-  // predate the index bootstrap's completeness or sit on a non-indexed object).
-  // Ambiguity: mirrors the loose walk's `commits.find(...startsWith)` — the
-  // first (newest-first) prefix match wins, no uniqueness check, matching the
-  // single-target resolution the walk performs today.
+  // resolveShortShaFromIndex resolves a short sha to its full sha from the code index; the first newest-first prefix match wins.
   async function resolveShortShaFromIndex(ctx, short) {
     if (!short) return null;
     const w = await codeIndexWalkState(ctx);
@@ -3480,29 +2645,13 @@
     });
   }
 
-  // COMMITS_PAGE_SIZE is one commits list page's row count, mirroring the page
-  // layer's sitePagesListSize. Both sides must agree exactly: the generated
-  // commits page and this route render the same rows, or the page-entry upgrade
-  // swaps one list for another.
+  // COMMITS_PAGE_SIZE is one commits list page's row count and must match the page layer's sitePagesListSize.
   const COMMITS_PAGE_SIZE = 100;
 
-  // SITE_PAGES_KEY is the HTML page layer's manifest, which publishes the commits
-  // list's pagination (see loadCommitsLayout).
+  // SITE_PAGES_KEY is the HTML page layer's manifest, which publishes the commits list's pagination.
   const SITE_PAGES_KEY = ".gitsocial/site/pages.json";
 
-  // loadCommitsLayout reads the commits list's PUBLISHED partition — how many
-  // pages are sealed and which commit is the sealing boundary — from the page
-  // layer's manifest. The writer decides that partition (it is what makes a
-  // sealed page immutable), so reading it rather than re-deriving it is what
-  // makes the static page and this route agree by construction rather than by
-  // two implementations happening to compute the same thing. In particular it is
-  // the only way to agree while either corpus is still bootstrapping, when the
-  // pages deliberately seal nothing.
-  //
-  // It is a FAST PATH, never proof: a bucket with no page layer, a manifest whose
-  // write failed, and a layout the corpus no longer matches all fall back to
-  // deriving the partition from the whole list (loadCommitsPage), which is
-  // costlier and always correct.
+  // loadCommitsLayout reads the commits list's published partition from the page manifest; a fast path, with loadCommitsPage deriving it when absent.
   async function loadCommitsLayout(ctx) {
     if (ctx.commitsLayout !== undefined) return ctx.commitsLayout;
     let layout = null;
@@ -3516,23 +2665,13 @@
     return layout;
   }
 
-  // loadCommitsPage returns one page of the default branch's commit list
-  // (page 0 = the mutable head, 1..sealed = the sealed pages, 1 being the
-  // oldest), sourced from the same code items index the generated pages are
-  // projected from and filtered to the commits that index attributes to the
-  // default branch.
-  //
-  // Depth is bounded by what the page needs: the head drains only as far as the
-  // published frontier (usually already in the eager set), page n only as far as
-  // its oldest row — the same "older →" cost the static chain has. Only the
-  // fallback, when there is no usable published layout, drains the corpus.
+  // loadCommitsPage returns one page of the default branch's commit list, page 0 being the mutable head, drained only as deep as that page needs.
   async function loadCommitsPage(ctx, page) {
     const { defaultBranch } = await listBranches(ctx);
     const size = COMMITS_PAGE_SIZE;
     const w = await codeIndexWalkState(ctx);
     if (!w) {
-      // Pre-index bucket: the bounded loose walk the timeline falls back to. No
-      // corpus means no sealed chain, so this is the head and nothing else.
+      // Pre-index bucket: the bounded loose walk, which is the head and nothing else.
       const r = await resolveCodeItems(ctx, size);
       const rows = r.items.filter((it) => (it._branch || "") === defaultBranch).map((it) => it.commit).slice(0, size);
       return { branch: defaultBranch, rows, page: 0, sealed: 0, total: rows.length };
@@ -3577,29 +2716,14 @@
     return { branch: defaultBranch, rows: rows.slice(from, to), page, sealed, total };
   }
 
-  // loadTimelineWindow is the bounded, autoscroll-paged merged timeline. It grows
-  // a `shown` cursor by TIMELINE_WINDOW per extend, merges every data branch's
-  // resolved metadata (newest-first, NO body fetches) by effective time, takes the
-  // true-newest `shown` across all branches, and hydrates ONLY that rendered slice
-  // — the prefix carried over from the previous window is already hydrated
-  // (loose-object bodies are immutable-cached and the commit records non-hollow),
-  // so an advance fetches ~TIMELINE_WINDOW new bodies, not the whole feed.
-  // truncated marks that more items remain (unwalked history OR beyond the cursor),
-  // which the scroll sentinel uses to keep advancing. Because each branch surfaces
-  // at least `shown` items (or is exhausted), the merged top-`shown` is exact.
+  // loadTimelineWindow is the autoscroll-paged merged timeline: merge every branch's metadata, take the newest shown, hydrate that slice alone.
   async function loadTimelineWindow(ctx, extend) {
     const tl = ctx.timeline || (ctx.timeline = { shown: 0 });
     tl.shown = extend ? tl.shown + TIMELINE_WINDOW : TIMELINE_WINDOW;
     const need = tl.shown;
     const merged = [];
     let more = false;
-    // Every lane in parallel: each extension's load is an independent chain
-    // (live ref → manifest → head+shard) against its own walk state, and
-    // awaiting them one after another serialized ~6 chains of round trips.
-    // The plain-code lane joins the same batch: code commits from every pushed
-    // code branch interleave so the feed matches the CLI/TUI all-branch
-    // timeline. One merged, deduped walk across branch tips, advanced in step
-    // with the window — not walked to the root up front.
+    // Every lane in parallel: each is an independent chain, and the plain-code lane joins the same batch.
     const [lanes, code] = await Promise.all([
       Promise.all(TIMELINE_SPECS.map(async (spec) => ({ spec, r: await resolveExtItems(ctx, spec.ext, need) }))),
       resolveCodeItems(ctx, need),
@@ -3619,28 +2743,13 @@
     return { items: windowItems, truncated: more || merged.length > need };
   }
 
-  // HOME_ACTIVITY_LIMIT caps the home view's recent-activity rows, mirroring the
-  // page layer's sitePagesHomeActivity so the static front page and this render
-  // show the same rows. Ten: a round number short enough that the section reads
-  // as a summary below the README rather than a scrolling log. There is no
-  // per-type quota — the newest ten entries are whatever they are, so a repo that
-  // commits daily can legitimately show ten code commits.
+  // HOME_ACTIVITY_LIMIT caps the home view's recent-activity rows and mirrors the page layer's sitePagesHomeActivity.
   const HOME_ACTIVITY_LIMIT = 10;
 
-  // HOME_ACTIVITY_NEED is how deep each branch is surfaced before the merge.
-  // resolveExtItems counts COMMITS, and replies and edits are commits too, so
-  // asking for exactly HOME_ACTIVITY_LIMIT could surface fewer than that many
-  // top-level items on a comment-heavy branch and drop a row the static page
-  // lists. Over-requesting fixes that for free: an index-seeded branch already
-  // holds far more than this in its eager set (head + newest sealed shard), and
-  // a branch shorter than this is exhausted either way — neither case fetches
-  // more than the LIMIT would.
+  // HOME_ACTIVITY_NEED over-requests per branch: replies and edits are commits too, and would otherwise crowd out top-level items.
   const HOME_ACTIVITY_NEED = HOME_ACTIVITY_LIMIT * 4;
 
-  // HOME_ACTIVITY_SPECS lists the data branches that section merges, with the
-  // item type each branch's entries carry when their header names none. Mirrors
-  // the page layer's sitePageLists and sitePageDefaultTypes; memo is excluded on
-  // both sides (a distinct extension with its own view, as in the timeline).
+  // HOME_ACTIVITY_SPECS lists the data branches the section merges and the default item type each carries.
   const HOME_ACTIVITY_SPECS = [
     { ext: "pm", branch: "gitmsg/pm", type: "issue" },
     { ext: "review", branch: "gitmsg/review", type: "pull-request" },
@@ -3648,32 +2757,17 @@
     { ext: "release", branch: "gitmsg/release", type: "release" },
   ];
 
-  // homeActivityRoot mirrors the page layer's thread rule (site_pages_thread.go
-  // pageReplyRootRef): a social comment and a review feedback are replies, which
-  // get no page of their own, so neither side lists them; everything else is a
-  // top-level item.
+  // homeActivityRoot mirrors the page layer's thread rule: a social comment and a review feedback are replies, so neither side lists them.
   function homeActivityRoot(ext, type) {
     if (ext === "social" && type === "comment") return false;
     if (ext === "review" && type === "feedback") return false;
     return true;
   }
 
-  // loadHomeActivity returns the newest top-level items across the data branches
-  // for the home view's recent-activity section. Metadata ONLY: subject, type,
-  // author and time all come from the items index, so unlike the timeline this
-  // hydrates no bodies and reads no objects. It is the same projection the push
-  // writes into the static front page (buildSiteFrontActivity) — same branches,
-  // same reply rule, same cap, same order (effective time then sha, descending)
-  // — so the page-entry upgrade re-renders the rows the page already shows.
+  // loadHomeActivity returns the newest top-level items across the data branches, metadata only, matching buildSiteFrontActivity.
   async function loadHomeActivity(ctx) {
     const merged = [];
-    // All lanes in parallel (see loadTimelineWindow). The code lane is INDEXED
-    // only (never the loose walk this route must not pay): plain code commits
-    // interleave as they do in the timeline — on a repo whose gitmsg corpus is
-    // mostly releases, items alone would advertise a months-old release list as
-    // "recent activity" while the daily commits stayed invisible — and the push
-    // reads its code rows from the same corpus, so a bucket without a code
-    // index shows no code rows on either surface.
+    // All lanes in parallel; the code lane is indexed only, so a bucket without a code index shows no code rows on either surface.
     const [lanes, code] = await Promise.all([
       Promise.all(HOME_ACTIVITY_SPECS.map(async (spec) => ({ spec, r: await resolveExtItems(ctx, spec.ext, HOME_ACTIVITY_NEED) }))),
       resolveCodeItemsIndexed(ctx, HOME_ACTIVITY_NEED),
@@ -3694,10 +2788,7 @@
     return merged.slice(0, HOME_ACTIVITY_LIMIT);
   }
 
-  // embeddedRefs returns the cross-repo context an item embeds for its own
-  // `original`/`reply-to` references: for each reference carrying a repo-url
-  // prefix, the matching GitMsg-Ref trailer's origin author/time and quoted
-  // excerpt. Same-repo references (no url) are omitted — those resolve locally.
+  // embeddedRefs returns the cross-repo context an item embeds for its own original and reply-to references.
   function embeddedRefs(commit, header) {
     const out = [];
     const refs = (commit && commit.refs) || [];
@@ -3713,15 +2804,7 @@
     return out;
   }
 
-  // parentQuote returns the excerpt a reply carries of the thing it answers: the
-  // GitMsg-Ref trailer matching its `reply-to` (the direct parent) or, failing
-  // that, its `original` (the thread root), whose ` > ` continuation lines
-  // parseRefs already captured as `quoted`. GITMSG §1.3 makes that content
-  // MANDATORY on a reference section and GITSOCIAL requires the fields naming
-  // it, so the context a reply needs travels inside the reply's own commit —
-  // no parent lookup, no cross-branch walk, and nothing to fetch beyond the
-  // body every list already hydrates. Null when the item names no parent, or
-  // carries the reference without content (a producer that skipped the quote).
+  // parentQuote returns the excerpt a reply carries of the thing it answers, from its own GitMsg-Ref trailer (GITMSG 1.3).
   function parentQuote(item) {
     const h = (item && item.header) || {};
     const refs = (item && item.commit && item.commit.refs) || [];
@@ -3737,23 +2820,17 @@
     return null;
   }
 
-  // ANCESTOR_CAP bounds the same-repo parent chain a reply's commit permalink
-  // resolves and renders above the item (root first); deeper threads truncate
-  // to the nearest ancestors, consistent with the other bounded detail walks.
+  // ANCESTOR_CAP bounds the same-repo parent chain a commit permalink resolves and renders.
   const ANCESTOR_CAP = 5;
 
-  // refBranch pulls the branch out of a gitmsg commit ref value
-  // ("[url]#commit:<hash>@<branch>"), or "" when the ref carries none.
+  // refBranch pulls the branch out of a gitmsg commit ref value, or "" when it carries none.
   function refBranch(ref) {
     const s = ref || "";
     const at = s.indexOf("@");
     return at < 0 ? "" : s.slice(at + 1);
   }
 
-  // parentRef returns the same-repo ref an item names as its immediate parent:
-  // `reply-to` (the direct parent) over `original` (the thread root), per
-  // GITSOCIAL 1.3. Cross-repo refs return null — those stay embeddedRefs
-  // territory (their objects are not in this bucket).
+  // parentRef returns the same-repo ref an item names as its parent, reply-to over original (GITSOCIAL 1.3); null for a cross-repo ref.
   function parentRef(header) {
     for (const key of ["reply-to", "original"]) {
       const val = header && header[key];
@@ -3762,23 +2839,14 @@
     return null;
   }
 
-  // quotedRefFor returns the commit's own GitMsg-Ref trailer entry matching one
-  // reference value — the embedded excerpt a permalink falls back to when the
-  // referenced parent cannot be resolved in-bucket.
+  // quotedRefFor returns the commit's own GitMsg-Ref entry matching one reference value.
   function quotedRefFor(commit, ref) {
     const want = refHash(ref);
     const refs = (commit && commit.refs) || [];
     return refs.find((r) => r.ref === ref || (want && hashEq(refHash(r.ref), want))) || null;
   }
 
-  // findRefItem resolves one same-repo commit ref to its item and the data
-  // branch it lives on. The ref's branch is a hint, not the truth: the CLI
-  // writes comment refs with the social branch even when the referenced commit
-  // lives on another data branch (a comment on a pm issue carries
-  // original=#commit:<issue>@gitmsg/social), so resolution is hash-driven —
-  // the hinted ext's walk first, then the remaining data branches, each
-  // deepened to DETAIL_WALK_CAP like the thread-source walk (bounded, cached
-  // on ctx; absent branches return empty immediately).
+  // findRefItem resolves a same-repo commit ref to its item and data branch; the ref's branch is a hint, so resolution is hash-driven.
   async function findRefItem(ctx, ref, branch) {
     const want = refHash(ref);
     if (!want) return null;
@@ -3793,13 +2861,7 @@
     return null;
   }
 
-  // resolveAncestors resolves an item's same-repo parent chain for the commit
-  // permalink view: the immediate parent (reply-to over original), then each
-  // ancestor's own parent, up to ANCESTOR_CAP. Returns { chain, missing }:
-  // chain is the resolved ancestors root-first, each with the data branch it
-  // was found on (for permalinks); missing is the first unresolvable ref
-  // (object absent or beyond the walk caps), letting the renderer fall back
-  // to the commit's own quoted excerpt. Cycle-safe via a visited set.
+  // resolveAncestors resolves an item's same-repo parent chain root-first up to ANCESTOR_CAP, reporting the first unresolvable ref.
   async function resolveAncestors(ctx, item, branch) {
     const chain = [];
     let missing = null;
@@ -3817,9 +2879,7 @@
     return { chain, missing };
   }
 
-  // groupPM splits pm items by type and buckets issues under the milestone /
-  // sprint they reference (via the `milestone` / `sprint` header fields, per
-  // GITPM 1.3). Milestones carry state+due; sprints carry state+start+end.
+  // groupPM splits pm items by type and buckets issues under the milestone or sprint they reference, per GITPM 1.3.
   function groupPM(items) {
     const milestones = [], sprints = [], issues = [];
     for (const it of items) {
@@ -3841,9 +2901,7 @@
     return { milestones, sprints, issues, byMilestone: bucket("milestone"), bySprint: bucket("sprint") };
   }
 
-  // itemLabels parses an item's `labels` header (comma-delimited scoped labels
-  // like "kind/feature,status/in-progress", GITPM 1.2) into { scope, value }
-  // entries; an unscoped label carries an empty scope.
+  // itemLabels parses an item's labels header into { scope, value } entries, per GITPM 1.2.
   function itemLabels(header) {
     return ((header && header.labels) || "").split(",").map((s) => s.trim()).filter(Boolean).map((l) => {
       const i = l.indexOf("/");
@@ -3851,13 +2909,7 @@
     });
   }
 
-  // PM_BOARD_COLUMNS mirrors the shipped kanban framework board
-  // (extensions/pm/framework.go FrameworkKanban / board.go DefaultBoardConfig):
-  // Backlog (state:open), In Progress (status:in-progress, WIP 3), Review
-  // (status:review, WIP 3), Done (state:closed). A static reader cannot read a
-  // repo's custom pm config board, so it mirrors the kanban default the TUI uses
-  // when no custom board is defined. Issue state is open|closed per spec; the
-  // finer columns come from `status/*` labels actually present on issues.
+  // PM_BOARD_COLUMNS mirrors the shipped kanban framework board, the default a static reader falls back to.
   const PM_BOARD_COLUMNS = [
     { name: "Backlog", filter: "state:open", wip: 0 },
     { name: "In Progress", filter: "status:in-progress", wip: 3 },
@@ -3865,10 +2917,7 @@
     { name: "Done", filter: "state:closed", wip: 0 },
   ];
 
-  // matchColumnFilter tests an issue header against a board filter expression
-  // ("state:open" or "status:in-progress", comma = OR), mirroring board.go
-  // matchFilter/matchSingleFilter: a `state:` filter compares the header state
-  // (default open); any other key matches a scoped label of that scope/value.
+  // matchColumnFilter tests an issue header against a board filter expression, mirroring board.go matchFilter.
   function matchColumnFilter(header, filter) {
     for (const part of filter.split(",")) {
       const p = part.trim();
@@ -3881,10 +2930,7 @@
     return false;
   }
 
-  // matchIssueColumn returns the best-matching column index for an issue header,
-  // preferring a specific label filter (status:x) over a broad state filter
-  // (state:open) exactly as board.go matchIssueToColumn does; -1 when nothing
-  // matches (the caller drops it into the first column).
+  // matchIssueColumn returns the best-matching column index, a label filter over a state filter; -1 when nothing matches.
   function matchIssueColumn(header, filters) {
     let stateMatch = -1;
     for (let i = 0; i < filters.length; i++) {
@@ -3895,11 +2941,7 @@
     return stateMatch;
   }
 
-  // boardColumnsFrom normalizes a resolved-board config (from the push-maintained
-  // .gitsocial/site/pm-config.json) into the { name, filter, wip } column shape
-  // buildBoard groups against; the kanban default (PM_BOARD_COLUMNS) when the
-  // config is absent, malformed, or carries no columns. `wip` is coerced to a
-  // number (0 = no limit), matching the ColumnConfig `*int` on the push side.
+  // boardColumnsFrom normalizes a resolved-board config into the column shape buildBoard groups against, else the kanban default.
   function boardColumnsFrom(config) {
     const swimlane = (config && config.defaultSwimlane) || "";
     const cols = config && Array.isArray(config.columns) ? config.columns : null;
@@ -3911,12 +2953,7 @@
     return { name: config.name || "Board", columns, defaultSwimlane: swimlane };
   }
 
-  // buildBoard groups resolved issue items into board columns (client-side
-  // regroup of the already-walked pm set, no new fetches). `config` is the
-  // repo's resolved board (framework or custom columns); the built-in kanban
-  // default is used when it is absent. An unmatched issue falls into the first
-  // column, matching board.go. Columns carry their WIP limit and the bucketed
-  // issues so a renderer can show counts and over-WIP.
+  // buildBoard groups resolved issues into board columns; an unmatched issue falls into the first, matching board.go.
   function buildBoard(issues, config) {
     const board = boardColumnsFrom(config);
     const columns = board.columns.map((c) => ({ name: c.name, filter: c.filter, wip: c.wip || 0, issues: [] }));
@@ -3929,12 +2966,7 @@
     return { name: board.name, columns, defaultSwimlane: board.defaultSwimlane || "" };
   }
 
-  // loadSiteConfig fetches the push-maintained resolved PM board config
-  // (.gitsocial/site/pm-config.json, { name, columns:[{name,filter,wip}] }) once
-  // per context; null when the bucket carries none (a bucket pushed before the
-  // artifact, or with no pm config) so the board falls back to the kanban
-  // default. No-cache like the other mutable site keys, so a config change is
-  // picked up on the next load.
+  // loadSiteConfig fetches the resolved PM board config once per context; null when the bucket carries none.
   async function loadSiteConfig(ctx) {
     if (ctx.siteConfig !== undefined) return ctx.siteConfig;
     let cfg = null;
@@ -3944,12 +2976,7 @@
     return cfg;
   }
 
-  // loadSiteCustomization fetches the push-maintained site customization
-  // (.gitsocial/site/site-config.json — { title?, accent?, accentDark?,
-  // favicon? }) once per context; null when the bucket carries none (a bucket
-  // pushed before the artifact, or with no `site` config) so the reader keeps
-  // its built-in defaults. No-cache like the other mutable site keys, so a
-  // customization change is picked up on the next load.
+  // loadSiteCustomization fetches the site customization once per context; null when the bucket carries none.
   async function loadSiteCustomization(ctx) {
     if (ctx.siteCustomization !== undefined) return ctx.siteCustomization;
     let cfg = null;
@@ -3959,23 +2986,17 @@
     return cfg;
   }
 
-  // SWIMLANE_FIELDS are the board group-by options, mirroring pm.SwimlaneFields:
-  // "" (none), priority, kind, assignees, author. The board's "group by" control
-  // cycles/selects among them.
+  // SWIMLANE_FIELDS are the board group-by options, mirroring pm.SwimlaneFields.
   const SWIMLANE_FIELDS = ["", "priority", "kind", "assignees", "author"];
   // SWIMLANE_LABELS names each field for the group-by control (none for "").
   const SWIMLANE_LABELS = { "": "none", priority: "priority", kind: "kind", assignees: "assignees", author: "author" };
-  // Predefined lane orders for priority/kind (mirrors view_board.go
-  // getSwimlaneOrder), ungrouped ("") last.
+  // SWIMLANE_ORDER holds the predefined lane orders for priority and kind, mirroring view_board.go getSwimlaneOrder.
   const SWIMLANE_ORDER = {
     priority: ["critical", "high", "medium", "low", ""],
     kind: ["bug", "feature", "task", "story", "spike", "chore", ""],
   };
 
-  // swimlaneValue extracts an issue's lane value for a group-by field, mirroring
-  // view_board.go getSwimlaneValue: assignees → first assignee; author → the
-  // display author (origin author over git author); priority/kind → the scoped
-  // label value; "" (no field or no value) → the ungrouped lane.
+  // swimlaneValue extracts an issue's lane value for a group-by field, mirroring view_board.go getSwimlaneValue.
   function swimlaneValue(item, field) {
     const h = item.header || {};
     if (field === "assignees") {
@@ -3990,19 +3011,14 @@
     return "";
   }
 
-  // swimlaneOrder returns the ordered lane values for a field over an issue set,
-  // mirroring view_board.go getSwimlaneOrder: priority/kind use their predefined
-  // order (filtered to lanes actually present, ungrouped last); other fields use
-  // encounter order (alphabetical for stability), ungrouped last. Empty when the
-  // field is "".
+  // swimlaneOrder returns the ordered lane values for a field over an issue set, the ungrouped lane last.
   function swimlaneOrder(issues, field) {
     if (!field) return [];
     const present = new Set();
     for (const it of issues) present.add(swimlaneValue(it, field));
     if (SWIMLANE_ORDER[field]) {
       const out = SWIMLANE_ORDER[field].filter((v) => present.has(v));
-      // Any present value not in the predefined order (a custom label) appended
-      // alphabetically before the ungrouped lane.
+      // A present value outside the predefined order is appended alphabetically, before the ungrouped lane.
       const extra = Array.from(present).filter((v) => v && SWIMLANE_ORDER[field].indexOf(v) === -1).sort();
       const hasBlank = out.indexOf("") !== -1;
       const base = out.filter((v) => v !== "").concat(extra);
@@ -4013,9 +3029,7 @@
     return vals;
   }
 
-  // groupBySwimlane buckets a column's issues by lane value, returning a Map
-  // lane → issues in the given lane order (empty lanes included so every column
-  // aligns to the same lane rows).
+  // groupBySwimlane buckets a column's issues by lane value, empty lanes included so every column aligns.
   function groupBySwimlane(issues, field, lanes) {
     const map = new Map();
     for (const lane of lanes) map.set(lane, []);
@@ -4027,23 +3041,15 @@
     return map;
   }
 
-  // swimlaneLabel names a lane for display: the ungrouped lane reads "(none)",
-  // any other value verbatim.
+  // swimlaneLabel names a lane for display; the ungrouped lane reads "(none)".
   function swimlaneLabel(value) { return value === "" ? "(none)" : value; }
 
-  // pmParentHash returns an issue's immediate-parent short hash per GITPM 1.7: the
-  // `parent` ref (a nested child's immediate parent) if present, else the `root`
-  // ref (a direct child carries only root). Null for a top-level issue.
+  // pmParentHash returns an issue's immediate-parent short hash per GITPM 1.7; null for a top-level issue.
   function pmParentHash(header) {
     return refHash((header && header.parent) || "") || refHash((header && header.root) || "") || null;
   }
 
-  // buildIssueHierarchy indexes parent/child relationships over a resolved issue
-  // set (GITPM 1.7): childrenOf maps a parent issue's short hash to its direct
-  // child items (chronological), byShort indexes issues by short. Cycle-safe by
-  // construction — it is a flat parent→children index built in one pass, with no
-  // recursive traversal that a cycle could trap (descendant walks that consume it
-  // still carry their own visited set).
+  // buildIssueHierarchy indexes parent and child relationships over a resolved issue set, per GITPM 1.7.
   function buildIssueHierarchy(issues) {
     const byShort = new Map();
     for (const it of issues) byShort.set(it.commit.short, it);
@@ -4061,31 +3067,14 @@
     return { byShort, childrenOf };
   }
 
-  // pmProgress counts closed vs total over an item set (a milestone's / sprint's
-  // members, or a parent's direct children), for the "n closed of m" progress.
+  // pmProgress counts closed against total over an item set.
   function pmProgress(items) {
     let closed = 0;
     for (const it of items) if (((it.header && it.header.state) || "open") === "closed") closed++;
     return { closed, total: items.length };
   }
 
-  // loadInteractionCounts builds the cross-branch interaction/review tallies the
-  // list cards show (TUI card-stat parity), keyed by a target item's short hash.
-  // It loads the social and review item sets (body-free; index-backed and
-  // exhaustive on an indexed bucket, but bounded to COUNTS_WALK_CAP loose commits
-  // when an ext has no index, so a mid-push/stale bucket never stalls the timeline
-  // behind an unbounded loose walk) and reduces their relations:
-  //   - a social comment (has `original`) increments the target's comment count;
-  //     a social reply-to a comment also counts toward the referenced item.
-  //   - a social repost / quote increments the original's repost / quote count.
-  //   - a review feedback referencing a PR (`pull-request` or `original`)
-  //     increments its comment count and, when it carries a `review-state`
-  //     verdict, the PR's approved / changes-requested tally (latest verdict per
-  //     reviewer wins, mirroring reviewSummary).
-  // Returns a Map short → { comments, reposts, quotes, approved, changesRequested }.
-  // Counts are computed at read time from the resident corpora, so they are
-  // always current (unlike a push-time count frozen into an immutable shard).
-  // Cached on ctx. Empty maps degrade gracefully (a bucket with no social/review).
+  // loadInteractionCounts builds the cross-branch comment, repost, quote and review tallies keyed by a target's short hash; cached on ctx.
   async function loadInteractionCounts(ctx) {
     if (ctx.interactionCounts) return ctx.interactionCounts;
     const counts = new Map();
@@ -4107,8 +3096,7 @@
       else if (t === "quote") bump(orig, "quotes");
       else if (t === "comment" || h.original) bump(orig, "comments");
     }
-    // Latest verdict per (PR short, reviewer email) so a reviewer's re-review does
-    // not double-count, mirroring reviewSummary's latest-verdict-per-reviewer rule.
+    // Latest verdict per PR and reviewer, so a re-review does not double-count, mirroring reviewSummary.
     const verdicts = new Map();
     for (const it of review) {
       const h = it.header || {};
@@ -4132,24 +3120,14 @@
     return counts;
   }
 
-  // countsFor returns the interaction/review counts for one item's short hash
-  // from a loaded counts map (null when the item has none), so a card can decide
-  // whether to render any count chips.
+  // countsFor returns one item's counts from a loaded map, or null.
   function countsFor(counts, short) {
     return (counts && counts.get(short)) || null;
   }
 
   // ---- In-bucket item search (tier i: over already-walked items) ----
 
-  // SEARCH_GROUPS orders and labels the groups the in-bucket search returns.
-  // The core search (CLI/TUI) sweeps every cached commit — gitmsg items AND
-  // plain code commits — so the site matches it: the gitmsg extensions search
-  // their resolved items, and the Commits group searches plain code commits at
-  // subject level from the code items index (the code corpus is deliberately
-  // metadata-only, so full text never covers code bodies). review/release are
-  // type-filtered to their standalone units (PRs, releases); pm/social/memo
-  // pass all resolved items. The code group's branch is "" — a code hit links
-  // to the plain commit detail route.
+  // SEARCH_GROUPS orders and labels the search groups; the code group searches plain commits at subject level.
   const SEARCH_GROUPS = [
     { ext: "pm", label: "Issues", branch: "gitmsg/pm", type: null },
     { ext: "review", label: "Pull Requests", branch: "gitmsg/review", type: "pull-request" },
@@ -4158,18 +3136,12 @@
     { ext: "memo", label: "Memos", branch: "gitmsg/memo", type: null },
     { ext: "code", label: "Commits", branch: "", type: null },
   ];
-  // SEARCH_EXTS is every gitmsg extension branch the search walks (the code
-  // lane is fed separately from the code items index in buildSearchCorpus).
+  // SEARCH_EXTS is every gitmsg extension branch the search walks; the code lane is fed from the code items index.
   const SEARCH_EXTS = ["social", "pm", "review", "release", "memo"];
-  // Header fields worth matching a query against (labels/tag/type/state/version/
-  // assignees), beyond the item subject/content and effective author.
+  // SEARCH_HEADER_KEYS are the header fields a query is matched against, beyond subject, content and author.
   const SEARCH_HEADER_KEYS = ["labels", "tag", "version", "type", "state", "assignees"];
 
-  // itemSubject returns an item's display subject even before hydration: the
-  // first line of its content when a body is present, else the metadata-index
-  // subject of the commit whose content would be displayed (latest version
-  // first, falling back through earlier versions to the canonical — mirroring
-  // hydrateItem's content selection). DOM-free.
+  // itemSubject returns an item's display subject even before hydration, falling back to the metadata-index subject.
   function itemSubject(item) {
     const content = stripLinkRefDefs(item.content || "").trim();
     if (content) { const nl = content.indexOf("\n"); return subjectText(nl < 0 ? content : content.slice(0, nl)); }
@@ -4181,10 +3153,7 @@
     return (item.commit && item.commit.subject) || "";
   }
 
-  // searchableText builds the lowercased haystack an item is matched against: its
-  // subject+body content (the index subject alone for a hollow, body-less item),
-  // its effective author, and the header fields above — mirroring the TUI search
-  // over content + author + extension fields. DOM-free.
+  // searchableText builds the lowercased haystack an item is matched against.
   function searchableText(item) {
     const parts = [item.content || itemSubject(item), item.author || ""];
     const h = item.header || {};
@@ -4192,66 +3161,36 @@
     return parts.join("\n").toLowerCase();
   }
 
-  // FACET_FIELDS are the pivots the in-bucket search exposes (mirroring the TUI's
-  // group-by=state/author/type/label). repo/list are omitted (one bucket = one
-  // repo); assignee/reviewer/milestone/base are dropped as low-value here.
+  // FACET_FIELDS are the pivots the in-bucket search exposes.
   const FACET_FIELDS = ["type", "state", "author", "label"];
-  // EXT_DEFAULT_TYPE names the Type-facet value for an item whose header carries
-  // no explicit type (a plain post, a bare issue), so every item buckets.
+  // EXT_DEFAULT_TYPE names the Type-facet value for an item whose header carries no type.
   const EXT_DEFAULT_TYPE = { social: "post", pm: "issue", review: "pull-request", release: "release", memo: "memo", code: "commit" };
-  // TYPE_ALIASES normalizes a typed `type:` token so the query box and the chips
-  // share one vocabulary (type:pr === the pull-request chip).
+  // TYPE_ALIASES normalizes a typed type: token to the chip vocabulary.
   const TYPE_ALIASES = { pr: "pull-request", prs: "pull-request" };
 
   // facetType returns an item's Type-facet token (header type or the ext default).
   function facetType(item, ext) { return (item.header && item.header.type) || EXT_DEFAULT_TYPE[ext] || ext; }
 
-  // BODY_ONLY_TYPES are the types that render whole, with no first line promoted
-  // to a heading. The line is root vs reply, not prose vs title: a comment and a
-  // review feedback note always render UNDER the thing they answer (the reply
-  // context above them, the diff hunk they annotate), which already names the
-  // subject — so their first line is the opening of a sentence, and setting it
-  // in the subject face turns half a thought into a title, markdown and all.
-  //
-  // A post is NOT here, and neither are the roots generally: a post is the root
-  // of its own page, feed entry and OG card, with nothing above it, and its
-  // first line already names it everywhere else (list row, feed title, <title>).
-  // A repost joins them because its content is generated, not written: social's
-  // CreateRepost fills it with a heading naming the original's author and first
-  // line, so the embedded original is the item; a quote is commentary written
-  // about that embedded original, which is the reply shape again.
+  // BODY_ONLY_TYPES render whole, with no first line promoted to a heading: the replies, and the generated content of a repost.
   const BODY_ONLY_TYPES = { comment: 1, feedback: 1, repost: 1, quote: 1 };
 
-  // isBodyOnly reports whether an item renders whole rather than as subject +
-  // body, so a detail surface shows all of its content instead of promoting the
-  // first line to a heading. Cards already render these types whole; this is the
-  // same rule for the detail (and for the static item page, site_pages_html.go
-  // sitePageBodyOnly).
+  // isBodyOnly reports whether an item renders whole rather than as subject plus body, mirroring site_pages_html.go sitePageBodyOnly.
   function isBodyOnly(item, ext) { return !!BODY_ONLY_TYPES[facetType(item, ext)]; }
-  // facetState returns an item's State-facet value, or "" for stateless
-  // extensions (posts, releases, memos have no open/closed workflow).
+  // facetState returns an item's State-facet value, or "" for a stateless extension.
   function facetState(item, ext) { return (ext === "pm" || ext === "review") ? ((item.header && item.header.state) || "open") : ""; }
   // itemLabelStrings returns an item's raw label strings (Label-facet values).
   function itemLabelStrings(item) { return ((item.header && item.header.labels) || "").split(",").map((s) => s.trim()).filter(Boolean); }
-  // authorBlob is the lowercased name+email an `author:` substring matches
-  // against. It includes the EFFECTIVE (origin) email over the git commit email
-  // so an `author:<email>` deep-link from analytics (which attributes imported
-  // content to its upstream author's origin email) matches; the raw git email is
-  // also kept so searching by the committer identity still works.
+  // authorBlob is the lowercased name and emails an author: substring matches against, the origin email included.
   function authorBlob(item) {
     const gitEmail = (item.commit && item.commit.authorEmail) || "";
     const effEmail = effectiveAuthorEmail(item.commit, item.header) || "";
     return ((item.author || "") + " " + effEmail + " " + gitEmail).toLowerCase();
   }
 
-  // TYPE_GLYPH maps a gitmsg item type to the compact leading glyph the TUI cards
-  // use (see tuisocial/util_adapters.go). Issues vary by state and are resolved in
-  // typeGlyph; the rest are fixed.
+  // TYPE_GLYPH maps a gitmsg item type to the TUI's compact leading glyph; issues vary by state and resolve in typeGlyph.
   const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞", commit: "◦" };
 
-  // typeGlyph returns an item's leading type glyph, matching the TUI card icons:
-  // ○ open / ● closed for issues, and the fixed TYPE_GLYPH for every other type
-  // (from the item's header type, else the extension default). "" when unknown.
+  // typeGlyph returns an item's leading type glyph, or "" when the type is unknown.
   function typeGlyph(item, ext) {
     const h = item.header || {};
     const t = h.type || EXT_DEFAULT_TYPE[h.ext || ext] || "";
@@ -4259,16 +3198,11 @@
     return TYPE_GLYPH[t] || "";
   }
 
-  // COMMIT_HASH_RE recognizes a bare commit-hash token (7-40 hex), mirroring
-  // core/search/parse.go: such a token searches by hash prefix rather than as
-  // free text. DATE_RE is the strict after:/before: date format (YYYY-MM-DD).
+  // COMMIT_HASH_RE recognizes a bare commit-hash token and DATE_RE the strict after: and before: date, mirroring core/search/parse.go.
   const COMMIT_HASH_RE = /^[0-9a-fA-F]{7,40}$/;
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-  // dateBound parses a strict YYYY-MM-DD (UTC) to unix seconds. `end` returns the
-  // inclusive END-of-day bound (23:59:59), so `before:D` includes all of day D;
-  // otherwise the start-of-day, so `after:D` includes all of day D. NaN when the
-  // string is not a valid strict date (mirrors core/search/parse.go rejecting it).
+  // dateBound parses a strict YYYY-MM-DD (UTC) to unix seconds; end returns the inclusive end of day.
   function dateBound(s, end) {
     if (!DATE_RE.test(s)) return NaN;
     const ms = Date.parse(s + "T00:00:00Z");
@@ -4276,13 +3210,7 @@
     return Math.floor(ms / 1000) + (end ? 86399 : 0);
   }
 
-  // parseSearchFilters splits a raw query into free-text `terms` and typed facet
-  // selections (type:/state:/author:/label:/@author), plus hash/date predicates:
-  // hash:/commit:<hex> and bare 7-40 hex tokens become `hashes` (prefix-matched
-  // against the item hash), and after:/before:<YYYY-MM-DD> become inclusive
-  // effectiveTime `dateFrom`/`dateTo` bounds (mirroring core/search/parse.go).
-  // Only these known keys are stripped; any other `word:value` (e.g. a "build:
-  // fix" subject) stays in terms so it is still matched literally.
+  // parseSearchFilters splits a raw query into free text, typed facet selections, hash prefixes and date bounds.
   function parseSearchFilters(query) {
     const typed = { type: [], state: [], author: [], label: [] };
     const hashes = [];
@@ -4306,26 +3234,21 @@
     return { terms: terms.trim().toLowerCase(), typed, hashes, dateFrom, dateTo };
   }
 
-  // itemMatchesHash reports whether an item's commit hash (full or short) matches
-  // any of the query's hash prefixes.
+  // itemMatchesHash reports whether an item's commit hash matches any of the query's prefixes.
   function itemMatchesHash(item, hashes) {
     const full = ((item.commit && item.commit.hash) || "").toLowerCase();
     const short = ((item.commit && item.commit.short) || "").toLowerCase();
     return hashes.some((h) => full.startsWith(h) || short.startsWith(h));
   }
 
-  // itemFacetValues returns an item's value(s) for one facet field (label is
-  // multi-valued; author uses the display name; type/state their token).
+  // itemFacetValues returns an item's value or values for one facet field.
   function itemFacetValues(item, ext, field) {
     if (field === "label") return itemLabelStrings(item);
     if (field === "author") return [item.author || ""];
     return [field === "type" ? facetType(item, ext) : facetState(item, ext)];
   }
 
-  // matchesFacet reports whether an item satisfies one field's active selection —
-  // the clicked-chip set unioned with the typed tokens. An empty selection matches
-  // all; otherwise OR within the field. Author matches by name/email substring,
-  // the rest by exact token.
+  // matchesFacet reports whether an item satisfies one field's selection; an empty selection matches all.
   function matchesFacet(item, ext, field, chip, typed) {
     if (!chip.size && !typed.length) return true;
     if (field === "author") {
@@ -4336,41 +3259,28 @@
     return itemFacetValues(item, ext, field).some((v) => chip.has(v) || typed.indexOf(String(v).toLowerCase()) !== -1);
   }
 
-  // facetSelected marks a chip active when its value is in the clicked set or is
-  // picked out by a typed token (so typing state:open lights the open chip).
+  // facetSelected marks a chip active when its value is in the clicked set or is picked out by a typed token.
   function facetSelected(field, value, chip, typed) {
     if (chip.has(value)) return true;
     if (field === "author") { const v = value.toLowerCase(); return typed.some((a) => v.indexOf(a) !== -1); }
     return typed.indexOf(String(value).toLowerCase()) !== -1;
   }
 
-  // searchItemsFaceted runs the in-bucket search with faceting. `query` may carry
-  // typed filters; `filters` holds the clicked-chip selections as
-  // { type, state, author, label } Sets. Returns the extension-grouped results
-  // (every active field applied), the same hits as a `flat` recency-ordered lane
-  // ({item, group} pairs — the default presentation), plus per-field facet
-  // buckets whose counts are
-  // drill-down (each field counted with the OTHER fields applied), so a chip shows
-  // how many results it would add. Honest over the loaded corpus. An idle query
-  // (no terms, no typed, no chips) yields empty results and no facets.
-  // searchRelevance ranks a matched item cheaply: a hash-prefix hit is surfaced
-  // first (2), a subject match next (1), a body-only match last (0). Within a
-  // rank, recency (effectiveTime) breaks ties — the sort caller applies that.
+  // searchRelevance ranks a matched item: a hash-prefix hit first, then a subject match, then a body-only match.
   function searchRelevance(item, terms, hashes) {
     if (hashes.length && itemMatchesHash(item, hashes)) return 2;
     if (terms && itemSubject(item).toLowerCase().indexOf(terms) !== -1) return 1;
     return 0;
   }
 
+  // searchItemsFaceted runs the in-bucket search with faceting: grouped hits, a flat recency lane, and per-field facet counts.
   function searchItemsFaceted(query, perExt, filters) {
     const f = filters || {};
     const chip = { type: f.type || new Set(), state: f.state || new Set(), author: f.author || new Set(), label: f.label || new Set() };
     const { terms, typed, hashes, dateFrom, dateTo } = parseSearchFilters(query);
     const active = !!terms || hashes.length > 0 || dateFrom !== null || dateTo !== null || FACET_FIELDS.some((k) => typed[k].length || chip[k].size);
     if (!active) return { query: "", terms: "", total: 0, groups: [], facets: {} };
-    // Flatten the corpus once (with each item's ext and group), pre-filtered by
-    // the free-text terms, hash prefixes, date bounds, and the group's own type
-    // guard. A hash query matches on the item hash (prefix), independent of terms.
+    // Flatten the corpus once, pre-filtered by the terms, hash prefixes, date bounds and the group's own type guard.
     const pool = [];
     for (const spec of SEARCH_GROUPS) {
       for (const it of (perExt[spec.ext] || [])) {
@@ -4396,13 +3306,10 @@
       g.items.push(row.it); g.count++; total++;
       flat.push({ item: row.it, group: g });
     }
-    // The flat lane is the default presentation: recency across ALL groups so a
-    // yesterday's commit is never buried under an old release, with hash hits
-    // and subject matches still surfaced first within the same relevance rank.
+    // The flat lane is the default presentation: relevance rank first, then recency across all groups.
     flat.sort((a, b) => (searchRelevance(b.item, terms, hashes) - searchRelevance(a.item, terms, hashes)) || (b.item.effectiveTime - a.item.effectiveTime));
     const groups = [];
-    // Within a group, rank by relevance (hash hit, then subject over body-only),
-    // then recency — a cheap relevance sort over the today-recency-only order.
+    // Within a group, rank by relevance, then recency.
     for (const spec of SEARCH_GROUPS) {
       const g = byExt.get(spec.ext);
       if (!g) continue;
@@ -4423,21 +3330,13 @@
     return { query: (query || "").trim().toLowerCase(), terms, total, groups, flat, facets };
   }
 
-  // searchItems is the facet-free entry point (backward-compatible shape) the
-  // DOM-free unit tests use: extension-grouped hits for a plain substring query,
-  // newest-first within each group; an empty query yields no groups.
+  // searchItems is the facet-free entry point the DOM-free unit tests use.
   function searchItems(query, perExt) {
     const r = searchItemsFaceted(query, perExt, null);
     return { query: r.query, total: r.total, groups: r.groups };
   }
 
-  // loadBodyIndex fetches the push-maintained search corpus for one extension
-  // (version 4, brotli — decoded transparently by the browser) once per context;
-  // null when the bucket carries none. This is the ONLY artifact carrying message
-  // bodies, so it is loaded only when the user asks search to cover full text.
-  // The corpus is append-only sharded under .gitsocial/site/bodies/<ext>/: the
-  // manifest lists immutable sealed shards (browser-cached across pushes) plus
-  // the no-cache head.
+  // loadBodyIndex fetches an extension's bodies corpus once per context; the one artifact carrying message bodies, so it loads on request.
   async function loadBodyIndex(ctx, ext) {
     if (!ctx.bodyIndex) ctx.bodyIndex = {};
     if (ctx.bodyIndex[ext] !== undefined) return ctx.bodyIndex[ext];
@@ -4449,12 +3348,7 @@
     return idx;
   }
 
-  // loadBodyIndexSharded assembles the sharded corpus into the { version, tip,
-  // items } shape: it fetches the manifest, then all sealed shards and the head
-  // in parallel, concatenates their items oldest-first (sealed shards
-  // oldest→newest, then head), and reverses to newest-first — the order
-  // resolveItems expects (latest edit wins). Null when the bucket carries no
-  // manifest or an older version.
+  // loadBodyIndexSharded assembles the sharded corpus newest-first; null when the manifest is absent or an older version.
   async function loadBodyIndexSharded(ctx, ext) {
     const dir = ".gitsocial/site/bodies/" + ext + "/";
     const mtext = await fetchText(ctx.base, dir + "manifest.json");
@@ -4475,20 +3369,7 @@
     return { version: 4, tip: m.tip, items };
   }
 
-  // buildSearchCorpus assembles the per-extension search sets in two tiers. The
-  // light tier (default) costs no extra downloads: an extension whose history is
-  // fully walked — from the always-loaded metadata index, or a short branch —
-  // searches every item over subject, author, and header fields (bodies absent
-  // until hydration; `light` marks that some results are body-less). The full
-  // tier (full=true, an explicit user request) fetches the bodies corpus and
-  // searches complete message text. An extension with neither falls back to the
-  // display items walked so far, with the "Search deeper" affordance (truncated).
-  // Cached on ctx; a deeper request advances only the fallback walks.
-  // olderItemBytes sums the compressed size of every corpus's not-yet-resident
-  // older metadata shards — including the code corpus, which the search drains
-  // too — the download the "search older items" affordance incurs (the
-  // light-search counterpart of fullSearchBytes). 0 once every corpus's shards
-  // are resident or a bucket has no index.
+  // olderItemBytes sums the compressed size of every corpus's not-yet-resident older metadata shards, the code corpus included.
   async function olderItemBytes(ctx) {
     let total = 0;
     const idxes = await Promise.all(SEARCH_EXTS.concat("code").map((ext) => loadItemsIndex(ctx, ext)));
@@ -4496,28 +3377,23 @@
     return total;
   }
 
+  // buildSearchCorpus assembles the per-extension search sets: a light metadata tier by default, full message text on request.
   async function buildSearchCorpus(ctx, extend, full, searchOlder, onLane) {
     const perExt = {};
     let truncated = false, light = false, hasOlder = false, partial = false;
-    // Fallback window cursor for an ext with neither bodies nor an index-backed
-    // walk; grows per "deeper" request, mirroring loadExtItemsWindow's paging.
+    // Fallback window cursor for an ext with neither bodies nor an index-backed walk.
     if (!ctx.searchNeed) ctx.searchNeed = WALK_CAP;
     else if (extend) ctx.searchNeed += WALK_CAP;
     const laneTotal = SEARCH_EXTS.length + 1;
     let laneDone = 0;
-    // note reports one lane's completion; the shared perExt object grows in
-    // place, so the caller can render the resolved lanes incrementally instead
-    // of holding the whole view behind the slowest one.
+    // note reports one lane's completion; perExt grows in place, so the caller can render lanes as they resolve.
     const note = () => { laneDone++; if (onLane) { try { onLane(perExt, laneDone, laneTotal); } catch (_) { /* render-side */ } } };
     const extLane = async (ext) => {
       if (full) {
         const bodies = await loadBodyIndex(ctx, ext);
         if (bodies) { perExt[ext] = resolveItems(bodies.items.map(indexCommit)); return; }
       }
-      // Light search covers the resident metadata (eager set + already-walked).
-      // "Search older items" pulls every remaining shard first; otherwise older
-      // shards stay a pending opt-in (hasOlder), and an incomplete manifest means
-      // even the full older set covers only the bootstrapped prefix (partial).
+      // Light search covers resident metadata; older shards stay a pending opt-in, and an incomplete manifest covers the bootstrapped prefix alone.
       const idx = await loadItemsIndex(ctx, ext);
       if (idx && searchOlder && !idx.allResident) await loadOlderItemShards(ctx, ext);
       const w = await extWalkState(ctx, ext);
@@ -4528,24 +3404,13 @@
         if (idx && idx.complete === false) partial = true;
         return;
       }
-      // Metadata-only fallback: resolveExtItems surfaces subjects/authors with
-      // NO body hydration — matching runs on the metadata tier either way, and
-      // hydrating hundreds of bodies here (the old loadExtItemsWindow call) is
-      // what held a cold search's first result behind ~40 s of one-object-per-
-      // RTT reads. Bodies stay lazy: the result view hydrates the matched few,
-      // and "Load full search index" covers full text.
+      // Metadata-only fallback: no body hydration here, since matching runs on the metadata tier either way.
       const r = await resolveExtItems(ctx, ext, ctx.searchNeed);
       perExt[ext] = r.items;
       if (r.items.some((it) => it.commit.hollow)) light = true;
       if (r.more) truncated = true;
     };
-    // Plain code commits join at SUBJECT level from the code items index
-    // (shared with the timeline/graph walks, so shards load once). The code
-    // corpus is deliberately metadata-only — no bodies corpus — so the full
-    // tier never upgrades these entries; in the light tier their presence marks
-    // the corpus `light` (body-less results exist), and "search older" drains
-    // the code shards like the extension corpora. No index (a v<4 or data-only
-    // bucket): no code lane, the pre-index behavior.
+    // Plain code commits join at subject level from the code index; the code corpus carries no bodies, so the full tier leaves them as they are.
     const codeLane = async () => {
       const cw = await codeIndexWalkState(ctx);
       if (!cw) return;
@@ -4565,22 +3430,13 @@
       if (cw.older && cw.older.length) hasOlder = true;
       if (!cw.complete) partial = true;
     };
-    // Every lane in parallel — each is an independent per-ext chain, and the
-    // serial version stacked their round trips end to end.
+    // Every lane in parallel: each is an independent per-ext chain.
     await Promise.all(SEARCH_EXTS.map((ext) => extLane(ext).then(note)).concat([codeLane().then(note)]));
     ctx.searchCorpus = { perExt, truncated, light, hasOlder, partial, full: !!full, older: !!searchOlder };
     return ctx.searchCorpus;
   }
 
-  // loadSearchWindow returns the in-bucket search corpus { perExt, truncated,
-  // light, hasOlder, partial, full, older }. The first call builds the light tier
-  // over resident metadata (no downloads beyond the eager set); a deeper request
-  // advances any fallback walks; `searchOlder` pulls the remaining metadata shards
-  // for whole-history light search; `full` fetches the bodies artifacts and
-  // upgrades to full-text search. Fullness and older-coverage are sticky: once
-  // upgraded, later rebuilds stay upgraded. `onLane(perExt, done, total)` fires
-  // as each extension lane resolves (never for a cached corpus, which returns
-  // whole), so a cold search view can render incrementally with progress.
+  // loadSearchWindow returns the in-bucket search corpus; fullness and older coverage are sticky, and onLane fires as each lane resolves.
   async function loadSearchWindow(ctx, extend, full, searchOlder, onLane) {
     const cached = ctx.searchCorpus;
     const wantFull = !!full || !!(cached && cached.full);
@@ -4589,10 +3445,7 @@
     return buildSearchCorpus(ctx, extend, wantFull, wantOlder, onLane);
   }
 
-  // fullSearchBytes sums the compressed byte size of every extension's bodies
-  // corpus, read from the already-loaded metadata index manifests (their
-  // bodiesBytes) — the download the "Load full search index" affordance will
-  // incur. 0 when unknown (no index, or an index predating the recorded size).
+  // fullSearchBytes sums the compressed size of every extension's bodies corpus, from the loaded index manifests.
   async function fullSearchBytes(ctx) {
     let total = 0;
     const idxes = await Promise.all(SEARCH_EXTS.map((ext) => loadItemsIndex(ctx, ext)));
@@ -4602,8 +3455,7 @@
 
   // ---- Review feedback (DOM-free, testable) ----
 
-  // feedbackLine returns a feedback's anchor { side, line }: the new-file line
-  // (preferred) else the old-file line, or null when it carries no line ref.
+  // feedbackLine returns a feedback's anchor { side, line }, the new-file line preferred; null without a line ref.
   function feedbackLine(header) {
     const nl = parseInt((header && header["new-line"]) || "", 10);
     const ol = parseInt((header && header["old-line"]) || "", 10);
@@ -4612,15 +3464,13 @@
     return null;
   }
 
-  // feedbackAnchorKey returns the diff-line key a feedback anchors to
-  // ("n<newLine>" preferred, else "o<oldLine>"), or null when it has no line ref.
+  // feedbackAnchorKey returns the diff-line key a feedback anchors to, or null.
   function feedbackAnchorKey(header) {
     const a = feedbackLine(header);
     return a ? (a.side === "new" ? "n" : "o") + a.line : null;
   }
 
-  // hunkLineKeys returns the anchor keys a rendered diff line answers to: its
-  // new-side and/or old-side key (a context line answers to both).
+  // hunkLineKeys returns the anchor keys a rendered diff line answers to; a context line answers to both.
   function hunkLineKeys(l) {
     const ks = [];
     if (l.newN) ks.push("n" + l.newN);
@@ -4628,11 +3478,7 @@
     return ks;
   }
 
-  // anchorFeedback partitions a file's feedback against a rendered hunk set:
-  // byKey maps a diff-line anchor key to the feedback attached there, offscreen
-  // lists feedback whose line is absent from every rendered hunk line (shown in a
-  // separate "not on visible lines" block). Matching is new-line-first, else
-  // old-line — mirroring the TUI feedback layer.
+  // anchorFeedback partitions a file's feedback into the keys of rendered hunk lines and an offscreen list.
   function anchorFeedback(fbList, hunks) {
     const present = new Set();
     for (const h of hunks || []) for (const l of h.lines) for (const k of hunkLineKeys(l)) present.add(k);
@@ -4648,9 +3494,7 @@
     return { byKey, offscreen };
   }
 
-  // prFeedback selects the feedback referencing a PR (by short hash) out of a
-  // resolved review item set, splitting file-anchored feedback (inline, carries
-  // `file`) from the rest (verdicts and general review feedback).
+  // prFeedback selects the feedback referencing a PR, splitting the file-anchored from the rest.
   function prFeedback(reviewItems, prShort) {
     const all = reviewItems.filter((i) => i.header && i.header.type === "feedback" && hashEq(anyRefHash(i.header["pull-request"]), prShort));
     const file = all.filter((i) => i.header.file);
@@ -4658,12 +3502,7 @@
     return { all, file, nonFile };
   }
 
-  // reviewSummary aggregates a PR's feedback into review state, mirroring
-  // review.ComputeReviewSummary: the latest review-state per reviewer email wins;
-  // approved / changesRequested count those verdicts; pending counts declared
-  // reviewers with no verdict; isBlocked when any changes-requested; isApproved
-  // when at least one approval, no changes-requested, and nothing pending. The
-  // reviewers list carries a per-reviewer chip (latest verdict, else "commented").
+  // reviewSummary aggregates a PR's feedback into review state, mirroring review.ComputeReviewSummary.
   function reviewSummary(feedbackItems, reviewers) {
     const latestVerdict = new Map();
     const acted = new Map();
@@ -4692,16 +3531,13 @@
     return { approved, changesRequested, pending, isBlocked: changesRequested > 0, isApproved: approved > 0 && changesRequested === 0 && pending === 0, reviewers: chips };
   }
 
-  // suggestionBody extracts the replacement text from a suggestion feedback body
-  // (the ```suggestion fenced block, GITREVIEW §1.4), or the whole trimmed body
-  // when no fence is present.
+  // suggestionBody extracts a suggestion feedback's replacement text, per GITREVIEW 1.4.
   function suggestionBody(content) {
     const m = /```suggestion[^\n]*\n([\s\S]*?)```/.exec(content || "");
     return m ? m[1].replace(/\n$/, "") : (content || "").trim();
   }
 
-  // authorStats aggregates commit counts by author name (falling back to email)
-  // over an already-walked commit set, descending by count then name.
+  // authorStats aggregates commit counts by author name over an already-walked commit set.
   function authorStats(commits) {
     const map = new Map();
     for (const c of commits) { const name = c.authorName || c.authorEmail || "unknown"; map.set(name, (map.get(name) || 0) + 1); }
@@ -4718,16 +3554,11 @@
 
   // ---- Lists (per-element refs; discovery/parsing is DOM-free, testable) ----
 
-  // List ref layout (gitmsg/list.go): metadata at
-  // refs/gitmsg/<ext>/lists/<name>/_meta (commit message is JSON), each member
-  // at refs/gitmsg/<ext>/lists/<name>/items/<hash> (commit message is the full
-  // member ref string, e.g. `https://x/y#branch:main`).
+  // List refs (gitmsg/list.go): metadata at <name>/_meta, one member per ref under <name>/items/<hash>.
   const LIST_META_SUFFIX = "/_meta";
   const LIST_ITEMS_SEG = "/items/";
 
-  // parseListRef splits a lists-namespace ref name into { ext, name, kind, hash }
-  // (kind is 'meta' or 'item'); null for a ref outside any lists namespace. The
-  // pre-migration single-ref layout (no /_meta) is read as the metadata ref.
+  // parseListRef splits a lists-namespace ref name into { ext, name, kind, hash }; null outside the namespace.
   function parseListRef(ref) {
     const m = /^refs\/gitmsg\/([^/]+)\/lists\/(.+)$/.exec(ref || "");
     if (!m) return null;
@@ -4739,9 +3570,7 @@
     return null;
   }
 
-  // enumerateLists groups a manifest's list refs into per-list descriptors
-  // ({ ext, name, id, metaRef, itemRefs }), sorted by ext then name. The id
-  // (`<ext>/<name>`) is the value carried by the `#list:` route.
+  // enumerateLists groups a manifest's list refs into per-list descriptors, sorted by ext then name.
   function enumerateLists(manifest) {
     if (!manifest) return [];
     const byKey = new Map();
@@ -4759,23 +3588,18 @@
     return out;
   }
 
-  // listMemberRef classifies a member ref string ("[url]#type:value"):
-  // { repoUrl, ref, local }. A local (workspace-relative, no url) member links
-  // into this bucket; a foreign member's objects live elsewhere (labeled text).
+  // listMemberRef classifies a member ref string as local to this bucket or foreign.
   function listMemberRef(memberRef) {
     const url = refRepoUrl(memberRef);
     return { repoUrl: url, ref: memberRef || "", local: !url };
   }
 
-  // jsonCommitMessage JSON-parses a commit message that is pure JSON (list _meta
-  // and ext config commits, created by CreateCommitTree), returning the object or
-  // null. DOM-free.
+  // jsonCommitMessage JSON-parses a commit message that is pure JSON, returning the object or null.
   function jsonCommitMessage(msg) {
     try { const v = JSON.parse((msg || "").trim()); return (v && typeof v === "object") ? v : null; } catch { return null; }
   }
 
-  // loadListMeta resolves a list's _meta commit into its metadata object
-  // (name/id/version); {} when the ref is absent/unparseable.
+  // loadListMeta resolves a list's _meta commit into its metadata object; {} when the ref is absent.
   async function loadListMeta(ctx, list) {
     if (!list.metaRef) return {};
     const sha = await refTip(ctx, list.metaRef);
@@ -4785,8 +3609,7 @@
     return jsonCommitMessage(parseCommit(sha, obj.body).content) || {};
   }
 
-  // loadListMembers resolves a list's per-element item refs into member ref
-  // strings (each item commit's message is the member ref), sorted.
+  // loadListMembers resolves a list's item refs into member ref strings, sorted.
   async function loadListMembers(ctx, list) {
     const out = [];
     for (const ref of list.itemRefs) {
@@ -4801,9 +3624,7 @@
     return out;
   }
 
-  // loadListsSummary returns every list in the bucket with its metadata and
-  // member count (count is the item-ref count, no per-member fetch). Empty when
-  // the bucket has no manifest or no list refs.
+  // loadListsSummary returns every list in the bucket with its metadata and member count.
   async function loadListsSummary(ctx) {
     const lists = enumerateLists(await manifestFor(ctx));
     const out = [];
@@ -4811,18 +3632,14 @@
     return out;
   }
 
-  // loadListDetail resolves one list by id (`<ext>/<name>`) with its resolved
-  // members; null when no such list exists.
+  // loadListDetail resolves one list by id with its resolved members; null when no such list exists.
   async function loadListDetail(ctx, id) {
     const l = enumerateLists(await manifestFor(ctx)).find((x) => x.id === id);
     if (!l) return null;
     return { ext: l.ext, name: l.name, id: l.id, meta: await loadListMeta(ctx, l), members: await loadListMembers(ctx, l) };
   }
 
-  // loadExtConfig resolves an extension's refs/gitmsg/<ext>/config commit into
-  // its JSON object (the whole commit message is the config JSON); null when the
-  // ref is absent/unparseable (rendered as "defaults"). Discovery is via refTip
-  // (live plain key or manifest).
+  // loadExtConfig resolves an extension's config ref into its JSON object; null when the ref is absent or unparseable.
   async function loadExtConfig(ctx, ext) {
     const sha = await refTip(ctx, "refs/gitmsg/" + ext + "/config");
     if (!sha) return null;
@@ -4833,14 +3650,10 @@
 
   // ---- Forks (refs/gitmsg/core/forks/<urlHash>, per-element refs) ----
 
-  // FORKS_PREFIX is the ref namespace one ref per registered fork lives under
-  // (CLAUDE.md "Workspace refs"). Each ref's NAME is a one-way hash of the fork
-  // URL; the URL itself is the pointed-to commit's message (gitmsg/forks.go).
+  // FORKS_PREFIX is the ref namespace one ref per registered fork lives under; the ref name hashes the URL, which the commit message carries.
   const FORKS_PREFIX = "refs/gitmsg/core/forks/";
 
-  // forkRefNames returns the manifest's fork ref names (each pointing at a valid
-  // 40-hex sha), sorted — the browser's only fork-ref discovery (public buckets
-  // expose no listing). DOM-free.
+  // forkRefNames returns the manifest's fork ref names, sorted; the browser's only fork-ref discovery.
   function forkRefNames(manifest) {
     if (!manifest) return [];
     return Object.keys(manifest)
@@ -4848,30 +3661,7 @@
       .sort();
   }
 
-  // loadForks resolves registered forks from the refs manifest: each fork ref
-  // points at a commit whose message is the normalized fork URL (the ref name is a
-  // non-reversible hash, so the URL only comes from the commit) and whose author
-  // time stands in for "last updated" (the fork ref moves when the fork is
-  // re-registered/refetched). Returns [{ url, time }] sorted most-recently-updated
-  // first, ties broken by URL for a deterministic order; empty when the bucket has
-  // no manifest or no fork refs. The commit-count / last-fetch columns the TUI
-  // shows are cache-derived and unavailable to a browser reader.
-  //
-  // `limit` bounds how many fork COMMITS are read (bounded-concurrency, via the
-  // loose-first state read): the URL lives only in the commit, so a bucket with
-  // thousands of registered forks (a big import) used to pay one object read per
-  // fork — minutes of fetching — before the config page could render its ten.
-  // A capped load reads the first `limit` refs in the manifest's (refname-hash)
-  // order — recency ordering over the WHOLE set would need every commit, which
-  // is exactly the cost the cap exists to avoid — and sorts the loaded subset
-  // by time. Callers get the total from forkRefNames and can re-invoke without
-  // a limit on demand ("Load all"); already-read commits come from the ctx
-  // object cache, so a retry only refetches what failed. A single failed read
-  // never rejects the batch (a bulk hydration is exactly where a rate limiter
-  // bites): the failure is counted on the returned array's `failed` property —
-  // the diffTrees `truncated` pattern — so the UI can say the list is partial
-  // instead of silently presenting it as complete. 403 still rejects whole
-  // (a private bucket is a page-level condition, not a partial list).
+  // loadForks resolves registered forks from the manifest, reading at most limit fork commits; a partial result carries a failed count, and a 403 rejects whole.
   async function loadForks(ctx, limit) {
     const manifest = await manifestFor(ctx);
     const refs = forkRefNames(manifest);
@@ -4897,10 +3687,7 @@
 
   // ---- Analytics aggregation (DOM-free, testable) ----
 
-  // commitsByMonth buckets a walked commit set by calendar month (YYYY-MM, UTC)
-  // into contiguous buckets from the earliest to the latest commit month, with
-  // the peak count — the model for the activity-over-time bar row. Empty input
-  // yields { buckets: [], max: 0 }.
+  // commitsByMonth buckets a walked commit set into contiguous calendar months, with the peak count.
   function commitsByMonth(commits) {
     const map = new Map();
     let lo = Infinity, hi = -Infinity;
@@ -4925,9 +3712,7 @@
     return { buckets, max };
   }
 
-  // extensionStats reduces the resolved item sets of every extension into the
-  // per-extension counts the analytics page shows (issues open/closed, PR
-  // open/merged/closed, releases, posts, memos, milestones, sprints). DOM-free.
+  // extensionStats reduces every extension's resolved items into the per-extension counts the analytics page shows.
   function extensionStats(perExt) {
     const pm = groupPM(perExt.pm || []);
     const issue = pmProgress(pm.issues);
@@ -4959,10 +3744,7 @@
     return h.version ? ("v" + h.version) : (h.tag || "");
   }
 
-  // ANALYTICS_SPECS maps each extension data branch to the analytics series it
-  // contributes and the item type that series counts, mirroring the timeline's
-  // categorization (social→posts all, pm→issues, review→PRs, release→releases)
-  // plus memos. ANALYTICS_KINDS is the ordered series list every bucket carries.
+  // ANALYTICS_SPECS maps each data branch to its analytics series and counted item type; ANALYTICS_KINDS is the ordered series list.
   const ANALYTICS_SPECS = [
     { ext: "social", kind: "posts", type: "" },
     { ext: "pm", kind: "issues", type: "issue" },
@@ -4972,40 +3754,17 @@
   ];
   const ANALYTICS_KINDS = ANALYTICS_SPECS.map((s) => s.kind);
 
-  // COUNTS_WALK_CAP bounds the loose-object walk an exhaustive-set loader is
-  // allowed to do for ONE extension when that extension has no metadata index (or
-  // a stale one that never bridges), so its items resolve only by walking loose
-  // objects. The full item set is only cheap when the index is present and
-  // current; without it, exhaustion degrades to one loose GET per commit —
-  // hundreds to thousands of sequential GETs on a big data branch (mid-push, a
-  // bucket pushed by plain git, a never-indexed ext), which stalls the view behind
-  // an unbounded walk and can trip R2 rate limits. The full set is never
-  // first-paint-critical: counts are a card-stat nicety, and a filter/board/
-  // analytics view degrades quietly to the most recent COUNTS_WALK_CAP commits.
-  // An index-backed walk is exhausted from cheap, browser-cached metadata shards
-  // and ignores this cap, so an indexed bucket is unchanged (exact, exhaustive).
+  // COUNTS_WALK_CAP bounds the loose-object walk one extension may do without a metadata index, so a view degrades to recent items instead of stalling.
   const COUNTS_WALK_CAP = WALK_CAP;
 
-  // loadExtItemsAll returns an extension's resolved items, metadata-only
-  // (UN-hydrated, no body fetches) — the input to the filter/board/analytics
-  // views and the interaction counts. An index-seeded walk pulls every older
-  // metadata shard (immutable, browser-cached) and costs no loose-object fetches,
-  // so an indexed bucket yields the COMPLETE set. On an index-absent or stale
-  // bucket the walk falls to loose objects; `looseCap` bounds THAT walk to its
-  // most-recent `looseCap` commits (default COUNTS_WALK_CAP) so first paint is
-  // never gated on an unbounded exhaustion walk. Empty when the branch is absent.
+  // loadExtItemsAll returns an extension's resolved items un-hydrated; looseCap bounds the walk when no index backs it.
   async function loadExtItemsAll(ctx, ext, looseCap) {
     const cap = looseCap || COUNTS_WALK_CAP;
     const w = await extWalkState(ctx, ext);
     if (!w) return [];
     return withWalkLock(w, async () => {
       if (w.state.commits.length === 0) await stepExtWalk(ctx, w, WALK_CAP);
-      // Progress guard: a step that neither adds commits nor drains an older shard
-      // is a stall; break rather than spin (a malformed corpus degrades to a
-      // partial list, never an eternal "Loading…"). Loose-walk cap: an index-backed
-      // state has an empty frontier (its steps only drain cheap older shards) so
-      // w.older drives it to exhaustion regardless of the cap; a loose walk stops
-      // once `cap` commits have been visited.
+      // Progress guard, plus the loose-walk cap: an index-backed state drains its shards regardless of the cap.
       let guardN = w.state.commits.length, guardShards = (w.older || []).length, stall = 0;
       while (!extWalkExhausted(w)) {
         if (!(w.older && w.older.length) && w.state.visited.size >= cap) break;
@@ -5018,16 +3777,12 @@
     });
   }
 
-  // loadExtItemsForCounts returns an extension's resolved items for the interaction
-  // tallies. A thin alias over loadExtItemsAll's default (COUNTS_WALK_CAP) loose
-  // bound: exact on an indexed bucket, the most-recent cap commits otherwise.
+  // loadExtItemsForCounts returns an extension's resolved items for the interaction tallies, at the default loose bound.
   async function loadExtItemsForCounts(ctx, ext) {
     return loadExtItemsAll(ctx, ext);
   }
 
-  // loadSiteStats fetches the push-computed stats blob (.gitsocial/site/stats.json)
-  // — currently the default branch's regular commit count. Null when absent (a
-  // bucket pushed before stats, or by a plain git push). Cached on ctx.
+  // loadSiteStats fetches the push-computed stats blob once per context; null when the bucket carries none.
   async function loadSiteStats(ctx) {
     if (ctx.siteStats !== undefined) return ctx.siteStats;
     let stats = null;
@@ -5037,23 +3792,13 @@
     return stats;
   }
 
-  // loadAnalyticsData loads every extension's item set (metadata-only) and reduces
-  // it to the flat, body-free entry list the analytics view aggregates: one
-  // { kind, time, author, email } per counted item. Also returns the running
-  // per-kind totals, the ordered kind list, the grand total, and the latest
-  // release label. The item set is COMPLETE on an index-seeded bucket (cheap
-  // metadata shards, no loose fetches); on an index-absent or stale bucket each
-  // branch's loose walk is bounded to its most-recent COUNTS_WALK_CAP commits (the
-  // partial flag the view surfaces), never an unbounded exhaustion fan-out. Also
-  // returns `partial`: true when any extension's set was capped by the loose bound,
-  // so the view can note the coverage is limited to recent items.
+  // loadAnalyticsData reduces every extension's item set to flat { kind, time, author, email } entries, with per-kind totals and a partial flag.
   async function loadAnalyticsData(ctx) {
     const entries = [];
     const perKind = {};
     let latestRelease = "";
     let partial = false;
-    // Per-extension lanes in parallel; the reduce below keeps spec order, so
-    // the aggregated output is unchanged.
+    // Per-extension lanes in parallel; the reduce below keeps spec order.
     const lanes = await Promise.all(ANALYTICS_SPECS.map(async (spec) => {
       const items = await loadExtItemsAll(ctx, spec.ext);
       return { spec, items, complete: await extSetComplete(ctx, spec.ext) };
@@ -5078,12 +3823,7 @@
     return { entries, perKind, kinds: ANALYTICS_KINDS.slice(), total: entries.length, latestRelease, partial };
   }
 
-  // activityBuckets buckets analytics entries into contiguous periods at the
-  // chosen granularity ("weekly" | "monthly" | "yearly", all UTC), each bucket
-  // carrying a per-kind count map and its total, plus the peak total across
-  // buckets — the model the stacked activity chart renders. Gaps between the
-  // first and last active period are filled with empty buckets so the timeline is
-  // continuous. Weekly buckets start Monday. Empty input yields { buckets:[], max:0 }.
+  // activityBuckets buckets analytics entries into contiguous periods, each with a per-kind count map and the peak total; weekly buckets start Monday.
   function activityBuckets(entries, gran, kinds) {
     const pad = (n) => String(n).padStart(2, "0");
     const step = gran === "weekly" ? 7 : 1;
@@ -5098,9 +3838,7 @@
       if (gran === "yearly") return String(idx);
       return Math.floor(idx / 12) + "-" + pad((idx % 12) + 1);
     };
-    // shortOf is the compact under-bar axis label; weekly collapses the full
-    // ISO date to "Mon D" so it fits a narrow column (the full date stays on the
-    // column's hover title). Monthly/yearly are already short.
+    // shortOf is the compact under-bar axis label; weekly collapses the ISO date to "Mon D".
     const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const shortOf = (idx) => {
       if (gran !== "weekly") return labelOf(idx);
@@ -5133,10 +3871,7 @@
     return { buckets, max };
   }
 
-  // topItemAuthors ranks analytics entries by item count, keyed by email (falling
-  // back to name) so an author's items merge across name spellings, descending by
-  // count then name. Each row carries the display name, email (for the hover
-  // tooltip), and count. DOM-free.
+  // topItemAuthors ranks analytics entries by item count, keyed by email so an author's items merge across name spellings.
   function topItemAuthors(entries, limit) {
     const map = new Map();
     for (const e of entries) {
@@ -5186,11 +3921,7 @@
     ttf: "font", otf: "font", woff: "font", woff2: "font", eot: "font",
   };
 
-  // iconName maps a filename (or a structural kind) to a GSIcons key. DOM-free
-  // and Node-testable. `kind` handles the tree-entry shapes: "tree" (folder),
-  // "tree-open" (expanded folder), "commit" (gitlink/submodule), "symlink"; any
-  // other kind falls through to filename/extension resolution, defaulting to the
-  // generic "file" icon for unknown types.
+  // iconName maps a filename, or a structural kind, to a GSIcons key, defaulting to "file".
   function iconName(name, kind) {
     if (kind === "tree") return "folder";
     if (kind === "tree-open") return "folder-open";
@@ -5207,14 +3938,7 @@
     return "file";
   }
 
-  // ICON_COLOR maps a GSIcons key to a hue class whose per-theme color is
-  // defined in index.html from the Pierre @pierre/vscode-icons palette (MIT,
-  // github.com/pierrecomputer/vscode-icons scripts/palette.mjs): the theme's
-  // fontColor per language, palette shade 400 for the dark background and 600
-  // for the light parchment (the light yellow is nudged darker for parchment
-  // legibility). Keys Pierre leaves monochrome (folder/folder-open, file, json,
-  // md, image, zip, sql, svg, font, text, gear, code, symlink) carry no entry
-  // and inherit --muted, so structural and unknown icons stay neutral.
+  // ICON_COLOR maps an icon key to a hue class defined in index.html; a key with no entry inherits --muted.
   const ICON_COLOR = {
     go: "i-cyan", ts: "i-cyan",
     js: "i-yellow",

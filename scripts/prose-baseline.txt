@@ -1,7 +1,7 @@
 comment-block-css	47
 comment-block-go	841
 comment-block-html	4
-comment-block-js	373
-emdash	1139
+comment-block-js	127
+emdash	950
 flag-help	141
 short-long	33

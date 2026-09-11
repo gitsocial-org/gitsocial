@@ -154,6 +154,17 @@ At the prefix root, next to the shell; the cache classes are defined in [S3.md](
 
 Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push. A manifest at any other version reads as absent, so a bump is a full regen under the per-push page budget.
 
+### Page entry
+
+A generated page hands the app three hooks: a `<meta name="gs-route">` route, a `data-base` attribute on the `<div id="gs-page">` mount, and the mount itself. `gs-upgrade.js` reads them, loads the shell relative to that base and lets `gs-app.js` render.
+
+- The page's own head script marks `<html>` with `gs-boot` before the body is parsed, so a visitor with JS starts on a loading line rather than on content that is about to change.
+- The takeover reveals twice: the app's chrome once `pages-full.css` governs the page, the content once the first view has settled. A page entered without a deep link keeps its served content until then.
+- A `location.hash` deep link wins over the page's own route when the fragment names a route. A bare in-page anchor addresses the page in hand, so the page's own route boots and the browser keeps the anchor.
+- Every step of the takeover is reversible. A shell asset that 404s or hangs, a throw during boot, or a route that does not settle restores the served page, its styling and its entry URL.
+- The shell-asset phase is bounded at 10 s, the app's first route at 35 s.
+- After boot a route with a page of its own gets that page URL, so a reload hits the object. App-only surfaces normalize to `index.html#<route>`. A `?base=` or `?repo=` override survives every rewrite.
+
 ### Artifacts
 
 Under `.gitsocial/site/`, read by the app in place of object walks, together with the bucket's ref list at `.gitsocial/refs.json` (see [S3.md](S3.md#keys)); a refname that list omits is probed live once per session:
@@ -171,3 +182,12 @@ Under `.gitsocial/site/`, read by the app in place of object walks, together wit
 | `push-state` | skip digest for push-time site maintenance |
 
 A first view stays under half a megabyte at 100,000 commits: the shell is about 150 KB, the timeline loads 50 items per scroll, and deep search states its download size before fetching. On a large repository the index bootstraps over several pushes.
+
+### Object reads
+
+The app reads git objects out of the bucket itself.
+
+- A packed commit or tag is located through the pack map at `.gitsocial/packmap/<xx>.json`, which names its byte range. One ranged GET returns a self-contained stream, since the commits pack is written at `--depth=0`.
+- Trees and blobs have no map entry. Their pack index is range-read through its fanout rather than downloaded whole.
+- The map covers commits and tags alone: a shard holds one 256th of every packed object, and every push rewrites all 256.
+- Pack indexes, map shards and pack data windows are cached for the session. An object a bucket stores loose is read loose.
