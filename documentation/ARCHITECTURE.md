@@ -49,6 +49,16 @@ go test -tags sitetest -timeout 30m ./library/core/objstore/   # the browser sit
 
 Coverage is a floor: the S3 helper tests run the helper as a child process, and the browser suites run under node, so neither is credited.
 
+### Design notes
+
+A branch that changes `core/objstore`, `core/gitmsg` or `core/cache`, or touches consistency, storage layout or a protocol surface, adds three steps to the branch flow above.
+
+- Before code: a design note, approved. Half a page in `.local/design/<feature>.md` while the branch is open: invariants, each naming its test; who writes and reads each artifact, under what guard; accepted failure modes and their repair; out of scope.
+- Once the push tier passes: one medium review of the branch against the note. Triage every finding by cause before fixing any: fix, accept and record in the commit body, or defer to an issue. No second full review.
+- On merge the note goes; each invariant lives on as its test, a row in the owning doc's reference tables, and a one-line comment where the code enforces it.
+
+Go back to the note instead of another fix when a function is about to be rewritten a second time, a finding is a consequence of a decision, three findings share a cause, or a fix needs a concept the guide does not describe.
+
 ## Code Rules
 
 ### Layers
@@ -70,6 +80,7 @@ Each layer imports only the layers below it. `core` imports nothing above itself
 ### Do
 
 - Read the relevant spec first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`.
+- Read the files a change touches in full before a design note, a review or a fix. Do not work from search hits.
 - Follow [STYLE.md](STYLE.md) for prose, help text, comments and commits.
 - Start each file with a one-line header comment (`// commits.go - Git commit operations`) and each function with a one-line comment.
 - Prefer functions to methods. Methods are for interfaces and for Bubbletea models in `tui`.
