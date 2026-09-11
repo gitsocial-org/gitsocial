@@ -370,8 +370,10 @@ func generateRepostContentFromItem(item *SocialItem) string {
 
 	repoName := protocol.GetFullDisplayName(item.RepoURL)
 	firstLine := strings.Split(item.Content, "\n")[0]
-	if len(firstLine) > 50 {
-		firstLine = firstLine[:47] + "..."
+	// Runes, not bytes: this line is stored as commit content, and a byte cut
+	// through a multi-byte character writes invalid UTF-8.
+	if runes := []rune(firstLine); len(runes) > 50 {
+		firstLine = string(runes[:47]) + "..."
 	}
 
 	return "# " + author + " @ " + repoName + ": " + firstLine

@@ -92,6 +92,7 @@ Rules that hold on every page:
 - Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer.
 - A list page heads with its sidebar label (Issues, Pull Requests, Timeline), and so do its `<title>`, description and feed title. The app heads the same routes with the same label from one table, pinned by `sitetest/parity_fixtures.json`, so the boot swap moves no heading. The one exception is `f/index.html`, which boots into the tree view.
 - Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is the one card the page layer and the app still shape differently.
+- A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item.
 - First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 
