@@ -158,7 +158,8 @@ func FormatTime(t time.Time) string {
 	if days < 7 {
 		return fmt.Sprintf("%dd ago", days)
 	}
-	return t.Format("Jan 2, 2006")
+	// The date is local, like FormatFullTime, so the two name the same day.
+	return t.Local().Format("Jan 2, 2006")
 }
 
 // FormatFullTime formats a timestamp with date, time, and timezone.

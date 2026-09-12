@@ -4,7 +4,22 @@ package tuicore
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+// FormatTime and FormatFullTime name the same day for a value from another zone.
+func TestFormatTimeAgreesWithFullTimeOnTheDate(t *testing.T) {
+	_, localOffset := time.Now().Zone()
+	behind := time.FixedZone("behind", localOffset-7*3600)
+	value := time.Date(2020, 1, 1, 23, 30, 0, 0, behind)
+	day := value.Local().Format("Jan 2, 2006")
+	if got := FormatTime(value); got != day {
+		t.Errorf("FormatTime = %q, want %q", got, day)
+	}
+	if got := FormatFullTime(value); !strings.HasPrefix(got, day) {
+		t.Errorf("FormatFullTime = %q, want it to start with %q", got, day)
+	}
+}
 
 func TestRenderMath_greekLetters(t *testing.T) {
 	tests := []struct {
