@@ -112,18 +112,18 @@ Known divergence: the app renders markdown for `.md` and `.markdown` only, so an
 
 ```bash
 scripts/site-test.sh                                              # the browser battery
-go test -tags sitetest -timeout 30m ./library/core/objstore/      # the same from go test; skipped without node
+go test -tags sitetest -timeout 30m ./library/core/site/      # the same from go test; skipped without node
 bin/locals3 -root <dir>                                           # serve a pushed site locally, see S3.md
 ```
 
-The harness is `library/core/objstore/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
+The harness is `library/core/site/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
 
 Every suite but one runs under a DOM shim that computes no styles. `verify_styles.js` is the exception: it drives a real Chrome, reads computed styles and child structure for a fixed selector list on ten routes in both themes, and compares them to the baselines in `sitetest/styles/`.
 
 Chrome resolves through `chrome.js`: a `CHROME` override, then a candidate list of absolute paths. A bare name on PATH is not accepted. The suite skips with a notice when there is no Chrome, and `release.sh` preflights the same resolver so a release cannot ship with the gate skipped.
 
 ```bash
-GS_STYLES_UPDATE=1 node library/core/objstore/sitetest/verify_styles.js   # recapture the baselines
+GS_STYLES_UPDATE=1 node library/core/site/sitetest/verify_styles.js   # recapture the baselines
 ```
 
 A baseline records the distinct variants a selector renders, not whichever element is first, because a fixture rebuild reorders lists. Type classes are dropped from the structure fingerprint for the same reason; their tints still show as colours on their own variants. A visual change ships with its baseline update in the same commit.
@@ -132,7 +132,7 @@ A baseline records the distinct variants a selector renders, not whichever eleme
 
 ### Shell
 
-`core/objstore/site/`, embedded in the binary and uploaded whenever the shell version changes:
+`core/site/assets/`, embedded in the binary and uploaded whenever the shell version changes:
 
 | File | Role |
 |---|---|
@@ -235,6 +235,8 @@ A push classifies the state from both manifests and both live head counts, then 
 ### Push-time maintenance
 
 Every ref-moving push to an s3 remote runs the site's share of the upkeep pass ([S3.md](S3.md#push-maintenance)).
+
+- The transport hands that share to a hook, `site.PostPushMaintenance`, which the CLI supplies to the remote helper. A binary that wires no hook pushes data and leaves the site to the next `gitsocial push`.
 
 - `.gitsocial/site/push-state` records the last full pass: the shell version, a digest over the `refs/` listing etags plus HEAD's, and the page layer's state. A matching marker skips the data-derived pass in two or three round trips.
 - The marker is stamped only at the end of a full pass, so a stale, missing or unreadable marker costs extra work rather than a skip. A per-remote override folds into the digest, since it moves no ref.

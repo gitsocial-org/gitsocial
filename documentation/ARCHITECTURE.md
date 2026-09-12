@@ -54,14 +54,14 @@ GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
 scripts/test.sh -run TestSmoke ./library/tui/test/          # go test -json with streamed per-test progress
 scripts/coverage.sh                         # statement-weighted coverage with -coverpkg=./..., into .test-artifacts/coverage/
 scripts/import-graph.sh                     # the per-package size, fan-in, fan-out and churn report
-go test -tags sitetest -timeout 30m ./library/core/objstore/   # the browser site battery; needs node
+go test -tags sitetest -timeout 30m ./library/core/site/   # the browser site battery; needs node
 ```
 
 Coverage is a floor: the S3 helper tests run the helper as a child process, and the browser suites run under node, so neither is credited.
 
 ### Design notes
 
-A branch that changes `core/objstore`, `core/gitmsg` or `core/cache`, or touches consistency, storage layout or a protocol surface, adds three steps to the branch flow above.
+A branch that changes `core/objstore`, `core/site`, `core/gitmsg` or `core/cache`, or touches consistency, storage layout or a protocol surface, adds three steps to the branch flow above.
 
 - Before code: a design note, approved. Half a page in `.local/design/<feature>.md` while the branch is open: invariants, each naming its test; who writes and reads each artifact, under what guard; accepted failure modes and their repair; out of scope.
 - Once the push tier passes: one medium review of the branch against the note. Triage every finding by cause before fixing any: fix, accept and record in the commit body, or defer to an issue. No second full review.
@@ -98,7 +98,7 @@ Each layer imports only the layers below it. `core` imports nothing above itself
 - Extensions import each other: `pm`, `review`, `release` and `memo` import `social` for comments, and `review` imports `pm` for the issues a pull request closes.
 - Each extension's `nav.go` imports `tui/tuinav` to register its navigation items. Nothing else in `extensions` imports `tui`.
 
-Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`; `fetch`; `notifications`, `objstore`, `search`; `gitmsg/divergence`. `scripts/import-graph.sh` prints the current edges.
+Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`; `fetch`; `notifications`, `objstore`, `search`; `site`, `gitmsg/divergence`. `scripts/import-graph.sh` prints the current edges.
 
 ### Do
 
@@ -144,7 +144,8 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   │   ├── gitmsg/            # protocol-level storage (config refs, lists, forks, push)
 │   │   ├── cache/             # SQLite
 │   │   ├── storage/           # bare repo management
-│   │   ├── objstore/          # S3 client, remote helper, static site
+│   │   ├── objstore/          # S3 client and the s3:// remote helper
+│   │   ├── site/              # the static site: its assets, artifacts and pages
 │   │   ├── fetch/             # fetch orchestration and processing
 │   │   ├── identity/          # identity verification; forge/ holds the forge adapters
 │   │   ├── notifications/     # notification aggregation
@@ -187,7 +188,8 @@ Outside the tree:
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/objstore`<br>S3 remote and site | `Client`, `Config`, `Capability`, `HelperEnv` | `NewClient`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `PushSite`, `PushArtifactObjects`, `PutObjectToRemote` |
+| `core/objstore`<br>S3 remote | `Client`, `Config`, `Capability`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
+| `core/site`<br>Static site | `SiteCustomization` | `Push`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent`, `ValidSiteFavicon` |
 | `core/fetch`<br>Fetch orchestration | | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |

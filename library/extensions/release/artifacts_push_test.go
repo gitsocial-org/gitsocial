@@ -16,6 +16,8 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 func TestShouldAdvanceLatest(t *testing.T) {
@@ -51,7 +53,7 @@ func TestEffectiveSiteURL(t *testing.T) {
 	if url := effectiveSiteURL(workdir, "origin"); url != "" {
 		t.Fatalf("unconfigured site url = %q, want empty", url)
 	}
-	if err := objstore.WriteWorkspaceSiteCustomization(workdir, objstore.SiteCustomization{URL: "https://example.org"}); err != nil {
+	if err := site.WriteWorkspaceSiteCustomization(workdir, site.SiteCustomization{URL: "https://example.org"}); err != nil {
 		t.Fatalf("WriteWorkspaceSiteCustomization: %v", err)
 	}
 	if url := effectiveSiteURL(workdir, "origin"); url != "https://example.org/" {

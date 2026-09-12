@@ -18,6 +18,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 // ArtifactPushResult reports what an artifact push did: the uploaded files,
@@ -94,10 +96,10 @@ func PushArtifacts(workdir, version string, filePaths []string, remote string) R
 // per-remote override (remote.<name>.gitsocial-site-url) when valid, else the
 // workspace site config's url — the same precedence the site push applies.
 func effectiveSiteURL(workdir, remote string) string {
-	cfg, _ := objstore.ReadWorkspaceSiteCustomization(workdir)
+	cfg, _ := site.ReadWorkspaceSiteCustomization(workdir)
 	siteURL := cfg.URL
 	if out, err := git.ExecGit(workdir, []string{"config", "--get", "remote." + remote + "." + objstore.SiteOverrideURLKey}); err == nil {
-		if norm, ok := objstore.NormalizeSiteURL(strings.TrimSpace(out.Stdout)); ok {
+		if norm, ok := site.NormalizeSiteURL(strings.TrimSpace(out.Stdout)); ok {
 			siteURL = norm
 		}
 	}

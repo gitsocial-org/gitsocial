@@ -11,6 +11,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 // Options configures a publish. Zero value = default behavior (reason-based
@@ -229,7 +231,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 // enabled — the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the site push.
 func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
-	published, complete, err = objstore.PushSite(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
+	published, complete, err = site.Push(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
 	if err != nil || !published {
 		return published, complete, err
 	}
@@ -240,9 +242,9 @@ func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, prog
 	if err != nil {
 		return true, complete, nil
 	}
-	_ = objstore.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
+	_ = site.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
 	stats := map[string]any{"branch": branch, "commits": len(times), "commitTimes": times}
-	_ = objstore.WriteSiteStats(remoteURL, objstore.HelperEnvFromOS(), stats)
+	_ = site.WriteSiteStats(remoteURL, objstore.HelperEnvFromOS(), stats)
 	return true, complete, nil
 }
 

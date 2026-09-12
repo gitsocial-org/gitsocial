@@ -13,6 +13,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 const coreExt = "core"
@@ -382,20 +384,20 @@ func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value s
 func resolveSiteConfigValue(key, value string) (string, error) {
 	switch key {
 	case "accent", "accentDark":
-		if !objstore.ValidSiteAccent(value) {
+		if !site.ValidSiteAccent(value) {
 			return "", fmt.Errorf("%s must be a #rgb or #rrggbb hex color, got %q", key, value)
 		}
 		return value, nil
 	case "favicon":
 		return resolveFaviconValue(value)
 	case "image":
-		norm, ok := objstore.NormalizeSiteImage(value)
+		norm, ok := site.NormalizeSiteImage(value)
 		if !ok {
 			return "", fmt.Errorf("image must be a relative bucket key (e.g. og-card.png) or an absolute https:// URL, got %q", value)
 		}
 		return norm, nil
 	case "url":
-		norm, ok := objstore.NormalizeSiteURL(value)
+		norm, ok := site.NormalizeSiteURL(value)
 		if !ok {
 			return "", fmt.Errorf("url must be an absolute https:// URL with no query or fragment (http:// only for localhost), got %q", value)
 		}
@@ -405,8 +407,8 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 		if trimmed == "" {
 			return "", fmt.Errorf("description must not be empty")
 		}
-		if len(trimmed) > objstore.SiteConfigMaxDescription {
-			return "", fmt.Errorf("description too long: %d chars (max %d)", len(trimmed), objstore.SiteConfigMaxDescription)
+		if len(trimmed) > site.SiteConfigMaxDescription {
+			return "", fmt.Errorf("description too long: %d chars (max %d)", len(trimmed), site.SiteConfigMaxDescription)
 		}
 		return trimmed, nil
 	case "publish", "pages":
@@ -416,7 +418,7 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 		}
 		return v, nil
 	case "filesInclude", "filesExclude":
-		globs := objstore.NormalizeSiteGlobs(value)
+		globs := site.NormalizeSiteGlobs(value)
 		if globs == "" {
 			return "", fmt.Errorf("%s must be comma-separated repo-relative path globs, got %q", key, value)
 		}
@@ -442,9 +444,9 @@ func resolveFaviconValue(value string) (string, error) {
 		}
 		dataURI = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
 	}
-	if !objstore.ValidSiteFavicon(dataURI) {
-		if len(dataURI) > objstore.SiteFaviconMaxBytes {
-			return "", fmt.Errorf("favicon is %d bytes, over the %d-byte cap", len(dataURI), objstore.SiteFaviconMaxBytes)
+	if !site.ValidSiteFavicon(dataURI) {
+		if len(dataURI) > site.SiteFaviconMaxBytes {
+			return "", fmt.Errorf("favicon is %d bytes, over the %d-byte cap", len(dataURI), site.SiteFaviconMaxBytes)
 		}
 		return "", fmt.Errorf("favicon must be a data: URI of type png, webp, or svg+xml")
 	}

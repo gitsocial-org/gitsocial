@@ -197,7 +197,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates map[stri
 	// One local commit source serves the whole pass; the helper runs as a git child, so the pushed objects are already here.
 	src := NewLocalCommitSource(h.gitDir, "")
 	defer src.Close()
-	// Refresh the dumb-HTTP surface on every ref-moving push, ahead of the site gate, so stock git keeps cloning.
+	// Refresh the dumb-HTTP surface on every ref-moving push, ahead of the hook, so stock git keeps cloning.
 	h.progress.Call("maintenance: ref advertisement", 0, 0)
 	LogDumbTransportInfo(h.client, h.prefix, src, refs, thin)
 	// With the bucket's refs known, a HEAD pointing at a ref it does not carry can be repaired.
@@ -841,7 +841,7 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 			if _, err := reader.Discard(1); err != nil { // trailing newline
 				return fmt.Errorf("cat-file %s: %w", sha, err)
 			}
-			compressed, err := encodeLooseObject(objType, content)
+			compressed, err := EncodeLooseObject(objType, content)
 			if err != nil {
 				return err
 			}
@@ -917,8 +917,8 @@ func putObjectWithRetry(ctx context.Context, client *Client, key string, body []
 	}
 }
 
-// encodeLooseObject builds git's loose-object format: zlib("<type> <size>\0" + content).
-func encodeLooseObject(objType string, content []byte) ([]byte, error) {
+// EncodeLooseObject builds git's loose-object format: zlib("<type> <size>\0" + content).
+func EncodeLooseObject(objType string, content []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zlib.NewWriter(&buf)
 	if _, err := fmt.Fprintf(zw, "%s %d\x00", objType, len(content)); err != nil {
@@ -943,7 +943,14 @@ func oneLine(err error) string {
 	return strings.ReplaceAll(err.Error(), "\n", " ")
 }
 
-// SiteOverride carries one remote's deployment-key overrides, applied over readSiteCustomization so every consumer sees effective values.
+// Per-remote site-override git config keys; only the deployment keys are overridable, since identity keys stay shared in the repo's config ref.
+const (
+	SiteOverrideURLKey     = "gitsocial-site-url"
+	SiteOverridePublishKey = "gitsocial-site-publish"
+	SiteOverridePagesKey   = "gitsocial-site-pages"
+)
+
+// SiteOverride carries one remote's deployment-key overrides, applied over the bucket's customization so every consumer sees effective values.
 type SiteOverride struct {
 	URL     string
 	Publish string

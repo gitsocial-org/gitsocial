@@ -153,8 +153,8 @@ preflight() {
   done
   # Chrome backs the style-assertion suite and is never on PATH by name, so it
   # resolves the way the suite does.
-  node "$root/library/core/objstore/sitetest/chrome.js" >/dev/null 2>&1
-  [ -n "$(node -e 'process.stdout.write(require("'"$root"'/library/core/objstore/sitetest/chrome.js").find())')" ] \
+  node "$root/library/core/site/sitetest/chrome.js" >/dev/null 2>&1
+  [ -n "$(node -e 'process.stdout.write(require("'"$root"'/library/core/site/sitetest/chrome.js").find())')" ] \
     || fail "Chrome not found for the style-assertion suite; set CHROME to its path"
   info "tools checked: git go goreleaser syft rcodesign curl node"
 
@@ -203,7 +203,7 @@ preflight() {
   # `-race` (supersedes the plain suite) and the browser site battery.
   if $DRY_RUN; then
     printf '    [dry-run] GITSOCIAL_TEST_FULL=1 go test -race ./...\n'
-    printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/objstore/\n'
+    printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/site/\n'
   else
     # Output goes to a log, not the terminal: a failing test is named from it,
     # and an intermittent one has to be, since it may not fail on the rerun.
@@ -213,7 +213,7 @@ preflight() {
       || die "go test -race ./... failed: $(grep -E '^(--- FAIL|FAIL|panic:)|DATA RACE' .test-artifacts/release-race.log | head -5 | tr '\n' ';')"
     info "tests green (race)"
     info "running the site battery (log: .test-artifacts/release-site.log)"
-    go test -tags sitetest -timeout 30m ./library/core/objstore/ >.test-artifacts/release-site.log 2>&1 \
+    go test -tags sitetest -timeout 30m ./library/core/site/ >.test-artifacts/release-site.log 2>&1 \
       || die "site battery failed: $(grep -E 'FAIL' .test-artifacts/release-site.log | head -5 | tr '\n' ';')"
     info "site battery green"
   fi

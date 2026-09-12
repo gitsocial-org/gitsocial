@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 var CoreSite = RegisterContext("core.site")
@@ -22,29 +22,29 @@ func init() {
 type siteField struct {
 	label string
 	hint  string
-	get   func(*objstore.SiteCustomization) *string
+	get   func(*site.SiteCustomization) *string
 }
 
 // siteFields lists the site customization fields in display order.
 var siteFields = []siteField{
-	{"title", "browser tab + header text", func(c *objstore.SiteCustomization) *string { return &c.Title }},
-	{"accent", "hex color, e.g. #0a7", func(c *objstore.SiteCustomization) *string { return &c.Accent }},
-	{"accentDark", "hex color for dark mode", func(c *objstore.SiteCustomization) *string { return &c.AccentDark }},
-	{"favicon", "data:image/png|webp|svg+xml URI", func(c *objstore.SiteCustomization) *string { return &c.Favicon }},
-	{"image", "og:image social card: bucket key (og-card.png) or https:// URL", func(c *objstore.SiteCustomization) *string { return &c.Image }},
-	{"url", "absolute https:// base URL, e.g. https://example.com/", func(c *objstore.SiteCustomization) *string { return &c.URL }},
-	{"description", "plain text, 300 chars max", func(c *objstore.SiteCustomization) *string { return &c.Description }},
-	{"publish", "true/false: master switch for the static site (default false)", func(c *objstore.SiteCustomization) *string { return &c.Publish }},
-	{"pages", "true/false: crawlable HTML pages (needs publish + url)", func(c *objstore.SiteCustomization) *string { return &c.Pages }},
-	{"filesInclude", "path globs the file pages publish beyond prose documents", func(c *objstore.SiteCustomization) *string { return &c.FilesInclude }},
-	{"filesExclude", "path globs the file pages never publish", func(c *objstore.SiteCustomization) *string { return &c.FilesExclude }},
+	{"title", "browser tab + header text", func(c *site.SiteCustomization) *string { return &c.Title }},
+	{"accent", "hex color, e.g. #0a7", func(c *site.SiteCustomization) *string { return &c.Accent }},
+	{"accentDark", "hex color for dark mode", func(c *site.SiteCustomization) *string { return &c.AccentDark }},
+	{"favicon", "data:image/png|webp|svg+xml URI", func(c *site.SiteCustomization) *string { return &c.Favicon }},
+	{"image", "og:image social card: bucket key (og-card.png) or https:// URL", func(c *site.SiteCustomization) *string { return &c.Image }},
+	{"url", "absolute https:// base URL, e.g. https://example.com/", func(c *site.SiteCustomization) *string { return &c.URL }},
+	{"description", "plain text, 300 chars max", func(c *site.SiteCustomization) *string { return &c.Description }},
+	{"publish", "true/false: master switch for the static site (default false)", func(c *site.SiteCustomization) *string { return &c.Publish }},
+	{"pages", "true/false: crawlable HTML pages (needs publish + url)", func(c *site.SiteCustomization) *string { return &c.Pages }},
+	{"filesInclude", "path globs the file pages publish beyond prose documents", func(c *site.SiteCustomization) *string { return &c.FilesInclude }},
+	{"filesExclude", "path globs the file pages never publish", func(c *site.SiteCustomization) *string { return &c.FilesExclude }},
 }
 
 // SiteView displays and edits the workspace's site customization (title, accent,
 // accentDark, favicon, url, description). Values live in the core config's `site` sub-object, which
 // `gitsocial push --site-only` publishes as the static site's site-config.json.
 type SiteView struct {
-	config       objstore.SiteCustomization
+	config       site.SiteCustomization
 	cursor       int
 	lastClickIdx int
 	editMode     bool
@@ -77,7 +77,7 @@ func (v *SiteView) Activate(state *State) tea.Cmd {
 	v.input.Blur()
 	v.err = ""
 	v.cursor = 0
-	if c, err := objstore.ReadWorkspaceSiteCustomization(v.workdir); err != nil {
+	if c, err := site.ReadWorkspaceSiteCustomization(v.workdir); err != nil {
 		v.err = err.Error()
 	} else {
 		v.config = c
@@ -183,11 +183,11 @@ func (v *SiteView) saveCurrent() tea.Cmd {
 		return nil
 	}
 	if label == "url" && value != "" {
-		value, _ = objstore.NormalizeSiteURL(value)
+		value, _ = site.NormalizeSiteURL(value)
 	}
 	updated := v.config
 	*siteFields[v.cursor].get(&updated) = value
-	if err := objstore.WriteWorkspaceSiteCustomization(v.workdir, updated); err != nil {
+	if err := site.WriteWorkspaceSiteCustomization(v.workdir, updated); err != nil {
 		v.err = err.Error()
 		return nil
 	}
@@ -207,23 +207,23 @@ func validateSiteField(label, value string) string {
 	}
 	switch label {
 	case "accent", "accentDark":
-		if !objstore.ValidSiteAccent(value) {
+		if !site.ValidSiteAccent(value) {
 			return "invalid hex color (use #rgb or #rrggbb)"
 		}
 	case "favicon":
-		if !objstore.ValidSiteFavicon(value) {
+		if !site.ValidSiteFavicon(value) {
 			return "invalid favicon (data:image/png|webp|svg+xml URI, max 32KB)"
 		}
 	case "image":
-		if _, ok := objstore.NormalizeSiteImage(value); !ok {
+		if _, ok := site.NormalizeSiteImage(value); !ok {
 			return "invalid image (relative bucket key or absolute https:// URL)"
 		}
 	case "url":
-		if _, ok := objstore.NormalizeSiteURL(value); !ok {
+		if _, ok := site.NormalizeSiteURL(value); !ok {
 			return "invalid URL (absolute https://, no query/fragment)"
 		}
 	case "description":
-		if len(value) > objstore.SiteConfigMaxDescription {
+		if len(value) > site.SiteConfigMaxDescription {
 			return "description too long (max 300 chars)"
 		}
 	case "publish", "pages":
@@ -231,7 +231,7 @@ func validateSiteField(label, value string) string {
 			return "must be true or false"
 		}
 	case "filesInclude", "filesExclude":
-		if objstore.NormalizeSiteGlobs(value) == "" {
+		if site.NormalizeSiteGlobs(value) == "" {
 			return "must be comma-separated repo-relative path globs"
 		}
 	}

@@ -9,4 +9,4 @@
 #   scripts/site-test.sh
 set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec node "$root/library/core/objstore/sitetest/runner.js"
+exec node "$root/library/core/site/sitetest/runner.js"

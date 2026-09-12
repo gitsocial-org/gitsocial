@@ -76,7 +76,7 @@ func pushHelper(t *testing.T, client *Client, dir string) *remoteHelper {
 	t.Helper()
 	gitDir := filepath.Join(dir, ".git")
 	t.Setenv("GIT_DIR", gitDir)
-	return &remoteHelper{client: client, gitDir: gitDir, fetched: map[string]bool{}, after: PostPushMaintenance}
+	return &remoteHelper{client: client, gitDir: gitDir, fetched: map[string]bool{}}
 }
 
 // pushCmds turns refnames into the push batch a plain `git push <refs>` sends
@@ -338,7 +338,7 @@ func TestUploadDelta_ThresholdKeepsSmallPushesLoose(t *testing.T) {
 }
 
 // TestUploadPacked_StateRefObjectsPack: refs/gitmsg/* objects join the packs —
-// every loose-key reader has a pack fallback now (getBucketCommit reads the
+// every loose-key reader has a pack fallback now (ReadPackedObject reads the
 // pack map, the browser probes both shapes) — so a packed push writes no loose
 // keys at all and the state commit resolves through the pack map.
 func TestUploadPacked_StateRefObjectsPack(t *testing.T) {
@@ -361,12 +361,12 @@ func TestUploadPacked_StateRefObjectsPack(t *testing.T) {
 	}
 	// The push-time config readers resolve the packed-only commit off the pack
 	// map: one range read, no loose key, no local source.
-	c, err := getBucketCommit(client, "", stateSha)
-	if err != nil {
-		t.Fatalf("getBucketCommit over a packed-only state commit: %v", err)
+	objType, body, ok, err := ReadPackedObject(client, "", stateSha)
+	if err != nil || !ok {
+		t.Fatalf("ReadPackedObject over a packed-only state commit: ok=%v err=%v", ok, err)
 	}
-	if strings.TrimSpace(c.item.Message) != "config" {
-		t.Errorf("packed state commit message = %q, want %q", c.item.Message, "config")
+	if objType != "commit" || !strings.Contains(string(body), "config") {
+		t.Errorf("packed state commit = (%q, %q), want a commit body naming config", objType, body)
 	}
 }
 
@@ -787,55 +787,12 @@ func TestSealLooseObjects_StateRefObjectsPackAndDelete(t *testing.T) {
 	// The sealed state commits stay readable through the pack fallback the
 	// push-time config readers use.
 	for _, sha := range []string{stateSha, orphan} {
-		c, err := getBucketCommit(client, "", sha)
-		if err != nil {
-			t.Errorf("getBucketCommit(%s) after seal + delete: %v", sha, err)
-		} else if c.item.SHA != sha {
-			t.Errorf("getBucketCommit(%s) returned sha %s", sha, c.item.SHA)
+		objType, _, ok, err := ReadPackedObject(client, "", sha)
+		if err != nil || !ok {
+			t.Errorf("ReadPackedObject(%s) after seal + delete: ok=%v err=%v", sha, ok, err)
+		} else if objType != "commit" {
+			t.Errorf("ReadPackedObject(%s) returned type %q", sha, objType)
 		}
-	}
-}
-
-// TestReadSiteConfigs_PackedOnlyAndLocal: the push-time config readers succeed
-// against a bucket whose config commits exist ONLY inside packs (the pack-map
-// fallback), and resolve purely from the local odb when a source is available
-// (asserted against an empty bucket, where only the local path can answer).
-func TestReadSiteConfigs_PackedOnlyAndLocal(t *testing.T) {
-	client, _ := testClient(t)
-	dir := packTestRepo(t, 4)
-	pmSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", `{"framework":"scrum"}`)
-	gitRun(t, dir, "update-ref", "refs/gitmsg/pm/config", pmSha)
-	coreSha := gitRun(t, dir, "commit-tree", gitRun(t, dir, "mktree"), "-m", `{"version":1,"site":{"title":"Packed"}}`)
-	gitRun(t, dir, "update-ref", "refs/gitmsg/core/config", coreSha)
-	h := pushHelper(t, client, dir)
-	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
-	if err := h.uploadMissingObjects(pushCmds("refs/heads/main", "refs/gitmsg/pm/config", "refs/gitmsg/core/config")); err != nil {
-		t.Fatalf("uploadMissingObjects: %v", err)
-	}
-	if got := looseObjectKeys(t, client); len(got) != 0 {
-		t.Fatalf("fixture is not packed-only: %d loose keys", len(got))
-	}
-	refs := map[string]string{"refs/gitmsg/pm/config": pmSha, "refs/gitmsg/core/config": coreSha}
-
-	cfg, ok, err := readSitePMConfig(client, "", refs, nil)
-	if err != nil || !ok || cfg.Framework != "scrum" {
-		t.Errorf("readSitePMConfig over a packed-only bucket = %+v ok=%v err=%v", cfg, ok, err)
-	}
-	custom, ok, err := readSiteBaseCustomization(client, "", refs, nil)
-	if err != nil || !ok || custom.Title != "Packed" {
-		t.Errorf("readSiteBaseCustomization over a packed-only bucket = %+v ok=%v err=%v", custom, ok, err)
-	}
-
-	src := NewLocalCommitSource(filepath.Join(dir, ".git"), "")
-	defer src.Close()
-	emptyClient, _ := testClient(t)
-	cfg, ok, err = readSitePMConfig(emptyClient, "", refs, src)
-	if err != nil || !ok || cfg.Framework != "scrum" {
-		t.Errorf("readSitePMConfig via the local odb = %+v ok=%v err=%v", cfg, ok, err)
-	}
-	custom, ok, err = readSiteBaseCustomization(emptyClient, "", refs, src)
-	if err != nil || !ok || custom.Title != "Packed" {
-		t.Errorf("readSiteBaseCustomization via the local odb = %+v ok=%v err=%v", custom, ok, err)
 	}
 }
 

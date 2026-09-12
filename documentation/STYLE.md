@@ -164,4 +164,4 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 | `short-long` | a cobra `Short` over 50 characters |
 | `flag-help` | flag help over 60 characters, or containing a parenthesis |
 
-`specs/`, `testdata/`, golden files and the vendored web assets under `library/core/objstore/` are out of scope for every rule.
+`specs/`, `testdata/`, golden files and the vendored web assets under `library/core/site/assets/` are out of scope for every rule.

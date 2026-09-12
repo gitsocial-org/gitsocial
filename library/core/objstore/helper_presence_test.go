@@ -80,7 +80,7 @@ func TestEnsureObject_bucketPackDescends(t *testing.T) {
 func TestEnsureObject_emptyTreeNotPresent(t *testing.T) {
 	gitDir, _, _, _ := packedTestRepo(t)
 	client, bucket := testClient(t)
-	encoded, err := encodeLooseObject("tree", nil)
+	encoded, err := EncodeLooseObject("tree", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

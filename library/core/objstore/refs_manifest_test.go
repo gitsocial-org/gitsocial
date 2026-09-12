@@ -22,7 +22,7 @@ func TestPostPushMaintenance_ManifestOnDeferredTransfer(t *testing.T) {
 		stale[ref] = sha
 	}
 	writeManifest(t, client, stale)
-	if err := client.Put(siteVersionKey, []byte("stale-version\n")); err != nil {
+	if err := client.Put(siteMarkerKey, []byte("stale-version\n")); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(git.DeferMaintenanceEnv, "1")
@@ -39,7 +39,7 @@ func TestPostPushMaintenance_ManifestOnDeferredTransfer(t *testing.T) {
 	if _, ok := got["refs/heads/gone"]; ok || len(got) != len(want) {
 		t.Errorf("manifest = %v, want exactly the bucket's refs %v", got, want)
 	}
-	if v, err := client.Get(siteVersionKey); err != nil || string(v) != "stale-version\n" {
+	if v, err := client.Get(siteMarkerKey); err != nil || string(v) != "stale-version\n" {
 		t.Error("deferred transfer must leave the site maintenance to the last one")
 	}
 }

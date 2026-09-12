@@ -4,7 +4,7 @@
 //
 // The cache policy expectations come from documentation/S3.md ("Cache policy"),
 // which is the specification both dev servers (locals3 and sitetest/serve.js)
-// and the uploader (objstore/cache_control.go) must agree on; the Range
+// and the uploaders (objstore/cache_control.go, site/site_cache_control.go) must agree on; the Range
 // expectations come from RFC 7233 and from Client.GetRange's contract.
 package main
 
@@ -141,7 +141,7 @@ func TestCacheControlFor(t *testing.T) {
 		{"repo/issue/2.html", revalidate},
 		// commits/<n>.html is sealed the same way but stays mutable on purpose:
 		// the default branch can be rebased, so those pages get re-derived
-		// (cache_control.go, isSealedListPageKey).
+		// (site/site_cache_control.go, isSealedListPageKey).
 		{"repo/commits/2.html", revalidate},
 		// Sealed sitemap parts; the index and the head part stay mutable.
 		{"repo/sitemap-2.xml", immutable},
@@ -203,7 +203,7 @@ func TestContentTypeFor(t *testing.T) {
 // battery's server (sitetest/serve.js): the two serve the same bucket, so a
 // type only one of them knows would make a local run and a suite run disagree.
 func TestContentTypesMatchServeJS(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join("..", "sitetest", "serve.js"))
+	source, err := os.ReadFile(filepath.Join("..", "..", "site", "sitetest", "serve.js"))
 	if err != nil {
 		t.Fatal(err)
 	}

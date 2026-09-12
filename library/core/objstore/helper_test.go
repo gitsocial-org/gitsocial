@@ -11,9 +11,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
 
-// siteHookProbeKey is the key the recording hook below writes, in the namespace only the site layer claims.
-const siteHookProbeKey = ".gitsocial/site/version"
-
 // runHelperPush drives one `git push refs/heads/main` through RunHelper against a fresh bucket, reporting into out; arm may fault the bucket first.
 func runHelperPush(t *testing.T, dir string, out *bytes.Buffer, arm func(*membucket.Bucket), after PostPushHook) *membucket.Bucket {
 	t.Helper()
@@ -51,7 +48,7 @@ func TestRunHelper_postPushHook(t *testing.T) {
 		if !o.ManifestOK {
 			t.Error("a push whose manifest write landed must reach the hook as ManifestOK true")
 		}
-		if err := o.Client.Put(o.Prefix+siteHookProbeKey, []byte("hook\n")); err != nil {
+		if err := o.Client.Put(o.Prefix+siteMarkerKey, []byte("hook\n")); err != nil {
 			t.Errorf("hook write: %v", err)
 		}
 	})
@@ -61,13 +58,13 @@ func TestRunHelper_postPushHook(t *testing.T) {
 	if !strings.HasSuffix(reportAtHook, "ok refs/heads/main\n\n") {
 		t.Errorf("the hook ran before the report was flushed; writer held %q", reportAtHook)
 	}
-	if _, ok := bucket.Object(siteHookProbeKey); !ok {
+	if _, ok := bucket.Object(siteMarkerKey); !ok {
 		t.Error("the hook's write never reached the bucket")
 	}
 
 	var nilOut bytes.Buffer
 	nilBucket := runHelperPush(t, dir, &nilOut, nil, nil)
-	if _, ok := nilBucket.Object(siteHookProbeKey); ok {
+	if _, ok := nilBucket.Object(siteMarkerKey); ok {
 		t.Error("a nil hook must leave the bucket without a site key")
 	}
 

@@ -10,7 +10,7 @@ rules="comment-block-css comment-block-go comment-block-html comment-block-js em
 zero=0000000000000000000000000000000000000000
 
 # tracked files in scope, one per line
-FILES=$(git ls-files | grep -vE '^specs/|^library/core/objstore/site/(fonts|grammars)/|^library/core/objstore/prismcomp/|^library/core/objstore/site/(prism|icons)\.js$|(^|/)testdata/|\.(golden|gz|woff2|png|svg|mp4)$|^go\.sum$' | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+FILES=$(git ls-files | grep -vE '^specs/|^library/core/site/assets/(fonts|grammars)/|^library/core/objstore/prismcomp/|^library/core/site/assets/(prism|icons)\.js$|(^|/)testdata/|\.(golden|gz|woff2|png|svg|mp4)$|^go\.sum$' | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
 
 # with_ext prints the in-scope files with the given extension, NUL-separated for xargs
 with_ext() { printf '%s\n' "$FILES" | grep -E "\.$1\$" | tr '\n' '\0'; }

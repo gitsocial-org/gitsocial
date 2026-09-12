@@ -69,8 +69,7 @@ func PutCompressed(client *Client, key string, compressed []byte, cacheControl s
 // some providers (Cloudflare R2) transparently decompress `Content-Encoding:
 // br` objects when the requester doesn't advertise br support (Go's transport
 // only advertises gzip), so the stored artifact arrives as plain JSON.
-// Treating that as absent silently re-bootstrapped every corpus on every push
-// and permanently blocked the HTML page layer behind siteItemsBootstrapPending.
+// Treating that as absent re-bootstraps every corpus on every push.
 func ReadCompressedJSON(client *Client, key string, v any) (found bool, err error) {
 	data, err := client.GetRetry(key)
 	if errors.Is(err, ErrNotFound) {
