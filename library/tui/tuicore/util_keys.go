@@ -214,11 +214,12 @@ var ExtensionKeys = []GlobalKey{
 	{Key: "R", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
 	{Key: "V", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
 	{Key: "M", Domain: DomainMemo, Target: MemoList, Label: "memos"},
-	{Key: "C", Domain: DomainCICD, Target: Global, Label: "actions"},       // placeholder
-	{Key: "O", Domain: DomainOps, Target: Global, Label: "operations"},     // placeholder
-	{Key: "Y", Domain: DomainSecurity, Target: Global, Label: "security"},  // placeholder
-	{Key: "|", Domain: DomainDM, Target: Global, Label: "dm"},              // placeholder
-	{Key: "F", Domain: DomainPortfolio, Target: Global, Label: "overview"}, // placeholder
+	// Reserved for extensions that do not exist yet; Target Global skips registration.
+	{Key: "C", Domain: "cicd", Target: Global, Label: "actions"},
+	{Key: "O", Domain: "ops", Target: Global, Label: "operations"},
+	{Key: "Y", Domain: "security", Target: Global, Label: "security"},
+	{Key: "|", Domain: "dm", Target: Global, Label: "dm"},
+	{Key: "F", Domain: "portfolio", Target: Global, Label: "overview"},
 }
 
 // GetExtensionKey returns the GlobalKey for a domain, or nil if not found.

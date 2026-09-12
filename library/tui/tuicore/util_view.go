@@ -192,20 +192,15 @@ var (
 
 // Domain IDs for top-level navigation domains
 const (
-	DomainSocial    = "social"
-	DomainCache     = "cache"
-	DomainConfig    = "config"
-	DomainSettings  = "settings"
-	DomainPM        = "pm"
-	DomainReview    = "review"
-	DomainRelease   = "release"
-	DomainMemo      = "memo"
-	DomainCICD      = "cicd"
-	DomainInfra     = "infra"
-	DomainOps       = "ops"
-	DomainSecurity  = "security"
-	DomainDM        = "dm"
-	DomainPortfolio = "portfolio"
+	DomainSocial   = "social"
+	DomainCache    = "cache"
+	DomainConfig   = "config"
+	DomainSettings = "settings"
+	DomainPM       = "pm"
+	DomainReview   = "review"
+	DomainRelease  = "release"
+	DomainMemo     = "memo"
+	DomainInfra    = "infra"
 )
 
 // DomainOf returns the top-level domain (e.g., "social" from "social.timeline")
