@@ -129,3 +129,45 @@ func TestIsLFSPointer(t *testing.T) {
 		})
 	}
 }
+
+// FuzzParseLFSPointer checks the pointer parser against FormatLFSPointer.
+func FuzzParseLFSPointer(f *testing.F) {
+	const oid = "4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393"
+	seeds := []string{
+		lfsPointerPrefix + "oid sha256:" + oid + "\nsize 12345\n",
+		lfsPointerPrefix + "oid sha256:" + oid + "\nsize 0\n",
+		lfsPointerPrefix + "size 12345\noid sha256:" + oid + "\n",
+		lfsPointerPrefix + "oid sha256:" + oid + "\nsize 99999999999999999999\n",
+		lfsPointerPrefix + "ext-0-shalink sha256:deadbeef\noid sha256:" + oid + "\nsize 7\n",
+		lfsPointerPrefix + "oid sha1:abc123\nsize 10\n",
+		lfsPointerPrefix,
+		"version https://git-lfs.github.com/spec/v2\noid sha256:" + oid + "\nsize 10\n",
+		"a regular file\n",
+		"",
+	}
+	for _, seed := range seeds {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, data []byte) {
+		gotOID, gotSize, ok := ParseLFSPointer(data)
+		// Content without the LFS v1 version line reads as no pointer at all.
+		if !IsLFSPointer(data) {
+			if ok || gotOID != "" || gotSize != 0 {
+				t.Fatalf("ParseLFSPointer() = %q, %d, %v for content that is not a pointer", gotOID, gotSize, ok)
+			}
+			return
+		}
+		if !ok {
+			return
+		}
+		// An accepted pointer carries a non-empty oid and a positive size.
+		if gotOID == "" || gotSize <= 0 {
+			t.Fatalf("ParseLFSPointer() accepted oid %q and size %d", gotOID, gotSize)
+		}
+		// A re-formatted pointer parses back to the same oid and size.
+		againOID, againSize, againOK := ParseLFSPointer(FormatLFSPointer(gotOID, gotSize))
+		if !againOK || againOID != gotOID || againSize != gotSize {
+			t.Errorf("round trip = %q, %d, %v; want %q, %d, true", againOID, againSize, againOK, gotOID, gotSize)
+		}
+	})
+}
