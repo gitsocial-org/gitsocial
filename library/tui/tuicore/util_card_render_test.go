@@ -92,6 +92,47 @@ func TestTruncateToWidth(t *testing.T) {
 	}
 }
 
+// A card rendered with Bold draws every body line bold and closes the style; without it, none.
+func TestBoldCardBodyLines(t *testing.T) {
+	card := Card{
+		Header:  CardHeader{Title: "Alice"},
+		Content: CardContent{Text: "first body line\n\nsecond body line"},
+	}
+	for _, markdown := range []bool{true, false} {
+		opts := CardOptions{Width: 80, WrapWidth: 79, MaxLines: -1, Markdown: markdown}
+		boldOpts := opts
+		boldOpts.Bold = true
+		lines := bodyLines(RenderCard(card, boldOpts))
+		if len(lines) != 2 {
+			t.Fatalf("markdown %v: found %d body lines, want 2", markdown, len(lines))
+		}
+		for _, line := range lines {
+			if !strings.Contains(line, "\x1b[1m") {
+				t.Fatalf("markdown %v: body line %q is not bold", markdown, line)
+			}
+			if !strings.HasSuffix(line, "\x1b[22m") {
+				t.Fatalf("markdown %v: body line %q leaves bold open", markdown, line)
+			}
+		}
+		for _, line := range bodyLines(RenderCard(card, opts)) {
+			if strings.Contains(line, "\x1b[1m") {
+				t.Fatalf("markdown %v: unbolded body line %q is bold", markdown, line)
+			}
+		}
+	}
+}
+
+// bodyLines returns the rendered lines carrying the test card's body text.
+func bodyLines(rendered string) []string {
+	var out []string
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "body") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
 // The verified badge is drawn from IsVerified and IsEditorVerified, never from card text.
 func TestVerifiedBadgeComesFromFlags(t *testing.T) {
 	const spoof = "Mallory ⚿"

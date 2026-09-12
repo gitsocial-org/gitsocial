@@ -21,7 +21,6 @@ var (
 	// Package-level glamour renderers (no word wrap - done via lipgloss)
 	markdownRenderer      *glamour.TermRenderer
 	mutedMarkdownRenderer *glamour.TermRenderer
-	boldMarkdownRenderer  *glamour.TermRenderer
 	// Matches email autolinks like <user@domain.com> to escape them before glamour
 	emailAutolinkRe = regexp.MustCompile(`<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>`)
 	// Matches fenced code blocks (``` or ~~~)
@@ -346,12 +345,6 @@ func buildMarkdownRenderers() {
 		glamour.WithWordWrap(0),
 		glamour.WithStylesFromJSONBytes([]byte(mutedJSON)),
 	)
-	boldMarkdownRenderer, _ = glamour.NewTermRenderer(
-		glamour.WithPreservedNewLines(),
-		glamour.WithStandardStyle(style),
-		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(bodyJSON)),
-	)
 }
 
 // glamourStyle returns the glamour standard style name for the current theme.
@@ -585,10 +578,7 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 	if !opts.Raw {
 		if opts.Markdown {
 			renderer, variant := markdownRenderer, byte('n')
-			switch {
-			case opts.Bold:
-				renderer, variant = boldMarkdownRenderer, 'b'
-			case opts.Dimmed:
+			if opts.Dimmed {
 				renderer, variant = mutedMarkdownRenderer, 'm'
 			}
 			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
@@ -638,8 +628,8 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 		} else if opts.Dimmed && !opts.Markdown {
 			// Only apply dim styling if not using markdown renderer (which handles its own styling)
 			str.WriteString(Dim.Render(line))
-		} else if opts.Bold && !opts.Markdown {
-			str.WriteString(Bold.Render(line))
+		} else if opts.Bold {
+			str.WriteString(boldLine(line))
 		} else {
 			str.WriteString(line)
 		}
@@ -879,6 +869,32 @@ func escapeEnd(s string, i int) int {
 		}
 	}
 	return j
+}
+
+// boldLine renders one body line bold, reopening bold after a reset the line carries and closing it at the end.
+func boldLine(line string) string {
+	if line == "" {
+		return line
+	}
+	const boldOn, boldOff = "\x1b[1m", "\x1b[22m"
+	var b strings.Builder
+	b.WriteString(boldOn)
+	for i := 0; i < len(line); {
+		if line[i] == '\x1b' {
+			end := escapeEnd(line, i)
+			seq := line[i:end]
+			b.WriteString(seq)
+			if isSGRReset(seq) {
+				b.WriteString(boldOn)
+			}
+			i = end
+			continue
+		}
+		b.WriteByte(line[i])
+		i++
+	}
+	b.WriteString(boldOff)
+	return b.String()
 }
 
 // isSGRReset reports whether an escape sequence clears every style attribute.
