@@ -1153,15 +1153,28 @@ func TestFetchRepository_followedIncremental(t *testing.T) {
 		t.Fatalf("first fetch error = %v", err)
 	}
 
-	// Add a new commit and push
-	git.CreateCommit(repoDir, git.CommitOptions{Message: "incremental", AllowEmpty: true})
+	// The new commit lands later today than the newest cached one, the case a bare --since date drops.
+	added, err := git.CreateCommit(repoDir, git.CommitOptions{Message: "incremental", AllowEmpty: true})
+	if err != nil {
+		t.Fatalf("CreateCommit() error = %v", err)
+	}
 	git.ExecGit(repoDir, []string{"push", "origin", "main"})
 
 	// Second fetch: exercises incremental path (meta.HasCommits is true).
-	// Count may be 0 if storage.FetchRepository silently fails and no new commits are seen.
 	_, err = fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("second fetch error = %v", err)
+	}
+	cached, err := cache.QueryLocked(func(db *sql.DB) (int, error) {
+		var c int
+		err := db.QueryRow("SELECT COUNT(*) FROM core_commits WHERE repo_url = ? AND hash = ?", bareDir, added).Scan(&c)
+		return c, err
+	})
+	if err != nil {
+		t.Fatalf("QueryLocked() error = %v", err)
+	}
+	if cached != 1 {
+		t.Errorf("commit %s cached = %d, want 1 (the incremental fetch has to ingest it)", added, cached)
 	}
 }
 

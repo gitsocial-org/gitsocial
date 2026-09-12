@@ -228,7 +228,8 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 	)
 
 	if opts.Since != nil {
-		args = append(args, fmt.Sprintf("--since=%s", opts.Since.Format("2006-01-02")))
+		// A full timestamp: git reads a bare date at the current clock time, which drops commits made earlier today.
+		args = append(args, fmt.Sprintf("--since=%s", opts.Since.Format(time.RFC3339)))
 	}
 	if opts.Until != nil {
 		until := opts.Until.Add(24 * time.Hour)

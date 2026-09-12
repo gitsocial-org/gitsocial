@@ -105,7 +105,7 @@ func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProce
 			if metaErr == nil {
 				var since *time.Time
 				if meta.HasCommits {
-					since = &meta.NewestCommitTime
+					since = sinceWithOverlap(meta.NewestCommitTime)
 				}
 				wsCount, wsErr := fetchAllBranches(workdir, originURL, wsBranch, since, processors)
 				if wsErr != nil {
@@ -276,11 +276,13 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 			}
 			count, err = fetchAllBranches(storageDir, repoURL, branch, nil, processors)
 		} else {
-			fetchOpts := &storage.FetchOptions{Since: meta.NewestCommitTime.Format("2006-01-02")}
+			since := sinceWithOverlap(meta.NewestCommitTime)
+			// A full timestamp for --shallow-since too: a bare date leaves out what landed earlier today.
+			fetchOpts := &storage.FetchOptions{Since: since.Format(time.RFC3339)}
 			if err := storage.FetchRepository(storageDir, branch, fetchOpts); err != nil {
 				log.Debug("incremental fetch failed, continuing with cached data", "url", repoURL, "error", err)
 			}
-			count, err = fetchAllBranches(storageDir, repoURL, branch, &meta.NewestCommitTime, processors)
+			count, err = fetchAllBranches(storageDir, repoURL, branch, since, processors)
 		}
 	} else {
 		fetchOpts := &storage.FetchOptions{Since: defaultSince}
@@ -299,6 +301,12 @@ func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultS
 	runHooks(hooks, storageDir, repoURL, branch, workspaceURL)
 
 	return count, nil
+}
+
+// sinceWithOverlap returns the newest cached commit time less a minute, the overlap that keeps a same-second commit in; the repeats cost an insert-ignore.
+func sinceWithOverlap(newest time.Time) *time.Time {
+	start := newest.Add(-time.Minute)
+	return &start
 }
 
 // fetchAllBranches processes commits with per-commit branch tracking, from since when it is set.
