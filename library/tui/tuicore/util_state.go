@@ -4,6 +4,8 @@ package tuicore
 import (
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 // LogSeverity defines the severity of a log entry.
@@ -127,7 +129,7 @@ type State struct {
 
 	// Registries
 	Registry    *Registry
-	NavRegistry *NavRegistry
+	NavRegistry *tuinav.NavRegistry
 
 	// Router for navigation
 	Router *Router

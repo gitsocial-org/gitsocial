@@ -1,7 +1,7 @@
-library/extensions/memo library/tui/tuicore
-library/extensions/pm library/tui/tuicore
-library/extensions/release library/tui/tuicore
-library/extensions/review library/tui/tuicore
-library/extensions/social library/tui/tuicore
+library/extensions/memo library/tui/tuinav
+library/extensions/pm library/tui/tuinav
+library/extensions/release library/tui/tuinav
+library/extensions/review library/tui/tuinav
+library/extensions/social library/tui/tuinav
 library/internal/testutil library/core/cache
 library/internal/testutil library/core/git

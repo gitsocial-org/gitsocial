@@ -4,11 +4,11 @@ package review
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 func TestRegisterNavItems(t *testing.T) {
-	r := tuicore.NewNavRegistry()
+	r := tuinav.NewNavRegistry()
 	RegisterNavItems(r)
 
 	item := r.Get("review")

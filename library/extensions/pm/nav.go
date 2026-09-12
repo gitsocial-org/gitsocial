@@ -1,12 +1,12 @@
 // nav.go - Navigation registry items and view metadata for PM extension
 package pm
 
-import "github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+import "github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 
 // RegisterNavItems registers PM extension navigation items.
-func RegisterNavItems(r *tuicore.NavRegistry, workdir string) {
+func RegisterNavItems(r *tuinav.NavRegistry, workdir string) {
 	// PM domain (order 1 - after social)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "pm",
 		Label:   "PM",
 		Icon:    "▢",
@@ -15,7 +15,7 @@ func RegisterNavItems(r *tuicore.NavRegistry, workdir string) {
 	})
 
 	// Boards sub-item (always visible)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "pm.board",
 		Label:   "Boards",
 		Icon:    "▦",
@@ -25,7 +25,7 @@ func RegisterNavItems(r *tuicore.NavRegistry, workdir string) {
 	})
 
 	// Issues sub-item (always visible)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "pm.issues",
 		Label:   "Issues",
 		Icon:    "○",
@@ -39,11 +39,11 @@ func RegisterNavItems(r *tuicore.NavRegistry, workdir string) {
 }
 
 // UpdatePMNavItems refreshes framework-dependent nav items (milestones/sprints).
-func UpdatePMNavItems(r *tuicore.NavRegistry, workdir string) {
+func UpdatePMNavItems(r *tuinav.NavRegistry, workdir string) {
 	hasMilestones, hasSprints := FrameworkFeatures(workdir)
-	var items []tuicore.NavItem
+	var items []tuinav.NavItem
 	if hasMilestones {
-		items = append(items, tuicore.NavItem{
+		items = append(items, tuinav.NavItem{
 			ID:      "pm.milestones",
 			Label:   "Milestones",
 			Icon:    "◇",
@@ -53,7 +53,7 @@ func UpdatePMNavItems(r *tuicore.NavRegistry, workdir string) {
 		})
 	}
 	if hasSprints {
-		items = append(items, tuicore.NavItem{
+		items = append(items, tuinav.NavItem{
 			ID:      "pm.sprints",
 			Label:   "Sprints",
 			Icon:    "◷",

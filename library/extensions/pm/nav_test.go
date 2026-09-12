@@ -4,7 +4,7 @@ package pm
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 func TestNavRegistration(t *testing.T) {
@@ -13,7 +13,7 @@ func TestNavRegistration(t *testing.T) {
 	t.Run("RegisterNavItems", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		r := tuicore.NewNavRegistry()
+		r := tuinav.NewNavRegistry()
 		RegisterNavItems(r, workdir)
 
 		pm := r.Get("pm")
@@ -55,8 +55,8 @@ func TestNavRegistration(t *testing.T) {
 		workdir := cloneFixture(t)
 		SavePMConfig(workdir, PMConfig{Framework: "scrum"})
 
-		r := tuicore.NewNavRegistry()
-		r.Register(tuicore.NavItem{ID: "pm", Label: "PM", Order: 1, Enabled: true})
+		r := tuinav.NewNavRegistry()
+		r.Register(tuinav.NavItem{ID: "pm", Label: "PM", Order: 1, Enabled: true})
 		UpdatePMNavItems(r, workdir)
 
 		milestones := r.Get("pm.milestones")
@@ -74,8 +74,8 @@ func TestNavRegistration(t *testing.T) {
 		workdir := cloneFixture(t)
 		SavePMConfig(workdir, PMConfig{Framework: "minimal"})
 
-		r := tuicore.NewNavRegistry()
-		r.Register(tuicore.NavItem{ID: "pm", Label: "PM", Order: 1, Enabled: true})
+		r := tuinav.NewNavRegistry()
+		r.Register(tuinav.NavItem{ID: "pm", Label: "PM", Order: 1, Enabled: true})
 		UpdatePMNavItems(r, workdir)
 
 		milestones := r.Get("pm.milestones")

@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 // Special nav item IDs (not in registry)
@@ -24,7 +26,7 @@ type NavPanel struct {
 	width            int
 	height           int
 	focused          bool
-	registry         *NavRegistry
+	registry         *tuinav.NavRegistry
 	router           *Router
 	cursorID         string // Visual cursor position (may differ from router selection when browsing)
 	workdir          string
@@ -35,7 +37,7 @@ type NavPanel struct {
 	errorLogCount    int
 	zonePrefix       string
 	// Cached flat items
-	cachedItems      []NavItem
+	cachedItems      []tuinav.NavItem
 	cachedDomain     string
 	cachedRegVersion int
 	// View cache
@@ -47,7 +49,7 @@ type NavPanel struct {
 }
 
 // NewNavPanel creates a new navigation panel.
-func NewNavPanel(workdir string, registry *NavRegistry, r *Router) *NavPanel {
+func NewNavPanel(workdir string, registry *tuinav.NavRegistry, r *Router) *NavPanel {
 	return &NavPanel{
 		registry:   registry,
 		router:     r,
@@ -113,7 +115,7 @@ func (p *NavPanel) Update(msg tea.Msg) (*NavPanel, tea.Cmd) {
 }
 
 // getFlatItems returns all navigable items in order (cached per domain+registry version).
-func (p *NavPanel) getFlatItems() []NavItem {
+func (p *NavPanel) getFlatItems() []tuinav.NavItem {
 	domain := p.currentDomain()
 	regVersion := p.registry.Version()
 	if p.cachedItems != nil && p.cachedDomain == domain && p.cachedRegVersion == regVersion {
@@ -127,17 +129,17 @@ func (p *NavPanel) getFlatItems() []NavItem {
 }
 
 // buildFlatItems rebuilds the flat navigation item list.
-func (p *NavPanel) buildFlatItems() []NavItem {
-	var items []NavItem
-	items = append(items, NavItem{ID: NavIDSearch, Label: "Search", Icon: "⌕", Enabled: true})
-	items = append(items, NavItem{ID: NavIDNotifications, Label: "Notifications", Icon: "⚑", Enabled: true})
-	items = append(items, NavItem{ID: NavIDAnalytics, Label: "Analytics", Icon: "◧", Enabled: true})
+func (p *NavPanel) buildFlatItems() []tuinav.NavItem {
+	var items []tuinav.NavItem
+	items = append(items, tuinav.NavItem{ID: NavIDSearch, Label: "Search", Icon: "⌕", Enabled: true})
+	items = append(items, tuinav.NavItem{ID: NavIDNotifications, Label: "Notifications", Icon: "⚑", Enabled: true})
+	items = append(items, tuinav.NavItem{ID: NavIDAnalytics, Label: "Analytics", Icon: "◧", Enabled: true})
 
 	currentDomain := p.currentDomain()
 
 	// Separate into extension items, DM, and bottom items (config, cache, settings)
-	var extensionItems, bottomItems []NavItem
-	var dmItem *NavItem
+	var extensionItems, bottomItems []tuinav.NavItem
+	var dmItem *tuinav.NavItem
 	for _, top := range p.registry.GetTopLevel() {
 		if top.ID == "dm" {
 			t := top
@@ -180,15 +182,15 @@ func (p *NavPanel) buildFlatItems() []NavItem {
 	}
 
 	// Error log at the very bottom
-	items = append(items, NavItem{ID: NavIDErrorLog, Label: "Error Log", Icon: "⚠", Enabled: true})
+	items = append(items, tuinav.NavItem{ID: NavIDErrorLog, Label: "Error Log", Icon: "⚠", Enabled: true})
 
 	return items
 }
 
 // flattenChildren recursively flattens child nav items.
-func (p *NavPanel) flattenChildren(parentID string) []NavItem {
+func (p *NavPanel) flattenChildren(parentID string) []tuinav.NavItem {
 	children := p.registry.GetChildren(parentID)
-	result := make([]NavItem, 0, len(children))
+	result := make([]tuinav.NavItem, 0, len(children))
 	for _, child := range children {
 		result = append(result, child)
 		result = append(result, p.flattenChildren(child.ID)...)
@@ -389,7 +391,7 @@ func (p *NavPanel) SetErrorLogCount(count int) {
 }
 
 // Registry returns the navigation registry.
-func (p *NavPanel) Registry() *NavRegistry {
+func (p *NavPanel) Registry() *tuinav.NavRegistry {
 	return p.registry
 }
 
@@ -456,8 +458,8 @@ func (p *NavPanel) View() string {
 
 	// Separate top-level items into extensions, DM, and bottom (config, cache, settings)
 	topLevel := p.registry.GetTopLevel()
-	var extensionItems, bottomItems []NavItem
-	var dmItem *NavItem
+	var extensionItems, bottomItems []tuinav.NavItem
+	var dmItem *tuinav.NavItem
 	for _, item := range topLevel {
 		if item.ID == "dm" {
 			t := item

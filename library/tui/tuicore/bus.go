@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 // AppContext provides access to app state for message handlers.
@@ -60,7 +62,7 @@ type NavContext interface {
 	SetUnpushedLFSCount(count int)
 	SetCacheSize(size string)
 	SetErrorLogCount(count int)
-	Registry() *NavRegistry
+	Registry() *tuinav.NavRegistry
 }
 
 // MessageHandler handles a specific message type.

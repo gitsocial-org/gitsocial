@@ -4,11 +4,11 @@ package social
 import (
 	"testing"
 
-	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
 func TestRegisterNavItems(t *testing.T) {
-	r := tuicore.NewNavRegistry()
+	r := tuinav.NewNavRegistry()
 	RegisterNavItems(r)
 
 	social := r.Get("social")
@@ -45,7 +45,7 @@ func TestRegisterNavItems(t *testing.T) {
 }
 
 func TestUpdateListItems(t *testing.T) {
-	r := tuicore.NewNavRegistry()
+	r := tuinav.NewNavRegistry()
 	RegisterNavItems(r)
 
 	lists := []List{
@@ -72,7 +72,7 @@ func TestUpdateListItems(t *testing.T) {
 }
 
 func TestUpdateListItems_empty(t *testing.T) {
-	r := tuicore.NewNavRegistry()
+	r := tuinav.NewNavRegistry()
 	RegisterNavItems(r)
 	UpdateListItems(r, nil)
 	// Should not panic; no dynamic items registered

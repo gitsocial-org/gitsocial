@@ -96,7 +96,7 @@ cli/gitsocial
 Each layer imports only the layers below it. `core` imports nothing above itself. Two standing exceptions:
 
 - Extensions import each other: `pm`, `review`, `release` and `memo` import `social` for comments, and `review` imports `pm` for the issues a pull request closes.
-- Each extension's `nav.go` imports `tui/tuicore` to register its navigation items. Nothing else in `extensions` imports `tui`.
+- Each extension's `nav.go` imports `tui/tuinav` to register its navigation items. Nothing else in `extensions` imports `tui`.
 
 Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`; `fetch`; `notifications`, `objstore`, `search`; `gitmsg/divergence`. `scripts/import-graph.sh` prints the current edges.
 
@@ -297,6 +297,7 @@ Two panels on Bubbletea: navigation on the left, content on the right. Keys are 
 library/tui/
 ├── app.go, host.go      # the tea.Model, view dispatch, shared state
 ├── tuicore/             # infrastructure and core views
+├── tuinav/              # navigation items and the registry extensions register into
 ├── tuisocial/, tuipm/, tuirelease/, tuireview/, tuimemo/, tuiproposal/
 ├── tuikeydoc/           # keybinding documentation generator
 └── test/                # headless integration tests

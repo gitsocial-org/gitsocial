@@ -1,12 +1,12 @@
 // nav.go - Navigation registry items and view metadata for social extension
 package social
 
-import "github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+import "github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 
 // RegisterNavItems registers social extension navigation items
-func RegisterNavItems(r *tuicore.NavRegistry) {
+func RegisterNavItems(r *tuinav.NavRegistry) {
 	// Social domain (order 0 - first in list, not selectable)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social",
 		Label:   "Social",
 		Icon:    "⌘",
@@ -15,7 +15,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	})
 
 	// Timeline sub-item
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social.timeline",
 		Label:   "Timeline",
 		Icon:    "⏱",
@@ -25,7 +25,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	})
 
 	// My Repository sub-item
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social.myrepo",
 		Label:   "My Repository",
 		Icon:    "⎇",
@@ -35,7 +35,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	})
 
 	// My Lists sub-item
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social.lists",
 		Label:   "My Lists",
 		Icon:    "☷",
@@ -45,7 +45,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	})
 
 	// My Followers sub-item (workspaces that follow us)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social.followers",
 		Label:   "My Followers",
 		Icon:    "㋡",
@@ -55,7 +55,7 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 	})
 
 	// Explore sub-item (browse/discover repositories)
-	r.Register(tuicore.NavItem{
+	r.Register(tuinav.NavItem{
 		ID:      "social.explore",
 		Label:   "Explore",
 		Icon:    "➼",
@@ -66,14 +66,14 @@ func RegisterNavItems(r *tuicore.NavRegistry) {
 }
 
 // UpdateListItems updates the dynamic list items under social.lists in the nav.
-func UpdateListItems(r *tuicore.NavRegistry, lists []List) {
-	items := make([]tuicore.NavItem, len(lists))
+func UpdateListItems(r *tuinav.NavRegistry, lists []List) {
+	items := make([]tuinav.NavItem, len(lists))
 	for i, list := range lists {
 		label := list.Name
 		if label == "" {
 			label = list.ID
 		}
-		items[i] = tuicore.NavItem{
+		items[i] = tuinav.NavItem{
 			ID:      "social.lists." + list.ID,
 			Label:   label,
 			Icon:    "",

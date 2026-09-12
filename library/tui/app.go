@@ -37,6 +37,7 @@ import (
 	glimport "github.com/gitsocial-org/gitsocial/library/import/gitlab"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuimemo"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuipm"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
@@ -209,8 +210,8 @@ func (m *Model) FetchRepo(repoURL string) tea.Cmd { return m.fetchAddedRepo(repo
 // NewModel creates a new TUI model with initial state and views.
 func NewModel(workdir, cacheDir string) Model {
 	// Initialize navigation registry
-	navRegistry := tuicore.NewNavRegistry()
-	tuicore.RegisterCoreNavItems(navRegistry)
+	navRegistry := tuinav.NewNavRegistry()
+	tuinav.RegisterCoreNavItems(navRegistry)
 	social.RegisterNavItems(navRegistry)
 	pm.RegisterNavItems(navRegistry, workdir)
 	release.RegisterNavItems(navRegistry)
