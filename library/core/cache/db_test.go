@@ -3,8 +3,10 @@ package cache
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -231,5 +233,75 @@ func TestRegisterSchema(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("Extension table not created: %v", err)
+	}
+}
+
+// insertConcurrentCommit writes one row keyed on the writer and iteration.
+func insertConcurrentCommit(writer, iteration int) error {
+	return ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(
+			`INSERT INTO core_commits (repo_url, hash, branch, message, timestamp)
+			 VALUES ('https://example.com/repo', ?, 'main', 'concurrent write', '2026-01-01T00:00:00Z')`,
+			fmt.Sprintf("w%02di%02d", writer, iteration))
+		return err
+	})
+}
+
+// countConcurrentCommits reads the row count the writers are filling in.
+func countConcurrentCommits() (int, error) {
+	return QueryLocked(func(db *sql.DB) (int, error) {
+		var count int
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE repo_url = 'https://example.com/repo'`).Scan(&count)
+		return count, err
+	})
+}
+
+// TestExecLocked_concurrentWritersAndReaders drives one cache from several goroutines at once.
+func TestExecLocked_concurrentWritersAndReaders(t *testing.T) {
+	setupTestDB(t)
+	const writers, readers, perGoroutine = 4, 4, 25
+	total := writers * perGoroutine
+
+	errs := make(chan error, (writers+readers)*perGoroutine)
+	var wg sync.WaitGroup
+	for writer := range writers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for iteration := range perGoroutine {
+				if err := insertConcurrentCommit(writer, iteration); err != nil {
+					errs <- fmt.Errorf("write %d/%d: %w", writer, iteration, err)
+				}
+			}
+		}()
+	}
+	for range readers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range perGoroutine {
+				count, err := countConcurrentCommits()
+				if err != nil {
+					errs <- fmt.Errorf("read: %w", err)
+					continue
+				}
+				if count < 0 || count > total {
+					errs <- fmt.Errorf("read: count = %d, want it within 0 and %d", count, total)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Error(err)
+	}
+	count, err := countConcurrentCommits()
+	if err != nil {
+		t.Fatalf("final count error = %v", err)
+	}
+	if count != total {
+		t.Errorf("final count = %d, want %d", count, total)
 	}
 }
