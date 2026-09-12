@@ -87,6 +87,8 @@ Each layer imports only the layers below it. `core` imports nothing above itself
 - Extensions import each other: `pm`, `review`, `release` and `memo` import `social` for comments, and `review` imports `pm` for the issues a pull request closes.
 - Each extension's `nav.go` imports `tui/tuicore` to register its navigation items. Nothing else in `extensions` imports `tui`.
 
+Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`; `fetch`; `notifications`, `objstore`, `search`; `gitmsg/divergence`. `scripts/import-graph.sh` prints the current edges.
+
 ### Do
 
 - Read the relevant spec first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`.
@@ -271,6 +273,8 @@ All-branch following stores each commit under its real refname. The workspace al
 
 - Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
 - An extension joins the fetch in `library/client`, the one place listing its `Processors`, its `SyncWorkspaceBatch` and its `BackfillSpec`.
+- An extension costs ten imports: `cache`, `fetch`, `git`, `gitmsg`, `log`, `notifications`, `protocol` and `result`, plus `social` for comments and `tui/tuicore` for its navigation items. It registers a notification provider with `notifications.RegisterProvider`.
+- `core/search` names every extension's table itself, in `query.go` and `group.go`, where `notifications` takes a registration. A sixth extension edits `core/search`; the asymmetry stays until one exists.
 - Core tables are read-only for extensions; use the cache APIs.
 - Known limits: `storage.GetStorageDir` hashes the URL only, so one URL on two branches shares storage; check `meta.HasCommits` before reading timestamps.
 
