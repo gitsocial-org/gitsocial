@@ -527,60 +527,42 @@ func renderStats(card Card, opts CardOptions) string {
 	return strings.Join(parts, Dim.Render(" · "))
 }
 
-// RenderMarkdown renders text with markdown formatting, math, email colorization, and word wrapping.
-func RenderMarkdown(text string, wrapWidth int) string {
+// renderGlamour runs the markdown pipeline: escape, extract code and math, render, restore, wrap.
+func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wrapWidth int, dimmedCode bool, images []mdImage, links []mdLink, urls []string, anchors *AnchorCollector) string {
 	text = strings.TrimSpace(text)
 	text = escapeEmailAutolinks(text)
 	textWithCodePlaceholders, codeBlocks := ExtractCodeBlocks(text)
 	contentWithPlaceholders, extractedMath := RenderMathWithPlaceholders(textWithCodePlaceholders)
-	rendered, err := cachedGlamourRender(markdownRenderer, 'n', contentWithPlaceholders)
+	rendered, err := cachedGlamourRender(renderer, variant, contentWithPlaceholders)
 	if err != nil {
 		text = RenderMath(text)
 	} else {
-		text = RestoreMath(rendered, extractedMath)
-		text = strings.TrimSpace(text)
+		text = strings.TrimSpace(RestoreMath(rendered, extractedMath))
 	}
-	text = RestoreCodeBlocks(text, codeBlocks, false)
+	text = RestoreCodeBlocks(text, codeBlocks, dimmedCode)
 	text = colorizeEmails(text)
-	if wrapWidth > 0 {
-		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
-	}
-	return text
-}
-
-// RenderMarkdownWithAnchors renders markdown text with link extraction and anchor marking for tab navigation.
-// Use this instead of RenderMarkdown when body content needs clickable/focusable links.
-func RenderMarkdownWithAnchors(text string, wrapWidth int, anchors *AnchorCollector) string {
-	text = strings.TrimSpace(text)
-	text = ConvertHTMLImages(text)
-	textNoImages, mdImages := ExtractMarkdownImages(text)
-	textNoLinks, mdLinks := ExtractMarkdownLinks(textNoImages)
-	textNoURLs, urls := ExtractURLs(textNoLinks)
-	return renderMarkdownWithURLs(textNoURLs, wrapWidth, mdImages, mdLinks, urls, anchors)
-}
-
-// renderMarkdownWithURLs renders markdown text with pre-extracted images, markdown links, and bare URLs restored after glamour.
-func renderMarkdownWithURLs(text string, wrapWidth int, mdImages []mdImage, mdLinks []mdLink, urls []string, anchors *AnchorCollector) string {
-	text = strings.TrimSpace(text)
-	text = escapeEmailAutolinks(text)
-	textWithCodePlaceholders, codeBlocks := ExtractCodeBlocks(text)
-	contentWithPlaceholders, extractedMath := RenderMathWithPlaceholders(textWithCodePlaceholders)
-	rendered, err := cachedGlamourRender(markdownRenderer, 'n', contentWithPlaceholders)
-	if err != nil {
-		text = RenderMath(text)
-	} else {
-		text = RestoreMath(rendered, extractedMath)
-		text = strings.TrimSpace(text)
-	}
-	text = RestoreCodeBlocks(text, codeBlocks, false)
-	text = colorizeEmails(text)
-	text = RestoreMarkdownImages(text, mdImages, anchors)
-	text = RestoreMarkdownLinks(text, mdLinks, anchors)
+	text = RestoreMarkdownImages(text, images, anchors)
+	text = RestoreMarkdownLinks(text, links, anchors)
 	text = RestoreURLs(text, urls, anchors)
 	if wrapWidth > 0 {
 		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
 	}
 	return text
+}
+
+// RenderMarkdown renders text with markdown formatting, math, email colorization, and word wrapping.
+func RenderMarkdown(text string, wrapWidth int) string {
+	return renderGlamour(markdownRenderer, 'n', text, wrapWidth, false, nil, nil, nil, nil)
+}
+
+// RenderMarkdownWithAnchors renders markdown text with link extraction and anchor marking for tab navigation.
+// Use this instead of RenderMarkdown when body content needs clickable/focusable links.
+func RenderMarkdownWithAnchors(text string, wrapWidth int, anchors *AnchorCollector) string {
+	text = ConvertHTMLImages(strings.TrimSpace(text))
+	textNoImages, mdImages := ExtractMarkdownImages(text)
+	textNoLinks, mdLinks := ExtractMarkdownLinks(textNoImages)
+	textNoURLs, urls := ExtractURLs(textNoLinks)
+	return renderGlamour(markdownRenderer, 'n', textNoURLs, wrapWidth, false, mdImages, mdLinks, urls, anchors)
 }
 
 // renderContent renders the card content with optional truncation
@@ -602,34 +584,14 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 
 	if !opts.Raw {
 		if opts.Markdown {
-			if opts.Dimmed || opts.Bold {
-				text = escapeEmailAutolinks(text)
-				textWithCodePlaceholders, codeBlocks := ExtractCodeBlocks(text)
-				contentWithPlaceholders, extractedMath := RenderMathWithPlaceholders(textWithCodePlaceholders)
-				renderer := mutedMarkdownRenderer
-				variant := byte('m')
-				if opts.Bold {
-					renderer = boldMarkdownRenderer
-					variant = 'b'
-				}
-				rendered, err := cachedGlamourRender(renderer, variant, contentWithPlaceholders)
-				if err != nil {
-					text = RenderMath(text)
-				} else {
-					text = RestoreMath(rendered, extractedMath)
-					text = strings.TrimSpace(text)
-				}
-				text = RestoreCodeBlocks(text, codeBlocks, opts.Dimmed)
-				text = colorizeEmails(text)
-				text = RestoreMarkdownImages(text, extractedMdImages, opts.Anchors)
-				text = RestoreMarkdownLinks(text, extractedMdLinks, opts.Anchors)
-				text = RestoreURLs(text, extractedURLs, opts.Anchors)
-				if opts.WrapWidth > 0 {
-					text = lipgloss.NewStyle().Width(opts.WrapWidth).Render(text)
-				}
-			} else {
-				text = renderMarkdownWithURLs(text, opts.WrapWidth, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
+			renderer, variant := markdownRenderer, byte('n')
+			switch {
+			case opts.Bold:
+				renderer, variant = boldMarkdownRenderer, 'b'
+			case opts.Dimmed:
+				renderer, variant = mutedMarkdownRenderer, 'm'
 			}
+			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
 		} else {
 			text = RenderMath(text)
 			text = RestoreMarkdownImages(text, extractedMdImages, opts.Anchors)
@@ -862,23 +824,17 @@ func IsLocalPath(url string) bool {
 			!strings.HasPrefix(url, "git@"))
 }
 
-// BuildCommitRef builds a smart commit reference string.
-// For workspace items (repoURL matches workspaceURL or is local), shows just "#hash".
-// For external items, shows "repo#commit:hash@branch".
-func BuildCommitRef(repoURL, hash, branch, workspaceURL string) string {
+// buildRef formats a short reference: "#hash" for the workspace, "repo#commit:hash@branch" elsewhere.
+func buildRef(repoURL, hash, branch string, isWorkspace bool) string {
 	if repoURL == "" || hash == "" {
 		return ""
 	}
-	shortHash := hash
-	if len(shortHash) > 12 {
-		shortHash = shortHash[:12]
+	if len(hash) > 12 {
+		hash = hash[:12]
 	}
-	isWorkspace := repoURL == workspaceURL || IsLocalPath(repoURL)
-	var ref string
-	if isWorkspace {
-		ref = "#" + shortHash
-	} else {
-		ref = repoURL + "#commit:" + shortHash
+	ref := repoURL + "#commit:" + hash
+	if isWorkspace || IsLocalPath(repoURL) {
+		ref = "#" + hash
 	}
 	if branch != "" {
 		ref += "@" + branch
@@ -886,30 +842,14 @@ func BuildCommitRef(repoURL, hash, branch, workspaceURL string) string {
 	return ref
 }
 
-// BuildRef builds a repo reference from an item's ID, repository, and branch.
-// Extracts hash from ID, formats as "repo#commit:hash@branch" (or "#hash" for local).
+// BuildCommitRef builds a reference from a commit hash, against the workspace URL.
+func BuildCommitRef(repoURL, hash, branch, workspaceURL string) string {
+	return buildRef(repoURL, hash, branch, repoURL == workspaceURL)
+}
+
+// BuildRef builds a reference from an item's ID, repository, and branch.
 func BuildRef(id, repoURL, branch string, isWorkspace bool) string {
-	if repoURL == "" {
-		return ""
-	}
-	parsed := protocol.ParseRef(id)
-	if parsed.Value == "" {
-		return ""
-	}
-	hash := parsed.Value
-	if len(hash) > 12 {
-		hash = hash[:12]
-	}
-	var ref string
-	if isWorkspace || IsLocalPath(repoURL) {
-		ref = "#" + hash
-	} else {
-		ref = repoURL + "#commit:" + hash
-	}
-	if branch != "" {
-		ref += "@" + branch
-	}
-	return ref
+	return buildRef(repoURL, protocol.ParseRef(id).Value, branch, isWorkspace)
 }
 
 // escapeEnd returns the index just past the escape sequence starting at i.

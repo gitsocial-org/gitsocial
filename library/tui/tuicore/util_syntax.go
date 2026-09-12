@@ -85,69 +85,52 @@ func SetDarkBackground(dark bool) {
 	clear(glamourCache.entries)
 }
 
-// HighlightCode highlights a full code block with syntax coloring.
-func HighlightCode(code, language string, dimmed bool) string {
+// highlight colors code with chroma and caches the result.
+// stripNewlines drops the newlines chroma places before reset codes, for single-line use.
+func highlight(code, language string, dimmed, stripNewlines bool) string {
 	d := byte('0')
 	if dimmed {
 		d = '1'
 	}
 	key := language + "\x00" + string(d) + "\x00" + code
-	if cached, ok := highlightCodeCache[key]; ok {
+	cache, limit := highlightCodeCache, 256
+	if stripNewlines {
+		cache, limit = highlightLineCache, 4096
+	}
+	if cached, ok := cache[key]; ok {
 		return cached
 	}
-	lexer := resolveLexer(language)
 	style := chromaStyle
 	if dimmed {
 		style = chromaDimStyle
 	}
-	tokens, err := chroma.Tokenise(lexer, nil, code)
+	tokens, err := chroma.Tokenise(resolveLexer(language), nil, code)
 	if err != nil {
 		return code
 	}
 	var buf strings.Builder
-	err = chromaFormatter.Format(&buf, style, chroma.Literator(tokens...))
-	if err != nil {
+	if err := chromaFormatter.Format(&buf, style, chroma.Literator(tokens...)); err != nil {
 		return code
 	}
 	result := buf.String()
-	if len(highlightCodeCache) >= 256 {
-		highlightCodeCache = make(map[string]string, 256)
+	if stripNewlines {
+		result = strings.ReplaceAll(result, "\n", "")
 	}
-	highlightCodeCache[key] = result
+	if len(cache) >= limit {
+		clear(cache)
+	}
+	cache[key] = result
 	return result
+}
+
+// HighlightCode highlights a full code block with syntax coloring.
+func HighlightCode(code, language string, dimmed bool) string {
+	return highlight(code, language, dimmed, false)
 }
 
 // HighlightLine highlights a single line of code for use in diffs.
 func HighlightLine(line, language string, dimmed bool) string {
-	d := byte('0')
-	if dimmed {
-		d = '1'
-	}
-	key := language + "\x00" + string(d) + "\x00" + line
-	if cached, ok := highlightLineCache[key]; ok {
-		return cached
-	}
-	lexer := resolveLexer(language)
-	style := chromaStyle
-	if dimmed {
-		style = chromaDimStyle
-	}
-	tokens, err := chroma.Tokenise(lexer, nil, line)
-	if err != nil {
-		return line
-	}
-	var buf strings.Builder
-	err = chromaFormatter.Format(&buf, style, chroma.Literator(tokens...))
-	if err != nil {
-		return line
-	}
-	// Strip all newlines — chroma may place \n before ANSI reset codes
-	result := strings.ReplaceAll(buf.String(), "\n", "")
-	if len(highlightLineCache) >= 4096 {
-		highlightLineCache = make(map[string]string, 4096)
-	}
-	highlightLineCache[key] = result
-	return result
+	return highlight(line, language, dimmed, true)
 }
 
 // DetectLanguage detects the programming language from a filename.

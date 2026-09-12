@@ -158,21 +158,8 @@ func RenderMessageFooter(message string, msgType MessageType) string {
 		Render(message)
 }
 
-// RenderFooter renders the keybinding hints for a view from the registry.
-// Local bindings appear first, followed by global keys in fixed order.
-// Pass nil for exclude to show all keys.
-func RenderFooter(registry *Registry, ctx Context, exclude map[string]bool) string {
-	return renderFooterInner(registry, ctx, exclude, nil)
-}
-
-// RenderFooterInclude renders footer like RenderFooter but force-shows keys in include
-// that would normally be hidden by hiddenKeys.
-func RenderFooterInclude(registry *Registry, ctx Context, exclude, include map[string]bool) string {
-	return renderFooterInner(registry, ctx, exclude, include)
-}
-
-// renderFooterInner is the shared implementation for RenderFooter and RenderFooterInclude.
-func renderFooterInner(registry *Registry, ctx Context, exclude, include map[string]bool) string {
+// renderFooterInner renders a position prefix, the local bindings, then the global keys dimmed.
+func renderFooterInner(registry *Registry, ctx Context, exclude, include map[string]bool, position string, skipQuit bool) string {
 	bindings := registry.ForContext(ctx)
 	bindingMap := make(map[string]Binding)
 	for _, b := range bindings {
@@ -185,7 +172,9 @@ func renderFooterInner(registry *Registry, ctx Context, exclude, include map[str
 		return hiddenKeys[key]
 	}
 	var parts []string
-	// First: local bindings (non-global, non-hidden).
+	if position != "" {
+		parts = append(parts, LabelStyle.Render(position))
+	}
 	for _, b := range bindings {
 		if isHidden(b.Key) || globalKeys[b.Key] {
 			continue
@@ -195,8 +184,10 @@ func renderFooterInner(registry *Registry, ctx Context, exclude, include map[str
 		}
 		parts = append(parts, kv(b.Key, b.Label, false))
 	}
-	// Then: global keys in fixed order (dimmed).
 	for _, key := range globalKeyOrder {
+		if skipQuit && key == "q" {
+			continue
+		}
 		if exclude != nil && exclude[key] {
 			continue
 		}
@@ -205,6 +196,19 @@ func renderFooterInner(registry *Registry, ctx Context, exclude, include map[str
 		}
 	}
 	return joinFooter(parts)
+}
+
+// RenderFooter renders the keybinding hints for a view from the registry.
+// Local bindings appear first, followed by global keys in fixed order.
+// Pass nil for exclude to show all keys.
+func RenderFooter(registry *Registry, ctx Context, exclude map[string]bool) string {
+	return renderFooterInner(registry, ctx, exclude, nil, "", false)
+}
+
+// RenderFooterInclude renders footer like RenderFooter but force-shows keys in include
+// that would normally be hidden by hiddenKeys.
+func RenderFooterInclude(registry *Registry, ctx Context, exclude, include map[string]bool) string {
+	return renderFooterInner(registry, ctx, exclude, include, "", false)
 }
 
 // RenderFooterWithPosition renders the keybinding hints for a view prefixed
@@ -220,42 +224,9 @@ func RenderFooterWithPosition(registry *Registry, ctx Context, current, total in
 // keys in `include` that would normally be suppressed by hiddenKeys (e.g. view
 // actions bound to letters reserved for global sidebar shortcuts, like M:merge).
 func RenderFooterWithPositionInclude(registry *Registry, ctx Context, current, total int, exclude, include map[string]bool) string {
-	bindings := registry.ForContext(ctx)
-	bindingMap := make(map[string]Binding)
-	for _, b := range bindings {
-		bindingMap[b.Key] = b
-	}
-	isHidden := func(key string) bool {
-		if include != nil && include[key] {
-			return false
-		}
-		return hiddenKeys[key]
-	}
-	var parts []string
+	position := ""
 	if total > 0 {
-		parts = append(parts, LabelStyle.Render(fmt.Sprintf("%d/%d ", current, total)))
+		position = fmt.Sprintf("%d/%d ", current, total)
 	}
-	// First: local bindings (non-global, non-hidden).
-	for _, b := range bindings {
-		if isHidden(b.Key) || globalKeys[b.Key] {
-			continue
-		}
-		if exclude != nil && exclude[b.Key] {
-			continue
-		}
-		parts = append(parts, kv(b.Key, b.Label, false))
-	}
-	// Then: global keys in fixed order (dimmed), minus `q`.
-	for _, key := range globalKeyOrder {
-		if key == "q" {
-			continue
-		}
-		if exclude != nil && exclude[key] {
-			continue
-		}
-		if b, ok := bindingMap[key]; ok {
-			parts = append(parts, kv(b.Key, b.Label, true))
-		}
-	}
-	return joinFooter(parts)
+	return renderFooterInner(registry, ctx, exclude, include, position, true)
 }

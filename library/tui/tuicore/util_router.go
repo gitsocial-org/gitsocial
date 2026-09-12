@@ -462,6 +462,9 @@ func LocReviewFeedbackInline(prID, file string, oldLine, newLine int, commit str
 	}}
 }
 
+// configNavExtensions are the extensions whose config view has its own nav item.
+var configNavExtensions = map[string]bool{"social": true, "pm": true, "release": true, "review": true, "memo": true}
+
 // NavItemID derives the nav panel selection from location.
 func (r *Router) NavItemID() string {
 	path := r.location.Path
@@ -478,18 +481,8 @@ func (r *Router) NavItemID() string {
 		}
 		return "social.timeline"
 	case "/config":
-		ext := r.location.Params["extension"]
-		switch ext {
-		case "social":
-			return "config.social"
-		case "pm":
-			return "config.pm"
-		case "release":
-			return "config.release"
-		case "review":
-			return "config.review"
-		case "memo":
-			return "config.memo"
+		if ext := r.location.Params["extension"]; configNavExtensions[ext] {
+			return "config." + ext
 		}
 		return "config.core"
 	}

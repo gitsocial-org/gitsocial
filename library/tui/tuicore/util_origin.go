@@ -64,15 +64,14 @@ func capitalizeFirst(s string) string {
 
 // RenderOriginRows returns detail-view metadata rows using RowStylesWithWidths.
 // Returns nil when origin is nil.
-func RenderOriginRows(origin *protocol.Origin, styles RowStyles, selectionBar string, anchors *AnchorCollector, showEmail ...bool) []string {
+func RenderOriginRows(origin *protocol.Origin, styles RowStyles, selectionBar string, anchors *AnchorCollector, showEmail bool) []string {
 	if origin == nil {
 		return nil
 	}
-	se := len(showEmail) > 0 && showEmail[0]
 	var lines []string
 	// Build "Origin" row: @author via Platform · time
 	var parts []string
-	if author := FormatOriginAuthorDisplay(origin, se); author != "" {
+	if author := FormatOriginAuthorDisplay(origin, showEmail); author != "" {
 		parts = append(parts, author)
 	}
 	if origin.Platform != "" {
