@@ -1,33 +1,4 @@
-// site_items.go - push-maintained per-extension static-site item artifacts.
-//
-// Two artifacts are written per gitmsg extension data branch, both append-only,
-// ingestion-order sharded (see site_shards.go) under a per-extension directory,
-// both brotli-compressed and uploaded with `Content-Encoding: br` so browsers
-// (and Node's fetch) decode them transparently over HTTPS/localhost:
-//
-//   - .gitsocial/site/items/<ext>/  metadata index: one entry per commit
-//     carrying only what the reader needs before a body is fetched (sha, author
-//     identity, author time, the raw `GitMsg:` header line, and the subject
-//     line). The header line keeps every relation (edits/original/reply-to/type/
-//     state/origin-*) parseable by the browser's existing header parser, so list
-//     ordering, edit/retraction resolution, and thread/relationship walks all
-//     work from the index alone. The user-visible message BODY (beyond the
-//     subject) is deliberately absent — the reader lazily fetches the loose
-//     object for the handful of items actually on screen. Sharded so the reader
-//     loads only the newest shard + head every page, not the whole lifetime.
-//   - .gitsocial/site/bodies/<ext>/  search corpus: one entry per commit with the
-//     full raw message (plus sha/author/ts search needs to rank hits). Loaded
-//     only by the search route, on the user's explicit full-text request — light
-//     search runs over the metadata index alone.
-//
-// Both are built from the bucket's own loose objects (uploaded before any ref
-// moves), so the artifacts always match what a reader can resolve — and objstore
-// stays free of a core/git dependency. Both corpora advance together in one
-// push, in a pinned write order (seal bodies shards, seal items shards, bodies
-// head, items head, bodies manifest, items manifest): manifests land last, the
-// bodies manifest's TotalBytes threads into the items manifest as bodiesBytes,
-// and any interruption leaves a state the repair machine (site_repair.go)
-// rebuilds on the next push.
+// site_items.go - the per-extension metadata index and search-body corpora
 
 package objstore
 
@@ -51,37 +22,18 @@ const (
 	siteItemsKeyPrefix = ".gitsocial/site/items/"
 	// siteBodiesKeyPrefix is the bucket namespace of the per-extension search corpora.
 	siteBodiesKeyPrefix = ".gitsocial/site/bodies/"
-	// siteItemsVersion is the artifact JSON schema version, shared by every
-	// artifact doc (items shards, bodies shards, both manifests, the cursor).
-	// A reader treats anything not at the current version as absent and falls
-	// back to the bounded loose-object walk until a push rewrites the artifacts.
+	// siteItemsVersion is the artifact JSON schema version shared by every gitmsg corpus doc.
 	siteItemsVersion = 4
-	// siteCodeItemsVersion is the CODE corpus's schema version: v5 entries carry
-	// the commit's parent shas so the repository graph renders from the index
-	// instead of a per-commit loose-object walk. The version salts the code
-	// corpus's shard content hashes (shardContentHash), so a push onto a v4
-	// bucket sees no valid manifest, re-bootstraps, and seals fresh v5 shards
-	// under new keys. The gitmsg corpora stay at siteItemsVersion, byte-identical.
+	// siteCodeItemsVersion is the code corpus's schema version; its entries carry parent shas.
 	siteCodeItemsVersion = 5
-	// brotliQualityFull is used for every no-cache doc (both corpora's heads and
-	// manifests, the cursor). Quality 9 (not the max 11) because max quality on a
-	// ~50MB corpus takes ~60s in the pure-Go encoder for only ~10% smaller output,
-	// not worth the wall time; sealed shards use max quality once
-	// (brotliQualityShard). Both decode transparently via Content-Encoding.
+	// brotliQualityFull compresses every no-cache doc; sealed shards use brotliQualityShard once.
 	brotliQualityFull = 9
 )
 
-// siteItemsWalkBudget bounds ONE push's artifact walk. It is no longer a fatal
-// cap: a branch larger than the budget bootstraps over many pushes (each seals
-// up to a budget's worth of older commits and leaves a cursor for the next push
-// to resume from), so the walk returns "budget hit vs root reached" rather than
-// erroring. A var (not a const) so tests can lower it, and
-// GITSOCIAL_SITE_WALK_BUDGET overrides it for the site-test fixture (unset in
-// production, so the value stays 50000).
+// siteItemsWalkBudget bounds one push's artifact walk; a larger branch bootstraps over several pushes.
 var siteItemsWalkBudget = siteItemsWalkBudgetFromEnv()
 
-// siteItemsWalkBudgetFromEnv returns the per-push walk budget, honoring a
-// positive GITSOCIAL_SITE_WALK_BUDGET override, else the 50000 default.
+// siteItemsWalkBudgetFromEnv returns the per-push walk budget, honoring GITSOCIAL_SITE_WALK_BUDGET.
 func siteItemsWalkBudgetFromEnv() int {
 	if v := os.Getenv("GITSOCIAL_SITE_WALK_BUDGET"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -91,22 +43,14 @@ func siteItemsWalkBudgetFromEnv() int {
 	return 50000
 }
 
-// siteItemsDoc is one metadata document (a sealed shard or the head under
-// .gitsocial/site/items/<ext>/) — the metadata-index counterpart of
-// siteBodyIndex, carrying one siteMetaEntry per commit.
+// siteItemsDoc is one metadata document: a sealed shard, or the head, of an extension's items index.
 type siteItemsDoc struct {
 	Version int             `json:"version"`
 	Tip     string          `json:"tip"`
 	Items   []siteMetaEntry `json:"items"`
 }
 
-// siteMetaEntry is one indexed commit's metadata: sha, the author identity and
-// time (native items have no origin-* in the header, so display and sort need
-// these before any body fetch), the raw `GitMsg:` header line (relations,
-// type/state, origin-* — parsed by the reader's existing header parser), and
-// the subject line (first line of the trailer-stripped content). The subject
-// rides in the always-loaded index so the site's light search matches items by
-// title for free, without downloading the bodies corpus.
+// siteMetaEntry is one indexed commit's metadata: sha, author identity and time, the raw GitMsg header line, and the subject.
 type siteMetaEntry struct {
 	SHA     string `json:"sha"`
 	Author  string `json:"author"`
@@ -114,32 +58,23 @@ type siteMetaEntry struct {
 	TS      int64  `json:"ts"`
 	Header  string `json:"header"`
 	Subject string `json:"subject"`
-	// Branch is the attributed branch for a CODE-corpus entry (the default branch
-	// when the commit is reachable from it, else the first code branch that reached
-	// it), so the reader links a code commit's card under a real branch route
-	// without a loose-object walk. `omitempty` keeps every gitmsg-extension entry
-	// byte-identical to before (they never set it), so their sealed shards' content
-	// hashes and keys are unchanged.
+	// Branch is a code entry's attributed branch; omitempty keeps gitmsg entries byte-identical.
 	Branch string `json:"branch,omitempty"`
-	// Parents is the commit's parent shas, set only for CODE-corpus entries
-	// (v5+): the repository graph needs the parent DAG, which nothing else in the
-	// index carries. `omitempty` keeps gitmsg-extension entries byte-identical.
+	// Parents is a code entry's parent shas, which the repository graph needs.
 	Parents []string `json:"parents,omitempty"`
 }
 
 // entrySHA implements shardEntry for the metadata index corpus.
 func (e siteMetaEntry) entrySHA() string { return e.SHA }
 
-// siteBodyIndex is one bodies document (a sealed shard or the head under
-// .gitsocial/site/bodies/<ext>/) — the shared search-corpus doc shape.
+// siteBodyIndex is one bodies document: a sealed shard, or the head, of an extension's search corpus.
 type siteBodyIndex struct {
 	Version int             `json:"version"`
 	Tip     string          `json:"tip"`
 	Items   []siteBodyEntry `json:"items"`
 }
 
-// siteBodyEntry is one commit's search record: sha, author and time (to rank
-// hits) and the full raw message (the searchable content plus header fields).
+// siteBodyEntry is one commit's search record: sha, author, time and the full raw message.
 type siteBodyEntry struct {
 	SHA     string `json:"sha"`
 	Author  string `json:"author"`
@@ -147,8 +82,7 @@ type siteBodyEntry struct {
 	Message string `json:"message"`
 }
 
-// walkedItem is one commit read back from the bucket, carrying every field the
-// two artifacts project (metadata index and bodies corpus).
+// walkedItem is one commit read back from the bucket, carrying every field the two corpora project.
 type walkedItem struct {
 	SHA     string
 	Author  string
@@ -156,12 +90,9 @@ type walkedItem struct {
 	TS      int64
 	Header  string
 	Message string
-	// Branch is set only by the code corpus walk (walkCodeItems): the branch a
-	// code commit is attributed to. Empty for the gitmsg-extension walks.
+	// Branch is set only by the code corpus walk; the gitmsg walks leave it empty.
 	Branch string
-	// Parents is set only by the code corpus walk: the commit's parent shas,
-	// projected into the v5 code metadata entries for the graph. Nil for the
-	// gitmsg-extension walks.
+	// Parents is set only by the code corpus walk; the gitmsg walks leave it nil.
 	Parents []string
 }
 
@@ -170,35 +101,19 @@ func metaOf(w walkedItem) siteMetaEntry {
 	return siteMetaEntry{SHA: w.SHA, Author: w.Author, Email: w.Email, TS: w.TS, Header: w.Header, Subject: subjectOf(w.Message)}
 }
 
-// siteLinkRefDefRE matches a CommonMark link reference definition line —
-// "[label]: destination" with an optional title. GitHub renders NOTHING for one
-// whose label is never referenced, which is how bots hide state in a comment
-// body: Vercel's "[vc]: #<digest>:<base64 json>", the "[//]: # (…)" marker.
-// Imported verbatim (as it must be), such a line is an item's FIRST line, so
-// without this it becomes the item's subject — a title of base64 on the list
-// row, the feed entry, the page title and the OG card.
+// siteLinkRefDefRE matches a CommonMark link reference definition line, which renders as nothing.
 var siteLinkRefDefRE = regexp.MustCompile(`^ {0,3}\[[^\]]{1,128}\]:\s*\S+(\s+("[^"]*"|'[^']*'|\([^)]*\)))?\s*$`)
 
-// siteHTMLCommentRE matches an HTML comment, the OTHER thing that renders as
-// nothing upstream and as noise here: "<!-- auto-generated by … -->" wrapping a
-// bot's state, section markers like "<!-- review_stack_entry_start -->".
+// siteHTMLCommentRE matches an HTML comment, the other thing that renders as nothing.
 var siteHTMLCommentRE = regexp.MustCompile(`(?s)<!--.*?-->`)
 
 // siteSubjectMarkdown unwraps "[text](href)" and "![alt](src)" to their words.
-// A subject is a NAME — for a list row, a feed entry, a page title, an OG card
-// — where markup cannot render, so a bot's badge link must read as "CLA
-// assistant check" and not as its own source.
 var siteSubjectMarkdown = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 
-// siteSubjectInlineHTML matches the inline HTML a comment body may carry (a
-// bot's "<br/>", "<sup>"), which the renderer shows and a title cannot.
+// siteSubjectInlineHTML matches the inline HTML a comment body may carry.
 var siteSubjectInlineHTML = regexp.MustCompile(`(?i)</?(br|hr|p|div|span|b|i|em|strong|code|kbd|sup|sub|img|a|details|summary)(\s[^<>]*)?/?>`)
 
-// siteSubjectMarkers strips the remaining leading block markers and the inline
-// emphasis a subject reduces to its text.
-// siteSubjectUnwrap is the rule set gs-core.js SUBJECT_UNWRAP mirrors, in
-// order: leading block marker, bold, italic, code span. Written without
-// backreferences so one rule set can serve both engines.
+// siteSubjectUnwrap is the rule set gs-core.js SUBJECT_UNWRAP mirrors, written without backreferences so one set serves both engines.
 var siteSubjectUnwrap = []struct {
 	re *regexp.Regexp
 	to string
@@ -206,9 +121,7 @@ var siteSubjectUnwrap = []struct {
 	{regexp.MustCompile(`^\s{0,3}(#{1,6}\s+|>\s?)`), ""},
 	{regexp.MustCompile(`\*\*([^*]+)\*\*`), "$1"},
 	{regexp.MustCompile(`\*([^\s*][^*]*)\*`), "$1"},
-	// Underscore emphasis is word-BOUNDED, per CommonMark: snake_case_name is a
-	// name, not emphasis. The boundary is captured and re-emitted because RE2
-	// has no lookaround — the reason gs-core.js states the rule the same way.
+	// Underscore emphasis is word-bounded, and RE2 has no lookaround, so the boundary is captured and re-emitted.
 	{regexp.MustCompile(`(^|[\s(])__([^\s_][^_]*)__($|[\s).,;:!?])`), "${1}${2}${3}"},
 	{regexp.MustCompile(`(^|[\s(])_([^\s_][^_]*)_($|[\s).,;:!?])`), "${1}${2}${3}"},
 	{regexp.MustCompile("`([^`]+)`"), "$1"},
@@ -217,16 +130,13 @@ var siteSubjectUnwrap = []struct {
 
 var siteSubjectSpace = regexp.MustCompile(`\s+`)
 
-// siteSubjectText projects a raw first line to the text a title should show.
-// Mirrors gs-core.js subjectText so the index, the served page and the app name
-// an item the same way.
+// siteSubjectText projects a raw first line to the text a title shows; mirrors gs-core.js subjectText.
 func siteSubjectText(line string) string {
 	out := line
 	for pass := 0; pass < 3 && siteSubjectMarkdown.MatchString(out); pass++ {
 		out = siteSubjectMarkdown.ReplaceAllString(out, "$1")
 	}
-	// Twice: a boundary character consumed by one match is the boundary the next
-	// one needs ("_a_ _b_"), so a single pass can leave the second unwrapped.
+	// Twice: one match consumes the boundary the next one needs, so a single pass can leave the second wrapped.
 	for pass := 0; pass < 2; pass++ {
 		for _, rule := range siteSubjectUnwrap {
 			out = rule.re.ReplaceAllString(out, rule.to)
@@ -235,12 +145,7 @@ func siteSubjectText(line string) string {
 	return strings.TrimSpace(siteSubjectSpace.ReplaceAllString(out, " "))
 }
 
-// siteStripLinkRefDefs removes what renders as nothing upstream — HTML comments
-// and link reference definitions — from content: the
-// lines matching siteLinkRefDefRE at a BLOCK start (start of input, after a
-// blank line, or after another definition) and outside fenced code — exactly
-// where CommonMark allows one, and exactly what gs-core.js collectLinkRefDefs
-// drops, so the served page and the app's re-render of it agree.
+// siteStripLinkRefDefs removes HTML comments and the link reference definitions at a block start outside fenced code, as gs-core.js collectLinkRefDefs does.
 func siteStripLinkRefDefs(content string) string {
 	if strings.Contains(content, "<!--") {
 		content = siteHTMLCommentRE.ReplaceAllString(content, "")
@@ -269,10 +174,7 @@ func siteStripLinkRefDefs(content string) string {
 	return strings.TrimLeft(strings.Join(kept, "\n"), "\n")
 }
 
-// subjectOf returns a message's subject line: the content with the GitMsg
-// trailer block stripped (mirroring gs-core.js cleanContent — the trailer
-// starts at the first line beginning `GitMsg: `), CRs removed, then the first
-// line, trimmed.
+// subjectOf returns a message's subject line: the content with the GitMsg trailer block stripped, then its first line.
 func subjectOf(message string) string {
 	content := message
 	if strings.HasPrefix(message, "GitMsg: ") {
@@ -305,20 +207,12 @@ func siteItemsHeadKey(ext string) string {
 	return siteItemsDir(ext) + "head.json"
 }
 
-// siteItemsCursorKey returns one extension's bootstrap-cursor key. A tiny
-// separate key (not a manifest field) so the "backfill one older segment" write
-// and the "append new tip commits" write never contend on the same object.
+// siteItemsCursorKey returns one extension's bootstrap-cursor key; a separate key so backfill and append writes do not contend.
 func siteItemsCursorKey(ext string) string {
 	return siteItemsDir(ext) + "cursor.json"
 }
 
-// siteItemsCursor records an in-progress bootstrap so it resumes across pushes
-// (and machines: it lives on the bucket). tip is the branch tip the partial
-// index was grown toward (guards against a concurrent tip advance mid-bootstrap);
-// oldestIndexed is the oldest sha sealed so far (BACKFILL's frontier for the next
-// budget segment); complete flips true once the walk reaches the branch root, at
-// which point the cursor key is deleted. Like every head/manifest it is
-// brotli-compressed and served no-cache.
+// siteItemsCursor records an in-progress bootstrap on the bucket, so it resumes across pushes and machines.
 type siteItemsCursor struct {
 	Version       int    `json:"version"`
 	Tip           string `json:"tip"`
@@ -355,14 +249,7 @@ func deleteItemsCursor(client *Client, prefix, ext string) error {
 	return client.Delete(prefix + siteItemsCursorKey(ext))
 }
 
-// finalizeCursor writes or clears the bootstrap cursor to match the walk's
-// post-write state: a nil pending clears it (the walk reached the root — index
-// complete), else it records tip/oldestIndexed for the next backfill. It is the
-// single translation of "is the index complete?" into the cursor object, and the
-// same nil-ness feeds the manifests' complete flag (pending == nil), so no writer
-// path can mark a manifest complete while leaving a cursor pending. Called after
-// the manifests (the pinned cursor-last order), so an
-// interrupted cursor write leaves only complete=false manifests to reconstruct.
+// finalizeCursor writes or clears the bootstrap cursor; a nil pending both clears it and marks the manifests complete, so the two cannot disagree.
 func finalizeCursor(client *Client, prefix, ext string, pending *siteItemsCursor) error {
 	if pending == nil {
 		return deleteItemsCursor(client, prefix, ext)
@@ -370,10 +257,7 @@ func finalizeCursor(client *Client, prefix, ext string, pending *siteItemsCursor
 	return putItemsCursor(client, prefix, ext, pending.Tip, pending.OldestIndexed)
 }
 
-// manifestOldestSha returns the oldest sha an items index already covers: the
-// first (oldest) member of the oldest sealed shard, or the oldest head entry
-// when nothing is sealed yet, or "" when it covers nothing. This is the
-// authoritative backfill frontier (the manifest, not the cursor's stale copy).
+// manifestOldestSha returns the oldest sha an items index covers; this is the backfill frontier, not the cursor's copy of it.
 func manifestOldestSha(client *Client, prefix, ext string, manifest *siteShardManifest, itemsHead []siteMetaEntry) (string, error) {
 	if manifest != nil && len(manifest.Shards) > 0 {
 		entries, err := readItemsHeadEntries(client, prefix+siteItemsDir(ext)+manifest.Shards[0].Key)
@@ -397,12 +281,7 @@ func manifestOldestSha(client *Client, prefix, ext string, manifest *siteShardMa
 	return "", nil
 }
 
-// reconstructCursor rebuilds an in-progress bootstrap cursor from an incomplete
-// items manifest whose real cursor was lost (a BOOTSTRAP interrupted between its
-// manifest writes and its cursor write). tip carries the manifest's recorded
-// branch tip (the index was grown toward it) so BACKFILL and APPEND see the same
-// tip a live cursor would. Returns nil (no error) only when the manifest covers
-// nothing indexable, in which case the caller keeps a nil cursor.
+// reconstructCursor rebuilds a lost bootstrap cursor from an incomplete items manifest; nil when the manifest covers nothing.
 func reconstructCursor(client *Client, prefix, ext string, manifest *siteShardManifest, newTip string) (*siteItemsCursor, error) {
 	oldest, err := manifestOldestSha(client, prefix, ext, manifest, nil)
 	if err != nil || len(oldest) != 40 {
@@ -421,9 +300,7 @@ func siteItemsShardKey(ext, hash string) string {
 	return siteItemsDir(ext) + shardObjectName(hash)
 }
 
-// itemsDocVersion returns the metadata-index schema version for one corpus:
-// siteCodeItemsVersion for the code corpus (entries carry parents), else the
-// shared siteItemsVersion.
+// itemsDocVersion returns one corpus's metadata-index schema version.
 func itemsDocVersion(ext string) int {
 	if ext == siteCodeExt {
 		return siteCodeItemsVersion
@@ -446,8 +323,7 @@ var itemsCorpus = shardCorpus[siteMetaEntry]{
 	},
 }
 
-// siteItemsExt maps a pushed ref name to the extension it indexes ("" for
-// refs outside the well-known gitmsg data branches).
+// siteItemsExt maps a pushed ref name to the extension it indexes.
 func siteItemsExt(refName string) string {
 	ext, ok := strings.CutPrefix(refName, "refs/heads/gitmsg/")
 	if !ok {
@@ -467,13 +343,7 @@ type bucketCommit struct {
 	parents []string
 }
 
-// getBucketCommit fetches and parses one commit object from the bucket: the
-// loose key first, then — on a clean miss — the pack map (a packed commit is
-// one Range GET of a self-contained zlib stream, exactly how the browser reads
-// it; see getPackedBucketCommit). The GETs retry transient faults (a 503
-// mid-walk, a dropped connection): a long bootstrap walk over thousands of
-// commits must survive one provider hiccup rather than lose the whole pass. A
-// commit found in neither shape returns the loose miss.
+// getBucketCommit fetches and parses one commit from the bucket: the loose key first, then the pack map on a miss.
 func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
 	compressed, err := client.GetRetry(prefix + "objects/" + sha[:2] + "/" + sha[2:])
 	if errors.Is(err, ErrNotFound) {
@@ -504,11 +374,7 @@ func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
 	return parseBucketCommit(sha, raw[nul+1:])
 }
 
-// getPackedBucketCommit resolves one commit out of the bucket's packfiles via
-// the pack map shard covering its sha: the shard names the pack and the exact
-// byte range, so the read is one Range GET and no .idx. ok is false (no error)
-// when the map has no usable entry or the named pack is gone — the caller then
-// surfaces its loose miss.
+// getPackedBucketCommit resolves one commit out of the bucket's packfiles through its pack map shard; ok is false when the map has no usable entry.
 func getPackedBucketCommit(client *Client, prefix, sha string) (bucketCommit, bool, error) {
 	doc, err := readPackMapShard(client, prefix, packMapShardName(sha))
 	if err != nil {
@@ -539,9 +405,7 @@ func getPackedBucketCommit(client *Client, prefix, sha string) (bucketCommit, bo
 	return c, true, nil
 }
 
-// parseBucketCommit extracts parents, author identity/time, the verbatim
-// message (for the bodies corpus) and the `GitMsg:` header line (for the
-// metadata index) from a raw commit object body.
+// parseBucketCommit extracts parents, author identity and time, the message and the GitMsg header line from a raw commit body.
 func parseBucketCommit(sha string, body []byte) (bucketCommit, error) {
 	text := string(body)
 	header, message, found := strings.Cut(text, "\n\n")
@@ -586,29 +450,12 @@ func parseAuthorIdent(ident string) (name, email string, ts int64) {
 	return name, email, ts
 }
 
-// walkBucketItems walks parent pointers from tip over the bucket's objects
-// (mirroring the site's BFS: parents ahead of the remaining frontier), skipping
-// descent into shas listed in stopAt, collecting AT MOST budget commits. It
-// returns the collected commits newest-first, the set of stopAt shas
-// encountered, and budgetHit — true when the walk stopped because it reached the
-// budget with commits still unvisited (the branch is larger than one push can
-// index, so BOOTSTRAP/BACKFILL resume from the collected segment's oldest sha),
-// false when the frontier emptied first (every reachable commit down to root or
-// stopAt is collected). A bounded gap walk (APPEND / REPAIR tail) passes the
-// same budget; its stopAt frontier terminates it well below the budget, so
-// budgetHit stays false there.
+// walkBucketItems walks parents from tip over the bucket's objects, stopping at stopAt and collecting at most budget commits newest-first.
 func walkBucketItems(client *Client, prefix, tip string, stopAt map[string]bool, budget int, sp *siteProgress) ([]walkedItem, map[string]bool, bool, error) {
 	return walkBucketItemsProgress(client, prefix, tip, stopAt, budget, 0, sp)
 }
 
-// walkBucketItemsProgress is walkBucketItems with an explicit progress total:
-// walkTotal is the ceiling reported to the Progress hook. Every current caller
-// passes 0 (a plain count): the walk budget is a per-push CAP the walk usually
-// won't reach, not the branch size, so reporting done/budget would show a
-// misleading percentage; and neither the manifest nor the cursor tracks the true
-// remaining commit count. walkTotal never affects the walk itself, only the
-// progress label — a caller that DID know the real remaining size could pass it
-// for an honest percentage.
+// walkBucketItemsProgress is walkBucketItems with an explicit progress ceiling; walkTotal 0 reports a plain count and changes no walk.
 func walkBucketItemsProgress(client *Client, prefix, tip string, stopAt map[string]bool, budget, walkTotal int, sp *siteProgress) ([]walkedItem, map[string]bool, bool, error) {
 	visited := map[string]bool{}
 	met := map[string]bool{}
@@ -639,8 +486,7 @@ func walkBucketItemsProgress(client *Client, prefix, tip string, stopAt map[stri
 	return items, met, false, nil
 }
 
-// planItems seals a full items (re)build's shards, returning the plan (staged so
-// the two corpora can interleave shard/head/manifest writes).
+// planItems seals a full items rebuild's shards and returns the plan.
 func planItems(client *Client, prefix, ext string, meta []siteMetaEntry, sp *siteProgress) (shardPlan[siteMetaEntry], error) {
 	return planSharded(client, itemsCorpus, prefix, ext, meta, nil, sp)
 }
@@ -661,35 +507,23 @@ func putItemsHead(client *Client, prefix, ext, tip string, plan *shardPlan[siteM
 	return putHead(client, itemsCorpus, prefix, ext, tip, plan)
 }
 
-// putItemsManifest assembles and writes an items plan's manifest, recording the
-// bodies corpus's total compressed size (bodiesBytes). complete is false while a
-// bootstrap is still backfilling older history.
+// putItemsManifest writes an items plan's manifest, recording the bodies corpus's compressed size.
 func putItemsManifest(client *Client, prefix, ext, tip string, plan shardPlan[siteMetaEntry], bodiesBytes int, complete bool) error {
 	_, err := putManifest(client, itemsCorpus, prefix, ext, tip, plan, bodiesBytes, complete)
 	return err
 }
 
-// readItemsManifest fetches one extension's metadata-index manifest; nil (no
-// error) when absent, an older version, or unparseable.
+// readItemsManifest fetches one extension's metadata-index manifest; nil when absent or unreadable.
 func readItemsManifest(client *Client, prefix, ext string) (*siteShardManifest, error) {
 	return readShardManifest(client, itemsCorpus, prefix, ext)
 }
 
-// readItemsHeadEntries fetches one metadata-index head document's entries (nil
-// when absent or unparseable).
+// readItemsHeadEntries fetches one metadata-index head document's entries.
 func readItemsHeadEntries(client *Client, key string) ([]siteMetaEntry, error) {
 	return readDocItems[siteMetaEntry](client, key)
 }
 
-// putSiteArtifacts (re)builds both sharded corpora for one extension from a
-// walked commit list, in the pinned write order (seal bodies shards, seal items
-// shards, bodies head, items head, bodies manifest, items manifest). Manifests
-// are the only commit points and land last, so any interruption leaves at worst
-// "bodies ahead of items", which REPAIR handles; sealed shards are content-hash
-// keyed (skip-existing) and heads are re-writable, so every earlier write is
-// idempotent on retry. bodiesBytes is threaded from the bodies manifest onto the
-// items manifest for the reader's full-search download size. complete is false
-// when the walk stopped at the budget with older history still to backfill.
+// putSiteArtifacts rebuilds both corpora for one extension in the pinned write order; the manifests land last.
 func putSiteArtifacts(client *Client, prefix, ext, tip string, items []walkedItem, complete bool, sp *siteProgress) error {
 	meta := make([]siteMetaEntry, len(items))
 	bodies := make([]siteBodyEntry, len(items))
@@ -718,9 +552,7 @@ func putSiteArtifacts(client *Client, prefix, ext, tip string, items []walkedIte
 	return putItemsManifest(client, prefix, ext, tip, itemsPlan, total, complete)
 }
 
-// deleteSiteArtifacts removes every artifact for one extension (branch deleted):
-// the whole sharded items set (each shard enumerated from its manifest, then
-// head + manifest) plus the whole sharded bodies set.
+// deleteSiteArtifacts removes every artifact for one extension whose branch is gone.
 func deleteSiteArtifacts(client *Client, prefix, ext string) error {
 	manifest, err := readItemsManifest(client, prefix, ext)
 	if err != nil {
@@ -742,28 +574,7 @@ func deleteSiteArtifacts(client *Client, prefix, ext string) error {
 	return deleteBodiesSharded(client, prefix, ext)
 }
 
-// updateSiteItemsIndex brings one extension's artifacts to newTip. It reads the
-// four bucket-derived inputs (both manifests + both live head counts),
-// classifies the state (see classifyItemsState / site_repair.go), and dispatches:
-//
-//   - NO-OP: both corpora already at newTip with matching head counts.
-//   - APPEND: both corpora lockstepped at a common tip; walk only the bounded gap
-//     newTip → that tip and extend both heads (sealing shards as they fill).
-//   - REPAIR: any observable mismatch WITH an items manifest present, never a
-//     from-scratch capped walk. Each corpus is rebuilt from its own reachable
-//     sealed shards plus a bounded tail re-walk (see repairItemsState); only a
-//     genuinely unreachable manifest tip (history rewrite) resets to bootstrap.
-//   - BOOTSTRAP: no items manifest at all (fresh / wiped). Walk up to one push's
-//     budget from newTip; if the branch fits, both corpora complete in one push
-//     exactly as before. If the budget is hit, seal the newest budget prefix
-//     (still a valid servable newest-first index) and leave a cursor so the next
-//     push backfills the next older segment. A branch past the budget can no
-//     longer error, so it never permanently wedges the index.
-//   - BACKFILL: a cursor is pending and the newest end is already at newTip; seal
-//     the next older budget segment (from oldestIndexed toward the root) and
-//     prepend it to both manifests, advancing (or, on reaching the root, clearing)
-//     the cursor. A newTip that advanced mid-bootstrap classifies as APPEND
-//     instead, which owns the newest end and bumps cursor.tip.
+// updateSiteItemsIndex brings one extension's artifacts to newTip: it reads both manifests and head counts, classifies the state, and dispatches.
 func updateSiteItemsIndex(client *Client, prefix, ext, newTip string, sp *siteProgress) error {
 	items, err := readItemsManifest(client, prefix, ext)
 	if err != nil {
@@ -777,10 +588,7 @@ func updateSiteItemsIndex(client *Client, prefix, ext, newTip string, sp *sitePr
 	if err != nil {
 		return err
 	}
-	// A torn bootstrap (incomplete manifest whose cursor PUT was lost) has no
-	// cursor on the bucket; reconstruct it from the manifest so the bootstrap
-	// resumes instead of freezing as a completed small branch. This is what makes
-	// manifest.Complete the authoritative "is a bootstrap pending" signal.
+	// A torn bootstrap has no cursor on the bucket, so rebuild it from the manifest rather than read the index as finished.
 	if cursor == nil && items != nil && !items.Complete {
 		if cursor, err = reconstructCursor(client, prefix, ext, items, newTip); err != nil {
 			return err
@@ -808,14 +616,7 @@ func updateSiteItemsIndex(client *Client, prefix, ext, newTip string, sp *sitePr
 	}
 }
 
-// appendItemsGap walks the bounded gap newTip → the corpora's common tip and
-// extends both heads (the steady-state APPEND path, and, mid-bootstrap, the
-// newest-end owner: it keeps the manifest incomplete and bumps cursor.tip so
-// BACKFILL later resumes from the unchanged oldestIndexed). The classifier
-// guarantees both manifests are present, lockstepped (items.Tip == bodies.Tip)
-// and their head counts match; if the bounded walk cannot reach that tip (an
-// unexpected concurrent rewrite between the read and the walk) it falls through
-// to REPAIR, which never does a from-scratch capped walk.
+// appendItemsGap walks the bounded gap from newTip to the corpora's common tip and extends both heads; a walk that misses that tip falls through to repair.
 func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *siteShardManifest, cursor *siteItemsCursor, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry, sp *siteProgress) error {
 	known := map[string]bool{items.Tip: true}
 	for _, e := range itemsHead {
@@ -825,10 +626,7 @@ func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *s
 	if err != nil || !met[items.Tip] {
 		return repairItemsState(client, prefix, ext, newTip, items, bodies, cursor, sp)
 	}
-	// APPEND owns only the newest end. With no cursor the index is already
-	// complete and the cursor stays absent (no finalize needed). With a bootstrap
-	// in flight it stays in flight: the head advances, oldestIndexed is untouched,
-	// and cursor.tip bumps to newTip.
+	// Append owns the newest end alone: a pending bootstrap stays pending, with oldestIndexed untouched.
 	if cursor == nil {
 		return putGapArtifacts(client, prefix, ext, newTip, gap, items, bodies, itemsHead, bodiesHead, true, sp)
 	}
@@ -839,18 +637,8 @@ func appendItemsGap(client *Client, prefix, ext, newTip string, items, bodies *s
 	return finalizeCursor(client, prefix, ext, pending)
 }
 
-// bootstrapItems seals the first budget segment of a fresh/wiped index. It walks
-// up to one push's budget from newTip; if the whole branch fits (root reached),
-// both corpora complete in one push and no cursor appears (small branches keep
-// the prior behavior). If the budget is hit, it seals the newest budget prefix
-// (a valid servable newest-first index) with complete=false and writes a cursor
-// whose oldestIndexed is the oldest sealed sha, so the next push backfills older.
+// bootstrapItems seals the first budget segment of a fresh index, leaving a cursor when the budget is hit before the root.
 func bootstrapItems(client *Client, prefix, ext, newTip string, sp *siteProgress) error {
-	// The walk budget is a per-push CAP, not the branch size: a branch of any
-	// size (from a handful of commits to millions) walks against the same 50k
-	// ceiling, so reporting done/budget would show a misleading "12%" on a branch
-	// that is actually nearly done. The true remaining size is unknown until the
-	// frontier empties, so report a plain count (total=0).
 	walked, _, budgetHit, err := walkBucketItemsProgress(client, prefix, newTip, nil, siteItemsWalkBudget, 0, sp)
 	if err != nil {
 		return err
@@ -865,34 +653,7 @@ func bootstrapItems(client *Client, prefix, ext, newTip string, sp *siteProgress
 	return finalizeCursor(client, prefix, ext, pending)
 }
 
-// backfillItems seals the next older budget segment of an in-progress bootstrap.
-// It walks up to budget from the oldest-indexed sha's parents toward the root
-// (stopAt = the already-indexed set, so it never re-walks sealed history),
-// prepends the sealed segment to both manifests (older than everything there;
-// the head is untouched), and advances the cursor — deleting it and marking the
-// manifests complete once the root is reached. Write order within the segment:
-// seal bodies shard(s), seal items shard(s), bodies manifest, items manifest,
-// cursor last; the head is never rewritten (APPEND owns it). Cursor last means an
-// interruption after the manifests re-walks the same segment (skip-existing) and
-// re-writes the same manifests on the next push, fully idempotent. The classifier
-// only routes here when the newest end is already at newTip, so the corpora tips
-// (read from the current manifests) are authoritative and no newTip is needed.
-//
-// The backfill frontier is derived from the MANIFEST (its oldest sealed sha),
-// not the cursor's oldestIndexed field: an interruption between the manifest
-// writes and the cursor write leaves the cursor's copy stale (lagging the
-// manifest), so trusting it would either re-walk covered history or stop short.
-// The manifest is authoritative for what is sealed; the cursor only carries the
-// bootstrap tip and the complete flag.
-//
-// stopAt is seeded with every cheaply-available already-indexed boundary — the
-// oldest sealed sha, every sealed shard's endTip, the head shas, and the
-// manifest tip — not just the frontier. On a strictly-linear chain the frontier
-// alone suffices, but a gitmsg data branch can carry a rare multi-machine
-// auto-merge; without the extra stop points a merge parent reachable both from
-// the frontier and from an already-indexed newer commit could be re-walked into
-// a backfill shard, duplicating that membership across two shards. The extra
-// boundaries make the walk halt at any indexed frontier.
+// backfillItems seals the next older budget segment of an in-progress bootstrap and prepends it to both manifests, leaving the head alone.
 func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, items *siteShardManifest, itemsHead []siteMetaEntry, sp *siteProgress) error {
 	frontier, err := manifestOldestSha(client, prefix, ext, items, itemsHead)
 	if err != nil {
@@ -909,6 +670,7 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 		// No older history: the frontier is the branch root; just complete it.
 		return completeBackfill(client, prefix, ext)
 	}
+	// Stop at every indexed boundary, not the frontier alone, so a merge parent reachable from two sides lands in one shard.
 	stop := map[string]bool{frontier: true}
 	if items != nil {
 		stop[items.Tip] = true
@@ -921,9 +683,6 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 	}
 	segment, budgetHit := []walkedItem{}, false
 	for _, p := range oldest.parents {
-		// Plain count (total=0): the budget is a per-push cap and the manifest/
-		// cursor track only the oldest-indexed frontier, not how many older commits
-		// remain, so no honest percentage is knowable here (see bootstrapItems).
 		seg, _, hit, err := walkBucketItemsProgress(client, prefix, p, stop, siteItemsWalkBudget-len(segment), 0, sp)
 		if err != nil {
 			return err
@@ -950,10 +709,7 @@ func backfillItems(client *Client, prefix, ext string, cursor *siteItemsCursor, 
 	return finalizeCursor(client, prefix, ext, pending)
 }
 
-// completeBackfill marks both manifests complete and clears the cursor when a
-// backfill discovers no older history remains (the cursor lagged the root by one
-// push). It re-reads and re-writes each manifest with complete=true, shards and
-// head untouched.
+// completeBackfill marks both manifests complete and clears the cursor when no older history remains.
 func completeBackfill(client *Client, prefix, ext string) error {
 	if err := markManifestComplete(client, bodiesCorpus, prefix, ext); err != nil {
 		return err
@@ -964,8 +720,7 @@ func completeBackfill(client *Client, prefix, ext string) error {
 	return deleteItemsCursor(client, prefix, ext)
 }
 
-// markManifestComplete re-reads one corpus's manifest and re-writes it with
-// complete=true (shards/head/tip/bytes unchanged); a no-op if it is already gone.
+// markManifestComplete re-reads one corpus's manifest and re-writes it complete; a no-op when it is gone.
 func markManifestComplete[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string) error {
 	m, err := readShardManifest(client, corpus, prefix, ext)
 	if err != nil || m == nil {
@@ -975,12 +730,7 @@ func markManifestComplete[E shardEntry](client *Client, corpus shardCorpus[E], p
 	return putShardManifest(client, corpus, prefix, ext, m)
 }
 
-// prependSegment seals one backfilled older segment for both corpora and prepends
-// it to their manifests (re-reading each manifest immediately before its write so
-// a concurrent APPEND's newer head/tip survives; a clobber self-heals via REPAIR
-// on the next push). Write order: bodies shard(s) + manifest, then items shard(s)
-// + manifest; the head is untouched. complete is true only when this segment
-// reached the branch root.
+// prependSegment seals one backfilled older segment for both corpora and prepends it to their manifests.
 func prependSegment(client *Client, prefix, ext string, segment []walkedItem, complete bool, sp *siteProgress) error {
 	segMeta := make([]siteMetaEntry, 0, len(segment))
 	segBodies := make([]siteBodyEntry, 0, len(segment))
@@ -1012,12 +762,7 @@ func prependSegment(client *Client, prefix, ext string, segment []walkedItem, co
 	return err
 }
 
-// putGapArtifacts appends the freshly-walked gap to both sharded corpora's heads
-// (sealing any newly-full shards; prior sealed shards are untouched), in the
-// pinned write order (seal bodies shards, seal items shards, bodies head, items
-// head, bodies manifest, items manifest). Manifests land last so an interruption
-// leaves at worst "bodies ahead of items", which REPAIR handles. complete is
-// false while a bootstrap is still backfilling older history.
+// putGapArtifacts appends a freshly-walked gap to both corpora's heads in the pinned write order.
 func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedItem, itemsManifest, bodiesManifest *siteShardManifest, itemsHead []siteMetaEntry, bodiesHead []siteBodyEntry, complete bool, sp *siteProgress) error {
 	gapMeta := make([]siteMetaEntry, 0, len(gap))
 	gapBodies := make([]siteBodyEntry, 0, len(gap))
@@ -1046,14 +791,7 @@ func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedIte
 	return putItemsManifest(client, prefix, ext, newTip, itemsPlan, total, complete)
 }
 
-// rebuildSiteItems drives every extension data branch present in refs, plus the
-// single code items index across every code branch, through the same state
-// machine as a helper push (used by `gitsocial push --site-only`). It is idempotent and
-// budget-aware: a small branch (re)builds in one call exactly as before; a branch
-// past the budget starts (or advances) the resumable bootstrap instead of
-// erroring, reusing every already-sealed shard via skip-existing. defaultBranch is
-// the repo's default (from the bucket HEAD) so the code index attributes commits
-// to it correctly.
+// rebuildSiteItems drives every data branch in refs, plus the code index, through the same state machine as a helper push.
 func rebuildSiteItems(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress) error {
 	for _, ext := range siteItemsExts {
 		tip, ok := refs["refs/heads/gitmsg/"+ext]
@@ -1073,15 +811,7 @@ func rebuildSiteItems(client *Client, prefix string, refs map[string]string, def
 	return nil
 }
 
-// siteItemsBootstrapPending reports whether any extension's items index still
-// needs work only a full site pass runs: an incomplete bootstrap
-// (manifest.Complete false, with older segments to backfill), or a data branch
-// with NO manifest at all — the helper's per-push maintenance only indexes the
-// branches that push moved, so a guard-enabled bucket can carry data branches
-// no push has indexed yet. Either way the push-state marker must stay unstamped
-// (no ref move signals the remaining work). Best-effort — a read error is
-// reported as pending, so at worst the marker is left unstamped and the next
-// push does a (harmless) full pass.
+// siteItemsBootstrapPending reports whether any items index still needs work a full site pass runs; a read error counts as pending.
 func siteItemsBootstrapPending(client *Client, prefix string, refs map[string]string) bool {
 	for _, ext := range siteItemsExts {
 		if _, ok := refs["refs/heads/gitmsg/"+ext]; !ok {

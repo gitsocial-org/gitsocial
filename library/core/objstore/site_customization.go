@@ -1,12 +1,4 @@
-// site_customization.go - push-maintained static-site customization artifact.
-//
-// The repo's site customization lives at refs/gitmsg/core/config as a commit
-// whose message is the core config JSON with a `site` sub-object (title, accent,
-// accentDark, favicon, image, url, description, publish, pages). This resolves that sub-object at push time, validates it
-// strictly, and emits it as .gitsocial/site/site-config.json alongside the other
-// mutable site artifacts. The reader loads it (no-cache, refreshed on every push)
-// and applies the overrides; an absent or malformed config deletes the artifact
-// (the reader falls back to its built-in defaults), mirroring pm-config.json.
+// site_customization.go - resolving the repo's `site` config sub-object at push time and publishing it as a site artifact
 
 package objstore
 
@@ -22,12 +14,10 @@ import (
 // siteCustomizationKey is the site customization the static site reads.
 const siteCustomizationKey = ".gitsocial/site/site-config.json"
 
-// siteConfigMaxTitle bounds a customization title (defensive: the reader only
-// uses textContent, but a runaway title serves no one).
+// siteConfigMaxTitle bounds a customization title.
 const siteConfigMaxTitle = 200
 
-// SiteFaviconMaxBytes caps the favicon data URI so the no-cache artifact stays
-// small (the whole reason it is a data URI: no extra bucket object).
+// SiteFaviconMaxBytes caps the favicon data URI, so the no-cache artifact stays small.
 const SiteFaviconMaxBytes = 32 * 1024
 
 // siteConfigMaxURL bounds the site base URL (site.url), after normalization.
@@ -36,33 +26,23 @@ const siteConfigMaxURL = 500
 // SiteConfigMaxDescription bounds the site description (site.description).
 const SiteConfigMaxDescription = 300
 
-// siteHexRe matches a strict CSS hex color (#rgb or #rrggbb), the only accent
-// shape the writer emits and the reader applies.
+// siteHexRe matches a strict CSS hex color, the only accent shape the writer emits.
 var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
-// siteFaviconRe matches an allowed favicon data URI prefix (png/webp/svg+xml).
-// Kept in sync with the reader's favicon guard in gs-app.js.
+// siteFaviconRe matches an allowed favicon data URI prefix, in step with the reader's guard in gs-app.js.
 var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
 
-// siteImageKeyRe matches a relative bucket key for site.image: plain path
-// segments, no scheme, no leading slash, no traversal.
+// siteImageKeyRe matches a relative bucket key for site.image: plain segments, no scheme, no leading slash, no traversal.
 var siteImageKeyRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 
-// Per-remote site-override git config keys, stored on the remote definition
-// (remote.<name>.<suffix>) as machine-local deployment state. Only the
-// deployment keys (url, publish, pages) are overridable; identity keys stay
-// shared in the repo's config ref. See documentation/STATIC-SITE.md.
+// Per-remote site-override git config keys; only the deployment keys are overridable, since identity keys stay shared in the repo's config ref.
 const (
 	SiteOverrideURLKey     = "gitsocial-site-url"
 	SiteOverridePublishKey = "gitsocial-site-publish"
 	SiteOverridePagesKey   = "gitsocial-site-pages"
 )
 
-// applySiteOverride overlays a remote's deployment overrides onto a resolved
-// customization, normalizing each override the same way the shared keys are
-// (url through NormalizeSiteURL, publish/pages through siteBoolString). An
-// override can turn a previously-empty customization into a publishable one
-// (ok=true), matching the single-boundary contract.
+// applySiteOverride overlays a remote's deployment overrides onto a resolved customization, normalizing each the way the shared keys are.
 func applySiteOverride(c siteCustomization, ok bool, ov SiteOverride) (siteCustomization, bool) {
 	if ov == (SiteOverride{}) {
 		return c, ok
@@ -88,11 +68,7 @@ func applySiteOverride(c siteCustomization, ok bool, ov SiteOverride) (siteCusto
 	return c, true
 }
 
-// siteCustomization is the validated customization the reader consumes: a title,
-// an accent (light) and optional accentDark, an optional favicon data URI, an
-// optional social-card image (og:image), the site's canonical base URL, a
-// description, and the two publish guards. Only the fields that survive
-// validation are emitted; empties are omitted.
+// siteCustomization is the validated customization the reader consumes; only the fields that survive validation are emitted.
 type siteCustomization struct {
 	Title       string `json:"title,omitempty"`
 	Accent      string `json:"accent,omitempty"`
@@ -103,16 +79,12 @@ type siteCustomization struct {
 	Description string `json:"description,omitempty"`
 	Publish     string `json:"publish,omitempty"` // "true" enables the static site (default off)
 	Pages       string `json:"pages,omitempty"`   // "true" enables the HTML page layer (needs publish + url)
-	// The file layer's escape hatch: comma-separated path globs ("**" spans any
-	// number of segments) that publish what the document rule misses and withhold
-	// what it should not have taken. Strings rather than lists so the type stays
-	// comparable and the CLI stores one value per key.
+	// The file layer's globs, comma-separated strings so the type stays comparable.
 	FilesInclude string `json:"filesInclude,omitempty"`
 	FilesExclude string `json:"filesExclude,omitempty"`
 }
 
-// siteBoolString normalizes a raw guard value to "true"/"false" ("" when it is
-// neither — the guard is then treated as unset, i.e. off).
+// siteBoolString normalizes a raw guard value to "true" or "false"; "" means unset, so the guard is off.
 func siteBoolString(v interface{}) string {
 	switch t := v.(type) {
 	case bool:
@@ -128,9 +100,7 @@ func siteBoolString(v interface{}) string {
 	return ""
 }
 
-// NormalizeSiteGlobs keeps the well-formed globs of a comma-separated list:
-// repo-relative paths, no leading slash and no traversal, so a glob can only
-// ever select inside the tree being published.
+// NormalizeSiteGlobs keeps the well-formed globs of a comma-separated list, so a glob can only select inside the published tree.
 func NormalizeSiteGlobs(v string) string {
 	var kept []string
 	for _, g := range strings.Split(v, ",") {
@@ -146,16 +116,12 @@ func NormalizeSiteGlobs(v string) string {
 // ValidSiteAccent reports whether v is a strict #rgb/#rrggbb hex color.
 func ValidSiteAccent(v string) bool { return siteHexRe.MatchString(v) }
 
-// ValidSiteFavicon reports whether v is an allowed favicon data URI (png/webp/
-// svg+xml) within the size cap.
+// ValidSiteFavicon reports whether v is an allowed favicon data URI within the size cap.
 func ValidSiteFavicon(v string) bool {
 	return len(v) <= SiteFaviconMaxBytes && siteFaviconRe.MatchString(v)
 }
 
-// NormalizeSiteImage validates a site.image value — the social-card image the
-// pages stamp as og:image. Either an absolute URL (same scheme rules as
-// site.url) or a relative bucket key resolved against the effective site.url at
-// render time. Returns ok=false when invalid.
+// NormalizeSiteImage validates a site.image value: an absolute URL under site.url's scheme rules, or a relative bucket key.
 func NormalizeSiteImage(v string) (string, bool) {
 	v = strings.TrimSpace(v)
 	if v == "" || len(v) > siteConfigMaxURL {
@@ -183,10 +149,7 @@ func NormalizeSiteImage(v string) (string, bool) {
 	return v, true
 }
 
-// NormalizeSiteURL validates and normalizes a site base URL: absolute https
-// (http only for localhost/127.0.0.1, the locals3 dev loop), no query or
-// fragment, normalized to a trailing slash, within the length cap. Returns
-// ok=false when invalid.
+// NormalizeSiteURL validates a site base URL: absolute https, or http for a loopback host, with no query or fragment and a trailing slash.
 func NormalizeSiteURL(v string) (string, bool) {
 	v = strings.TrimSpace(v)
 	u, err := url.Parse(v)
@@ -211,10 +174,7 @@ func NormalizeSiteURL(v string) (string, bool) {
 	return v, true
 }
 
-// validateSiteCustomization keeps only the fields that pass strict validation,
-// dropping anything malformed field-by-field (a bad accent never poisons a good
-// title). Returns ok=false when nothing survives, so the caller deletes the
-// artifact rather than emit an empty object.
+// validateSiteCustomization keeps only the fields that validate, dropping the rest one by one; ok is false when nothing survives.
 func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, bool) {
 	var c siteCustomization
 	if s, ok := raw["title"].(string); ok {
@@ -268,10 +228,7 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	return c, true
 }
 
-// readSiteCustomization resolves the bucket's site customization and overlays
-// the per-remote deployment overrides (ov) at this single boundary, so every
-// consumer sees effective values. See readSiteBaseCustomization for the base
-// resolution and applySiteOverride for the override rules.
+// readSiteCustomization resolves the bucket's site customization and overlays the per-remote overrides at this one boundary, so every consumer sees effective values.
 func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) (siteCustomization, bool, error) {
 	base, ok, err := readSiteBaseCustomization(client, prefix, refs, src)
 	if err != nil {
@@ -281,14 +238,7 @@ func readSiteCustomization(client *Client, prefix string, refs map[string]string
 	return c, ok, nil
 }
 
-// readSiteBaseCustomization resolves refs/gitmsg/core/config and extracts its
-// validated `site` sub-object (no per-remote overrides applied), reading the
-// commit from the local odb when src is available (nil = bucket-only) and
-// otherwise from the bucket — loose key or, on a sealed bucket, the pack map.
-// Returns ok=false (no error) when the ref is absent, the object is
-// missing/not a commit, the message is not valid config JSON, or nothing in
-// `site` survives validation — the caller then deletes the artifact (reader
-// falls back to its defaults).
+// readSiteBaseCustomization resolves refs/gitmsg/core/config and extracts its validated `site` sub-object, with no overrides applied; ok is false when nothing survives.
 func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string, src *localCommitSource) (siteCustomization, bool, error) {
 	sha, present := refs["refs/gitmsg/core/config"]
 	if !present || len(sha) != 40 {
@@ -310,11 +260,7 @@ func readSiteBaseCustomization(client *Client, prefix string, refs map[string]st
 	return valid, ok, nil
 }
 
-// writeSiteCustomization publishes the validated site customization at
-// .gitsocial/site/site-config.json after every push, so the static site honors
-// the repo's refs/gitmsg/core/config `site` sub-object. Absent/malformed config
-// deletes the artifact (reader falls back to its defaults). Best-effort by
-// contract; written on the same refs-moved path that maintains refs.json.
+// writeSiteCustomization publishes the validated site customization after every push; an absent or malformed config deletes the artifact instead.
 func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) error {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {

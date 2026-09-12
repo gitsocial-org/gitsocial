@@ -1,32 +1,9 @@
-// site_pages_thread.go - thread assembly for the static HTML pages: corpus
-// read-back, header parsing via core/protocol, root/reply classification,
-// same-repo edit and retract resolution (GITMSG.md §1.5), and reply
-// attachment in timestamp order.
+// site_pages_thread.go - thread assembly for the static pages: root and reply classification, version resolution, and reply ordering
 //
-// Top-level (root) detection per extension, derived from the specs:
-//
-//   social  (GITSOCIAL §1.1/§1.3): `post` (including implicit posts carrying
-//           no GitMsg header), `repost`, and `quote` are roots. `comment` is
-//           always a reply; its `original` field names the thread root
-//           directly (never an intermediate comment), `reply-to` only nests
-//           it. A repost/quote's `original` is a share relation, not a reply
-//           relation, so both stay top-level.
-//   pm      (GITPM): `issue`, `milestone`, and `sprint` are all roots. The
-//           milestone/sprint/parent/root/blocks fields are hierarchy links
-//           BETWEEN roots, not thread membership; sub-issues get their own
-//           pages. Discussion on PM items arrives as social comments
-//           (ext="social") on the social data branch, resolved by hash.
-//   review  (GITREVIEW): `pull-request` is a root; `feedback` is always a
-//           reply to the PR named by its `pull-request` field (original as a
-//           fallback).
-//   release (GITRELEASE): `release` is a root; discussion is social comments.
-//   memo    (no spec; extension code): `memo` is a root; memos have no reply
-//           type.
-//
-// Anything carrying `edits` is a version of its canonical, never a root or a
-// reply itself. A cross-repo edit is a proposal (GITMSG §1.5) and MUST NOT
-// change resolved state, so it is dropped here; the owner's accepting mirror
-// edit is a same-repo edit and resolves normally.
+// Which types are roots follows the specs: specs/GITSOCIAL.md §1.1 and §1.3,
+// specs/GITPM.md, specs/GITREVIEW.md and specs/GITRELEASE.md. Anything carrying
+// `edits` is a version of its canonical, and a cross-repo edit is a proposal
+// (specs/GITMSG.md §1.5), so it is dropped here rather than resolved.
 
 package objstore
 
@@ -39,9 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// sitePageMsg is one corpus entry with its GitMsg header parsed: the metadata
-// index supplies identity/author/time/subject, the bodies corpus the full raw
-// message (may be empty when the bodies corpus lags the index).
+// sitePageMsg is one corpus entry with its GitMsg header parsed; Message is empty when the bodies corpus lags the index.
 type sitePageMsg struct {
 	Ext     string // items index (data branch) the entry came from
 	SHA     string // full 40-hex sha
@@ -55,8 +30,7 @@ type sitePageMsg struct {
 	Header  *protocol.Header // nil for plain commits (implicit posts)
 }
 
-// sitePageItem is one resolved item (a root or a reply): the canonical message
-// plus the latest same-repo version's content and state.
+// sitePageItem is one resolved item: the canonical message plus the latest same-repo version's content and state.
 type sitePageItem struct {
 	Msg       *sitePageMsg // canonical (identity, author, creation time)
 	Resolved  *sitePageMsg // latest version (== Msg when never edited)
@@ -68,8 +42,7 @@ type sitePageItem struct {
 	Replies   []*sitePageItem // for roots: the thread, parent before children, siblings by time
 }
 
-// sitePageDefaultTypes mirrors the shell's EXT_DEFAULT_TYPE: the item type
-// assumed when a header carries none (or the commit has no header at all).
+// sitePageDefaultTypes mirrors the shell's EXT_DEFAULT_TYPE: the type assumed when a header names none.
 var sitePageDefaultTypes = map[string]string{"social": "post", "pm": "issue", "review": "pull-request", "release": "release", "memo": "memo"}
 
 // pageHeaderField returns a header field, "" when the header is absent.
@@ -80,8 +53,7 @@ func pageHeaderField(m *sitePageMsg, key string) string {
 	return m.Header.Fields[key]
 }
 
-// pageMsgType returns a message's item type: the header type, else the source
-// extension's default.
+// pageMsgType returns a message's item type: the header type, else the extension's default.
 func pageMsgType(m *sitePageMsg) string {
 	if t := pageHeaderField(m, "type"); t != "" {
 		return t
@@ -89,8 +61,7 @@ func pageMsgType(m *sitePageMsg) string {
 	return sitePageDefaultTypes[m.Ext]
 }
 
-// pageReplyRootRef returns the reference naming the thread root a message
-// replies to, or "" for a top-level item (see the file-top mapping).
+// pageReplyRootRef returns the reference naming the thread root a message replies to, or "" for a top-level item.
 func pageReplyRootRef(m *sitePageMsg) string {
 	if m.Header == nil {
 		return ""
@@ -110,15 +81,10 @@ func pageReplyRootRef(m *sitePageMsg) string {
 	return ""
 }
 
-// pageRefHashRe extracts the hex hash from a relation ref of ANY type
-// ("#<type>:<hash>[@branch]"), mirroring the shell's anyRefHash: relation
-// fields can carry a non-commit ref type (e.g. `pull-request="#unknown:<hash>"`),
-// so a commit-only parse would miss real thread members.
+// pageRefHashRe extracts the hex hash from a relation ref of any type, since a relation field can carry a non-commit ref type.
 var pageRefHashRe = regexp.MustCompile(`[#:]([0-9a-f]{7,40})(?:@|$)`)
 
-// pageLocalCommitHash resolves a reference to a local (same-repo) 12-hex commit
-// hash, or "" when the ref is absent, malformed, or names another repository
-// (local refs start with "#"; remote refs carry a URL before it).
+// pageLocalCommitHash resolves a reference to a same-repo 12-hex commit hash, or "" when it names another repository.
 func pageLocalCommitHash(ref string) string {
 	if !strings.HasPrefix(ref, "#") {
 		return ""
@@ -134,8 +100,7 @@ func pageLocalCommitHash(ref string) string {
 	return hash
 }
 
-// pageEffectiveTime returns a message's display/sort time: origin-time (set on
-// imported content) over the git author time, mirroring the shell.
+// pageEffectiveTime returns a message's display time: origin-time over the git author time, mirroring the shell.
 func pageEffectiveTime(m *sitePageMsg) int64 {
 	if t := pageHeaderField(m, "origin-time"); t != "" {
 		if ts, err := time.Parse(time.RFC3339, t); err == nil {
@@ -145,8 +110,7 @@ func pageEffectiveTime(m *sitePageMsg) int64 {
 	return m.TS
 }
 
-// pageDisplayAuthor returns a message's display author name and email,
-// preferring the origin-* provenance of imported content.
+// pageDisplayAuthor returns a message's display author, preferring the origin provenance of imported content.
 func pageDisplayAuthor(m *sitePageMsg) (name, email string) {
 	name, email = m.Author, m.Email
 	if o := protocol.ExtractOrigin(m.Header); o != nil {
@@ -160,9 +124,7 @@ func pageDisplayAuthor(m *sitePageMsg) (name, email string) {
 	return name, email
 }
 
-// pageItemType returns an item's type from the canonical header (edits — and
-// especially retract edits — may omit it), falling back to the latest version,
-// then the extension default.
+// pageItemType returns an item's type from the canonical header, which an edit may omit, then the latest version, then the extension default.
 func pageItemType(it *sitePageItem) string {
 	if t := pageHeaderField(it.Msg, "type"); t != "" {
 		return t
@@ -170,8 +132,7 @@ func pageItemType(it *sitePageItem) string {
 	return pageMsgType(it.Resolved)
 }
 
-// pageItemField returns an item's resolved header field: the latest version's
-// value wins (state transitions are edits), falling back to the canonical.
+// pageItemField returns an item's resolved header field: the latest version wins, since a state transition is an edit.
 func pageItemField(it *sitePageItem, key string) string {
 	if v := pageHeaderField(it.Resolved, key); v != "" {
 		return v
@@ -179,25 +140,16 @@ func pageItemField(it *sitePageItem, key string) string {
 	return pageHeaderField(it.Msg, key)
 }
 
-// pageItemBody returns an item's resolved clean content (protocol metadata
-// stripped), falling back to the indexed subject when the bodies corpus has no
-// entry for the resolved version.
+// pageItemBody returns an item's resolved clean content, falling back to the indexed subject when no body was fetched.
 func pageItemBody(it *sitePageItem) string {
 	if it.Resolved.Message != "" {
-		// Link reference definitions render nothing on the platform the content
-		// came from, and nothing in the app either (gs-core.js parseMarkdown
-		// consumes them) — this layer prints plain paragraphs, so it drops them
-		// here, at the one accessor every page builder reads an item through.
+		// Drop link reference definitions here, the one accessor every page builder reads an item through.
 		return siteStripLinkRefDefs(protocol.ExtractCleanContent(it.Resolved.Message))
 	}
 	return it.Resolved.Subject
 }
 
-// buildSitePageThreads resolves versions and assembles reply threads across
-// every extension's messages, returning each extension's top-level items
-// newest-first (effective time, sha-descending tiebreak). Replies whose root
-// lives in another repository (or was never fetched) have no local page and
-// are dropped.
+// buildSitePageThreads resolves versions and assembles reply threads, returning each extension's top-level items newest-first; a reply with no local root is dropped.
 func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageItem {
 	versions := map[string][]*sitePageMsg{}
 	var items []*sitePageItem
@@ -251,13 +203,10 @@ func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageI
 	return roots
 }
 
-// sitePageThreadMaxDepth caps a nested reply's visual indent, mirroring
-// gs-core.js THREAD_MAX_DEPTH so page and app indent a thread alike.
+// sitePageThreadMaxDepth caps a nested reply's visual indent, mirroring gs-core.js THREAD_MAX_DEPTH.
 const sitePageThreadMaxDepth = 4
 
-// pageOrderThread flattens a root's replies the way gs-core.js groupThread and
-// flattenThread do: a reply follows the one it answers, siblings run oldest
-// first, and depth is capped. A reply whose parent is missing is a root.
+// pageOrderThread flattens a root's replies as gs-core.js does: a reply follows the one it answers, siblings run oldest first, depth is capped.
 func pageOrderThread(replies []*sitePageItem) []*sitePageItem {
 	children := map[*sitePageItem][]*sitePageItem{}
 	var roots []*sitePageItem
@@ -303,9 +252,7 @@ func pageOrderThread(replies []*sitePageItem) []*sitePageItem {
 	return out
 }
 
-// pageResolveRoot follows a reply reference to its top-level item: `original`
-// names the root directly per GITSOCIAL §1.3, but a comment carrying only
-// `reply-to` lands on its parent, so the chain is walked (bounded) to the root.
+// pageResolveRoot follows a reply reference to its top-level item, walking a bounded chain when only `reply-to` is set.
 func pageResolveRoot(byShort map[string]*sitePageItem, ref string) *sitePageItem {
 	target := byShort[pageLocalCommitHash(ref)]
 	for depth := 0; target != nil && depth < 16; depth++ {
@@ -322,14 +269,7 @@ func pageResolveRoot(byShort map[string]*sitePageItem, ref string) *sitePageItem
 	return target
 }
 
-// applyPageVersions applies GITMSG §1.5 resolution: the latest same-repo edit
-// supplies the resolved content and the retracted state; the canonical keeps
-// the identity, author, and creation time. "Latest" is by timestamp, with
-// same-second edits broken by branch (corpus ingestion) order — git timestamps
-// have one-second resolution, so a retitle and a close landing in the same
-// second MUST resolve to the later commit on the data branch, matching the
-// shell's chain-order resolution (gs-core.js resolveItems). Hash descending is
-// the final (cross-corpus) fallback.
+// applyPageVersions applies GITMSG §1.5 resolution: the latest same-repo edit supplies the content and state. Git timestamps have one-second resolution, so a same-second tie breaks on branch order, then hash.
 func applyPageVersions(it *sitePageItem, vs []*sitePageMsg) {
 	if len(vs) == 0 {
 		return
@@ -354,9 +294,7 @@ func applyPageVersions(it *sitePageItem, vs []*sitePageMsg) {
 	it.Retracted = pageHeaderField(latest, "retracted") == "true"
 }
 
-// readSitePagesMeta reads back one extension's complete metadata index (the
-// artifact the push just maintained) into parsed page messages, oldest-first as
-// stored, with no bodies attached (Message stays "").
+// readSitePagesMeta reads back one extension's metadata index into parsed page messages, oldest-first, with no bodies attached.
 func readSitePagesMeta(client *Client, prefix, ext string, items *siteShardManifest) ([]sitePageMsg, error) {
 	meta, err := readAllShardEntries(client, prefix, ext, itemsCorpus, items)
 	if err != nil {
@@ -375,10 +313,7 @@ func readSitePagesMeta(client *Client, prefix, ext string, items *siteShardManif
 	return msgs, nil
 }
 
-// readSitePagesCorpus reads back one extension's complete metadata index and
-// bodies corpus and projects them into parsed page messages, oldest-first as
-// stored (the full-regen path; incremental passes read bodies selectively via
-// attachThreadBodies).
+// readSitePagesCorpus reads back one extension's metadata index and bodies corpus together, the full-regen path.
 func readSitePagesCorpus(client *Client, prefix, ext string, items *siteShardManifest) ([]sitePageMsg, error) {
 	msgs, err := readSitePagesMeta(client, prefix, ext, items)
 	if err != nil {
@@ -405,8 +340,7 @@ func readSitePagesCorpus(client *Client, prefix, ext string, items *siteShardMan
 	return msgs, nil
 }
 
-// attachThreadBodies reads back the message bodies the affected threads render
-// (the resolved latest version of each root and reply).
+// attachThreadBodies reads back the bodies the affected threads render.
 func attachThreadBodies(client *Client, prefix string, affected []*sitePageItem) error {
 	var msgs []*sitePageMsg
 	for _, r := range affected {
@@ -418,9 +352,7 @@ func attachThreadBodies(client *Client, prefix string, affected []*sitePageItem)
 	return attachMsgBodies(client, prefix, msgs)
 }
 
-// attachRootBodies reads back only the given roots' own resolved bodies
-// (replies skipped) — the feed's incremental path renders just the entry
-// items' content, never their threads.
+// attachRootBodies reads back the given roots' own bodies alone, which is all a feed entry renders.
 func attachRootBodies(client *Client, prefix string, items []*sitePageItem) error {
 	msgs := make([]*sitePageMsg, 0, len(items))
 	for _, it := range items {
@@ -429,9 +361,7 @@ func attachRootBodies(client *Client, prefix string, items []*sitePageItem) erro
 	return attachMsgBodies(client, prefix, msgs)
 }
 
-// attachMsgBodies fetches the still-missing bodies of the given messages,
-// grouped per source extension so each bodies corpus is scanned once, newest
-// shards first, only until every needed sha is found.
+// attachMsgBodies fetches the still-missing bodies, grouped per extension so each corpus is scanned once.
 func attachMsgBodies(client *Client, prefix string, msgs []*sitePageMsg) error {
 	need := map[string][]*sitePageMsg{}
 	for _, m := range msgs {
@@ -455,11 +385,7 @@ func attachMsgBodies(client *Client, prefix string, msgs []*sitePageMsg) error {
 	return nil
 }
 
-// readBodiesBySHAs fetches the bodies of the given shas from one extension's
-// corpus: the head first (new content lives there), then sealed shards newest
-// to oldest, stopping as soon as every sha is found. need is consumed. Missing
-// shas simply stay absent from the result (the renderer falls back to the
-// indexed subject).
+// readBodiesBySHAs fetches the given shas' bodies from one corpus, head first then sealed shards newest to oldest, stopping once all are found. need is consumed.
 func readBodiesBySHAs(client *Client, prefix, ext string, need map[string]bool) (map[string]string, error) {
 	out := make(map[string]string, len(need))
 	manifest, err := readBodiesManifest(client, prefix, ext)
@@ -489,8 +415,7 @@ func readBodiesBySHAs(client *Client, prefix, ext string, need map[string]bool) 
 	return out, nil
 }
 
-// readAllShardEntries reads one corpus's full entry list: every sealed shard in
-// manifest order (oldest first), then the head.
+// readAllShardEntries reads one corpus's full entry list: every sealed shard in manifest order, then the head.
 func readAllShardEntries[E shardEntry](client *Client, prefix, ext string, corpus shardCorpus[E], manifest *siteShardManifest) ([]E, error) {
 	var out []E
 	for _, s := range manifest.Shards {

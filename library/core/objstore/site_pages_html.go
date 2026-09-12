@@ -1,34 +1,4 @@
-// site_pages_html.go - templates and styling for the static HTML pages: the
-// shared head (meta/OG/canonical/PE hooks), the item/list/front templates, the
-// two-sheet CSS wiring (the inlined pages-core.css base + the pages-full.css
-// link), and the presentation builders (chips, meta lines, paragraphs,
-// description extraction).
-//
-// Everything renders through html/template so every subject/body/author/header
-// value — all attacker-controlled — is context-escaped. Exactly two values are
-// typed, and both are narrow by construction:
-//
-//   - The favicon href (template.URL, since html/template rewrites any data: URI
-//     in a URL attribute to a failsafe): either this package's own shell
-//     constant or a data URI already narrowed to an image type by
-//     ValidSiteFavicon.
-//   - The front page's README (template.HTML, siteFrontReadme.HTML): markup
-//     produced by THIS package's renderer, site_markdown.go, which builds every
-//     tag itself from a parsed block/span tree and escapes every text node,
-//     attribute value and code body with html.EscapeString. Raw HTML embedded in
-//     the source is never passed through: it is lexed and REBUILT against an
-//     element/attribute allowlist that has no event handlers, no style, no
-//     script/iframe/object, and no image or link target that is not an absolute
-//     https/mailto/in-page/app reference. The tier matters: this is the bucket
-//     owner's own repo README, so the allowlist is hygiene, not an adversarial
-//     boundary. ITEM BODIES ARE THIRD-PARTY AND STAY ESCAPED PLAIN TEXT
-//     (sitePageParas) — do not route them through here without redoing that
-//     threat model.
-//
-// The visual spec is the app's own sheets: site/pages-core.css (the shared
-// base every page inlines — see sitePagesCoreCSS below) and
-// site/pages-full.css (the component vocabulary every page links). The
-// generated pages converge toward the app's treatment, never the other way.
+// site_pages_html.go - page templates, the inlined CSS base and the presentation builders
 
 package objstore
 
@@ -47,64 +17,40 @@ import (
 )
 
 const (
-	// sitePagesLegacyCSSKey is the retired generated stylesheet (pages.css),
-	// superseded by the core/full split: pages now inline pages-core.css and
-	// link the shell's pages-full.css. Kept only for the disable sweep; on live
-	// buckets the old key simply goes stale and unreferenced.
+	// sitePagesLegacyCSSKey is the retired generated stylesheet, kept for the disable sweep.
 	sitePagesLegacyCSSKey = "pages.css"
-	// sitePagesFrontKey is the front page's bucket key. Since the entry flip
-	// the generated front page (the app's home landing + PE hooks +
-	// gs-upgrade.js) IS index.html — the pages maintainer owns index.html
-	// whenever the page layer is effective, and uploadSiteFiles owns the embedded
-	// shell index.html only when it is not. The old timeline.html key was retired on the flip (it never
-	// deployed to production, so URLs-are-forever does not bind).
+	// sitePagesFrontKey is the front page's bucket key; the page layer owns it whenever it is effective.
 	sitePagesFrontKey = "index.html"
-	// sitePagesLegacyFrontKey is the pre-flip front-page key, swept on every push
-	// so a bucket first pushed by an older binary (which wrote timeline.html) does
-	// not keep serving a stale duplicate front page.
+	// sitePagesLegacyFrontKey is the pre-flip front-page key, swept on every push.
 	sitePagesLegacyFrontKey = "timeline.html"
-	// sitePagesUpgradeKey is the shell's page-entry boot asset (gs-upgrade.js),
-	// referenced defer by every generated page; uploaded with the other shell
-	// assets by uploadSiteFiles.
+	// sitePagesUpgradeKey is the page-entry boot asset every generated page defers.
 	sitePagesUpgradeKey = "gs-upgrade.js"
-	// sitePagesSitemapKey is the sitemap entry point: a single <urlset> until the
-	// URL count exceeds one part, then a <sitemapindex> over the parts.
+	// sitePagesSitemapKey is the sitemap entry point: one urlset, or an index over the parts.
 	sitePagesSitemapKey = "sitemap.xml"
-	// sitePagesSitemapHeadKey is index mode's mutable newest part; the numbered
-	// sitemap-<n>.xml parts are sealed (full, long-cached).
+	// sitePagesSitemapHeadKey is index mode's mutable newest part.
 	sitePagesSitemapHeadKey = "sitemap-head.xml"
 	// sitePagesRobotsKey is the crawler policy file.
 	sitePagesRobotsKey = "robots.txt"
-	// sitePagesFeedKey is the Atom 1.0 feed of the newest top-level items, one
-	// more crawl-surface artifact in the sitemap/robots class.
+	// sitePagesFeedKey is the Atom 1.0 feed of the newest top-level items.
 	sitePagesFeedKey = "feed.xml"
-	// siteFeedBodyMax caps one feed entry's raw body bytes before paragraph
-	// rendering (a cut appends a truncation marker, like the README cap).
+	// siteFeedBodyMax caps one feed entry's raw body bytes before paragraph rendering.
 	siteFeedBodyMax = 4 * 1024
 	// sitePageDescriptionLen bounds the meta/OG description (~160 chars).
 	sitePageDescriptionLen = 160
-	// sitePageRobotsNoIndex is the meta robots value a tombstone carries: no
-	// content to index, but its outbound links still count.
+	// sitePageRobotsNoIndex is the meta robots value a tombstone carries.
 	sitePageRobotsNoIndex = "noindex,follow"
 )
 
-// sitePageMaxReplies caps a thread's inlined replies; the rest truncate into an
-// explicit "N more replies" marker (the app shows the full thread). A var so
-// tests can lower it.
+// sitePageMaxReplies caps a thread's inlined replies; the rest truncate into a marker. A var so tests can lower it.
 var sitePageMaxReplies = 100
 
-// sitePageMaxThreadBytes caps a thread's total inlined body bytes (~200 KB). A
-// var so tests can lower it.
+// sitePageMaxThreadBytes caps a thread's total inlined body bytes. A var so tests can lower it.
 var sitePageMaxThreadBytes = 200 * 1024
 
-// siteSitemapPartSize bounds one sitemap file's URL count (the protocol caps a
-// sitemap at 50K URLs; ~40K leaves headroom). A positive
-// GITSOCIAL_SITE_SITEMAP_PART overrides it so tests exercise index mode without
-// generating 40K pages.
+// siteSitemapPartSize bounds one sitemap file's URL count.
 var siteSitemapPartSize = siteSitemapPartSizeFromEnv()
 
-// siteSitemapPartSizeFromEnv returns the sitemap part size, honoring a positive
-// GITSOCIAL_SITE_SITEMAP_PART override, else the 40000 default.
+// siteSitemapPartSizeFromEnv returns the sitemap part size, honoring GITSOCIAL_SITE_SITEMAP_PART.
 func siteSitemapPartSizeFromEnv() int {
 	if v := os.Getenv("GITSOCIAL_SITE_SITEMAP_PART"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -114,43 +60,10 @@ func siteSitemapPartSizeFromEnv() int {
 	return 40000
 }
 
-// sitePagesCoreCSS is the shared style base every generated page inlines into
-// its head (a <style data-gs-core> element): the embedded site/pages-core.css
-// with its comments stripped, otherwise verbatim. The same file is linked by
-// the app shell (index.html), so identical rules govern the document before
-// and after the boot swap — the pages cannot drift from the app because there
-// is no second copy to drift. The sheet carries the design tokens, the theme
-// gates, the reset, the body/anchor base, the `.gs-boot` boot-state rules the
-// inline boot script below activates, and the #gs-page shell + structural
-// rules (scoped so they go inert once the swap replaces the mount); the
-// doctrines behind each live as comments in pages-core.css itself.
-//
-// It is inlined rather than linked for the same reasons the old inline base
-// was: a saved or curl'ed copy reads decently on its own, a failed stylesheet
-// fetch degrades to a font swap instead of an unstyled page, and the boot's
-// hide/loading rules must be in force before any external fetch resolves.
-// The inline base is also what lets pages-full.css load ASYNC (the preload +
-// onload-flip link, with a noscript fallback for no-JS readers): first paint
-// is the HTML plus these bytes — correct type, layout, palette — and full's
-// component styling (chips, cards, code panels) applies when it arrives. The
-// containment guards in core (table/img/pre) keep wide README content from
-// overflowing a phone viewport during that window.
-// pages-core.css contains no url() by construction (a drift test enforces
-// it): pages live at several directory depths, where a relative URL would
-// resolve against the page instead of the site root. Changing the core sheet
-// means a sitePagesVersion bump and full regen — every page's head carries
-// these bytes; pages-full.css remains the one-PUT-to-update side.
-//
-// A configured accent never reaches these bytes: it is site DATA, stamped per
-// push as a tiny :root override after the inlined core (sitePagesAccentCSS),
-// so the embedded sheet — and with it the shell version hash — stays the
-// binary's stable identity.
+// sitePagesCoreCSS is the embedded site/pages-core.css, comments stripped, inlined into every page's head.
 var sitePagesCoreCSS = sitePagesReadCoreCSS()
 
-// sitePagesReadCoreCSS reads the embedded site/pages-core.css with its
-// comments stripped (they would otherwise ship in every page's head); a build
-// whose embed is broken cannot render pages at all, so it panics
-// (template.Must-style, as sitePagesShellIcon does).
+// sitePagesReadCoreCSS reads the embedded site/pages-core.css with its comments stripped; a broken embed panics at init.
 func sitePagesReadCoreCSS() string {
 	data, err := siteFiles.ReadFile("site/pages-core.css")
 	if err != nil {
@@ -159,8 +72,7 @@ func sitePagesReadCoreCSS() string {
 	return strings.TrimSpace(sitePagesStripCSSComments(string(data)))
 }
 
-// sitePagesStripCSSComments removes /* … */ spans so the inlined copy carries
-// declarations only.
+// sitePagesStripCSSComments removes /* … */ spans so the inlined copy carries declarations only.
 func sitePagesStripCSSComments(css string) string {
 	var b strings.Builder
 	for {
@@ -178,41 +90,7 @@ func sitePagesStripCSSComments(css string) string {
 	}
 }
 
-// sitePagesBootScript is the one inline script every page carries. It runs
-// synchronously in the head — before the body is parsed, so before the browser
-// can paint any static content — and marks the document as booting, which is
-// what activates the `.gs-boot` rules above. A client that runs no scripts never
-// reaches it and therefore never hides anything.
-//
-// It also owns the failsafe for the case gs-upgrade.js cannot: the upgrade
-// script 404ing, being blocked, or failing to parse means nothing downstream is
-// left to undo the hide, and a page hidden with no one to reveal it is the blank
-// page this whole mechanism must never produce. So the hide un-does itself on
-// the load event (defer scripts run before it, so an upgrade that was going to
-// take over already has) and, as a backstop for a document whose load event
-// never fires, on a timer. Both defer to __gsBooting, the flag gs-upgrade.js
-// sets when it takes ownership and starts its own watchdog.
-// The cloak is CONDITIONAL, and the condition is whether the app is about to
-// show something this page does not already show. On the front page it is not:
-// since the README is pre-rendered (site_markdown.go) the served document is the
-// same landing the home route renders, so hiding it buys a loading line in place
-// of a finished page and costs the visitor the whole shell download before they
-// can read anything (~149 KB of the front page's ~182 KB, seconds on 4G). A
-// fragment naming a different route is the exception: a deep link IS about to
-// replace the content, so it cloaks as every other page does.
-//
-// The page's own route comes from the gs-route meta, which the head emits above
-// this script. The fragment test mirrors the route grammar's two shapes (a path
-// route past "/", or a <reftype>:<value> route) rather than restating parseRoute:
-// anything else is a bare anchor, which rides along on the page's own route.
-//
-// It also stamps the app's stored theme choice on <html> before first paint:
-// the shell's theme toggle persists localStorage "theme" as "light-mode"/
-// "dark-mode" (site/index.html, gs-upgrade.js), and the inlined core sheet
-// gates its palette on exactly these classes (on <html> here, on <body> in the
-// app) with prefers-color-scheme as the no-choice fallback — so a visitor who
-// picked a theme in the app gets the pages in that theme with no flip at boot,
-// and a no-JS client keeps the system theme.
+// sitePagesBootScript is the inline head script every page carries: it stamps the stored theme and cloaks a page the app is about to replace.
 const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`try{var t=w.localStorage.getItem("theme");if(t==="dark-mode"||t==="light-mode")e.classList.add(t)}catch(x){}` +
 	`var m=d.querySelector('meta[name="gs-route"]');var r=m?m.getAttribute("content"):"";` +
@@ -221,17 +99,7 @@ const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`function u(){if(!w.__gsBooting)e.classList.remove("gs-boot")}` +
 	`setTimeout(u,10000);w.addEventListener("load",u)})(document,window)</script>`
 
-// sitePagesAccentCSS renders the per-push accent override a page's head stamps
-// right after the inlined core (in a second <style data-gs-core>, so the boot
-// swap keeps it live with the core). The stock teals are pages-core.css's own
-// --pl-link/--pd-link defaults, so nothing is emitted until the site config
-// sets an accent; the override then retargets exactly those tokens and every
-// derived tint follows through the core's var indirection. The mapping mirrors
-// the app's applyAccent (gs-app.js) and the retired pages.css baking exactly:
-// a configured accent tints both themes, accentDark — when set — tints the
-// dark theme separately. cfg's fields are already validated
-// (readSiteCustomization drops malformed values), so the spliced strings are
-// strict hex colors, never free text.
+// sitePagesAccentCSS renders the per-push accent override stamped after the inlined core; readSiteCustomization has already reduced cfg to hex colors.
 func sitePagesAccentCSS(cfg siteCustomization) template.CSS {
 	light, dark := "", ""
 	if cfg.Accent != "" {
@@ -253,14 +121,7 @@ func sitePagesAccentCSS(cfg siteCustomization) template.CSS {
 	return template.CSS(":root{" + strings.Join(decls, ";") + "}")
 }
 
-// sitePageTemplateText is the full template set. The shared "head" stamps the
-// common metadata plus the PE hooks (gs-route meta, the #gs-page mount div with
-// its data-base attribute) — inert plain HTML until the gs-upgrade.js boot
-// adopts them. The @CORE@ placeholder is spliced with the embedded
-// pages-core.css before parsing; the data-gs-core attribute on that <style>
-// (and on the optional accent override after it) marks it as the shared base
-// the boot swap must leave live — everything else in the head is suspended
-// when the app takes over.
+// sitePageTemplateText is the full template set; @CORE@ and @BOOT@ are spliced in before parsing.
 const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -350,35 +211,20 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
 {{template "foot"}}{{end}}`
 
-// sitePageTemplates is the parsed page template set, with the inlined core CSS
-// and the boot script spliced in (both embedded constants, never user content).
+// sitePageTemplates is the parsed page template set, with the core CSS and the boot script spliced in.
 var sitePageTemplates = template.Must(template.New("pages").Parse(
 	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
-// sitePagesInlineIconMax bounds a configured favicon the page layer inlines.
-// The shell stamps its head once; the page layer stamps one head per page, so a
-// large data URI is multiplied by the page count both in the bucket and on
-// every visit. Past this the pages carry the shell's default mark and the
-// upgrade layer swaps the configured icon in on boot, exactly as in the shell.
+// sitePagesInlineIconMax bounds a configured favicon the page layer inlines; past it a page carries the shell default.
 const sitePagesInlineIconMax = 2048
 
 // sitePagesShellIconRe pulls the <link rel="icon"> href out of the shell.
 var sitePagesShellIconRe = regexp.MustCompile(`<link rel="icon" href="([^"]*)"`)
 
-// sitePagesDefaultIcon is the shell's own favicon href, read from the embedded
-// site/index.html so the generated pages and the SPA cannot drift apart. It is
-// a data: URI, which is the point: a page that declares no icon makes the
-// browser request /favicon.ico at the ORIGIN root, and under a bucket prefix
-// that is a key the site does not own and can never serve. An inlined icon
-// resolves with no request and no bucket object at all.
+// sitePagesDefaultIcon is the shell's own favicon href, a data: URI every page inlines.
 var sitePagesDefaultIcon = sitePagesShellIcon()
 
-// sitePagesShellIcon extracts the shell's favicon href from the embedded shell.
-// The match is byte-exact on the shell's own markup, so a reformat of that
-// <link> tag panics at package init (template.Must-style) rather than shipping
-// every generated page with no favicon — the silent regression to the
-// /favicon.ico 404 that the icon exists to prevent, which no runtime signal
-// would ever report.
+// sitePagesShellIcon extracts the shell's favicon href from the embedded shell; no match panics at init.
 func sitePagesShellIcon() template.URL {
 	data, err := siteFiles.ReadFile("site/index.html")
 	if err != nil {
@@ -453,10 +299,7 @@ type siteItemPageData struct {
 	Chrome    sitePageChrome
 	ListDir   string
 	ListLabel string
-	// Subject titles the document (<title>, OG, the list row that links here).
-	// Heading is what the page itself shows, and stays EMPTY on a body-only type
-	// (sitePageBodyOnly), whose first line is prose the body renders in full —
-	// mirroring the app's detail (gs-render.js detailView).
+	// Subject titles the document; Heading is empty on a body-only type, whose first line is prose.
 	Subject   string
 	Heading   string
 	Chip      *sitePageChip
@@ -484,10 +327,7 @@ type sitePageNavGroup struct {
 	Links   []sitePageNavLink
 }
 
-// sitePageListEntry is one row on a list or front page. ID, when set, is the
-// row's own anchor (`c-<sha12>` on the commits list), which is what gives a row
-// a citable URL of its own; item rows leave it empty because the item already
-// has a page.
+// sitePageListEntry is one row on a list or front page; ID, when set, is the row's own anchor.
 type sitePageListEntry struct {
 	ID         string
 	Glyph      string // leading type glyph ("" — this type has none)
@@ -519,12 +359,7 @@ type siteFrontPageData struct {
 	ActivityMoreLabel string // its label, shared with the app's control (siteActivityMoreLabel)
 }
 
-// siteFrontHome is the front page's body: the repo landing the booted app
-// renders on the home route (gs-render.js homeView) — the default branch strip,
-// the root file listing, then the README. The two must show the same content in
-// the same order: index.html is dual-owned and the page-entry upgrade replaces
-// this body with the app's own home render, so any disagreement is a visible
-// swap on first load.
+// siteFrontHome is the front page's body: the branch strip, the root file listing, then the README, in the app's home order.
 type siteFrontHome struct {
 	Branch       string           // default branch name ("" — no strip, no files)
 	Branches     string           // "N branches", the app's branch-count chip
@@ -550,10 +385,7 @@ type siteFrontFile struct {
 	Href string // app link to the file/directory view
 }
 
-// siteFrontReadme is the front page's README section: the default branch's
-// README.md rendered by this package's own markdown renderer
-// (site_markdown.go), capped with a truncation marker. HTML is the one typed
-// value on a page body — see this file's header for what that trusts.
+// siteFrontReadme is the front page's README, rendered by site_markdown.go; item bodies take sitePageParas instead and stay escaped text.
 type siteFrontReadme struct {
 	HTML      template.HTML
 	Truncated bool
@@ -570,10 +402,7 @@ type sitePageSite struct {
 	Files       bool         // the file layer has pages: every sidebar carries the Files entry
 }
 
-// sitePageList describes one type directory: source extension, bucket dir,
-// display label, the shell route its pages map to, and its sidebar identity
-// (the app's own label, glyph and section, so the pages' sidebar is the app's —
-// see sitePageSidebar).
+// sitePageList describes one type directory: extension, bucket dir, label, shell route and sidebar identity.
 type sitePageList struct {
 	Ext      string
 	Dir      string
@@ -584,9 +413,7 @@ type sitePageList struct {
 	Section  string // sidebar section ("" — an ungrouped top-level item)
 }
 
-// sitePageLists orders the five type directories. Milestones and sprints fold
-// into issues; the posts list routes to the shell's /timeline tab (the shell
-// has no posts-only surface). Routes match gs-core.js parseRoute's INDEX_TABS.
+// sitePageLists orders the five type directories; the routes match gs-core.js parseRoute's INDEX_TABS.
 var sitePageLists = []sitePageList{
 	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○", Section: "PM"},
 	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂", Section: "Repository"},
@@ -604,10 +431,7 @@ func renderSitePage(name string, data any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// sitePageAppURL builds the in-app hash URL on the front page (index.html) for a
-// shell route — used by the front page's branch/commit/file links (none of those
-// get pages, so they deep-link into the app, which gs-upgrade.js boots with the
-// hash winning over the page's own gs-route).
+// sitePageAppURL builds the in-app hash URL on the front page for a shell route.
 func sitePageAppURL(site sitePageSite, route string) string {
 	return site.URL + "index.html#" + route
 }
@@ -620,8 +444,7 @@ func sitePageDate(ts int64) string {
 	return time.Unix(ts, 0).UTC().Format("2006-01-02")
 }
 
-// sitePageParas splits escaped-text content into paragraphs of lines
-// (\n\n → <p>, \n → <br> in the template).
+// sitePageParas splits an item body into paragraphs of lines; the template escapes every line, so no markup reaches the page.
 func sitePageParas(text string) [][]string {
 	text = strings.TrimSpace(strings.ReplaceAll(text, "\r", ""))
 	if text == "" {
@@ -638,8 +461,7 @@ func sitePageParas(text string) [][]string {
 	return paras
 }
 
-// sitePageDescription extracts a meta/OG description: the text (falling back
-// to the subject) stripped of markdown, collapsed and truncated to ~160 chars.
+// sitePageDescription extracts a meta description: the text, else the subject, stripped of markdown and truncated.
 func sitePageDescription(text, fallback string) string {
 	collapsed := strings.Join(strings.Fields(siteMarkdownPlainText(text)), " ")
 	if collapsed == "" {
@@ -652,15 +474,7 @@ func sitePageDescription(text, fallback string) string {
 	return collapsed
 }
 
-// sitePageBodyOnly reports whether an item type renders whole, with no first
-// line promoted to a heading. Mirrors gs-core.js BODY_ONLY_TYPES: replies
-// (comment, feedback) render under the thing they answer, which already names
-// the subject; a repost carries no content of its own; a quote is commentary
-// about its embedded original. A POST is not one of them — it is the root of
-// its own page and feed entry, and its first line names it everywhere else.
-//
-// Only roots get a static page, so on this layer the rule reaches reposts and
-// quotes; the app applies the same rule to the reply routes it renders.
+// sitePageBodyOnly reports whether an item type renders whole, with no first line promoted to a heading. Mirrors gs-core.js BODY_ONLY_TYPES.
 func sitePageBodyOnly(t string) bool {
 	switch t {
 	case "comment", "feedback", "repost", "quote":
@@ -677,26 +491,14 @@ func sitePageTypeLabel(t string) string {
 	return t
 }
 
-// sitePageTypeGlyph maps an item type to the compact leading glyph the app's
-// cards show (gs-core.js TYPE_GLYPH). Issues vary by state and are resolved in
-// sitePageGlyph. The glyphs are plain text, so the no-JS page carries exactly
-// the characters the upgraded render paints.
+// sitePageTypeGlyph maps an item type to the app's leading card glyph (gs-core.js TYPE_GLYPH).
 var sitePageTypeGlyph = map[string]string{
 	"post": "•", "comment": "↩", "repost": "↻", "quote": "↻",
 	"milestone": "◇", "sprint": "◷", "pull-request": "⑂", "feedback": "↩",
 	"release": "⏏", "memo": "☞", "commit": "◦",
 }
 
-// sitePageGlyph returns a type's glyph and its tint class, mirroring
-// gs-render.js typeGlyphEl: a state-bearing type (issue, pull request) is tinted
-// by state, every other type falls through to the single muted tg-<type> class.
-// An unknown type has no glyph, exactly as typeGlyph returns "".
-//
-// The two arguments are deliberately distinct, because the JS derives them from
-// different fallbacks and the static page must agree with the booted app row for
-// row: itemType (the header type, else the extension's DEFAULT TYPE — typeGlyph)
-// picks the character, while classType (the header type, else the extension
-// NAME — typeGlyphEl's own `h.type || ext`) picks the class and the title.
+// sitePageGlyph returns a type's glyph and tint class (gs-render.js typeGlyphEl): itemType picks the character, classType the class and title.
 func sitePageGlyph(itemType, classType, state string) (glyph, class string) {
 	if itemType == "issue" {
 		glyph = "○"
@@ -713,11 +515,7 @@ func sitePageGlyph(itemType, classType, state string) (glyph, class string) {
 	return glyph, "tg-" + class
 }
 
-// sitePageGlyphTitle returns a glyph's title attribute, mirroring gs-render.js
-// typeGlyphEl: the class type, and on a state-bearing type (issue, pull request)
-// its state after it. The tint is the only state cue the row carries — the chip
-// that used to repeat it is gone — and a cue carried by color alone is no cue at
-// all for a reader who cannot see it.
+// sitePageGlyphTitle returns a glyph's title attribute: the class type, plus its state on a state-bearing type.
 func sitePageGlyphTitle(classType, state string) string {
 	if classType != "issue" && classType != "pull-request" {
 		return classType
@@ -728,10 +526,7 @@ func sitePageGlyphTitle(classType, state string) string {
 	return classType + " · " + state
 }
 
-// sitePageGlyphClassType returns the type the app tints and titles an item's
-// glyph by (gs-render.js typeGlyphEl's `h.type || ext`): the item's own header
-// type, else the source EXTENSION NAME — not the extension's default type, which
-// is what picks the glyph character instead.
+// sitePageGlyphClassType returns the type the app tints a glyph by: the item's header type, else the extension name.
 func sitePageGlyphClassType(it *sitePageItem) string {
 	if t := pageHeaderField(it.Msg, "type"); t != "" {
 		return t
@@ -742,21 +537,13 @@ func sitePageGlyphClassType(it *sitePageItem) string {
 	return it.Msg.Ext
 }
 
-// siteActivityMoreLabel labels the recent-activity section's trailing link on
-// both surfaces (gs-render.js homeActivityMore uses the same words).
+// siteActivityMoreLabel labels the recent-activity section's trailing link on both surfaces.
 const siteActivityMoreLabel = "See more"
 
-// siteActivityMoreKey is that link's crawlable destination: the social posts
-// archive, which is the served page for the app's /timeline route (gs-upgrade.js
-// hashForPath), so the link is a real object for a crawler and the timeline view
-// for a visitor whose upgrade booted.
+// siteActivityMoreKey is that link's crawlable destination, the served page for the app's /timeline route.
 const siteActivityMoreKey = "./posts/index.html"
 
-// sitePageStateClass maps a workflow state to its chip color class. A cancel
-// state is closed in BOTH spellings, matching gs-render.js glyphStateClass:
-// GITPM.md words the milestone/sprint state with a doubled l, the issue/review
-// paths with one. Matched by prefix because the repo's misspell linter rewrites
-// the doubled-l literal on sight, so it cannot be written as a case here.
+// sitePageStateClass maps a workflow state to its chip color class; a cancel state matches by prefix, since the misspell linter rewrites the doubled-l spelling.
 func sitePageStateClass(state string) string {
 	if strings.HasPrefix(state, "cancel") {
 		return "closed"
@@ -771,11 +558,7 @@ func sitePageStateClass(state string) string {
 	}
 }
 
-// sitePageChipStateClass maps a workflow state to the app's solid-fill chip
-// class, mirroring gs-render.js stateChip's map exactly (every known state gets
-// a fill so the white .chip.state text stays legible; anything else falls to
-// the slate "unknown" fill). A cancel state is matched by prefix for the same
-// misspell-linter reason as sitePageStateClass.
+// sitePageChipStateClass maps a workflow state to the app's solid-fill chip class (gs-render.js stateChip).
 func sitePageChipStateClass(state string) string {
 	if strings.HasPrefix(state, "cancel") {
 		return "canceled"
@@ -787,10 +570,7 @@ func sitePageChipStateClass(state string) string {
 	return "unknown"
 }
 
-// sitePageItemChip returns an item's leading state chip (nil when its type
-// carries none), in the app's chip class vocabulary (gs-render.js stateChip and
-// the release/retracted chips), which pages-full.css styles to the app's
-// treatment. A draft PR is the app's plain unclassed chip.
+// sitePageItemChip returns an item's leading state chip, nil when its type carries none.
 func sitePageItemChip(it *sitePageItem) *sitePageChip {
 	if it.Retracted {
 		return &sitePageChip{Class: "chip-retracted", Label: "retracted"}
@@ -825,8 +605,7 @@ func sitePageAuthorBit(m *sitePageMsg) string {
 	return name
 }
 
-// sitePageBaseHead formats a PR's "head → base" branch pair from its header
-// refs (cross-fork sides keep their repository prefix).
+// sitePageBaseHead formats a PR's "head → base" branch pair from its header refs.
 func sitePageBaseHead(it *sitePageItem) string {
 	format := func(ref string) string {
 		if ref == "" {
@@ -845,8 +624,7 @@ func sitePageBaseHead(it *sitePageItem) string {
 	return head + " → " + base
 }
 
-// siteItemPageMeta builds an item page's meta-line bits (type, type extras,
-// author, date, markers, and the item's short ref).
+// siteItemPageMeta builds an item page's meta-line bits: type, extras, author, date, markers and short ref.
 func siteItemPageMeta(it *sitePageItem) []string {
 	t := pageItemType(it)
 	bits := []string{sitePageTypeLabel(t)}
@@ -878,11 +656,7 @@ func siteItemPageMeta(it *sitePageItem) []string {
 	return append(bits, "#commit:"+it.Msg.Short)
 }
 
-// sitePageFeedbackChip returns a feedback reply's review-state chip (nil for a
-// plain comment). The classes are the app's reviewer-chip verdict vocabulary
-// (.chip.reviewer-chip.fb-*) — its closest equivalent: the app has no bare
-// approved/changes chip of its own (verdicts ride reviewer chips and .fb-card
-// borders), so the pages borrow the reviewer-chip tint for the same states.
+// sitePageFeedbackChip returns a feedback reply's review-state chip, nil for a plain comment.
 func sitePageFeedbackChip(r *sitePageItem) *sitePageChip {
 	switch pageItemField(r, "review-state") {
 	case "approved":
@@ -893,8 +667,7 @@ func sitePageFeedbackChip(r *sitePageItem) *sitePageChip {
 	return nil
 }
 
-// sitePageFeedbackAnchor formats a line-anchored feedback's "file:line" bit
-// ("" when the feedback is not file-anchored).
+// sitePageFeedbackAnchor formats a line-anchored feedback's "file:line" bit.
 func sitePageFeedbackAnchor(r *sitePageItem) string {
 	file := pageItemField(r, "file")
 	if file == "" {
@@ -913,8 +686,7 @@ func sitePageFeedbackAnchor(r *sitePageItem) string {
 	return file + ":" + line
 }
 
-// buildSiteReply renders one thread reply as a comment card (a tombstone line
-// when the reply was retracted).
+// buildSiteReply renders one thread reply as a comment card, or a tombstone line when it was retracted.
 func buildSiteReply(r *sitePageItem) sitePageReply {
 	if r.Retracted {
 		return sitePageReply{Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
@@ -946,8 +718,7 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 	return s
 }
 
-// buildSiteReleaseArtifacts returns a release page's artifact/checksum block
-// (nil when the release ships none).
+// buildSiteReleaseArtifacts returns a release page's artifact and checksum block.
 func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 	var lines []string
 	for _, a := range strings.Split(pageItemField(it, "artifacts"), ",") {
@@ -971,9 +742,7 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 	return &sitePageSection{Meta: meta, Pre: strings.Join(lines, "\n")}
 }
 
-// sitePageItemSubject returns the subject an item page is titled by: its first
-// line, or for a retracted one the type and tag (every tombstone body is the
-// same sentence, so the tag is all that identifies it).
+// sitePageItemSubject returns the subject an item page is titled by: its first line, or the type and tag when retracted.
 func sitePageItemSubject(it *sitePageItem) string {
 	if !it.Retracted {
 		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
@@ -986,11 +755,7 @@ func sitePageItemSubject(it *sitePageItem) string {
 	return subject
 }
 
-// siteItemPageTitles resolves every root's <title> subject so no two pages share
-// one: a unique subject is used as is, a shared one takes the item's date, and
-// its short ref when that repeats too (the short ref IS the page key, so this
-// always terminates). taken holds the titles other layers already published, so
-// uniqueness holds across the whole site rather than within this one.
+// siteItemPageTitles resolves every root's <title> subject so no two pages share one; taken holds the titles other layers published.
 func siteItemPageTitles(roots map[string][]*sitePageItem, taken map[string]bool) map[string]string {
 	var items []*sitePageItem
 	for _, list := range sitePageLists {
@@ -1025,8 +790,7 @@ func siteItemPageTitles(roots map[string][]*sitePageItem, taken map[string]bool)
 	return titles
 }
 
-// siteTitleSet collects the resolved titles a layer published, for the next
-// layer's own disambiguation.
+// siteTitleSet collects the resolved titles a layer published, for the next layer's disambiguation.
 func siteTitleSet(titles map[string]string) map[string]bool {
 	set := make(map[string]bool, len(titles))
 	for _, t := range titles {
@@ -1044,10 +808,7 @@ func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
 	return subject + " · " + date
 }
 
-// buildSiteItemPage assembles one root's full item-page data: chrome, meta
-// line, escaped-text body (or tombstone), release extras, and the thread
-// sections in timestamp order up to the reply/byte cap. title is the site-unique
-// <title> subject; every other promoted subject is markdown-stripped.
+// buildSiteItemPage assembles one root's item-page data: chrome, meta line, body or tombstone, release extras and the capped thread.
 func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, title string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
@@ -1067,8 +828,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		d.Heading = sitePageSubjectOrPlaceholder(subject)
 	}
 	if it.Retracted {
-		// A tombstone IS the page's own words, not the item's, so it heads every
-		// type — the body-only carve-out is about content, and there is none left.
+		// A tombstone is the page's own words, so it heads every type.
 		d.Heading = d.Subject
 		d.Tomb = "this " + sitePageTypeLabel(pageItemType(it)) + " was retracted by its author"
 		// The page stays for links that already exist, but has nothing to index.
@@ -1107,11 +867,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	return d
 }
 
-// sitePageListChip returns a list row's chip with the state pill removed from
-// the types whose glyph is tinted by state (issue, pull request) — the app's
-// cards carry that state in the glyph alone, so a chip beside it repeats it.
-// Every other chip stays: a draft PR's plain chip, a retraction marker, a
-// prerelease, and a milestone's or sprint's state, whose glyph carries no tint.
+// sitePageListChip drops a list row's state pill on the types whose glyph is already tinted by state.
 func sitePageListChip(it *sitePageItem) *sitePageChip {
 	chip := sitePageItemChip(it)
 	if chip == nil || it.Retracted {
@@ -1126,8 +882,7 @@ func sitePageListChip(it *sitePageItem) *sitePageChip {
 	return chip
 }
 
-// sitePageSubjectOrPlaceholder strips a promoted first line to its words, or
-// falls back, since a row's subject anchor is its only link to the item.
+// sitePageSubjectOrPlaceholder strips a promoted first line to its words, or falls back to a placeholder.
 func sitePageSubjectOrPlaceholder(subject string) string {
 	if stripped := siteSubjectText(subject); stripped != "" {
 		return stripped
@@ -1135,12 +890,7 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 	return "(untitled)"
 }
 
-// buildSiteListEntry renders one root as a list/front row. base is the page's
-// relative path to the site root; defaultType suppresses the redundant type
-// bit on a type's own list (an issue row on the issues list). The row leads with
-// the app's own type glyph, so the booted app re-renders the row rather than
-// replacing a chip-and-subject line with a glyph card.
-
+// buildSiteListEntry renders one root as a list or front row; defaultType suppresses the type bit on a type's own list.
 func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
@@ -1177,16 +927,7 @@ type siteFrontActivityEntry struct {
 	sha string
 }
 
-// buildSiteFrontActivity projects the newest top-level items across the item
-// roots (memo excluded, mirroring the app's data branches) INTERLEAVED with the
-// newest code commits, into the front page's recent-activity rows: subject,
-// type, author and time, all of it metadata the indexes already carry, so no
-// body or object is read. Without the code interleave the section reports only
-// what a repo happens to publish as gitmsg items, which on a release-heavy repo
-// is a months-old release list standing in for a project that commits daily.
-// Item rows link to their own crawlable page; code commits have none, so those
-// link into the app. The app's loadHomeActivity mirrors this selection, cap and
-// order, so the upgrade re-renders the same rows.
+// buildSiteFrontActivity merges the newest items (memo excluded) with the newest code commits into the front page's activity rows.
 func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]int, code []siteMetaEntry, site sitePageSite) []sitePageListEntry {
 	var merged []siteFrontActivityEntry
 	for _, e := range code {
@@ -1247,17 +988,10 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 	return rows
 }
 
-// sitePageNavSections orders the sidebar's sections, mirroring the app's own
-// nav (index.html / gs-upgrade.js CHROME); the empty section closes the list
-// with the ungrouped items, as it does there.
+// sitePageNavSections orders the sidebar's sections, mirroring the app's nav; the empty section closes the list.
 var sitePageNavSections = []string{"Social", "PM", "Repository", ""}
 
-// sitePageSidebar builds a page's sidebar: the app's nav — sections, glyphs,
-// labels and the active item — narrowed to the destinations that have a
-// generated page, so every link a crawler or a no-JS reader follows is a real
-// document. base is the page's relative path to the site root; current is the
-// dir the page belongs to ("" — the front page, so Home is current); files adds
-// the file layer's entry, which a repo that publishes no documents never sees.
+// sitePageSidebar builds a page's sidebar from the app's nav, narrowed to the destinations that have a generated page.
 func sitePageSidebar(base, current string, files bool) []sitePageNavGroup {
 	groups := []sitePageNavGroup{{Links: []sitePageNavLink{
 		{Href: base + "index.html", Label: "Home", Glyph: "⌂", Current: current == ""},
@@ -1286,12 +1020,10 @@ func sitePageSidebar(base, current string, files bool) []sitePageNavGroup {
 	return groups
 }
 
-// siteXMLEscaper escapes text/attribute content for the sitemap XML (locs are
-// derived from site.url, whose path may carry XML-special characters).
+// siteXMLEscaper escapes text and attribute content for the sitemap and feed XML.
 var siteXMLEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;")
 
-// siteSitemapEntry is one sitemap URL: its absolute location, its last activity
-// (W3C date), and the creation sort key that keeps part membership stable.
+// siteSitemapEntry is one sitemap URL: location, last activity, and the creation sort key.
 type siteSitemapEntry struct {
 	loc     string
 	lastmod string
@@ -1299,14 +1031,7 @@ type siteSitemapEntry struct {
 	sha     string
 }
 
-// buildSiteSitemapEntries collects the sitemap URL set: the site root first,
-// then every generated item page with <lastmod> = the item's latest activity
-// (root, resolved edit, or newest reply). Item entries sort ascending by
-// creation (time, sha) — creation never changes, so appends land at the tail
-// and sealed part membership stays stable.
-//
-// A retracted root stays OUT: its page is a noindex tombstone, so submitting it
-// spends crawl budget to be told no. Its activity still dates the site root.
+// buildSiteSitemapEntries collects the sitemap URL set: the site root, then every item page, sorted by creation so sealed part membership holds.
 func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) []siteSitemapEntry {
 	var items []siteSitemapEntry
 	var newest int64
@@ -1336,14 +1061,7 @@ func buildSiteSitemapEntries(roots map[string][]*sitePageItem, done map[string]i
 	return append([]siteSitemapEntry{{loc: site.URL, lastmod: sitePageDate(newest)}}, items...)
 }
 
-// buildSiteSitemapListEntries collects the type-list index pages' sitemap
-// entries with <lastmod> = the type's latest item activity. These stay out of
-// buildSiteSitemapEntries: their positions would shift as items append, so they
-// ride the rewritten head part (or the single urlset), never a sealed one.
-//
-// A list with nothing to list is skipped: the page is still generated and
-// sidebar-linked, but "nothing here yet" cannot be indexed on its merits.
-// Retracted roots do not count, since the list hides them.
+// buildSiteSitemapListEntries collects the type-list index pages' entries; they ride the head part, not a sealed one.
 func buildSiteSitemapListEntries(roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) []siteSitemapEntry {
 	entries := make([]siteSitemapEntry, 0, len(sitePageLists))
 	for _, list := range sitePageLists {
@@ -1366,8 +1084,7 @@ func buildSiteSitemapListEntries(roots map[string][]*sitePageItem, done map[stri
 	return entries
 }
 
-// sitePageLastActivity returns an item's latest activity time: its creation,
-// its resolved edit, or its newest reply.
+// sitePageLastActivity returns an item's latest activity: its creation, its resolved edit, or its newest reply.
 func sitePageLastActivity(it *sitePageItem) int64 {
 	last := pageEffectiveTime(it.Msg)
 	if it.Edited && it.Resolved.TS > last {
@@ -1411,13 +1128,7 @@ func renderSiteSitemapIndex(parts []siteSitemapEntry) []byte {
 	return []byte(b.String())
 }
 
-// writeSiteSitemap writes the crawl map for the generated pages: a single
-// sitemap.xml until the URL count exceeds one part, then a sitemap index over
-// sealed numbered parts (full, immutable, long-cached — appends only ever grow
-// the tail) plus the rewritten sitemap-head.xml newest part. The type-list
-// index pages and the commits list (head + every sealed page) ride the single
-// urlset / head part only (see buildSiteSitemapListEntries); the part math runs
-// on root + items alone.
+// writeSiteSitemap writes the crawl map: one sitemap.xml, or an index over sealed parts plus the rewritten head part.
 func writeSiteSitemap(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, commits *siteCommitsState, files *siteFilesState) error {
 	entries := buildSiteSitemapEntries(roots, done, site)
 	lists := append(buildSiteSitemapListEntries(roots, done, site), buildSiteCommitsSitemapEntries(commits, site)...)
@@ -1455,16 +1166,12 @@ func newestLastmod(entries []siteSitemapEntry) string {
 }
 
 // writeSiteRobots writes robots.txt: allow everything and point at the sitemap.
-// Deliberately no Disallow for .gitsocial/ — a crawler's renderer needs the
-// shards for the SPA surfaces, and loose objects are never linked.
 func writeSiteRobots(client *Client, prefix string, site sitePageSite) error {
 	body := "User-agent: *\nAllow: /\nSitemap: " + site.URL + "sitemap.xml\n"
 	return putSiteText(client, prefix+sitePagesRobotsKey, "text/plain; charset=utf-8", []byte(body))
 }
 
-// siteFeedEntry is one Atom entry projected from a top-level item: its title,
-// canonical page URL (also its stable <id>), latest activity and creation
-// times, display author, item-type category term, and body HTML.
+// siteFeedEntry is one Atom entry projected from a top-level item; href is also its stable id.
 type siteFeedEntry struct {
 	title     string
 	href      string
@@ -1475,11 +1182,7 @@ type siteFeedEntry struct {
 	content   string // escaped <p>/<br> HTML of the item's own body ("" = no content element)
 }
 
-// selectSiteFeedItems picks one feed's item set: the newest sitePagesFeedSize
-// non-retracted top-level items of the given extensions (code commits absent —
-// they have no item page to link), newest-first by (effective time, sha).
-// Selection runs before body attachment so bodies are never fetched for items
-// the cap drops.
+// selectSiteFeedItems picks one feed's newest non-retracted top-level items; it runs before body attachment, so a dropped item costs no fetch.
 func selectSiteFeedItems(roots map[string][]*sitePageItem, done map[string]int, exts []string) []*sitePageItem {
 	var items []*sitePageItem
 	for _, ext := range exts {
@@ -1502,10 +1205,7 @@ func selectSiteFeedItems(roots map[string][]*sitePageItem, done map[string]int, 
 	return items
 }
 
-// siteFeedContentHTML renders an item's own body (subject stripped, replies
-// excluded) as escaped <p>/<br> HTML for the entry's content element, capped
-// at siteFeedBodyMax with a truncation marker paragraph; "" when the item has
-// no body beyond its subject.
+// siteFeedContentHTML renders an item's own body as escaped HTML for the entry's content element, capped at siteFeedBodyMax.
 func siteFeedContentHTML(it *sitePageItem) string {
 	_, body := protocol.SplitSubjectBody(pageItemBody(it))
 	truncated := false
@@ -1533,8 +1233,7 @@ func siteFeedContentHTML(it *sitePageItem) string {
 	return b.String()
 }
 
-// buildSiteFeedEntries projects the selected (body-attached) items into Atom
-// entries.
+// buildSiteFeedEntries projects the selected items into Atom entries.
 func buildSiteFeedEntries(items []*sitePageItem, site sitePageSite) []siteFeedEntry {
 	entries := make([]siteFeedEntry, 0, len(items))
 	for _, it := range items {
@@ -1556,8 +1255,7 @@ func buildSiteFeedEntries(items []*sitePageItem, site sitePageSite) []siteFeedEn
 	return entries
 }
 
-// siteFeedHead is one feed document's identity block: the main feed carries
-// the site's, a type feed its list's.
+// siteFeedHead is one feed document's identity block.
 type siteFeedHead struct {
 	id       string
 	title    string
@@ -1566,9 +1264,7 @@ type siteFeedHead struct {
 	alt      string
 }
 
-// renderSiteFeed renders one Atom 1.0 feed document. The feed's <updated> is the
-// newest entry's activity (epoch when there are no entries — deterministic, never
-// wall clock); every text/attribute value is XML-escaped.
+// renderSiteFeed renders one Atom 1.0 feed document; <updated> is the newest entry's activity, not the wall clock.
 func renderSiteFeed(entries []siteFeedEntry, head siteFeedHead) []byte {
 	esc := siteXMLEscaper.Replace
 	rfc3339 := func(ts int64) string { return time.Unix(ts, 0).UTC().Format(time.RFC3339) }
@@ -1598,8 +1294,7 @@ func renderSiteFeed(entries []siteFeedEntry, head siteFeedHead) []byte {
 		b.WriteString("<author><name>" + esc(e.author) + "</name></author>\n")
 		b.WriteString("<category term=\"" + esc(e.term) + "\"/>\n")
 		if e.content != "" {
-			// Escaped HTML inside escaped XML: the content is HTML markup whose
-			// text was already escaped, XML-escaped again as element chardata.
+			// The content is HTML whose text is already escaped, XML-escaped again as chardata.
 			b.WriteString("<content type=\"html\">" + esc(e.content) + "</content>\n")
 		}
 		b.WriteString("</entry>\n")
@@ -1608,10 +1303,7 @@ func renderSiteFeed(entries []siteFeedEntry, head siteFeedHead) []byte {
 	return []byte(b.String())
 }
 
-// putSiteFeed fetches the selected items' missing root bodies (a no-op on the
-// full-regen path where the corpus is already loaded, a few head-first GETs on
-// the metadata-only incremental path) and uploads one rendered feed document
-// (uncompressed, like the sitemap and robots).
+// putSiteFeed fetches the selected items' missing bodies and uploads one rendered feed document.
 func putSiteFeed(client *Client, prefix, key string, items []*sitePageItem, head siteFeedHead, site sitePageSite) error {
 	if err := attachRootBodies(client, prefix, items); err != nil {
 		return fmt.Errorf("feed bodies %s: %w", key, err)
@@ -1619,8 +1311,7 @@ func putSiteFeed(client *Client, prefix, key string, items []*sitePageItem, head
 	return putSiteText(client, prefix+key, "application/atom+xml; charset=utf-8", renderSiteFeed(buildSiteFeedEntries(items, site), head))
 }
 
-// writeSiteFeed writes the main Atom feed: the front page's item interleave
-// (memo excluded), identified as the site itself.
+// writeSiteFeed writes the main Atom feed: the front page's item set, memos excluded.
 func writeSiteFeed(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite) error {
 	exts := make([]string, 0, len(sitePageLists))
 	for _, list := range sitePageLists {
@@ -1637,17 +1328,12 @@ func siteTypeFeedKey(list sitePageList) string {
 	return list.Dir + "/" + sitePagesFeedKey
 }
 
-// siteTypeFeedTitle words a type feed's display title, distinct from the main
-// feed's so reader pickers tell them apart.
+// siteTypeFeedTitle words a type feed's display title, distinct from the main feed's.
 func siteTypeFeedTitle(list sitePageList, site sitePageSite) string {
 	return list.NavLabel + " · " + site.Title
 }
 
-// writeSiteTypeFeeds writes the per-type Atom feeds: every type directory's
-// feed mirrors its list page the way the main feed mirrors the front page
-// (memos included here — only the main feed's interleave excludes them). dirs
-// (nil = every dir) limits the incremental pass to the type directories whose
-// entries changed, matching writeSiteTypeLists' gating.
+// writeSiteTypeFeeds writes the per-type Atom feeds; dirs (nil = every dir) limits the incremental pass.
 func writeSiteTypeFeeds(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, dirs map[string]bool) error {
 	for _, list := range sitePageLists {
 		if dirs != nil && !dirs[list.Dir] {

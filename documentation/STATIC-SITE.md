@@ -72,27 +72,33 @@ gitsocial config site set url "https://example.com/"   # absolute base for canon
 Effective when `publish`, `pages` and a valid `url` are all set. Every push then maintains the [page keys](#page-keys):
 
 - An item page inlines its thread: replies in time order, edits resolved with an "edited" marker, tombstones for retractions, review chips and `file:line` feedback on pull requests, artifact blocks on releases. A thread caps at about 100 replies or 200 KB with a "N more replies" marker.
-- A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Milestones and sprints fold into `issues`.
-- The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Sealed commits pages are re-derived after a rebase or force-push.
+- A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Page 1 is the oldest. The sealed page that was newest when it sealed keeps its `← newer` link to the head after it stops being newest, and the head's `older →` chain reaches every page, so a crawler walking either direction lands on a real document. Milestones and sprints fold into `issues`.
+- `index.html` is dual-owned: the page layer holds it whenever the layer is effective, the shell otherwise. Every effective push reclaims it, since the same push's shell upload may have written over it.
+- The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Its rows come from the code index, not a second git walk, so the list, the timeline and the front page's activity agree on which commits belong to the branch.
+- Sealed commits pages are re-derived after a rebase or force-push. `gitmsg/*` branches are append-only by protocol, but the default branch is not, so every pass re-locates the recorded frontier in the current list before sealing onward: the sha must still be there, with the same number of rows below it. A sha commits to its whole ancestry, so a frontier still present proves the sealed region intact, and the row count catches a re-attribution that inserted rows beneath it. Either check failing re-derives the whole chain. Two contracts follow: `commits/` gets no Atom feed, since the code corpus carries no bodies to syndicate, and a sealed commits page is `no-cache` rather than immutable, since a re-derived page has to be re-fetched.
+- The commits pagination is published in the pages manifest and read back by both sides, so the app's `/commits` route renders the same rows the generated page shows and the boot swap moves nothing.
 - A file page renders one prose document on the default branch at `f/<path>.html` (`f/specs/GITMSG.html`). A document qualifies when:
   - it is markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) or an extensionless convention document (LICENSE, NOTICE, AUTHORS, CONTRIBUTING, CHANGELOG and their siblings, shown preformatted);
   - it is not under a dotdir, `node_modules/`, `vendor/`, `testdata/`, `third_party/`, `fixtures/`, `golden/`, `corpus/`, `snapshots/` or `__snapshots__/`, and is not a submodule, a symlink or the root README;
   - its path has no space and none of `@ : # ? %`.
 - File pages follow the tree: a document that leaves it loses its page, one under 100 words stays out of the sitemap, and any renders whole up to 256 KB. `filesInclude` and `filesExclude` override the selection rule.
+- A file page's key mirrors the repo path with the extension swapped for `.html`, which is a one-to-one map onto the `file:<path>@<branch>` route the page stamps as its boot hook. Two documents that would claim one key put the second at `<path>.html`.
+- Discovery is the one place the page layer reads a git tree instead of the push's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb; a tree it cannot read carries the published set forward rather than reading as an empty repo. A changed default branch rewrites the whole set, since the branch is in every page's route and meta line. Each page's date comes from one history walk over the whole tree, not a `git log` per path.
 - The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app. The page has no heading of its own; the README's headings stand as written and the repo title is the `<title>` and the sidebar.
 - `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
 - `feed.xml` is Atom 1.0 with the newest 50 non-retracted top-level items, memos excluded. Each type directory has its own `feed.xml`.
 
-The README is rendered with the app's own markdown grammar (`site_markdown.go` is a port of it), so the page and the app agree block for block; raw HTML is rebuilt against an allowlist. Two differences from the app: repo-relative images degrade to their alt text, and in-page anchors are rewritten to the rendered heading ids.
+The README is rendered with the app's own markdown grammar (`site_markdown.go` is a port of it), so the page and the app agree block for block; raw HTML is rebuilt against an allowlist. Two differences from the app: repo-relative images degrade to their alt text, since a bucket serves objects by sha and has no src for a path, and in-page anchors are rewritten to the rendered heading ids so a README's own table of contents works with no script running. Every emitted image is `loading="lazy"`, which keeps a hero image out of the preload scanner's way while the shell loads. Sanitizer output is balanced, so a README the size cap cut mid-structure still yields well-formed HTML.
 
 Rules that hold on every page:
 
 - Every `<title>` is unique (a shared subject gets the item's date, then its short ref) and every `<meta name="description">` is prose with the markdown syntax stripped.
 - Retraction tombstones and file pages under the word floor carry `noindex,follow`. The page stays, so existing links keep working.
-- Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer.
+- Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer, and they are the one typed value a page body carries. Everything else on a page is context-escaped by `html/template`; the other typed value is the favicon href, which is either the shell's own constant or a data URI already narrowed to an image type.
+- The markdown renderer builds every tag itself and escapes every text node, attribute value and code body. Raw HTML in the source is lexed and rebuilt against an allowlist that admits no event handler, no `style`, no `script`, `iframe` or `object`, and no image or link target that is not an absolute `https:`, `mailto:`, in-page or app reference.
 - A list page heads with its sidebar label (Issues, Pull Requests, Timeline), and so do its `<title>`, description and feed title. The app heads the same routes with the same label from one table, pinned by `sitetest/parity_fixtures.json`, so the boot swap moves no heading. The one exception is `f/index.html`, which boots into the tree view.
 - Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is the one card the page layer and the app still shape differently.
-- A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item.
+- A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.
 - A thread reply is a comment card in both renderers, under a `Comments (N)` heading, with its type glyph leading the meta row and one rail per depth level. Ordering is the app's: a reply follows the one it answers, siblings run oldest first, depth caps at four. The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
 - First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
@@ -135,6 +141,8 @@ A baseline records the distinct variants a selector renders, not whichever eleme
 
 `.js`, `.css`, `.html` and `.json` under `site/` upload brotli-compressed with `Content-Encoding: br`. Generated HTML, the sitemap, `robots.txt` and the feeds upload plain. Git objects never carry an encoding.
 
+A generated page inlines `pages-core.css` into its head, comments stripped, and links `pages-full.css` behind a preload that flips to a stylesheet on load, with a `noscript` fallback. So first paint is the HTML plus the inlined bytes, and the component styling arrives after. The same two files govern the app, so the page and the booted app cannot drift. Two rules follow: `pages-core.css` carries no `url()`, since pages sit at several directory depths where a relative URL resolves against the page; and a change to it bumps `sitePagesVersion`, since every page's head carries a copy. A configured accent is site data, not part of the sheet: it is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
+
 A grammar is chosen by file extension, then basename (`Dockerfile`, `Makefile`, `CMakeLists.txt`), then a fence's info string, with `markup` as the fallback. Code renders plain first and highlights when the grammar arrives.
 
 ### Page keys
@@ -158,7 +166,9 @@ Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `
 
 A generated page hands the app three hooks: a `<meta name="gs-route">` route, a `data-base` attribute on the `<div id="gs-page">` mount, and the mount itself. `gs-upgrade.js` reads them, loads the shell relative to that base and lets `gs-app.js` render.
 
-- The page's own head script marks `<html>` with `gs-boot` before the body is parsed, so a visitor with JS starts on a loading line rather than on content that is about to change.
+- The page's own head script marks `<html>` with `gs-boot` before the body is parsed, so a visitor with JS starts on a loading line rather than on content that is about to change. It also stamps the theme the app stored in `localStorage`, so a visitor who chose one gets the page in it with no flip at boot.
+- The front page is the exception: its README is pre-rendered, so the served document is already what the home route shows and cloaking it would trade a finished page for a loading line plus the whole shell download. A fragment naming a different route cloaks as every other page does.
+- The mark undoes itself on the load event, and on a 10 s timer for a document whose load event does not fire. Both defer to the flag `gs-upgrade.js` sets when it takes ownership, so an upgrade that fails to parse still leaves a readable page.
 - The takeover reveals twice: the app's chrome once `pages-full.css` governs the page, the content once the first view has settled. A page entered without a deep link keeps its served content until then.
 - A `location.hash` deep link wins over the page's own route when the fragment names a route. A bare in-page anchor addresses the page in hand, so the page's own route boots and the browser keeps the anchor.
 - Every step of the takeover is reversible. A shell asset that 404s or hangs, a throw during boot, or a route that does not settle restores the served page, its styling and its entry URL.
@@ -182,6 +192,36 @@ Under `.gitsocial/site/`, read by the app in place of object walks, together wit
 | `push-state` | skip digest for push-time site maintenance |
 
 A first view stays under half a megabyte at 100,000 commits: the shell is about 150 KB, the timeline loads 50 items per scroll, and deep search states its download size before fetching. On a large repository the index bootstraps over several pushes.
+
+### Index maintenance
+
+Each extension keeps two corpora: `items/<ext>/` for metadata and `bodies/<ext>/` for the searchable message text. Both are append-only and split oldest-first into fixed groups. A full group seals into a content-hash-keyed shard, the trailing group is the mutable head, and a manifest lists the shards, the head, the branch tip at write time and the corpus's compressed size. A sealed shard's membership does not change under append, so its key is stable and a rebuild re-uploads nothing. Both corpora are built from the bucket's own objects, which are uploaded before any ref moves, so an artifact cannot name a commit a reader is unable to resolve.
+
+One push writes both corpora in a pinned order: bodies shards, items shards, bodies head, items head, bodies manifest, items manifest, and the cursor last. Manifests are the only commit points, so an interruption leaves at worst bodies ahead of items. A document at any other schema version reads as absent, and the reader falls back to a bounded object walk until a push rewrites it.
+
+A push classifies the state from both manifests and both live head counts, then takes one action:
+
+| Action | State | Work |
+|---|---|---|
+| no-op | both corpora at the pushed tip, head counts matching | none |
+| append | both lockstepped at a common tip below the pushed tip | walk the bounded gap, extend both heads |
+| repair | an items manifest is present and anything mismatches | rebuild each corpus from its own sealed shards plus a bounded tail re-walk |
+| bootstrap | no items manifest | seal the newest budget segment, and leave a cursor when the budget is hit |
+| backfill | a cursor is pending and the newest end is at the pushed tip | seal the next older segment and prepend it to both manifests |
+
+- Once an items manifest exists there is no path back to a from-scratch capped walk. The one reset is a manifest tip unreachable from the pushed tip, which means history was rewritten under the artifacts.
+- A bootstrap is in flight when a cursor is pending or the items manifest is marked incomplete. The two read the same way, so a lost cursor write cannot freeze the index; backfill reconstructs the cursor from the manifest's oldest sealed shard.
+- Append owns the newest end and backfill the oldest, so the two do not overlap. The backfill frontier is the manifest's oldest sealed sha, not the cursor's lagging copy of it.
+- A backfill walk stops at every already-indexed boundary, not just the frontier, so a merge parent reachable from two sides cannot land in two shards.
+- The walk budget is a per-push cap, not a branch size, so progress reports a plain count rather than a percentage.
+- A schema version past 4 salts a shard's content hash, so a version tick yields new keys instead of trusting a stale-schema object.
+
+`items/code/` is one corpus across every code branch, with no bodies: a code card shows the subject, author, time and hash, and the detail view hydrates the object. It runs the same machine with four differences.
+
+- Its tip is a digest over the sorted branch tips, so any branch move, addition or deletion reads as a changed tip.
+- Each entry carries an attributed branch: the default branch wherever the commit is reachable from it, else the first branch in default-first name order whose walk reached it. That is the reader's own rule, so switching the timeline to the index moves no card. Entries also carry parent shas, which is how the repository graph renders without a per-commit walk.
+- A commit carrying a `GitMsg:` header is walked for reachability and left out of the corpus, as the reader filters it.
+- A changed corpus tip takes the repair path rather than a gap append: membership is "reachable from any current tip", so a force-push can shrink it inside a sealed shard. With no bootstrap in flight the repair re-walks every tip and reseals; content-hash keying leaves unchanged shards untouched and drops the stale ones from the manifest. Backfilled parents inherit the frontier commit's own branch.
 
 ### Object reads
 

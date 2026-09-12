@@ -1,31 +1,9 @@
-// site_markdown.go - the markdown renderer the page layer uses for the front
-// page's README: a Go port of the reader's own grammar, emitting an HTML string
-// where the reader builds DOM nodes, and backing siteMarkdownPlainText.
+// site_markdown.go - a Go port of the app's markdown grammar, for the README and file pages
 //
-// The grammar is deliberately not designed here — it is transcribed from the
-// three functions the booted app renders the same README with, so the served
-// document and the app agree block for block: parseMarkdown / parseInline
-// (site/gs-core.js), and renderInline / renderBlocksInto / sanitizeInert
-// (site/gs-render.js). Covered: ATX and setext headings, paragraphs, fenced
-// code, nested and task lists, GFM tables, blockquotes, thematic breaks, links,
-// images, emphasis, strong, strikethrough, inline code, autolinks, and the raw
-// HTML allowlist READMEs rely on.
-//
-// Two deliberate departures from the reader, both forced by what a static page
-// can do:
-//
-//   - A repo-relative image has no src a bucket can serve (the bucket is keyed
-//     by sha, not by path; the reader resolves those by fetching the blob and
-//     building a blob: URL), so it degrades to its alt text instead of emitting
-//     a src that would 404. Only an absolute https src becomes a real <img>.
-//   - In-page anchors are rewritten to the heading ids this renderer stamps
-//     (md-<slug>, the reader's own scheme), so a README's own table of contents
-//     works with no script running.
-//
-// Provenance note: this renders the BUCKET OWNER'S OWN README, so the allowlist
-// is hygiene (never execute what someone pasted into their own README), not an
-// adversarial boundary. Item bodies are third-party content under a stricter
-// policy and are NOT rendered through here.
+// The grammar is transcribed from gs-core.js parseMarkdown and parseInline and
+// gs-render.js renderInline, renderBlocksInto and sanitizeInert, so the served
+// page and the app agree block for block. Item bodies are third-party content
+// under a stricter policy and are not rendered here.
 
 package objstore
 
@@ -62,8 +40,7 @@ const (
 	siteMDRawHTML = "rawhtml"
 )
 
-// siteMDBlock is one parsed block. The fields are a union over the block kinds
-// (the reader's block objects, transcribed), not a per-kind type each.
+// siteMDBlock is one parsed block; its fields are a union over the block kinds, not a type each.
 type siteMDBlock struct {
 	Kind    string
 	Level   int            // heading level
@@ -79,8 +56,7 @@ type siteMDBlock struct {
 	Raw     string // html/htmlopen source
 }
 
-// siteMDItem is one list item: its inline content, an optional task checkbox
-// state, and any nested lists that hang off it.
+// siteMDItem is one list item: its inline content, task state, and any nested lists.
 type siteMDItem struct {
 	Spans    []siteMDSpan
 	Task     string // "" none, " " unchecked, "x" checked
@@ -97,16 +73,13 @@ type siteMDSpan struct {
 	Href  string       // link
 }
 
-// siteMarkdownContext is what a relative reference resolves against: the app's
-// hash-URL base (site.URL + "index.html#") and the branch the document lives on.
-// Both empty means relative references simply do not resolve.
+// siteMarkdownContext is what a relative reference resolves against; both fields empty means none resolve.
 type siteMarkdownContext struct {
 	AppBase string
 	Branch  string
 }
 
-// siteMDRender carries one document's render state: the reference context and
-// the heading slugs already used (ids stay unique within the document).
+// siteMDRender carries one document's render state: its context and the heading slugs already used.
 type siteMDRender struct {
 	ctx   siteMarkdownContext
 	slugs map[string]bool
@@ -136,21 +109,17 @@ var (
 	siteMDSlugSpaceRE = regexp.MustCompile(`\s+`)
 )
 
-// siteMDVoidTags carry no closing tag, so line- and inline-level detection
-// treats them as standalone elements, never wrappers (gs-core.js VOID_HTML).
+// siteMDVoidTags carry no closing tag, so detection treats them as standalone elements (gs-core.js VOID_HTML).
 var siteMDVoidTags = map[string]bool{"br": true, "hr": true, "img": true, "source": true, "col": true, "input": true, "wbr": true, "area": true}
 
-// siteMDInlineTags are the inline-level tags whose line continues the current
-// paragraph instead of breaking it (gs-core.js INLINE_HTML).
+// siteMDInlineTags are the tags whose line continues the current paragraph (gs-core.js INLINE_HTML).
 var siteMDInlineTags = map[string]bool{
 	"a": true, "b": true, "i": true, "em": true, "strong": true, "code": true, "kbd": true,
 	"sup": true, "sub": true, "span": true, "img": true, "br": true, "del": true, "s": true,
 	"strike": true, "mark": true, "small": true, "picture": true, "input": true,
 }
 
-// siteMDAllowTags is the sanitizer's element allowlist (gs-render.js
-// SANITIZE_TAGS): these are rebuilt clean, everything else is dropped or
-// unwrapped.
+// siteMDAllowTags is the sanitizer's element allowlist; everything else is dropped or unwrapped.
 var siteMDAllowTags = map[string]bool{
 	"div": true, "span": true, "p": true, "br": true, "hr": true, "a": true, "img": true,
 	"b": true, "strong": true, "i": true, "em": true, "code": true, "pre": true,
@@ -161,8 +130,7 @@ var siteMDAllowTags = map[string]bool{
 	"kbd": true, "del": true, "s": true, "strike": true, "blockquote": true, "mark": true,
 }
 
-// siteMDDropTags vanish subtree and all: nothing executable, loadable or
-// document-level ever reaches the output (gs-render.js SANITIZE_DROP).
+// siteMDDropTags vanish subtree and all, so nothing executable or document-level reaches the output.
 var siteMDDropTags = map[string]bool{
 	"script": true, "style": true, "iframe": true, "object": true, "embed": true, "link": true,
 	"meta": true, "noscript": true, "template": true, "svg": true, "math": true, "form": true,
@@ -170,16 +138,13 @@ var siteMDDropTags = map[string]bool{
 	"base": true, "frame": true, "frameset": true, "applet": true,
 }
 
-// siteMDAllowAttrs is the attribute allowlist (gs-render.js SANITIZE_ATTRS).
-// Event handlers and style are absent by construction, which is what makes an
-// onerror= or onclick= impossible to carry through.
+// siteMDAllowAttrs is the attribute allowlist; it holds no event handler and no style, so neither can carry through.
 var siteMDAllowAttrs = map[string]bool{
 	"align": true, "alt": true, "title": true, "width": true, "height": true,
 	"src": true, "href": true, "open": true,
 }
 
-// renderSiteMarkdown renders markdown to the page layer's HTML. Empty when the
-// document carries no blocks, so a caller can skip the section entirely.
+// renderSiteMarkdown renders markdown to the page layer's HTML; empty when the document carries no blocks.
 func renderSiteMarkdown(text string, ctx siteMarkdownContext) string {
 	blocks := parseSiteMarkdown(text)
 	if len(blocks) == 0 {
@@ -193,16 +158,14 @@ func renderSiteMarkdown(text string, ctx siteMarkdownContext) string {
 	return b.String()
 }
 
-// siteMarkdownPlainText flattens markdown to prose over the renderer's own
-// grammar: markup drops, link text and image alt text survive.
+// siteMarkdownPlainText flattens markdown to prose: markup drops, link text and image alt text survive.
 func siteMarkdownPlainText(text string) string {
 	var lines []string
 	appendSiteMDPlainText(&lines, parseSiteMarkdown(text))
 	return strings.Join(lines, "\n")
 }
 
-// appendSiteMDPlainText appends each block's plain text (raw HTML contributes
-// nothing: only the render path sanitizes it).
+// appendSiteMDPlainText appends each block's plain text; raw HTML contributes nothing, since only the render path sanitizes it.
 func appendSiteMDPlainText(lines *[]string, blocks []siteMDBlock) {
 	for _, block := range blocks {
 		switch block.Kind {
@@ -236,8 +199,7 @@ func siteMDCellsPlainText(cells [][]siteMDSpan) string {
 	return strings.Join(texts, " ")
 }
 
-// siteMDSpanPlainText flattens inline spans to prose. Distinct from
-// siteMDSpanText, which must keep mirroring the reader's slug input exactly.
+// siteMDSpanPlainText flattens inline spans to prose; siteMDSpanText is separate, since it mirrors the reader's slug input.
 func siteMDSpanPlainText(spans []siteMDSpan) string {
 	var b strings.Builder
 	for _, s := range spans {
@@ -254,12 +216,7 @@ func siteMDSpanPlainText(spans []siteMDSpan) string {
 	return b.String()
 }
 
-// siteMDTruncateSource caps markdown SOURCE at max bytes, reporting whether it
-// cut. The cut is pulled back to the last line boundary so the renderer is never
-// handed half a line: every block rule is line-based, so a whole-line cut can
-// only ever leave a structure unclosed (which the renderer closes), where a
-// mid-line cut could leave half a tag with nothing to do but escape it back into
-// the visible markup this layer exists to remove.
+// siteMDTruncateSource caps markdown source at max bytes, pulled back to a line boundary, since every block rule is line-based.
 func siteMDTruncateSource(text string, max int) (string, bool) {
 	if len(text) <= max {
 		return text, false
@@ -273,18 +230,14 @@ func siteMDTruncateSource(text string, max int) (string, bool) {
 
 // ---- Block parsing (gs-core.js parseMarkdown) ----
 
-// parseSiteMarkdown parses text into a block list. Raw HTML is captured
-// verbatim as html/htmlopen/htmlclose blocks for the sanitizer; every other
-// block is plain data the writer turns into markup it generated itself.
+// parseSiteMarkdown parses text into a block list, capturing raw HTML verbatim for the sanitizer.
 func parseSiteMarkdown(text string) []siteMDBlock {
 	lines := strings.Split(strings.ReplaceAll(text, "\r", ""), "\n")
 	var blocks []siteMDBlock
 	for i := 0; i < len(lines); {
 		line := lines[i]
 		if siteMDFenceRE.MatchString(line) {
-			// The fence's info string is parsed away and dropped: it only selects a
-			// highlighter grammar, and the static page ships no tokenizer (the
-			// booted app highlights the same block in place).
+			// The fence's info string only selects a highlighter grammar, and the static page ships no tokenizer.
 			var body []string
 			for i++; i < len(lines) && !siteMDFenceRE.MatchString(lines[i]); i++ {
 				body = append(body, lines[i])
@@ -378,10 +331,7 @@ func parseSiteMarkdown(text string) []siteMDBlock {
 			i++
 		}
 		if len(para) == 0 {
-			// Progress guard: a line that breaks a paragraph but matched no block
-			// rule (a malformed or cut-off tag, a stray closing tag with trailing
-			// text) is consumed as the escaped text it is. Without it the line
-			// would be re-examined forever.
+			// A line that breaks a paragraph but matched no block rule is consumed as text, so the loop makes progress.
 			para = append(para, lines[i])
 			i++
 		}
@@ -396,16 +346,14 @@ func parseSiteMarkdown(text string) []siteMDBlock {
 	return blocks
 }
 
-// siteMDStripQuote removes one blockquote marker (and the space after it) from
-// a line, the way the reader's `line.replace(/^\s*>\s?/, "")` does.
+// siteMDStripQuote removes one blockquote marker, and the space after it, from a line.
 func siteMDStripQuote(line string) string {
 	rest := strings.TrimLeft(line, " \t")
 	rest = strings.TrimPrefix(rest, ">")
 	return strings.TrimPrefix(rest, " ")
 }
 
-// siteMDIndentWidth counts a line's leading whitespace (a tab counts as two),
-// which is what decides list nesting.
+// siteMDIndentWidth counts a line's leading whitespace, a tab as two, which decides list nesting.
 func siteMDIndentWidth(line string) int {
 	n := 0
 	for _, c := range line {
@@ -421,9 +369,7 @@ func siteMDIndentWidth(line string) int {
 	return n
 }
 
-// parseSiteMDList consumes an indentation-delimited list starting at `start`,
-// returning the block and the line after it. Deeper-indented items attach to the
-// preceding item as nested lists; a blank line ends the list (tight lists only).
+// parseSiteMDList consumes an indentation-delimited list and returns the block and the line after it; a blank line ends it.
 func parseSiteMDList(lines []string, start int) (siteMDBlock, int) {
 	base := siteMDIndentWidth(lines[start])
 	block := siteMDBlock{Kind: siteMDList, Ordered: siteMDOrderedRE.MatchString(lines[start])}
@@ -462,8 +408,7 @@ func parseSiteMDList(lines []string, start int) (siteMDBlock, int) {
 	return block, i
 }
 
-// siteMDSplitRow splits a table row into trimmed cells, dropping the optional
-// leading and trailing pipes.
+// siteMDSplitRow splits a table row into trimmed cells, dropping the optional outer pipes.
 func siteMDSplitRow(line string) []string {
 	s := strings.TrimSpace(line)
 	s = strings.TrimPrefix(s, "|")
@@ -506,9 +451,7 @@ func siteMDCellAlign(cell string) string {
 	return ""
 }
 
-// siteMDIsThematicBreak recognizes a *** / --- / ___ rule line (3+ markers,
-// spaces allowed between). A `---` directly under paragraph text is a setext h2
-// instead, which parseSiteMarkdown checks first.
+// siteMDIsThematicBreak recognizes a rule line; a `---` under paragraph text is a setext heading, which the parser checks first.
 func siteMDIsThematicBreak(line string) bool {
 	body := strings.TrimLeft(line, " ")
 	if len(line)-len(body) > 3 || body == "" {
@@ -531,9 +474,7 @@ func siteMDIsThematicBreak(line string) bool {
 	return count >= 3
 }
 
-// siteMDBreaksParagraph reports whether a trimmed `<`-leading line ends the
-// current paragraph: closing tags and block-level tags do, an inline-level tag
-// joins the paragraph and flows through the inline parser's raw-HTML handling.
+// siteMDBreaksParagraph reports whether a tag-leading line ends the current paragraph; an inline-level tag joins it instead.
 func siteMDBreaksParagraph(t string) bool {
 	m := siteMDLeadTagRE.FindStringSubmatch(t)
 	if m == nil {
@@ -544,9 +485,7 @@ func siteMDBreaksParagraph(t string) bool {
 
 // ---- Inline parsing (gs-core.js parseInline) ----
 
-// siteMDMatchDelim returns the index of the delimiter closing the one at
-// `start`, counting nesting, or -1. This is what lets a [![alt](img)](link)
-// badge parse: the outer ] and ) match past the inner image's.
+// siteMDMatchDelim returns the index of the delimiter closing the one at start, counting nesting, which is what lets a badge link parse.
 func siteMDMatchDelim(text string, start int, open, close byte) int {
 	depth := 0
 	for i := start; i < len(text); i++ {
@@ -563,15 +502,12 @@ func siteMDMatchDelim(text string, start int, open, close byte) int {
 	return -1
 }
 
-// siteMDIsPunct reports whether a byte is one of the ASCII punctuation
-// characters a backslash may escape.
+// siteMDIsPunct reports whether a byte is ASCII punctuation a backslash may escape.
 func siteMDIsPunct(c byte) bool {
 	return (c >= '!' && c <= '/') || (c >= ':' && c <= '@') || (c >= '[' && c <= '`') || (c >= '{' && c <= '~')
 }
 
-// parseSiteMDInline tokenizes text into inline spans: code, images, links,
-// autolinks, bare URLs, strong, strikethrough, emphasis, a raw-HTML subset
-// captured verbatim for the sanitizer, and plain text.
+// parseSiteMDInline tokenizes text into inline spans, capturing a raw-HTML subset verbatim for the sanitizer.
 func parseSiteMDInline(text string) []siteMDSpan {
 	var spans []siteMDSpan
 	var buf strings.Builder
@@ -701,8 +637,7 @@ func siteMDSlug(s string) string {
 	return siteMDSlugSpaceRE.ReplaceAllString(s, "-")
 }
 
-// siteMDJoinPath normalizes a relative path the way the reader's joinPath does
-// (drops "./", resolves ".." and empty segments).
+// siteMDJoinPath normalizes a relative path the way the reader's joinPath does.
 func siteMDJoinPath(rel string) string {
 	rel = strings.TrimPrefix(rel, "./")
 	rel = strings.TrimPrefix(rel, "/")
@@ -721,12 +656,7 @@ func siteMDJoinPath(rel string) string {
 	return strings.Join(parts, "/")
 }
 
-// siteMDHref gates a link target. An in-page anchor is rewritten onto this
-// renderer's own heading ids so a README's table of contents works with no
-// script running; absolute web, mailto and root-relative targets pass through;
-// a bare-relative path resolves to the app's file route (the only surface that
-// can show a repo file). "" means the link renders without an href, exactly as
-// the reader renders one it cannot resolve.
+// siteMDHref gates a link target: an in-page anchor is rewritten onto this renderer's heading ids, and a bare-relative path resolves to the app's file route. "" renders the link with no href.
 func siteMDHref(raw string, ctx siteMarkdownContext) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -757,18 +687,7 @@ func siteMDHref(raw string, ctx siteMarkdownContext) string {
 	return ref
 }
 
-// siteMDImageHTML renders an image. An absolute https src is a real <img> (badge
-// rows and shields render exactly as they do in the app); anything else is
-// repo-relative or an unusable scheme, and a static page has no src for it — the
-// bucket serves objects by sha, not by path — so it DEGRADES TO ITS ALT TEXT
-// rather than emitting a src that would 404 or reach off-site. The booted app
-// re-renders the same README and resolves those images from the object store,
-// which is the one remaining thing the upgrade adds to this section.
-// Every emitted image is loading="lazy": on a deep-link entry the boot hides
-// this content within milliseconds, and lazy images inside a display:none
-// subtree are never fetched — without it the preload scanner pulled a README
-// hero image (often hundreds of KB, third-party) on every route, competing
-// with the shell batch; a no-JS reader still gets the image on scroll.
+// siteMDImageHTML renders an image: an absolute https src becomes a real lazy-loaded <img>, and anything else degrades to its alt text.
 func siteMDImageHTML(src, alt, extraAttrs string) string {
 	if !strings.HasPrefix(strings.ToLower(src), "https://") {
 		return html.EscapeString(alt)
@@ -798,8 +717,7 @@ type siteHTMLToken struct {
 	Void  bool // written self-closing
 }
 
-// siteMDOpenTag is one element the sanitizer has entered: the source tag name
-// (what a closing tag matches against) and whether anything was emitted for it.
+// siteMDOpenTag is one element the sanitizer has entered: its source tag name, and whether anything was emitted for it.
 type siteMDOpenTag struct {
 	name string
 	emit bool
@@ -813,9 +731,7 @@ func siteMDIsTagNameByte(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
 }
 
-// lexSiteHTMLTag parses one tag starting at s[0]=='<', returning the token and
-// how many bytes it spans. A zero length means this is not a tag (an unfinished
-// or malformed one), and the caller keeps the '<' as text.
+// lexSiteHTMLTag parses one tag and returns it with its byte length; a zero length means the caller keeps the '<' as text.
 func lexSiteHTMLTag(s string) (siteHTMLToken, int) {
 	i := 1
 	tk := siteHTMLToken{Kind: siteHTMLStart}
@@ -887,9 +803,7 @@ func lexSiteHTMLTag(s string) (siteHTMLToken, int) {
 	return siteHTMLToken{}, 0
 }
 
-// lexSiteHTML splits a raw HTML fragment into text runs, start tags and end
-// tags. Comments, doctypes and processing instructions are dropped, which is
-// what an inert parse leaves the reader's sanitizer to rebuild from.
+// lexSiteHTML splits a raw HTML fragment into text runs and tags, dropping comments, doctypes and processing instructions.
 func lexSiteHTML(s string) []siteHTMLToken {
 	var out []siteHTMLToken
 	var text strings.Builder
@@ -937,10 +851,7 @@ func lexSiteHTML(s string) []siteHTMLToken {
 	return out
 }
 
-// cleanSiteHTMLTag rebuilds one start tag against the allowlist: allowed
-// attributes only (so an event handler or a style has no way through), hrefs and
-// image sources re-gated. It returns the tag's HTML and the tag name that must
-// be closed later ("" for a void element or an image).
+// cleanSiteHTMLTag rebuilds one start tag against the allowlist, re-gating hrefs and image sources, and returns the name to close later.
 func cleanSiteHTMLTag(tk siteHTMLToken, ctx siteMarkdownContext) (string, string) {
 	var attrs strings.Builder
 	var src, alt string
@@ -976,11 +887,7 @@ func cleanSiteHTMLTag(tk siteHTMLToken, ctx siteMarkdownContext) (string, string
 	return open, tk.Tag
 }
 
-// sanitizeSiteHTML rebuilds a raw HTML fragment against the allowlist: dropped
-// tags vanish subtree and all, unknown tags unwrap to their children, allowed
-// tags are re-emitted from their parsed name and filtered attributes. The output
-// is always balanced — every element this opens, it closes — so a fragment cut
-// mid-structure by the README cap still yields well-formed HTML.
+// sanitizeSiteHTML rebuilds a raw HTML fragment against the allowlist; its output is balanced, so a fragment the cap cut mid-structure still renders.
 func sanitizeSiteHTML(raw string, ctx siteMarkdownContext) string {
 	var b strings.Builder
 	var open []siteMDOpenTag
@@ -1044,12 +951,7 @@ func sanitizeSiteHTML(raw string, ctx siteMarkdownContext) string {
 	return b.String()
 }
 
-// sanitizeSiteHTMLWrapper rebuilds a block-level opening tag that following
-// blocks nest inside (a README's <div align="center"> hero). It returns the
-// emitted tag and the name to close, both "" when the element does not survive
-// the allowlist — in which case the wrapper is not entered at all and its
-// children render into the parent, exactly as the reader's renderBlocksInto
-// behaves when the sanitizer hands it no container.
+// sanitizeSiteHTMLWrapper rebuilds a block-level opening tag following blocks nest inside; both results are "" when the element does not survive, and its children render into the parent.
 func sanitizeSiteHTMLWrapper(raw string, ctx siteMarkdownContext) (string, string) {
 	for _, tk := range lexSiteHTML(raw) {
 		if tk.Kind != siteHTMLStart {
@@ -1065,10 +967,7 @@ func sanitizeSiteHTMLWrapper(raw string, ctx siteMarkdownContext) (string, strin
 
 // ---- Writing (gs-render.js renderBlocksInto / renderMdBlock / renderInline) ----
 
-// writeSiteMDBlocks writes a block list, honoring the raw-HTML wrapper markers:
-// an htmlopen pushes a sanitized container the following blocks nest into, and
-// anything still open when the list ends is closed, so a document truncated
-// mid-structure never emits unbalanced markup.
+// writeSiteMDBlocks writes a block list, nesting into each sanitized wrapper and closing whatever is still open at the end.
 func writeSiteMDBlocks(b *strings.Builder, blocks []siteMDBlock, r *siteMDRender) {
 	var open []string
 	for _, block := range blocks {
@@ -1092,9 +991,7 @@ func writeSiteMDBlocks(b *strings.Builder, blocks []siteMDBlock, r *siteMDRender
 				break
 			}
 		case siteMDHTML:
-			// Nothing at all when the line does not survive the allowlist (a
-			// dropped <script>, a repo-relative <img> with no alt), rather than a
-			// blank line where it used to be.
+			// Emit nothing when the line does not survive the allowlist, rather than a blank line.
 			if out := sanitizeSiteHTML(block.Raw, r.ctx); out != "" {
 				b.WriteString(out + "\n")
 			}
@@ -1138,8 +1035,7 @@ func writeSiteMDBlock(b *strings.Builder, block siteMDBlock, r *siteMDRender) {
 	}
 }
 
-// siteMDHeadingID returns a heading's anchor id: the reader's md- prefixed slug,
-// deduplicated within the document so every heading is addressable.
+// siteMDHeadingID returns a heading's anchor id, deduplicated within the document so every heading is addressable.
 func siteMDHeadingID(spans []siteMDSpan, r *siteMDRender) string {
 	slug := siteMDSlug(siteMDSpanText(spans))
 	if slug == "" {
@@ -1153,7 +1049,7 @@ func siteMDHeadingID(spans []siteMDSpan, r *siteMDRender) string {
 	return "md-" + id
 }
 
-// siteMDSpanText flattens inline spans to their plain text (for heading slugs).
+// siteMDSpanText flattens inline spans to their plain text, for heading slugs.
 func siteMDSpanText(spans []siteMDSpan) string {
 	var b strings.Builder
 	for _, s := range spans {
@@ -1220,9 +1116,7 @@ func writeSiteMDTable(b *strings.Builder, block siteMDBlock, r *siteMDRender) {
 	b.WriteString("</tbody>\n</table>\n")
 }
 
-// writeSiteMDInline writes inline spans. Markdown-native spans emit markup this
-// file generated; only a rawhtml span reaches the sanitizer, and text is always
-// escaped.
+// writeSiteMDInline writes inline spans: only a rawhtml span reaches the sanitizer, and every text node is escaped.
 func writeSiteMDInline(b *strings.Builder, spans []siteMDSpan, r *siteMDRender) {
 	for _, s := range spans {
 		switch s.Kind {

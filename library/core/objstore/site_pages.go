@@ -1,39 +1,4 @@
-// site_pages.go - push-maintained static HTML page layer (the website's
-// human-readable pages), generated at the prefix root next to the shell:
-//
-//   i/<shorthash>.html      one page per top-level gitmsg item, thread inlined
-//   issues/ prs/ posts/ releases/ memos/
-//                           per-type list pages (mutable index.html head +
-//                           immutable sealed <n>.html, chained "older →")
-//
-// Every page inlines the shared style base (site/pages-core.css, see
-// site_pages_html.go) and links the shell's pages-full.css — its only
-// subresource besides the woff2 fonts that sheet pulls in. The retired
-// generated pages.css is swept on disable and otherwise left to go stale.
-//   index.html              the generated front page (the app's home landing +
-//                           PE hooks + gs-upgrade.js) — the entry flip: when the
-//                           page layer is effective the pages maintainer OWNS
-//                           index.html; uploadSiteFiles owns the embedded shell
-//                           index.html only when it is not (dual-mode ownership).
-//   sitemap.xml robots.txt  crawl surface (sitemap-<n>.xml parts past ~40K URLs)
-//   feed.xml                Atom 1.0 feed of the newest top-level items
-//   <dir>/feed.xml          per-type Atom feeds mirroring each list page
-//
-// Pages are a projection of the push's own artifacts (the items metadata index
-// + bodies corpus, never a second git walk), enabled by the pushed guards
-// (site.publish + site.pages + a valid site.url), and tracked by the pages
-// manifest at .gitsocial/site/pages.json. This file owns the manifest, the
-// per-push page budget, the bootstrap/full-regen path (missing/foreign-version
-// manifest → budgeted regeneration with a cursor resume), the incremental path
-// (complete manifest + moved items tips → classify the delta, regenerate only
-// the affected threads/lists), and the disable path (guards off while the
-// bucket carries pages → best-effort deletion, manifest last).
-//
-// The page root keys are reserved alongside the repo data layout (HEAD,
-// objects/, refs/, .gitsocial/), the shell files (index.html, gs-*.js,
-// icons.js, prism.js, grammars/), and the release artifact objects
-// (artifacts/, owned by `release artifacts push` — see artifacts.go) — all
-// disjoint by construction.
+// site_pages.go - the static HTML page layer: its manifest, budget, and the regen, incremental and disable passes
 
 package objstore
 
@@ -68,31 +33,16 @@ const (
 	sitePagesFeedSize = 50
 	// sitePagesReadmeMax caps the front page's inlined README bytes.
 	sitePagesReadmeMax = 8 * 1024
-	// sitePagesHomeFiles caps the front page's root file listing, mirroring the
-	// app's HOME_FILE_LIMIT (gs-render.js homeFileList) so the static rows and
-	// the upgraded render are the same rows.
+	// sitePagesHomeFiles caps the front page's root file listing, mirroring the app's HOME_FILE_LIMIT.
 	sitePagesHomeFiles = 3
-	// sitePagesHomeActivity caps the front page's recent-activity rows, mirroring
-	// the app's HOME_ACTIVITY_LIMIT (gs-core.js loadHomeActivity). Ten: a round
-	// number short enough that the section reads as a summary below the README
-	// rather than a scrolling log. There is no per-type quota — the newest ten
-	// entries are whatever they are, so a repo that commits daily can legitimately
-	// show ten code commits and no item rows.
+	// sitePagesHomeActivity caps the front page's recent-activity rows, mirroring the app's HOME_ACTIVITY_LIMIT.
 	sitePagesHomeActivity = 10
 )
 
-// sitePagesBudget bounds one push's item-page writes. Unbounded by default: a
-// push publishes the whole page set, because a bucket left mid-bootstrap is an
-// incomplete mirror — it serves item pages for part of its corpus and 404s the
-// rest until someone pushes again, and nothing in the push output demanded that
-// second push. The cursor machinery still earns its keep as the resume path for
-// a push that is interrupted rather than budgeted short.
-// GITSOCIAL_SITE_PAGES_BUDGET caps it for a caller that would rather spread a
-// very large first publish over several pushes. A var so tests can lower it.
+// sitePagesBudget bounds one push's item-page writes; unbounded unless GITSOCIAL_SITE_PAGES_BUDGET caps it. A var so tests can lower it.
 var sitePagesBudget = sitePagesBudgetFromEnv()
 
-// sitePagesBudgetFromEnv returns the per-push page budget: a positive
-// GITSOCIAL_SITE_PAGES_BUDGET when set, else unbounded.
+// sitePagesBudgetFromEnv returns the per-push page budget, honoring GITSOCIAL_SITE_PAGES_BUDGET.
 func sitePagesBudgetFromEnv() int {
 	if v := os.Getenv("GITSOCIAL_SITE_PAGES_BUDGET"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -114,22 +64,17 @@ type sitePagesManifest struct {
 	SiteHash string            `json:"siteHash,omitempty"` // hash of the site identity (title/url/description) stamped into every page
 }
 
-// sitePagesCommitsPending reports whether the commits layer still owes sealing
-// work a later push must finish (the per-push page budget cut it short).
+// sitePagesCommitsPending reports whether the commits layer still owes sealing work a later push must finish.
 func sitePagesCommitsPending(m *sitePagesManifest) bool {
 	return m != nil && m.Commits != nil && m.Commits.Pending
 }
 
-// sitePagesCursor records an in-progress page bootstrap: per-extension counts
-// of item pages already generated (newest-first prefix of that extension's
-// top-level items).
+// sitePagesCursor records an in-progress page bootstrap: per-extension counts of item pages already generated.
 type sitePagesCursor struct {
 	Done map[string]int `json:"done"`
 }
 
-// readSitePagesManifest fetches the pages manifest; nil (no error) when it is
-// absent, at an unknown version, or unparseable — all of which mean a full
-// (re)generation.
+// readSitePagesManifest fetches the pages manifest; nil when absent, at another version, or unreadable, each meaning a full regen.
 func readSitePagesManifest(client *Client, prefix string) (*sitePagesManifest, error) {
 	var m sitePagesManifest
 	found, err := readCompressedJSON(client, prefix+sitePagesManifestKey, &m)
@@ -142,8 +87,7 @@ func readSitePagesManifest(client *Client, prefix string) (*sitePagesManifest, e
 	return &m, nil
 }
 
-// putSitePagesManifest writes the pages manifest (the layer's commit point,
-// always last in the write order).
+// putSitePagesManifest writes the pages manifest, the layer's commit point and last in the write order.
 func putSitePagesManifest(client *Client, prefix string, m *sitePagesManifest) error {
 	comp, err := compressJSON(m, brotliQualityFull)
 	if err != nil {
@@ -152,14 +96,7 @@ func putSitePagesManifest(client *Client, prefix string, m *sitePagesManifest) e
 	return putCompressed(client, prefix+sitePagesManifestKey, comp)
 }
 
-// putSiteText uploads one plain (uncompressed) page-layer document with its
-// Content-Type; crawl and unfurl scrapers are the least capable clients, so
-// nothing here carries a Content-Encoding. These are the documents fetched
-// directly by whatever asked for the URL — the HTML pages, the sitemap, robots,
-// the feed — and a bucket serves a stored encoding to every client regardless of
-// its Accept-Encoding. The page layer exists to be legible to those clients, so
-// it trades their bytes for their comprehension; the stylesheet they never fetch
-// goes through putSiteAsset instead.
+// putSiteText uploads one page-layer document uncompressed, since a bucket serves a stored encoding whatever the client accepts.
 func putSiteText(client *Client, key, contentType string, body []byte) error {
 	return withRetry(func() error {
 		resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": contentType})
@@ -182,20 +119,12 @@ type sitePageUpload struct {
 	page []byte
 }
 
-// sitePagesChunk sizes one bootstrap upload batch: several round trips deep per
-// worker, so the pool stays fed, while the cursor still advances often enough
-// that an interrupted push repeats at most one batch.
+// sitePagesChunk sizes one bootstrap upload batch: deep enough to keep the pool fed, short enough that an interruption repeats one batch.
 func sitePagesChunk() int {
 	return max(1, 4*resolveUploadConcurrency())
 }
 
-// putSitePages uploads a batch of rendered pages through a worker pool sized
-// like the object uploads (GITSOCIAL_S3_CONCURRENCY / s3.concurrency). A page
-// PUT is a full round trip and a bootstrap writes thousands of them, so serial
-// uploads make the site layer, not the network, the bound. Pages within a batch
-// are independent and their PUTs overwrite-idempotent, so completion order
-// carries no meaning; progress counts up from base under the mutex that holds
-// the single-goroutine-per-phase Progress contract.
+// putSitePages uploads a batch of rendered pages through a worker pool; progress counts up from base under the mutex the Progress contract needs.
 func putSitePages(client *Client, uploads []sitePageUpload, progress Progress, phase string, base, total int) error {
 	if len(uploads) == 0 {
 		return nil
@@ -239,10 +168,7 @@ func putSitePages(client *Client, uploads []sitePageUpload, progress Progress, p
 	return firstErr
 }
 
-// sitePagesEffective resolves the HTML page layer's enablement from the
-// bucket's pushed site config: both guards on plus a valid site.url
-// (canonicals, OG and the sitemap need the absolute base). Returns the
-// normalized base URL.
+// sitePagesEffective resolves the page layer's enablement from the pushed site config and returns the normalized base URL.
 func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 	if !ok || cfg.Publish != "true" || cfg.Pages != "true" {
 		return "", false
@@ -250,9 +176,7 @@ func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 	return NormalizeSiteURL(cfg.URL)
 }
 
-// sitePageSiteFor assembles the site identity every page stamps. A relative
-// site.image key resolves against the effective base URL here, so every
-// consumer sees the absolute og:image URL.
+// sitePageSiteFor assembles the site identity every page stamps, resolving a relative site.image against the base URL.
 func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageSite {
 	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Image != "" && !strings.Contains(site.Image, "://") {
@@ -264,22 +188,13 @@ func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageS
 	return site
 }
 
-// sitePageSiteHash fingerprints the site identity baked into every rendered
-// page (title, canonical base, description, og:image, favicon, and the accent
-// override each head inlines); a change regenerates everything.
+// sitePageSiteHash fingerprints the site identity baked into every page; a change regenerates the whole layer.
 func sitePageSiteHash(site sitePageSite) string {
 	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + string(site.Icon) + "\x00" + string(site.AccentCSS)))
 	return hex.EncodeToString(h[:])[:12]
 }
 
-// sitePagesState reports the pages-state component the push-state marker
-// records plus whether the page layer still has work that only a site pass runs
-// (a pending bootstrap, consumed tips lagging the items indexes, a stale site
-// identity, or a page set awaiting the disable-path deletion). The helper's
-// post-push maintenance consults it before stamping the push-state marker — a
-// stamped marker would make the next site push skip work no ref move signals.
-// Best-effort: any read error reports pending with no stampable state, costing
-// at worst an extra full pass, never a wrong skip.
+// sitePagesState reports the push-state marker's pages component, and whether the layer still has work only a site pass runs; a read error counts as pending.
 func sitePagesState(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) (state string, pending bool) {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
@@ -297,9 +212,7 @@ func sitePagesState(client *Client, prefix string, refs map[string]string, ov Si
 	if err != nil || manifest == nil || manifest.Cursor != nil || sitePagesCommitsPending(manifest) || sitePagesFilesPending(manifest) {
 		return "", true
 	}
-	// The file layer's own flag comes from the recorded set rather than a tree
-	// walk: this helper has no default branch to read one from, and a tree that
-	// moved moved a ref, which is what un-skips the next pass anyway.
+	// The file layer's flag comes from the recorded set, since this helper has no default branch to walk a tree from.
 	site := sitePageSiteFor(prefix, cfg, url)
 	site.Files = sitePagesHasFiles(manifest)
 	if manifest.SiteHash != sitePageSiteHash(site) {
@@ -312,13 +225,7 @@ func sitePagesState(client *Client, prefix string, refs map[string]string, ov Si
 	return sitePagesStateOn, false
 }
 
-// rebuildSitePages maintains the static HTML page layer after the item
-// artifacts. Guards off (or no valid site.url) → any existing page set is
-// deleted; pushes are otherwise byte-identical to a pages-less binary. Returns
-// pending=true while the layer still has work (an incomplete bootstrap, or an
-// incomplete deletion) so the caller leaves the push-state marker unstamped and
-// the next push resumes; state is the marker's pages-state component ("" while
-// pending).
+// rebuildSitePages maintains the page layer after the item artifacts, deleting the page set when the guards are off; pending leaves the marker unstamped.
 func rebuildSitePages(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress, ov SiteOverride) (pending bool, state string, err error) {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
@@ -340,10 +247,7 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	if err != nil {
 		return false, "", err
 	}
-	// Discovery runs before the site identity is hashed: whether the layer has
-	// pages puts the Files entry in EVERY page's sidebar, so a flip has to
-	// regenerate the pages that hold it. An unreadable tree is not a flip — the
-	// published set carries forward and the layer does no work this pass.
+	// Discovery runs before the identity is hashed, since the Files sidebar entry is stamped into every page. An unreadable tree carries the published set forward.
 	tip := siteBucketBranchTip(refs, defaultBranch)
 	docs, known := discoverSiteFileDocs(src, tip, cfg)
 	if !known {
@@ -362,13 +266,7 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	switch {
 	case manifest != nil && manifest.Cursor == nil && sitePagesTipsCurrent(manifest, tips) && !sitePagesCommitsPending(manifest) &&
 		!sitePagesFilesPending(manifest) && !siteFileDocsChanged(manifest.Files, docs, defaultBranch):
-		// Nothing any page derives from moved: the page set is current. But the
-		// front page IS index.html since the entry flip, and this same push's
-		// uploadSiteFiles/ensureSiteShell may have just (re)uploaded the embedded
-		// shell over it (a shell-version bump, or any non-pages ref move that
-		// un-skips maintenance). Reclaim index.html deterministically — the pages
-		// maintainer owns it whenever the layer is effective — from the cheap
-		// metadata index (no bodies read).
+		// Nothing a page derives from moved, but this push's shell upload may have written over index.html, so reclaim it.
 		err = reclaimSiteFrontPage(client, prefix, site, manifests, home)
 	case manifest != nil && manifest.Cursor == nil:
 		pending, err = incrementalSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, progress)
@@ -378,18 +276,12 @@ func rebuildSitePages(client *Client, prefix string, refs map[string]string, def
 	if err != nil || pending {
 		return pending, "", err
 	}
-	// The legacy pre-flip front page (timeline.html) is retired; sweep it best-
-	// effort on every effective push so a bucket first pushed by an older binary
-	// stops serving a stale duplicate front page.
+	// Sweep the retired pre-flip front page so an older binary's bucket stops serving a duplicate.
 	_ = client.Delete(prefix + sitePagesLegacyFrontKey)
 	return false, sitePagesStateOn, nil
 }
 
-// reclaimSiteFrontPage re-renders and PUTs index.html (the generated front page)
-// from the metadata index without reading any bodies — the cheap no-op-push path
-// that reclaims index.html after uploadSiteFiles/ensureSiteShell may have written
-// the embedded shell over it. The recent-activity section needs only
-// subjects/authors/times (metadata), so no thread bodies are read.
+// reclaimSiteFrontPage re-renders index.html from the metadata index alone, reading no bodies.
 func reclaimSiteFrontPage(client *Client, prefix string, site sitePageSite, manifests map[string]*siteShardManifest, home *siteFrontHome) error {
 	metas := map[string][]sitePageMsg{}
 	for ext, m := range manifests {
@@ -407,10 +299,7 @@ func reclaimSiteFrontPage(client *Client, prefix string, site sitePageSite, mani
 	return writeSiteFrontPage(client, prefix, roots, done, site, home)
 }
 
-// readSiteFrontCodeEntries returns the newest code items (newest-first, up to
-// limit) from the code items index: the head, then newest sealed shards. Empty
-// (no error) when the code index is absent — the same condition under which the
-// app's own activity section shows no code rows, so the two stay in agreement.
+// readSiteFrontCodeEntries returns the newest code items from the code index: the head, then the newest sealed shards.
 func readSiteFrontCodeEntries(client *Client, prefix string, limit int) ([]siteMetaEntry, error) {
 	m, err := readItemsManifest(client, prefix, siteCodeExt)
 	if err != nil || m == nil {
@@ -434,8 +323,7 @@ func readSiteFrontCodeEntries(client *Client, prefix string, limit int) ([]siteM
 	return out, nil
 }
 
-// sitePageDefaultTitle derives a fallback site title from the repo's key
-// prefix (its last path segment) when no title is configured.
+// sitePageDefaultTitle derives a fallback site title from the key prefix's last segment.
 func sitePageDefaultTitle(prefix string) string {
 	trimmed := strings.TrimSuffix(prefix, "/")
 	if i := strings.LastIndex(trimmed, "/"); i >= 0 {
@@ -447,10 +335,7 @@ func sitePageDefaultTitle(prefix string) string {
 	return trimmed
 }
 
-// readSitePagesManifests reads every present extension's items manifest plus
-// the code index manifest, returning the gitmsg manifests (the pages read those
-// corpora) and the consumed-tip map the pages manifest diffs against (the code
-// tip included, so a code-only push refreshes the front page's interleave).
+// readSitePagesManifests reads every present items manifest plus the code index, returning the gitmsg manifests and the consumed-tip map.
 func readSitePagesManifests(client *Client, prefix string, refs map[string]string) (map[string]*siteShardManifest, map[string]string, error) {
 	manifests := map[string]*siteShardManifest{}
 	tips := map[string]string{}
@@ -478,9 +363,7 @@ func readSitePagesManifests(client *Client, prefix string, refs map[string]strin
 	return manifests, tips, nil
 }
 
-// sitePagesTipsCurrent reports whether the pages manifest consumed exactly the
-// current items-manifest tips (any drift — a moved, added, or removed corpus —
-// triggers the incremental pass).
+// sitePagesTipsCurrent reports whether the pages manifest consumed the current items-manifest tips; any drift triggers the incremental pass.
 func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 	if len(m.Ext) != len(tips) {
 		return false
@@ -493,28 +376,12 @@ func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 	return true
 }
 
-// readSiteFrontHome reads the front page's body through the local commit source
-// the push already has (never a bucket GET — a pusher without a local repo
-// simply gets a thinner front page): the default branch strip, its root file
-// listing and its README. This mirrors what the booted app renders on the home
-// route (gs-render.js homeView), so the page-entry upgrade replaces the body
-// with the same content rather than a different page.
-//
-// Every part of the body reads from ONE source of truth: the BUCKET's tip for
-// the default branch. The local ref of the same name is not it — `gitsocial push
-// --site-only` pushes no data of its own, so a local branch ahead of the bucket
-// would
-// list files the bucket cannot serve behind app links that resolve to nothing,
-// and a bucket HEAD naming a branch this checkout lacks would drop the listing
-// even though the bucket carries it. The local odb is only the reader for that
-// sha; a miss thins the page (no files, no README) instead of misreporting it.
+// readSiteFrontHome reads the front page's body from the local odb at the bucket's own tip, so the page cannot describe content the bucket is unable to serve.
 func readSiteFrontHome(src *localCommitSource, site sitePageSite, refs map[string]string, defaultBranch string) *siteFrontHome {
 	if defaultBranch == "" {
 		return nil
 	}
-	// The count the app's chip shows: every refs/heads/* the bucket carries, plus
-	// the default branch when the listing has not caught up with it (listBranches
-	// adds it to the same set).
+	// The app's chip counts every refs/heads/* the bucket carries, plus the default branch when the listing lags it.
 	branches := 0
 	for ref := range refs {
 		if strings.HasPrefix(ref, "refs/heads/") {
@@ -544,9 +411,7 @@ func readSiteFrontHome(src *localCommitSource, site sitePageSite, refs map[strin
 // localBranchRef names a branch's full ref.
 func localBranchRef(branch string) string { return "refs/heads/" + branch }
 
-// siteBucketBranchTip returns the BUCKET's usable tip for a branch ("" when it
-// carries none): the one sha the front page and the file layer read a tree from,
-// so neither can describe content the bucket cannot serve.
+// siteBucketBranchTip returns the bucket's usable tip for a branch, the one sha the front page and the file layer read a tree from.
 func siteBucketBranchTip(refs map[string]string, branch string) string {
 	if tip := refs[localBranchRef(branch)]; len(tip) >= 12 {
 		return tip
@@ -554,8 +419,7 @@ func siteBucketBranchTip(refs map[string]string, branch string) string {
 	return ""
 }
 
-// readSiteFrontLatest reads the default branch's tip commit for the front page's
-// meta strip. nil when the sha is unknown or the commit is not readable locally.
+// readSiteFrontLatest reads the default branch's tip commit for the front page's meta strip.
 func readSiteFrontLatest(src *localCommitSource, site sitePageSite, sha, branch string) *siteFrontCommit {
 	if len(sha) < 12 {
 		return nil
@@ -593,9 +457,7 @@ type siteTreeRow struct {
 const (
 	// siteTreeDirMode marks a subtree entry.
 	siteTreeDirMode = "40000"
-	// siteTreeFileMode and siteTreeExecMode mark the regular blobs; every other
-	// mode is a submodule's commit or a symlink's target path, neither of which is
-	// content this repo publishes.
+	// siteTreeFileMode and siteTreeExecMode mark the regular blobs; any other mode is a submodule or a symlink.
 	siteTreeFileMode = "100644"
 	siteTreeExecMode = "100755"
 )
@@ -618,10 +480,7 @@ func parseSiteTreeRows(body []byte) []siteTreeRow {
 	return rows
 }
 
-// readSiteRootTree reads and parses the root tree of the bucket tip's commit
-// (tip = "" when the bucket has no usable tip for the default branch). Empty
-// (never an error) when the odb has no local copy of that commit, which just
-// thins the front page.
+// readSiteRootTree reads and parses the root tree of the bucket tip's commit; empty when the odb has no local copy.
 func readSiteRootTree(src *localCommitSource, tip string) []siteTreeEntry {
 	if tip == "" {
 		return nil
@@ -637,8 +496,7 @@ func readSiteRootTree(src *localCommitSource, tip string) []siteTreeEntry {
 	return entries
 }
 
-// siteReadmeName picks the root README the app's findReadme would pick (same
-// candidate names, same precedence, case-insensitive), or "" when there is none.
+// siteReadmeName picks the root README the app's findReadme would pick, by the same names and precedence.
 func siteReadmeName(entries []siteTreeEntry) string {
 	for _, want := range []string{"readme.md", "readme", "readme.markdown", "readme.txt"} {
 		for _, e := range entries {
@@ -650,15 +508,7 @@ func siteReadmeName(entries []siteTreeEntry) string {
 	return ""
 }
 
-// readSiteFrontReadme reads one root README blob from the bucket tip's tree and
-// RENDERS it (site_markdown.go), capped at sitePagesReadmeMax with a truncation
-// marker. Rendering is what makes the served document say what the project is:
-// a README is the one file reliably full of markdown and raw HTML, so as escaped
-// plain text the front page's first indexable content was its own markup.
-//
-// The cap is applied to the SOURCE and pulled back to the last line boundary, so
-// the renderer is never handed a half-written line; the renderer itself closes
-// whatever the cut left open, so the page is well-formed either way.
+// readSiteFrontReadme reads and renders one root README, capping the source at a line boundary so the renderer takes no half line.
 func readSiteFrontReadme(src *localCommitSource, tip, name, branch string, site sitePageSite) *siteFrontReadme {
 	if tip == "" || name == "" {
 		return nil
@@ -675,11 +525,7 @@ func readSiteFrontReadme(src *localCommitSource, tip, name, branch string, site 
 	return &siteFrontReadme{HTML: template.HTML(rendered), Truncated: truncated}
 }
 
-// buildSiteFrontFiles renders the root listing the app's homeFileList shows:
-// directories first then files, each group ordered case-insensitively, capped at
-// sitePagesHomeFiles rows behind the same "Show all N" control (a link into the
-// app's code browser, since the rows themselves are app routes — files get no
-// pages of their own).
+// buildSiteFrontFiles renders the root listing the app's homeFileList shows: directories first, then files, capped behind a "Show all N" link.
 func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) (files []siteFrontFile, moreHref, moreLabel string) {
 	ordered := append([]siteTreeEntry(nil), entries...)
 	sort.SliceStable(ordered, func(i, j int) bool {
@@ -705,13 +551,7 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 	return files, moreHref, moreLabel
 }
 
-// generateSitePages runs one budgeted full-regen pass: read back the item
-// corpora, assemble threads, then write in the pinned order — item pages
-// (budgeted, newest-first per extension, cursor resume), list pages, front page,
-// sitemap + robots, manifest last (the commit point; every earlier write is an
-// idempotent overwrite, so an interrupted pass just redoes the tail). The
-// stylesheet is already on the bucket: rebuildSitePages ships it on every pass,
-// before any page can reference it.
+// generateSitePages runs one budgeted full-regen pass, writing in the pinned order with the manifest last.
 func generateSitePages(client *Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, progress Progress) (bool, error) {
 	msgs := map[string][]sitePageMsg{}
 	for ext, m := range manifests {
@@ -727,9 +567,7 @@ func generateSitePages(client *Client, prefix string, site sitePageSite, prior *
 	if err != nil {
 		return false, err
 	}
-	// The file pages go out between the item pages and the commits sealing: they
-	// are few and they are the site's richest content, but a bucket without item
-	// pages has no crawlable items at all.
+	// File pages go out after the item pages, which a bucket needs before it has any crawlable items.
 	filesState, budget, err := maintainSiteFilePages(client, prefix, site, sitePagesFilesState(prior), files, siteTitleSet(titles), prior == nil, budget, progress)
 	if err != nil {
 		return false, err
@@ -738,9 +576,7 @@ func generateSitePages(client *Client, prefix string, site sitePageSite, prior *
 	if err != nil {
 		return false, err
 	}
-	// The commits layer reads the code corpus, not the gitmsg ones, so a full
-	// regen re-derives it from scratch (prior = nil): a version bump or a site
-	// identity change is exactly when the sealed chain must be rebuilt anyway.
+	// A full regen re-derives the commits layer from scratch, which is what a version or identity change calls for.
 	commits, err := maintainSiteCommitPages(client, prefix, site, nil, defaultBranch, complete, budget)
 	if err != nil {
 		return false, err
@@ -772,12 +608,7 @@ func generateSitePages(client *Client, prefix string, site sitePageSite, prior *
 	return !complete || commits.Pending || sitePagesFilesPending(manifest), nil
 }
 
-// maintainSiteCommitPages runs the commits list layer for one pass: read the
-// default-branch slice of the code index, then write the head and whatever the
-// budget lets it seal. Sealing additionally waits on the CODE index being
-// complete — while that corpus is still bootstrapping its older history, today's
-// oldest row is not the oldest row, and page 1 must be the oldest hundred
-// forever.
+// maintainSiteCommitPages runs the commits list layer for one pass; sealing waits on a complete code index, since page 1 must hold the oldest hundred.
 func maintainSiteCommitPages(client *Client, prefix string, site sitePageSite, prior *siteCommitsState, defaultBranch string, itemsComplete bool, budget int) (*siteCommitsState, error) {
 	entries, codeComplete, err := readSiteCommitEntries(client, prefix, defaultBranch)
 	if err != nil {
@@ -786,15 +617,7 @@ func maintainSiteCommitPages(client *Client, prefix string, site sitePageSite, p
 	return writeSiteCommitPages(client, prefix, entries, defaultBranch, itemsComplete && codeComplete, site, prior, budget)
 }
 
-// incrementalSitePages processes one push's delta on a complete page set: the
-// messages appended past the consumed tips are classified through the same
-// thread machinery as the full build — a new top-level item gets its page, a
-// reply/edit/retract resolves to its root, whose page is regenerated with
-// thread bodies read back only for the affected threads. Only the affected type
-// lists (plus the front page, sitemap head and manifest) are rewritten; sealed
-// list pages stay immutable. The delta is deliberately unbudgeted — it is
-// push-sized by construction, and a corpus whose consumed tip vanished
-// (repair/history rewrite) falls back to the budgeted full regeneration.
+// incrementalSitePages regenerates only the threads and lists one push's delta touched; a vanished consumed tip falls back to the full regen.
 func incrementalSitePages(client *Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, progress Progress) (bool, error) {
 	metas := map[string][]sitePageMsg{}
 	delta := map[string]bool{}
@@ -851,10 +674,7 @@ func incrementalSitePages(client *Client, prefix string, site sitePageSite, prio
 	if err != nil {
 		return false, err
 	}
-	// The commits layer works off the code corpus, so it is dirty on exactly three
-	// signals: the code tip moved, the default branch changed under it, or the
-	// budget left it mid-seal. Clean means the pass reads no code shard at all and
-	// carries the published state through unchanged.
+	// The commits layer is dirty on three signals: a moved code tip, a changed default branch, or a seal the budget cut short.
 	commits := prior.Commits
 	if commits == nil || commits.Pending || commits.Branch != defaultBranch || prior.Ext[siteCodeExt] != tips[siteCodeExt] {
 		commits, err = maintainSiteCommitPages(client, prefix, site, prior.Commits, defaultBranch, true, budget)
@@ -886,11 +706,7 @@ func incrementalSitePages(client *Client, prefix string, site sitePageSite, prio
 	return commits.Pending || sitePagesFilesPending(manifest), nil
 }
 
-// sitePageEntriesSince returns the entries appended after the given consumed
-// branch tip (the newest entry of the corpus at consume time; the corpus is
-// ingestion-ordered, so everything past it is new). A "" tip means the corpus
-// is new since the last pass: everything is new. found is false when the tip is
-// no longer in the corpus (repaired or rewritten), making the delta unknowable.
+// sitePageEntriesSince returns the entries appended after a consumed tip; found is false when the tip has left the corpus.
 func sitePageEntriesSince(entries []sitePageMsg, tip string) ([]sitePageMsg, bool) {
 	if tip == "" {
 		return entries, true
@@ -903,12 +719,7 @@ func sitePageEntriesSince(entries []sitePageMsg, tip string) ([]sitePageMsg, boo
 	return nil, false
 }
 
-// affectedSitePageRoots maps a delta (message shorts) onto the top-level items
-// whose pages must be (re)generated: a delta member may be a root itself, one
-// of its replies, or the resolved latest version of either. Delta members with
-// no owning root (a reply to a foreign/never-fetched root, a dropped cross-repo
-// proposal, a superseded stale edit) change no rendered page and are skipped.
-// Returned newest-first for stable write order.
+// affectedSitePageRoots maps a delta onto the top-level items whose pages must be regenerated, newest-first; a member with no owning root is skipped.
 func affectedSitePageRoots(roots map[string][]*sitePageItem, delta map[string]bool) []*sitePageItem {
 	owner := map[string]*sitePageItem{}
 	for _, rs := range roots {
@@ -937,20 +748,7 @@ func affectedSitePageRoots(roots map[string][]*sitePageItem, delta map[string]bo
 	return affected
 }
 
-// deleteSitePages removes the whole HTML page layer — the disable path: pages
-// turned off (or site.url removed) while the bucket carries a page set. List +
-// Delete over the page namespaces, best-effort per key (failures log and
-// continue); the manifest is deleted last and only after a clean sweep, so an
-// interrupted deletion retries on the next push. Returns complete=false while
-// anything (including the manifest) survives.
-//
-// index.html is NOT deleted — it is dual-owned: the generated front page while
-// the layer is effective, the embedded shell otherwise. On disable this restores
-// the embedded shell index.html itself (rather than relying on the ordering with
-// uploadSiteFiles/ensureSiteShell, which may skip on a matching shell-version
-// marker even though index.html currently holds the generated front page), so
-// the flip back to the shell is deterministic. The retired timeline.html front
-// key is swept alongside the page namespaces.
+// deleteSitePages removes the page layer on disable, best-effort per key with the manifest deleted last; index.html is restored to the shell rather than deleted.
 func deleteSitePages(client *Client, prefix string) (bool, error) {
 	_, exists, err := objectSize(client, prefix+sitePagesManifestKey)
 	if err != nil {
@@ -985,8 +783,7 @@ func deleteSitePages(client *Client, prefix string) (bool, error) {
 	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
 		remove(prefix + key)
 	}
-	// Restore the embedded shell as index.html (the flip back). Best-effort: a
-	// failure keeps the sweep incomplete so the next push retries.
+	// Restore the embedded shell as index.html; a failure keeps the sweep incomplete so the next push retries.
 	if err := uploadShellIndexHTML(client, prefix); err != nil {
 		clean = false
 		fmt.Fprintf(os.Stderr, "gitsocial s3: restore shell index.html: %v\n", err)
@@ -1001,13 +798,7 @@ func deleteSitePages(client *Client, prefix string) (bool, error) {
 	return true, nil
 }
 
-// writeSiteItemPages writes item pages newest-first per extension under the
-// per-push budget, resuming from the prior cursor when that extension's
-// consumed tip is unchanged (a moved tip resets the extension: the sorted root
-// list may have shifted, and page PUTs are overwrite-idempotent). It returns
-// what is LEFT of the budget, which the commits layer seals against — item pages
-// come first because a bucket without them has no crawlable items at all.
-// titles carries each root's site-unique <title> (siteItemPageTitles).
+// writeSiteItemPages writes item pages newest-first per extension under the per-push budget and returns what is left of it; a moved tip resets that extension.
 func writeSiteItemPages(client *Client, prefix string, roots map[string][]*sitePageItem, tips map[string]string, site sitePageSite, prior *sitePagesManifest, titles map[string]string, progress Progress) (map[string]int, bool, int, error) {
 	done := map[string]int{}
 	if prior != nil && prior.Cursor != nil {
@@ -1046,16 +837,7 @@ func writeSiteItemPages(client *Client, prefix string, roots map[string][]*siteP
 	return done, complete, budget, nil
 }
 
-// writeSiteTypeLists writes the type directories' list pages from the roots
-// generated so far (retracted roots are hidden per GITMSG §1.5). While the
-// bootstrap is incomplete only the mutable head is written (the true oldest
-// entries are not known yet, so nothing seals). On a complete set the sealing
-// frontier (the manifest's per-dir newest-sealed sha) partitions the roots:
-// everything at or below it is already in immutable <n>.html pages (1 = oldest)
-// and is never rewritten; the head above it seals its oldest full hundreds into
-// new pages as it overflows, advancing the frontier. affected (nil = every dir)
-// limits the incremental pass to the dirs whose entries changed; skipped dirs
-// carry their prior sealing state through to the returned counts/frontier.
+// writeSiteTypeLists writes the type list pages: the head, plus the sealed pages the frontier leaves to seal; affected (nil = every dir) limits the pass.
 func writeSiteTypeLists(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, complete bool, site sitePageSite, prior *sitePagesManifest, affected map[string]bool) (map[string]int, map[string]string, error) {
 	counts := map[string]int{}
 	frontier := map[string]string{}
@@ -1139,19 +921,7 @@ func writeSiteTypeLists(client *Client, prefix string, roots map[string][]*siteP
 	return counts, frontier, nil
 }
 
-// siteChainedListPage assembles the shape every list page shares: the heading,
-// the rows, and the chain that links a mutable head to its sealed pages. n = 0
-// is the head; n >= 1 is a sealed page (1 = oldest). The sidebar rides on the
-// chrome each caller builds (sitePageSidebar), which is also where a page's own
-// dir is marked current.
-//
-// The chain is the reason this has one owner rather than one per list kind. The
-// newest sealed page AT SEAL TIME links "← newer" to the head and keeps that
-// link once it stops being newest (sealed pages are immutable by contract, and
-// the link still navigates), while the older→ chain from the head always covers
-// every page. Two copies of that rule drift silently, and a drifted chain is a
-// crawler walking into a page that links nowhere. Callers own what actually
-// differs between the kinds: the row builder, the meta line, and the chrome.
+// siteChainedListPage assembles the heading, rows and newer/older chain every list page shares; n = 0 is the head, n >= 1 a sealed page with 1 the oldest.
 func siteChainedListPage(label string, entries []sitePageListEntry, metaBits []string, n, sealed int) siteListPageData {
 	d := siteListPageData{
 		Heading:  label,
@@ -1212,8 +982,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 	return d
 }
 
-// buildSiteSealedListPage assembles one immutable older list page (n = 1 is the
-// oldest); siteChainedListPage owns the newer/older chain.
+// buildSiteSealedListPage assembles one sealed older list page; siteChainedListPage owns its chain.
 func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries []*sitePageItem, n, sealed int) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(pageEntries))
 	for _, it := range pageEntries {
@@ -1245,12 +1014,7 @@ func sitePageListDescription(list sitePageList, site sitePageSite) string {
 	return list.NavLabel + " of " + site.Title + ", newest first."
 }
 
-// writeSiteFrontPage writes the front page: the repo landing the booted app
-// renders on the home route (branch strip, root file listing, README, then the
-// recent-activity rows), from readSiteFrontHome's local-odb read plus the item
-// roots. index.html is dual-owned and the page-entry upgrade replaces this body
-// with the app's own home render, so the two carry the same content in the same
-// order — the upgrade swaps nothing in.
+// writeSiteFrontPage writes the front page: the branch strip, root file listing, README and recent-activity rows the app's home route also renders.
 func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, home *siteFrontHome) error {
 	code, err := readSiteFrontCodeEntries(client, prefix, sitePagesHomeActivity)
 	if err != nil {
@@ -1274,13 +1038,9 @@ func writeSiteFrontPage(client *Client, prefix string, roots map[string][]*siteP
 		Description: sitePageDescription(description, site.Title),
 		OGTitle:     site.Title,
 		SiteTitle:   site.Title,
-		// Post-flip the front page IS index.html, and its canonical/clean URL is
-		// the site root itself (matching the sitemap's root entry), not the
-		// index.html filename.
+		// The front page's canonical URL is the site root, matching the sitemap's root entry.
 		Canonical: site.URL,
-		// The front page IS the app's home view (parseRoute maps "/" to home);
-		// stamping /timeline here would boot the upgraded app into the feed over
-		// the landing the static page shows.
+		// The front page is the app's home view, so a /timeline route here would boot past the landing it shows.
 		Route: "/",
 		Base:  "./",
 		Image: site.Image,
