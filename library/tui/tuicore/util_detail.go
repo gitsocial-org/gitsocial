@@ -9,15 +9,12 @@ import (
 // RenderProgressBar renders a progress bar with completed/total count.
 // Example output: ████████░░░░░░░░  8/15 (53%)
 func RenderProgressBar(completed, total, barWidth int) string {
-	if total == 0 {
+	if total <= 0 {
 		return Dim.Render("No items")
 	}
-	percent := 0
-	if total > 0 {
-		percent = (completed * 100) / total
-	}
+	percent := (completed * 100) / total
 	filled := 0
-	if barWidth > 0 && total > 0 {
+	if barWidth > 0 {
 		filled = (completed * barWidth) / total
 	}
 	empty := barWidth - filled

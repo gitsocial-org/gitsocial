@@ -251,7 +251,6 @@ func RegisterGlobalKeys(r *Registry) {
 
 	// Register core keys (@:notifications - shown in footer)
 	for _, ck := range CoreKeys {
-		ck := ck // capture for closure
 		r.Register(Binding{
 			Key:      ck.Key,
 			Label:    ck.Label,
@@ -267,7 +266,6 @@ func RegisterGlobalKeys(r *Registry) {
 
 	// Register extension keys (S, P, R, V, M, C, I, O, Y, |, F - uppercase, highlighted in sidebar)
 	for _, ek := range ExtensionKeys {
-		ek := ek // capture for closure
 		// Skip placeholders (Target == Global means not implemented)
 		if ek.Target == Global {
 			continue
