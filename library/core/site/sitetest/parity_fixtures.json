@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -98,6 +98,44 @@
       "commitText": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor Bob <bob@example.com> 1700000100 +0000\ncommitter Bob <bob@example.com> 1700000100 +0000\n\nWindows checkout\r\n\r\nEdited on a CRLF machine.\r\n\r\nGitMsg: ext=\"memo\" v=\"1\" type=\"memo\"",
       "expectSubject": "Windows checkout",
       "expectHeader": "GitMsg: ext=\"memo\" v=\"1\" type=\"memo\""
+    }
+  ],
+  "feedbackCards": [
+    {
+      "name": "approved-no-anchor",
+      "header": { "review-state": "approved" },
+      "expectVerdict": "approved",
+      "expectAnchor": ""
+    },
+    {
+      "name": "changes-requested-single-line",
+      "header": { "review-state": "changes-requested", "file": "notes.txt", "new-line": "2" },
+      "expectVerdict": "changes-requested",
+      "expectAnchor": "notes.txt:2"
+    },
+    {
+      "name": "plain-comment-line-range",
+      "header": { "file": "notes.txt", "new-line": "4", "new-line-end": "5" },
+      "expectVerdict": "",
+      "expectAnchor": "notes.txt:4-5"
+    },
+    {
+      "name": "old-side-anchor",
+      "header": { "review-state": "commented", "file": "docs/api.md", "old-line": "17" },
+      "expectVerdict": "",
+      "expectAnchor": "docs/api.md:17"
+    },
+    {
+      "name": "whole-file-anchor",
+      "header": { "file": "Makefile" },
+      "expectVerdict": "",
+      "expectAnchor": "Makefile"
+    },
+    {
+      "name": "degenerate-line-range",
+      "header": { "review-state": "approved", "file": "notes.txt", "new-line": "9", "new-line-end": "9" },
+      "expectVerdict": "approved",
+      "expectAnchor": "notes.txt:9"
     }
   ],
   "listHeadings": {

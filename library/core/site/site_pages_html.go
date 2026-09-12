@@ -176,9 +176,9 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Pre}}<pre>{{.Pre}}</pre>
 {{end}}{{template "paras" .Paras}}</section>
 {{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
-{{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card comment">
+{{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
 {{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
@@ -280,9 +280,10 @@ type sitePageSection struct {
 	Tomb  string
 }
 
-// sitePageReply is one thread reply, rendered as the app's comment card.
+// sitePageReply is one thread reply, rendered as the app's comment or feedback card.
 type sitePageReply struct {
-	Chip       *sitePageChip
+	Variant    string // card variant classes ("comment", "feedback verdict-approved")
+	Chips      []sitePageChip
 	Glyph      string
 	GlyphClass string
 	GlyphTitle string
@@ -658,18 +659,16 @@ func siteItemPageMeta(it *sitePageItem) []string {
 	return append(bits, "#commit:"+it.Msg.Short)
 }
 
-// sitePageFeedbackChip returns a feedback reply's review-state chip, nil for a plain comment.
-func sitePageFeedbackChip(r *sitePageItem) *sitePageChip {
-	switch pageItemField(r, "review-state") {
-	case "approved":
-		return &sitePageChip{Class: "reviewer-chip fb-approved", Label: "approved"}
-	case "changes-requested":
-		return &sitePageChip{Class: "reviewer-chip fb-changes-requested", Label: "changes requested"}
+// sitePageFeedbackVerdict returns a feedback's review verdict, "" for a plain comment. Mirrors feedbackVerdict in gs-core.js.
+func sitePageFeedbackVerdict(r *sitePageItem) string {
+	switch state := pageItemField(r, "review-state"); state {
+	case "approved", "changes-requested":
+		return state
 	}
-	return nil
+	return ""
 }
 
-// sitePageFeedbackAnchor formats a line-anchored feedback's "file:line" bit.
+// sitePageFeedbackAnchor formats a line-anchored feedback's "file:line" chip label. Mirrors feedbackAnchorLabel in gs-core.js.
 func sitePageFeedbackAnchor(r *sitePageItem) string {
 	file := pageItemField(r, "file")
 	if file == "" {
@@ -688,24 +687,29 @@ func sitePageFeedbackAnchor(r *sitePageItem) string {
 	return file + ":" + line
 }
 
-// buildSiteReply renders one thread reply as a comment card, or a tombstone line when it was retracted.
+// buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted.
 func buildSiteReply(r *sitePageItem) sitePageReply {
 	if r.Retracted {
-		return sitePageReply{Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
+		return sitePageReply{Variant: "comment", Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
 	}
 	t := pageMsgType(r.Msg)
 	glyph, glyphClass := sitePageGlyph(t, t, "")
 	s := sitePageReply{
+		Variant:    "comment",
 		Depth:      r.Depth,
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
 		GlyphTitle: t,
 		Meta:       []string{sitePageAuthorBit(r.Msg), sitePageDate(pageEffectiveTime(r.Msg))},
 	}
-	if pageMsgType(r.Msg) == "feedback" {
-		s.Chip = sitePageFeedbackChip(r)
+	if t == "feedback" {
+		s.Variant = "feedback"
+		if verdict := sitePageFeedbackVerdict(r); verdict != "" {
+			s.Variant += " verdict-" + verdict
+			s.Chips = append(s.Chips, sitePageChip{Class: "verdict-" + verdict, Label: strings.ReplaceAll(verdict, "-", " ")})
+		}
 		if anchor := sitePageFeedbackAnchor(r); anchor != "" {
-			s.Meta = append(s.Meta, anchor)
+			s.Chips = append(s.Chips, sitePageChip{Label: anchor})
 		}
 		if pageItemField(r, "suggestion") == "true" {
 			s.Meta = append(s.Meta, "suggestion")

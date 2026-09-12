@@ -1,4 +1,4 @@
-// site_parity_test.go - writer/reader subject/header parity invariant.
+// site_parity_test.go - writer/reader parity invariants: subject/header, and the feedback card.
 // The Go writer's subjectOf / extractHeaderLine (site_items.go) and the JS
 // reader's cleanContent / parseGitmsg (site/gs-core.js) must derive the same
 // subject and GitMsg header line from a commit message. This test pins the Go
@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // parityMessageCase pins the subject/header expected from a raw commit message.
@@ -35,10 +37,19 @@ type parityRawObjectCase struct {
 	ExpectHeader  string `json:"expectHeader"`
 }
 
+// parityFeedbackCase pins the verdict and anchor label a feedback card's header yields.
+type parityFeedbackCase struct {
+	Name          string            `json:"name"`
+	Header        map[string]string `json:"header"`
+	ExpectVerdict string            `json:"expectVerdict"`
+	ExpectAnchor  string            `json:"expectAnchor"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	MessageCases   []parityMessageCase   `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase `json:"rawObjectCases"`
+	FeedbackCards  []parityFeedbackCase  `json:"feedbackCards"`
 	ListHeadings   map[string]string     `json:"listHeadings"`
 }
 
@@ -84,6 +95,47 @@ func TestParityListHeadings(t *testing.T) {
 		tab := strings.TrimPrefix(list.Route, "/")
 		if want, ok := f.ListHeadings[tab]; !ok || want != list.NavLabel {
 			t.Errorf("%s: heading %q, fixture %q", tab, list.NavLabel, want)
+		}
+	}
+}
+
+// TestParityFeedbackCard asserts the feedback card's verdict class and anchor
+// chip label match the fixture the app's own half (unit_parity.js) asserts.
+func TestParityFeedbackCard(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.FeedbackCards) == 0 {
+		t.Fatal("no feedback cases in parity fixtures")
+	}
+	for _, c := range f.FeedbackCards {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: c.Header}}
+			item := &sitePageItem{Msg: msg, Resolved: msg}
+			if got := sitePageFeedbackVerdict(item); got != c.ExpectVerdict {
+				t.Errorf("verdict = %q, want %q", got, c.ExpectVerdict)
+			}
+			if got := sitePageFeedbackAnchor(item); got != c.ExpectAnchor {
+				t.Errorf("anchor = %q, want %q", got, c.ExpectAnchor)
+			}
+		})
+	}
+}
+
+// TestParityFeedbackCardVariant asserts a feedback reply renders as the card
+// variant both renderers build, with the verdict on the card and on a chip.
+func TestParityFeedbackCardVariant(t *testing.T) {
+	fields := map[string]string{"type": "feedback", "review-state": "changes-requested", "file": "notes.txt", "new-line": "2"}
+	msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
+	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg})
+	if reply.Variant != "feedback verdict-changes-requested" {
+		t.Errorf("variant = %q, want %q", reply.Variant, "feedback verdict-changes-requested")
+	}
+	want := []sitePageChip{{Class: "verdict-changes-requested", Label: "changes requested"}, {Label: "notes.txt:2"}}
+	if len(reply.Chips) != len(want) {
+		t.Fatalf("chips = %v, want %v", reply.Chips, want)
+	}
+	for i := range want {
+		if reply.Chips[i] != want[i] {
+			t.Errorf("chip %d = %v, want %v", i, reply.Chips[i], want[i])
 		}
 	}
 }
