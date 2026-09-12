@@ -1,18 +1,7 @@
-// pack.go - packfiles on the push path: two packs split by object type, the
-// pack .idx parser, and the pack map the browser reads packed commit bodies
-// through.
+// pack.go - packfiles on the push path: the two packs, the .idx parser, and the pack map a reader resolves a commit through
 //
-// Git's dumb walker prefers loose objects and only falls back to
-// objects/info/packs when a loose fetch 404s, so the same object must never
-// exist both loose and packed: a push either packs its whole delta or leaves it
-// all loose. Commits and tags pack with --depth=0 (measured 0.5% larger, zero
-// deltas) so a reader resolves any commit body from one byte range and never a
-// delta chain; trees and blobs pack at git's default depth, where delta
-// compression is the whole point.
-//
-// Git is invoked with os/exec directly for the reason helper_push.go documents:
-// the helper runs as a child of git with GIT_DIR in its environment, and
-// objstore stays free of a core/git dependency.
+// A push packs its whole delta or leaves it all loose: git's dumb walker falls
+// back to a pack only on a loose 404, so no object may exist as both.
 package objstore
 
 import (
@@ -36,32 +25,17 @@ const (
 	// packKeyPrefix is the bucket namespace of packfiles and their indexes, the
 	// layout stock git's dumb walker expects next to objects/info/packs.
 	packKeyPrefix = "objects/pack/"
-	// packMapKeyPrefix is the bucket namespace of the pack map: one shard per
-	// two-hex sha prefix (git's own loose fan-out), mapping a packed commit or
-	// tag to the exact byte range of its pack entry. It describes packs rather
-	// than the site, so it sits beside the ref-mode marker under .gitsocial/
-	// instead of under the site artifacts — a plain s3:// remote with no site
-	// still packs, and its reader still needs the offsets.
+	// packMapKeyPrefix is the pack map's namespace: one shard per two-hex sha prefix, next to the ref-mode marker rather than the site artifacts.
 	packMapKeyPrefix = ".gitsocial/packmap/"
-	// packMapVersion is the pack map shard schema version; a reader treats any
-	// other version as absent and falls back to the loose object.
+	// packMapVersion is the pack map shard schema version; another version reads as absent.
 	packMapVersion = 1
-	// defaultPackThreshold is the delta size at or above which a push uploads
-	// packfiles instead of loose objects. Packing a handful of objects would
-	// litter the bucket with tiny packs, each costing the dumb walker an extra
-	// .idx fetch and a manifest line, while the PUT saving is a rounding error;
-	// the win only starts once a push is thousands of round trips long.
+	// defaultPackThreshold is the delta size at which a push uploads packfiles instead of loose objects.
 	defaultPackThreshold = 1000
-	// maxPackUploadBytes caps a single pack upload. The client PUTs a pack as
-	// one request (no multipart), and providers reject a single PUT past ~5 GB,
-	// so a delta whose pack would exceed this falls back to loose objects rather
-	// than failing the push.
+	// maxPackUploadBytes caps a single pack upload, since the client PUTs a pack in one request.
 	maxPackUploadBytes = 4 << 30
 )
 
-// resolvePackThreshold returns the object count at or above which a push packs,
-// honoring a positive GITSOCIAL_S3_PACK_THRESHOLD override (the site-test
-// fixture lowers it; unset in production).
+// resolvePackThreshold returns the object count at which a push packs, honoring GITSOCIAL_S3_PACK_THRESHOLD.
 func resolvePackThreshold() int {
 	if v := os.Getenv("GITSOCIAL_S3_PACK_THRESHOLD"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
@@ -71,18 +45,14 @@ func resolvePackThreshold() int {
 	return defaultPackThreshold
 }
 
-// packMapEntry locates one object inside a pack: its sha and the exact byte
-// range of its pack entry, so a reader needs one Range GET and no .idx.
+// packMapEntry locates one object inside a pack: its sha and the byte range of its entry.
 type packMapEntry struct {
 	sha    string
 	offset int64
 	size   int64
 }
 
-// builtPack is one packfile ready to upload: git's pack name ("pack-<hash>"),
-// the .pack and .idx bytes, the object count it carries (the sealing pass's
-// leftover accounting reads it), and the per-object byte ranges the pack map
-// publishes (empty for the content pack, whose readers use the .idx).
+// builtPack is one packfile ready to upload: its name, bytes, object count, and the ranges the pack map publishes.
 type builtPack struct {
 	name    string
 	pack    []byte
@@ -91,20 +61,14 @@ type builtPack struct {
 	entries []packMapEntry
 }
 
-// packMapDoc is one pack map shard: the packs its entries live in, and
-// sha → [packIndex, offset, size] for every packed commit or tag whose sha
-// starts with the shard's two-hex prefix.
+// packMapDoc is one pack map shard: its packs, and sha to [packIndex, offset, size] for each commit or tag under its prefix.
 type packMapDoc struct {
 	Version int                `json:"version"`
 	Packs   []string           `json:"packs"`
 	Offsets map[string][]int64 `json:"offsets"`
 }
 
-// classifyObjects splits a sha list with one `git cat-file --batch-check` pass:
-// commits and tags (packed without deltas, published in the pack map), trees
-// and blobs (packed at default depth), and the shas the local odb does not
-// carry. A push errors on any miss; the sealing pass, which classifies whatever
-// a bucket happens to hold, simply skips them.
+// classifyObjects splits a sha list in one cat-file pass: commits and tags, trees and blobs, and what the local odb lacks.
 func classifyObjects(shas []string) (commitLike, content, missing []string, err error) {
 	cmd := exec.Command("git", "cat-file", "--batch-check")
 	cmd.Stdin = strings.NewReader(strings.Join(shas, "\n") + "\n")
@@ -128,11 +92,7 @@ func classifyObjects(shas []string) (commitLike, content, missing []string, err 
 	return commitLike, content, missing, nil
 }
 
-// buildDeltaPacks builds the two packs a packed write produces from one sha
-// list: commits and tags without deltas (their byte ranges recorded for the
-// pack map), trees and blobs at git's default depth. Either half may be empty,
-// so the result carries one or two packs. A sha the local odb lacks is an error
-// here — silently dropping an object from a pack would publish a broken pack.
+// buildDeltaPacks builds the two packs a packed write produces; a sha the local odb lacks is an error, since dropping one would publish a broken pack.
 func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 	commitLike, content, missing, err := classifyObjects(shas)
 	if err != nil {
@@ -158,11 +118,7 @@ func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 	return packs, nil
 }
 
-// buildPack runs `git pack-objects` over a sha list and reads the resulting
-// pack, index, and (when withEntries) every object's byte range back. noDelta
-// forbids delta compression, which is what makes a commit read one self-
-// contained zlib stream at a fixed offset. A nil pack (no error) means the sha
-// list was empty.
+// buildPack runs git pack-objects over a sha list and reads the pack, its index and its byte ranges back; noDelta is what makes a commit one self-contained stream.
 func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
 	if len(shas) == 0 {
 		return nil, nil
@@ -172,13 +128,7 @@ func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
 		return nil, fmt.Errorf("pack temp dir: %w", err)
 	}
 	defer os.RemoveAll(dir)
-	// The pusher's own git config must not change the shape of a bucket artifact
-	// every other reader depends on: pack.indexVersion=1 writes a v1 index that
-	// neither parsePackIdx nor the browser reads, and any pack.packSizeLimit
-	// splits the output into several packfiles the single-pack contract below
-	// rejects. Both are pinned on the command line, which outranks every config
-	// file. The rest (compression, window, depth for the content pack) only
-	// changes how well the pack packs, so it is left to the pusher.
+	// Pin the two settings that change an artifact's shape, since the command line outranks every config file.
 	args := []string{"-c", "pack.indexVersion=2", "-c", "pack.packSizeLimit=0", "pack-objects", "-q", "--delta-base-offset"}
 	if noDelta {
 		args = append(args, "--depth=0")
@@ -189,8 +139,7 @@ func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
 	if _, err := cmd.Output(); err != nil {
 		return nil, fmt.Errorf("git pack-objects: %w", err)
 	}
-	// Take the name from the file git actually wrote rather than its stdout, so
-	// the uploaded key and the objects/info/packs line can never disagree.
+	// Take the name from the file git wrote, so the uploaded key and the objects/info/packs line agree.
 	written, err := filepath.Glob(filepath.Join(dir, "pack-*.pack"))
 	if err != nil || len(written) != 1 {
 		return nil, fmt.Errorf("git pack-objects: expected one packfile in %s, found %d", dir, len(written))
@@ -219,9 +168,7 @@ type packIdxEntry struct {
 	offset int64
 }
 
-// parsePackIdx reads a v2 pack index (magic, 256-entry fanout, sorted shas,
-// CRCs, 4-byte offsets with an 8-byte large-offset table) and returns every
-// entry in sha order.
+// parsePackIdx reads a v2 pack index and returns every entry in sha order.
 func parsePackIdx(idx []byte) ([]packIdxEntry, error) {
 	const header = 8 + 256*4
 	if len(idx) < header+40 || string(idx[:4]) != "\xfftOc" || binary.BigEndian.Uint32(idx[4:8]) != 2 {
@@ -249,10 +196,7 @@ func parsePackIdx(idx []byte) ([]packIdxEntry, error) {
 	return entries, nil
 }
 
-// packEntryRanges turns a pack index into per-object byte ranges. Pack entries
-// are contiguous, so an entry ends where the next one (in offset order) begins,
-// and the last ends at the pack's 20-byte trailing checksum — no inflation and
-// no `git verify-pack` pass needed to learn a size.
+// packEntryRanges turns a pack index into per-object byte ranges; entries are contiguous, so each ends where the next begins.
 func packEntryRanges(idx []byte, packSize int64) ([]packMapEntry, error) {
 	entries, err := parsePackIdx(idx)
 	if err != nil {
@@ -271,18 +215,7 @@ func packEntryRanges(idx []byte, packSize int64) ([]packMapEntry, error) {
 	return ranges, nil
 }
 
-// publishPack PUTs a pack's index and then the pack itself under objects/pack/,
-// followed by the pack map entries a commits pack carries. Both objects are
-// immutable (content-named), so re-uploads are idempotent and the retry is
-// free; the index lands first so a reader that discovers the pack can always
-// index it.
-//
-// Only the two object uploads can fail this: the pack map is a read
-// optimization over them (a reader with no entry range-reads the .idx instead),
-// so a shard that will not write is logged and nothing more. Failing here would
-// reject a push whose packfiles are already durable on the bucket, over an index
-// that costs a reader nothing but an extra round trip and that the next pack
-// published into the same shard rewrites anyway.
+// publishPack PUTs a pack's index and then the pack, then its map entries; the index lands first, so a reader that finds the pack can index it.
 func publishPack(client *Client, capability Capability, prefix string, built *builtPack, concurrency int) error {
 	for _, part := range []struct {
 		suffix string
@@ -305,10 +238,7 @@ func publishPack(client *Client, capability Capability, prefix string, built *bu
 // packMapShardName is the pack map shard a sha belongs to (its two-hex prefix).
 func packMapShardName(sha string) string { return sha[:2] }
 
-// writePackMap records a pack's object ranges into the sha-prefixed pack map,
-// merging into whatever earlier packs already published. Shards are read,
-// merged, and written concurrently: a cold push touches all 256 of them, and
-// serial round trips would dominate the pack upload it follows.
+// writePackMap merges a pack's object ranges into the sha-prefixed pack map, shard by shard and concurrently.
 func writePackMap(client *Client, capability Capability, prefix, packName string, entries []packMapEntry, concurrency int) error {
 	byShard := map[string][]packMapEntry{}
 	for _, e := range entries {
@@ -325,11 +255,7 @@ func writePackMap(client *Client, capability Capability, prefix, packName string
 	})
 }
 
-// writePackMapShard merges one pack's entries into a single pack map shard,
-// under compare-and-swap. A plain write loses a concurrent pusher's entries for
-// good: an object is packed once, so nothing ever rewrites the shard it went
-// missing from, and every reader of those commits pays the fallback (fetch a
-// whole pack index and binary-search it) forever.
+// writePackMapShard merges one pack's entries into a shard under compare-and-swap; an object is packed once, so nothing rewrites a lost entry.
 func writePackMapShard(client *Client, capability Capability, prefix, shard, packName string, entries []packMapEntry) error {
 	return updateCompressedJSON(client, capability, prefix+packMapKeyPrefix+shard+".json", func(doc *packMapDoc, found bool) error {
 		if !found || doc.Version != packMapVersion || doc.Offsets == nil {
@@ -353,8 +279,7 @@ func writePackMapShard(client *Client, capability Capability, prefix, shard, pac
 	})
 }
 
-// readPackMapShard fetches one pack map shard, returning an empty document when
-// it is absent, unparseable, or written by another schema version.
+// readPackMapShard fetches one pack map shard, empty when absent, unreadable, or at another schema version.
 func readPackMapShard(client *Client, prefix, shard string) (*packMapDoc, error) {
 	var doc packMapDoc
 	found, err := readCompressedJSON(client, prefix+packMapKeyPrefix+shard+".json", &doc)
@@ -368,15 +293,10 @@ func readPackMapShard(client *Client, prefix, shard string) (*packMapDoc, error)
 	return &doc, nil
 }
 
-// packObjectTypes maps a pack entry's 3-bit type code to the git object type
-// name (whole objects only; 6/7 are the delta codes).
+// packObjectTypes maps a pack entry's 3-bit type code to the git object type name; 6 and 7 are the delta codes.
 var packObjectTypes = map[byte]string{1: "commit", 2: "tree", 3: "blob", 4: "tag"}
 
-// inflatePackEntry decodes one NON-DELTA pack entry out of its exact byte range
-// (a pack map range): the type/size varint header, then one self-contained zlib
-// stream — the shape the commits pack guarantees, since it is written with
-// --depth=0. A delta entry is an error here, not a fallback: the pack map only
-// indexes the commits pack.
+// inflatePackEntry decodes one non-delta pack entry from its byte range; a delta entry is an error, since the map indexes only the commits pack.
 func inflatePackEntry(raw []byte) (objType string, body []byte, err error) {
 	if len(raw) == 0 {
 		return "", nil, fmt.Errorf("pack entry: empty range")
@@ -407,9 +327,7 @@ func inflatePackEntry(raw []byte) (objType string, body []byte, err error) {
 	return objType, body, nil
 }
 
-// listBucketPacks returns the pack names ("pack-<hash>") the bucket carries,
-// sorted, derived from the objects/pack/ listing rather than push-side state so
-// packs another clone uploaded are listed too.
+// listBucketPacks returns the pack names the bucket carries, from the objects/pack/ listing, so another clone's packs are listed too.
 func listBucketPacks(client *Client, prefix string) ([]string, error) {
 	keys, err := client.List(prefix + packKeyPrefix)
 	if err != nil {
@@ -426,8 +344,7 @@ func listBucketPacks(client *Client, prefix string) ([]string, error) {
 	return names, nil
 }
 
-// parseInfoPacks reads the pack names out of an objects/info/packs body
-// ("P <name>.pack" lines, git's update-server-info format).
+// parseInfoPacks reads the pack names out of an objects/info/packs body.
 func parseInfoPacks(body []byte) []string {
 	var names []string
 	for _, line := range strings.Split(string(body), "\n") {
@@ -442,9 +359,7 @@ func parseInfoPacks(body []byte) []string {
 	return names
 }
 
-// forEachBounded runs fn for indexes 0..n-1 over a bounded worker pool and
-// returns the first error. Used by the pack map's per-shard read-merge-write,
-// where each shard is an independent pair of round trips.
+// forEachBounded runs fn for indexes 0 to n-1 over a bounded worker pool and returns the first error.
 func forEachBounded(n, concurrency int, fn func(i int) error) error {
 	if n == 0 {
 		return nil

@@ -18,26 +18,19 @@ import (
 	"sync/atomic"
 )
 
-// Generation chains live under "<refname>/.gen/<counter>". A dot-prefixed
-// path component is illegal in a git refname, so chain keys can never collide
-// with a real ref, and they sort inside the one refs/ listing reads already do.
+// Generation chains live under "<refname>/.gen/<counter>"; a dot-prefixed component is illegal in a refname, so a chain key cannot collide with a real ref.
 const (
 	genDir   = "/.gen/"
 	genWidth = 10 // zero-padded decimal; ~10 updates/s for 30 years before overflow
 )
 
-// bucketRefsKey holds refname → sha for the whole bucket, the ref source for a
-// reader without ListBucket (git through the helper, or the browser).
-// legacySiteManifestKey is its pre-manifest site copy: read as a fallback, never written.
+// bucketRefsKey holds refname to sha for the whole bucket; legacySiteManifestKey is its pre-manifest site copy, read as a fallback and not written.
 const (
 	bucketRefsKey         = ".gitsocial/refs.json"
 	legacySiteManifestKey = ".gitsocial/site/refs.json"
 )
 
-// publishRefManifest writes refs as the ref manifest, in etag mode conditional
-// on etag ("" = absent), and returns the new ETag. ErrPreconditionFailed means
-// the document moved, so the caller re-derives refs and tries again. An empty
-// mode reads the bucket's marker.
+// publishRefManifest writes refs as the ref manifest and returns the new ETag; ErrPreconditionFailed means the document moved, so the caller re-derives and retries.
 func publishRefManifest(client *Client, prefix, mode string, refs map[string]string, etag string) (string, error) {
 	if mode == "" {
 		var err error
@@ -59,9 +52,7 @@ func publishRefManifest(client *Client, prefix, mode string, refs map[string]str
 	return newETag, err
 }
 
-// rebuildRefManifest republishes the manifest from a fresh listing, leaving a
-// matching one alone, and returns the refs. The ETag is read before the listing,
-// so a manifest written between the two fails the write instead of hiding a ref.
+// rebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
 func rebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		stored, etag, err := readClaimsWithETag(client, prefix+bucketRefsKey)
@@ -84,8 +75,7 @@ func rebuildRefManifest(client *Client, prefix string, progress Progress) (map[s
 	return nil, fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
 }
 
-// putRefManifestConditional writes the manifest only while the key still carries
-// etag, or (empty etag) only while it is still absent, and returns the new ETag.
+// putRefManifestConditional writes the manifest only while the key still carries etag, or only while it is absent for an empty one.
 func putRefManifestConditional(client *Client, key string, data []byte, etag string) (string, error) {
 	headers := map[string]string{"Content-Type": "application/json", "If-Match": etag}
 	if etag == "" {
@@ -109,10 +99,7 @@ func genKey(prefix, refName string, gen uint64) string {
 	return fmt.Sprintf("%s%s%s%0*d", prefix, refName, genDir, genWidth, gen)
 }
 
-// parseGenKey splits a prefix-stripped key into refname and generation;
-// isGen=false means a plain ref key (returned as refName unchanged).
-// Malformed counters are an error — only a foreign writer produces keys
-// under /.gen/ that this code didn't format.
+// parseGenKey splits a prefix-stripped key into refname and generation; a malformed counter is an error, since only a foreign writer formats one.
 func parseGenKey(key string) (refName string, gen uint64, isGen bool, err error) {
 	idx := strings.LastIndex(key, genDir)
 	if idx < 0 {
@@ -135,17 +122,12 @@ func refSHA(refName string, value []byte) (string, error) {
 	return sha, nil
 }
 
-// readRemoteRefs returns refname → sha for every remote ref, resolving
-// generation chains (highest generation wins) and plain keys. A chain takes
-// precedence over a plain key of the same name.
+// readRemoteRefs returns refname to sha for every remote ref; the highest generation wins, and a chain outranks a plain key of the same name.
 func readRemoteRefs(client *Client, prefix string) (map[string]string, error) {
 	return readRemoteRefsProgress(client, prefix, nil)
 }
 
-// ListRemoteRefs returns refname → sha for every ref in the bucket behind a
-// canonical s3 remote URL (the same listing the push-state digest reads). It is
-// the narrow entry the push-path tracking-ref reconcile needs without reaching
-// into objstore internals.
+// ListRemoteRefs returns refname to sha for every ref in the bucket behind a canonical s3 remote URL.
 func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) {
 	client, prefix, _, err := clientForRemote(remoteURL, env)
 	if err != nil {
@@ -154,20 +136,7 @@ func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) 
 	return readRemoteRefs(client, prefix)
 }
 
-// readRemoteRefsProgress is readRemoteRefs with a progress hook: reading each
-// ref is one GET, so a bucket with many refs (fork registrations) is a long
-// silent phase without it. The per-ref GETs run through a bounded worker pool
-// (same size as the upload pool) so ~1,000 refs cost latency of ~1,000/N round
-// trips instead of 1,000 serial ones; the first error cancels the pool.
-//
-// ETag verification: a plain ref key's body is exactly "<sha>\n", and a simple-
-// PUT S3/R2 ETag is the MD5 of the body — so when the site refs.json manifest
-// (1 GET) claims a refname→sha and that sha's "<sha>\n" MD5 matches the ETag the
-// listing already carried, the ref value is proven WITHOUT a GET. Only a
-// verified match is trusted, so a wrong manifest can never poison a ref value;
-// any mismatch, an absent manifest entry, a multipart-shaped ETag (contains a
-// dash → not a plain MD5), or a generation chain falls back to the GET below.
-// Buckets with no refs.json (a plain git remote) skip the optimization entirely.
+// readRemoteRefsProgress is readRemoteRefs with a progress hook, reading the per-ref GETs through a bounded pool. A manifest claim whose MD5 matches the listing's ETag proves a ref's value with no GET; anything else falls back to the read.
 func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	listed, err := client.ListWithETags(prefix + "refs/")
 	// A public web domain in front of a bucket answers a list request with 404.
@@ -194,8 +163,7 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 	if !found {
 		manifest, _ = readClaimsDoc(client, prefix+legacySiteManifestKey)
 	}
-	// Resolve plain refs that the manifest+ETag prove up front; only the
-	// unverified remainder becomes GET jobs.
+	// Resolve the plain refs the manifest and ETag prove up front; only the rest become GET jobs.
 	out := map[string]string{}
 	type refJob struct {
 		refName string
@@ -238,9 +206,7 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 	return out, nil
 }
 
-// readRefsWithoutListing discovers refs for a reader that cannot list: a
-// push-maintained document supplies the names, and in etag mode each name's own
-// key its value; a generation chain has no such key, so there the claim is the value.
+// readRefsWithoutListing discovers refs for a reader that cannot list: a document supplies the names, and in etag mode each name's own key its value.
 func readRefsWithoutListing(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	claims, found := readRefClaims(client, prefix)
 	if !found {
@@ -280,10 +246,7 @@ func readRefsWithoutListing(client *Client, prefix string, progress Progress) (m
 	return refs.out, nil
 }
 
-// readRefClaims returns the first ref document the bucket publishes, freshest
-// source first: bucketRefsKey, info/refs, then the pre-manifest site copy, which
-// older pushes rewrote only while the site was published. found=false means none
-// is there; a document that is present and empty is found, with no refs.
+// readRefClaims returns the first ref document the bucket publishes, freshest source first; a present and empty document is found, with no refs.
 func readRefClaims(client *Client, prefix string) (map[string]string, bool) {
 	if claims, found := readClaimsDoc(client, prefix+bucketRefsKey); found {
 		return claims, true
@@ -294,9 +257,7 @@ func readRefClaims(client *Client, prefix string) (map[string]string, bool) {
 	return readClaimsDoc(client, prefix+legacySiteManifestKey)
 }
 
-// noRefSourceError diagnoses a bucket publishing no ref document: a readable
-// ref-mode marker or HEAD means a bucket last pushed by an older gitsocial,
-// neither readable means the bucket is private to this reader or still empty.
+// noRefSourceError diagnoses a bucket publishing no ref document, by whether its ref-mode marker or HEAD is readable.
 func noRefSourceError(client *Client, prefix string) error {
 	for _, key := range []string{refModeKey, "HEAD"} {
 		_, err := client.Get(prefix + key)
@@ -313,8 +274,7 @@ func noRefSourceError(client *Client, prefix string) error {
 	return fmt.Errorf("the credentials for this remote can neither list the bucket nor read its refs: the bucket is empty, or the key lacks s3:GetObject and s3:ListBucket")
 }
 
-// readRefModeMarker returns the bucket's recorded ref mode, "" when no push has
-// pinned one yet.
+// readRefModeMarker returns the bucket's recorded ref mode, "" when no push has pinned one.
 func readRefModeMarker(client *Client, prefix string) (string, error) {
 	value, err := client.Get(prefix + refModeKey)
 	if errors.Is(err, ErrNotFound) {
@@ -330,16 +290,13 @@ func readRefModeMarker(client *Client, prefix string) (string, error) {
 	return mode, nil
 }
 
-// readClaimsDoc reads one refname → sha JSON document. found=false means the key
-// is absent or unreadable; a present empty document is found with zero refs.
+// readClaimsDoc reads one refname-to-sha JSON document; a present empty document is found, with zero refs.
 func readClaimsDoc(client *Client, key string) (map[string]string, bool) {
 	claims, _, err := readClaimsWithETag(client, key)
 	return claims, err == nil && claims != nil
 }
 
-// readClaimsWithETag is readClaimsDoc plus the stored ETag a conditional rewrite
-// compares against. A present document that does not parse is nil claims with
-// its ETag and no error, so a rewrite can still replace it.
+// readClaimsWithETag is readClaimsDoc plus the stored ETag; an unparseable document yields nil claims with its ETag, so a rewrite can replace it.
 func readClaimsWithETag(client *Client, key string) (map[string]string, string, error) {
 	data, etag, err := client.GetWithETag(key)
 	if err != nil {
@@ -352,11 +309,7 @@ func readClaimsWithETag(client *Client, key string) (map[string]string, string, 
 	return claims, etag, nil
 }
 
-// etagMatchesRef reports whether a listing ETag proves a plain ref holds sha:
-// the ref body is exactly "<sha>\n", so on a simple (non-multipart) PUT the ETag
-// is the MD5 hex of that body. A multipart-upload ETag carries a "-<parts>"
-// suffix (never a plain MD5) and any non-32-hex ETag is rejected, so only a true
-// MD5 match verifies.
+// etagMatchesRef reports whether a listing ETag proves a plain ref holds sha; only a true MD5 of the "<sha>\n" body verifies.
 func etagMatchesRef(etag, sha string) bool {
 	e := strings.Trim(etag, `"`)
 	if len(e) != 32 || strings.Contains(e, "-") {
@@ -366,17 +319,13 @@ func etagMatchesRef(etag, sha string) bool {
 	return hex.EncodeToString(sum[:]) == strings.ToLower(e)
 }
 
-// refReadResult carries the accumulated refs and the first error (if any) from
-// the bounded ref-read pool.
+// refReadResult carries the accumulated refs and the first error from the ref-read pool.
 type refReadResult struct {
 	out map[string]string
 	err error
 }
 
-// readRefJobs runs read over each job through a bounded worker pool sized like
-// the upload pool. The first error cancels the pool and is returned; progress
-// (nil = silent) is reported as each ref lands, serialized behind the result
-// mutex so the single-goroutine-per-phase Progress contract holds under the pool.
+// readRefJobs runs read over each job through a bounded worker pool; the first error cancels it, and progress is serialized behind the result mutex.
 func readRefJobs[J any](total int, progress Progress, read func(context.Context, J) (string, string, error), jobs []J) refReadResult {
 	concurrency := resolveUploadConcurrency()
 	if concurrency < 1 {
@@ -431,8 +380,7 @@ func readRefJobs[J any](total int, progress Progress, read func(context.Context,
 	return refReadResult{out: out, err: firstErr}
 }
 
-// readChainTip reads the ref value at the given generation, re-listing the
-// chain when the key was garbage-collected between list and read.
+// readChainTip reads the ref value at a generation, re-listing the chain when the key was collected between list and read.
 func readChainTip(client *Client, prefix, refName string, gen uint64) (string, error) {
 	for attempt := 0; attempt < 3; attempt++ {
 		value, err := client.GetRetry(genKey(prefix, refName, gen))
@@ -454,7 +402,7 @@ func readChainTip(client *Client, prefix, refName string, gen uint64) (string, e
 	return "", fmt.Errorf("ref %s: generation chain kept moving; retry", refName)
 }
 
-// maxGeneration lists one ref's chain and returns its highest generation (0 = none).
+// maxGeneration lists one ref's chain and returns its highest generation, 0 for none.
 func maxGeneration(client *Client, prefix, refName string) (uint64, error) {
 	keys, err := client.List(prefix + refName + genDir)
 	if err != nil {

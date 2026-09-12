@@ -1,13 +1,4 @@
-// helper.go - git remote helper for s3:// remotes (read side)
-//
-// Implements the gitremote-helpers(7) line protocol with the `fetch`
-// capability (object-graph level, dumb-transport shape): `list` reads one key
-// per ref plus HEAD, `fetch` walks the commit graph from the wanted tips and
-// downloads missing objects straight into GIT_DIR/objects. Loose objects are
-// stored in the bucket exactly as git writes them (zlib, same 2/38 fan-out), so
-// downloads are verbatim copies and SHAs are never rewritten; a bucket whose
-// bulk history is packed instead has its packfiles pulled and indexed locally
-// once per session (see pack.go).
+// helper.go - the read side of the s3:// remote helper: the line protocol, the ref listing and the object-graph fetch
 package objstore
 
 import (
@@ -36,10 +27,7 @@ type HelperEnv struct {
 	PathStyle bool
 }
 
-// HelperEnvFromOS reads helper configuration from the process environment:
-// GIT_DIR plus GITSOCIAL_S3_ENDPOINT / GITSOCIAL_S3_REGION /
-// GITSOCIAL_S3_PATH_STYLE. Credentials are not carried here; they resolve per
-// endpoint host when the client is built (credentials.go).
+// HelperEnvFromOS reads helper configuration from the process environment; credentials are not carried here, but resolved per endpoint host.
 func HelperEnvFromOS() HelperEnv {
 	return HelperEnv{
 		GitDir:    os.Getenv("GIT_DIR"),
@@ -49,11 +37,7 @@ func HelperEnvFromOS() HelperEnv {
 	}
 }
 
-// ParseS3URL splits a canonical s3 URL (s3://<endpoint-host>/<bucket>/<prefix>)
-// into endpoint host, bucket, and key prefix (prefix is "" or ends with "/").
-// A known provider's virtual-host spelling (s3://<bucket>.<endpoint-host>/…)
-// folds to the same result. Bucket-only authorities and query parameters are
-// rejected.
+// ParseS3URL splits a canonical s3 URL into endpoint host, bucket and key prefix; a known provider's virtual-host spelling folds to the same result.
 func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -66,8 +50,7 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 		return "", "", "", fmt.Errorf("s3 URLs take no parameters (configure endpoint/path-style via GITSOCIAL_S3_* env): %s", raw)
 	}
 	authority := strings.ToLower(u.Host)
-	// A dot or a port marks a real endpoint host; a bare bucket name has neither
-	// (bucket names can't contain ":"), so localhost:8000 passes and s3://bucket/repo doesn't.
+	// A dot or a port marks a real endpoint host, which a bare bucket name has neither of.
 	if !strings.Contains(authority, ".") && !strings.Contains(authority, ":") {
 		return "", "", "", fmt.Errorf("s3 URLs must name the endpoint host: s3://<endpoint-host>/<bucket>/<prefix> (got %s)", raw)
 	}
@@ -90,8 +73,7 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 	return endpointHost, bucket, trail, nil
 }
 
-// hostAddressKind classifies an endpoint authority (host or host:port):
-// ipLiteral is true for any IP address, loopback for localhost/127.x/::1.
+// hostAddressKind classifies an endpoint authority: ipLiteral for any IP address, loopback for localhost and the loopback range.
 func hostAddressKind(authority string) (ipLiteral, loopback bool) {
 	host := authority
 	if h, _, err := net.SplitHostPort(authority); err == nil {
@@ -130,18 +112,13 @@ type remoteHelper struct {
 	thinPins       []ThinPin          // frontier this push excluded against (nil = none computed)
 }
 
-// clientForRemote builds the S3 client, key prefix, and provider capability
-// for a canonical s3 remote URL, honoring the env's dev/self-hosted overrides.
+// clientForRemote builds the client, key prefix and provider capability for a canonical s3 remote URL.
 func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capability, error) {
 	endpointHost, bucket, prefix, err := ParseS3URL(remoteURL)
 	if err != nil {
 		return nil, "", CapabilityUnknown, err
 	}
-	// The URL's endpoint host is authoritative; the env endpoint override
-	// exists for dev/self-hosted servers (http scheme, path-style addressing).
-	// Without an override, IP-literal and localhost hosts get dev defaults:
-	// virtual-host addressing can't work there (bucket.<ip> never resolves),
-	// and loopback servers speak plain http.
+	// The URL's endpoint host is authoritative. Absent an override, an IP-literal or loopback host takes path-style addressing, which is the only shape that resolves there.
 	endpoint := env.Endpoint
 	pathStyle := env.PathStyle
 	if endpoint == "" {
@@ -163,9 +140,7 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 	if region == "" {
 		region = "us-east-1"
 	}
-	// Credentials resolve per endpoint host (env pair > credentials file >
-	// AWS_* pair; see resolveCredentials), so a multi-remote push signs each
-	// provider with its own keys in one invocation.
+	// Credentials resolve per endpoint host, so a multi-remote push signs each provider with its own keys.
 	access, secret := resolveCredentials(endpointHost)
 	client, err := NewClient(Config{
 		Endpoint:  endpoint,
@@ -181,11 +156,7 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 	return client, prefix, capability, nil
 }
 
-// RunHelper speaks the git remote-helper protocol on in/out for the given
-// s3:// remote URL until EOF or an empty command line. remoteName is the git
-// remote the helper was invoked for (per gitremote-helpers(7)); it reads that
-// remote's per-remote site overrides from git config so the bucket-side site
-// maintenance honors them. An anonymous-URL invocation passes "" (no overrides).
+// RunHelper speaks the git remote-helper protocol on in and out until EOF or an empty command line; remoteName supplies the per-remote site overrides, and "" means none.
 func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
 	if env.GitDir == "" {
 		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
@@ -194,9 +165,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	if err != nil {
 		return err
 	}
-	// Progress goes to the helper's STDERR (out is the git protocol stream);
-	// git relays a remote helper's stderr to the user's terminal. GIT_QUIET
-	// silences it, mirroring git's own progress suppression.
+	// Progress goes to stderr, since out is the git protocol stream; GIT_QUIET silences it.
 	var pw *progressWriter
 	if os.Getenv("GIT_QUIET") == "" {
 		pw = newProgressWriter(os.Stderr, stderrIsTTY())
@@ -257,13 +226,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	return scanner.Err()
 }
 
-// option handles one "option <name> <value>" command and returns the protocol
-// reply. Only "cas" — the per-ref --force-with-lease expectation git sends
-// ahead of a push batch (value "<refname>:<expected-oid>") — is supported;
-// every other option answers "unsupported", which git treats as a clean
-// decline (the same result it got from a helper without the option capability,
-// so nothing that worked before can regress). The recorded lease is enforced
-// by the push ref-update CAS loops (see checkLease in helper_push.go).
+// option handles one "option" command; only "cas", the per-ref force-with-lease expectation, is supported, and every other option answers unsupported, which git takes as a clean decline.
 func (h *remoteHelper) option(spec string) string {
 	name, value, _ := strings.Cut(spec, " ")
 	if name != "cas" {
@@ -283,9 +246,7 @@ func (h *remoteHelper) option(spec string) string {
 	return "ok"
 }
 
-// list prints every ref (resolving generation chains) and the HEAD symref. Before
-// a push it also notes the ref manifest's ETag and brings a missing or stale
-// manifest up to this listing, which a push that moves nothing would never do.
+// list prints every ref and the HEAD symref; before a push it also brings a missing or stale ref manifest up to this listing.
 func (h *remoteHelper) list(w io.Writer, forPush bool) error {
 	refs, err := readRemoteRefs(h.client, h.prefix)
 	if err != nil {
@@ -327,11 +288,8 @@ func (h *remoteHelper) list(w io.Writer, forPush bool) error {
 }
 
 // fetch downloads the object graphs reachable from each requested tip.
-// Batch lines look like "fetch <sha> <refname>".
 func (h *remoteHelper) fetch(batch []string) error {
-	// A packed bucket serves bulk history as packfiles rather than loose keys,
-	// so pull them once up front: the walk then resolves those objects out of
-	// the local odb instead of 404ing on every one.
+	// Pull a packed bucket's packfiles once up front, so the walk resolves those objects from the local odb.
 	if err := h.ensurePacksLocal(); err != nil {
 		return err
 	}
@@ -347,11 +305,7 @@ func (h *remoteHelper) fetch(batch []string) error {
 	return nil
 }
 
-// ensurePacksLocal downloads every packfile the bucket lists that GIT_DIR does
-// not already carry, indexes it with `git index-pack`, and records which objects
-// each contains. Handing the pack to git is the cheap way to read a packed
-// bucket from this side — git resolves the delta chains, unlike the browser
-// reader, which has to do it itself. Runs at most once per helper session.
+// ensurePacksLocal downloads every packfile GIT_DIR lacks, indexes it with git index-pack, and records what each carries. It runs once per session.
 func (h *remoteHelper) ensurePacksLocal() error {
 	if h.packsPulled {
 		return nil
@@ -395,14 +349,10 @@ func (h *remoteHelper) ensurePacksLocal() error {
 	return nil
 }
 
-// packSidecarSuffixes are the files `git index-pack` produces beside a pack:
-// the index it always writes, and the reverse index newer git versions add.
+// packSidecarSuffixes are the files git index-pack produces beside a pack.
 var packSidecarSuffixes = []string{".pack", ".idx", ".rev"}
 
-// downloadPack fetches one packfile into GIT_DIR/objects/pack and builds its
-// index locally. It lands under a temporary name and is renamed into place only
-// once indexed, so an interrupted download never leaves git a pack it cannot
-// read, and no tmp-* leftover for `git fsck` to warn about.
+// downloadPack fetches one packfile and indexes it locally, landing it under a temporary name and renaming it in only once indexed.
 func (h *remoteHelper) downloadPack(dir, name string) error {
 	data, err := h.client.GetRetry(h.prefix + packKeyPrefix + name + ".pack")
 	if err != nil {
@@ -431,8 +381,7 @@ func (h *remoteHelper) downloadPack(dir, name string) error {
 	return nil
 }
 
-// walkObject ensures the object and everything it references exist locally,
-// downloading missing objects from the bucket. Iterative DFS.
+// walkObject ensures the object and everything it references exist locally, downloading what is missing.
 func (h *remoteHelper) walkObject(sha string) error {
 	stack := []string{sha}
 	for len(stack) > 0 {
@@ -447,8 +396,7 @@ func (h *remoteHelper) walkObject(sha string) error {
 			return err
 		}
 		if present {
-			// Already in the local odb from a previous fetch; its graph is
-			// assumed complete (same assumption git makes for haves).
+			// Already in the local odb, so its graph is assumed complete, as git assumes for haves.
 			continue
 		}
 		children, err := objectChildren(objType, body, cur)
@@ -460,25 +408,10 @@ func (h *remoteHelper) walkObject(sha string) error {
 	return nil
 }
 
-// emptyTreeSHA is the one object git synthesizes in every repository: `cat-file`
-// answers for it whether or not the odb holds a copy. The odb presence probe
-// below must therefore skip it — reading it as present would stop the walk from
-// downloading the bucket's copy, and a clone's `git fsck` then reports it missing
-// (gitmsg data branches are all empty-tree commits, so this is the common case).
+// emptyTreeSHA is the object git synthesizes in every repository, so the presence probe must skip it or the walk does not download the bucket's copy.
 const emptyTreeSHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-// ensureObject makes the object available in GIT_DIR/objects and returns its
-// type and raw body when this session brought it in. present=true (with no
-// body) means the object was already in the local odb before this fetch, so its
-// graph is assumed complete.
-//
-// An object the bucket carries in a packfile is deliberately NOT "present": the
-// packs were pulled whole, but a pack need not close over its own references (an
-// older, smaller push may have left them loose), so the walk descends through it.
-// An object the local odb holds that no bucket pack carries IS present: it
-// arrived through a real git transport (a previous fetch, or the thin-fork
-// upstream overlay), which guarantees closure — the same assumption the loose
-// path and git's haves negotiation already make.
+// ensureObject makes the object available in GIT_DIR/objects and returns its type and body when this session brought it in. An object from a pulled pack is not present, since a pack need not close over its references; one the local odb already held is, since it arrived through a real transport.
 func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, present bool, err error) {
 	if len(sha) != 40 {
 		return "", nil, false, fmt.Errorf("malformed object id %q", sha)
@@ -503,9 +436,7 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 	key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
 	data, err := h.client.Get(key)
 	if errors.Is(err, ErrNotFound) {
-		// A thin fork bucket deliberately omits the objects it shares with its
-		// upstream, so the first miss is the trigger to overlay upstream into this
-		// repo (once per session) and retry the object exactly once.
+		// A thin fork bucket omits what it shares with upstream, so the first miss triggers the overlay and one retry.
 		ran, upErr := h.ensureUpstreamLocal()
 		if upErr != nil {
 			return "", nil, false, upErr
@@ -545,8 +476,7 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 	return objType, body, false, err
 }
 
-// localOdb returns the helper's lazily-started `git cat-file --batch` reader on
-// GIT_DIR, used to read objects that arrived inside a downloaded packfile.
+// localOdb returns the helper's lazily-started cat-file reader on GIT_DIR.
 func (h *remoteHelper) localOdb() *localCommitSource {
 	if h.local == nil {
 		h.local = newLocalCommitSource(h.gitDir, "")
@@ -554,8 +484,7 @@ func (h *remoteHelper) localOdb() *localCommitSource {
 	return h.local
 }
 
-// inflateLooseObject inflates a loose object and splits its "<type> <size>\0"
-// header from the raw body.
+// inflateLooseObject inflates a loose object and splits its header from the raw body.
 func inflateLooseObject(compressed []byte, sha string) (objType string, body []byte, err error) {
 	zr, err := zlib.NewReader(bytes.NewReader(compressed))
 	if err != nil {
@@ -574,8 +503,7 @@ func inflateLooseObject(compressed []byte, sha string) (objType string, body []b
 	return objType, raw[nul+1:], nil
 }
 
-// objectChildren returns the SHAs an object references (commit → tree +
-// parents, tree → entries, tag → object, blob → none).
+// objectChildren returns the shas an object references.
 func objectChildren(objType string, body []byte, sha string) ([]string, error) {
 	switch objType {
 	case "blob":
@@ -621,9 +549,7 @@ func tagChildren(body []byte) []string {
 	return nil
 }
 
-// treeChildren parses the binary tree format: "<mode> <name>\0" + 20-byte SHA.
-// Gitlink entries (mode 160000, submodule commits) are skipped: they reference
-// objects that live in the submodule's repository, not this one.
+// treeChildren parses the binary tree format, skipping gitlink entries, whose objects live in the submodule's repository.
 func treeChildren(body []byte, sha string) ([]string, error) {
 	var out []string
 	for len(body) > 0 {

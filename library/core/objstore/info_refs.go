@@ -1,13 +1,4 @@
-// info_refs.go - git dumb-HTTP transport surface.
-//
-// The bucket layout already IS git's dumb-HTTP protocol: content-addressed
-// objects under objects/<xx>/<38-hex> (or packfiles under objects/pack/, see
-// pack.go), and HEAD / refs/* as plain keys, all served publicly over HTTPS.
-// Stock git's dumb walker needs only two more keys it cannot synthesize (it
-// can't list directories): info/refs (the ref listing in `git
-// update-server-info` format) and objects/info/packs (the pack list, a lone
-// newline while the bucket is all-loose). With both present, `git clone
-// https://<host>/` works with stock git and no helper.
+// info_refs.go - the two listing keys git's dumb-HTTP walker cannot synthesize
 package objstore
 
 import (
@@ -22,41 +13,19 @@ import (
 	"strings"
 )
 
-// Dumb-HTTP transport keys, mutable (regenerated whenever refs move) so both stay
-// no-cache (the default cacheControlForKey classification) and text/plain.
+// Dumb-HTTP transport keys, regenerated whenever refs move, so both stay no-cache.
 const (
 	infoRefsKey = "info/refs"
 	packsKey    = "objects/info/packs"
 )
 
-// alternatesKeys are published as EMPTY objects so git's dumb walker gets a
-// valid "no alternates" answer instead of a 404. This is not cosmetic: on a
-// loose-object miss the walker calls fetch_alternates from inside a completion
-// callback, and a 404 there can livelock it in unbounded reentrancy
-// (process_object_response → fetch_alternates → step_active_slots → …, observed
-// at 99% CPU against a Cloudflare-proxied bucket over HTTP/2, 2026-08-15). An
-// empty 200 resolves the probe once and the walker never re-enters it.
+// alternatesKeys are published as empty objects, not left absent: git's dumb walker probes them from a completion callback, where a 404 can livelock it.
 var alternatesKeys = []string{"objects/info/http-alternates", "objects/info/alternates"}
 
-// maxTagPeelDepth bounds tag-of-tag dereferencing so a malformed or cyclic tag
-// chain can never spin.
+// maxTagPeelDepth bounds tag-of-tag dereferencing, so a cyclic tag chain cannot spin.
 const maxTagPeelDepth = 10
 
-// writeDumbTransportInfo refreshes info/refs and objects/info/packs from the
-// refs and packs the bucket actually carries, so a bucket-served repo clones and
-// fetches with stock git over plain HTTPS. src (may be nil) is the pushing
-// repo's odb, used to peel a tag whose object is packed rather than loose.
-// Best-effort: it runs after the push report is flushed (like the rest of
-// post-push maintenance) and a failure only leaves the dumb surface stale until
-// the next push, never affecting the git push itself.
-//
-// thin flips the ref advertisement off: a thin fork bucket (thin.go) carries an
-// incomplete history by design, so advertising refs a stock clone would then walk
-// into missing objects for is exactly the silent breakage that design refuses.
-// info/refs is a key we own and regenerate, so deleting it is safe, and
-// `gitsocial push --full` restores it. objects/info/packs is KEPT either way —
-// it is not only a dumb-HTTP key (ensurePacksLocal reads it to find the bucket's
-// packs), and without a ref advertisement it grants no cloneability.
+// writeDumbTransportInfo refreshes info/refs and objects/info/packs from what the bucket carries; thin drops the ref advertisement, since a thin bucket's history is incomplete.
 func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) error {
 	if thin {
 		if err := client.Delete(prefix + infoRefsKey); err != nil {
@@ -85,10 +54,7 @@ func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSourc
 	return nil
 }
 
-// buildInfoPacks renders the objects/info/packs body in `git
-// update-server-info` format: one "P <name>.pack" line per pack, then a blank
-// line. An all-loose bucket has no packs and gets the lone newline git itself
-// writes.
+// buildInfoPacks renders the objects/info/packs body: one "P <name>.pack" line per pack, then a blank line.
 func buildInfoPacks(names []string) []byte {
 	var buf bytes.Buffer
 	for _, name := range names {
@@ -98,12 +64,7 @@ func buildInfoPacks(names []string) []byte {
 	return buf.Bytes()
 }
 
-// buildInfoRefs renders the info/refs body in `git update-server-info` format:
-// "<sha>\t<refname>\n" for every ref sorted by refname, and — for a ref pointing
-// at an annotated tag — an immediate "<peeled-sha>\t<refname>^{}\n" line with the
-// tag's ultimate non-tag target. peel(sha) resolves a tag under refs/tags to that
-// target (ok=false for a non-tag or an unresolvable object, so no peel line is
-// emitted, matching a lightweight tag).
+// buildInfoRefs renders the info/refs body: one line per ref sorted by name, plus a peel line for each annotated tag.
 func buildInfoRefs(refs map[string]string, peel func(sha string) (string, bool)) []byte {
 	names := make([]string, 0, len(refs))
 	for name := range refs {
@@ -114,8 +75,7 @@ func buildInfoRefs(refs map[string]string, peel func(sha string) (string, bool))
 	for _, name := range names {
 		sha := refs[name]
 		fmt.Fprintf(&buf, "%s\t%s\n", sha, name)
-		// Only tags carry annotated (tag) objects by git convention; peeling just
-		// those keeps the cost to one GET per tag while matching update-server-info.
+		// Only tags carry annotated objects, so peeling those alone costs one GET per tag.
 		if strings.HasPrefix(name, "refs/tags/") {
 			if target, ok := peel(sha); ok {
 				fmt.Fprintf(&buf, "%s\t%s^{}\n", target, name)
@@ -125,12 +85,7 @@ func buildInfoRefs(refs map[string]string, peel func(sha string) (string, bool))
 	return buf.Bytes()
 }
 
-// peelBucketTag dereferences a ref value to its ultimate non-tag object,
-// preferring the bucket's loose objects (self-contained, so a tag pushed by
-// another clone peels correctly) and falling back to the pushing repo's odb
-// when the tag object is packed. Returns ok=false when sha is not a tag object
-// or can't be read, so buildInfoRefs emits no peel line — the same output as a
-// lightweight tag pointing directly at a commit.
+// peelBucketTag dereferences a ref value to its non-tag object, preferring the bucket's loose copy and falling back to the local odb.
 func peelBucketTag(client *Client, prefix string, src *localCommitSource, sha string) (string, bool) {
 	cur := sha
 	for depth := 0; depth < maxTagPeelDepth; depth++ {
@@ -146,10 +101,7 @@ func peelBucketTag(client *Client, prefix string, src *localCommitSource, sha st
 	return "", false
 }
 
-// bucketTagTarget reads an object from the bucket (falling back to the local
-// odb when the bucket copy is packed rather than loose); when it is an
-// annotated tag it returns the sha its `object` header names. isTag=false (with
-// no error) for any non-tag object.
+// bucketTagTarget reads an object from the bucket, or the local odb when the bucket copy is packed, and returns an annotated tag's target.
 func bucketTagTarget(client *Client, prefix string, src *localCommitSource, sha string) (target string, isTag bool, err error) {
 	if len(sha) != 40 {
 		return "", false, fmt.Errorf("malformed object id %q", sha)
@@ -193,9 +145,7 @@ func bucketTagTarget(client *Client, prefix string, src *localCommitSource, sha 
 	return children[0], true, nil
 }
 
-// putText uploads a mutable text/plain transport key (info/refs, packs). The
-// key's mutability makes it no-cache under cacheControlForKey, so stock git and
-// the browser reader always revalidate its ref state rather than serve it stale.
+// putText uploads a mutable text/plain transport key; cacheControlForKey makes it no-cache, so a reader revalidates its ref state.
 func putText(client *Client, key string, body []byte) error {
 	resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": "text/plain; charset=utf-8"})
 	if err != nil {
@@ -205,18 +155,14 @@ func putText(client *Client, key string, body []byte) error {
 	return nil
 }
 
-// logDumbTransportInfo runs writeDumbTransportInfo and reports any failure to
-// stderr without disturbing the caller — the shared best-effort maintenance
-// contract (a stale dumb surface self-heals on the next ref-moving push).
+// logDumbTransportInfo runs writeDumbTransportInfo and reports a failure to stderr; the surface self-heals on the next ref-moving push.
 func logDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) {
 	if err := writeDumbTransportInfo(client, prefix, src, refs, thin); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: dumb-http info: %v\n", err)
 	}
 }
 
-// readInfoRefsClaims reads the ref advertisement as refname → sha, the last
-// listing-free ref source (see readRefsWithoutListing). Peel lines name a tag's
-// target, so they are skipped; found=false when the key is absent (thin buckets).
+// readInfoRefsClaims reads the ref advertisement as refname to sha, the last listing-free ref source; peel lines are skipped.
 func readInfoRefsClaims(client *Client, prefix string) (map[string]string, bool) {
 	body, err := client.GetRetry(prefix + infoRefsKey)
 	if err != nil {

@@ -1,14 +1,7 @@
-// helper_push.go - push side of the s3:// remote helper
+// helper_push.go - push side of the s3:// remote helper: the object transfer, the ref CAS and the post-push maintenance
 //
-// A push either uploads its whole object delta as loose content-addressed keys
-// (small pushes, where a pack would cost the dumb walker more than it saves) or
-// as two packfiles (see pack.go). The two never mix for the same object: git's
-// dumb walker prefers loose and only falls back to objects/info/packs on a 404.
-//
-// Git invocations here use os/exec directly rather than core/git: the helper
-// runs as a child of git with GIT_DIR in its environment (no worktree path to
-// hand to ExecGit), and keeping objstore free of a core/git dependency leaves
-// core/git free to reference objstore for helper setup without a cycle.
+// Git runs here through os/exec rather than core/git: the helper is a child of
+// git with GIT_DIR set, and objstore stays free of a core/git import.
 package objstore
 
 import (
@@ -75,8 +68,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		failAll(ErrCredentialsRequired)
 		return nil
 	}
-	// Resolve how this bucket stores refs before any write: a bucket that
-	// cannot CAS at all is rejected up front rather than racing silently.
+	// Resolve the bucket's ref mode before any write, so a bucket that cannot CAS is rejected up front.
 	if err := h.resolveRefMode(); err != nil {
 		failAll(err)
 		return nil
@@ -90,12 +82,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	branchPushed := ""
 	updates := map[string]string{}   // dst -> new sha ("" = deleted)
 	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
-	// The writes run concurrently, the bookkeeping does not: each command targets
-	// its own key (no two commands in a batch share a write target), so the CAS
-	// contract stays per-ref and only the round trips overlap — the whole cost of
-	// a many-ref push, which a repo registering one ref per fork pays in full. The
-	// report lines and the state below are then emitted in command order, as git
-	// expects, from results the pool has already finished producing.
+	// No two commands in a batch share a write target, so the CAS contract stays per-ref while the round trips overlap; the report keeps command order.
 	shas := make([]string, len(cmds))
 	errs := runParallel(len(cmds), func(i int) error {
 		sha, err := h.applyRefUpdate(cmds[i])
@@ -128,15 +115,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	}
 	// Leases apply to this batch only; a later batch gets fresh option cas lines.
 	h.leases = nil
-	// Report is complete: emit the terminating blank line and flush it out to git
-	// NOW, before any post-push bucket maintenance. The gitremote-helpers(7)
-	// protocol has git block reading our stdout for the per-ref status + blank
-	// line, so anything slow between the ref writes and this flush leaves git idle
-	// waiting on a report that already landed — on a large multi-ref push over a
-	// high-latency bucket the maintenance below runs long enough to look like a
-	// hang (git and the helper both at 0% CPU), and refs that already updated
-	// would appear to fail. Maintenance must therefore run strictly after git has
-	// its report; it is best-effort and its outcome never affects the push.
+	// Flush the report before any maintenance: git blocks reading it, so work ahead of this line reads as a hang.
 	fmt.Fprint(w, "\n")
 	if f, ok := w.(interface{ Flush() error }); ok {
 		if err := f.Flush(); err != nil {
@@ -147,15 +126,9 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	return nil
 }
 
-// postPushMaintenance runs the best-effort bucket upkeep that follows a
-// successful push — advertising the default branch as HEAD and refreshing the
-// static read surface's artifacts. It runs only AFTER the push report has been
-// flushed to git (see push): none of this is part of git's ref-update contract,
-// so a slow or failed maintenance pass must never delay or fail the push itself.
+// postPushMaintenance runs the best-effort bucket upkeep after a push, strictly after the report is flushed to git.
 func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPushed map[string]string) {
-	// The manifest follows every ref-moving transfer, deferred or not: a later
-	// transfer in the same run may move nothing and never reach the maintenance
-	// below. manifestOK withholds the site marker, which is keyed on the refs digest.
+	// The manifest follows every ref-moving transfer, deferred or not, since a later one may move nothing.
 	refsMoved := len(updates) > 0
 	manifestOK := true
 	if refsMoved {
@@ -164,20 +137,11 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 			manifestOK = false
 		}
 	}
-	// A gitsocial push is several git pushes in a row (code branches, tags, data
-	// branches, state refs) and every one of them lands here, so the same ref
-	// listing, HEAD check, sealing pass and site refresh would run four or five
-	// times over against a bucket that is still changing. The caller sets this
-	// on every transfer but the last, which then does the work once against the
-	// final state. A bare `git push` never sets it and is unaffected; a run that
-	// dies before its last transfer simply leaves the maintenance to the next
-	// push, which is where it would have landed anyway.
+	// One gitsocial push is several git pushes; the caller defers all but the last, which runs the pass once against the final state.
 	if os.Getenv(git.DeferMaintenanceEnv) == "1" {
 		return
 	}
-	// Advertise the repo's real default branch (its local HEAD symref) as the
-	// bucket HEAD — never assume "main". Fall back to a pushed branch only when
-	// HEAD can't be read (detached, or a non-repo caller).
+	// Advertise the repo's own HEAD symref as the bucket HEAD, falling back to a pushed branch when it cannot be read.
 	head := localDefaultBranchRef()
 	if head == "" {
 		head = branchPushed
@@ -185,8 +149,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	if head != "" {
 		h.ensureRemoteHEAD(head)
 	}
-	// A thin push records the frontier it excluded against, so readers know where
-	// to resolve the missing objects and the next push can fall back to it.
+	// A thin push records the frontier it excluded against, so readers can resolve the missing objects.
 	thin, upstreamURL := h.thinPush()
 	if thin {
 		h.publishThinUpstream(upstreamURL)
@@ -194,10 +157,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	if !refsMoved {
 		return
 	}
-	// The refs the bucket now carries drive both the dumb-HTTP transport surface
-	// and the site read artifacts; every step of the pass reads this one view.
-	// Best-effort — a read failure only skips this push's maintenance, never the
-	// git push itself.
+	// Every step of the pass reads this one view of the refs the bucket now carries.
 	if h.remoteRefs == nil {
 		refs, err := readRemoteRefs(h.client, h.prefix)
 		if err != nil {
@@ -207,40 +167,26 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 		h.remoteRefs = refs
 	}
 	refs := h.remoteRefs
-	// One local commit source serves the whole maintenance pass: the transport
-	// rewrite (the local odb peels an annotated tag whose bucket copy is packed)
-	// and every config-commit read below, which prefers the local odb over a
-	// bucket GET (the helper runs as a git child, so the pushed configs are here).
+	// One local commit source serves the whole pass; the helper runs as a git child, so the pushed objects are already here.
 	src := newLocalCommitSource(h.gitDir, "")
 	defer src.close()
-	// Refresh info/refs + objects/info/packs on EVERY ref-moving push, before and
-	// independent of the site.publish gate below, so a bucket-served repo clones
-	// and fetches with stock git over plain HTTPS even when the static site is off.
+	// Refresh the dumb-HTTP surface on every ref-moving push, ahead of the site gate, so stock git keeps cloning.
 	h.progress.call("maintenance: ref advertisement", 0, 0)
 	logDumbTransportInfo(h.client, h.prefix, src, refs, thin)
-	// Now that the bucket's refs are known, a HEAD left pointing at a ref the
-	// bucket does not carry can be repaired (ensureRemoteHEAD above cannot: it
-	// keeps any HEAD that is not a gitmsg branch).
+	// With the bucket's refs known, a HEAD pointing at a ref it does not carry can be repaired.
 	h.progress.call("maintenance: HEAD", 0, 0)
 	h.repairDanglingHEAD(refs, head, branchPushed)
-	// Sealing packs already-loose history and, after a grace period, deletes the
-	// loose copies. Best-effort and self-rate-limited, like everything here.
+	// Sealing packs loose history and, after a grace period, deletes the loose copies.
 	h.progress.call("maintenance: packs", 0, 0)
 	h.maintainPacks(refs)
-	// A thin bucket is helper-only: it publishes no static site (the site reads a
-	// history the bucket does not carry). Sealing above still runs — it packs the
-	// fork's OWN loose objects, which is all a thin bucket has.
+	// A thin bucket publishes no site, since the site reads a history it does not carry.
 	if thin {
 		if enabled, _, probeErr := siteEnabled(h.client, h.prefix); probeErr == nil && enabled {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: thin fork bucket; its existing site is no longer maintained (detach with `gitsocial push --full`)\n")
 		}
 		return
 	}
-	// The static site is gated on the PUSHED site.publish guard (the `site`
-	// sub-object of refs/gitmsg/core/config), the only enabler: without it a
-	// plain s3:// git remote stays clean, and a bucket whose site predates the
-	// guard is left untouched with a one-line hint. Best-effort throughout — a
-	// read failure only skips this push's maintenance, never the git push itself.
+	// The pushed site.publish guard is the only enabler, so a plain s3:// remote stays clean.
 	h.progress.call("maintenance: site artifacts", 0, 0)
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
@@ -253,15 +199,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 		}
 		return
 	}
-	// The refs-derived artifacts (refs manifest, pm/site config, the shell)
-	// depend ONLY on the refs/ listing + HEAD, so skip re-deriving them when a
-	// prior pass already covered this exact ref state at this shell version —
-	// detected in ~2-3 round trips. The helper just moved refs, so its OWN push
-	// almost always changes the digest and runs the full block; the win is a
-	// concurrent/duplicate push whose ref state another pusher already handled.
-	// The per-branch site-items append below is NOT gated on the marker: those
-	// branches just moved, and updateSiteItemsIndex already does its own cheap
-	// tip comparison, so the marker must never mask that append.
+	// The refs-derived artifacts depend only on the refs listing and HEAD, so the marker can skip them. The items append below is not gated on it.
 	shellVersion, verErr := siteVersion()
 	upToDate, digest := false, ""
 	if verErr == nil {
@@ -269,9 +207,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	}
 	shellUploaded := false
 	if !upToDate {
-		// Shell first (creation on a guard-enabled bucket, or the self-refresh to
-		// this binary's embedded version), so a reader never sees data artifacts
-		// without an entry page. Best-effort like everything here.
+		// Shell first, so no reader sees data artifacts without an entry page.
 		var err error
 		if shellUploaded, err = ensureSiteShell(h.client, h.prefix); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
@@ -280,29 +216,12 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 		h.writeSiteCustomization(src)
 	}
 	h.updateSiteItems(extPushed)
-	// index.html is dual-owned: the generated front page while the page layer is
-	// effective, the embedded shell otherwise. A shell (re)upload above overwrites
-	// it with the shell, so if the page layer is effective AND its page set is
-	// already complete-and-current (the narrow case where updateSiteItems moved no
-	// tip, so the marker below would NOT be withheld and the next site push would
-	// skip), reclaim the generated front page now. When tips DID move, the page
-	// layer is pending and the marker is withheld, so the next site-publishing push
-	// rebuilds pages (and reclaims index.html) — no reclaim needed here.
+	// A shell upload overwrites the dual-owned index.html, so reclaim the front page in the one case the marker below would still be stamped.
 	reclaimOK := true
 	if shellUploaded {
 		reclaimOK = h.reclaimSitePagesFront(refs, src)
 	}
-	// Stamp the marker after the refs-derived writes so a later push against this
-	// same ref state can skip them. Best-effort: a wrong/missing marker only costs
-	// extra work next time, never a wrong skip. Skipped when we didn't run the
-	// block (upToDate), couldn't trust the digest (""), a bootstrap is still
-	// backfilling, or the HTML page layer still has work (a pending bootstrap or
-	// cleanup, or consumed tips this push just moved past) that only a site pass
-	// runs — a stamped marker would make the next site pass skip it. Also withheld
-	// when a shell-upload reclaim of index.html FAILED: sitePagesState inspects the
-	// manifest/tips, not index.html's content, so a stamped marker would let the
-	// next push skip and leave index.html stranded as the embedded shell. And
-	// withheld when the refs manifest did not land (manifestOK above).
+	// Stamp the marker only when this pass left nothing a later site pass must still do; a withheld marker costs one extra pass, a wrong one costs a skip.
 	if !upToDate && reclaimOK && manifestOK {
 		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override, src)
 		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
@@ -311,10 +230,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	}
 }
 
-// writeSitePMConfig publishes the resolved PM board config after every push, so
-// the static site's board honors the repo's refs/gitmsg/pm/config. Best-effort,
-// same contract as the manifest: a failure only leaves the board on the kanban
-// default until the next push.
+// writeSitePMConfig publishes the resolved PM board config after every push.
 func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 	refs := h.remoteRefs
 	if err := writeSitePMConfig(h.client, h.prefix, refs, src); err != nil {
@@ -322,10 +238,7 @@ func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 	}
 }
 
-// writeSiteCustomization publishes the validated site customization after every
-// push, so the static site honors the repo's refs/gitmsg/core/config `site`
-// sub-object. Best-effort, same contract as the manifest: a failure only leaves
-// the site on its built-in defaults until the next push.
+// writeSiteCustomization publishes the validated site customization after every push.
 func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
 	refs := h.remoteRefs
 	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override, src); err != nil {
@@ -333,19 +246,9 @@ func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
 	}
 }
 
-// updateSiteItems maintains the per-extension site artifacts (metadata index +
-// search corpus) for every pushed gitmsg data branch, plus the single code items
-// index across every pushed code branch, alongside the refs manifest. Best-effort,
-// same contract: a stale artifact only degrades the site until the next push. An
-// error here can now only be transient (a network / bucket failure): the artifact
-// state is always repairable on the next push (the repair state machine rebuilds
-// any mismatch from the immutable sealed shards + a bounded walk), so a failed
-// maintenance pass never wedges the index.
+// updateSiteItems maintains the site artifacts for every pushed data branch, plus the code index; the repair machine heals whatever a failure leaves.
 func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
-	// The helper runs as a git child with GIT_DIR set, so every commit the walk
-	// visits (an ancestor of a just-pushed tip) is present in the local odb —
-	// read it there instead of a per-commit bucket GET. One source serves the
-	// whole pass across extensions and the code corpus.
+	// Every commit the walk visits is an ancestor of a just-pushed tip, so read it from the local odb rather than the bucket.
 	src := newLocalCommitSource(h.gitDir, "")
 	defer src.close()
 	for ext, sha := range extPushed {
@@ -362,16 +265,7 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 	h.updateSiteCodeItems(src)
 }
 
-// reclaimSitePagesFront re-writes the generated front page (index.html) after a
-// shell (re)upload clobbered it, but ONLY when the page layer is effective and
-// its page set is already complete-and-current — the narrow case a shell-version
-// bump on a plain push leaves the marker stampable (no tip moved), so the next
-// site push would skip and index.html would stay the shell. When the page set is
-// pending/absent/stale, or the layer is off, there is nothing to reclaim (the
-// marker is withheld anyway, so the next site-publishing push rebuilds/reclaims), and
-// this returns ok=true. It returns ok=FALSE only when a reclaim it should have
-// done FAILED, so the caller withholds the marker (a stamped marker would let the
-// next push skip and strand index.html as the shell).
+// reclaimSitePagesFront re-writes index.html after a shell upload clobbered it, but only when the page set is complete and current; ok=false only on a failed reclaim.
 func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localCommitSource) (ok bool) {
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
@@ -404,12 +298,7 @@ func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localC
 	return true
 }
 
-// updateSiteCodeItems maintains the single code items index across every pushed
-// code branch. Unlike the per-extension indexes it is keyed on ALL current code
-// tips (a synthetic digest tip), so any code-branch push runs it and a push that
-// touched only ext branches sees a NO-OP after a cheap manifest read. The current
-// code tips and the default branch come from the bucket's refs (the authoritative
-// post-push state) and the pushing repo's HEAD. Best-effort, same contract.
+// updateSiteCodeItems maintains the single code items index across every code branch the bucket carries.
 func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
 	refs := h.remoteRefs
 	defaultBranch := strings.TrimPrefix(localDefaultBranchRef(), "refs/heads/")
@@ -420,9 +309,7 @@ func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
 	}
 }
 
-// publishRefManifest writes the helper's ref view as the manifest after a push.
-// When the document moved since list, the view is re-derived from a listing with
-// this batch's own updates laid over it, so a pusher that cannot list keeps its refs.
+// publishRefManifest writes the helper's ref view as the manifest after a push, re-deriving it from a listing when the document moved.
 func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		etag, err := publishRefManifest(h.client, h.prefix, h.refMode, h.remoteRefs, h.manifestETag)
@@ -452,22 +339,13 @@ func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
 	return fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
 }
 
-// maxCASRetries bounds the read-check-write loop; contention on GitSocial's
-// per-element refs is rare, so hitting this means something is spinning.
+// maxCASRetries bounds the read-check-write loop; per-element refs rarely contend, so hitting it means something is spinning.
 const maxCASRetries = 5
 
 // zeroOID is git's null object id (in a cas lease: the ref must not exist).
 const zeroOID = "0000000000000000000000000000000000000000"
 
-// checkLease enforces a --force-with-lease expectation (recorded by `option
-// cas`, see helper.go) at write time: the remote's current value ("" = absent)
-// must equal the expected one ("" = must not exist). A match authorizes the
-// update even when it is not a fast-forward; a mismatch rejects with git's
-// conventional "stale info" phrasing so porcelain output reads like a native
-// lease failure. Both ref-mode CAS loops re-check on every attempt, so a
-// concurrent pusher landing between read and write is caught on the retry's
-// re-read, never slipped past. leased=false means no lease applies and the
-// normal fast-forward rules decide.
+// checkLease enforces a --force-with-lease expectation at write time; both CAS loops re-check it on every attempt, so a racing pusher is caught on the re-read.
 func (h *remoteHelper) checkLease(dst, current string) (leased bool, err error) {
 	expected, ok := h.leases[dst]
 	if !ok {
@@ -479,10 +357,7 @@ func (h *remoteHelper) checkLease(dst, current string) (leased bool, err error) 
 	return true, nil
 }
 
-// applyRefUpdate writes or deletes one ref, dispatching on the bucket's ref
-// mode, and returns the written sha ("" for a deletion). The stored value is
-// the object src names — for an annotated tag that is the tag object itself,
-// exactly as git stores it.
+// applyRefUpdate writes or deletes one ref by the bucket's ref mode and returns the written sha; an annotated tag stores the tag object, as git does.
 func (h *remoteHelper) applyRefUpdate(cmd pushCommand) (string, error) {
 	if h.refMode == refModeGeneration {
 		return h.applyRefUpdateGeneration(cmd)
@@ -490,16 +365,11 @@ func (h *remoteHelper) applyRefUpdate(cmd pushCommand) (string, error) {
 	return h.applyRefUpdateETag(cmd)
 }
 
-// applyRefUpdateETag writes or deletes one plain ref key with ETag
-// compare-and-swap: read current value + ETag, verify the update is allowed
-// (fast-forward unless forced), write with If-Match / If-None-Match: *, and
-// re-read on precondition failure. This is git's "old value must match"
-// ref-update contract expressed in S3.
+// applyRefUpdateETag writes or deletes one plain ref key with ETag compare-and-swap, re-reading on a precondition failure.
 func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 	key := h.prefix + cmd.dst
 	if cmd.src == "" {
-		// Deletion stays unconditional: S3 has no conditional DELETE, and git
-		// itself only guards deletes client-side.
+		// Deletion stays unconditional: S3 has no conditional DELETE, and git guards deletes client-side.
 		return "", h.client.Delete(key)
 	}
 	sha, err := gitOutput("rev-parse", "--verify", cmd.src)
@@ -546,11 +416,7 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
 }
 
-// applyRefUpdateGeneration writes or deletes one ref as a generation chain:
-// every update atomically creates the next generation key with
-// If-None-Match: * (the only CAS create-only providers enforce), the highest
-// generation is the current value, and superseded generations are cleaned up
-// after a successful write.
+// applyRefUpdateGeneration writes or deletes one ref as a generation chain, creating the next key with the only CAS a create-only provider enforces.
 func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error) {
 	if cmd.src == "" {
 		return "", h.deleteRefGenerations(cmd.dst)
@@ -607,9 +473,7 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
 }
 
-// gcGenerations best-effort deletes generations older than the written one's
-// immediate predecessor, so a concurrent reader's list→read window survives
-// one more update. Failures only log: the next successful write re-collects.
+// gcGenerations deletes generations older than the written one's predecessor, so a concurrent reader's list-then-read window survives one more update.
 func (h *remoteHelper) gcGenerations(refName string, previousGen uint64) {
 	keys, err := h.client.List(h.prefix + refName + genDir)
 	if err != nil {
@@ -627,9 +491,7 @@ func (h *remoteHelper) gcGenerations(refName string, previousGen uint64) {
 	}
 }
 
-// deleteRefGenerations removes a ref's whole chain, oldest first so readers
-// keep resolving the current value until the end. Deletion is unconditional,
-// matching the etag mode and git's client-side-only delete guard.
+// deleteRefGenerations removes a ref's whole chain, oldest first, so readers keep resolving the current value until the end.
 func (h *remoteHelper) deleteRefGenerations(refName string) error {
 	keys, err := h.client.List(h.prefix + refName + genDir)
 	if err != nil {
@@ -643,9 +505,7 @@ func (h *remoteHelper) deleteRefGenerations(refName string) error {
 	return nil
 }
 
-// checkFastForward enforces the non-force update rule: the remote's current
-// value must be an ancestor of what we push. A current value we don't have
-// locally means someone pushed history we haven't fetched.
+// checkFastForward enforces the non-force rule: the remote's current value must be an ancestor of the pushed one.
 func checkFastForward(current, next, dst string) error {
 	if _, err := gitOutput("cat-file", "-e", current); err != nil {
 		return fmt.Errorf("remote %s is at %s which is not known locally; fetch first", dst, current[:12])
@@ -674,8 +534,7 @@ func isAncestor(a, b string) (bool, error) {
 	return false, fmt.Errorf("git merge-base --is-ancestor: %w", err)
 }
 
-// refModeKey / casProbeKey live under a dot-prefixed namespace no git ref
-// can collide with (refnames can't start with a dot).
+// refModeKey and casProbeKey live under a dot-prefixed namespace no refname can reach.
 const (
 	refModeKey  = ".gitsocial/ref-mode"
 	casProbeKey = ".gitsocial/cas-probe"
@@ -687,10 +546,7 @@ const (
 	refModeGeneration = "generation" // chain keys, If-None-Match: * create CAS
 )
 
-// resolveRefMode determines the bucket's ref mode and caches it in h.refMode.
-// The bucket's marker wins over provider capability so every writer stays
-// consistent; without a marker the capability (probed when unknown) decides,
-// and the winning first pusher records it with a create-CAS write.
+// resolveRefMode determines the bucket's ref mode and caches it; the bucket's marker wins over provider capability, so every writer agrees.
 func (h *remoteHelper) resolveRefMode() error {
 	if h.refMode != "" {
 		return nil
@@ -714,8 +570,7 @@ func (h *remoteHelper) resolveRefMode() error {
 	return nil
 }
 
-// refModeFromCapability picks the ref mode for a fresh bucket, probing the
-// endpoint's conditional-write behavior when no preset declares it.
+// refModeFromCapability picks the ref mode for a fresh bucket, probing conditional writes when no preset declares them.
 func (h *remoteHelper) refModeFromCapability() (string, error) {
 	capability := h.capability
 	if capability == CapabilityUnknown {
@@ -723,12 +578,10 @@ func (h *remoteHelper) refModeFromCapability() (string, error) {
 		if capability, err = h.probeCapability(); err != nil {
 			return "", err
 		}
-		// Keep what the probe learned: the document rewrites on this push read
-		// it to decide whether a conditional update is worth attempting.
+		// Keep what the probe learned: this push's document rewrites read it.
 		h.capability = capability
 	} else if err := h.probeCreateCAS(); err != nil {
-		// Declared capabilities still get the cheap create-CAS sanity check:
-		// a bucket that ignores conditional headers must be rejected loudly.
+		// A declared capability still gets the create-CAS check, so a bucket that ignores conditional headers is rejected.
 		return "", err
 	}
 	if capability == CapabilityFull {
@@ -737,8 +590,7 @@ func (h *remoteHelper) refModeFromCapability() (string, error) {
 	return refModeGeneration, nil
 }
 
-// probeCreateCAS verifies the bucket enforces If-None-Match: * creates:
-// create a probe key, then require a duplicate create to fail.
+// probeCreateCAS verifies the bucket enforces If-None-Match creates: write a probe key, then require a duplicate create to fail.
 func (h *remoteHelper) probeCreateCAS() error {
 	probe := h.prefix + casProbeKey
 	// A leftover probe key from a crashed run would fail the first create.
@@ -757,9 +609,7 @@ func (h *remoteHelper) probeCreateCAS() error {
 	return nil
 }
 
-// probeCapability classifies an unknown endpoint's conditional-write support:
-// create-CAS must be enforced (else the bucket is rejected), then If-Match
-// overwrite behavior decides full vs create-only.
+// probeCapability classifies an unknown endpoint: create-CAS must hold, then If-Match behavior decides full against create-only.
 func (h *remoteHelper) probeCapability() (Capability, error) {
 	if err := h.probeCreateCAS(); err != nil {
 		return CapabilityUnknown, err
@@ -769,8 +619,7 @@ func (h *remoteHelper) probeCapability() (Capability, error) {
 		return CapabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
 	}
 	defer func() { _ = h.client.Delete(probe) }()
-	// A deliberately wrong (but well-formed) ETag: success means If-Match is
-	// silently ignored, so only create-CAS can be trusted.
+	// A wrong but well-formed ETag: success means If-Match is ignored, so only create-CAS can be trusted.
 	err := h.client.PutIfMatch(probe, []byte("probe3\n"), `"d41d8cd98f00b204e9800998ecf8427e"`)
 	if err == nil {
 		return CapabilityCreateOnly, nil
@@ -794,8 +643,7 @@ func (h *remoteHelper) probeCapability() (Capability, error) {
 	}
 }
 
-// publishRefMode records the bucket's ref mode with a create-CAS write so
-// concurrent first pushers converge on a single mode.
+// publishRefMode records the bucket's ref mode with a create-CAS write, so concurrent first pushers converge.
 func (h *remoteHelper) publishRefMode(mode string) (string, error) {
 	err := h.client.PutIfAbsent(h.prefix+refModeKey, []byte(mode+"\n"))
 	if errors.Is(err, ErrPreconditionFailed) {
@@ -817,23 +665,15 @@ func (h *remoteHelper) publishRefMode(mode string) (string, error) {
 // ensureRemoteHEAD writes HEAD on first push so later clones get a default branch.
 func (h *remoteHelper) ensureRemoteHEAD(branch string) {
 	if cur, err := h.client.Get(h.prefix + "HEAD"); err == nil {
-		// Keep an existing HEAD unless it points at a gitmsg data branch — never a
-		// valid default (a symptom of the earlier first-pushed-branch heuristic).
+		// Keep an existing HEAD unless it points at a gitmsg data branch, which is not a valid default.
 		if !strings.Contains(string(cur), "refs/heads/gitmsg/") {
 			return
 		}
 	}
-	// Best effort: a missing/wrong HEAD only degrades clone ergonomics.
 	_ = h.client.Put(h.prefix+"HEAD", []byte("ref: "+branch+"\n"))
 }
 
-// repairDanglingHEAD repoints a bucket HEAD whose target ref the bucket does not
-// carry, preferring the first candidate it does carry. A first push made from a
-// feature branch publishes that branch as HEAD, and when the branch itself is
-// never pushed the symref dangles: the browser reports no default branch, and
-// every route that resolves one falls back to a full history walk (measured at
-// 34x the fetches). Nothing repaired this before, since ensureRemoteHEAD keeps
-// any HEAD that is not a gitmsg branch, so the bucket stayed broken permanently.
+// repairDanglingHEAD repoints a bucket HEAD whose target ref the bucket does not carry, to the first candidate it does.
 func (h *remoteHelper) repairDanglingHEAD(refs map[string]string, candidates ...string) {
 	cur, err := h.client.Get(h.prefix + "HEAD")
 	if err != nil {
@@ -857,9 +697,7 @@ func (h *remoteHelper) repairDanglingHEAD(refs map[string]string, candidates ...
 	}
 }
 
-// localDefaultBranchRef returns the pushing repo's default branch ref (its HEAD
-// symref, e.g. "refs/heads/master") so the bucket advertises the real default —
-// not an assumed "main". Empty when HEAD is detached or unreadable.
+// localDefaultBranchRef returns the pushing repo's HEAD symref, so the bucket advertises its real default branch.
 func localDefaultBranchRef() string {
 	ref, err := gitOutput("symbolic-ref", "HEAD")
 	if err != nil || !strings.HasPrefix(ref, "refs/heads/") {
@@ -868,17 +706,7 @@ func localDefaultBranchRef() string {
 	return ref
 }
 
-// uploadMissingObjects uploads every object the pushed refs reach that the
-// remote doesn't already have, computed as `rev-list --objects <srcs> --not
-// <remote tips we have locally>`.
-//
-// A thin push (thin.go) splits its sources by ref class and widens the negative
-// end for one of them, so the gitmsg-is-never-thinned invariant holds:
-//
-//	code:   rev-list --objects <code refs>   --not <bucket tips> <verified frontier>
-//	gitmsg: rev-list --objects <gitmsg refs> --not <bucket tips>
-//
-// The two sha lists are unioned and handed to uploadDelta unchanged.
+// uploadMissingObjects uploads every object the pushed refs reach that the bucket lacks; a thin push widens the negative end for code refs alone, so gitmsg stays whole.
 func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 	tips, err := h.remoteTipsPresentLocally()
 	if err != nil {
@@ -907,7 +735,7 @@ func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 			shas = append(shas, sha)
 		}
 	}
-	// rev-list --objects peels annotated tags; upload tag objects explicitly.
+	// rev-list --objects peels annotated tags, so upload the tag objects explicitly.
 	for _, src := range srcs {
 		sha, err := gitOutput("rev-parse", "--verify", src)
 		if err != nil {
@@ -935,9 +763,7 @@ func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 	return h.uploadDelta(shas)
 }
 
-// revListObjects feeds add() every object reachable from srcs but not from the
-// excluded tips. A source list that is empty (a push with no ref of that class)
-// contributes nothing rather than running a rev-list with no positive ref.
+// revListObjects feeds add every object reachable from srcs but not from the excluded tips; an empty source list contributes nothing.
 func revListObjects(dir string, srcs, excluded []string, add func(string)) error {
 	if len(srcs) == 0 {
 		return nil
@@ -959,11 +785,7 @@ func revListObjects(dir string, srcs, excluded []string, add func(string)) error
 	return nil
 }
 
-// uploadDelta uploads a push's object delta: packed once it is large enough to
-// pay for a pack (see pack.go), loose below that. State-ref objects
-// (refs/gitmsg/*) pack with everything else — every loose-key reader has a pack
-// fallback (getBucketCommit reads the pack map, the browser's getObject probes
-// both shapes).
+// uploadDelta uploads a push's object delta: packed once it is large enough to pay for a pack, loose below that.
 func (h *remoteHelper) uploadDelta(shas []string) error {
 	if len(shas) < resolvePackThreshold() {
 		h.looseUploaded += len(shas)
@@ -972,11 +794,7 @@ func (h *remoteHelper) uploadDelta(shas []string) error {
 	return h.uploadPacked(shas)
 }
 
-// uploadPacked builds and uploads the two packs — commits and tags without
-// deltas (so a reader resolves a commit body from one byte range), trees and
-// blobs at git's default depth — publishes the commit byte ranges as the pack
-// map, and records every sha as present for this session. A pack past the
-// single-PUT ceiling falls back to loose objects rather than failing the push.
+// uploadPacked builds and uploads the two packs and publishes the commit byte ranges as the pack map; a pack past the single-PUT ceiling falls back to loose objects.
 func (h *remoteHelper) uploadPacked(shas []string) error {
 	if len(shas) == 0 {
 		return nil
@@ -986,8 +804,7 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 	if err != nil {
 		return err
 	}
-	// Size-check every pack BEFORE uploading any, so the fallback never leaves
-	// one half of the delta packed and the other half loose.
+	// Size-check every pack before uploading any, so the fallback cannot leave half the delta packed.
 	for _, built := range packs {
 		if len(built.pack) > maxPackUploadBytes {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: %s is %d bytes, past the single-PUT ceiling; uploading loose objects instead\n", built.name, len(built.pack))
@@ -1007,8 +824,7 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 	return nil
 }
 
-// remoteTipsPresentLocally resolves the remote's ref values and keeps those
-// whose objects exist locally — safe negative ends for the rev-list frontier.
+// remoteTipsPresentLocally resolves the remote's ref values and keeps those whose objects exist locally.
 func (h *remoteHelper) remoteTipsPresentLocally() ([]string, error) {
 	refs, err := readRemoteRefs(h.client, h.prefix)
 	if err != nil {
@@ -1029,24 +845,10 @@ type encodedObject struct {
 	compressed []byte
 }
 
-// listResumeThreshold is the git-computed delta size at or above which
-// uploadObjects first LISTs the bucket's objects/ prefix to skip objects already
-// present (an interrupted initial push then resumes where it stopped instead of
-// re-PUTting everything). The LIST costs ~1 round trip per 1,000 keys, so it only
-// pays off once the delta is large: below this, the handful of redundant PUTs an
-// interrupted small push would repeat is cheaper than the extra listing. 2,000 is
-// ~2 LIST round trips against the delta's thousands of PUTs — a rounding error on
-// a large push, pure overhead on a small one.
+// listResumeThreshold is the delta size at which uploadObjects first lists objects/ to skip what is already present.
 const listResumeThreshold = 2000
 
-// filterPresentObjects removes shas already on the bucket from a large upload
-// delta, so an interrupted initial push resumes instead of re-PUTting every
-// object. It only LISTs (and only pays that cost) when the delta is at least
-// listResumeThreshold; below that it returns the input unchanged. Keys are
-// content-addressed, so a present key IS the finished object — no ETag/size
-// comparison is needed. A LIST error is non-fatal: fall back to uploading the
-// full delta (the PUTs are idempotent), never fail the push over the
-// optimization.
+// filterPresentObjects drops shas the bucket already holds from a large delta; keys are content-addressed, so a present key is the finished object.
 func filterPresentObjects(client *Client, prefix string, shas []string) []string {
 	if len(shas) < listResumeThreshold {
 		return shas
@@ -1058,7 +860,7 @@ func filterPresentObjects(client *Client, prefix string, shas []string) []string
 	}
 	present := make(map[string]bool, len(objs))
 	for _, o := range objs {
-		// objects/<xx>/<38-hex> -> reassemble the 40-hex sha.
+		// objects/<xx>/<38-hex>: reassemble the 40-hex sha.
 		rel := strings.TrimPrefix(o.Key, prefix+"objects/")
 		rel = strings.Replace(rel, "/", "", 1)
 		if len(rel) == 40 {
@@ -1074,22 +876,12 @@ func filterPresentObjects(client *Client, prefix string, shas []string) []string
 	return kept
 }
 
-// uploadObjects streams objects out of the local odb via `git cat-file
-// --batch`, re-encodes each as a loose object, and uploads them through a
-// bounded worker pool. Content addressing makes each object immutable and
-// re-uploads idempotent, so upload order is free: no ordering constraint holds
-// across objects, and the ref-update phase runs only after this returns nil.
-// Uploads are one HTTP round trip each, so serial transfer is pure round-trip
-// latency; the pool overlaps that latency across resolveUploadConcurrency
-// workers. The cat-file read stays sequential (one git process) and feeds the
-// pool as a producer.
+// uploadObjects streams objects out of the local odb, re-encodes each as a loose object and uploads them through a bounded worker pool.
 func (h *remoteHelper) uploadObjects(shas []string) error {
 	if len(shas) == 0 {
 		return nil
 	}
-	// On a large delta, drop objects already on the bucket so an interrupted
-	// initial push resumes instead of re-uploading everything (below the
-	// threshold this is a no-op — the LIST would cost more than it saves).
+	// On a large delta, drop what the bucket already holds so an interrupted first push resumes.
 	shas = filterPresentObjects(h.client, h.prefix, shas)
 	if len(shas) == 0 {
 		return nil
@@ -1153,14 +945,7 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 	return uploadEncodedObjects(h.client, h.prefix, resolveUploadConcurrency(), len(shas), h.progress, produce)
 }
 
-// uploadEncodedObjects runs a bounded worker pool that PUTs each object the
-// producer emits. The first hard error (from the producer or any worker)
-// cancels the context so peers stop promptly and the producer unblocks, then
-// the wrapped error is returned. Objects are content-addressed and immutable,
-// so worker order is irrelevant; refs move only after this returns nil.
-//
-// total is the object count (for progress); progress (nil = silent) is called
-// as each object lands, throttled by the caller-provided hook.
+// uploadEncodedObjects runs a bounded worker pool that PUTs each object the producer emits; the first error cancels the rest. Refs move only after it returns nil.
 func uploadEncodedObjects(client *Client, prefix string, concurrency, total int, progress Progress, produce func(context.Context, chan<- encodedObject) error) error {
 	if concurrency < 1 {
 		concurrency = 1
@@ -1205,9 +990,7 @@ func uploadEncodedObjects(client *Client, prefix string, concurrency, total int,
 	return firstErr
 }
 
-// putObjectWithRetry retries an object PUT past a transient fault, so a killed
-// connection costs one retried object rather than the push. Objects are
-// content-addressed, so a re-PUT is idempotent; a refusal surfaces at once.
+// putObjectWithRetry retries an object PUT past a transient fault; a re-PUT is idempotent, and a refusal surfaces at once.
 func putObjectWithRetry(ctx context.Context, client *Client, key string, body []byte) error {
 	var err error
 	for attempt := 0; ; attempt++ {
@@ -1238,8 +1021,7 @@ func encodeLooseObject(objType string, content []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// gitOutput runs a git command (repo located via the GIT_DIR env git gave the
-// helper) and returns trimmed stdout.
+// gitOutput runs a git command against the GIT_DIR git handed the helper and returns trimmed stdout.
 func gitOutput(args ...string) (string, error) {
 	return gitOutputIn("", args...)
 }
@@ -1249,20 +1031,14 @@ func oneLine(err error) string {
 	return strings.ReplaceAll(err.Error(), "\n", " ")
 }
 
-// SiteOverride carries a remote's per-remote deployment-key overrides; each ""
-// field means "not overridden" (the repo config value stands). Applied over
-// readSiteCustomization's result at that single boundary so every consumer
-// (guards, canonical/OG URL, siteHash, site-config.json) sees effective values.
+// SiteOverride carries one remote's deployment-key overrides, applied over readSiteCustomization so every consumer sees effective values.
 type SiteOverride struct {
 	URL     string
 	Publish string
 	Pages   string
 }
 
-// readRemoteSiteOverride reads a remote's per-remote site deployment overrides
-// from git config (remote.<name>.gitsocial-site-{url,publish,pages}), using the
-// GIT_DIR git handed the helper. An empty name (anonymous-URL invocation) or an
-// unset key yields no override for that field.
+// readRemoteSiteOverride reads a remote's site deployment overrides from git config; an empty name yields none.
 func readRemoteSiteOverride(remoteName string) SiteOverride {
 	if remoteName == "" {
 		return SiteOverride{}

@@ -36,10 +36,7 @@ type Client struct {
 // the reason a write is impossible before attempting one.
 func (c *Client) Anonymous() bool { return c.anonymous }
 
-// NewClient builds a client from a resolved config. Credentials come from the
-// caller (resolveCredentials is the one resolver, see credentials.go); a config
-// carrying neither half builds an anonymous client: unsigned, read-only, for a
-// bucket granting public GetObject.
+// NewClient builds a client from a resolved config; one carrying neither credential half builds an anonymous, read-only client.
 func NewClient(cfg Config) (*Client, error) {
 	if cfg.Region == "" {
 		cfg.Region = "us-east-1"
@@ -61,11 +58,7 @@ func NewClient(cfg Config) (*Client, error) {
 	}, nil
 }
 
-// newTransport returns an HTTP transport sized for the concurrent push
-// upload pool: stdlib's default keeps only 2 idle connections per host, so a
-// pool of N workers would churn N-2 fresh TLS handshakes every round. Keep
-// enough idle connections alive to match a generous pool and cap total
-// connections so a large custom pool can't exhaust local sockets.
+// newTransport returns an HTTP transport sized for the concurrent upload pool, so it does not churn a TLS handshake per worker per round.
 func newTransport() *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.MaxIdleConns = 128
@@ -103,19 +96,13 @@ func (c *Client) objectURL(key string) (*url.URL, error) {
 var (
 	ErrNotFound           = fmt.Errorf("objstore: not found")
 	ErrPreconditionFailed = fmt.Errorf("objstore: precondition failed")
-	// ErrAccessDenied is a 403 on a read. It wraps ErrNotFound because a bucket
-	// that denies listing answers 403 for absent keys too, so the two are one
-	// fact to a reader without s3:ListBucket; ref discovery matches it to fall back.
+	// ErrAccessDenied is a 403 on a read; it wraps ErrNotFound, since a bucket that denies listing answers 403 for absent keys too.
 	ErrAccessDenied = fmt.Errorf("%w (access denied)", ErrNotFound)
 	// ErrCredentialsRequired replaces the 403 an unsigned write would earn.
 	ErrCredentialsRequired = fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
 )
 
-// httpStatusError carries a non-2xx HTTP status code so callers (the GET retry)
-// can tell a transient server fault (5xx, 429 — worth retrying) from a client
-// error (4xx — not). A transport-level error (killed connection, DNS, TLS)
-// carries no status code and is surfaced separately; the retry treats it as
-// transient too.
+// httpStatusError carries a non-2xx status code, so the retry can tell a transient server fault from a client error.
 type httpStatusError struct {
 	code int
 	err  error
@@ -124,9 +111,7 @@ type httpStatusError struct {
 func (e *httpStatusError) Error() string { return e.err.Error() }
 func (e *httpStatusError) Unwrap() error { return e.err }
 
-// isTransientFault reports whether a failed request is worth retrying: a 429 or
-// 5xx status, or a transport-level error carrying no status. A 404, 403, 412,
-// any other 4xx and a refused unsigned write are definite answers.
+// isTransientFault reports whether a failed request is worth retrying; a 404, 403, 412 or other 4xx is a definite answer.
 func isTransientFault(err error) bool {
 	if err == nil {
 		return false
@@ -139,13 +124,12 @@ func isTransientFault(err error) bool {
 		// AWS answers a stalled upload with a 400 it documents as retryable.
 		return se.code == 429 || (se.code >= 500 && se.code <= 599) || (se.code == 400 && strings.Contains(se.err.Error(), "RequestTimeout"))
 	}
-	// No HTTP status reached us: a transport-level failure (connection reset,
-	// timeout, DNS). Idempotent read, so retry.
+	// No status reached the caller, so this is a transport-level failure; the operation is idempotent, so retry.
 	return true
 }
 
 func (c *Client) do(method, key string, query url.Values, body []byte, headers map[string]string) (*http.Response, error) {
-	// Refuse an unsigned write here, so the caller reports the cause not a 403.
+	// Refuse an unsigned write here, so the caller reports the cause and not a 403.
 	if c.anonymous && method != http.MethodGet && method != http.MethodHead {
 		return nil, ErrCredentialsRequired
 	}
@@ -161,10 +145,7 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 		payloadHash = hexSHA256(body)
 	}
 	debug := os.Getenv("GITSOCIAL_S3_DEBUG") == "1"
-	// Transport failures (a stale keep-alive the server closed mid-stream,
-	// reset, broken pipe) surface as errors from Do with no response. The body
-	// is an in-memory slice and every S3 call here is idempotent, so the
-	// request is rebuilt, re-signed, and retried a couple of times.
+	// A transport failure surfaces from Do with no response; the body is in memory and every call here is idempotent, so the request is rebuilt and re-signed.
 	var resp *http.Response
 	for attempt := 1; ; attempt++ {
 		var reader io.Reader
@@ -179,10 +160,7 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 		for name, value := range headers {
 			req.Header.Set(name, value)
 		}
-		// Stamp every upload with its cache policy (immutable loose objects vs
-		// always-revalidate mutable state) at this single chokepoint, so both the
-		// git-push and site-push write paths get it. Cache-Control is not a signed
-		// header, so this never affects SigV4.
+		// Stamp every upload's cache policy at this one chokepoint; Cache-Control is not signed, so it does not affect SigV4.
 		if method == http.MethodPut && req.Header.Get("Cache-Control") == "" {
 			req.Header.Set("Cache-Control", cacheControlForKey(key))
 		}
@@ -217,9 +195,7 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 		resp.Body.Close()
 		return nil, fmt.Errorf("%w: %s", ErrNotFound, key)
 	}
-	// See ErrAccessDenied: a no-listing bucket spells "absent" as 403. A signed
-	// reader folds only a denial, so a rejected credential keeps its error code;
-	// a denied write stays a hard error, so a CAS or delete never reads as success.
+	// A no-listing bucket spells absent as 403. A signed reader folds only a denial, and a denied write stays a hard error.
 	if resp.StatusCode == http.StatusForbidden && (method == http.MethodGet || method == http.MethodHead) {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		resp.Body.Close()
@@ -228,9 +204,7 @@ func (c *Client) do(method, key string, query url.Values, body []byte, headers m
 		}
 		return nil, &httpStatusError{code: resp.StatusCode, err: fmt.Errorf("objstore: %s %s: HTTP 403: %s", method, key, strings.TrimSpace(string(respBody)))}
 	}
-	// 412 = failed If-Match / If-None-Match; 409 = AWS's concurrent
-	// conditional-write conflict. Both mean "re-read and retry" to a CAS caller.
-	// The provider's error body is kept for diagnosing conditional-write quirks.
+	// 412 is a failed If-Match or If-None-Match and 409 is AWS's conditional-write conflict; both mean re-read and retry.
 	if resp.StatusCode == http.StatusPreconditionFailed || resp.StatusCode == http.StatusConflict {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		resp.Body.Close()
@@ -258,10 +232,7 @@ func (c *Client) Get(key string) ([]byte, error) {
 	return data, nil
 }
 
-// GetRange downloads one byte range of an object (end exclusive), mirroring
-// the browser's fetchRange: a server that ignores Range answers 200 with the
-// whole body, which is sliced locally so the caller sees the requested range
-// either way.
+// GetRange downloads one byte range of an object, end exclusive; a server that ignores Range answers 200, and the body is sliced locally.
 func (c *Client) GetRange(key string, start, end int64) ([]byte, error) {
 	headers := map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", start, end-1)}
 	resp, err := c.do(http.MethodGet, key, nil, nil, headers)
@@ -290,26 +261,10 @@ func (c *Client) GetRangeRetry(key string, start, end int64) ([]byte, error) {
 	return withReadRetry(context.TODO(), func() ([]byte, error) { return c.GetRange(key, start, end) })
 }
 
-// retryBackoff paces read/PUT retries; len+1 = total attempts. A var so tests
-// can shrink the waits (shared by putObjectWithRetry and the read retries).
+// retryBackoff paces read and PUT retries; its length plus one is the attempt count. A var so tests can shrink the waits.
 var retryBackoff = []time.Duration{500 * time.Millisecond, 2 * time.Second}
 
-// withReadRetry runs an idempotent read (GET/HEAD/LIST) and retries it on a
-// transient fault (5xx, 429, or a transport-level error) with bounded backoff,
-// so a single Cloudflare 503 or a dropped connection mid-walk costs one retried
-// read instead of losing a long operation. A definite answer (success, 404,
-// 403, any other 4xx) returns immediately; a fault that persists past the
-// attempts surfaces the last error. ctx aborts the wait when a peer has already
-// failed a pooled operation (pass context.TODO() for an un-pooled read).
-// withRetry runs an idempotent request and retries it on a transient fault with
-// the same bounded backoff the reads use. A GET is idempotent by definition and
-// a PUT of the same key and bytes is too, so a retry either lands or fails
-// definitively. Both write paths need it: one throttled PUT out of thousands
-// would otherwise fail a whole publish, and a single 503 on a ref's
-// compare-and-swap would fail the push. A non-transient answer (404, 403, a CAS
-// precondition failure) returns at once rather than burning the backoff on an
-// error that cannot clear. withReadRetry is the variant to use where a pooled
-// operation needs ctx to abort the wait.
+// withRetry runs an idempotent request and retries a transient fault with bounded backoff; a PUT of the same key and bytes is idempotent, so a retry lands or fails for good.
 func withRetry(fn func() error) error {
 	var err error
 	for attempt := 0; ; attempt++ {
@@ -320,6 +275,7 @@ func withRetry(fn func() error) error {
 	}
 }
 
+// withReadRetry is withRetry for a read, with ctx to abort the wait when a pooled peer has already failed.
 func withReadRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) {
 	var result T
 	var err error
@@ -337,9 +293,7 @@ func withReadRetry[T any](ctx context.Context, fn func() (T, error)) (T, error) 
 	}
 }
 
-// GetRetry is Get with transient-fault retry (see withReadRetry): the read path
-// long operations depend on (object GETs in the site walk, ref reads, manifest
-// reads) so a momentary provider hiccup doesn't lose the whole pass.
+// GetRetry is Get with transient-fault retry, the read path a long operation depends on.
 func (c *Client) GetRetry(key string) ([]byte, error) {
 	return withReadRetry(context.TODO(), func() ([]byte, error) { return c.Get(key) })
 }
@@ -357,8 +311,7 @@ func (c *Client) GetWithETag(key string) ([]byte, string, error) {
 		if data, err = io.ReadAll(resp.Body); err != nil {
 			return fmt.Errorf("objstore: read %s: %w", key, err)
 		}
-		// A CDN that compresses a response on the fly marks its ETag weak (W/"..."),
-		// which If-Match never matches; the value inside is still the object's own.
+		// A CDN that compresses on the fly marks its ETag weak, which If-Match cannot match; the value inside is still the object's.
 		etag = strings.TrimPrefix(resp.Header.Get("ETag"), "W/")
 		return nil
 	})
@@ -375,8 +328,7 @@ func (c *Client) Put(key string, data []byte) error {
 	return nil
 }
 
-// PutIfMatch writes an object only when its current ETag matches (compare-and-
-// swap). Returns ErrPreconditionFailed when the object changed underneath.
+// PutIfMatch writes an object only when its current ETag matches, and returns ErrPreconditionFailed when it changed underneath.
 func (c *Client) PutIfMatch(key string, data []byte, etag string) error {
 	return withRetry(func() error {
 		return c.putIfMatchOnce(key, data, etag)
@@ -393,8 +345,7 @@ func (c *Client) putIfMatchOnce(key string, data []byte, etag string) error {
 	return nil
 }
 
-// PutIfAbsent writes an object only when the key doesn't exist yet
-// (If-None-Match: *). Returns ErrPreconditionFailed when it already exists.
+// PutIfAbsent writes an object only when the key does not exist yet, and returns ErrPreconditionFailed when it does.
 func (c *Client) PutIfAbsent(key string, data []byte) error {
 	return withRetry(func() error {
 		resp, err := c.do(http.MethodPut, key, nil, data, map[string]string{"If-None-Match": "*"})
@@ -406,8 +357,7 @@ func (c *Client) PutIfAbsent(key string, data []byte) error {
 	})
 }
 
-// Delete removes an object; deleting a missing key is not an error (S3
-// semantics: DELETE is idempotent).
+// Delete removes an object; deleting a missing key is not an error, since DELETE is idempotent.
 func (c *Client) Delete(key string) error {
 	resp, err := c.do(http.MethodDelete, key, nil, nil, nil)
 	if err != nil {
@@ -449,10 +399,7 @@ func (c *Client) List(prefix string) ([]string, error) {
 	return keys, nil
 }
 
-// ListWithETags returns every key under the given prefix with its ETag
-// (ListObjectsV2, paginated). The ETag comes free in the listing, so a caller
-// that only needs to know whether the listing changed (the site push-state
-// digest) never issues a per-key GET.
+// ListWithETags returns every key under a prefix with its ETag; the ETag comes free in the listing, so a change check needs no per-key GET.
 func (c *Client) ListWithETags(prefix string) ([]ListedObject, error) {
 	var objs []ListedObject
 	token := ""

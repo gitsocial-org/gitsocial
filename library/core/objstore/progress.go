@@ -1,10 +1,4 @@
-// progress.go - progress reporting for long s3 push/site operations.
-//
-// Long s3 operations (initial object upload, the site item-index walk + shard
-// uploads) run for many minutes with no output. A small Progress hook threads
-// through the objstore entry points that need it so callers can render live
-// progress without objstore owning any I/O policy. nil = silent; there is no
-// global state.
+// progress.go - progress reporting for the long push and site operations
 package objstore
 
 import (
@@ -15,18 +9,10 @@ import (
 	"time"
 )
 
-// Progress reports a phase's advance. total is 0 when unknown. Within a phase
-// the calls are serialized (a single walk/producer goroutine, or, for the
-// concurrent object-upload and ref-read pools, a mutex guarding the emit), so
-// implementations need not be re-entrant across phases; the stderr renderer
-// guards its own writes regardless.
+// Progress reports a phase's advance, with total 0 when unknown; calls within a phase are serialized, so an implementation need not be re-entrant.
 type Progress func(phase string, done, total int)
 
-// throttle rate-limits progress emissions: it fires at most once per interval,
-// and always fires the terminal call (done == total, total > 0) so the final
-// count is never dropped. Counter-based batching is layered on top by the
-// caller (emit every N items) so this stays purely time-based and testable
-// with an injectable clock.
+// throttle rate-limits progress emissions to once per interval, and fires the terminal call regardless, so the final count lands.
 type throttle struct {
 	mu       sync.Mutex
 	interval time.Duration
@@ -40,18 +26,13 @@ func newThrottle(interval time.Duration) *throttle {
 	return &throttle{interval: interval, now: time.Now}
 }
 
-// ready reports whether an emission should fire now. The first call always
-// fires; a terminal call (done == total with a known total) always fires so
-// the completion line lands; otherwise it fires only once the interval has
-// elapsed since the last fire.
+// ready reports whether an emission should fire now: the first call, a terminal call, or once the interval has elapsed.
 func (t *throttle) ready(done, total int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.now()
 	terminal := total > 0 && done >= total
-	// A phase marker (no counts) reports that a distinct, possibly long step has
-	// STARTED, so dropping it to the interval would hide exactly what it exists to
-	// show. One line per marker, and callers emit them once per step.
+	// A phase marker names a step that has started, so the interval must not drop it.
 	if isPhaseMarker(done, total) || !t.started || terminal || now.Sub(t.last) >= t.interval {
 		t.started = true
 		t.last = now
@@ -60,11 +41,7 @@ func (t *throttle) ready(done, total int) bool {
 	return false
 }
 
-// progressWriter renders Progress calls as human-readable lines on an
-// io.Writer (the helper's stderr, or the CLI's). On a TTY it rewrites a single
-// line in place with a carriage return; otherwise it emits newline-terminated
-// lines at a much lower rate so piped logs don't explode. It is
-// safe for concurrent phase updates.
+// progressWriter renders Progress calls as lines on an io.Writer: a single in-place line on a TTY, slower newline lines otherwise.
 type progressWriter struct {
 	mu       sync.Mutex
 	w        io.Writer
@@ -77,12 +54,10 @@ type progressWriter struct {
 // ttyProgressInterval throttles interactive single-line refreshes (~1s).
 const ttyProgressInterval = time.Second
 
-// pipeProgressInterval throttles non-interactive newline lines (~10s) so
-// piped logs stay small.
+// pipeProgressInterval throttles non-interactive newline lines, so piped logs stay small.
 const pipeProgressInterval = 10 * time.Second
 
-// newProgressWriter builds a progressWriter. tty selects carriage-return
-// single-line updates (~1s) vs newline lines at a much lower rate (~10s).
+// newProgressWriter builds a progressWriter; tty selects in-place single-line updates over newline lines.
 func newProgressWriter(w io.Writer, tty bool) *progressWriter {
 	interval := pipeProgressInterval
 	if tty {
@@ -91,11 +66,7 @@ func newProgressWriter(w io.Writer, tty bool) *progressWriter {
 	return &progressWriter{w: w, tty: tty, thr: newThrottle(interval)}
 }
 
-// StderrProgress returns a Progress hook that renders throttled progress to
-// stderr, plus a done() to call when all phases finish (closes any pending
-// in-place TTY line). It uses the same TTY-vs-pipe policy as the git-spawned
-// helper, so `gitsocial push --site-only` and a plain `git push` show identical
-// progress. The hook is nil-safe to call after done().
+// StderrProgress returns a throttled stderr Progress hook plus the function that closes its pending TTY line, on the same policy the git-spawned helper uses.
 func StderrProgress() (Progress, func()) {
 	pw := newProgressWriter(os.Stderr, stderrIsTTY())
 	return pw.Progress(), pw.finish
@@ -109,10 +80,7 @@ func (p *progressWriter) Progress() Progress {
 	return p.report
 }
 
-// report renders one progress update, honoring the throttle. The terminal call
-// of a phase (done == total, total known) always renders so the final count
-// shows, and on a TTY it closes the in-place line with a newline so the next
-// phase starts clean.
+// report renders one progress update, honoring the throttle; a phase's terminal call closes the in-place TTY line.
 func (p *progressWriter) report(phase string, done, total int) {
 	terminal := total > 0 && done >= total
 	if !p.thr.ready(done, total) {
@@ -134,8 +102,7 @@ func (p *progressWriter) report(phase string, done, total int) {
 	fmt.Fprintln(p.w, line)
 }
 
-// finish closes any pending in-place TTY line with a newline. A no-op off a
-// TTY or when nothing is pending. Call once when all phases are done.
+// finish closes any pending in-place TTY line; call it once when all phases are done.
 func (p *progressWriter) finish() {
 	if p == nil {
 		return
@@ -148,8 +115,7 @@ func (p *progressWriter) finish() {
 	}
 }
 
-// formatProgress renders one progress line: "<phase>: <done>/<total> (NN%)" when
-// the total is known, or "<phase>: <done>" when it is unknown (total == 0).
+// formatProgress renders one progress line, with a percentage when the total is known.
 func formatProgress(phase string, done, total int) string {
 	if isPhaseMarker(done, total) {
 		return phase
@@ -161,17 +127,14 @@ func formatProgress(phase string, done, total int) string {
 	return fmt.Sprintf("%s: %d/%d (%d%%)", phase, done, total, pct)
 }
 
-// call invokes a Progress hook if non-nil (nil-safe convenience for the
-// threaded call sites).
+// call invokes a Progress hook when it is non-nil.
 func (p Progress) call(phase string, done, total int) {
 	if p != nil {
 		p(phase, done, total)
 	}
 }
 
-// stderrIsTTY reports whether stderr is a character device (a terminal),
-// stdlib-only so core stays free of an isatty dependency. This is the same
-// signal git uses to decide between in-place progress and quiet output.
+// stderrIsTTY reports whether stderr is a character device, the same signal git reads to choose its progress shape.
 func stderrIsTTY() bool {
 	info, err := os.Stderr.Stat()
 	if err != nil {
@@ -180,9 +143,7 @@ func stderrIsTTY() bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-// isPhaseMarker reports whether a call is a bare phase marker — a step that
-// names itself but counts nothing (both done and total zero), rendered as the
-// phase alone rather than "<phase>: 0".
+// isPhaseMarker reports whether a call names a step but counts nothing, so it renders as the phase alone.
 func isPhaseMarker(done, total int) bool {
 	return done == 0 && total == 0
 }

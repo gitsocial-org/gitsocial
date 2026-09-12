@@ -10,10 +10,7 @@ import (
 	"strings"
 )
 
-// refsHeadDigest fingerprints everything a data-derived site artifact depends
-// on with a cheap listing: the sorted (key, etag) pairs of the refs/ listing
-// plus HEAD's etag. Two calls returning the same digest guarantee no branch tip,
-// config ref, fork ref, or default-branch selection moved between them.
+// refsHeadDigest fingerprints every source a data-derived site artifact reads: the sorted refs/ listing etags plus HEAD's.
 func refsHeadDigest(client *Client, prefix string) (string, error) {
 	objs, err := client.ListWithETags(prefix + "refs/")
 	if err != nil {
@@ -36,8 +33,7 @@ func refsHeadDigest(client *Client, prefix string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-// headObjectETag returns a key's ETag via a HEAD request, or "" (no error) when
-// the key is absent (a bucket with no HEAD symref yet).
+// headObjectETag returns a key's ETag, or "" when the key is absent.
 func headObjectETag(client *Client, key string) (string, error) {
 	resp, err := client.do(http.MethodHead, key, nil, nil, nil)
 	if errors.Is(err, ErrNotFound) {
