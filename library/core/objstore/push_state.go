@@ -5,13 +5,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 )
 
-// refsHeadDigest fingerprints every source a data-derived site artifact reads: the sorted refs/ listing etags plus HEAD's.
-func refsHeadDigest(client *Client, prefix string) (string, error) {
+// RefsHeadDigest fingerprints every source a data-derived site artifact reads: the sorted refs/ listing etags plus HEAD's.
+func RefsHeadDigest(client *Client, prefix string) (string, error) {
 	objs, err := client.ListWithETags(prefix + "refs/")
 	if err != nil {
 		return "", fmt.Errorf("list refs for push-state: %w", err)
@@ -35,14 +34,12 @@ func refsHeadDigest(client *Client, prefix string) (string, error) {
 
 // headObjectETag returns a key's ETag, or "" when the key is absent.
 func headObjectETag(client *Client, key string) (string, error) {
-	resp, err := client.do(http.MethodHead, key, nil, nil, nil)
+	_, etag, err := client.HeadObject(key)
 	if errors.Is(err, ErrNotFound) {
 		return "", nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("head %s: %w", key, err)
 	}
-	etag := resp.Header.Get("ETag")
-	resp.Body.Close()
 	return etag, nil
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -282,7 +283,7 @@ func writePackMapShard(client *Client, capability Capability, prefix, shard, pac
 // readPackMapShard fetches one pack map shard, empty when absent, unreadable, or at another schema version.
 func readPackMapShard(client *Client, prefix, shard string) (*packMapDoc, error) {
 	var doc packMapDoc
-	found, err := readCompressedJSON(client, prefix+packMapKeyPrefix+shard+".json", &doc)
+	found, err := ReadCompressedJSON(client, prefix+packMapKeyPrefix+shard+".json", &doc)
 	if err != nil {
 		return nil, fmt.Errorf("read pack map shard %s: %w", shard, err)
 	}
@@ -291,6 +292,30 @@ func readPackMapShard(client *Client, prefix, shard string) (*packMapDoc, error)
 	}
 	doc.Version = packMapVersion
 	return &doc, nil
+}
+
+// ReadPackedObject resolves one object out of the bucket's packfiles through its pack map shard; ok is false when the map has no usable entry.
+func ReadPackedObject(client *Client, prefix, sha string) (objType string, body []byte, ok bool, err error) {
+	doc, err := readPackMapShard(client, prefix, packMapShardName(sha))
+	if err != nil {
+		return "", nil, false, err
+	}
+	at, found := doc.Offsets[sha]
+	if !found || len(at) != 3 || at[0] < 0 || at[0] >= int64(len(doc.Packs)) {
+		return "", nil, false, nil
+	}
+	raw, err := client.GetRangeRetry(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
+	if errors.Is(err, ErrNotFound) {
+		return "", nil, false, nil
+	}
+	if err != nil {
+		return "", nil, false, fmt.Errorf("read packed object %s: %w", sha, err)
+	}
+	objType, body, err = inflatePackEntry(raw)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("packed object %s: %w", sha, err)
+	}
+	return objType, body, true, nil
 }
 
 // packObjectTypes maps a pack entry's 3-bit type code to the git object type name; 6 and 7 are the delta codes.

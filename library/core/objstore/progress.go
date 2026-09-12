@@ -127,8 +127,8 @@ func formatProgress(phase string, done, total int) string {
 	return fmt.Sprintf("%s: %d/%d (%d%%)", phase, done, total, pct)
 }
 
-// call invokes a Progress hook when it is non-nil.
-func (p Progress) call(phase string, done, total int) {
+// Call invokes a Progress hook when it is non-nil.
+func (p Progress) Call(phase string, done, total int) {
 	if p != nil {
 		p(phase, done, total)
 	}

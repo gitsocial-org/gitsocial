@@ -30,7 +30,7 @@ const (
 // the pushed version becomes the new latest. Returns whether latest.txt was
 // rewritten.
 func PushArtifactObjects(remoteURL string, env HelperEnv, version string, files map[string][]byte, advance func(current string) bool) (bool, error) {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return false, err
 	}

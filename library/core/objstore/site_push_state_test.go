@@ -47,33 +47,33 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	if _, ok := readSitePushState(client, ""); !ok {
 		t.Fatal("first push must leave a push-state marker")
 	}
-	manifestPuts := bucket.putCount(bucketRefsKey)
+	manifestPuts := bucket.PutCount(bucketRefsKey)
 	if manifestPuts == 0 {
 		t.Fatal("first push must have written the refs manifest")
 	}
 
 	// Second push against the unchanged bucket: it must skip. Capture the write and
 	// per-ref GET counters before, and assert nothing moves.
-	putsBefore := bucket.totalPuts()
-	socRefGetsBefore := bucket.getCount("refs/heads/gitmsg/social")
-	manifestPutsBefore := bucket.putCount(bucketRefsKey)
-	listsBefore := bucket.listCount()
+	putsBefore := bucket.TotalPuts()
+	socRefGetsBefore := bucket.GetCount("refs/heads/gitmsg/social")
+	manifestPutsBefore := bucket.PutCount(bucketRefsKey)
+	listsBefore := bucket.ListCount()
 
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("second pushSite: %v", err)
 	}
-	if got := bucket.totalPuts(); got != putsBefore {
+	if got := bucket.TotalPuts(); got != putsBefore {
 		t.Errorf("second push wrote %d objects, want 0 (skip)", got-putsBefore)
 	}
 	// The skip costs only the cheap digest listing (one refs/ ListObjectsV2 page),
 	// never the full per-ref maintenance.
-	if got := bucket.listCount() - listsBefore; got > 1 {
+	if got := bucket.ListCount() - listsBefore; got > 1 {
 		t.Errorf("second push issued %d listings, want at most 1 (digest only)", got)
 	}
-	if got := bucket.getCount("refs/heads/gitmsg/social"); got != socRefGetsBefore {
+	if got := bucket.GetCount("refs/heads/gitmsg/social"); got != socRefGetsBefore {
 		t.Errorf("second push issued %d per-ref GETs, want 0 (skip)", got-socRefGetsBefore)
 	}
-	if got := bucket.putCount(bucketRefsKey); got != manifestPutsBefore {
+	if got := bucket.PutCount(bucketRefsKey); got != manifestPutsBefore {
 		t.Errorf("second push rewrote the refs manifest, want a skip")
 	}
 
@@ -83,11 +83,11 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	if err := client.Put("refs/heads/gitmsg/social", []byte(newTip+"\n")); err != nil {
 		t.Fatalf("advance social ref: %v", err)
 	}
-	manifestBefore := bucket.putCount(bucketRefsKey)
+	manifestBefore := bucket.PutCount(bucketRefsKey)
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("third pushSite: %v", err)
 	}
-	if got := bucket.putCount(bucketRefsKey); got == manifestBefore {
+	if got := bucket.PutCount(bucketRefsKey); got == manifestBefore {
 		t.Error("third push after a ref change must rewrite the refs manifest (marker invalidated)")
 	}
 }
@@ -135,11 +135,11 @@ func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	}
 	// The full pass must run (it re-reads the manifest it left correct, and
 	// rewrites nothing else) and rewrite the marker to a valid one.
-	manifestGetsBefore := bucket.getCount(bucketRefsKey)
+	manifestGetsBefore := bucket.GetCount(bucketRefsKey)
 	if _, err := pushSite(client, "", nil, SiteOverride{}, nil); err != nil {
 		t.Fatalf("second pushSite after corruption: %v", err)
 	}
-	if got := bucket.getCount(bucketRefsKey); got == manifestGetsBefore {
+	if got := bucket.GetCount(bucketRefsKey); got == manifestGetsBefore {
 		t.Error("push after a corrupt marker must run the full pass")
 	}
 	if _, ok := readSitePushState(client, ""); !ok {
@@ -162,7 +162,7 @@ func TestSitePushState_RoundTrip(t *testing.T) {
 	// An empty digest is never written (can never match a real digest).
 	client2, bucket2 := testClient(t)
 	writeSitePushState(client2, "", "shellv1", "", sitePagesStateOff)
-	if bucket2.putCount(sitePushStateKey) != 0 {
+	if bucket2.PutCount(sitePushStateKey) != 0 {
 		t.Error("an empty digest must not write a marker")
 	}
 }
@@ -172,9 +172,9 @@ func TestSitePushState_RoundTrip(t *testing.T) {
 func TestSiteMaintenanceUpToDate_ShellVersionBump(t *testing.T) {
 	client, _ := testClient(t)
 	seedSiteBucket(t, client)
-	digest, err := refsHeadDigest(client, "")
+	digest, err := RefsHeadDigest(client, "")
 	if err != nil {
-		t.Fatalf("refsHeadDigest: %v", err)
+		t.Fatalf("RefsHeadDigest: %v", err)
 	}
 	writeSitePushState(client, "", "old-shell", digest, sitePagesStateOff)
 	// Same digest but a newer shell version: not up to date.

@@ -13,19 +13,20 @@ package objstore
 import "strings"
 
 const (
-	// cacheControlImmutable marks content-addressed loose objects.
-	cacheControlImmutable = "public, max-age=31536000, immutable"
-	// cacheControlRevalidate marks every mutable key: cache but always revalidate.
-	cacheControlRevalidate = "no-cache"
+	// CacheControlImmutable marks a key whose bytes are sealed, for the writer that seals one.
+	CacheControlImmutable = "public, max-age=31536000, immutable"
+	// CacheControlRevalidate marks every mutable key: cache but always revalidate.
+	CacheControlRevalidate = "no-cache"
 )
 
-// cacheControlForKey classifies a bucket key by mutability and returns the
-// Cache-Control value it must be stored (and served) with.
+// cacheControlForKey classifies a transport key by mutability and returns the
+// Cache-Control value it must be stored (and served) with. A writer that seals
+// a key of its own stamps CacheControlImmutable on the upload instead.
 func cacheControlForKey(key string) string {
-	if isLooseObjectKey(key) || isPackKey(key) || isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) || isArtifactVersionKey(key) {
-		return cacheControlImmutable
+	if isLooseObjectKey(key) || isPackKey(key) || isArtifactVersionKey(key) {
+		return CacheControlImmutable
 	}
-	return cacheControlRevalidate
+	return CacheControlRevalidate
 }
 
 // isPackKey reports whether a key is a packfile or its index
@@ -56,19 +57,6 @@ func isArtifactVersionKey(key string) bool {
 		return false
 	}
 	return strings.Contains(key[i+len(ArtifactsPrefix):], "/")
-}
-
-// isDigitString reports whether s is non-empty and all decimal digits.
-func isDigitString(s string) bool {
-	if s == "" {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // isLooseObjectKey reports whether a key is a content-addressed loose object

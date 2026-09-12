@@ -82,11 +82,11 @@ func TestLocalWalk_ReadsLocalNotBucket(t *testing.T) {
 	gitDir, shas := seedGitChain(t, client, n)
 	tip := shas[n-1]
 
-	src := newLocalCommitSource(gitDir, "")
+	src := NewLocalCommitSource(gitDir, "")
 	if src == nil {
-		t.Fatal("newLocalCommitSource returned nil for a real repo")
+		t.Fatal("NewLocalCommitSource returned nil for a real repo")
 	}
-	defer src.close()
+	defer src.Close()
 
 	withTestShardCount(func() {
 		withTestWalkBudget(50000, func() {
@@ -98,7 +98,7 @@ func TestLocalWalk_ReadsLocalNotBucket(t *testing.T) {
 	})
 	assertLockstepState(t, client, "social", shas, tip)
 	for _, sha := range shas {
-		if got := bucket.getCount("objects/" + sha[:2] + "/" + sha[2:]); got != 0 {
+		if got := bucket.GetCount("objects/" + sha[:2] + "/" + sha[2:]); got != 0 {
 			t.Errorf("object %s got %d bucket GETs; the walk should have read it locally", sha[:8], got)
 		}
 	}
@@ -124,8 +124,8 @@ func TestLocalWalk_FallsBackPerMissingObject(t *testing.T) {
 		t.Fatalf("packed copy still present; the fallback test needs a loose-only object")
 	}
 
-	src := newLocalCommitSource(gitDir, "")
-	defer src.close()
+	src := NewLocalCommitSource(gitDir, "")
+	defer src.Close()
 	withTestShardCount(func() {
 		withTestWalkBudget(50000, func() {
 			sp := &siteProgress{ext: "social", src: src}
@@ -136,14 +136,14 @@ func TestLocalWalk_FallsBackPerMissingObject(t *testing.T) {
 	})
 	assertLockstepState(t, client, "social", shas, tip)
 	// The missing object fell back to exactly one bucket GET; its neighbors did not.
-	if got := bucket.getCount("objects/" + missing[:2] + "/" + missing[2:]); got != 1 {
+	if got := bucket.GetCount("objects/" + missing[:2] + "/" + missing[2:]); got != 1 {
 		t.Errorf("missing object %s got %d bucket GETs, want 1 (per-object fallback)", missing[:8], got)
 	}
 	for _, sha := range shas {
 		if sha == missing {
 			continue
 		}
-		if got := bucket.getCount("objects/" + sha[:2] + "/" + sha[2:]); got != 0 {
+		if got := bucket.GetCount("objects/" + sha[:2] + "/" + sha[2:]); got != 0 {
 			t.Errorf("present object %s got %d bucket GETs; want 0 (read locally)", sha[:8], got)
 		}
 	}
@@ -166,7 +166,7 @@ func TestLocalWalk_NilSourceBucketOnly(t *testing.T) {
 	})
 	assertLockstepState(t, client, "social", shas, tip)
 	for _, sha := range shas {
-		if got := bucket.getCount("objects/" + sha[:2] + "/" + sha[2:]); got == 0 {
+		if got := bucket.GetCount("objects/" + sha[:2] + "/" + sha[2:]); got == 0 {
 			t.Errorf("object %s got 0 bucket GETs; a nil source must read from the bucket", sha[:8])
 		}
 	}

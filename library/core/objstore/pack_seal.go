@@ -93,7 +93,7 @@ func (h *remoteHelper) maintainPacks(refs map[string]string) {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: %s does not list the packs of round %s yet; keeping their loose objects\n", packsKey, roundKey(round))
 			continue
 		}
-		if err := deleteRoundLooseObjects(h.client, h.prefix, round, resolveUploadConcurrency()); err != nil {
+		if err := deleteRoundLooseObjects(h.client, h.prefix, round, UploadConcurrency()); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: pack deletion: %v\n", err)
 			continue
 		}
@@ -180,7 +180,7 @@ func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound
 		if len(built.pack) > maxPackUploadBytes {
 			continue
 		}
-		if err := publishPack(h.client, h.capability, h.prefix, built, resolveUploadConcurrency()); err != nil {
+		if err := publishPack(h.client, h.capability, h.prefix, built, UploadConcurrency()); err != nil {
 			return round, looseAfter, err
 		}
 		round.Packs = append(round.Packs, built.name)
@@ -406,9 +406,9 @@ func commitPackState(client *Client, capability Capability, prefix string, updat
 // writePackState publishes the sealing state as is; only for a caller that owns the whole document, since a pass uses commitPackState.
 func writePackState(client *Client, prefix string, state *packState) error {
 	state.Version = packStateVersion
-	compressed, err := compressJSON(state, brotliQualityFull)
+	compressed, err := CompressJSON(state, BrotliQualityFull)
 	if err != nil {
 		return err
 	}
-	return putCompressed(client, prefix+packStateKey, compressed)
+	return PutCompressed(client, prefix+packStateKey, compressed, "")
 }

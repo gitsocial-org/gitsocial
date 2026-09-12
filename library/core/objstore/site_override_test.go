@@ -96,8 +96,8 @@ func TestWriteSiteCustomization_overrideStamped(t *testing.T) {
 	if got.URL != "https://r2.example/" {
 		t.Fatalf("site-config.json url = %q, want the override so the SPA agrees with the pages", got.URL)
 	}
-	if bucket.putCount(siteCustomizationKey) != 1 {
-		t.Errorf("expected 1 PUT, got %d", bucket.putCount(siteCustomizationKey))
+	if bucket.PutCount(siteCustomizationKey) != 1 {
+		t.Errorf("expected 1 PUT, got %d", bucket.PutCount(siteCustomizationKey))
 	}
 }
 

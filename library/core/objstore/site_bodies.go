@@ -4,14 +4,8 @@ package objstore
 
 import (
 	"errors"
-	"net/http"
 	"os"
 	"strconv"
-)
-
-const (
-	// brotliQualityShard compresses a sealed shard once, so max quality is worth the one-time wall time.
-	brotliQualityShard = 11
 )
 
 // shardBodyCount is the commit count of a sealed shard, fixed so shard boundaries stay stable under append. A var so tests can lower it.
@@ -66,18 +60,14 @@ var bodiesCorpus = shardCorpus[siteBodyEntry]{
 
 // objectSize reports whether a key exists and its stored size when HEAD carries one; it downloads no body, so a sizeless HEAD returns (0, true) for the caller to fill from the manifest.
 func objectSize(client *Client, key string) (int, bool, error) {
-	resp, err := client.do(http.MethodHead, key, nil, nil, nil)
+	size, _, err := client.HeadObject(key)
 	if errors.Is(err, ErrNotFound) {
 		return 0, false, nil
 	}
 	if err != nil {
 		return 0, false, err
 	}
-	resp.Body.Close()
-	if n, e := strconv.Atoi(resp.Header.Get("Content-Length")); e == nil && n > 0 {
-		return n, true, nil
-	}
-	return 0, true, nil
+	return size, true, nil
 }
 
 // planBodies seals a full bodies rebuild's shards and returns the plan.

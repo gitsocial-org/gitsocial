@@ -22,10 +22,10 @@ import (
 // transport is sized to match). The env/setting knob covers the long tail.
 const defaultUploadConcurrency = 16
 
-// resolveUploadConcurrency picks the object-upload pool size, env first, then
+// UploadConcurrency picks the object-upload pool size, env first, then
 // the personal setting, then the default. A non-positive or unparsable value
 // at any layer falls through to the next.
-func resolveUploadConcurrency() int {
+func UploadConcurrency() int {
 	if v := os.Getenv("GITSOCIAL_S3_CONCURRENCY"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
 			return n
@@ -41,17 +41,17 @@ func resolveUploadConcurrency() int {
 	return defaultUploadConcurrency
 }
 
-// runParallel runs fn over indices [0,n) through the resolved upload pool and
+// RunParallel runs fn over indices [0,n) through the resolved upload pool and
 // returns each call's error, index-aligned with the input. Every index runs even
 // when a peer fails: a push's per-ref report needs an outcome for every command,
 // and callers that only care about the first failure just scan the result. fn
 // must confine its writes to its own index (or synchronize them itself).
-func runParallel(n int, fn func(i int) error) []error {
+func RunParallel(n int, fn func(i int) error) []error {
 	errs := make([]error, n)
 	if n == 0 {
 		return errs
 	}
-	concurrency := max(1, min(resolveUploadConcurrency(), n))
+	concurrency := max(1, min(UploadConcurrency(), n))
 	work := make(chan int)
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
@@ -71,8 +71,8 @@ func runParallel(n int, fn func(i int) error) []error {
 	return errs
 }
 
-// firstError returns the first non-nil error, or nil.
-func firstError(errs []error) error {
+// FirstError returns the first non-nil error, or nil.
+func FirstError(errs []error) error {
 	for _, err := range errs {
 		if err != nil {
 			return err

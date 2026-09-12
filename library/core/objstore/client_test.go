@@ -51,9 +51,9 @@ func TestClientForRemote_strayHalfPairStaysAnonymous(t *testing.T) {
 	clearCredentialEnv(t)
 	setCredentialsFile(t, "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "stray")
-	client, _, _, err := clientForRemote("s3://s3.example.com/bucket/repo", HelperEnv{})
+	client, _, _, err := ClientForRemote("s3://s3.example.com/bucket/repo", HelperEnv{})
 	if err != nil {
-		t.Fatalf("clientForRemote: %v", err)
+		t.Fatalf("ClientForRemote: %v", err)
 	}
 	if !client.Anonymous() {
 		t.Error("a stray half env pair must leave the client anonymous")

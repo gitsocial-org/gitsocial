@@ -10,7 +10,7 @@ import "net/http"
 // the Cache-Control header is applied by the client's per-key policy, so a root
 // key such as install.sh is stored no-cache.
 func PutObjectToRemote(remoteURL string, env HelperEnv, key string, data []byte, contentType string) error {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}

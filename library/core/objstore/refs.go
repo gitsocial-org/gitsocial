@@ -52,8 +52,8 @@ func publishRefManifest(client *Client, prefix, mode string, refs map[string]str
 	return newETag, err
 }
 
-// rebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
-func rebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
+// RebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
+func RebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		stored, etag, err := readClaimsWithETag(client, prefix+bucketRefsKey)
 		if err != nil && !errors.Is(err, ErrNotFound) {
@@ -122,21 +122,21 @@ func refSHA(refName string, value []byte) (string, error) {
 	return sha, nil
 }
 
-// readRemoteRefs returns refname to sha for every remote ref; the highest generation wins, and a chain outranks a plain key of the same name.
-func readRemoteRefs(client *Client, prefix string) (map[string]string, error) {
+// ReadRemoteRefs returns refname to sha for every remote ref; the highest generation wins, and a chain outranks a plain key of the same name.
+func ReadRemoteRefs(client *Client, prefix string) (map[string]string, error) {
 	return readRemoteRefsProgress(client, prefix, nil)
 }
 
 // ListRemoteRefs returns refname to sha for every ref in the bucket behind a canonical s3 remote URL.
 func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return nil, err
 	}
-	return readRemoteRefs(client, prefix)
+	return ReadRemoteRefs(client, prefix)
 }
 
-// readRemoteRefsProgress is readRemoteRefs with a progress hook, reading the per-ref GETs through a bounded pool. A manifest claim whose MD5 matches the listing's ETag proves a ref's value with no GET; anything else falls back to the read.
+// readRemoteRefsProgress is ReadRemoteRefs with a progress hook, reading the per-ref GETs through a bounded pool. A manifest claim whose MD5 matches the listing's ETag proves a ref's value with no GET; anything else falls back to the read.
 func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (map[string]string, error) {
 	listed, err := client.ListWithETags(prefix + "refs/")
 	// A public web domain in front of a bucket answers a list request with 404.
@@ -327,7 +327,7 @@ type refReadResult struct {
 
 // readRefJobs runs read over each job through a bounded worker pool; the first error cancels it, and progress is serialized behind the result mutex.
 func readRefJobs[J any](total int, progress Progress, read func(context.Context, J) (string, string, error), jobs []J) refReadResult {
-	concurrency := resolveUploadConcurrency()
+	concurrency := UploadConcurrency()
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -364,7 +364,7 @@ func readRefJobs[J any](total int, progress Progress, read func(context.Context,
 				}
 				mu.Lock()
 				out[refName] = sha
-				progress.call("site refs", int(atomic.AddInt64(&done, 1)), total)
+				progress.Call("site refs", int(atomic.AddInt64(&done, 1)), total)
 				mu.Unlock()
 			}
 		}()

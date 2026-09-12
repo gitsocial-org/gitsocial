@@ -187,7 +187,7 @@ func (h *remoteHelper) refreshLocalOdb(pins []ThinPin) {
 			continue // not fetched: tells us nothing about freshness
 		}
 		if _, _, ok := h.localOdb().typed(pin.SHA); !ok {
-			h.local.close()
+			h.local.Close()
 			h.local = nil
 		}
 		return
@@ -210,6 +210,15 @@ func readThinUpstream(client *Client, prefix string) (*thinUpstreamDoc, error) {
 	return &doc, nil
 }
 
+// ThinUpstreamURL returns the upstream a bucket is thin against, "" when the bucket carries no marker.
+func ThinUpstreamURL(client *Client, prefix string) (string, error) {
+	doc, err := readThinUpstream(client, prefix)
+	if err != nil || doc == nil {
+		return "", err
+	}
+	return doc.URL, nil
+}
+
 // writeThinUpstream publishes the thin-fork marker.
 func writeThinUpstream(client *Client, prefix string, doc thinUpstreamDoc) error {
 	body, err := json.Marshal(doc)
@@ -227,7 +236,7 @@ var ErrThinBucket = errors.New("thin fork bucket: its history is incomplete with
 
 // PushFull detaches a bucket from its thin relationship: upload what the bucket lacks, restore the ref advertisement, delete the marker. workdir's refs must cover the bucket's tips.
 func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress) error {
-	client, prefix, capability, err := clientForRemote(remoteURL, env)
+	client, prefix, capability, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -235,7 +244,7 @@ func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress
 	if err != nil || doc == nil {
 		return err
 	}
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil {
 		return fmt.Errorf("read refs: %w", err)
 	}
@@ -248,8 +257,8 @@ func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress
 	if err := h.uploadObjects(missing); err != nil {
 		return fmt.Errorf("upload missing objects: %w", err)
 	}
-	src := newLocalCommitSource("", workdir)
-	defer src.close()
+	src := NewLocalCommitSource("", workdir)
+	defer src.Close()
 	if err := writeDumbTransportInfo(client, prefix, src, refs, false); err != nil {
 		return err
 	}
@@ -330,7 +339,7 @@ func bucketObjectInventory(client *Client, prefix string) (map[string]bool, erro
 
 // ThinUpstream reports the upstream a bucket is thin against and how many tips its last push pinned, from the bucket key rather than per-clone config.
 func ThinUpstream(remoteURL string, env HelperEnv) (url string, pins int, err error) {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return "", 0, err
 	}

@@ -15,8 +15,8 @@ import (
 	"sync"
 )
 
-// localCommitSource reads objects from a local git odb through one long-lived cat-file batch; a nil source is inert, so every read misses.
-type localCommitSource struct {
+// LocalCommitSource reads objects from a local git odb through one long-lived cat-file batch; a nil source is inert, so every read misses.
+type LocalCommitSource struct {
 	mu      sync.Mutex
 	gitDir  string // the odb the batch reads, for the callers that must run their own git
 	workdir string
@@ -26,8 +26,8 @@ type localCommitSource struct {
 	broken  bool // a protocol/IO error retired the process; every later read misses
 }
 
-// newLocalCommitSource starts a cat-file batch bound to gitDir, or to a workdir when gitDir is ""; nil means a bucket-only walk.
-func newLocalCommitSource(gitDir, workdir string) *localCommitSource {
+// NewLocalCommitSource starts a cat-file batch bound to gitDir, or to a workdir when gitDir is ""; nil means a bucket-only walk.
+func NewLocalCommitSource(gitDir, workdir string) *LocalCommitSource {
 	if gitDir == "" && workdir == "" {
 		return nil
 	}
@@ -53,11 +53,27 @@ func newLocalCommitSource(gitDir, workdir string) *localCommitSource {
 	if err := cmd.Start(); err != nil {
 		return nil
 	}
-	return &localCommitSource{gitDir: gitDir, workdir: workdir, cmd: cmd, stdin: stdin, stdout: bufio.NewReaderSize(stdout, 1<<20)}
+	return &LocalCommitSource{gitDir: gitDir, workdir: workdir, cmd: cmd, stdin: stdin, stdout: bufio.NewReaderSize(stdout, 1<<20)}
 }
 
-// close shuts the cat-file process down. Safe on a nil source.
-func (s *localCommitSource) close() {
+// GitDir returns the odb the batch reads, for a caller that must run its own git.
+func (s *LocalCommitSource) GitDir() string {
+	if s == nil {
+		return ""
+	}
+	return s.gitDir
+}
+
+// Workdir returns the working tree the batch runs in, "" when it reads a bare odb.
+func (s *LocalCommitSource) Workdir() string {
+	if s == nil {
+		return ""
+	}
+	return s.workdir
+}
+
+// Close shuts the cat-file process down. Safe on a nil source.
+func (s *LocalCommitSource) Close() {
 	if s == nil || s.cmd == nil {
 		return
 	}
@@ -65,19 +81,19 @@ func (s *localCommitSource) close() {
 	_ = s.cmd.Wait()
 }
 
-// commit reads one commit's raw object body from the local odb; ok is false, not an error, on a miss.
-func (s *localCommitSource) commit(sha string) (body []byte, ok bool) {
-	return s.object(sha, "commit")
+// Commit reads one commit's raw object body from the local odb; ok is false, not an error, on a miss.
+func (s *LocalCommitSource) Commit(sha string) (body []byte, ok bool) {
+	return s.Object(sha, "commit")
 }
 
-// object reads one object's raw body by name, requiring the given type; an IO or protocol error retires the process rather than failing the caller.
-func (s *localCommitSource) object(name, wantType string) (body []byte, ok bool) {
+// Object reads one object's raw body by name, requiring the given type; an IO or protocol error retires the process rather than failing the caller.
+func (s *LocalCommitSource) Object(name, wantType string) (body []byte, ok bool) {
 	objType, body, ok := s.typed(name)
 	return body, ok && objType == wantType
 }
 
 // typed reads one object's type and raw body by name, for a caller that takes whatever type the odb holds.
-func (s *localCommitSource) typed(name string) (objType string, body []byte, ok bool) {
+func (s *LocalCommitSource) typed(name string) (objType string, body []byte, ok bool) {
 	if s == nil {
 		return "", nil, false
 	}

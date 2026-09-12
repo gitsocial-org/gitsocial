@@ -82,7 +82,7 @@ func TestPublishRefManifest_ReListsWhenTheDocumentMoved(t *testing.T) {
 		bucketRefsKey:     `{"refs/heads/main":"` + shaA + `"}`,
 		"refs/heads/main": shaA + "\n",
 	})
-	client, prefix, _, err := clientForRemote(url, HelperEnv{})
+	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,13 +119,13 @@ func TestRebuildRefManifest_ReplacesUnparseableDocument(t *testing.T) {
 	if err := client.Put(bucketRefsKey, []byte("{not json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rebuildRefManifest(client, "", nil); err != nil {
+	if _, err := RebuildRefManifest(client, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if got, found := readClaimsDoc(client, bucketRefsKey); !found || len(got) != len(want) {
 		t.Errorf("manifest = %v, want %v", got, want)
 	}
-	if n := bucket.listCount(); n != 1 {
+	if n := bucket.ListCount(); n != 1 {
 		t.Errorf("listed %d times, want once", n)
 	}
 }

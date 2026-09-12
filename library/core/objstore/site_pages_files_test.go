@@ -75,8 +75,8 @@ func buildFilePages(t *testing.T, client *Client, dir, head string, site map[str
 			}
 		}
 	}
-	src := newLocalCommitSource("", dir)
-	defer src.close()
+	src := NewLocalCommitSource("", dir)
+	defer src.Close()
 	// The code index is what a real push maintains before the pages (rebuildSiteItems),
 	// and its tip is what tells the pages a branch moved.
 	if err := updateSiteCodeIndex(client, "", codeBranchTips(refs, "main"), "main", &siteProgress{ext: siteCodeExt, src: src}); err != nil {
@@ -194,7 +194,7 @@ func TestSiteFilePages_Discovery(t *testing.T) {
 	if !strings.Contains(index, `href="../index.html"`) || !strings.Contains(getKey(t, client, sitePagesFrontKey), `href="./f/index.html"`) {
 		t.Error("the sidebar must link the file index once the layer has pages")
 	}
-	if got := cacheControlForKey("f/handbook/Guide.html"); got != cacheControlRevalidate {
+	if got := siteCacheControl("f/handbook/Guide.html"); got != "" {
 		t.Errorf("file pages must revalidate, got %q", got)
 	}
 }
@@ -279,7 +279,7 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 	})
 	client, bucket := testClient(t)
 	buildFilePages(t, client, dir, head, pagesTestSite())
-	one, two, index := bucket.putCount("f/docs/one.html"), bucket.putCount("f/docs/two.html"), bucket.putCount("f/index.html")
+	one, two, index := bucket.PutCount("f/docs/one.html"), bucket.PutCount("f/docs/two.html"), bucket.PutCount("f/index.html")
 	if one != 1 || index != 1 {
 		t.Fatalf("first pass wrote one=%d index=%d, want 1/1", one, index)
 	}
@@ -290,7 +290,7 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 	if buildFilePages(t, client, dir, head, pagesTestSite()) {
 		t.Fatal("the second pass must complete")
 	}
-	if bucket.putCount("f/docs/one.html") != one || bucket.putCount("f/index.html") != index {
+	if bucket.PutCount("f/docs/one.html") != one || bucket.PutCount("f/index.html") != index {
 		t.Error("a pass over an unchanged tree must write nothing")
 	}
 
@@ -298,10 +298,10 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 	if buildFilePages(t, client, dir, next, pagesTestSite()) {
 		t.Fatal("the third pass must complete")
 	}
-	if bucket.putCount("f/docs/one.html") != one+1 {
+	if bucket.PutCount("f/docs/one.html") != one+1 {
 		t.Error("the edited document's page must be rewritten")
 	}
-	if bucket.putCount("f/docs/two.html") != two {
+	if bucket.PutCount("f/docs/two.html") != two {
 		t.Error("an untouched document's page must not be rewritten")
 	}
 	if !strings.Contains(getKey(t, client, "f/docs/one.html"), "first, revised.") {

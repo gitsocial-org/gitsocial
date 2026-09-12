@@ -14,8 +14,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,7 +108,7 @@ func pagesTestSite() map[string]any {
 // pagesRefs assembles the refs map rebuildSitePages consumes.
 func pagesRefs(client *Client, t *testing.T) map[string]string {
 	t.Helper()
-	refs, err := readRemoteRefs(client, "")
+	refs, err := ReadRemoteRefs(client, "")
 	if err != nil {
 		t.Fatalf("read refs: %v", err)
 	}
@@ -141,23 +139,14 @@ func buildPages(t *testing.T, client *Client) (pending bool, state string) {
 // assertions read what a browser renders. Fails the test when absent.
 func getKey(t *testing.T, client *Client, key string) string {
 	t.Helper()
-	resp, err := client.do(http.MethodGet, key, nil, nil, nil)
+	data, err := client.Get(key)
 	if err != nil {
 		t.Fatalf("get %s: %v", key, err)
 	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read %s: %v", key, err)
+	if raw, decErr := BrotliDecompress(data); decErr == nil && len(raw) > 0 {
+		return string(raw)
 	}
-	if resp.Header.Get("Content-Encoding") != "br" {
-		return string(data)
-	}
-	raw, err := brotliDecompress(data)
-	if err != nil {
-		t.Fatalf("decode %s: %v", key, err)
-	}
-	return string(raw)
+	return string(data)
 }
 
 // keyExists reports whether a bucket key is present.
@@ -379,7 +368,7 @@ func TestSitePages_SealedListOverflow(t *testing.T) {
 	}
 
 	// +80 posts: the incremental pass must seal page 3 and never rewrite 1/2.
-	puts1, puts2 := bucket.putCount("posts/1.html"), bucket.putCount("posts/2.html")
+	puts1, puts2 := bucket.PutCount("posts/1.html"), bucket.PutCount("posts/2.html")
 	more := make([]pageMsgSpec, 0, 80)
 	for i := 230; i < 310; i++ {
 		more = append(more, pageMsgSpec{msg: fmt.Sprintf("post number %03d", i), ts: int64(1000 + i)})
@@ -388,7 +377,7 @@ func TestSitePages_SealedListOverflow(t *testing.T) {
 	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("incremental pass pending=%v state=%q", pending, state)
 	}
-	if bucket.putCount("posts/1.html") != puts1 || bucket.putCount("posts/2.html") != puts2 {
+	if bucket.PutCount("posts/1.html") != puts1 || bucket.PutCount("posts/2.html") != puts2 {
 		t.Error("sealed pages 1/2 must not be rewritten by the incremental pass")
 	}
 	page3 := getKey(t, client, "posts/3.html")
@@ -543,8 +532,8 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 		t.Fatal("unexpected pending")
 	}
 	rootKey, bystanderKey := "i/"+rootSha[:12]+".html", "i/"+bystander[:12]+".html"
-	rootPuts, byPuts := bucket.putCount(rootKey), bucket.putCount(bystanderKey)
-	frontPuts := bucket.putCount(sitePagesFrontKey)
+	rootPuts, byPuts := bucket.PutCount(rootKey), bucket.PutCount(bystanderKey)
+	frontPuts := bucket.PutCount(sitePagesFrontKey)
 
 	// Delta: one reply to the root + one new top-level post.
 	out := seedSocialMessages(t, client, bystander, []pageMsgSpec{
@@ -555,13 +544,13 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("incremental pending=%v state=%q", pending, state)
 	}
-	if bucket.putCount(rootKey) != rootPuts+1 {
+	if bucket.PutCount(rootKey) != rootPuts+1 {
 		t.Error("the replied-to root's page must be regenerated exactly once")
 	}
-	if bucket.putCount(bystanderKey) != byPuts {
+	if bucket.PutCount(bystanderKey) != byPuts {
 		t.Error("an unaffected item's page must not be rewritten")
 	}
-	if bucket.putCount(sitePagesFrontKey) != frontPuts+1 {
+	if bucket.PutCount(sitePagesFrontKey) != frontPuts+1 {
 		t.Error("the front page must be rewritten once")
 	}
 	if !strings.Contains(getKey(t, client, rootKey), "Fresh reply body") {
@@ -694,10 +683,10 @@ func TestSitePages_SitemapCoverageAndIndexMode(t *testing.T) {
 			t.Errorf("list pages must never land in sealed part %s", part)
 		}
 	}
-	if cacheControlForKey("sitemap-1.xml") != cacheControlImmutable {
+	if siteCacheControl("sitemap-1.xml") != CacheControlImmutable {
 		t.Error("sealed sitemap parts must be immutable-cached")
 	}
-	if cacheControlForKey(sitePagesSitemapHeadKey) != cacheControlRevalidate || cacheControlForKey(sitePagesSitemapKey) != cacheControlRevalidate {
+	if siteCacheControl(sitePagesSitemapHeadKey) != "" || siteCacheControl(sitePagesSitemapKey) != "" {
 		t.Error("sitemap head/index must revalidate")
 	}
 }
@@ -717,7 +706,7 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	if err := client.Delete(sitePagesManifestKey); err != nil {
 		t.Fatal(err)
 	}
-	digest, err := refsHeadDigest(client, "")
+	digest, err := RefsHeadDigest(client, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -807,8 +796,8 @@ func TestSitePages_FrontHome(t *testing.T) {
 	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
 		t.Fatal(err)
 	}
-	src := newLocalCommitSource("", dir)
-	defer src.close()
+	src := NewLocalCommitSource("", dir)
+	defer src.Close()
 	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, SiteOverride{}); err != nil || pending {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
@@ -847,8 +836,8 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
 		t.Fatal(err)
 	}
-	src := newLocalCommitSource("", dir)
-	defer src.close()
+	src := NewLocalCommitSource("", dir)
+	defer src.Close()
 	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, SiteOverride{}); err != nil || pending {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
@@ -909,8 +898,8 @@ func TestSitePages_FrontHomeIgnoresLocalBranch(t *testing.T) {
 	if err := updateSiteItemsIndex(client, "", "social", refs["refs/heads/gitmsg/social"], nil); err != nil {
 		t.Fatal(err)
 	}
-	src := newLocalCommitSource("", dir)
-	defer src.close()
+	src := NewLocalCommitSource("", dir)
+	defer src.Close()
 	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, SiteOverride{}); err != nil || pending {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
@@ -1111,11 +1100,11 @@ func TestSitePages_AtomFeed(t *testing.T) {
 	}
 
 	// No-op reclaim pass (no tips moved) must not rewrite the feed.
-	feedPuts := bucket.putCount(sitePagesFeedKey)
+	feedPuts := bucket.PutCount(sitePagesFeedKey)
 	if pending, _ := buildPages(t, client); pending {
 		t.Fatal("unexpected pending on reclaim pass")
 	}
-	if bucket.putCount(sitePagesFeedKey) != feedPuts {
+	if bucket.PutCount(sitePagesFeedKey) != feedPuts {
 		t.Error("a no-op pass must not rewrite feed.xml")
 	}
 
@@ -1126,7 +1115,7 @@ func TestSitePages_AtomFeed(t *testing.T) {
 	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("incremental pending=%v state=%q", pending, state)
 	}
-	if bucket.putCount(sitePagesFeedKey) <= feedPuts {
+	if bucket.PutCount(sitePagesFeedKey) <= feedPuts {
 		t.Error("an item-appending push must rewrite feed.xml")
 	}
 	f = atomFeedDoc{}
@@ -1241,16 +1230,16 @@ func TestSitePages_TypeFeeds(t *testing.T) {
 
 	// Incremental: an issues-only push rewrites issues/feed.xml and the main
 	// feed, never the other type feeds.
-	mainPuts, issuesPuts := bucket.putCount(sitePagesFeedKey), bucket.putCount("issues/feed.xml")
-	postsPuts, memosPuts := bucket.putCount("posts/feed.xml"), bucket.putCount("memos/feed.xml")
+	mainPuts, issuesPuts := bucket.PutCount(sitePagesFeedKey), bucket.PutCount("issues/feed.xml")
+	postsPuts, memosPuts := bucket.PutCount("posts/feed.xml"), bucket.PutCount("memos/feed.xml")
 	seedExtMessages(t, client, "pm", issues[0], []pageMsgSpec{{msg: "Issue two\n\nsecond body", ts: 1030}})
 	if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("incremental pending=%v state=%q", pending, state)
 	}
-	if bucket.putCount("issues/feed.xml") != issuesPuts+1 || bucket.putCount(sitePagesFeedKey) != mainPuts+1 {
+	if bucket.PutCount("issues/feed.xml") != issuesPuts+1 || bucket.PutCount(sitePagesFeedKey) != mainPuts+1 {
 		t.Error("an issues push must rewrite the issues feed and the main feed once")
 	}
-	if bucket.putCount("posts/feed.xml") != postsPuts || bucket.putCount("memos/feed.xml") != memosPuts {
+	if bucket.PutCount("posts/feed.xml") != postsPuts || bucket.PutCount("memos/feed.xml") != memosPuts {
 		t.Error("an issues push must not rewrite unaffected type feeds")
 	}
 	f = atomFeedDoc{}

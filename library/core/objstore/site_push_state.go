@@ -54,7 +54,7 @@ func readSitePushState(client *Client, prefix string) (sitePushState, bool) {
 // siteMaintenanceUpToDate reports whether a full pass can be skipped, and returns the fresh digest so a full pass can stamp it without re-listing.
 func siteMaintenanceUpToDate(client *Client, prefix, shellVersion string, ov SiteOverride) (upToDate bool, digest string) {
 	state, ok := readSitePushState(client, prefix)
-	digest, err := refsHeadDigest(client, prefix)
+	digest, err := RefsHeadDigest(client, prefix)
 	if err != nil {
 		return false, ""
 	}

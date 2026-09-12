@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"html/template"
 	"math"
-	"net/http"
 	"os"
 	"sort"
 	"strconv"
@@ -77,7 +76,7 @@ type sitePagesCursor struct {
 // readSitePagesManifest fetches the pages manifest; nil when absent, at another version, or unreadable, each meaning a full regen.
 func readSitePagesManifest(client *Client, prefix string) (*sitePagesManifest, error) {
 	var m sitePagesManifest
-	found, err := readCompressedJSON(client, prefix+sitePagesManifestKey, &m)
+	found, err := ReadCompressedJSON(client, prefix+sitePagesManifestKey, &m)
 	if err != nil {
 		return nil, err
 	}
@@ -89,23 +88,23 @@ func readSitePagesManifest(client *Client, prefix string) (*sitePagesManifest, e
 
 // putSitePagesManifest writes the pages manifest, the layer's commit point and last in the write order.
 func putSitePagesManifest(client *Client, prefix string, m *sitePagesManifest) error {
-	comp, err := compressJSON(m, brotliQualityFull)
+	comp, err := CompressJSON(m, BrotliQualityFull)
 	if err != nil {
 		return err
 	}
-	return putCompressed(client, prefix+sitePagesManifestKey, comp)
+	return PutCompressed(client, prefix+sitePagesManifestKey, comp, "")
 }
 
 // putSiteText uploads one page-layer document uncompressed, since a bucket serves a stored encoding whatever the client accepts.
 func putSiteText(client *Client, key, contentType string, body []byte) error {
-	return withRetry(func() error {
-		resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": contentType})
-		if err != nil {
-			return fmt.Errorf("upload %s: %w", key, err)
-		}
-		resp.Body.Close()
-		return nil
-	})
+	headers := map[string]string{"Content-Type": contentType}
+	if class := siteCacheControl(key); class != "" {
+		headers["Cache-Control"] = class
+	}
+	if err := client.PutWithHeadersRetry(key, body, headers); err != nil {
+		return fmt.Errorf("upload %s: %w", key, err)
+	}
+	return nil
 }
 
 // putSitePage uploads one rendered HTML page.
@@ -121,7 +120,7 @@ type sitePageUpload struct {
 
 // sitePagesChunk sizes one bootstrap upload batch: deep enough to keep the pool fed, short enough that an interruption repeats one batch.
 func sitePagesChunk() int {
-	return max(1, 4*resolveUploadConcurrency())
+	return max(1, 4*UploadConcurrency())
 }
 
 // putSitePages uploads a batch of rendered pages through a worker pool; progress counts up from base under the mutex the Progress contract needs.
@@ -129,7 +128,7 @@ func putSitePages(client *Client, uploads []sitePageUpload, progress Progress, p
 	if len(uploads) == 0 {
 		return nil
 	}
-	concurrency := max(1, min(resolveUploadConcurrency(), len(uploads)))
+	concurrency := max(1, min(UploadConcurrency(), len(uploads)))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	work := make(chan sitePageUpload)
@@ -152,7 +151,7 @@ func putSitePages(client *Client, uploads []sitePageUpload, progress Progress, p
 					continue
 				}
 				mu.Lock()
-				progress.call(phase, base+int(atomic.AddInt64(&done, 1)), total)
+				progress.Call(phase, base+int(atomic.AddInt64(&done, 1)), total)
 				mu.Unlock()
 			}
 		}()
@@ -195,7 +194,7 @@ func sitePageSiteHash(site sitePageSite) string {
 }
 
 // sitePagesState reports the push-state marker's pages component, and whether the layer still has work only a site pass runs; a read error counts as pending.
-func sitePagesState(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) (state string, pending bool) {
+func sitePagesState(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *LocalCommitSource) (state string, pending bool) {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
 		return "", true
@@ -226,7 +225,7 @@ func sitePagesState(client *Client, prefix string, refs map[string]string, ov Si
 }
 
 // rebuildSitePages maintains the page layer after the item artifacts, deleting the page set when the guards are off; pending leaves the marker unstamped.
-func rebuildSitePages(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress, ov SiteOverride) (pending bool, state string, err error) {
+func rebuildSitePages(client *Client, prefix string, refs map[string]string, defaultBranch string, src *LocalCommitSource, progress Progress, ov SiteOverride) (pending bool, state string, err error) {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
 		return false, "", err
@@ -377,7 +376,7 @@ func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 }
 
 // readSiteFrontHome reads the front page's body from the local odb at the bucket's own tip, so the page cannot describe content the bucket is unable to serve.
-func readSiteFrontHome(src *localCommitSource, site sitePageSite, refs map[string]string, defaultBranch string) *siteFrontHome {
+func readSiteFrontHome(src *LocalCommitSource, site sitePageSite, refs map[string]string, defaultBranch string) *siteFrontHome {
 	if defaultBranch == "" {
 		return nil
 	}
@@ -420,11 +419,11 @@ func siteBucketBranchTip(refs map[string]string, branch string) string {
 }
 
 // readSiteFrontLatest reads the default branch's tip commit for the front page's meta strip.
-func readSiteFrontLatest(src *localCommitSource, site sitePageSite, sha, branch string) *siteFrontCommit {
+func readSiteFrontLatest(src *LocalCommitSource, site sitePageSite, sha, branch string) *siteFrontCommit {
 	if len(sha) < 12 {
 		return nil
 	}
-	body, ok := src.commit(sha)
+	body, ok := src.Commit(sha)
 	if !ok {
 		return nil
 	}
@@ -481,11 +480,11 @@ func parseSiteTreeRows(body []byte) []siteTreeRow {
 }
 
 // readSiteRootTree reads and parses the root tree of the bucket tip's commit; empty when the odb has no local copy.
-func readSiteRootTree(src *localCommitSource, tip string) []siteTreeEntry {
+func readSiteRootTree(src *LocalCommitSource, tip string) []siteTreeEntry {
 	if tip == "" {
 		return nil
 	}
-	body, ok := src.object(tip+"^{tree}", "tree")
+	body, ok := src.Object(tip+"^{tree}", "tree")
 	if !ok {
 		return nil
 	}
@@ -509,11 +508,11 @@ func siteReadmeName(entries []siteTreeEntry) string {
 }
 
 // readSiteFrontReadme reads and renders one root README, capping the source at a line boundary so the renderer takes no half line.
-func readSiteFrontReadme(src *localCommitSource, tip, name, branch string, site sitePageSite) *siteFrontReadme {
+func readSiteFrontReadme(src *LocalCommitSource, tip, name, branch string, site sitePageSite) *siteFrontReadme {
 	if tip == "" || name == "" {
 		return nil
 	}
-	body, ok := src.object(tip+":"+name, "blob")
+	body, ok := src.Object(tip+":"+name, "blob")
 	if !ok {
 		return nil
 	}

@@ -17,7 +17,7 @@ func TestGetRetry_AbsorbsTransient500(t *testing.T) {
 	if err := client.Put("k", []byte("value")); err != nil {
 		t.Fatalf("put: %v", err)
 	}
-	bucket.flakyGet("k", 2)
+	bucket.FlakyGet("k", 2)
 	got, err := client.GetRetry("k")
 	if err != nil {
 		t.Fatalf("GetRetry over a transient fault: %v", err)
@@ -28,7 +28,7 @@ func TestGetRetry_AbsorbsTransient500(t *testing.T) {
 	// One initial attempt + two retries that failed + one that succeeded = 3 GETs
 	// reached the bucket (the two 500s plus the success; the very first is one of
 	// the two flaky ones).
-	if n := bucket.getCount("k"); n != 3 {
+	if n := bucket.GetCount("k"); n != 3 {
 		t.Errorf("bucket saw %d GETs, want 3 (2 transient 500s + 1 success)", n)
 	}
 }
@@ -40,13 +40,13 @@ func TestGetRetry_GivesUpOnPersistentFault(t *testing.T) {
 	if err := client.Put("k", []byte("value")); err != nil {
 		t.Fatalf("put: %v", err)
 	}
-	bucket.failGet("k")
+	bucket.FailGet("k")
 	_, err := client.GetRetry("k")
 	if err == nil {
 		t.Fatal("expected an error from a fault that never clears")
 	}
 	// 1 initial + len(retryBackoff) retries = total attempts, all reaching the bucket.
-	if n := bucket.getCount("k"); n != len(retryBackoff)+1 {
+	if n := bucket.GetCount("k"); n != len(retryBackoff)+1 {
 		t.Errorf("bucket saw %d GETs, want %d (initial + %d retries)", n, len(retryBackoff)+1, len(retryBackoff))
 	}
 }
@@ -58,7 +58,7 @@ func TestGetRetry_NoRetryOn404(t *testing.T) {
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetRetry on absent key = %v, want ErrNotFound", err)
 	}
-	if n := bucket.getCount("absent"); n != 1 {
+	if n := bucket.GetCount("absent"); n != 1 {
 		t.Errorf("bucket saw %d GETs for a 404, want 1 (a 404 is a definite answer, never retried)", n)
 	}
 }
@@ -73,7 +73,7 @@ func TestWalk_AbsorbsTransient500MidWalk(t *testing.T) {
 	tip := shas[n-1]
 	// Arm a transient fault on a mid-chain commit's object key.
 	mid := shas[3]
-	bucket.flakyGet("objects/"+mid[:2]+"/"+mid[2:], 2)
+	bucket.FlakyGet("objects/"+mid[:2]+"/"+mid[2:], 2)
 
 	withTestShardCount(func() {
 		withTestWalkBudget(50000, func() {
@@ -94,7 +94,7 @@ func TestWalk_FailsOnPersistentFault(t *testing.T) {
 	shas := seedChain(t, client, "", "", n)
 	tip := shas[n-1]
 	mid := shas[2]
-	bucket.failGet("objects/" + mid[:2] + "/" + mid[2:])
+	bucket.FailGet("objects/" + mid[:2] + "/" + mid[2:])
 
 	withTestShardCount(func() {
 		withTestWalkBudget(50000, func() {

@@ -250,10 +250,10 @@ func TestRepair_BodiesManifestAhead(t *testing.T) {
 		oldHead := rawDoc(t, client, siteItemsHeadKey("social"))
 		shas = append(shas, seedChain(t, client, shas[4], "", 2)...)
 		mustUpdate(t, client, "social", shas[6])
-		if err := putCompressed(client, siteItemsManifestKey("social"), oldManifest); err != nil {
+		if err := PutCompressed(client, siteItemsManifestKey("social"), oldManifest, ""); err != nil {
 			t.Fatalf("rewind items manifest: %v", err)
 		}
-		if err := putCompressed(client, siteItemsHeadKey("social"), oldHead); err != nil {
+		if err := PutCompressed(client, siteItemsHeadKey("social"), oldHead, ""); err != nil {
 			t.Fatalf("rewind items head: %v", err)
 		}
 		shas = append(shas, seedChain(t, client, shas[6], "", 1)...)
@@ -273,10 +273,10 @@ func TestRepair_ItemsManifestAhead(t *testing.T) {
 		oldHead := rawDoc(t, client, bodiesHeadKey("social"))
 		shas = append(shas, seedChain(t, client, shas[4], "", 2)...)
 		mustUpdate(t, client, "social", shas[6])
-		if err := putCompressed(client, bodiesManifestKey("social"), oldManifest); err != nil {
+		if err := PutCompressed(client, bodiesManifestKey("social"), oldManifest, ""); err != nil {
 			t.Fatalf("rewind bodies manifest: %v", err)
 		}
-		if err := putCompressed(client, bodiesHeadKey("social"), oldHead); err != nil {
+		if err := PutCompressed(client, bodiesHeadKey("social"), oldHead, ""); err != nil {
 			t.Fatalf("rewind bodies head: %v", err)
 		}
 		shas = append(shas, seedChain(t, client, shas[6], "", 1)...)
@@ -304,11 +304,11 @@ func TestRepair_HeadCountMismatch(t *testing.T) {
 			mustUpdate(t, client, "social", shas[5])
 			// Interruption between a head put and its manifest put: the live head
 			// no longer matches the manifest's head count.
-			comp, err := compressJSON(corrupt.doc(shas[5]), brotliQualityFull)
+			comp, err := CompressJSON(corrupt.doc(shas[5]), BrotliQualityFull)
 			if err != nil {
 				t.Fatalf("%s: compress: %v", corrupt.name, err)
 			}
-			if err := putCompressed(client, corrupt.key, comp); err != nil {
+			if err := PutCompressed(client, corrupt.key, comp, ""); err != nil {
 				t.Fatalf("%s: corrupt head: %v", corrupt.name, err)
 			}
 			shas = append(shas, seedChain(t, client, shas[5], "", 1)...)
@@ -441,19 +441,19 @@ func TestRepair_NoOpAndAppendStillWork(t *testing.T) {
 		mustUpdate(t, client, "social", shas[4])
 		assertLockstepState(t, client, "social", shas, shas[4])
 		// No-op: a re-push at the same tip rewrites nothing.
-		manifestPuts := bucket.putCount(siteItemsManifestKey("social"))
+		manifestPuts := bucket.PutCount(siteItemsManifestKey("social"))
 		mustUpdate(t, client, "social", shas[4])
-		if got := bucket.putCount(siteItemsManifestKey("social")); got != manifestPuts {
+		if got := bucket.PutCount(siteItemsManifestKey("social")); got != manifestPuts {
 			t.Errorf("no-op re-push rewrote the items manifest (%d -> %d PUTs)", manifestPuts, got)
 		}
 		// Append: one more commit advances both corpora and reuses the sealed shard.
 		items0, _ := readItemsManifest(client, "", "social")
 		shardKey := siteItemsDir("social") + items0.Shards[0].Key
-		shardPuts := bucket.putCount(shardKey)
+		shardPuts := bucket.PutCount(shardKey)
 		shas = append(shas, seedChain(t, client, shas[4], "", 1)...)
 		mustUpdate(t, client, "social", shas[5])
 		assertLockstepState(t, client, "social", shas, shas[5])
-		if got := bucket.putCount(shardKey); got != shardPuts {
+		if got := bucket.PutCount(shardKey); got != shardPuts {
 			t.Errorf("append re-PUT a sealed shard (%d -> %d PUTs)", shardPuts, got)
 		}
 	})

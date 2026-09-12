@@ -119,8 +119,8 @@ func TestWriteSiteCustomization(t *testing.T) {
 		if got.Title != "Demo" || got.Accent != "#0a7" || got.AccentDark != "#0dd" {
 			t.Fatalf("artifact = %+v", got)
 		}
-		if bucket.putCount(siteCustomizationKey) != 1 {
-			t.Fatalf("expected 1 PUT, got %d", bucket.putCount(siteCustomizationKey))
+		if bucket.PutCount(siteCustomizationKey) != 1 {
+			t.Fatalf("expected 1 PUT, got %d", bucket.PutCount(siteCustomizationKey))
 		}
 	})
 
@@ -165,10 +165,13 @@ func TestWriteSiteCustomization(t *testing.T) {
 	})
 }
 
-// TestSiteCustomizationCacheControl confirms the artifact falls through to the
-// no-cache policy (mutable key), so a customization change is picked up next load.
+// TestSiteCustomizationCacheControl confirms the artifact seals no key of its
+// own, so it falls through to the no-cache class and a change is picked up next load.
 func TestSiteCustomizationCacheControl(t *testing.T) {
-	if got := cacheControlForKey(siteCustomizationKey); got != cacheControlRevalidate {
-		t.Fatalf("site-config.json cache-control = %q, want %q", got, cacheControlRevalidate)
+	if got := siteCacheControl(siteCustomizationKey); got != "" {
+		t.Fatalf("site-config.json cache class = %q, want the key default", got)
+	}
+	if got := cacheControlForKey(siteCustomizationKey); got != CacheControlRevalidate {
+		t.Fatalf("site-config.json default class = %q, want %q", got, CacheControlRevalidate)
 	}
 }

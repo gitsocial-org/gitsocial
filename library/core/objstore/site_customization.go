@@ -5,7 +5,6 @@ package objstore
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -229,7 +228,7 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 }
 
 // readSiteCustomization resolves the bucket's site customization and overlays the per-remote overrides at this one boundary, so every consumer sees effective values.
-func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) (siteCustomization, bool, error) {
+func readSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *LocalCommitSource) (siteCustomization, bool, error) {
 	base, ok, err := readSiteBaseCustomization(client, prefix, refs, src)
 	if err != nil {
 		return siteCustomization{}, false, err
@@ -239,7 +238,7 @@ func readSiteCustomization(client *Client, prefix string, refs map[string]string
 }
 
 // readSiteBaseCustomization resolves refs/gitmsg/core/config and extracts its validated `site` sub-object, with no overrides applied; ok is false when nothing survives.
-func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string, src *localCommitSource) (siteCustomization, bool, error) {
+func readSiteBaseCustomization(client *Client, prefix string, refs map[string]string, src *LocalCommitSource) (siteCustomization, bool, error) {
 	sha, present := refs["refs/gitmsg/core/config"]
 	if !present || len(sha) != 40 {
 		return siteCustomization{}, false, nil
@@ -261,7 +260,7 @@ func readSiteBaseCustomization(client *Client, prefix string, refs map[string]st
 }
 
 // writeSiteCustomization publishes the validated site customization after every push; an absent or malformed config deletes the artifact instead.
-func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *localCommitSource) error {
+func writeSiteCustomization(client *Client, prefix string, refs map[string]string, ov SiteOverride, src *LocalCommitSource) error {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
 		return err
@@ -273,10 +272,8 @@ func writeSiteCustomization(client *Client, prefix string, refs map[string]strin
 	if err != nil {
 		return fmt.Errorf("marshal site customization: %w", err)
 	}
-	resp, err := client.do(http.MethodPut, prefix+siteCustomizationKey, nil, data, map[string]string{"Content-Type": "application/json"})
-	if err != nil {
+	if err := client.PutWithHeaders(prefix+siteCustomizationKey, data, map[string]string{"Content-Type": "application/json"}); err != nil {
 		return fmt.Errorf("upload %s: %w", siteCustomizationKey, err)
 	}
-	resp.Body.Close()
 	return nil
 }

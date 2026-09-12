@@ -70,9 +70,9 @@ func TestReadRemoteRefs_PoolMatchesSerial(t *testing.T) {
 	serial := serialReadRefs(t, client, "")
 	serial[chainRef] = chainSha // baseline the chain the serial helper skipped
 
-	got, err := readRemoteRefs(client, "")
+	got, err := ReadRemoteRefs(client, "")
 	if err != nil {
-		t.Fatalf("readRemoteRefs: %v", err)
+		t.Fatalf("ReadRemoteRefs: %v", err)
 	}
 	if len(got) != len(want) {
 		t.Fatalf("pooled read returned %d refs, want %d", len(got), len(want))
@@ -124,7 +124,7 @@ func TestReadRemoteRefs_ErrorWrapped(t *testing.T) {
 	if err := client.Put("refs/heads/broken", []byte("not-a-sha\n")); err != nil {
 		t.Fatalf("seed broken ref: %v", err)
 	}
-	_, err := readRemoteRefs(client, "")
+	_, err := ReadRemoteRefs(client, "")
 	if err == nil {
 		t.Fatal("expected an error from the malformed ref value")
 	}
@@ -138,12 +138,12 @@ func TestReadRemoteRefs_ErrorWrapped(t *testing.T) {
 func TestReadRemoteRefs_Deterministic(t *testing.T) {
 	client, _ := testClient(t)
 	seedPlainRefs(t, client, 400)
-	first, err := readRemoteRefs(client, "")
+	first, err := ReadRemoteRefs(client, "")
 	if err != nil {
 		t.Fatalf("read 1: %v", err)
 	}
 	for i := 0; i < 5; i++ {
-		next, err := readRemoteRefs(client, "")
+		next, err := ReadRemoteRefs(client, "")
 		if err != nil {
 			t.Fatalf("read %d: %v", i+2, err)
 		}

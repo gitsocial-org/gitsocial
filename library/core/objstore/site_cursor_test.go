@@ -128,7 +128,7 @@ func TestBootstrap_ResumesAcrossPushesToRoot(t *testing.T) {
 			before := shardKeySet(t, client)
 			puts := map[string]int{}
 			for _, k := range before {
-				puts[k] = bucket.putCount(siteItemsDir("social") + k)
+				puts[k] = bucket.PutCount(siteItemsDir("social") + k)
 			}
 			if err := rebuildSiteItems(client, "", map[string]string{"refs/heads/gitmsg/social": tip}, "", nil, nil); err != nil {
 				t.Fatalf("rebuild after complete: %v", err)
@@ -141,7 +141,7 @@ func TestBootstrap_ResumesAcrossPushesToRoot(t *testing.T) {
 				if after[i] != before[i] {
 					t.Errorf("rebuild changed shard %d key: %s -> %s", i, before[i], after[i])
 				}
-				if got := bucket.putCount(siteItemsDir("social") + before[i]); got != puts[before[i]] {
+				if got := bucket.PutCount(siteItemsDir("social") + before[i]); got != puts[before[i]] {
 					t.Errorf("rebuild re-PUT sealed shard %s (%d -> %d)", before[i], puts[before[i]], got)
 				}
 			}
@@ -271,16 +271,16 @@ func TestBootstrap_BackfillInterruptionRecovers(t *testing.T) {
 					preCursor := rawDoc(t, client, siteItemsCursorKey("social"))
 					mustUpdate(t, client, "social", tip) // push 2: one backfill segment
 					if tc.rewindItemsMF {
-						if err := putCompressed(client, siteItemsManifestKey("social"), preItems); err != nil {
+						if err := PutCompressed(client, siteItemsManifestKey("social"), preItems, ""); err != nil {
 							t.Fatalf("rewind items manifest: %v", err)
 						}
 					}
 					if tc.rewindBodiesMF {
-						if err := putCompressed(client, bodiesManifestKey("social"), preBodies); err != nil {
+						if err := PutCompressed(client, bodiesManifestKey("social"), preBodies, ""); err != nil {
 							t.Fatalf("rewind bodies manifest: %v", err)
 						}
 					}
-					if err := putCompressed(client, siteItemsCursorKey("social"), preCursor); err != nil {
+					if err := PutCompressed(client, siteItemsCursorKey("social"), preCursor, ""); err != nil {
 						t.Fatalf("rewind cursor: %v", err)
 					}
 					// Drive to the root; recovery may take a few more pushes.

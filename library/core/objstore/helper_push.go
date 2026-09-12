@@ -84,7 +84,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
 	// No two commands in a batch share a write target, so the CAS contract stays per-ref while the round trips overlap; the report keeps command order.
 	shas := make([]string, len(cmds))
-	errs := runParallel(len(cmds), func(i int) error {
+	errs := RunParallel(len(cmds), func(i int) error {
 		sha, err := h.applyRefUpdate(cmds[i])
 		shas[i] = sha
 		return err
@@ -159,7 +159,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	}
 	// Every step of the pass reads this one view of the refs the bucket now carries.
 	if h.remoteRefs == nil {
-		refs, err := readRemoteRefs(h.client, h.prefix)
+		refs, err := ReadRemoteRefs(h.client, h.prefix)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: post-push maintenance: %v\n", err)
 			return
@@ -168,16 +168,16 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	}
 	refs := h.remoteRefs
 	// One local commit source serves the whole pass; the helper runs as a git child, so the pushed objects are already here.
-	src := newLocalCommitSource(h.gitDir, "")
-	defer src.close()
+	src := NewLocalCommitSource(h.gitDir, "")
+	defer src.Close()
 	// Refresh the dumb-HTTP surface on every ref-moving push, ahead of the site gate, so stock git keeps cloning.
-	h.progress.call("maintenance: ref advertisement", 0, 0)
-	logDumbTransportInfo(h.client, h.prefix, src, refs, thin)
+	h.progress.Call("maintenance: ref advertisement", 0, 0)
+	LogDumbTransportInfo(h.client, h.prefix, src, refs, thin)
 	// With the bucket's refs known, a HEAD pointing at a ref it does not carry can be repaired.
-	h.progress.call("maintenance: HEAD", 0, 0)
+	h.progress.Call("maintenance: HEAD", 0, 0)
 	h.repairDanglingHEAD(refs, head, branchPushed)
 	// Sealing packs loose history and, after a grace period, deletes the loose copies.
-	h.progress.call("maintenance: packs", 0, 0)
+	h.progress.Call("maintenance: packs", 0, 0)
 	h.maintainPacks(refs)
 	// A thin bucket publishes no site, since the site reads a history it does not carry.
 	if thin {
@@ -187,7 +187,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 		return
 	}
 	// The pushed site.publish guard is the only enabler, so a plain s3:// remote stays clean.
-	h.progress.call("maintenance: site artifacts", 0, 0)
+	h.progress.Call("maintenance: site artifacts", 0, 0)
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)
@@ -231,7 +231,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 }
 
 // writeSitePMConfig publishes the resolved PM board config after every push.
-func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
+func (h *remoteHelper) writeSitePMConfig(src *LocalCommitSource) {
 	refs := h.remoteRefs
 	if err := writeSitePMConfig(h.client, h.prefix, refs, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
@@ -239,7 +239,7 @@ func (h *remoteHelper) writeSitePMConfig(src *localCommitSource) {
 }
 
 // writeSiteCustomization publishes the validated site customization after every push.
-func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
+func (h *remoteHelper) writeSiteCustomization(src *LocalCommitSource) {
 	refs := h.remoteRefs
 	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override, src); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
@@ -249,8 +249,8 @@ func (h *remoteHelper) writeSiteCustomization(src *localCommitSource) {
 // updateSiteItems maintains the site artifacts for every pushed data branch, plus the code index; the repair machine heals whatever a failure leaves.
 func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 	// Every commit the walk visits is an ancestor of a just-pushed tip, so read it from the local odb rather than the bucket.
-	src := newLocalCommitSource(h.gitDir, "")
-	defer src.close()
+	src := NewLocalCommitSource(h.gitDir, "")
+	defer src.Close()
 	for ext, sha := range extPushed {
 		var err error
 		if sha == "" {
@@ -266,7 +266,7 @@ func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
 }
 
 // reclaimSitePagesFront re-writes index.html after a shell upload clobbered it, but only when the page set is complete and current; ok=false only on a failed reclaim.
-func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localCommitSource) (ok bool) {
+func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *LocalCommitSource) (ok bool) {
 	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
 	if err != nil {
 		return false // can't tell if a reclaim was needed: withhold the marker
@@ -299,7 +299,7 @@ func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *localC
 }
 
 // updateSiteCodeItems maintains the single code items index across every code branch the bucket carries.
-func (h *remoteHelper) updateSiteCodeItems(src *localCommitSource) {
+func (h *remoteHelper) updateSiteCodeItems(src *LocalCommitSource) {
 	refs := h.remoteRefs
 	defaultBranch := strings.TrimPrefix(localDefaultBranchRef(), "refs/heads/")
 	tips := codeBranchTips(refs, defaultBranch)
@@ -323,7 +323,7 @@ func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
 		if _, h.manifestETag, err = readClaimsWithETag(h.client, h.prefix+bucketRefsKey); err != nil && !errors.Is(err, ErrNotFound) {
 			return err
 		}
-		refs, err := readRemoteRefs(h.client, h.prefix)
+		refs, err := ReadRemoteRefs(h.client, h.prefix)
 		if err != nil {
 			return fmt.Errorf("read refs: %w", err)
 		}
@@ -799,7 +799,7 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 	if len(shas) == 0 {
 		return nil
 	}
-	h.progress.call("packing", 0, len(shas))
+	h.progress.Call("packing", 0, len(shas))
 	packs, err := buildDeltaPacks(shas)
 	if err != nil {
 		return err
@@ -813,10 +813,10 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 		}
 	}
 	for i, built := range packs {
-		if err := publishPack(h.client, h.capability, h.prefix, built, resolveUploadConcurrency()); err != nil {
+		if err := publishPack(h.client, h.capability, h.prefix, built, UploadConcurrency()); err != nil {
 			return err
 		}
-		h.progress.call("packs", i+1, len(packs))
+		h.progress.Call("packs", i+1, len(packs))
 	}
 	for _, sha := range shas {
 		h.fetched[sha] = true
@@ -826,7 +826,7 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 
 // remoteTipsPresentLocally resolves the remote's ref values and keeps those whose objects exist locally.
 func (h *remoteHelper) remoteTipsPresentLocally() ([]string, error) {
-	refs, err := readRemoteRefs(h.client, h.prefix)
+	refs, err := ReadRemoteRefs(h.client, h.prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -942,7 +942,7 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 		}
 		return nil
 	}
-	return uploadEncodedObjects(h.client, h.prefix, resolveUploadConcurrency(), len(shas), h.progress, produce)
+	return uploadEncodedObjects(h.client, h.prefix, UploadConcurrency(), len(shas), h.progress, produce)
 }
 
 // uploadEncodedObjects runs a bounded worker pool that PUTs each object the producer emits; the first error cancels the rest. Refs move only after it returns nil.
@@ -977,7 +977,7 @@ func uploadEncodedObjects(client *Client, prefix string, concurrency, total int,
 					setErr(fmt.Errorf("upload object %s: %w", obj.sha, err))
 					continue
 				}
-				progress.call("objects", int(atomic.AddInt64(&done, 1)), total)
+				progress.Call("objects", int(atomic.AddInt64(&done, 1)), total)
 			}
 		}()
 	}

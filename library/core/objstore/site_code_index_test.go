@@ -224,9 +224,9 @@ func TestCode_NoOpWhenUnchanged(t *testing.T) {
 		shas := seedChain(t, client, "", "", 6)
 		refs := map[string]string{"refs/heads/main": shas[5]}
 		mustUpdateCode(t, client, refs, "main")
-		before := bucket.putCount(siteItemsManifestKey(siteCodeExt))
+		before := bucket.PutCount(siteItemsManifestKey(siteCodeExt))
 		mustUpdateCode(t, client, refs, "main")
-		after := bucket.putCount(siteItemsManifestKey(siteCodeExt))
+		after := bucket.PutCount(siteItemsManifestKey(siteCodeExt))
 		if after != before {
 			t.Fatalf("NO-OP re-wrote the manifest: %d -> %d PUTs", before, after)
 		}

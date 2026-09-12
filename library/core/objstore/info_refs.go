@@ -26,7 +26,7 @@ var alternatesKeys = []string{"objects/info/http-alternates", "objects/info/alte
 const maxTagPeelDepth = 10
 
 // writeDumbTransportInfo refreshes info/refs and objects/info/packs from what the bucket carries; thin drops the ref advertisement, since a thin bucket's history is incomplete.
-func writeDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) error {
+func writeDumbTransportInfo(client *Client, prefix string, src *LocalCommitSource, refs map[string]string, thin bool) error {
 	if thin {
 		if err := client.Delete(prefix + infoRefsKey); err != nil {
 			return fmt.Errorf("delete %s: %w", infoRefsKey, err)
@@ -86,7 +86,7 @@ func buildInfoRefs(refs map[string]string, peel func(sha string) (string, bool))
 }
 
 // peelBucketTag dereferences a ref value to its non-tag object, preferring the bucket's loose copy and falling back to the local odb.
-func peelBucketTag(client *Client, prefix string, src *localCommitSource, sha string) (string, bool) {
+func peelBucketTag(client *Client, prefix string, src *LocalCommitSource, sha string) (string, bool) {
 	cur := sha
 	for depth := 0; depth < maxTagPeelDepth; depth++ {
 		target, isTag, err := bucketTagTarget(client, prefix, src, cur)
@@ -102,13 +102,13 @@ func peelBucketTag(client *Client, prefix string, src *localCommitSource, sha st
 }
 
 // bucketTagTarget reads an object from the bucket, or the local odb when the bucket copy is packed, and returns an annotated tag's target.
-func bucketTagTarget(client *Client, prefix string, src *localCommitSource, sha string) (target string, isTag bool, err error) {
+func bucketTagTarget(client *Client, prefix string, src *LocalCommitSource, sha string) (target string, isTag bool, err error) {
 	if len(sha) != 40 {
 		return "", false, fmt.Errorf("malformed object id %q", sha)
 	}
 	compressed, err := client.Get(prefix + "objects/" + sha[:2] + "/" + sha[2:])
 	if errors.Is(err, ErrNotFound) {
-		body, ok := src.object(sha, "tag")
+		body, ok := src.Object(sha, "tag")
 		if !ok {
 			return "", false, err
 		}
@@ -155,8 +155,8 @@ func putText(client *Client, key string, body []byte) error {
 	return nil
 }
 
-// logDumbTransportInfo runs writeDumbTransportInfo and reports a failure to stderr; the surface self-heals on the next ref-moving push.
-func logDumbTransportInfo(client *Client, prefix string, src *localCommitSource, refs map[string]string, thin bool) {
+// LogDumbTransportInfo runs writeDumbTransportInfo and reports a failure to stderr; the surface self-heals on the next ref-moving push.
+func LogDumbTransportInfo(client *Client, prefix string, src *LocalCommitSource, refs map[string]string, thin bool) {
 	if err := writeDumbTransportInfo(client, prefix, src, refs, thin); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: dumb-http info: %v\n", err)
 	}

@@ -104,7 +104,7 @@ type remoteHelper struct {
 	packsPulled    bool               // the bucket's packfiles were pulled into GIT_DIR this session
 	packObjects    map[string]bool    // object SHAs the pulled packfiles carry
 	looseUploaded  int                // objects THIS push uploaded loose (drives the seal trigger)
-	local          *localCommitSource // lazily-started local odb reader (packed-object bodies)
+	local          *LocalCommitSource // lazily-started local odb reader (packed-object bodies)
 	upstreamPulled bool               // the thin-fork read overlay ran this session
 	thinResolved   bool               // the push relationship (thin.go) was read from git config this session
 	thin           bool               // pushes to this remote exclude upstream objects
@@ -112,8 +112,8 @@ type remoteHelper struct {
 	thinPins       []ThinPin          // frontier this push excluded against (nil = none computed)
 }
 
-// clientForRemote builds the client, key prefix and provider capability for a canonical s3 remote URL.
-func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capability, error) {
+// ClientForRemote builds the client, key prefix and provider capability for a canonical s3 remote URL.
+func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capability, error) {
 	endpointHost, bucket, prefix, err := ParseS3URL(remoteURL)
 	if err != nil {
 		return nil, "", CapabilityUnknown, err
@@ -161,7 +161,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	if env.GitDir == "" {
 		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
 	}
-	client, prefix, capability, err := clientForRemote(remoteURL, env)
+	client, prefix, capability, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	}
 	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, remoteName: remoteName, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
 	defer pw.finish()
-	defer func() { h.local.close() }()
+	defer func() { h.local.Close() }()
 
 	w := bufio.NewWriter(out)
 	defer w.Flush()
@@ -248,7 +248,7 @@ func (h *remoteHelper) option(spec string) string {
 
 // list prints every ref and the HEAD symref; before a push it also brings a missing or stale ref manifest up to this listing.
 func (h *remoteHelper) list(w io.Writer, forPush bool) error {
-	refs, err := readRemoteRefs(h.client, h.prefix)
+	refs, err := ReadRemoteRefs(h.client, h.prefix)
 	if err != nil {
 		return err
 	}
@@ -477,9 +477,9 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 }
 
 // localOdb returns the helper's lazily-started cat-file reader on GIT_DIR.
-func (h *remoteHelper) localOdb() *localCommitSource {
+func (h *remoteHelper) localOdb() *LocalCommitSource {
 	if h.local == nil {
-		h.local = newLocalCommitSource(h.gitDir, "")
+		h.local = NewLocalCommitSource(h.gitDir, "")
 	}
 	return h.local
 }

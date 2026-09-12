@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
 
 // publicNoListBucket answers like a public bucket does to an unsigned reader:
@@ -20,7 +22,7 @@ func publicNoListBucket(t *testing.T, seed map[string]string) string {
 // from a bucket's own endpoint, 404 from a web domain in front of it.
 func publicBucket(t *testing.T, seed map[string]string, status int) string {
 	t.Helper()
-	mem := newMemBucket()
+	mem := membucket.New()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Has("list-type") {
 			http.Error(w, "AccessDenied", status)
@@ -44,7 +46,7 @@ func publicBucket(t *testing.T, seed map[string]string, status int) string {
 	url := "s3://" + strings.TrimPrefix(srv.URL, "http://") + "/b/repo"
 	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "k")
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "s")
-	client, prefix, _, err := clientForRemote(url, HelperEnv{})
+	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func anonClient(t *testing.T, url string) (*Client, string) {
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
-	client, prefix, _, err := clientForRemote(url, HelperEnv{})
+	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +87,7 @@ func TestAnon_ManifestSource(t *testing.T) {
 		"refs/heads/gitmsg/pm": shaB + "\n",
 	})
 	client, prefix := anonClient(t, url)
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +109,7 @@ func TestAnon_InfoRefsFallbackAndChainClaim(t *testing.T) {
 		refModeKey:        refModeGeneration + "\n",
 	})
 	client, prefix := anonClient(t, url)
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +124,7 @@ func TestAnon_InfoRefsFallbackAndChainClaim(t *testing.T) {
 func TestAnon_NoSourceAndWriteRefused(t *testing.T) {
 	url := publicNoListBucket(t, map[string]string{"HEAD": "ref: refs/heads/main\n"})
 	client, prefix := anonClient(t, url)
-	if _, err := readRemoteRefs(client, prefix); err == nil || !strings.Contains(err.Error(), "publishes no ref manifest") {
+	if _, err := ReadRemoteRefs(client, prefix); err == nil || !strings.Contains(err.Error(), "publishes no ref manifest") {
 		t.Errorf("err = %v, want the no-manifest diagnosis", err)
 	}
 	if err := putObject(client, prefix, "x", []byte("y"), ""); err == nil || !strings.Contains(err.Error(), "credentials required") {
@@ -139,7 +141,7 @@ func TestAnon_DeletedRefDropped(t *testing.T) {
 		refModeKey:        refModeETag + "\n",
 	})
 	client, prefix := anonClient(t, url)
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +155,7 @@ func TestAnon_PrivateBucketNamesCredentials(t *testing.T) {
 	// empty one, and says so with the credentials to set.
 	url := publicNoListBucket(t, nil)
 	client, prefix := anonClient(t, url)
-	_, err := readRemoteRefs(client, prefix)
+	_, err := ReadRemoteRefs(client, prefix)
 	if !errors.Is(err, ErrCredentialsRequired) {
 		t.Errorf("err = %v, want ErrCredentialsRequired", err)
 	}
@@ -166,14 +168,14 @@ func TestSigned_NoListFallsBackToManifest(t *testing.T) {
 		bucketRefsKey:     `{"refs/heads/main":"` + shaA + `"}`,
 		"refs/heads/main": shaA + "\n",
 	})
-	client, prefix, _, err := clientForRemote(url, HelperEnv{})
+	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if client.Anonymous() {
 		t.Fatal("client should be signed")
 	}
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil || refs["refs/heads/main"] != shaA {
 		t.Errorf("refs = %v, err = %v", refs, err)
 	}
@@ -188,7 +190,7 @@ func TestSigned_RejectedCredentialKeepsItsError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "k")
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "s")
-	client, prefix, _, err := clientForRemote("s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo", HelperEnv{})
+	client, prefix, _, err := ClientForRemote("s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo", HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +208,7 @@ func TestAnon_WebDomainAnswers404(t *testing.T) {
 		"refs/heads/main": shaA + "\n",
 	}, http.StatusNotFound)
 	client, prefix := anonClient(t, url)
-	refs, err := readRemoteRefs(client, prefix)
+	refs, err := ReadRemoteRefs(client, prefix)
 	if err != nil || refs["refs/heads/main"] != shaA {
 		t.Errorf("refs = %v, err = %v", refs, err)
 	}

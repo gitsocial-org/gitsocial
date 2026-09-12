@@ -11,13 +11,13 @@ package objstore
 type siteProgress struct {
 	progress Progress
 	ext      string
-	src      *localCommitSource
+	src      *LocalCommitSource
 }
 
 // commitSource returns the pass's local commit source (nil-safe: a nil
 // *siteProgress or an unset source yields nil, which getCommit treats as
 // bucket-only).
-func (sp *siteProgress) commitSource() *localCommitSource {
+func (sp *siteProgress) commitSource() *LocalCommitSource {
 	if sp == nil {
 		return nil
 	}
@@ -33,7 +33,7 @@ func (sp *siteProgress) commitSource() *localCommitSource {
 // the manifest nor the cursor tracks a real remaining count.
 func (sp *siteProgress) walk(done, total int) {
 	if sp != nil {
-		sp.progress.call("site index "+sp.ext, done, total)
+		sp.progress.Call("site index "+sp.ext, done, total)
 	}
 }
 
@@ -44,6 +44,6 @@ func (sp *siteProgress) walk(done, total int) {
 // is just the two corpora advancing in lockstep.
 func (sp *siteProgress) shards(corpus string, done, total int) {
 	if sp != nil {
-		sp.progress.call("site "+corpus+" shards "+sp.ext, done, total)
+		sp.progress.Call("site "+corpus+" shards "+sp.ext, done, total)
 	}
 }

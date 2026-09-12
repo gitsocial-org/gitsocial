@@ -135,7 +135,7 @@ func TestProgressWriter_ThrottleDropsMiddle(t *testing.T) {
 // TestNilProgress_NilSafe: the nil-safe helpers never panic on a nil hook.
 func TestNilProgress_NilSafe(t *testing.T) {
 	var p Progress
-	p.call("phase", 1, 2) // must not panic
+	p.Call("phase", 1, 2) // must not panic
 	var sp *siteProgress
 	sp.walk(5, 0) // must not panic
 	sp.shards("items", 1, 2)

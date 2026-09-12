@@ -32,9 +32,9 @@ func TestRefsVerify_NoPerRefGETOnConsistentManifest(t *testing.T) {
 	want := seedPlainRefs(t, client, 200)
 	writeManifest(t, client, want)
 
-	got, err := readRemoteRefs(client, "")
+	got, err := ReadRemoteRefs(client, "")
 	if err != nil {
-		t.Fatalf("readRemoteRefs: %v", err)
+		t.Fatalf("ReadRemoteRefs: %v", err)
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d refs, want %d", len(got), len(want))
@@ -44,11 +44,11 @@ func TestRefsVerify_NoPerRefGETOnConsistentManifest(t *testing.T) {
 			t.Errorf("ref %s: got %q want %q", ref, got[ref], sha)
 		}
 	}
-	if n := bucket.getCount(bucketRefsKey); n != 1 {
+	if n := bucket.GetCount(bucketRefsKey); n != 1 {
 		t.Errorf("refs.json GETs = %d, want exactly 1", n)
 	}
 	for ref := range want {
-		if n := bucket.getCount(ref); n != 0 {
+		if n := bucket.GetCount(ref); n != 0 {
 			t.Errorf("ref %s got %d per-ref GETs; a verified manifest claim needs none", ref, n)
 		}
 	}
@@ -73,14 +73,14 @@ func TestRefsVerify_FallsBackOnMismatch(t *testing.T) {
 	claims[bad] = fmt.Sprintf("%040x", 0xdead)
 	writeManifest(t, client, claims)
 
-	got, err := readRemoteRefs(client, "")
+	got, err := ReadRemoteRefs(client, "")
 	if err != nil {
-		t.Fatalf("readRemoteRefs: %v", err)
+		t.Fatalf("ReadRemoteRefs: %v", err)
 	}
 	if got[bad] != want[bad] {
 		t.Errorf("ref %s resolved to %q, want the true bucket value %q (manifest must never poison)", bad, got[bad], want[bad])
 	}
-	if n := bucket.getCount(bad); n != 1 {
+	if n := bucket.GetCount(bad); n != 1 {
 		t.Errorf("mismatched ref %s got %d GETs, want 1 (fell back)", bad, n)
 	}
 	// A ref whose claim was correct still needed no GET.
@@ -88,7 +88,7 @@ func TestRefsVerify_FallsBackOnMismatch(t *testing.T) {
 		if ref == bad {
 			continue
 		}
-		if n := bucket.getCount(ref); n != 0 {
+		if n := bucket.GetCount(ref); n != 0 {
 			t.Errorf("verified ref %s got %d GETs, want 0", ref, n)
 		}
 	}
@@ -115,14 +115,14 @@ func TestRefsVerify_FallsBackOnMultipartETag(t *testing.T) {
 		t.Fatalf("put ref: %v", err)
 	}
 	writeManifest(t, client, map[string]string{ref: sha})
-	got, err := readRemoteRefs(client, "")
+	got, err := ReadRemoteRefs(client, "")
 	if err != nil {
-		t.Fatalf("readRemoteRefs: %v", err)
+		t.Fatalf("ReadRemoteRefs: %v", err)
 	}
 	if got[ref] != sha {
 		t.Fatalf("ref %s = %q, want %q", ref, got[ref], sha)
 	}
-	if n := bucket.getCount(ref); n != 0 {
+	if n := bucket.GetCount(ref); n != 0 {
 		t.Errorf("verified ref got %d GETs, want 0", n)
 	}
 }
@@ -132,15 +132,15 @@ func TestRefsVerify_FallsBackOnMultipartETag(t *testing.T) {
 func TestRefsVerify_NoManifestFullGET(t *testing.T) {
 	client, bucket := testClient(t)
 	want := seedPlainRefs(t, client, 30)
-	got, err := readRemoteRefs(client, "")
+	got, err := ReadRemoteRefs(client, "")
 	if err != nil {
-		t.Fatalf("readRemoteRefs: %v", err)
+		t.Fatalf("ReadRemoteRefs: %v", err)
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d refs, want %d", len(got), len(want))
 	}
 	for ref := range want {
-		if n := bucket.getCount(ref); n != 1 {
+		if n := bucket.GetCount(ref); n != 1 {
 			t.Errorf("ref %s got %d GETs, want 1 (no manifest ⇒ full GET path)", ref, n)
 		}
 	}

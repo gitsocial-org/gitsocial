@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// readCompressedJSONWithETag is readCompressedJSON plus the stored ETag a later conditional write compares against. A key that is present but does not parse is an error, not found=false, so nothing writes a zeroed document over it.
+// readCompressedJSONWithETag is ReadCompressedJSON plus the stored ETag a later conditional write compares against. A key that is present but does not parse is an error, not found=false, so nothing writes a zeroed document over it.
 func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, etag string, err error) {
 	data, err := withReadRetry(context.TODO(), func() ([]byte, error) {
 		body, tag, err := client.GetWithETag(key)
@@ -24,7 +24,7 @@ func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, 
 	if err != nil {
 		return false, "", fmt.Errorf("read %s: %w", key, err)
 	}
-	raw, err := brotliDecompress(data)
+	raw, err := BrotliDecompress(data)
 	if err != nil || !json.Valid(raw) {
 		raw = data
 	}
@@ -63,7 +63,7 @@ func updateCompressedJSON[T any](client *Client, capability Capability, key stri
 			return err
 		}
 		if capability == CapabilityCreateOnly && etag != "" {
-			return putCompressed(client, key, compressed)
+			return PutCompressed(client, key, compressed, "")
 		}
 		err = putCompressedIfMatch(client, key, compressed, etag)
 		if err == nil {
@@ -79,7 +79,7 @@ func updateCompressedJSON[T any](client *Client, capability Capability, key stri
 	if err != nil {
 		return err
 	}
-	return putCompressed(client, key, compressed)
+	return PutCompressed(client, key, compressed, "")
 }
 
 // mergeCompressedJSON runs one read-merge-compress cycle and returns the bytes to write with the ETag to write them against.
@@ -92,7 +92,7 @@ func mergeCompressedJSON[T any](client *Client, key string, merge func(doc *T, f
 	if err := merge(&doc, found); err != nil {
 		return nil, "", err
 	}
-	compressed, err := compressJSON(&doc, brotliQualityFull)
+	compressed, err := CompressJSON(&doc, BrotliQualityFull)
 	if err != nil {
 		return nil, "", err
 	}

@@ -51,7 +51,7 @@ func TestEnsureObject_bucketPackDescends(t *testing.T) {
 		fetched:     map[string]bool{},
 		packObjects: map[string]bool{commit: true, tree: true, blob: true},
 	}
-	defer h.local.close()
+	defer h.local.Close()
 
 	objType, body, present, err := h.ensureObject(commit)
 	if err != nil {
@@ -84,10 +84,10 @@ func TestEnsureObject_emptyTreeNotPresent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bucket.objs["objects/"+emptyTreeSHA[:2]+"/"+emptyTreeSHA[2:]] = memObject{body: encoded}
+	bucket.Seed("objects/"+emptyTreeSHA[:2]+"/"+emptyTreeSHA[2:], encoded)
 
 	h := &remoteHelper{gitDir: gitDir, client: client, fetched: map[string]bool{}}
-	defer h.local.close()
+	defer h.local.Close()
 	objType, _, present, err := h.ensureObject(emptyTreeSHA)
 	if err != nil {
 		t.Fatalf("ensureObject(empty tree): %v", err)
@@ -109,7 +109,7 @@ func TestEnsureObject_emptyTreeNotPresent(t *testing.T) {
 func TestEnsureObject_localOdbPresent(t *testing.T) {
 	gitDir, commit, tree, blob := packedTestRepo(t)
 	h := &remoteHelper{gitDir: gitDir, fetched: map[string]bool{}}
-	defer h.local.close()
+	defer h.local.Close()
 
 	objType, body, present, err := h.ensureObject(commit)
 	if err != nil {

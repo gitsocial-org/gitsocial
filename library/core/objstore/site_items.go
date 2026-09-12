@@ -26,8 +26,6 @@ const (
 	siteItemsVersion = 4
 	// siteCodeItemsVersion is the code corpus's schema version; its entries carry parent shas.
 	siteCodeItemsVersion = 5
-	// brotliQualityFull compresses every no-cache doc; sealed shards use brotliQualityShard once.
-	brotliQualityFull = 9
 )
 
 // siteItemsWalkBudget bounds one push's artifact walk; a larger branch bootstraps over several pushes.
@@ -224,7 +222,7 @@ type siteItemsCursor struct {
 // absent, an older version, or unparseable.
 func readItemsCursor(client *Client, prefix, ext string) (*siteItemsCursor, error) {
 	var c siteItemsCursor
-	found, err := readCompressedJSON(client, prefix+siteItemsCursorKey(ext), &c)
+	found, err := ReadCompressedJSON(client, prefix+siteItemsCursorKey(ext), &c)
 	if err != nil {
 		return nil, err
 	}
@@ -236,11 +234,11 @@ func readItemsCursor(client *Client, prefix, ext string) (*siteItemsCursor, erro
 
 // putItemsCursor writes one extension's bootstrap cursor (no-cache, brotli q9).
 func putItemsCursor(client *Client, prefix, ext, tip, oldestIndexed string) error {
-	comp, err := compressJSON(&siteItemsCursor{Version: itemsDocVersion(ext), Tip: tip, OldestIndexed: oldestIndexed}, brotliQualityFull)
+	comp, err := CompressJSON(&siteItemsCursor{Version: itemsDocVersion(ext), Tip: tip, OldestIndexed: oldestIndexed}, BrotliQualityFull)
 	if err != nil {
 		return err
 	}
-	return putCompressed(client, prefix+siteItemsCursorKey(ext), comp)
+	return PutCompressed(client, prefix+siteItemsCursorKey(ext), comp, "")
 }
 
 // deleteItemsCursor removes one extension's bootstrap cursor (the walk reached
@@ -374,26 +372,11 @@ func getBucketCommit(client *Client, prefix, sha string) (bucketCommit, error) {
 	return parseBucketCommit(sha, raw[nul+1:])
 }
 
-// getPackedBucketCommit resolves one commit out of the bucket's packfiles through its pack map shard; ok is false when the map has no usable entry.
+// getPackedBucketCommit resolves one commit out of the bucket's packfiles; ok is false when the pack map has no usable entry.
 func getPackedBucketCommit(client *Client, prefix, sha string) (bucketCommit, bool, error) {
-	doc, err := readPackMapShard(client, prefix, packMapShardName(sha))
-	if err != nil {
+	objType, body, ok, err := ReadPackedObject(client, prefix, sha)
+	if err != nil || !ok {
 		return bucketCommit{}, false, err
-	}
-	at, found := doc.Offsets[sha]
-	if !found || len(at) != 3 || at[0] < 0 || at[0] >= int64(len(doc.Packs)) {
-		return bucketCommit{}, false, nil
-	}
-	raw, err := client.GetRangeRetry(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
-	if errors.Is(err, ErrNotFound) {
-		return bucketCommit{}, false, nil
-	}
-	if err != nil {
-		return bucketCommit{}, false, fmt.Errorf("read packed object %s: %w", sha, err)
-	}
-	objType, body, err := inflatePackEntry(raw)
-	if err != nil {
-		return bucketCommit{}, false, fmt.Errorf("packed object %s: %w", sha, err)
 	}
 	if objType != "commit" {
 		return bucketCommit{}, false, fmt.Errorf("object %s: not a commit", sha)
@@ -792,7 +775,7 @@ func putGapArtifacts(client *Client, prefix, ext, newTip string, gap []walkedIte
 }
 
 // rebuildSiteItems drives every data branch in refs, plus the code index, through the same state machine as a helper push.
-func rebuildSiteItems(client *Client, prefix string, refs map[string]string, defaultBranch string, src *localCommitSource, progress Progress) error {
+func rebuildSiteItems(client *Client, prefix string, refs map[string]string, defaultBranch string, src *LocalCommitSource, progress Progress) error {
 	for _, ext := range siteItemsExts {
 		tip, ok := refs["refs/heads/gitmsg/"+ext]
 		if !ok {

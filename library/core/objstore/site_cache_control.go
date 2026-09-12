@@ -3,6 +3,27 @@ package objstore
 
 import "strings"
 
+// siteCacheControl returns the cache class a site key is written with, "" for the key's default.
+func siteCacheControl(key string) string {
+	if isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) {
+		return CacheControlImmutable
+	}
+	return ""
+}
+
+// isDigitString reports whether s is non-empty and all decimal digits.
+func isDigitString(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // isSealedSitemapPartKey reports whether a key is a sealed (full, immutable)
 // sitemap part — `sitemap-<n>.xml` at a path boundary. The index (sitemap.xml)
 // and the mutable newest part (sitemap-head.xml) stay no-cache.

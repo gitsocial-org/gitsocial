@@ -1,6 +1,6 @@
 // credentials_test.go - per-endpoint credentials: file parsing (missing,
 // malformed, unknown host), the env > file > AWS_* precedence ladder, and
-// host-keyed resolution through clientForRemote.
+// host-keyed resolution through ClientForRemote.
 
 package objstore
 
@@ -145,9 +145,9 @@ func TestClientForRemote_credentialsByHost(t *testing.T) {
 		"b.example.com": {"accessKey": "ak-b", "secretKey": "sk-b"}
 	}`)
 	for host, wantAK := range map[string]string{"a.example.com": "ak-a", "b.example.com": "ak-b"} {
-		client, _, _, err := clientForRemote("s3://"+host+"/bucket/repo", HelperEnv{})
+		client, _, _, err := ClientForRemote("s3://"+host+"/bucket/repo", HelperEnv{})
 		if err != nil {
-			t.Fatalf("clientForRemote(%s): %v", host, err)
+			t.Fatalf("ClientForRemote(%s): %v", host, err)
 		}
 		if client.cfg.AccessKey != wantAK {
 			t.Errorf("host %s signed with access key %q, want %q", host, client.cfg.AccessKey, wantAK)

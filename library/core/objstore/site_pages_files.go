@@ -68,7 +68,7 @@ type siteFilePass struct {
 	docs   []siteFileDoc
 	branch string
 	tip    string
-	src    *localCommitSource
+	src    *LocalCommitSource
 }
 
 // siteFileDoc is one discovered document: its path, blob, bucket key, and whether it renders as markdown.
@@ -216,11 +216,11 @@ func siteFileGlobs(v string) []string {
 }
 
 // siteFileWalk collects the default-branch tree's blobs, pruning what no site publishes from; ok is false when the tree cannot be read at all.
-func siteFileWalk(src *localCommitSource, tip string) (files []siteFileDoc, ok bool) {
+func siteFileWalk(src *LocalCommitSource, tip string) (files []siteFileDoc, ok bool) {
 	if tip == "" {
 		return nil, false
 	}
-	body, ok := src.object(tip+"^{tree}", "tree")
+	body, ok := src.Object(tip+"^{tree}", "tree")
 	if !ok {
 		return nil, false
 	}
@@ -239,7 +239,7 @@ func siteFileWalk(src *localCommitSource, tip string) (files []siteFileDoc, ok b
 				if siteFileSkipDirs[strings.ToLower(row.Name)] {
 					continue
 				}
-				sub, found := src.object(row.SHA, "tree")
+				sub, found := src.Object(row.SHA, "tree")
 				if !found {
 					continue
 				}
@@ -303,7 +303,7 @@ func siteFilePageKey(p string) string {
 }
 
 // discoverSiteFileDocs resolves the documents the default branch publishes; known is false when the tree is unreadable, so the caller carries its published set forward.
-func discoverSiteFileDocs(src *localCommitSource, tip string, cfg siteCustomization) (docs []siteFileDoc, known bool) {
+func discoverSiteFileDocs(src *LocalCommitSource, tip string, cfg siteCustomization) (docs []siteFileDoc, known bool) {
 	files, ok := siteFileWalk(src, tip)
 	if !ok {
 		return nil, false
@@ -359,20 +359,20 @@ func siteFileWordCount(source string, markdown bool) int {
 }
 
 // siteFileLastCommitTimes maps every path to its newest commit time in one history walk, not a git log per path.
-func siteFileLastCommitTimes(src *localCommitSource, tip string) map[string]int64 {
+func siteFileLastCommitTimes(src *LocalCommitSource, tip string) map[string]int64 {
 	times := map[string]int64{}
 	if src == nil || tip == "" {
 		return times
 	}
 	args := []string{}
-	if src.workdir != "" {
-		args = append(args, "-C", src.workdir)
+	if workdir := src.Workdir(); workdir != "" {
+		args = append(args, "-C", workdir)
 	}
 	args = append(args, "log", "--format=%ct", "--name-only", "--no-renames", tip)
 	cmd := exec.Command("git", args...)
 	cmd.Env = append(cmd.Environ(), "GIT_NO_LAZY_FETCH=1")
-	if src.gitDir != "" {
-		cmd.Env = append(cmd.Env, "GIT_DIR="+src.gitDir)
+	if gitDir := src.GitDir(); gitDir != "" {
+		cmd.Env = append(cmd.Env, "GIT_DIR="+gitDir)
 	}
 	out, err := cmd.Output()
 	if err != nil {
@@ -509,7 +509,7 @@ func maintainSiteFilePages(client *Client, prefix string, site sitePageSite, pri
 			carry()
 			continue
 		}
-		body, ok := src.object(doc.Blob, "blob")
+		body, ok := src.Object(doc.Blob, "blob")
 		if !ok {
 			carry()
 			continue

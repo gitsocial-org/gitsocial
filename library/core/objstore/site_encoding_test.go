@@ -16,13 +16,15 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
 
 // assertStoredBrotli checks a key was stored brotli-encoded, smaller than raw,
 // and decodes back to exactly the raw bytes.
-func assertStoredBrotli(t *testing.T, client *Client, bucket *memBucket, key string, raw []byte) {
+func assertStoredBrotli(t *testing.T, client *Client, bucket *membucket.Bucket, key string, raw []byte) {
 	t.Helper()
-	if enc := bucket.encOf(key); enc != "br" {
+	if enc := bucket.EncOf(key); enc != "br" {
 		t.Errorf("%s: stored Content-Encoding = %q, want %q", key, enc, "br")
 		return
 	}
@@ -33,7 +35,7 @@ func assertStoredBrotli(t *testing.T, client *Client, bucket *memBucket, key str
 	if len(stored) >= len(raw) {
 		t.Errorf("%s: stored %d bytes, raw %d — compression bought nothing", key, len(stored), len(raw))
 	}
-	decoded, err := brotliDecompress(stored)
+	decoded, err := BrotliDecompress(stored)
 	if err != nil {
 		t.Fatalf("%s: decode: %v", key, err)
 	}
@@ -66,7 +68,7 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 		}
 		key := "repo/" + name
 		if !siteCompressible(name) {
-			if enc := bucket.encOf(key); enc != "" {
+			if enc := bucket.EncOf(key); enc != "" {
 				t.Errorf("%s: non-text asset stored with Content-Encoding %q", key, enc)
 			}
 			continue
@@ -74,7 +76,7 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 		assertStoredBrotli(t, client, bucket, key, raw)
 	}
 	markerKey := "repo/" + siteVersionKey
-	if enc := bucket.encOf(markerKey); enc != "" {
+	if enc := bucket.EncOf(markerKey); enc != "" {
 		t.Errorf("%s: version marker stored with Content-Encoding %q, want none", markerKey, enc)
 	}
 	h := sha256.New()
@@ -121,7 +123,7 @@ func TestTransportKeysNeverEncoded(t *testing.T) {
 			continue
 		}
 		transport++
-		if enc := bucket.encOf(key); enc != "" {
+		if enc := bucket.EncOf(key); enc != "" {
 			t.Errorf("%s: transport key stored with Content-Encoding %q — git's dumb walker cannot decode it", key, enc)
 		}
 	}
@@ -130,7 +132,7 @@ func TestTransportKeysNeverEncoded(t *testing.T) {
 	if transport == 0 {
 		t.Fatal("no transport keys written: the assertion would be vacuous")
 	}
-	if enc := bucket.encOf("repo/gs-core.js"); enc != "br" {
+	if enc := bucket.EncOf("repo/gs-core.js"); enc != "br" {
 		t.Fatalf("shell asset on the same bucket = %q, want br", enc)
 	}
 }

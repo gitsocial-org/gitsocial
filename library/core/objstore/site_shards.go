@@ -92,11 +92,11 @@ func reverseGeneric[E shardEntry](in []E) []E {
 
 // putShardDoc uploads one corpus document and returns its compressed size.
 func putShardDoc[E shardEntry](client *Client, corpus shardCorpus[E], ext, key, tip string, entries []E, quality int) (int, error) {
-	comp, err := compressJSON(corpus.marshalDoc(ext, tip, entries), quality)
+	comp, err := CompressJSON(corpus.marshalDoc(ext, tip, entries), quality)
 	if err != nil {
 		return 0, err
 	}
-	if err := putCompressed(client, key, comp); err != nil {
+	if err := PutCompressed(client, key, comp, siteCacheControl(key)); err != nil {
 		return 0, err
 	}
 	return len(comp), nil
@@ -112,7 +112,7 @@ func sealShardGeneric[E shardEntry](client *Client, corpus shardCorpus[E], prefi
 		return siteShardEntry{}, 0, err
 	}
 	if !exists {
-		if size, err = putShardDoc(client, corpus, ext, key, endTip, group, brotliQualityShard); err != nil {
+		if size, err = putShardDoc(client, corpus, ext, key, endTip, group, BrotliQualityShard); err != nil {
 			return siteShardEntry{}, 0, err
 		}
 	} else if size == 0 {
@@ -135,11 +135,11 @@ func shardSizes(m *siteShardManifest) map[string]int {
 
 // putShardManifest uploads one corpus's manifest.
 func putShardManifest[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string, m *siteShardManifest) error {
-	comp, err := compressJSON(m, brotliQualityFull)
+	comp, err := CompressJSON(m, BrotliQualityFull)
 	if err != nil {
 		return err
 	}
-	return putCompressed(client, prefix+corpus.manifestKey(ext), comp)
+	return PutCompressed(client, prefix+corpus.manifestKey(ext), comp, "")
 }
 
 // shardPlan is a corpus's sealed shards plus the unsealed head, both computed before any head or manifest is written.
@@ -267,7 +267,7 @@ func prependSegmentPlan[E shardEntry](client *Client, corpus shardCorpus[E], pre
 
 // putHead writes a plan's head document and records its compressed size on the plan.
 func putHead[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext, tip string, plan *shardPlan[E]) error {
-	headBytes, err := putShardDoc(client, corpus, ext, prefix+corpus.headKey(ext), tip, plan.head, brotliQualityFull)
+	headBytes, err := putShardDoc(client, corpus, ext, prefix+corpus.headKey(ext), tip, plan.head, BrotliQualityFull)
 	if err != nil {
 		return err
 	}
@@ -290,7 +290,7 @@ func readDocItems[E shardEntry](client *Client, key string) ([]E, error) {
 	var doc struct {
 		Items []E `json:"items"`
 	}
-	found, err := readCompressedJSON(client, key, &doc)
+	found, err := ReadCompressedJSON(client, key, &doc)
 	if err != nil || !found {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func readDocItems[E shardEntry](client *Client, key string) ([]E, error) {
 // readShardManifest fetches one corpus's manifest; nil when absent, at another version, or unreadable.
 func readShardManifest[E shardEntry](client *Client, corpus shardCorpus[E], prefix, ext string) (*siteShardManifest, error) {
 	var m siteShardManifest
-	found, err := readCompressedJSON(client, prefix+corpus.manifestKey(ext), &m)
+	found, err := ReadCompressedJSON(client, prefix+corpus.manifestKey(ext), &m)
 	if err != nil {
 		return nil, err
 	}

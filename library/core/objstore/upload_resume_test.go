@@ -38,12 +38,12 @@ func TestFilterPresent_SkipsPresentAboveThreshold(t *testing.T) {
 	// Mark the first half as already uploaded (an interrupted push's progress).
 	half := len(shas) / 2
 	putObjectKeys(t, client, shas[:half])
-	listsBefore := bucket.listCount()
+	listsBefore := bucket.ListCount()
 
 	kept := filterPresentObjects(client, "", shas)
 
-	if bucket.listCount() != listsBefore+1 {
-		t.Errorf("expected exactly one LIST above the threshold, saw %d", bucket.listCount()-listsBefore)
+	if bucket.ListCount() != listsBefore+1 {
+		t.Errorf("expected exactly one LIST above the threshold, saw %d", bucket.ListCount()-listsBefore)
 	}
 	if len(kept) != len(shas)-half {
 		t.Fatalf("kept %d objects, want %d (the not-yet-present half)", len(kept), len(shas)-half)
@@ -66,12 +66,12 @@ func TestFilterPresent_SkipsListBelowThreshold(t *testing.T) {
 	client, bucket := testClient(t)
 	shas := makeShas(listResumeThreshold - 1) // one below
 	putObjectKeys(t, client, shas[:10])       // some already present
-	listsBefore := bucket.listCount()
+	listsBefore := bucket.ListCount()
 
 	kept := filterPresentObjects(client, "", shas)
 
-	if bucket.listCount() != listsBefore {
-		t.Errorf("expected NO LIST below the threshold, saw %d extra", bucket.listCount()-listsBefore)
+	if bucket.ListCount() != listsBefore {
+		t.Errorf("expected NO LIST below the threshold, saw %d extra", bucket.ListCount()-listsBefore)
 	}
 	if len(kept) != len(shas) {
 		t.Errorf("below the threshold the full delta is kept: got %d, want %d", len(kept), len(shas))

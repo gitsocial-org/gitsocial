@@ -1,4 +1,4 @@
-// membucket_test.go - an in-process, in-memory S3 stub for the objstore tests.
+// membucket.go - an in-process, in-memory S3 stub for the objstore tests.
 //
 // Implements the GET/HEAD/PUT/DELETE + ListObjectsV2 surface the Client uses
 // (path-style: the first path segment is the bucket), including If-None-Match /
@@ -8,7 +8,7 @@
 // ignores SigV4 (the Client signs, the stub does not verify — the tests exercise
 // artifact logic, not auth).
 
-package objstore
+package membucket
 
 import (
 	"crypto/md5"
@@ -22,16 +22,16 @@ import (
 	"sync"
 )
 
-// memObject is one stored object: its bytes and Content-Encoding.
-type memObject struct {
+// object is one stored object: its bytes and Content-Encoding.
+type object struct {
 	body []byte
 	enc  string
 }
 
-// memBucket is a threadsafe in-memory object store implementing http.Handler.
-type memBucket struct {
+// Bucket is a threadsafe in-memory object store implementing http.Handler.
+type Bucket struct {
 	mu        sync.Mutex
-	objs      map[string]memObject
+	objs      map[string]object
 	puts      map[string]int
 	gets      map[string]int  // per-key non-list GET count (skip-path assertions)
 	lists     int             // ListObjectsV2 request count
@@ -48,95 +48,105 @@ type memBucket struct {
 	flakyGets     map[string]int // keys whose next N GETs return 500, then succeed
 }
 
-// newMemBucket returns an empty in-memory bucket.
-func newMemBucket() *memBucket {
-	return &memBucket{objs: map[string]memObject{}, puts: map[string]int{}, gets: map[string]int{}, failPuts: map[string]bool{}, flakyPuts: map[string]int{}, failGets: map[string]int{}, flakyGets: map[string]int{}}
+// New returns an empty in-memory bucket.
+func New() *Bucket {
+	return &Bucket{objs: map[string]object{}, puts: map[string]int{}, gets: map[string]int{}, failPuts: map[string]bool{}, flakyPuts: map[string]int{}, failGets: map[string]int{}, flakyGets: map[string]int{}}
 }
 
-// failPut marks a bucket-relative key so its next PUTs return HTTP 500.
-func (m *memBucket) failPut(key string) {
+// FailPut marks a bucket-relative key so its next PUTs return HTTP 500.
+func (m *Bucket) FailPut(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.failPuts[key] = true
 }
 
-// clearFailPut lets a key's PUTs succeed again, so a test can assert what the
-// pass AFTER a failure does.
-func (m *memBucket) clearFailPut(key string) {
+// ClearFailPut lets a key's PUTs succeed again, so a test can assert what the pass after a failure does.
+func (m *Bucket) ClearFailPut(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.failPuts, key)
 }
 
-// flakyPut marks a bucket-relative key so its next n PUTs return HTTP 500,
-// after which PUTs succeed (simulated transient fault).
-func (m *memBucket) flakyPut(key string, n int) {
+// FlakyPut marks a bucket-relative key so its next n PUTs return HTTP 500, after which PUTs succeed.
+func (m *Bucket) FlakyPut(key string, n int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.flakyPuts[key] = n
 }
 
-// failGet marks a bucket-relative key so every GET returns HTTP 500 (a
-// fault that never clears — the read-retry must give up and surface the error).
-func (m *memBucket) failGet(key string) {
+// FailGet marks a bucket-relative key so every GET returns HTTP 500, a fault that does not clear.
+func (m *Bucket) FailGet(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.failGets[key] = 1
 }
 
-// flakyGet marks a bucket-relative key so its next n GETs return HTTP 500,
-// after which GETs succeed (a transient read fault the retry must absorb).
-func (m *memBucket) flakyGet(key string, n int) {
+// FlakyGet marks a bucket-relative key so its next n GETs return HTTP 500, after which GETs succeed.
+func (m *Bucket) FlakyGet(key string, n int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.flakyGets[key] = n
 }
 
-// rejectIfMatchWrites makes the bucket behave like a create-only provider.
-func (m *memBucket) rejectIfMatchWrites() {
+// RejectIfMatchWrites makes the bucket behave like a create-only provider.
+func (m *Bucket) RejectIfMatchWrites() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rejectIfMatch = true
 }
 
-// ifMatchCount returns how many If-Match writes the bucket saw.
-func (m *memBucket) ifMatchCount() int {
+// IfMatchCount returns how many If-Match writes the bucket saw.
+func (m *Bucket) IfMatchCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ifMatchTries
 }
 
-// putCount returns how many times a key (bucket-relative) was PUT.
-func (m *memBucket) putCount(key string) int {
+// PutCount returns how many times a key (bucket-relative) was PUT.
+func (m *Bucket) PutCount(key string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.puts[key]
 }
 
-// encOf returns the Content-Encoding a key (bucket-relative) was stored with
-// ("" when it carries none, matching a key that was never written).
-func (m *memBucket) encOf(key string) string {
+// Seed stores one object's bytes directly, for a fixture the Client cannot write.
+func (m *Bucket) Seed(key string, body []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.objs[key] = object{body: body}
+}
+
+// Object returns a stored object's bytes; ok is false when the key is absent.
+func (m *Bucket) Object(key string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	obj, ok := m.objs[key]
+	return string(obj.body), ok
+}
+
+// EncOf returns the Content-Encoding a key (bucket-relative) was stored with, "" when it carries none.
+func (m *Bucket) EncOf(key string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.objs[key].enc
 }
 
-// getCount returns how many non-list GETs a key (bucket-relative) received.
-func (m *memBucket) getCount(key string) int {
+// GetCount returns how many non-list GETs a key (bucket-relative) received.
+func (m *Bucket) GetCount(key string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.gets[key]
 }
 
-// listCount returns how many ListObjectsV2 requests the bucket received.
-func (m *memBucket) listCount() int {
+// ListCount returns how many ListObjectsV2 requests the bucket received.
+func (m *Bucket) ListCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.lists
 }
 
-// totalPuts returns the total number of successful PUTs across all keys.
-func (m *memBucket) totalPuts() int {
+// TotalPuts returns the total number of successful PUTs across all keys.
+func (m *Bucket) TotalPuts() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	total := 0
@@ -146,11 +156,11 @@ func (m *memBucket) totalPuts() int {
 	return total
 }
 
-// etag returns the quoted md5 hex of bytes, matching S3 ETag shape.
-func etag(b []byte) string { return fmt.Sprintf("%q", fmt.Sprintf("%x", md5.Sum(b))) }
+// ETag returns the quoted md5 hex of bytes, matching S3 ETag shape.
+func ETag(b []byte) string { return fmt.Sprintf("%q", fmt.Sprintf("%x", md5.Sum(b))) }
 
-// keyOf strips the leading "/<bucket>/" so stored keys are bucket-relative.
-func keyOf(path string) string {
+// KeyOf strips the leading "/<bucket>/" so stored keys are bucket-relative.
+func KeyOf(path string) string {
 	p := strings.TrimPrefix(path, "/")
 	if i := strings.IndexByte(p, '/'); i >= 0 {
 		return p[i+1:]
@@ -159,8 +169,8 @@ func keyOf(path string) string {
 }
 
 // ServeHTTP dispatches the S3 subset under a single lock.
-func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	key := keyOf(r.URL.Path)
+func (m *Bucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	key := KeyOf(r.URL.Path)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	switch r.Method {
@@ -185,7 +195,7 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(404)
 			return
 		}
-		tag := etag(obj.body)
+		tag := ETag(obj.body)
 		w.Header().Set("ETag", tag)
 		if obj.enc != "" {
 			w.Header().Set("Content-Encoding", obj.enc)
@@ -194,14 +204,15 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(304)
 			return
 		}
-		w.Write(obj.body)
+		// A test client that hung up needs no report from the stub.
+		_, _ = w.Write(obj.body)
 	case http.MethodHead:
 		obj, ok := m.objs[key]
 		if !ok {
 			w.WriteHeader(404)
 			return
 		}
-		w.Header().Set("ETag", etag(obj.body))
+		w.Header().Set("ETag", ETag(obj.body))
 		w.Header().Set("Content-Length", strconv.Itoa(len(obj.body)))
 		if obj.enc != "" {
 			w.Header().Set("Content-Encoding", obj.enc)
@@ -225,14 +236,14 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if match := r.Header.Get("If-Match"); match != "" {
 			m.ifMatchTries++
-			if m.rejectIfMatch || !exists || etag(existing.body) != match {
+			if m.rejectIfMatch || !exists || ETag(existing.body) != match {
 				w.WriteHeader(412)
 				return
 			}
 		}
-		m.objs[key] = memObject{body: body, enc: r.Header.Get("Content-Encoding")}
+		m.objs[key] = object{body: body, enc: r.Header.Get("Content-Encoding")}
 		m.puts[key]++
-		w.Header().Set("ETag", etag(body))
+		w.Header().Set("ETag", ETag(body))
 		w.WriteHeader(200)
 	case http.MethodDelete:
 		delete(m.objs, key)
@@ -243,7 +254,7 @@ func (m *memBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // list answers a ListObjectsV2 request over the in-memory keys under prefix.
-func (m *memBucket) list(w http.ResponseWriter, r *http.Request) {
+func (m *Bucket) list(w http.ResponseWriter, r *http.Request) {
 	prefix := r.URL.Query().Get("prefix")
 	var keys []string
 	for k := range m.objs {
@@ -258,7 +269,7 @@ func (m *memBucket) list(w http.ResponseWriter, r *http.Request) {
 		// git ref name and writing it raw makes the whole document unparseable.
 		fmt.Fprint(w, "<Contents><Key>")
 		_ = xml.EscapeText(w, []byte(k))
-		fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", etag(m.objs[k].body))
+		fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", ETag(m.objs[k].body))
 	}
 	fmt.Fprint(w, `</ListBucketResult>`)
 }

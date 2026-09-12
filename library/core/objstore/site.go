@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"sort"
 	"strings"
 )
@@ -93,21 +92,17 @@ func putSiteAsset(client *Client, key, name string, data []byte) error {
 	headers := map[string]string{"Content-Type": siteContentType(name)}
 	// Assets ship once per shell version, so pay full-quality brotli once.
 	if siteCompressible(name) {
-		compressed, err := brotliCompress(data, brotliQualityShard)
+		compressed, err := BrotliCompress(data, BrotliQualityShard)
 		if err != nil {
 			return fmt.Errorf("compress %s: %w", name, err)
 		}
 		data = compressed
 		headers["Content-Encoding"] = "br"
 	}
-	return withRetry(func() error {
-		resp, err := client.do(http.MethodPut, key, nil, data, headers)
-		if err != nil {
-			return fmt.Errorf("upload %s: %w", key, err)
-		}
-		resp.Body.Close()
-		return nil
-	})
+	if err := client.PutWithHeadersRetry(key, data, headers); err != nil {
+		return fmt.Errorf("upload %s: %w", key, err)
+	}
+	return nil
 }
 
 // uploadShellFile puts one embedded site file (by its site/-relative name).
@@ -131,7 +126,7 @@ func uploadSiteFiles(client *Client, prefix string) error {
 		return err
 	}
 	// The shell is dozens of small files, each a round trip, so they upload through the pool.
-	if err := firstError(runParallel(len(names), func(i int) error {
+	if err := FirstError(RunParallel(len(names), func(i int) error {
 		return uploadShellFile(client, prefix, names[i])
 	})); err != nil {
 		return err
@@ -158,14 +153,13 @@ func siteEnabled(client *Client, prefix string) (enabled bool, markerVersion str
 	case err == nil:
 		return true, strings.TrimSpace(string(current)), nil
 	case errors.Is(err, ErrNotFound):
-		resp, headErr := client.do(http.MethodHead, prefix+"index.html", nil, nil, nil)
+		_, _, headErr := client.HeadObject(prefix + "index.html")
 		if errors.Is(headErr, ErrNotFound) {
 			return false, "", nil
 		}
 		if headErr != nil {
 			return false, "", fmt.Errorf("probe site shell: %w", headErr)
 		}
-		resp.Body.Close()
 		return true, "", nil
 	default:
 		return false, "", fmt.Errorf("read site version: %w", err)
@@ -207,22 +201,20 @@ func SetRemoteHead(remoteURL string, env HelperEnv, branch string) error {
 	if branch == "" {
 		return nil
 	}
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
 	body := []byte("ref: refs/heads/" + branch + "\n")
-	resp, err := client.do(http.MethodPut, prefix+"HEAD", nil, body, map[string]string{"Content-Type": "text/plain"})
-	if err != nil {
+	if err := client.PutWithHeaders(prefix+"HEAD", body, map[string]string{"Content-Type": "text/plain"}); err != nil {
 		return fmt.Errorf("write HEAD: %w", err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
 // WriteSiteStats publishes the small stats blob the browser reads in one fetch, refreshed on `gitsocial push --site-only`.
 func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -231,45 +223,43 @@ func WriteSiteStats(remoteURL string, env HelperEnv, stats map[string]any) error
 		return fmt.Errorf("marshal site stats: %w", err)
 	}
 	// Brotli-compressed like the item corpora; the commit times can be large.
-	comp, err := brotliCompress(data, brotliQualityFull)
+	comp, err := BrotliCompress(data, BrotliQualityFull)
 	if err != nil {
 		return fmt.Errorf("compress site stats: %w", err)
 	}
-	resp, err := client.do(http.MethodPut, prefix+siteStatsKey, nil, comp, map[string]string{"Content-Type": "application/json", "Content-Encoding": "br"})
-	if err != nil {
+	if err := client.PutWithHeaders(prefix+siteStatsKey, comp, map[string]string{"Content-Type": "application/json", "Content-Encoding": "br"}); err != nil {
 		return fmt.Errorf("upload %s: %w", siteStatsKey, err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
 // PushSite uploads the shell, seeds the refs manifest and runs the item-artifact state machine over every data branch. The workspace's site.publish guard is the only enabler.
 func PushSite(remoteURL string, env HelperEnv, workdir string, ov SiteOverride, progress Progress) (published, complete bool, err error) {
-	client, prefix, _, err := clientForRemote(remoteURL, env)
+	client, prefix, _, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return false, false, err
 	}
 	// The thin marker is read from the bucket, not per-clone config, so the refusal holds from any clone.
-	if doc, thinErr := readThinUpstream(client, prefix); thinErr == nil && doc != nil {
-		return false, false, fmt.Errorf("%w (upstream %s)", ErrThinBucket, doc.URL)
+	if upstream, thinErr := ThinUpstreamURL(client, prefix); thinErr == nil && upstream != "" {
+		return false, false, fmt.Errorf("%w (upstream %s)", ErrThinBucket, upstream)
 	}
 	// The per-remote override wins over the workspace value, so one remote can carry data with no site.
 	cfg, cfgErr := ReadWorkspaceSiteCustomization(workdir)
 	eff, effOK := applySiteOverride(siteCustomization(cfg), cfg != SiteCustomization{}, ov)
 	if cfgErr != nil || !effOK || eff.Publish != "true" {
 		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
-			progress.call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
+			progress.Call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
 		}
 		return false, false, nil
 	}
-	src := newLocalCommitSource(env.GitDir, workdir)
-	defer src.close()
+	src := NewLocalCommitSource(env.GitDir, workdir)
+	defer src.Close()
 	complete, err = pushSite(client, prefix, src, ov, progress)
 	return true, complete, err
 }
 
 // pushSite is PushSite over a resolved client and prefix; complete is false when a bootstrap still owes work a later push must finish.
-func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOverride, progress Progress) (complete bool, err error) {
+func pushSite(client *Client, prefix string, src *LocalCommitSource, ov SiteOverride, progress Progress) (complete bool, err error) {
 	// Skip the pass when nothing a site artifact derives from has moved since the last one at this shell version.
 	shellVersion, err := siteVersion()
 	if err != nil {
@@ -277,19 +267,19 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 	}
 	upToDate, skipDigest := siteMaintenanceUpToDate(client, prefix, shellVersion, ov)
 	if upToDate {
-		progress.call("site up to date", 1, 1)
+		progress.Call("site up to date", 1, 1)
 		return true, nil
 	}
 	if err := uploadSiteFiles(client, prefix); err != nil {
 		return false, err
 	}
 	// The manifest is the site's listing of the bucket, and publishing it heals one an interrupted push left behind.
-	refs, err := rebuildRefManifest(client, prefix, progress)
+	refs, err := RebuildRefManifest(client, prefix, progress)
 	if err != nil {
 		return false, fmt.Errorf("site manifest: %w", err)
 	}
 	// Keep the dumb-HTTP surface in step, so a site-only push also heals a stale listing.
-	logDumbTransportInfo(client, prefix, src, refs, false)
+	LogDumbTransportInfo(client, prefix, src, refs, false)
 	if err := writeSitePMConfig(client, prefix, refs, src); err != nil {
 		return false, err
 	}
@@ -310,7 +300,7 @@ func pushSite(client *Client, prefix string, src *localCommitSource, ov SiteOver
 		}
 	} else if cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src); err == nil {
 		if _, on := sitePagesEffective(cfg, ok); on {
-			progress.call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial push --site-only`)", 1, 1)
+			progress.Call("site pages: deferred (items index bootstrap in progress; push again or run `gitsocial push --site-only`)", 1, 1)
 		}
 	}
 	// Stamp the marker only after a pass that finished; a bootstrap still in progress has work no ref move signals.

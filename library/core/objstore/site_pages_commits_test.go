@@ -156,10 +156,10 @@ func TestSiteCommits_SealedLayoutAndRows(t *testing.T) {
 	}
 	// A sealed commits page is re-derivable (the default branch can be rewritten),
 	// so unlike a sealed type-list page it must never be cached as immutable.
-	if cacheControlForKey("commits/1.html") != cacheControlRevalidate {
+	if siteCacheControl("commits/1.html") != "" || cacheControlForKey("commits/1.html") != CacheControlRevalidate {
 		t.Error("sealed commits pages must revalidate, not cache immutably")
 	}
-	if cacheControlForKey("posts/1.html") != cacheControlImmutable {
+	if siteCacheControl("posts/1.html") != CacheControlImmutable {
 		t.Error("control: a sealed type-list page still caches immutably")
 	}
 }
@@ -176,7 +176,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 	if pending, _ := buildCodePages(t, client); pending {
 		t.Fatal("unexpected pending")
 	}
-	puts1, puts2 := bucket.putCount("commits/1.html"), bucket.putCount("commits/2.html")
+	puts1, puts2 := bucket.PutCount("commits/1.html"), bucket.PutCount("commits/2.html")
 
 	// (a) ANCESTOR: 80 more commits on top. The frontier is untouched history, so
 	// the sealed region carries through and only page 3 is written.
@@ -184,7 +184,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 	if pending, state := buildCodePages(t, client); pending || state != sitePagesStateOn {
 		t.Fatalf("append pass pending=%v state=%q", pending, state)
 	}
-	if bucket.putCount("commits/1.html") != puts1 || bucket.putCount("commits/2.html") != puts2 {
+	if bucket.PutCount("commits/1.html") != puts1 || bucket.PutCount("commits/2.html") != puts2 {
 		t.Error("an append must not rewrite a sealed commits page")
 	}
 	page3 := getKey(t, client, "commits/3.html")
@@ -202,7 +202,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 
 	// (b) REWRITTEN: main is force-moved onto an unrelated chain, so the recorded
 	// frontier is no longer reachable. The guard must notice and re-derive.
-	puts1 = bucket.putCount("commits/1.html")
+	puts1 = bucket.PutCount("commits/1.html")
 	rewritten := seedCodeBranch(t, client, "", "rewritten ", 230)
 	if pending, _ := buildCodePages(t, client); pending {
 		t.Fatal("unexpected pending after the rewrite")
@@ -214,7 +214,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 	if st.Frontier == frontierBefore || st.Frontier != rewritten[199][:12] {
 		t.Errorf("frontier = %q, want the rewritten chain's %s", st.Frontier, rewritten[199][:12])
 	}
-	if bucket.putCount("commits/1.html") == puts1 {
+	if bucket.PutCount("commits/1.html") == puts1 {
 		t.Error("a rewrite must re-derive the sealed pages, not leave them serving dropped history")
 	}
 	page1 := getKey(t, client, "commits/1.html")

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
 
 // testShardCount is the lowered sealed-shard size the shard tests run under, so
@@ -26,9 +28,9 @@ func withTestShardCount(fn func()) {
 
 // testClient spins a memBucket-backed httptest server and returns a path-style
 // Client pointed at it plus the bucket (for PUT-count assertions).
-func testClient(t *testing.T) (*Client, *memBucket) {
+func testClient(t *testing.T) (*Client, *membucket.Bucket) {
 	t.Helper()
-	bucket := newMemBucket()
+	bucket := membucket.New()
 	srv := httptest.NewServer(bucket)
 	t.Cleanup(srv.Close)
 	client, err := NewClient(Config{
@@ -192,7 +194,7 @@ func TestSealShard_SkipExistingNoRePut(t *testing.T) {
 		}
 		m, _ := readBodiesManifest(client, "", "review")
 		shardKey := bodiesShardKey("review", m.Shards[0].Hash)
-		before := bucket.putCount(shardKey)
+		before := bucket.PutCount(shardKey)
 		if before != 1 {
 			t.Fatalf("first build PUT the shard %d times, want 1", before)
 		}
@@ -201,7 +203,7 @@ func TestSealShard_SkipExistingNoRePut(t *testing.T) {
 		if _, err := writeCorpus(client, bodiesCorpus, "review", tip, newestFirst(oldest), 0); err != nil {
 			t.Fatalf("re-writeCorpus: %v", err)
 		}
-		if after := bucket.putCount(shardKey); after != before {
+		if after := bucket.PutCount(shardKey); after != before {
 			t.Errorf("sealed shard re-PUT on rebuild: %d PUTs, want %d", after, before)
 		}
 	})
@@ -284,7 +286,7 @@ func TestReadCompressedJSON_TranscodedBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get manifest: %v", err)
 	}
-	plain, err := brotliDecompress(compressed)
+	plain, err := BrotliDecompress(compressed)
 	if err != nil {
 		t.Fatalf("decompress manifest: %v", err)
 	}

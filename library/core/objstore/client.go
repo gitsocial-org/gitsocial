@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -326,6 +327,35 @@ func (c *Client) Put(key string, data []byte) error {
 	}
 	resp.Body.Close()
 	return nil
+}
+
+// PutWithHeaders uploads an object with the caller's headers; an unset Cache-Control takes the key's default class.
+func (c *Client) PutWithHeaders(key string, data []byte, headers map[string]string) error {
+	resp, err := c.do(http.MethodPut, key, nil, data, headers)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// PutWithHeadersRetry is PutWithHeaders with transient-fault retry; a PUT of the same key and bytes is idempotent.
+func (c *Client) PutWithHeadersRetry(key string, data []byte, headers map[string]string) error {
+	return withRetry(func() error { return c.PutWithHeaders(key, data, headers) })
+}
+
+// HeadObject returns a key's stored size and ETag, without its body; size is 0 when the response carries no length.
+func (c *Client) HeadObject(key string) (size int, etag string, err error) {
+	resp, err := c.do(http.MethodHead, key, nil, nil, nil)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+	etag = resp.Header.Get("ETag")
+	if n, convErr := strconv.Atoi(resp.Header.Get("Content-Length")); convErr == nil && n > 0 {
+		size = n
+	}
+	return size, etag, nil
 }
 
 // PutIfMatch writes an object only when its current ETag matches, and returns ErrPreconditionFailed when it changed underneath.

@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
 
 // gitRun runs a git command in dir with a hermetic environment (no user config,
@@ -401,13 +403,13 @@ func TestWriteDumbTransportInfo_ListsPacks(t *testing.T) {
 	}
 	for _, name := range bucketPackNames(t, client) {
 		for _, key := range []string{"objects/pack/" + name + ".pack", "objects/pack/" + name + ".idx"} {
-			if got := cacheControlForKey(key); got != cacheControlImmutable {
-				t.Errorf("cacheControlForKey(%q) = %q, want %q", key, got, cacheControlImmutable)
+			if got := cacheControlForKey(key); got != CacheControlImmutable {
+				t.Errorf("cacheControlForKey(%q) = %q, want %q", key, got, CacheControlImmutable)
 			}
 		}
 	}
-	if got := cacheControlForKey(packsKey); got != cacheControlRevalidate {
-		t.Errorf("cacheControlForKey(%q) = %q, want %q", packsKey, got, cacheControlRevalidate)
+	if got := cacheControlForKey(packsKey); got != CacheControlRevalidate {
+		t.Errorf("cacheControlForKey(%q) = %q, want %q", packsKey, got, CacheControlRevalidate)
 	}
 }
 
@@ -433,7 +435,7 @@ func TestFetch_PackOnlyBucket(t *testing.T) {
 	destGit := filepath.Join(dest, ".git")
 	t.Setenv("GIT_DIR", destGit)
 	fetcher := &remoteHelper{client: client, gitDir: destGit, fetched: map[string]bool{}}
-	defer fetcher.local.close()
+	defer fetcher.local.Close()
 	if err := fetcher.fetch([]string{"fetch " + tip + " refs/heads/main"}); err != nil {
 		t.Fatalf("fetch from a pack-only bucket: %v", err)
 	}
@@ -604,9 +606,9 @@ func TestMaintainPacks_DeclinedSealAdvancesLastSealAndMeasuresLoose(t *testing.T
 	// count is below the trigger and the interval has not expired, so the pass
 	// must not pay another objects/ listing.
 	h.looseUploaded = 0
-	listsBefore := bucket.listCount()
+	listsBefore := bucket.ListCount()
 	h.maintainPacks(refs)
-	if got := bucket.listCount(); got != listsBefore {
+	if got := bucket.ListCount(); got != listsBefore {
 		t.Errorf("the push after a decline listed the bucket (%d listings, was %d); the interval must rate-limit the retry", got, listsBefore)
 	}
 	state, err = readPackState(client, "")
@@ -824,8 +826,8 @@ func TestReadSiteConfigs_PackedOnlyAndLocal(t *testing.T) {
 		t.Errorf("readSiteBaseCustomization over a packed-only bucket = %+v ok=%v err=%v", custom, ok, err)
 	}
 
-	src := newLocalCommitSource(filepath.Join(dir, ".git"), "")
-	defer src.close()
+	src := NewLocalCommitSource(filepath.Join(dir, ".git"), "")
+	defer src.Close()
 	emptyClient, _ := testClient(t)
 	cfg, ok, err = readSitePMConfig(emptyClient, "", refs, src)
 	if err != nil || !ok || cfg.Framework != "scrum" {
@@ -846,7 +848,7 @@ func TestReadSiteConfigs_PackedOnlyAndLocal(t *testing.T) {
 // (its own requests run through the same handler).
 func hookedClient(t *testing.T, after func(*Client, *http.Request)) *Client {
 	t.Helper()
-	bucket := newMemBucket()
+	bucket := membucket.New()
 	var mu sync.Mutex
 	var client *Client
 	current := func() *Client {
@@ -877,7 +879,7 @@ func hookedClient(t *testing.T, after func(*Client, *http.Request)) *Client {
 // readOf reports whether a request is a plain GET of the given bucket key (not
 // a listing), i.e. the read half of a compare-and-swap cycle.
 func readOf(r *http.Request, key string) bool {
-	return r.Method == http.MethodGet && r.URL.Query().Get("list-type") != "2" && keyOf(r.URL.Path) == key
+	return r.Method == http.MethodGet && r.URL.Query().Get("list-type") != "2" && membucket.KeyOf(r.URL.Path) == key
 }
 
 // TestCommitPackState_ConcurrentPassesMerge: two pushers that both read the
@@ -967,7 +969,7 @@ func TestCommitPackState_DeletionMergesOntoAnotherPushersState(t *testing.T) {
 // both packfiles already durable on the bucket.
 func TestPutCompressedIfMatch_RetriesATransientFault(t *testing.T) {
 	client, bucket := testClient(t)
-	bucket.flakyPut(packStateKey, 1) // one 5xx, then through
+	bucket.FlakyPut(packStateKey, 1) // one 5xx, then through
 
 	if err := commitPackState(client, CapabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err != nil {
 		t.Fatalf("commitPackState: %v", err)
@@ -976,7 +978,7 @@ func TestPutCompressedIfMatch_RetriesATransientFault(t *testing.T) {
 	// and one stored write means the fault was absorbed where it happened: a
 	// re-read would mean a spent compare-and-swap attempt or the unconditional
 	// fallback, both of which turn a hiccup into last-writer-wins.
-	reads, writes := bucket.getCount(packStateKey), bucket.putCount(packStateKey)
+	reads, writes := bucket.GetCount(packStateKey), bucket.PutCount(packStateKey)
 	if reads != 1 {
 		t.Errorf("%d reads of %s, want 1: a transient write fault must not cost a re-read", reads, packStateKey)
 	}
@@ -1000,16 +1002,16 @@ func TestPutCompressedIfMatch_RetriesATransientFault(t *testing.T) {
 // dropped round is loose copies nothing ever collects, kept forever beside the
 // packs that replaced them.
 func TestReadPackState_PresentButUnreadableIsNeverOverwritten(t *testing.T) {
-	foreign, err := compressJSON(map[string]any{"version": packStateVersion + 99, "generation": 7}, brotliQualityFull)
+	foreign, err := CompressJSON(map[string]any{"version": packStateVersion + 99, "generation": 7}, BrotliQualityFull)
 	if err != nil {
-		t.Fatalf("compressJSON: %v", err)
+		t.Fatalf("CompressJSON: %v", err)
 	}
 	for _, tc := range []struct {
 		name string
 		seed func(*Client) error
 	}{
 		{"bytes that do not parse", func(c *Client) error { return c.Put(packStateKey, []byte("{ half a document")) }},
-		{"another schema version", func(c *Client) error { return putCompressed(c, packStateKey, foreign) }},
+		{"another schema version", func(c *Client) error { return PutCompressed(c, packStateKey, foreign, "") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client, _ := testClient(t)
@@ -1163,7 +1165,7 @@ func TestSealLooseObjects_StampsSealedAtOnEveryPublishedRound(t *testing.T) {
 			}
 			refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
 			if tc.failListing {
-				bucket.failPut(packsKey)
+				bucket.FailPut(packsKey)
 			}
 
 			t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
@@ -1200,7 +1202,7 @@ func TestMaintainPacks_FailedSealRetriesNextPush(t *testing.T) {
 		t.Fatalf("uploadMissingObjects: %v", err)
 	}
 	refs := map[string]string{"refs/heads/main": gitRun(t, dir, "rev-parse", "HEAD")}
-	bucket.failPut(packsKey) // the pack listing every reader discovers packs through
+	bucket.FailPut(packsKey) // the pack listing every reader discovers packs through
 
 	t.Setenv("GITSOCIAL_S3_PACK_THRESHOLD", "1")
 	h.maintainPacks(refs)
@@ -1220,9 +1222,9 @@ func TestMaintainPacks_FailedSealRetriesNextPush(t *testing.T) {
 		t.Errorf("pack state has %d pending rounds, want the round whose packs landed", len(state.Pending))
 	}
 
-	listsBefore := bucket.listCount()
+	listsBefore := bucket.ListCount()
 	h.maintainPacks(refs)
-	if bucket.listCount() == listsBefore {
+	if bucket.ListCount() == listsBefore {
 		t.Error("the next push did not re-attempt the seal (no objects/ listing)")
 	}
 }
@@ -1280,7 +1282,7 @@ func TestWritePackMapShard_MergesConcurrentPacks(t *testing.T) {
 // which those providers do enforce, and no update is lost either way.
 func TestUpdateCompressedJSON_CreateOnlyProviderSkipsTheDoomedUpdate(t *testing.T) {
 	client, bucket := testClient(t)
-	bucket.rejectIfMatchWrites()
+	bucket.RejectIfMatchWrites()
 	key := packMapKeyPrefix + "aa.json"
 	record := func(capability Capability, packName string) {
 		t.Helper()
@@ -1297,18 +1299,18 @@ func TestUpdateCompressedJSON_CreateOnlyProviderSkipsTheDoomedUpdate(t *testing.
 	}
 
 	record(CapabilityCreateOnly, "pack-created")
-	if got := bucket.ifMatchCount(); got != 0 {
+	if got := bucket.IfMatchCount(); got != 0 {
 		t.Errorf("creating the document attempted %d If-Match writes, want 0 (an absent key takes If-None-Match: *)", got)
 	}
 	record(CapabilityCreateOnly, "pack-updated")
-	if got := bucket.ifMatchCount(); got != 0 {
+	if got := bucket.IfMatchCount(); got != 0 {
 		t.Errorf("updating under CapabilityCreateOnly attempted %d If-Match writes, want 0: every one of them can only 412", got)
 	}
 
 	// Positive control: the same bucket, declared full-capability, still pays the
 	// retries before falling back. That cost is what the declaration removes.
 	record(CapabilityFull, "pack-probed")
-	if got := bucket.ifMatchCount(); got != maxCASRetries {
+	if got := bucket.IfMatchCount(); got != maxCASRetries {
 		t.Errorf("updating under CapabilityFull attempted %d If-Match writes, want %d", got, maxCASRetries)
 	}
 

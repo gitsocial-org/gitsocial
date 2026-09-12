@@ -48,7 +48,7 @@ func TestUploadEncodedObjects_AllLand(t *testing.T) {
 	}
 	for _, sha := range shas {
 		key := "repo/objects/" + sha[:2] + "/" + sha[2:]
-		if got := bucket.putCount(key); got != 1 {
+		if got := bucket.PutCount(key); got != 1 {
 			t.Errorf("object %s: put count = %d, want 1", sha, got)
 		}
 	}
@@ -63,7 +63,7 @@ func TestUploadEncodedObjects_TransientErrorRetries(t *testing.T) {
 	produce, shas := feedObjects(n)
 	flaky := shas[41]
 	flakyKey := "repo/objects/" + flaky[:2] + "/" + flaky[2:]
-	bucket.flakyPut(flakyKey, 2)
+	bucket.FlakyPut(flakyKey, 2)
 
 	if err := uploadEncodedObjects(client, "repo/", 8, len(shas), nil, produce); err != nil {
 		t.Fatalf("uploadEncodedObjects with transient failure: %v", err)
@@ -74,7 +74,7 @@ func TestUploadEncodedObjects_TransientErrorRetries(t *testing.T) {
 		if key == flakyKey {
 			want = 1 // successful store count; the two 500s never stored
 		}
-		if got := bucket.putCount(key); got != want {
+		if got := bucket.PutCount(key); got != want {
 			t.Errorf("object %s: put count = %d, want %d", sha, got, want)
 		}
 	}
@@ -87,7 +87,7 @@ func TestUploadEncodedObjects_MidTransferError(t *testing.T) {
 	// Poison one key so its PUT 500s; the pool must fail the whole push.
 	bad := fmt.Sprintf("%040x", 42)
 	badKey := "repo/objects/" + bad[:2] + "/" + bad[2:]
-	bucket.failPut(badKey)
+	bucket.FailPut(badKey)
 
 	var produced int64
 	produce := func(ctx context.Context, out chan<- encodedObject) error {
@@ -132,13 +132,13 @@ func TestUploadEncodedObjects_ProducerError(t *testing.T) {
 // TestResolveUploadConcurrency_EnvWins: the env var overrides any setting/default.
 func TestResolveUploadConcurrency_EnvWins(t *testing.T) {
 	t.Setenv("GITSOCIAL_S3_CONCURRENCY", "7")
-	if got := resolveUploadConcurrency(); got != 7 {
-		t.Errorf("resolveUploadConcurrency() = %d, want 7 (env)", got)
+	if got := UploadConcurrency(); got != 7 {
+		t.Errorf("UploadConcurrency() = %d, want 7 (env)", got)
 	}
 	// A garbage env value falls through to the default (no personal repo here).
 	t.Setenv("GITSOCIAL_S3_CONCURRENCY", "nope")
 	t.Setenv("GITSOCIAL_PERSONAL_REPO", t.TempDir()) // empty dir, no config
-	if got := resolveUploadConcurrency(); got != defaultUploadConcurrency {
-		t.Errorf("resolveUploadConcurrency() = %d, want default %d", got, defaultUploadConcurrency)
+	if got := UploadConcurrency(); got != defaultUploadConcurrency {
+		t.Errorf("UploadConcurrency() = %d, want default %d", got, defaultUploadConcurrency)
 	}
 }

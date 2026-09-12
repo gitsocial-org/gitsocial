@@ -14,7 +14,6 @@ package objstore
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 )
 
@@ -102,7 +101,7 @@ func resolveSiteBoard(cfg sitePMConfig) siteResolvedBoard {
 // bucket, the pack map. Returns ok=false (no error) when the ref is absent,
 // the object is missing/not a commit, or the message is not valid config JSON —
 // the caller then omits the artifact (reader falls back to the kanban default).
-func readSitePMConfig(client *Client, prefix string, refs map[string]string, src *localCommitSource) (sitePMConfig, bool, error) {
+func readSitePMConfig(client *Client, prefix string, refs map[string]string, src *LocalCommitSource) (sitePMConfig, bool, error) {
 	sha, present := refs["refs/gitmsg/pm/config"]
 	if !present || len(sha) != 40 {
 		return sitePMConfig{}, false, nil
@@ -122,7 +121,7 @@ func readSitePMConfig(client *Client, prefix string, refs map[string]string, src
 // after every push, so the static board honors the repo's config. Absent config
 // deletes the artifact (reader falls back to the kanban default). Best-effort by
 // contract; written on the same refs-moved path that maintains refs.json.
-func writeSitePMConfig(client *Client, prefix string, refs map[string]string, src *localCommitSource) error {
+func writeSitePMConfig(client *Client, prefix string, refs map[string]string, src *LocalCommitSource) error {
 	cfg, ok, err := readSitePMConfig(client, prefix, refs, src)
 	if err != nil {
 		return err
@@ -135,10 +134,8 @@ func writeSitePMConfig(client *Client, prefix string, refs map[string]string, sr
 	if err != nil {
 		return fmt.Errorf("marshal site pm config: %w", err)
 	}
-	resp, err := client.do(http.MethodPut, prefix+siteConfigKey, nil, data, map[string]string{"Content-Type": "application/json"})
-	if err != nil {
+	if err := client.PutWithHeaders(prefix+siteConfigKey, data, map[string]string{"Content-Type": "application/json"}); err != nil {
 		return fmt.Errorf("upload %s: %w", siteConfigKey, err)
 	}
-	resp.Body.Close()
 	return nil
 }
