@@ -3470,6 +3470,22 @@
     return a ? (a.side === "new" ? "n" : "o") + a.line : null;
   }
 
+  // feedbackVerdict returns a feedback's review verdict, "" for a plain comment. Mirrors sitePageFeedbackVerdict in site_pages_html.go.
+  function feedbackVerdict(header) {
+    const state = (header && header["review-state"]) || "";
+    return state === "approved" || state === "changes-requested" ? state : "";
+  }
+
+  // feedbackAnchorLabel returns a feedback's "file:line" chip label, "" when it names no file. Mirrors sitePageFeedbackAnchor in site_pages_html.go.
+  function feedbackAnchorLabel(header) {
+    const h = header || {};
+    if (!h.file) return "";
+    let line = h["new-line"], end = h["new-line-end"];
+    if (!line) { line = h["old-line"]; end = h["old-line-end"]; }
+    if (!line) return h.file;
+    return end && end !== line ? h.file + ":" + line + "-" + end : h.file + ":" + line;
+  }
+
   // hunkLineKeys returns the anchor keys a rendered diff line answers to; a context line answers to both.
   function hunkLineKeys(l) {
     const ks = [];
@@ -3958,7 +3974,7 @@
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
-    feedbackLine, feedbackAnchorKey, hunkLineKeys, anchorFeedback, prFeedback,
+    feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,

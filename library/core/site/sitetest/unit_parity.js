@@ -56,6 +56,12 @@ for (const c of FIX.rawObjectCases) {
   eq(subj, c.expectSubject, c.name + ": parseCommit subject");
 }
 
+console.log("=== parity invariant: feedback card verdict + anchor chip ===");
+for (const c of FIX.feedbackCards) {
+  eq(GS.feedbackVerdict(c.header), c.expectVerdict, c.name + ": verdict");
+  eq(GS.feedbackAnchorLabel(c.header), c.expectAnchor, c.name + ": anchor label");
+}
+
 require("../assets/gs-render.js");
 const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");

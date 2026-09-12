@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -1975,36 +1975,32 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // feedbackCard renders one PR feedback: verdict icon, author, time and body.
-  function feedbackCard(fb) {
+  // feedbackCard renders one PR feedback as a card variant; atLine drops the anchor chip where the card already sits on its line.
+  function feedbackCard(fb, atLine) {
     const h = fb.header || {};
-    const state = h["review-state"];
-    const icon = state === "approved" ? "✓" : state === "changes-requested" ? "✗" : "↩";
-    const node = el("div", { class: "fb-card" + (state ? " fb-" + state : "") }, []);
-    const when = fb.effectiveTime || (fb.commit && fb.commit.authorTime);
-    node.append(el("div", { class: "fb-head" }, [
-      el("span", { class: "fb-icon" }, [icon]), " ",
-      el("span", { class: "fb-author" }, [authorEl(fb.author || "unknown", effectiveAuthorEmail(fb.commit, fb.header))]),
-      el("span", { class: "meta" }, [" · ", timeEl(when)]),
-    ]));
-    if (h.suggestion === "true") node.append(suggestionBlock(fb));
-    else if (fb.content) node.append(renderCommitBody(fb.content));
-    else node.append(el("div", { class: "body" }, ["(no content)"]));
-    return node;
+    const verdict = feedbackVerdict(h);
+    const anchor = atLine ? "" : feedbackAnchorLabel(h);
+    const meta = el("span", { class: "meta" }, []);
+    prependGlyph(meta, fb, "review");
+    if (verdict) meta.append(el("span", { class: "chip verdict-" + verdict }, [verdict.replace("-", " ")]));
+    if (anchor) meta.append(el("span", { class: "chip" }, [anchor]));
+    meta.append(authorEl(fb.author || "unknown", effectiveAuthorEmail(fb.commit, fb.header)), " · ",
+      timeEl(fb.effectiveTime || (fb.commit && fb.commit.authorTime)));
+    let body;
+    if (h.suggestion === "true") body = suggestionBlock(fb);
+    else if (fb.content) body = renderCommitBody(fb.content);
+    else body = el("div", { class: "body" }, ["(no content)"]);
+    return card({ variant: "feedback" + (verdict ? " verdict-" + verdict : ""), parts: [meta, body] });
   }
 
-  // feedbackRow wraps a feedback card as a full-width diff row.
-  function feedbackRow(fb) { return el("div", { class: "diff-feedback" }, [feedbackCard(fb)]); }
+  // feedbackRow wraps a feedback card as a full-width diff row, under the line it anchors to.
+  function feedbackRow(fb) { return el("div", { class: "diff-feedback" }, [feedbackCard(fb, true)]); }
 
   // offscreenBlock renders feedback whose anchored line is not in the rendered hunks.
   function offscreenBlock(fbList) {
-    const box = el("div", { class: "fb-offscreen" }, []);
-    box.append(el("div", { class: "fb-offscreen-head mono" }, ["Comments not on visible lines"]));
-    for (const fb of fbList) {
-      const h = fb.header || {};
-      const line = h["new-line"] || h["old-line"] || "?";
-      box.append(el("div", { class: "fb-offscreen-item" }, [el("span", { class: "meta" }, ["L" + line + " · "]), feedbackCard(fb)]));
-    }
+    const box = el("div", { class: "diff-offscreen" }, []);
+    box.append(el("div", { class: "diff-offscreen-head mono" }, ["Comments not on visible lines"]));
+    for (const fb of fbList) box.append(feedbackCard(fb));
     return box;
   }
 
@@ -2071,7 +2067,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         el("span", { class: "diff-status s-" + entry.status }, [diffStatusLabel(entry.status)]),
         ...(fileIcon ? [fileIcon] : []),
         el("span", { class: "mono diff-path" }, [entry.path]),
-        ...(entryFb.length ? [el("span", { class: "chip fb-count" }, [entryFb.length + (entryFb.length === 1 ? " comment" : " comments")])] : []),
+        ...(entryFb.length ? [el("span", { class: "chip chip-count" }, [entryFb.length + (entryFb.length === 1 ? " comment" : " comments")])] : []),
         counts,
         fullscreenBtn(() => body),
       ]);
@@ -2221,7 +2217,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const chips = el("div", { class: "review-chips" }, []);
       for (const r of summary.reviewers) {
         const icon = r.state === "approved" ? "✓ " : r.state === "changes-requested" ? "✗ " : "↩ ";
-        chips.append(el("span", { class: "chip reviewer-chip fb-" + r.state }, [icon + r.name + " · " + r.state]));
+        chips.append(el("span", { class: "chip reviewer-chip verdict-" + r.state }, [icon + r.name + " · " + r.state]));
       }
       wrap.append(chips);
     }
