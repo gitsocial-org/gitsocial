@@ -301,7 +301,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	var socialType, extension, itemType string
 	var state, labels, assignees, due sql.NullString
 	var base, head, reviewers sql.NullString
-	var tag, version, sbom sql.NullString
+	var tag, version, sbom, milestone sql.NullString
 	var draft, prerelease, comments int
 
 	err := rows.Scan(
@@ -313,6 +313,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 		&state, &labels, &assignees, &due,
 		&draft, &base, &head, &reviewers,
 		&tag, &version, &prerelease, &sbom, &comments,
+		&milestone,
 		&hasProposed,
 	)
 	if err != nil {
@@ -360,6 +361,7 @@ func scanItem(rows *sql.Rows) (Item, error) {
 	item.Version = version.String
 	item.Prerelease = prerelease == 1
 	item.Comments = comments
+	item.Milestone, _ = protocol.SplitSubjectBody(milestone.String)
 
 	return item, nil
 }

@@ -3,7 +3,6 @@ package search
 
 import (
 	"database/sql"
-	"fmt"
 	"sort"
 	"strings"
 
@@ -30,23 +29,14 @@ func IsValidGroupBy(field string) bool {
 	return validGroupByFields[field]
 }
 
-// needsEnrichment returns true if the group-by field requires data from resolved views.
-func needsEnrichment(field string) bool {
-	switch field {
-	case "state", "label", "assignee", "reviewer", "base", "milestone":
-		return true
-	}
-	return false
-}
-
 // itemKey identifies a unique item by its composite key.
 type itemKey struct {
 	repoURL, hash, branch string
 }
 
-// enrichForGrouping populates internal grouping fields on items by querying resolved views.
+// enrichForGrouping populates the label grouping field on items.
 func enrichForGrouping(items []ScoredItem, field string) {
-	if len(items) == 0 || !needsEnrichment(field) {
+	if len(items) == 0 || field != "label" {
 		return
 	}
 
@@ -57,24 +47,16 @@ func enrichForGrouping(items []ScoredItem, field string) {
 	}
 
 	_ = cache.ExecLocked(func(db *sql.DB) error {
-		enrichPM(db, items, keyIndex, field)
-		enrichReview(db, items, keyIndex, field)
-		if field == "milestone" {
-			enrichMilestoneNames(db, items)
-		}
+		enrichPM(db, items, keyIndex)
+		enrichReview(db, items, keyIndex)
 		return nil
 	})
 }
 
-// enrichPM queries pm_items for state, labels, assignees, scoped to result set items.
-func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field string) {
-	if field != "state" && field != "label" && field != "assignee" && field != "milestone" {
-		return
-	}
-
+// enrichPM queries pm_items for labels, scoped to result set items.
+func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int) {
 	hashFilter, hashArgs := buildHashFilter(keyIndex)
-	query := `SELECT repo_url, hash, branch, state, labels, assignees,
-		milestone_repo_url, milestone_hash, milestone_branch
+	query := `SELECT repo_url, hash, branch, labels
 		FROM pm_items WHERE type IN ('issue', 'milestone', 'sprint') AND ` + hashFilter
 	rows, err := db.Query(query, hashArgs...)
 	if err != nil {
@@ -84,43 +66,24 @@ func enrichPM(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field 
 
 	for rows.Next() {
 		var repoURL, hash, branch string
-		var state, labels, assignees sql.NullString
-		var msRepoURL, msHash, msBranch sql.NullString
-		if err := rows.Scan(&repoURL, &hash, &branch, &state, &labels, &assignees,
-			&msRepoURL, &msHash, &msBranch); err != nil {
+		var labels sql.NullString
+		if err := rows.Scan(&repoURL, &hash, &branch, &labels); err != nil {
 			continue
 		}
-		k := itemKey{repoURL, hash, branch}
-		for _, idx := range keyIndex[k] {
-			if state.Valid && items[idx].groupState == "" {
-				items[idx].groupState = state.String
-			}
+		for _, idx := range keyIndex[itemKey{repoURL, hash, branch}] {
 			if labels.Valid {
 				items[idx].groupLabels = labels.String
-			}
-			if assignees.Valid {
-				items[idx].groupAssignees = assignees.String
-			}
-			if msHash.Valid {
-				items[idx].groupMilestone = fmt.Sprintf("%s#%s#%s", msRepoURL.String, msHash.String, msBranch.String)
 			}
 		}
 	}
 }
 
-// enrichReview queries review_items for state, labels, reviewers, base, scoped to result set items.
-// Labels are not a review_items column: they live on core_commits, which is the
-// same source review_items_resolved reads them from.
-func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, field string) {
-	if field != "state" && field != "label" && field != "reviewer" && field != "base" {
-		return
-	}
-
+// enrichReview queries review_items for labels, scoped to result set items.
+func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int) {
 	hashFilter, hashArgs := buildHashFilter(keyIndex)
-	query := `SELECT repo_url, hash, branch, state,
+	query := `SELECT repo_url, hash, branch,
 		(SELECT c.labels FROM core_commits c WHERE c.repo_url = review_items.repo_url
-			AND c.hash = review_items.hash AND c.branch = review_items.branch) AS labels,
-		reviewers, base
+			AND c.hash = review_items.hash AND c.branch = review_items.branch) AS labels
 		FROM review_items WHERE type = 'pull-request' AND ` + hashFilter
 	rows, err := db.Query(query, hashArgs...)
 	if err != nil {
@@ -130,23 +93,13 @@ func enrichReview(db *sql.DB, items []ScoredItem, keyIndex map[itemKey][]int, fi
 
 	for rows.Next() {
 		var repoURL, hash, branch string
-		var state, labels, reviewers, base sql.NullString
-		if err := rows.Scan(&repoURL, &hash, &branch, &state, &labels, &reviewers, &base); err != nil {
+		var labels sql.NullString
+		if err := rows.Scan(&repoURL, &hash, &branch, &labels); err != nil {
 			continue
 		}
-		k := itemKey{repoURL, hash, branch}
-		for _, idx := range keyIndex[k] {
-			if state.Valid && items[idx].groupState == "" {
-				items[idx].groupState = state.String
-			}
+		for _, idx := range keyIndex[itemKey{repoURL, hash, branch}] {
 			if labels.Valid && items[idx].groupLabels == "" {
 				items[idx].groupLabels = labels.String
-			}
-			if reviewers.Valid {
-				items[idx].groupReviewers = reviewers.String
-			}
-			if base.Valid {
-				items[idx].groupBase = base.String
 			}
 		}
 	}
@@ -165,43 +118,6 @@ func buildHashFilter(keyIndex map[itemKey][]int) (string, []interface{}) {
 	ph := strings.Repeat("?,", len(args))
 	ph = ph[:len(ph)-1]
 	return "hash IN (" + ph + ")", args
-}
-
-// enrichMilestoneNames resolves milestone composite refs to names.
-func enrichMilestoneNames(db *sql.DB, items []ScoredItem) {
-	msRefs := make(map[string]bool)
-	for i := range items {
-		if items[i].groupMilestone != "" {
-			msRefs[items[i].groupMilestone] = true
-		}
-	}
-	if len(msRefs) == 0 {
-		return
-	}
-
-	msNames := make(map[string]string)
-	for ref := range msRefs {
-		parts := strings.SplitN(ref, "#", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		var message sql.NullString
-		err := db.QueryRow(`SELECT message FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ? LIMIT 1`,
-			parts[0], parts[1], parts[2]).Scan(&message)
-		if err == nil && message.Valid {
-			subject := message.String
-			if idx := strings.IndexByte(subject, '\n'); idx >= 0 {
-				subject = subject[:idx]
-			}
-			msNames[ref] = strings.TrimSpace(subject)
-		}
-	}
-
-	for i := range items {
-		if name, ok := msNames[items[i].groupMilestone]; ok {
-			items[i].groupMilestone = name
-		}
-	}
 }
 
 // groupBy groups scored items by the specified field and builds the Groups slice on Result.
@@ -262,9 +178,6 @@ func extractGroupKeys(item ScoredItem, field string) []string {
 	switch field {
 	case "state":
 		val = item.State
-		if val == "" {
-			val = item.groupState
-		}
 	case "author":
 		val = item.AuthorEmail
 	case "type":
@@ -276,13 +189,13 @@ func extractGroupKeys(item ScoredItem, field string) []string {
 	case "label":
 		return splitCSVOrNone(item.groupLabels)
 	case "assignee":
-		return splitCSVOrNone(item.groupAssignees)
+		return splitCSVOrNone(item.Assignees)
 	case "reviewer":
-		return splitCSVOrNone(item.groupReviewers)
+		return splitCSVOrNone(item.Reviewers)
 	case "milestone":
-		val = item.groupMilestone
+		val = item.Milestone
 	case "base":
-		val = item.groupBase
+		val = item.Base
 	}
 	if val == "" {
 		return []string{"(none)"}
@@ -328,11 +241,7 @@ func toGroupedItem(item ScoredItem, groupField string) GroupedItem {
 		gi.Author = item.AuthorName
 	}
 	if groupField != "state" {
-		if item.State != "" {
-			gi.State = item.State
-		} else if item.groupState != "" {
-			gi.State = item.groupState
-		}
+		gi.State = item.State
 	}
 	if groupField != "label" && item.groupLabels != "" {
 		gi.Labels = item.groupLabels

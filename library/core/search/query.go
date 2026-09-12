@@ -168,6 +168,7 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	versionExpr := coalesceStr(has, [][2]string{{"rli", "version"}})
 	prereleaseExpr := coalesceInt(has, [][2]string{{"rli", "prerelease"}})
 	sbomExpr := coalesceStr(has, [][2]string{{"rli", "sbom"}})
+	milestoneExpr := buildMilestoneExpr(has)
 
 	commentsExpr := "0"
 	if hasInteractions {
@@ -200,11 +201,22 @@ func buildSelect(tables []extensionTable, hasInteractions bool) string {
 	       ` + prereleaseExpr + ` as item_prerelease,
 	       ` + sbomExpr + ` as item_sbom,
 	       ` + commentsExpr + ` as item_comments,
+	       ` + milestoneExpr + ` as item_milestone,
 	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.canonical_branch = r.branch AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
 	FROM core_commits r
 	` + strings.Join(joins, "\n\t")
 
 	return query
+}
+
+// buildMilestoneExpr builds an expression for the message of an item's milestone.
+func buildMilestoneExpr(has map[string]bool) string {
+	if !has["pi"] {
+		return "''"
+	}
+	return `COALESCE((SELECT mc.effective_message FROM core_commits mc
+		WHERE mc.repo_url = pi.milestone_repo_url AND mc.hash = pi.milestone_hash
+		AND mc.branch = pi.milestone_branch), '')`
 }
 
 // buildResolvedStateExpr builds a state expression that resolves through the version chain.
