@@ -70,6 +70,8 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		failAll(ErrCredentialsRequired)
 		return nil
 	}
+	// The seal trigger reads what this batch uploaded, so the count starts at zero for each one.
+	h.looseUploaded = 0
 	// Resolve the bucket's ref mode before any write, so a bucket that cannot CAS is rejected up front.
 	if err := h.resolveRefMode(); err != nil {
 		failAll(err)
@@ -717,7 +719,6 @@ func revListObjects(dir string, srcs, excluded []string, add func(string)) error
 // uploadDelta uploads a push's object delta: packed once it is large enough to pay for a pack, loose below that.
 func (h *remoteHelper) uploadDelta(shas []string) error {
 	if len(shas) < resolvePackThreshold() {
-		h.looseUploaded += len(shas)
 		return h.uploadObjects(shas)
 	}
 	return h.uploadPacked(shas)
@@ -737,7 +738,6 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 	for _, built := range packs {
 		if len(built.pack) > maxPackUploadBytes {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: %s is %d bytes, past the single-PUT ceiling; uploading loose objects instead\n", built.name, len(built.pack))
-			h.looseUploaded += len(shas)
 			return h.uploadObjects(shas)
 		}
 	}
@@ -880,7 +880,12 @@ func (h *remoteHelper) uploadObjects(shas []string) error {
 		}
 		return nil
 	}
-	return uploadEncodedObjects(h.client, h.prefix, UploadConcurrency(), len(shas), h.progress, produce)
+	if err := uploadEncodedObjects(h.client, h.prefix, UploadConcurrency(), len(shas), h.progress, produce); err != nil {
+		return err
+	}
+	// Counted past the presence filter, so the seal trigger sees the objects this push uploaded.
+	h.looseUploaded += len(shas)
+	return nil
 }
 
 // uploadEncodedObjects runs a bounded worker pool that PUTs each object the producer emits; the first error cancels the rest. Refs move only after it returns nil.

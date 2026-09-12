@@ -390,8 +390,12 @@ func (c *Client) ListWithETags(prefix string) ([]ListedObject, error) {
 		for _, obj := range result.Contents {
 			objs = append(objs, ListedObject{Key: obj.Key, ETag: obj.ETag})
 		}
-		if !result.IsTruncated || result.NextContinuationToken == "" {
+		if !result.IsTruncated {
 			return objs, nil
+		}
+		// A short listing read as complete drops keys; a v1-marker provider lands here.
+		if result.NextContinuationToken == "" {
+			return nil, fmt.Errorf("objstore: list %s: the provider reported a truncated listing with no continuation token, so the remaining keys cannot be read", prefix)
 		}
 		token = result.NextContinuationToken
 	}

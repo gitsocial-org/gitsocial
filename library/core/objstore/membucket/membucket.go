@@ -49,6 +49,7 @@ type Bucket struct {
 	failGets      map[string]int // keys whose GETs return 500 forever (>0 = armed)
 	flakyGets     map[string]int // keys whose next N GETs fail, then succeed
 	getStatus     map[string]int // status a failing GET answers with (0 = 500)
+	truncateLists bool           // every listing claims truncation and offers no continuation token
 }
 
 // New returns an empty in-memory bucket.
@@ -101,6 +102,13 @@ func (m *Bucket) FlakyGetStatus(key string, n, status int) {
 	defer m.mu.Unlock()
 	m.flakyGets[key] = n
 	m.getStatus[key] = status
+}
+
+// TruncateListings makes every listing claim truncation with no continuation token, the shape a v1-marker provider answers with.
+func (m *Bucket) TruncateListings() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.truncateLists = true
 }
 
 // RejectIfMatchWrites makes the bucket behave like a create-only provider.
@@ -294,7 +302,11 @@ func (m *Bucket) list(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Strings(keys)
-	fmt.Fprint(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>`)
+	truncated := "false"
+	if m.truncateLists {
+		truncated = "true"
+	}
+	fmt.Fprintf(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>%s</IsTruncated>`, truncated)
 	for _, k := range keys {
 		// Escape the key, as a real bucket and locals3 both do: "&" is legal in a
 		// git ref name and writing it raw makes the whole document unparseable.
