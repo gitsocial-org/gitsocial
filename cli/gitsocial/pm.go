@@ -212,8 +212,11 @@ Filter syntax:
   state:open              filter by state
   assignees:alice@x.com   filter by assignee
   status:backlog          filter by label
+  priority:high           filter by label
   -kind:chore             exclude a label
-  due:today               also due:overdue and due:week
+  due:today               due today
+  due:overdue             past due
+  due:week                due within 7 days
   "search text"           text search
 
 Sort by created, due or priority, each with :asc or :desc.`,

@@ -33,10 +33,21 @@ then origin, or the first s3 remote when origin is not one. Diverged
 gitmsg/* branches merge automatically; diverged code branches fail with a
 hint. See documentation/S3.md for remotes and thin fork buckets.
 
+Published:
+  branch commits  posts, comments, reposts, quotes
+  state refs      lists and configs under refs/gitmsg/
+  tags            every local tag
+  code branches   the default branch when it is ahead, and open PR heads
+  the site        on an s3 remote with site.publish
+
 Examples:
-  gitsocial push              # resolved remotes, data and site
-  gitsocial push r2 backup    # named remotes, in order
-  gitsocial push --site-only  # refresh the site, push no data`,
+  gitsocial push                 # resolved remotes, data and site
+  gitsocial push r2 backup       # named remotes, in order
+  gitsocial push --dry-run       # show what would be pushed
+  gitsocial push --no-code       # data and site, no code branches
+  gitsocial push --site-only     # refresh the site, push no data
+  gitsocial push --all-branches  # every local branch
+  gitsocial push --full          # detach a thin fork bucket`,
 		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

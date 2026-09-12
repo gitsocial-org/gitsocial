@@ -70,7 +70,19 @@ func newImportCmd() *cobra.Command {
 		Use:   "import [url]",
 		Short: "Import data from external platforms",
 		Long: `Import issues, releases, pull requests and discussions from a forge.
-With no URL origin is used; with no subcommand every type is imported.`,
+With no URL origin is used; with no subcommand every type is imported in
+dependency order. Re-running skips what is already imported.
+
+GitHub imports through the gh CLI, GitLab through its REST API. Comments
+and discussions come from GitHub only.
+
+Examples:
+  gitsocial import                                 # origin, everything
+  gitsocial import https://github.com/org/repo     # one URL, everything
+  gitsocial import pm https://github.com/org/repo  # milestones, issues
+  gitsocial import release https://gitlab.com/org/repo
+  gitsocial import review https://codeberg.org/org/repo
+  gitsocial import social --state open --limit 100 --dry-run`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImport(cmd, args, "all", allExtensions, &f)

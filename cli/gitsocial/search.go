@@ -46,9 +46,46 @@ func newSearchCmd() *cobra.Command {
 		Short: "Search across all extensions",
 		Long: `Search posts, issues, pull requests, releases and memos.
 
-A filter is a flag or an inline term such as author:<email>, type:<type>
-or after:<date>, and the flag wins when both are given. The filter
-values, the scopes and the group-by fields are in documentation/CLI.md.`,
+A filter is a flag or an inline term, and the flag wins when both are
+given.
+
+Inline filters:
+  author:<email>     filter by author email
+  repo:<url>         filter by repository URL
+  type:<type>        filter by item type
+  hash:<prefix>      filter by commit hash prefix
+  after:YYYY-MM-DD   items after the date
+  before:YYYY-MM-DD  items before the date
+
+Types: post, comment, repost, quote, pr, issue, milestone, sprint,
+release, memo.
+
+Type filters:
+  --state       open, closed, merged, canceled
+  --labels      comma-separated, any match
+  --assignee    implies --type issue
+  --milestone   implies --type issue
+  --sprint      implies --type issue
+  --reviewer    implies --type pr
+  --draft       implies --type pr
+  --base        implies --type pr
+  --prerelease  implies --type release
+  --tag         implies --type release
+  --tier        implies --type memo: session, personal, project,
+                inherited, external
+
+Scopes: timeline, the default, list:<name>, repository:<url>.
+Sort: score, the default, or date.
+Group by: state, author, type, extension, repo, label, assignee,
+reviewer, milestone, base. --top caps the items per group and
+--count-only prints the counts alone.
+
+Examples:
+  gitsocial search "hello world"
+  gitsocial search "feature" --author dev@example.com --type post
+  gitsocial search --type pr --state open --json
+  gitsocial search --type issue --labels bug --assignee dev@example.com
+  gitsocial search --type pr --group-by author --top 5`,
 		Args: cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

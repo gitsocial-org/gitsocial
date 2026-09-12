@@ -30,7 +30,10 @@ func newIDVerifyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify <commit>",
 		Short: "Verify a commit signature",
-		Args:  cobra.ExactArgs(1),
+		Long: `Verify a commit's signature against the forge's attestations and, when
+identity.dns_verification is on, a DNS binding. The trust model is in
+documentation/IDENTITY.md.`,
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -91,7 +94,9 @@ func newIDResolveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve <email>",
 		Short: "Resolve an identity over DNS",
-		Args:  cobra.ExactArgs(1),
+		Long: `Resolve an email address to its identity through the DNS well-known
+endpoint of its domain.`,
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
 			email := args[0]

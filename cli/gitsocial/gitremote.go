@@ -13,8 +13,11 @@ import (
 // (via a shim). Args per gitremote-helpers(7): <remote-name> [<url>].
 func newGitRemoteS3Cmd() *cobra.Command {
 	return &cobra.Command{
-		Use:    "__git-remote-s3 <remote> [<url>]",
-		Short:  "git remote helper for s3:// remotes",
+		Use:   "__git-remote-s3 <remote> [<url>]",
+		Short: "git remote helper for s3:// remotes",
+		Long: `The remote helper git execs for an s3:// remote, per
+gitremote-helpers(7). git invokes it through the helper alias; it is not
+a command to run by hand.`,
 		Hidden: true,
 		Args:   cobra.RangeArgs(1, 2),
 		// No PersistentPreRunE side effects wanted here (cache open, logging

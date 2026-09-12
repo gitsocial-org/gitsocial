@@ -32,7 +32,10 @@ func newCloneCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clone <url> [directory]",
 		Short: "Clone a repository, s3:// included",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: `Clone a repository. An s3:// URL needs no extra setup: it is normalized,
+and the clone's local config records the s3 helper alias, so plain git
+works in the clone too.`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			remoteURL := args[0]

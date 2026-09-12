@@ -26,6 +26,10 @@ func newLogCmd() *cobra.Command {
 		Long: `Show the activity log of this repository, or of the timeline with
 --scope timeline.
 
+Scopes:
+  repository:my  this repository, the default
+  timeline       all activity in the timeline
+
 Types: post, comment, repost, quote, list-create, list-delete,
 repository-follow, repository-unfollow, config, metadata.
 

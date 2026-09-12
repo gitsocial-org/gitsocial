@@ -149,10 +149,15 @@ normalized to s3://<endpoint-host>/<bucket>/<prefix> and the s3 helper
 alias is recorded, so plain git works there too. The name defaults to
 origin. The accepted URL shapes are in documentation/S3.md.
 
+--default appends the remote to git config gitsocial.pushRemote.
+--site sets site.publish in the core config, so pushes to s3 remotes also
+publish the browser static site.
+
 Examples:
   gitsocial remote add s3://s3.us-east-1.amazonaws.com/my-bucket/repo
+  gitsocial remote add https://us-east-1.console.aws.amazon.com/s3/buckets/my-bucket
   gitsocial remote add upstream s3://<endpoint-host>/<bucket>/repo
-  gitsocial remote add s3 s3://<endpoint-host>/<bucket>/repo --default`,
+  gitsocial remote add s3 s3://<endpoint-host>/<bucket>/repo --default --site`,
 		Args: cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

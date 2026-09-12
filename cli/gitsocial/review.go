@@ -493,7 +493,9 @@ func newReviewPRUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <pr-ref>",
 		Short: "Update a PR with current branch tips",
-		Args:  cobra.ExactArgs(1),
+		Long: `Update a pull request with the current tips of its head and base
+branches, which signals that new code is ready for review.`,
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)

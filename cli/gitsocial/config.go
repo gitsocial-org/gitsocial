@@ -168,12 +168,23 @@ func newSiteConfigCmd() *cobra.Command {
 		Use:   "site",
 		Short: "Manage static site customization",
 		Long: `Set the browser site's title, accent color, favicon and the other site
-keys. Values live in the site object of the core config ref and reach
-the bucket as .gitsocial/site/site-config.json on the next push.
+keys. Values live in the site object of the core config ref and reach the
+bucket as .gitsocial/site/site-config.json on the next push.
 
-Keys: title, description, accent, accentDark, favicon, image, url,
-publish, pages, filesInclude, filesExclude. Their accepted values are in
-documentation/STATIC-SITE.md.`,
+Keys:
+  title         plain text for the tab title and the header
+  description   plain text, up to 300 characters
+  accent        accent color, #rgb or #rrggbb
+  accentDark    accent color for dark mode, same form
+  favicon       @path/to/icon.png or a data: URI; png, webp or svg, 32KB
+  image         og:image for every page: a bucket key or an https:// URL
+  url           the public base URL, absolute https://, trailing slash
+  publish       true or false, default false: the site master switch
+  pages         true or false, default false: the crawlable HTML pages
+  filesInclude  comma-separated globs the file pages also publish
+  filesExclude  comma-separated globs the file pages skip
+
+Validation is in documentation/STATIC-SITE.md.`,
 	}
 	cmd.AddCommand(newSiteConfigGetCmd(), newSiteConfigSetCmd(), newSiteConfigListCmd())
 	return cmd
@@ -282,7 +293,18 @@ func newSiteConfigSetCmd() *cobra.Command {
 		Short: "Set a site customization value",
 		Long: `Set a site customization value. Valid keys: title, description, accent,
 accentDark, favicon, image, url, publish, pages, filesInclude,
-filesExclude. Their accepted values are in documentation/STATIC-SITE.md.
+filesExclude.
+
+  accent, accentDark  #rgb or #rrggbb, such as #0a7 or #00dddd
+  favicon             @path/to/icon.png to read and encode a png, webp
+                      or svg image, or a data: URI; 32KB max
+  image               a bucket key relative to the site root, uploaded
+                      with gitsocial remote put, or an https:// URL
+  url                 absolute https://, http:// for localhost only, no
+                      query or fragment, normalized to a trailing slash
+  description         plain text, 300 characters max
+  publish, pages      true or false, both default false; pages needs
+                      publish true and a valid url
 
 With --remote <name> the value is stored in git config as
 remote.<name>.gitsocial-site-<key> and applies only to pushes to that

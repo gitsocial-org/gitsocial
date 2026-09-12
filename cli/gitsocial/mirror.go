@@ -61,14 +61,30 @@ func newMirrorCmd() *cobra.Command {
 		Long: `Mirror a forge-hosted project into an S3 bucket as a browsable site.
 mirror fetches from the forge, imports issues, pull requests, releases
 and discussions, then pushes data, code and the site to the bucket.
-The two URLs are told apart by scheme, so their order is free.
 Re-running refreshes, and a crashed run resumes.
 
-Examples:
+The two URLs are told apart by scheme, so their order is free:
   gitsocial mirror <forge-url> <s3-url>  cold start: clone, import, push
   gitsocial mirror <s3-url>              attach the bucket, import, push
-  gitsocial mirror                       refresh
-  gitsocial mirror --dry-run             the checklist and the plan`,
+  gitsocial mirror                       refresh a mirrored workspace
+
+Origin stays the forge URL and the bucket is a second remote. Every
+upstream branch is mirrored unless --default-branch-only.
+
+Credentials resolve in order:
+  1. GITSOCIAL_S3_ACCESS_KEY and GITSOCIAL_S3_SECRET_KEY
+  2. ~/.config/gitsocial/credentials.json, per endpoint host
+  3. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+On a TTY without -y mirror prompts for them; otherwise it fails naming
+the gitsocial config credentials set command.
+
+Creating the bucket, allowing public reads and attaching a domain are
+provider dashboard steps. --dry-run prints that checklist and the plan.
+
+Examples:
+  gitsocial mirror https://github.com/org/repo s3://<host>/<bucket>/repo
+  gitsocial mirror --url https://project.example.org/
+  gitsocial mirror -n 50 --dry-run`,
 		Args: cobra.MaximumNArgs(2),
 		// A long-running composite command: a mid-run failure (gh auth, S3
 		// credentials, push) is not a usage error, so keep the output to the

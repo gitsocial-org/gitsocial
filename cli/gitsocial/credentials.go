@@ -32,7 +32,10 @@ Resolution when a request to a bucket is signed:
   3. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 
 Credentials are keyed by endpoint host, the granularity providers scope
-keys to.`,
+keys to:
+  <account>.r2.cloudflarestorage.com
+  s3.us-east-1.amazonaws.com
+  127.0.0.1:9000`,
 	}
 	cmd.AddCommand(newCredentialsSetCmd(), newCredentialsListCmd(), newCredentialsRemoveCmd())
 	return cmd
@@ -132,7 +135,9 @@ func newCredentialsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List stored credential hosts",
-		Args:  cobra.NoArgs,
+		Long: `List the endpoint hosts with stored credentials. Access keys print
+masked, and secret keys do not print.`,
+		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
 			creds, err := objstore.ReadCredentialsFile()
