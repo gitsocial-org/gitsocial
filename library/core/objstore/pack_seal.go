@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -163,7 +162,7 @@ func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound
 	if len(loose) < resolveSealThreshold() {
 		return round, len(loose), nil
 	}
-	sealable, err := sealableObjects(loose, refs)
+	sealable, err := sealableObjects(h.localOdb(), loose, refs)
 	if err != nil {
 		return round, looseAfter, err
 	}
@@ -199,8 +198,8 @@ func (h *remoteHelper) sealLooseObjects(refs map[string]string) (round packRound
 }
 
 // sealableObjects derives what this clone may pack from the bucket's loose keys: reachable from a resolvable bucket ref tip, minus what the local odb lacks.
-func sealableObjects(loose []string, refs map[string]string) ([]string, error) {
-	packable, err := reachableObjects(bucketRefTips(refs))
+func sealableObjects(src *LocalCommitSource, loose []string, refs map[string]string) ([]string, error) {
+	packable, err := reachableObjects(bucketRefTips(src, refs))
 	if err != nil {
 		return nil, err
 	}
@@ -220,21 +219,15 @@ func sealableObjects(loose []string, refs map[string]string) ([]string, error) {
 	return append(commitLike, content...), nil
 }
 
-// bucketRefTips returns every bucket ref tip whose object the local odb carries; only the values mean anything in this repo, not the refnames.
-func bucketRefTips(refs map[string]string) []string {
-	var tips []string
-	for _, sha := range refs {
-		if len(sha) != 40 || !isHexString(sha) {
-			continue
+// bucketRefTips returns every bucket ref tip whose object the local odb carries, through one batch call; only the values mean anything in this repo, not the refnames.
+func bucketRefTips(src *LocalCommitSource, refs map[string]string) []string {
+	wellFormed := map[string]string{}
+	for name, sha := range refs {
+		if len(sha) == 40 && isHexString(sha) {
+			wellFormed[name] = sha
 		}
-		if _, err := gitOutput("cat-file", "-e", sha+"^{object}"); err != nil {
-			continue
-		}
-		tips = append(tips, sha)
 	}
-	// Sorted, so the rev-list below is one deterministic command for a given bucket.
-	sort.Strings(tips)
-	return tips
+	return presentLocally(src, wellFormed)
 }
 
 // reachableObjects returns every object reachable from tips, the tips included, since rev-list peels an annotated tag.

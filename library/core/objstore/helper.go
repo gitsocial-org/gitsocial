@@ -105,6 +105,7 @@ type remoteHelper struct {
 	packObjects    map[string]bool    // object SHAs the pulled packfiles carry
 	looseUploaded  int                // objects THIS push uploaded loose (drives the seal trigger)
 	local          *LocalCommitSource // lazily-started local odb reader (packed-object bodies)
+	localStarted   bool               // local was built, so the lazy start runs once
 	upstreamPulled bool               // the thin-fork read overlay ran this session
 	thinResolved   bool               // the push relationship (thin.go) was read from git config this session
 	thin           bool               // pushes to this remote exclude upstream objects
@@ -477,10 +478,11 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 	return objType, body, false, err
 }
 
-// localOdb returns the helper's lazily-started cat-file reader on GIT_DIR.
+// localOdb returns the helper's lazily-started cat-file reader on the repo it was given: the GIT_DIR git handed it, or an explicit workdir. The push starts it before its parallel ref updates, so the lazy start itself never races.
 func (h *remoteHelper) localOdb() *LocalCommitSource {
-	if h.local == nil {
-		h.local = NewLocalCommitSource(h.gitDir, "")
+	if !h.localStarted {
+		h.localStarted = true
+		h.local = NewLocalCommitSource(h.gitDir, h.workdir)
 	}
 	return h.local
 }

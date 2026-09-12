@@ -94,46 +94,75 @@ func (s *LocalCommitSource) Object(name, wantType string) (body []byte, ok bool)
 
 // typed reads one object's type and raw body by name, for a caller that takes whatever type the odb holds.
 func (s *LocalCommitSource) typed(name string) (objType string, body []byte, ok bool) {
+	_, objType, body, ok = s.read(name)
+	return objType, body, ok
+}
+
+// resolve returns one name's object id and type, for a caller that needs neither the body nor a git process per name.
+func (s *LocalCommitSource) resolve(name string) (sha, objType string, ok bool) {
+	sha, objType, _, ok = s.read(name)
+	return sha, objType, ok
+}
+
+// read sends one name to the batch and reads its header and body back; an IO or protocol error retires the process rather than failing the caller.
+func (s *LocalCommitSource) read(name string) (sha, objType string, body []byte, ok bool) {
 	if s == nil {
-		return "", nil, false
+		return "", "", nil, false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.broken {
-		return "", nil, false
+		return "", "", nil, false
 	}
 	if _, err := io.WriteString(s.stdin, name+"\n"); err != nil {
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
 	header, err := s.stdout.ReadString('\n')
 	if err != nil {
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
 	fields := strings.Fields(strings.TrimSpace(header))
 	// A "missing" answer is a clean miss: absent locally, or an unresolvable rev-spec.
 	if len(fields) == 2 && fields[1] == "missing" {
-		return "", nil, false
+		return "", "", nil, false
 	}
 	if len(fields) != 3 {
 		// Malformed, so do not try to consume a body of unknown size.
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
 	var size int64
 	if _, err := fmt.Sscanf(fields[2], "%d", &size); err != nil {
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
 	content := make([]byte, size)
 	if _, err := io.ReadFull(s.stdout, content); err != nil {
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
 	if _, err := s.stdout.Discard(1); err != nil { // trailing newline
 		s.broken = true
-		return "", nil, false
+		return "", "", nil, false
 	}
-	return fields[1], content, true
+	return fields[0], fields[1], content, true
+}
+
+// resolvedObject is one name's resolution in a local odb: its object id and type.
+type resolvedObject struct {
+	sha     string
+	objType string
+}
+
+// resolveLocalBatch resolves every name through one long-lived cat-file batch, so a push spawns no git process per ref; a name the odb cannot resolve is absent from the result.
+func resolveLocalBatch(src *LocalCommitSource, names []string) map[string]resolvedObject {
+	out := make(map[string]resolvedObject, len(names))
+	for _, name := range names {
+		if sha, objType, ok := src.resolve(name); ok {
+			out[name] = resolvedObject{sha: sha, objType: objType}
+		}
+	}
+	return out
 }

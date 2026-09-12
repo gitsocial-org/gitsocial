@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,11 +22,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
-// pushCommand is one parsed "push [+]<src>:<dst>" line.
+// pushCommand is one parsed "push [+]<src>:<dst>" line, with src resolved once for the whole batch.
 type pushCommand struct {
-	src    string // empty = delete dst
-	dst    string
-	forced bool
+	src     string // empty = delete dst
+	dst     string
+	forced  bool
+	sha     string // src's object id, resolved by resolveSources
+	objType string // src's object type, so an annotated tag is uploaded as the tag object
 }
 
 // parsePushCommand parses a remote-helper push line.
@@ -69,6 +72,11 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	}
 	// Resolve the bucket's ref mode before any write, so a bucket that cannot CAS is rejected up front.
 	if err := h.resolveRefMode(); err != nil {
+		failAll(err)
+		return nil
+	}
+	// One batch call resolves every src, so neither the transfer nor the per-ref CAS spawns a git process per ref.
+	if err := h.resolveSources(cmds); err != nil {
 		failAll(err)
 		return nil
 	}
@@ -283,10 +291,7 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 		// Deletion stays unconditional: S3 has no conditional DELETE, and git guards deletes client-side.
 		return "", h.client.Delete(key)
 	}
-	sha, err := gitOutput("rev-parse", "--verify", cmd.src)
-	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w", cmd.src, err)
-	}
+	sha := cmd.sha
 	value := []byte(sha + "\n")
 	var lastErr error
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
@@ -309,7 +314,7 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 				return "", leaseErr
 			}
 			if !leased && !cmd.forced {
-				if err := checkFastForward(current, sha, cmd.dst); err != nil {
+				if err := checkFastForward(h.localOdb(), current, sha, cmd.dst); err != nil {
 					return "", err
 				}
 			}
@@ -332,10 +337,7 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 	if cmd.src == "" {
 		return "", h.deleteRefGenerations(cmd.dst)
 	}
-	sha, err := gitOutput("rev-parse", "--verify", cmd.src)
-	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w", cmd.src, err)
-	}
+	sha := cmd.sha
 	var lastErr error
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		maxGen, err := maxGeneration(h.client, h.prefix, cmd.dst)
@@ -363,7 +365,7 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 				return "", leaseErr
 			}
 			if !leased && !cmd.forced {
-				if err := checkFastForward(currentSHA, sha, cmd.dst); err != nil {
+				if err := checkFastForward(h.localOdb(), currentSHA, sha, cmd.dst); err != nil {
 					return "", err
 				}
 			}
@@ -417,8 +419,8 @@ func (h *remoteHelper) deleteRefGenerations(refName string) error {
 }
 
 // checkFastForward enforces the non-force rule: the remote's current value must be an ancestor of the pushed one.
-func checkFastForward(current, next, dst string) error {
-	if _, err := gitOutput("cat-file", "-e", current); err != nil {
+func checkFastForward(src *LocalCommitSource, current, next, dst string) error {
+	if _, _, ok := src.resolve(current); !ok {
 		return fmt.Errorf("remote %s is at %s which is not known locally; fetch first", dst, current[:12])
 	}
 	ancestor, err := isAncestor(current, next)
@@ -617,6 +619,28 @@ func localDefaultBranchRef() string {
 	return ref
 }
 
+// resolveSources resolves every command's src to its object id and type in one batch call, so the transfer and the per-ref CAS both read it.
+func (h *remoteHelper) resolveSources(cmds []pushCommand) error {
+	names := make([]string, 0, len(cmds))
+	for _, cmd := range cmds {
+		if cmd.src != "" {
+			names = append(names, cmd.src)
+		}
+	}
+	resolved := resolveLocalBatch(h.localOdb(), names)
+	for i := range cmds {
+		if cmds[i].src == "" {
+			continue
+		}
+		found, ok := resolved[cmds[i].src]
+		if !ok {
+			return fmt.Errorf("resolve %s: not in the local odb", cmds[i].src)
+		}
+		cmds[i].sha, cmds[i].objType = found.sha, found.objType
+	}
+	return nil
+}
+
 // uploadMissingObjects uploads every object the pushed refs reach that the bucket lacks; a thin push widens the negative end for code refs alone, so gitmsg stays whole.
 func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 	tips, err := h.remoteTipsPresentLocally()
@@ -624,6 +648,14 @@ func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 		return err
 	}
 	var srcs, gitmsgSrcs, codeSrcs []string
+	seen := map[string]bool{}
+	var shas []string
+	add := func(sha string) {
+		if !seen[sha] {
+			seen[sha] = true
+			shas = append(shas, sha)
+		}
+	}
 	for _, cmd := range cmds {
 		if cmd.src == "" {
 			continue // deletion: nothing to upload
@@ -634,27 +666,13 @@ func (h *remoteHelper) uploadMissingObjects(cmds []pushCommand) error {
 		} else {
 			codeSrcs = append(codeSrcs, cmd.src)
 		}
+		// rev-list --objects peels annotated tags, so upload the tag objects explicitly.
+		if cmd.objType == "tag" {
+			add(cmd.sha)
+		}
 	}
 	if len(srcs) == 0 {
 		return nil
-	}
-	seen := map[string]bool{}
-	var shas []string
-	add := func(sha string) {
-		if !seen[sha] {
-			seen[sha] = true
-			shas = append(shas, sha)
-		}
-	}
-	// rev-list --objects peels annotated tags, so upload the tag objects explicitly.
-	for _, src := range srcs {
-		sha, err := gitOutput("rev-parse", "--verify", src)
-		if err != nil {
-			return fmt.Errorf("resolve %s: %w", src, err)
-		}
-		if objType, err := gitOutput("cat-file", "-t", sha); err == nil && objType == "tag" {
-			add(sha)
-		}
 	}
 	thin, upstreamURL := h.thinPush()
 	if !thin {
@@ -735,19 +753,28 @@ func (h *remoteHelper) uploadPacked(shas []string) error {
 	return nil
 }
 
-// remoteTipsPresentLocally resolves the remote's ref values and keeps those whose objects exist locally.
+// remoteTipsPresentLocally resolves the remote's ref values and keeps those whose objects exist locally, through one batch call.
 func (h *remoteHelper) remoteTipsPresentLocally() ([]string, error) {
 	refs, err := ReadRemoteRefs(h.client, h.prefix)
 	if err != nil {
 		return nil, err
 	}
-	var tips []string
+	return presentLocally(h.localOdb(), refs), nil
+}
+
+// presentLocally returns the ref values the local odb carries, sorted, so a walk over them is one deterministic command.
+func presentLocally(src *LocalCommitSource, refs map[string]string) []string {
+	names := make([]string, 0, len(refs))
 	for _, sha := range refs {
-		if _, err := gitOutput("cat-file", "-e", sha); err == nil {
-			tips = append(tips, sha)
-		}
+		names = append(names, sha)
 	}
-	return tips, nil
+	present := resolveLocalBatch(src, names)
+	tips := make([]string, 0, len(present))
+	for name := range present {
+		tips = append(tips, name)
+	}
+	sort.Strings(tips)
+	return tips
 }
 
 // encodedObject is one loose object ready to upload: its sha and zlib bytes.

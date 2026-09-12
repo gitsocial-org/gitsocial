@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -188,7 +189,7 @@ func (h *remoteHelper) refreshLocalOdb(pins []ThinPin) {
 		}
 		if _, _, ok := h.localOdb().typed(pin.SHA); !ok {
 			h.local.Close()
-			h.local = nil
+			h.local, h.localStarted = nil, false
 		}
 		return
 	}
@@ -249,6 +250,8 @@ func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress
 		return fmt.Errorf("read refs: %w", err)
 	}
 	h := &remoteHelper{client: client, prefix: prefix, capability: capability, workdir: workdir, fetched: map[string]bool{}, progress: progress}
+	// One cat-file batch serves the whole detach, and it is a git child with an open stdin until it closes.
+	defer func() { h.local.Close() }()
 	missing, err := h.missingBucketObjects(refs)
 	if err != nil {
 		return err
@@ -257,9 +260,7 @@ func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress
 	if err := h.uploadObjects(missing); err != nil {
 		return fmt.Errorf("upload missing objects: %w", err)
 	}
-	src := NewLocalCommitSource("", workdir)
-	defer src.Close()
-	if err := writeDumbTransportInfo(client, prefix, src, refs, false); err != nil {
+	if err := writeDumbTransportInfo(client, prefix, h.localOdb(), refs, false); err != nil {
 		return err
 	}
 	if err := client.Delete(prefix + thinUpstreamKey); err != nil {
@@ -274,15 +275,19 @@ func (h *remoteHelper) missingBucketObjects(refs map[string]string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	var tips []string
+	values := make([]string, 0, len(refs))
 	for _, sha := range refs {
-		if _, err := h.git("cat-file", "-e", sha); err == nil {
-			tips = append(tips, sha)
-		}
+		values = append(values, sha)
+	}
+	resolved := resolveLocalBatch(h.localOdb(), values)
+	tips := make([]string, 0, len(resolved))
+	for sha := range resolved {
+		tips = append(tips, sha)
 	}
 	if len(tips) == 0 {
 		return nil, nil
 	}
+	sort.Strings(tips)
 	seen := map[string]bool{}
 	var missing []string
 	add := func(sha string) {
@@ -293,7 +298,7 @@ func (h *remoteHelper) missingBucketObjects(refs map[string]string) ([]string, e
 	}
 	// rev-list --objects peels annotated tags, so carry the tag objects themselves.
 	for _, sha := range tips {
-		if objType, err := h.git("cat-file", "-t", sha); err == nil && objType == "tag" {
+		if resolved[sha].objType == "tag" {
 			add(sha)
 		}
 	}
