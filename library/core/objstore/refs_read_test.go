@@ -95,7 +95,7 @@ func TestReadRemoteRefs_ProgressAndPool(t *testing.T) {
 	var maxDone, total int
 	seen := map[int]bool{}
 	progress := func(phase string, done, tot int) {
-		if phase != "site refs" {
+		if phase != "refs" {
 			return
 		}
 		if done > maxDone {

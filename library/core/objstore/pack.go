@@ -16,7 +16,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -37,12 +36,7 @@ const (
 
 // resolvePackThreshold returns the object count at which a push packs, honoring GITSOCIAL_S3_PACK_THRESHOLD.
 func resolvePackThreshold() int {
-	if v := os.Getenv("GITSOCIAL_S3_PACK_THRESHOLD"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			return n
-		}
-	}
-	return defaultPackThreshold
+	return envInt("GITSOCIAL_S3_PACK_THRESHOLD", defaultPackThreshold)
 }
 
 // packMapEntry locates one object inside a pack: its sha and the byte range of its entry.

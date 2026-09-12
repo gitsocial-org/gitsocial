@@ -52,27 +52,44 @@ func publishRefManifest(client *Client, prefix, mode string, refs map[string]str
 	return newETag, err
 }
 
-// RebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
-func RebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
+// casRefManifest publishes the manifest under compare-and-swap, calling derive once per attempt for the document as stored, the refs to write and the ETag to write them against; a stored document already equal to the refs is left alone.
+func casRefManifest(client *Client, prefix, mode string, derive func(attempt int) (stored, refs map[string]string, etag string, err error)) (string, error) {
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
-		stored, etag, err := readClaimsWithETag(client, prefix+bucketRefsKey)
-		if err != nil && !errors.Is(err, ErrNotFound) {
-			return nil, err
-		}
-		refs, err := readRemoteRefsProgress(client, prefix, progress)
+		stored, refs, etag, err := derive(attempt)
 		if err != nil {
-			return nil, fmt.Errorf("read refs: %w", err)
+			return "", err
 		}
 		if stored != nil && maps.Equal(stored, refs) {
-			return refs, nil
+			return etag, nil
 		}
-		if _, err = publishRefManifest(client, prefix, "", refs, etag); err == nil {
-			return refs, nil
-		} else if !errors.Is(err, ErrPreconditionFailed) {
-			return nil, err
+		newETag, err := publishRefManifest(client, prefix, mode, refs, etag)
+		if err == nil {
+			return newETag, nil
+		}
+		if !errors.Is(err, ErrPreconditionFailed) {
+			return "", err
 		}
 	}
-	return nil, fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
+	return "", fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
+}
+
+// RebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
+func RebuildRefManifest(client *Client, prefix string, progress Progress) (map[string]string, error) {
+	var current map[string]string
+	_, err := casRefManifest(client, prefix, "", func(int) (map[string]string, map[string]string, string, error) {
+		stored, etag, err := readClaimsWithETag(client, prefix+bucketRefsKey)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, nil, "", err
+		}
+		if current, err = readRemoteRefsProgress(client, prefix, progress); err != nil {
+			return nil, nil, "", fmt.Errorf("read refs: %w", err)
+		}
+		return stored, current, etag, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return current, nil
 }
 
 // putRefManifestConditional writes the manifest only while the key still carries etag, or only while it is absent for an empty one.
@@ -358,7 +375,7 @@ func readRefJobs[J any](total int, progress Progress, read func(context.Context,
 				}
 				mu.Lock()
 				out[refName] = sha
-				progress.Call("site refs", int(atomic.AddInt64(&done, 1)), total)
+				progress.Call("refs", int(atomic.AddInt64(&done, 1)), total)
 				mu.Unlock()
 			}
 		}()

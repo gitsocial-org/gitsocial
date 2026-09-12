@@ -22,14 +22,22 @@ import (
 // transport is sized to match). The env/setting knob covers the long tail.
 const defaultUploadConcurrency = 16
 
+// envInt returns an environment variable's positive integer value, or fallback when it is unset or unusable.
+func envInt(name string, fallback int) int {
+	if v := os.Getenv(name); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			return n
+		}
+	}
+	return fallback
+}
+
 // UploadConcurrency picks the object-upload pool size, env first, then
 // the personal setting, then the default. A non-positive or unparsable value
 // at any layer falls through to the next.
 func UploadConcurrency() int {
-	if v := os.Getenv("GITSOCIAL_S3_CONCURRENCY"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			return n
-		}
+	if n := envInt("GITSOCIAL_S3_CONCURRENCY", 0); n > 0 {
+		return n
 	}
 	if s, err := settings.Load(""); err == nil {
 		if v, ok := settings.Get(s, "s3.concurrency"); ok {

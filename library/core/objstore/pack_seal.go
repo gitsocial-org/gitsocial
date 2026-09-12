@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 	"time"
 )
@@ -98,10 +98,11 @@ func (h *remoteHelper) maintainPacks(refs map[string]string) {
 		}
 		update.deleted[roundKey(round)] = true
 	}
-	if why := unsealableClone(); why != "" && sealDue(state, generation, h.looseUploaded) {
+	due := sealDue(state, generation, h.looseUploaded)
+	if why := unsealableClone(); why != "" && due {
 		// Leaving sealAttempted false keeps LastSeal put, so the next clone with full history runs the pass.
 		fmt.Fprintf(os.Stderr, "gitsocial s3: skipping the sealing pass (%s); a clone carrying full history will run it\n", why)
-	} else if sealDue(state, generation, h.looseUploaded) {
+	} else if due {
 		round, looseAfter, err := h.sealLooseObjects(refs)
 		// A round that published packs is recorded even alongside an error, since its loose copies still need collecting.
 		if len(round.Packs) > 0 {
@@ -139,12 +140,7 @@ func unsealableClone() string {
 
 // resolveSealThreshold returns the minimum object count a seal packs: the drift trigger itself, so a fired trigger cannot immediately decline.
 func resolveSealThreshold() int {
-	if v := os.Getenv("GITSOCIAL_S3_PACK_THRESHOLD"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			return n
-		}
-	}
-	return packSealLooseThreshold
+	return envInt("GITSOCIAL_S3_PACK_THRESHOLD", packSealLooseThreshold)
 }
 
 // sealLooseObjects packs whatever loose history this clone may seal and returns the round the packs landed in, error or not. SealedAt is stamped on return, not entry, so a long first seal does not hand back a spent grace.
@@ -351,20 +347,35 @@ func deleteRoundLooseObjects(client *Client, prefix string, round packRound, con
 	})
 }
 
-// listLooseObjects returns every sha the bucket stores as a loose key.
-func listLooseObjects(client *Client, prefix string) ([]string, error) {
+// bucketLooseObjects returns the sha of every loose object key the bucket carries; the one listing of objects/ the push, the seal and the thin inventory all read.
+func bucketLooseObjects(client *Client, prefix string) (map[string]bool, error) {
 	keys, err := client.List(prefix + "objects/")
 	if err != nil {
 		return nil, fmt.Errorf("list objects: %w", err)
 	}
-	var shas []string
+	shas := make(map[string]bool, len(keys))
 	for _, key := range keys {
+		// objects/<xx>/<38-hex>: reassemble the 40-hex sha.
 		rel := strings.TrimPrefix(key, prefix+"objects/")
 		rel = strings.Replace(rel, "/", "", 1)
 		if len(rel) == 40 && isHexString(rel) {
-			shas = append(shas, rel)
+			shas[rel] = true
 		}
 	}
+	return shas, nil
+}
+
+// listLooseObjects is bucketLooseObjects as a sorted slice, so a seal packs the same set in the same order every run.
+func listLooseObjects(client *Client, prefix string) ([]string, error) {
+	present, err := bucketLooseObjects(client, prefix)
+	if err != nil {
+		return nil, err
+	}
+	shas := make([]string, 0, len(present))
+	for sha := range present {
+		shas = append(shas, sha)
+	}
+	sort.Strings(shas)
 	return shas, nil
 }
 

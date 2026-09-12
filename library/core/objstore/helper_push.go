@@ -232,21 +232,20 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates map[stri
 
 // publishRefManifest writes the helper's ref view as the manifest after a push, re-deriving it from a listing when the document moved.
 func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
-	for attempt := 0; attempt < maxCASRetries; attempt++ {
-		etag, err := publishRefManifest(h.client, h.prefix, h.refMode, h.remoteRefs, h.manifestETag)
-		if err == nil {
-			h.manifestETag = etag
-			return nil
+	// The push's own view is always written, so nil stands for "nothing to compare against" on every attempt.
+	etag, err := casRefManifest(h.client, h.prefix, h.refMode, func(attempt int) (map[string]string, map[string]string, string, error) {
+		if attempt == 0 {
+			return nil, h.remoteRefs, h.manifestETag, nil
 		}
-		if !errors.Is(err, ErrPreconditionFailed) {
-			return err
+		// Contention: re-read the document's ETag and the bucket's refs, then replay this push's updates onto them.
+		_, storedETag, err := readClaimsWithETag(h.client, h.prefix+bucketRefsKey)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return nil, nil, "", err
 		}
-		if _, h.manifestETag, err = readClaimsWithETag(h.client, h.prefix+bucketRefsKey); err != nil && !errors.Is(err, ErrNotFound) {
-			return err
-		}
+		h.manifestETag = storedETag
 		refs, err := ReadRemoteRefs(h.client, h.prefix)
 		if err != nil {
-			return fmt.Errorf("read refs: %w", err)
+			return nil, nil, "", fmt.Errorf("read refs: %w", err)
 		}
 		for ref, sha := range updates {
 			if sha == "" {
@@ -256,8 +255,13 @@ func (h *remoteHelper) publishRefManifest(updates map[string]string) error {
 			}
 		}
 		h.remoteRefs = refs
+		return nil, refs, storedETag, nil
+	})
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
+	h.manifestETag = etag
+	return nil
 }
 
 // maxCASRetries bounds the read-check-write loop; per-element refs rarely contend, so hitting it means something is spinning.
@@ -791,19 +795,10 @@ func filterPresentObjects(client *Client, prefix string, shas []string) []string
 	if len(shas) < listResumeThreshold {
 		return shas
 	}
-	objs, err := client.ListWithETags(prefix + "objects/")
+	present, err := bucketLooseObjects(client, prefix)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: list objects for resume: %v\n", err)
 		return shas
-	}
-	present := make(map[string]bool, len(objs))
-	for _, o := range objs {
-		// objects/<xx>/<38-hex>: reassemble the 40-hex sha.
-		rel := strings.TrimPrefix(o.Key, prefix+"objects/")
-		rel = strings.Replace(rel, "/", "", 1)
-		if len(rel) == 40 {
-			present[rel] = true
-		}
 	}
 	kept := shas[:0:0]
 	for _, sha := range shas {

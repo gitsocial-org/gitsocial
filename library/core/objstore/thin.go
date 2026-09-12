@@ -310,17 +310,9 @@ func (h *remoteHelper) missingBucketObjects(refs map[string]string) ([]string, e
 
 // bucketObjectInventory is the set of object shas a bucket carries, loose keys plus every object its packs index.
 func bucketObjectInventory(client *Client, prefix string) (map[string]bool, error) {
-	objs, err := client.ListWithETags(prefix + "objects/")
+	inventory, err := bucketLooseObjects(client, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("list bucket objects: %w", err)
-	}
-	inventory := make(map[string]bool, len(objs))
-	for _, obj := range objs {
-		rel := strings.TrimPrefix(obj.Key, prefix+"objects/")
-		rel = strings.Replace(rel, "/", "", 1)
-		if len(rel) == 40 {
-			inventory[rel] = true
-		}
 	}
 	names, err := listBucketPacks(client, prefix)
 	if err != nil {

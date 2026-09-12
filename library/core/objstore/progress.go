@@ -31,9 +31,8 @@ func (t *throttle) ready(done, total int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.now()
-	terminal := total > 0 && done >= total
 	// A phase marker names a step that has started, so the interval must not drop it.
-	if isPhaseMarker(done, total) || !t.started || terminal || now.Sub(t.last) >= t.interval {
+	if isPhaseMarker(done, total) || !t.started || isTerminal(done, total) || now.Sub(t.last) >= t.interval {
 		t.started = true
 		t.last = now
 		return true
@@ -82,7 +81,7 @@ func (p *progressWriter) Progress() Progress {
 
 // report renders one progress update, honoring the throttle; a phase's terminal call closes the in-place TTY line.
 func (p *progressWriter) report(phase string, done, total int) {
-	terminal := total > 0 && done >= total
+	terminal := isTerminal(done, total)
 	if !p.thr.ready(done, total) {
 		return
 	}
@@ -141,6 +140,11 @@ func stderrIsTTY() bool {
 		return false
 	}
 	return info.Mode()&os.ModeCharDevice != 0
+}
+
+// isTerminal reports whether a call is its phase's last, so the in-place line closes.
+func isTerminal(done, total int) bool {
+	return total > 0 && done >= total
 }
 
 // isPhaseMarker reports whether a call names a step but counts nothing, so it renders as the phase alone.
