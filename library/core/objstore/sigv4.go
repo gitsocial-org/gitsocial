@@ -58,14 +58,21 @@ func signRequest(req *http.Request, accessKey, secretKey, region, service, paylo
 			", Signature="+signature)
 }
 
-// canonicalURIEncode normalizes an already-escaped path to SigV4's URI
-// encoding rules (S3 style: no path normalization, each segment URI-encoded
-// with '/' preserved).
+// canonicalURIEncode re-encodes an already-escaped path to SigV4's rules: each segment URI-encoded, "/" preserved, no path normalization.
 func canonicalURIEncode(escapedPath string) string {
 	if escapedPath == "" {
 		return "/"
 	}
-	return escapedPath
+	segments := strings.Split(escapedPath, "/")
+	for i, segment := range segments {
+		// Go leaves !$&'()*+,;=:@ unescaped in a path, where AWS's UriEncode escapes them.
+		decoded, err := url.PathUnescape(segment)
+		if err != nil {
+			decoded = segment
+		}
+		segments[i] = uriEncode(decoded)
+	}
+	return strings.Join(segments, "/")
 }
 
 // canonicalQueryString sorts and encodes query parameters per SigV4.
