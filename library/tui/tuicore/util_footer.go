@@ -24,12 +24,14 @@ var (
 			Background(BgFooter).
 			Padding(0, 1, 0, 3)
 
-	keyStyle = lipgloss.NewStyle().
+	// KeyStyle renders a key glyph; view packages reuse it for inline key hints.
+	KeyStyle = lipgloss.NewStyle().
 			Foreground(BorderFocused).
 			Background(BgFooter).
 			Bold(true)
 
-	labelStyle = lipgloss.NewStyle().
+	// LabelStyle renders the label after a key glyph.
+	LabelStyle = lipgloss.NewStyle().
 			Foreground(TextNormal).
 			Background(BgFooter)
 
@@ -58,11 +60,11 @@ var (
 // including the colon between key and label, so the bar background
 // survives lipgloss's per-span reset codes.
 func kv(key, label string, dim bool) string {
-	labelS := labelStyle
+	labelS := LabelStyle
 	if dim {
 		labelS = dimStyle
 	}
-	return keyStyle.Render(key) + sepStyle.Render(":") + labelS.Render(label)
+	return KeyStyle.Render(key) + sepStyle.Render(":") + labelS.Render(label)
 }
 
 // joinFooter joins styled footer parts with a bg-aware two-space separator
@@ -73,7 +75,7 @@ func joinFooter(parts []string) string {
 
 // RenderSyncingFooter renders the syncing progress message.
 func RenderSyncingFooter() string {
-	return keyStyle.Render("Syncing workspace...")
+	return KeyStyle.Render("Syncing workspace...")
 }
 
 // RenderBackgroundSyncFooter renders a dim indicator while the post-startup
@@ -90,8 +92,8 @@ func RenderLoadingFooter() string {
 
 // RenderFetchingFooter renders the fetching progress with dynamic info.
 func RenderFetchingFooter(repos, lists int) string {
-	return keyStyle.Render("Fetching...") + sepStyle.Render("  ") +
-		labelStyle.Render(fmt.Sprintf("%d repos from %d lists", repos, lists))
+	return KeyStyle.Render("Fetching...") + sepStyle.Render("  ") +
+		LabelStyle.Render(fmt.Sprintf("%d repos from %d lists", repos, lists))
 }
 
 // importSpinnerFrames cycles for the animated glyph next to the import header.
@@ -108,9 +110,9 @@ func RenderImportingFooter(repoURL, phase, detail string) string {
 	if repoURL != "" {
 		head = "Importing from " + repoURL
 	}
-	result := keyStyle.Render(glyph+" "+head) + sepStyle.Render("...")
+	result := KeyStyle.Render(glyph+" "+head) + sepStyle.Render("...")
 	if phase != "" {
-		result += sepStyle.Render("  ") + labelStyle.Render(phase)
+		result += sepStyle.Render("  ") + LabelStyle.Render(phase)
 	}
 	if detail != "" {
 		result += sepStyle.Render(" ") + dimStyle.Render("("+detail+")")
@@ -124,17 +126,17 @@ func RenderPushingFooter(remote string) string {
 	if remote != "" {
 		content = "Pushing to " + remote + "..."
 	}
-	return keyStyle.Render(content)
+	return KeyStyle.Render(content)
 }
 
 // RenderSavingFooter renders the saving progress message.
 func RenderSavingFooter() string {
-	return keyStyle.Render("Saving...")
+	return KeyStyle.Render("Saving...")
 }
 
 // RenderRetractingFooter renders the retracting progress message.
 func RenderRetractingFooter() string {
-	return keyStyle.Render("Retracting...")
+	return KeyStyle.Render("Retracting...")
 }
 
 // RenderMessageFooter renders a status message with appropriate color.
@@ -231,7 +233,7 @@ func RenderFooterWithPositionInclude(registry *Registry, ctx Context, current, t
 	}
 	var parts []string
 	if total > 0 {
-		parts = append(parts, labelStyle.Render(fmt.Sprintf("%d/%d ", current, total)))
+		parts = append(parts, LabelStyle.Render(fmt.Sprintf("%d/%d ", current, total)))
 	}
 	// First: local bindings (non-global, non-hidden).
 	for _, b := range bindings {

@@ -1,5 +1,5 @@
-// settings.go - User settings view for editing application preferences
-package tuicore
+// view_settings.go - User settings view for editing application preferences
+package tuiviews
 
 import (
 	"strings"
@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // SettingsView displays and edits user settings.
@@ -33,14 +34,14 @@ type SettingsView struct {
 }
 
 // Bindings returns keybindings for the settings view.
-func (v *SettingsView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "e", Label: "edit", Contexts: []Context{Settings}, Handler: noop},
-		{Key: "j", Label: "down", Contexts: []Context{Settings}, Handler: noop},
-		{Key: "k", Label: "up", Contexts: []Context{Settings}, Handler: noop},
-		{Key: "home", Label: "first", Contexts: []Context{Settings}, Handler: noop},
-		{Key: "end", Label: "last", Contexts: []Context{Settings}, Handler: noop},
+func (v *SettingsView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.Settings}, Handler: noop},
+		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.Settings}, Handler: noop},
+		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.Settings}, Handler: noop},
+		{Key: "home", Label: "first", Contexts: []tuicore.Context{tuicore.Settings}, Handler: noop},
+		{Key: "end", Label: "last", Contexts: []tuicore.Context{tuicore.Settings}, Handler: noop},
 	}
 }
 
@@ -49,7 +50,7 @@ func NewSettingsView() *SettingsView {
 	input := textinput.New()
 	input.CharLimit = 256
 	input.Prompt = "> "
-	StyleTextInput(&input, Dim, lipgloss.NewStyle(), Dim)
+	tuicore.StyleTextInput(&input, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
 
 	return &SettingsView{
 		input:        input,
@@ -74,7 +75,7 @@ func (v *SettingsView) SetExtensionChangeCallback(fn func(ext string, enabled bo
 }
 
 // Activate loads settings when the view becomes active.
-func (v *SettingsView) Activate(state *State) tea.Cmd {
+func (v *SettingsView) Activate(state *tuicore.State) tea.Cmd {
 	v.editMode = false
 	v.workdir = state.Workdir
 	return v.loadSettings()
@@ -120,7 +121,7 @@ func (v *SettingsView) HandleLoaded(msg SettingsViewLoadedMsg) {
 }
 
 // Update handles messages and returns commands.
-func (v *SettingsView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *SettingsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.editMode {
@@ -148,7 +149,7 @@ func (v *SettingsView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *SettingsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
-		idx := ZoneClicked(msg, len(v.keys), v.zonePrefix)
+		idx := tuicore.ZoneClicked(msg, len(v.keys), v.zonePrefix)
 		if idx >= 0 {
 			if idx == v.lastClickIdx && idx == v.cursor {
 				v.lastClickIdx = -1
@@ -294,7 +295,7 @@ func categoryScopeLabel(keys []string) string {
 	}
 	switch first.Scope {
 	case settings.ScopePersonalConfig:
-		return "  " + Dim.Render("· synced")
+		return "  " + tuicore.Dim.Render("· synced")
 	}
 	return ""
 }
@@ -327,7 +328,7 @@ func (v *SettingsView) notifyExtensionChange() {
 }
 
 // resolveWorkspaceMode returns the workspace mode for the current workdir.
-func (v *SettingsView) resolveWorkspaceMode(state *State) string {
+func (v *SettingsView) resolveWorkspaceMode(state *tuicore.State) string {
 	originURL := protocol.NormalizeURL(git.GetOriginURL(state.Workdir))
 	if originURL == "" {
 		return "(no origin)"
@@ -345,12 +346,12 @@ func (v *SettingsView) IsInputActive() bool {
 }
 
 // Render renders the settings view to a string.
-func (v *SettingsView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *SettingsView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 
 	if v.data == nil {
-		content := Dim.Render("Loading settings...")
-		footer := RenderFooter(state.Registry, Settings, nil)
+		content := tuicore.Dim.Render("Loading settings...")
+		footer := tuicore.RenderFooter(state.Registry, tuicore.Settings, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -366,7 +367,7 @@ func (v *SettingsView) Render(state *State) string {
 		{"Extensions", []string{"extensions.social", "extensions.pm", "extensions.review", "extensions.release", "extensions.memo"}},
 	}
 
-	rs := DefaultRowStyles()
+	rs := tuicore.DefaultRowStyles()
 	innerHeight := state.InnerHeight()
 
 	var b strings.Builder
@@ -377,7 +378,7 @@ func (v *SettingsView) Render(state *State) string {
 			break
 		}
 		header := cat.name + categoryScopeLabel(cat.keys)
-		b.WriteString(RenderHeader(rs, header))
+		b.WriteString(tuicore.RenderHeader(rs, header))
 		b.WriteString("\n")
 		lines++
 
@@ -402,23 +403,23 @@ func (v *SettingsView) Render(state *State) string {
 			displayValue := value
 			if settings.IsEnum(key) {
 				opts := settings.EnumOptions[key]
-				displayValue = value + "  " + Dim.Render("("+strings.Join(opts, " · ")+")")
+				displayValue = value + "  " + tuicore.Dim.Render("("+strings.Join(opts, " · ")+")")
 			}
 			if suffix := rowSuffix[key]; suffix != "" {
-				displayValue += "  " + Dim.Render(suffix)
+				displayValue += "  " + tuicore.Dim.Render(suffix)
 			}
 
 			var line string
 			if idx == v.cursor {
 				if v.editMode {
-					line = RenderEditRow(rs, key, v.input.View())
+					line = tuicore.RenderEditRow(rs, key, v.input.View())
 				} else {
-					line = RenderRow(rs, key, displayValue, "", true)
+					line = tuicore.RenderRow(rs, key, displayValue, "", true)
 				}
 			} else {
-				line = RenderRow(rs, key, displayValue, "", false)
+				line = tuicore.RenderRow(rs, key, displayValue, "", false)
 			}
-			b.WriteString(MarkZone(ZoneID(v.zonePrefix, idx), line))
+			b.WriteString(tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, idx), line))
 			b.WriteString("\n")
 			lines++
 			idx++
@@ -428,10 +429,10 @@ func (v *SettingsView) Render(state *State) string {
 	}
 
 	if v.err != "" {
-		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(tuicore.StatusError).Render("Error: " + v.err))
 		b.WriteString("\n")
 	}
 
-	footer := RenderFooter(state.Registry, Settings, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Settings, nil)
 	return wrapper.Render(b.String(), footer)
 }

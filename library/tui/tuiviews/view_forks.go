@@ -1,5 +1,5 @@
 // view_forks.go - Fork management view for registering/removing fork repositories
-package tuicore
+package tuiviews
 
 import (
 	"fmt"
@@ -17,11 +17,12 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func init() {
-	RegisterViewMeta(ViewMeta{Path: "/config/forks", Context: CoreForks, Title: "Forks", Icon: "⑂", NavItemID: "config.forks"})
-	RegisterMessageHandler(handleForkMessages)
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/forks", Context: tuicore.CoreForks, Title: "Forks", Icon: "⑂", NavItemID: "config.forks"})
+	tuicore.RegisterMessageHandler(handleForkMessages)
 }
 
 // forkSort identifies the sort mode for the forks list.
@@ -45,8 +46,8 @@ type ForksView struct {
 	inputMode bool
 	addForm   *huh.Form
 	addURL    string
-	confirm   ConfirmDialog
-	choice    ChoiceDialog
+	confirm   tuicore.ConfirmDialog
+	choice    tuicore.ChoiceDialog
 
 	// Search
 	searchActive bool
@@ -65,7 +66,7 @@ func NewForksView(workdir string) *ForksView {
 	searchInput.Placeholder = ""
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
-	StyleTextInput(&searchInput, Title, Title, Dim)
+	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
 
 	return &ForksView{
 		workdir:      workdir,
@@ -79,7 +80,7 @@ func NewForksView(workdir string) *ForksView {
 func (v *ForksView) SetSize(width, height int) {}
 
 // Activate loads forks when the view becomes active.
-func (v *ForksView) Activate(state *State) tea.Cmd {
+func (v *ForksView) Activate(state *tuicore.State) tea.Cmd {
 	v.inputMode = false
 	v.addForm = nil
 	v.addURL = ""
@@ -99,7 +100,7 @@ func (v *ForksView) Activate(state *State) tea.Cmd {
 func (v *ForksView) Deactivate() {}
 
 // Update handles messages and returns commands.
-func (v *ForksView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *ForksView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.inputMode || v.confirm.IsActive() || v.searchActive {
@@ -157,7 +158,7 @@ func (v *ForksView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *ForksView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
-		idx := ZoneClicked(msg, len(v.filteredIndices()), v.zonePrefix)
+		idx := tuicore.ZoneClicked(msg, len(v.filteredIndices()), v.zonePrefix)
 		if idx >= 0 {
 			if idx == v.lastClickIdx && idx == v.cursor {
 				v.lastClickIdx = -1
@@ -190,15 +191,15 @@ func (v *ForksView) activateSelected() tea.Cmd {
 	}
 	repoURL := v.forks[indices[v.cursor]]
 	return func() tea.Msg {
-		return NavigateMsg{
-			Location: LocRepository(repoURL, ""),
-			Action:   NavPush,
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocRepository(repoURL, ""),
+			Action:   tuicore.NavPush,
 		}
 	}
 }
 
 // handleKey processes keyboard input.
-func (v *ForksView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
+func (v *ForksView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	key := msg.String()
 
 	if handled, cmd := v.confirm.HandleKey(key); handled {
@@ -262,7 +263,7 @@ func (v *ForksView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 		v.searchInput.SetValue(v.searchQuery)
 		return v.searchInput.Focus()
 	case "v":
-		v.choice.Show("Sort by:", []Choice{
+		v.choice.Show("Sort by:", []tuicore.Choice{
 			{Key: "a", Label: "name"},
 			{Key: "f", Label: "fetched"},
 			{Key: "c", Label: "commits"},
@@ -290,7 +291,7 @@ func (v *ForksView) startAddForm() tea.Cmd {
 	v.addURL = ""
 	urlField := huh.NewInput().
 		Key("url").
-		Title(PadLabel(RequiredLabel("Fork URL"))).
+		Title(tuicore.PadLabel(tuicore.RequiredLabel("Fork URL"))).
 		Placeholder("https://example.com/owner/repo").
 		CharLimit(512).
 		Value(&v.addURL).
@@ -300,11 +301,11 @@ func (v *ForksView) startAddForm() tea.Cmd {
 			}
 			return nil
 		})
-	v.addForm = huh.NewForm(huh.NewGroup(urlField, NewSubmitField())).
-		WithTheme(FormTheme()).
+	v.addForm = huh.NewForm(huh.NewGroup(urlField, tuicore.NewSubmitField())).
+		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(FormKeyMap())
+		WithKeyMap(tuicore.FormKeyMap())
 	return v.addForm.Init()
 }
 
@@ -383,7 +384,7 @@ func (v *ForksView) filteredIndices() []int {
 		}
 		return indices
 	}
-	pattern := CompileSearchPattern(v.searchQuery)
+	pattern := tuicore.CompileSearchPattern(v.searchQuery)
 	if pattern == nil {
 		indices := make([]int, len(v.forks))
 		for i := range v.forks {
@@ -439,8 +440,8 @@ func (v *ForksView) removeFork(forkURL string) tea.Cmd {
 }
 
 // Render renders the forks view.
-func (v *ForksView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *ForksView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	height := wrapper.ContentHeight()
 
 	var lines []string
@@ -454,9 +455,9 @@ func (v *ForksView) Render(state *State) string {
 	indices := v.filteredIndices()
 
 	if len(v.forks) == 0 {
-		lines = append(lines, Dim.Render("No forks registered"))
+		lines = append(lines, tuicore.Dim.Render("No forks registered"))
 	} else if len(indices) == 0 {
-		lines = append(lines, Dim.Render("No matches"))
+		lines = append(lines, tuicore.Dim.Render("No matches"))
 	} else {
 		// Keep cursor in bounds
 		if v.cursor >= len(indices) {
@@ -518,9 +519,9 @@ func (v *ForksView) Render(state *State) string {
 			urlHeader += " ↓"
 		}
 		header := fmt.Sprintf("  %s  %s  %s",
-			Dim.Render(commitsCol.Render(commitsHeader)),
-			Dim.Render(fetchedCol.Render(fetchedHeader)),
-			Dim.Render(urlHeader),
+			tuicore.Dim.Render(commitsCol.Render(commitsHeader)),
+			tuicore.Dim.Render(fetchedCol.Render(fetchedHeader)),
+			tuicore.Dim.Render(urlHeader),
 		)
 		lines = append(lines, header)
 
@@ -532,18 +533,18 @@ func (v *ForksView) Render(state *State) string {
 		visibleRows := rows[v.scroll:end]
 		visibleIndices := indices[v.scroll:end]
 
-		searchPattern := CompileSearchPattern(v.searchQuery)
+		searchPattern := tuicore.CompileSearchPattern(v.searchQuery)
 
 		for vi, r := range visibleRows {
 			listIdx := v.scroll + vi
 			selected := listIdx == v.cursor
 			prefix := "  "
 			if selected {
-				prefix = Title.Render("▸ ")
+				prefix = tuicore.Title.Render("▸ ")
 			}
-			dim := Dim
+			dim := tuicore.Dim
 			if selected {
-				dim = DimSelected
+				dim = tuicore.DimSelected
 			}
 
 			var line strings.Builder
@@ -556,11 +557,11 @@ func (v *ForksView) Render(state *State) string {
 			if searchPattern != nil {
 				line.WriteString(highlightMatch(r.url, searchPattern))
 			} else if selected {
-				line.WriteString(Hyperlink(forkURL, TitleSelected.Render(r.url)))
+				line.WriteString(tuicore.Hyperlink(forkURL, tuicore.TitleSelected.Render(r.url)))
 			} else {
-				line.WriteString(Hyperlink(forkURL, r.url))
+				line.WriteString(tuicore.Hyperlink(forkURL, r.url))
 			}
-			lines = append(lines, MarkZone(ZoneID(v.zonePrefix, listIdx), line.String()))
+			lines = append(lines, tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, listIdx), line.String()))
 		}
 	}
 
@@ -576,9 +577,9 @@ func (v *ForksView) Render(state *State) string {
 	case v.choice.IsActive():
 		footer = v.choice.Render()
 	case v.inputMode && v.addForm != nil:
-		footer = FormFooter(false, v.addForm.Errors())
+		footer = tuicore.FormFooter(false, v.addForm.Errors())
 	default:
-		footer = RenderFooter(state.Registry, CoreForks, nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.CoreForks, nil)
 	}
 	return wrapper.Render(strings.Join(lines[:height], "\n"), footer)
 }
@@ -586,7 +587,7 @@ func (v *ForksView) Render(state *State) string {
 // highlightMatch highlights search matches in a fork name.
 func highlightMatch(text string, pattern *regexp.Regexp) string {
 	return pattern.ReplaceAllStringFunc(text, func(match string) string {
-		return Highlight.Render(match)
+		return tuicore.Highlight.Render(match)
 	})
 }
 
@@ -615,13 +616,13 @@ func (v *ForksView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for the forks view.
-func (v *ForksView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "a", Label: "add fork", Contexts: []Context{CoreForks}, Handler: noop},
-		{Key: "x", Label: "remove fork", Contexts: []Context{CoreForks}, Handler: noop},
-		{Key: "v", Label: "sort", Contexts: []Context{CoreForks}, Handler: noop},
-		{Key: "/", Label: "search", Contexts: []Context{CoreForks}, Handler: noop},
+func (v *ForksView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "a", Label: "add fork", Contexts: []tuicore.Context{tuicore.CoreForks}, Handler: noop},
+		{Key: "x", Label: "remove fork", Contexts: []tuicore.Context{tuicore.CoreForks}, Handler: noop},
+		{Key: "v", Label: "sort", Contexts: []tuicore.Context{tuicore.CoreForks}, Handler: noop},
+		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.CoreForks}, Handler: noop},
 	}
 }
 
@@ -648,7 +649,7 @@ func forkMeta(forkURL string) (commits, fetched string) {
 			return "-", "-"
 		}
 		if t, err := time.Parse(time.RFC3339, repo.LastFetch.String); err == nil {
-			return "0", FormatTime(t)
+			return "0", tuicore.FormatTime(t)
 		}
 		return "0", "-"
 	}
@@ -656,7 +657,7 @@ func forkMeta(forkURL string) (commits, fetched string) {
 	repo, err := cache.GetRepository(forkURL)
 	if err == nil && repo.LastFetch.Valid {
 		if t, err := time.Parse(time.RFC3339, repo.LastFetch.String); err == nil {
-			return commits, FormatTime(t)
+			return commits, tuicore.FormatTime(t)
 		}
 	}
 	return commits, "-"
@@ -685,7 +686,7 @@ func forkCommitCount(forkURL string) int {
 }
 
 // handleForkMessages handles fork-related messages at the core level.
-func handleForkMessages(msg tea.Msg, ctx AppContext) (bool, tea.Cmd) {
+func handleForkMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ForkAddedMsg:
 		return handleForkAdded(msg, ctx)
@@ -695,9 +696,9 @@ func handleForkMessages(msg tea.Msg, ctx AppContext) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func handleForkAdded(msg ForkAddedMsg, ctx AppContext) (bool, tea.Cmd) {
+func handleForkAdded(msg ForkAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
-		ctx.Host().SetMessage(msg.Err.Error(), MessageTypeError)
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, ctx.Host().Update(msg)
 	}
 	text := fmt.Sprintf("Fork added: %s", protocol.GetDisplayName(msg.ForkURL))
@@ -706,19 +707,19 @@ func handleForkAdded(msg ForkAddedMsg, ctx AppContext) (bool, tea.Cmd) {
 		text += ". For a soft/packaging fork, a list may fit better (Timeline → My Lists)"
 		timeout = 9 * time.Second
 	}
-	msgCmd := ctx.Host().SetMessageWithTimeout(text, MessageTypeSuccess, timeout)
+	msgCmd := ctx.Host().SetMessageWithTimeout(text, tuicore.MessageTypeSuccess, timeout)
 	viewCmd := ctx.Host().Update(msg)
 	return true, tea.Batch(msgCmd, viewCmd)
 }
 
-func handleForkRemoved(msg ForkRemovedMsg, ctx AppContext) (bool, tea.Cmd) {
+func handleForkRemoved(msg ForkRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
-		ctx.Host().SetMessage(msg.Err.Error(), MessageTypeError)
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, ctx.Host().Update(msg)
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Fork removed: %s", protocol.GetDisplayName(msg.ForkURL)),
-		MessageTypeSuccess,
+		tuicore.MessageTypeSuccess,
 		5*time.Second,
 	)
 	viewCmd := ctx.Host().Update(msg)

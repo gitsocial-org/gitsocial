@@ -1,5 +1,5 @@
 // view_site.go - Site customization view for the static browser read-surface
-package tuicore
+package tuiviews
 
 import (
 	"strings"
@@ -10,12 +10,13 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/site"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-var CoreSite = RegisterContext("core.site")
+var CoreSite = tuicore.RegisterContext("core.site")
 
 func init() {
-	RegisterViewMeta(ViewMeta{Path: "/config/site", Context: CoreSite, Title: "Site", Icon: "◱", NavItemID: "config.site"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/site", Context: CoreSite, Title: "Site", Icon: "◱", NavItemID: "config.site"})
 }
 
 // siteField identifies a single editable site-customization field.
@@ -59,7 +60,7 @@ func NewSiteView(workdir string) *SiteView {
 	input := textinput.New()
 	input.CharLimit = 512
 	input.Prompt = "> "
-	StyleTextInput(&input, Dim, lipgloss.NewStyle(), Dim)
+	tuicore.StyleTextInput(&input, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
 	return &SiteView{
 		input:        input,
 		workdir:      workdir,
@@ -72,7 +73,7 @@ func NewSiteView(workdir string) *SiteView {
 func (v *SiteView) SetSize(width, height int) {}
 
 // Activate loads the site customization when the view becomes active.
-func (v *SiteView) Activate(state *State) tea.Cmd {
+func (v *SiteView) Activate(state *tuicore.State) tea.Cmd {
 	v.editMode = false
 	v.input.Blur()
 	v.err = ""
@@ -86,7 +87,7 @@ func (v *SiteView) Activate(state *State) tea.Cmd {
 }
 
 // Update handles messages and returns commands.
-func (v *SiteView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *SiteView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.editMode {
@@ -109,7 +110,7 @@ func (v *SiteView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *SiteView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
-		idx := ZoneClicked(msg, len(siteFields), v.zonePrefix)
+		idx := tuicore.ZoneClicked(msg, len(siteFields), v.zonePrefix)
 		if idx >= 0 {
 			if idx == v.lastClickIdx && idx == v.cursor {
 				v.lastClickIdx = -1
@@ -242,28 +243,28 @@ func validateSiteField(label, value string) string {
 func (v *SiteView) IsInputActive() bool { return v.editMode }
 
 // Bindings returns keybindings for the site view.
-func (v *SiteView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	push := func(ctx *HandlerContext) (bool, tea.Cmd) {
+func (v *SiteView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
 			return false, nil
 		}
 		return true, ctx.StartPush()
 	}
-	return []Binding{
-		{Key: "e", Label: "edit", Contexts: []Context{CoreSite}, Handler: noop},
-		{Key: "j", Label: "down", Contexts: []Context{CoreSite}, Handler: noop},
-		{Key: "k", Label: "up", Contexts: []Context{CoreSite}, Handler: noop},
-		{Key: "home", Label: "first", Contexts: []Context{CoreSite}, Handler: noop},
-		{Key: "end", Label: "last", Contexts: []Context{CoreSite}, Handler: noop},
-		{Key: "p", Label: "push", Contexts: []Context{CoreSite}, Handler: push},
+	return []tuicore.Binding{
+		{Key: "e", Label: "edit", Contexts: []tuicore.Context{CoreSite}, Handler: noop},
+		{Key: "j", Label: "down", Contexts: []tuicore.Context{CoreSite}, Handler: noop},
+		{Key: "k", Label: "up", Contexts: []tuicore.Context{CoreSite}, Handler: noop},
+		{Key: "home", Label: "first", Contexts: []tuicore.Context{CoreSite}, Handler: noop},
+		{Key: "end", Label: "last", Contexts: []tuicore.Context{CoreSite}, Handler: noop},
+		{Key: "p", Label: "push", Contexts: []tuicore.Context{CoreSite}, Handler: push},
 	}
 }
 
 // Render renders the site customization view.
-func (v *SiteView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
-	rs := DefaultRowStyles()
+func (v *SiteView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
+	rs := tuicore.DefaultRowStyles()
 
 	// The value column is whatever the pane leaves after the row indent, the
 	// fixed 20-column label and the two-space gaps. Bound the plain text before
@@ -280,32 +281,32 @@ func (v *SiteView) Render(state *State) string {
 		if display == "" {
 			display = "(not set)"
 		}
-		display = TruncateToWidth(display, valueWidth)
+		display = tuicore.TruncateToWidth(display, valueWidth)
 		if hint := f.hint; hint != "" {
 			// The hint is supplementary, so it yields the leftover room.
-			if room := valueWidth - AnsiWidth(display) - 2; room > 3 {
-				display += "  " + Dim.Render(TruncateToWidth(hint, room))
+			if room := valueWidth - tuicore.AnsiWidth(display) - 2; room > 3 {
+				display += "  " + tuicore.Dim.Render(tuicore.TruncateToWidth(hint, room))
 			}
 		}
 		var line string
 		if i == v.cursor && v.editMode {
-			line = RenderEditRow(rs, f.label, v.input.View())
+			line = tuicore.RenderEditRow(rs, f.label, v.input.View())
 		} else {
-			line = RenderRow(rs, f.label, display, "", i == v.cursor)
+			line = tuicore.RenderRow(rs, f.label, display, "", i == v.cursor)
 		}
-		b.WriteString(MarkZone(ZoneID(v.zonePrefix, i), line))
+		b.WriteString(tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, i), line))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(Dim.Render("Saved to the core config; publish with 'p' or `gitsocial push --site-only`."))
+	b.WriteString(tuicore.Dim.Render("Saved to the core config; publish with 'p' or `gitsocial push --site-only`."))
 	b.WriteString("\n")
 
 	if v.err != "" {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(tuicore.StatusError).Render("Error: " + v.err))
 	}
 
-	footer := RenderFooter(state.Registry, CoreSite, nil)
+	footer := tuicore.RenderFooter(state.Registry, CoreSite, nil)
 	return wrapper.Render(b.String(), footer)
 }

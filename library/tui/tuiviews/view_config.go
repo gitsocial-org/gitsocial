@@ -1,5 +1,5 @@
-// config.go - Extension configuration view for editing git config values
-package tuicore
+// view_config.go - Extension configuration view for editing git config values
+package tuiviews
 
 import (
 	"fmt"
@@ -12,6 +12,7 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // configAddData holds the in-progress add-key form values.
@@ -36,23 +37,23 @@ type ConfigView struct {
 }
 
 // Bindings returns keybindings for the config view.
-func (v *ConfigView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	push := func(ctx *HandlerContext) (bool, tea.Cmd) {
+func (v *ConfigView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
 			return false, nil
 		}
 		return true, ctx.StartPush()
 	}
-	return []Binding{
-		{Key: "e", Label: "edit", Contexts: []Context{Config}, Handler: noop},
-		{Key: "a", Label: "add", Contexts: []Context{Config}, Handler: noop},
-		{Key: "D", Label: "delete key", Contexts: []Context{Config}, Handler: noop},
-		{Key: "j", Label: "down", Contexts: []Context{Config}, Handler: noop},
-		{Key: "k", Label: "up", Contexts: []Context{Config}, Handler: noop},
-		{Key: "home", Label: "first", Contexts: []Context{Config}, Handler: noop},
-		{Key: "end", Label: "last", Contexts: []Context{Config}, Handler: noop},
-		{Key: "p", Label: "push", Contexts: []Context{Config}, Handler: push},
+	return []tuicore.Binding{
+		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "a", Label: "add", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "D", Label: "delete key", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "home", Label: "first", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "end", Label: "last", Contexts: []tuicore.Context{tuicore.Config}, Handler: noop},
+		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.Config}, Handler: push},
 	}
 }
 
@@ -61,7 +62,7 @@ func NewConfigView() *ConfigView {
 	input := textinput.New()
 	input.CharLimit = 256
 	input.Prompt = "> "
-	StyleTextInput(&input, Dim, lipgloss.NewStyle(), Dim)
+	tuicore.StyleTextInput(&input, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
 
 	return &ConfigView{
 		input:        input,
@@ -89,7 +90,7 @@ func (v *ConfigView) Extension() string {
 }
 
 // Activate loads the config when the view becomes active.
-func (v *ConfigView) Activate(state *State) tea.Cmd {
+func (v *ConfigView) Activate(state *tuicore.State) tea.Cmd {
 	if ext := state.Router.Location().Param("extension"); ext != "" {
 		v.extension = ext
 	}
@@ -142,7 +143,7 @@ func (v *ConfigView) HandleLoaded(msg ConfigViewLoadedMsg) {
 }
 
 // Update handles messages and returns commands.
-func (v *ConfigView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *ConfigView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.editMode || v.addMode {
@@ -177,7 +178,7 @@ func (v *ConfigView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *ConfigView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
-		idx := ZoneClicked(msg, len(v.keys), v.zonePrefix)
+		idx := tuicore.ZoneClicked(msg, len(v.keys), v.zonePrefix)
 		if idx >= 0 {
 			if idx == v.lastClickIdx && idx == v.cursor {
 				v.lastClickIdx = -1
@@ -244,7 +245,7 @@ func (v *ConfigView) startAddForm() tea.Cmd {
 
 	keyField := huh.NewInput().
 		Key("key").
-		Title(PadLabel(RequiredLabel("Key"))).
+		Title(tuicore.PadLabel(tuicore.RequiredLabel("Key"))).
 		Placeholder("e.g. mykey").
 		CharLimit(128).
 		Value(&v.addData.Key).
@@ -256,15 +257,15 @@ func (v *ConfigView) startAddForm() tea.Cmd {
 		})
 	valueField := huh.NewInput().
 		Key("value").
-		Title(PadLabel("Value")).
+		Title(tuicore.PadLabel("Value")).
 		Placeholder("value").
 		CharLimit(512).
 		Value(&v.addData.Value)
-	v.addForm = huh.NewForm(huh.NewGroup(keyField, valueField, NewSubmitField())).
-		WithTheme(FormTheme()).
+	v.addForm = huh.NewForm(huh.NewGroup(keyField, valueField, tuicore.NewSubmitField())).
+		WithTheme(tuicore.FormTheme()).
 		WithShowHelp(false).
 		WithShowErrors(false).
-		WithKeyMap(FormKeyMap())
+		WithKeyMap(tuicore.FormKeyMap())
 	return v.addForm.Init()
 }
 
@@ -350,28 +351,28 @@ func (v *ConfigView) IsInputActive() bool {
 }
 
 // Render renders the config view to a string.
-func (v *ConfigView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
-	rs := DefaultRowStyles()
+func (v *ConfigView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
+	rs := tuicore.DefaultRowStyles()
 
 	var b strings.Builder
 	if len(v.keys) == 0 && !v.addMode {
-		b.WriteString(Dim.Render("No config set for this extension"))
+		b.WriteString(tuicore.Dim.Render("No config set for this extension"))
 		b.WriteString("\n\n")
-		b.WriteString(Dim.Render("Press 'a' to add a new key"))
+		b.WriteString(tuicore.Dim.Render("Press 'a' to add a new key"))
 	} else {
 		for i, kv := range v.keys {
 			var line string
 			if i == v.cursor {
 				if v.editMode {
-					line = RenderEditRow(rs, kv.Key, v.input.View())
+					line = tuicore.RenderEditRow(rs, kv.Key, v.input.View())
 				} else {
-					line = RenderRow(rs, kv.Key, kv.Value, "", true)
+					line = tuicore.RenderRow(rs, kv.Key, kv.Value, "", true)
 				}
 			} else {
-				line = RenderRow(rs, kv.Key, kv.Value, "", false)
+				line = tuicore.RenderRow(rs, kv.Key, kv.Value, "", false)
 			}
-			b.WriteString(MarkZone(ZoneID(v.zonePrefix, i), line))
+			b.WriteString(tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, i), line))
 			b.WriteString("\n")
 		}
 	}
@@ -384,14 +385,14 @@ func (v *ConfigView) Render(state *State) string {
 
 	if v.err != "" {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(tuicore.StatusError).Render("Error: " + v.err))
 	}
 
 	var footer string
 	if v.addMode && v.addForm != nil {
-		footer = FormFooter(false, v.addForm.Errors())
+		footer = tuicore.FormFooter(false, v.addForm.Errors())
 	} else {
-		footer = RenderFooter(state.Registry, Config, nil)
+		footer = tuicore.RenderFooter(state.Registry, tuicore.Config, nil)
 	}
 	return wrapper.Render(b.String(), footer)
 }

@@ -1,11 +1,13 @@
 // view_help.go - Help view showing concepts and keybinding reference from embedded docs
-package tuicore
+package tuiviews
 
 import (
 	_ "embed"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 //go:generate cp ../../../documentation/TUI-HELP.md help.md
@@ -29,31 +31,31 @@ func NewHelpView() *HelpView {
 }
 
 // Bindings returns keybindings for the help view.
-func (v *HelpView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "j", Label: "scroll down", Contexts: []Context{Help}, Handler: noop},
-		{Key: "k", Label: "scroll up", Contexts: []Context{Help}, Handler: noop},
-		{Key: "ctrl+d", Label: "half-page down", Contexts: []Context{Help}, Handler: noop},
-		{Key: "ctrl+u", Label: "half-page up", Contexts: []Context{Help}, Handler: noop},
-		{Key: "home", Label: "top", Contexts: []Context{Help}, Handler: noop},
-		{Key: "end", Label: "bottom", Contexts: []Context{Help}, Handler: noop},
+func (v *HelpView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "j", Label: "scroll down", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
+		{Key: "k", Label: "scroll up", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
+		{Key: "ctrl+d", Label: "half-page down", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
+		{Key: "ctrl+u", Label: "half-page up", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
+		{Key: "home", Label: "top", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
+		{Key: "end", Label: "bottom", Contexts: []tuicore.Context{tuicore.Help}, Handler: noop},
 	}
 }
 
 // Activate resets scroll and renders content when the view becomes active.
-func (v *HelpView) Activate(state *State) tea.Cmd {
+func (v *HelpView) Activate(state *tuicore.State) tea.Cmd {
 	v.scroll = 0
 	width := state.InnerWidth()
 	combined := helpContent + "\n" + helpKeysContent
-	rendered := RenderMarkdown(combined, width)
+	rendered := tuicore.RenderMarkdown(combined, width)
 	rendered = strings.TrimRight(rendered, "\n")
 	v.lines = strings.Split(rendered, "\n")
 	return nil
 }
 
 // Update handles messages.
-func (v *HelpView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *HelpView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		switch msg.(type) {
@@ -93,11 +95,11 @@ func (v *HelpView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // Render renders the help view.
-func (v *HelpView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *HelpView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	if len(v.lines) == 0 {
-		footer := RenderFooter(state.Registry, Help, nil)
-		return wrapper.Render(Dim.Render("Loading..."), footer)
+		footer := tuicore.RenderFooter(state.Registry, tuicore.Help, nil)
+		return wrapper.Render(tuicore.Dim.Render("Loading..."), footer)
 	}
 	height := wrapper.ContentHeight()
 	if v.scroll >= len(v.lines) {
@@ -111,6 +113,6 @@ func (v *HelpView) Render(state *State) string {
 		end = len(v.lines)
 	}
 	visible := strings.Join(v.lines[v.scroll:end], "\n")
-	footer := RenderFooter(state.Registry, Help, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Help, nil)
 	return wrapper.Render(visible, footer)
 }

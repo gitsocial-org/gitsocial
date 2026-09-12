@@ -10,6 +10,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuiviews"
 )
 
 // KeyDoc represents a single keybinding for documentation.
@@ -55,15 +56,15 @@ func CollectAll() []DomainDoc {
 	}
 	host := &docHost{state: state}
 	// Register core views
-	host.AddView("/settings", tuicore.NewSettingsView())
-	host.AddView("/config", tuicore.NewConfigView())
-	host.AddView("/config/identity", tuicore.NewIdentityView(""))
-	host.AddView("/cache", tuicore.NewCacheView())
-	host.AddView("/analytics", tuicore.NewAnalyticsView())
-	host.AddView("/help", tuicore.NewHelpView())
-	host.AddView("/search", tuicore.NewSearchView("", nil, nil))
-	host.AddView("/search/help", tuicore.NewSearchHelpView())
-	host.AddView("/notifications", tuicore.NewNotificationsView("", nil, nil, nil, nil))
+	host.AddView("/settings", tuiviews.NewSettingsView())
+	host.AddView("/config", tuiviews.NewConfigView())
+	host.AddView("/config/identity", tuiviews.NewIdentityView(""))
+	host.AddView("/cache", tuiviews.NewCacheView())
+	host.AddView("/analytics", tuiviews.NewAnalyticsView())
+	host.AddView("/help", tuiviews.NewHelpView())
+	host.AddView("/search", tuiviews.NewSearchView("", nil, nil))
+	host.AddView("/search/help", tuiviews.NewSearchHelpView())
+	host.AddView("/notifications", tuiviews.NewNotificationsView("", nil, nil, nil, nil))
 	// Register extension views
 	tuisocial.Register(host)
 	tuipm.Register(host)

@@ -1,5 +1,5 @@
-// notifications.go - Notifications view for comments, reposts, and mentions
-package tuicore
+// view_notifications.go - Notifications view for comments, reposts, and mentions
+package tuiviews
 
 import (
 	"fmt"
@@ -8,11 +8,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // NotificationsLoadedMsg is sent when notifications are loaded.
 type NotificationsLoadedMsg struct {
-	Result NotificationsResult
+	Result tuicore.NotificationsResult
 	Err    error
 }
 
@@ -40,17 +41,17 @@ type NotificationsAllMarkedUnreadMsg struct {
 
 // NotificationsView displays notifications.
 type NotificationsView struct {
-	meta            []NotificationMeta
-	cardlist        *CardList
+	meta            []tuicore.NotificationMeta
+	cardlist        *tuicore.CardList
 	loading         bool
 	unreadOnly      bool
 	workdir         string
-	getFunc         GetNotificationsFunc
-	markReadFn      MarkReadFunc
-	markUnreadFn    MarkUnreadFunc
-	markAllReadFn   MarkAllReadFunc
-	markAllUnreadFn MarkAllUnreadFunc
-	resolveFunc     ResolveItemFunc
+	getFunc         tuicore.GetNotificationsFunc
+	markReadFn      tuicore.MarkReadFunc
+	markUnreadFn    tuicore.MarkUnreadFunc
+	markAllReadFn   tuicore.MarkAllReadFunc
+	markAllUnreadFn tuicore.MarkAllUnreadFunc
+	resolveFunc     tuicore.ResolveItemFunc
 	restoreID       string    // item ID to reselect after reload ("" = none)
 	loadedFetchTime time.Time // LastFetchTime when data was loaded; reload when it changes
 }
@@ -59,7 +60,7 @@ type NotificationsView struct {
 type NotificationsViewOption func(*NotificationsView)
 
 // WithBulkMarkFuncs sets bulk mark-all functions for efficient batch operations.
-func WithBulkMarkFuncs(readFn MarkAllReadFunc, unreadFn MarkAllUnreadFunc) NotificationsViewOption {
+func WithBulkMarkFuncs(readFn tuicore.MarkAllReadFunc, unreadFn tuicore.MarkAllUnreadFunc) NotificationsViewOption {
 	return func(v *NotificationsView) {
 		v.markAllReadFn = readFn
 		v.markAllUnreadFn = unreadFn
@@ -67,42 +68,42 @@ func WithBulkMarkFuncs(readFn MarkAllReadFunc, unreadFn MarkAllUnreadFunc) Notif
 }
 
 // Bindings returns keybindings for the notifications view.
-func (v *NotificationsView) Bindings() []Binding {
-	return []Binding{
-		{Key: "m", Label: "read", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+func (v *NotificationsView) Bindings() []tuicore.Binding {
+	return []tuicore.Binding{
+		{Key: "m", Label: "read", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.MarkNotificationRead()
 			}},
-		{Key: "M", Label: "read all", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "M", Label: "read all", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.MarkAllNotificationsRead()
 			}},
-		{Key: "u", Label: "unread", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "u", Label: "unread", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.MarkNotificationUnread()
 			}},
-		{Key: "U", Label: "unread all", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "U", Label: "unread all", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.MarkAllNotificationsUnread()
 			}},
-		{Key: "r", Label: "refresh", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				return false, nil // Handled by view
 			}},
-		{Key: "F", Label: "filter", Contexts: []Context{Notifications},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "F", Label: "filter", Contexts: []tuicore.Context{tuicore.Notifications},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
@@ -112,7 +113,7 @@ func (v *NotificationsView) Bindings() []Binding {
 }
 
 // NewNotificationsView creates a new notifications view with injected dependencies.
-func NewNotificationsView(workdir string, getFn GetNotificationsFunc, markReadFn MarkReadFunc, markUnreadFn MarkUnreadFunc, resolveFn ResolveItemFunc, opts ...NotificationsViewOption) *NotificationsView {
+func NewNotificationsView(workdir string, getFn tuicore.GetNotificationsFunc, markReadFn tuicore.MarkReadFunc, markUnreadFn tuicore.MarkUnreadFunc, resolveFn tuicore.ResolveItemFunc, opts ...NotificationsViewOption) *NotificationsView {
 	v := &NotificationsView{
 		workdir:      workdir,
 		getFunc:      getFn,
@@ -123,9 +124,9 @@ func NewNotificationsView(workdir string, getFn GetNotificationsFunc, markReadFn
 	for _, opt := range opts {
 		opt(v)
 	}
-	v.cardlist = NewCardList(nil)
+	v.cardlist = tuicore.NewCardList(nil)
 	if resolveFn != nil {
-		v.cardlist.SetItemResolver(func(itemID string) (DisplayItem, bool) {
+		v.cardlist.SetItemResolver(func(itemID string) (tuicore.DisplayItem, bool) {
 			return resolveFn(workdir, itemID)
 		})
 	}
@@ -138,7 +139,7 @@ func (v *NotificationsView) SetSize(width, height int) {
 }
 
 // Activate loads notifications.
-func (v *NotificationsView) Activate(state *State) tea.Cmd {
+func (v *NotificationsView) Activate(state *tuicore.State) tea.Cmd {
 	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/notifications" {
 		if id, ok := v.GetItemAt(state.DetailSource.Index); ok {
@@ -176,18 +177,18 @@ func (v *NotificationsView) loadNotifications() tea.Cmd {
 }
 
 // Update handles input for the notifications view.
-func (v *NotificationsView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *NotificationsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg.(type) {
 	case tea.KeyPressMsg, tea.MouseMsg:
 		consumed, activate, link := v.cardlist.Update(msg)
 		if link != nil {
-			return func() tea.Msg { return NavigateMsg{Location: *link, Action: NavPush} }
+			return func() tea.Msg { return tuicore.NavigateMsg{Location: *link, Action: tuicore.NavPush} }
 		}
 		if activate {
 			return v.navigateToSelected()
 		}
 		if consumed {
-			return ConsumedCmd
+			return tuicore.ConsumedCmd
 		}
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			return v.handleKey(key)
@@ -225,9 +226,9 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 	}
 	if m.Type == "follow" {
 		return func() tea.Msg {
-			return NavigateMsg{
-				Location: LocRepository(m.ActorRepo, m.Branch),
-				Action:   NavPush,
+			return tuicore.NavigateMsg{
+				Location: tuicore.LocRepository(m.ActorRepo, m.Branch),
+				Action:   tuicore.NavPush,
 			}
 		}
 	}
@@ -236,11 +237,11 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 		return nil
 	}
 	items := v.cardlist.Items()
-	loc := GetNavTarget(item)
+	loc := tuicore.GetNavTarget(item)
 	return func() tea.Msg {
-		return NavigateMsg{
+		return tuicore.NavigateMsg{
 			Location:    loc,
-			Action:      NavPush,
+			Action:      tuicore.NavPush,
 			SourcePath:  "/notifications",
 			SourceIndex: v.cardlist.Selected(),
 			SourceTotal: len(items),
@@ -249,7 +250,7 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 }
 
 // Refresh reloads notifications in place, preserving the focused row by ID.
-func (v *NotificationsView) Refresh(_ *State) tea.Cmd {
+func (v *NotificationsView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardlist.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -269,7 +270,7 @@ func (v *NotificationsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded processes the loaded notifications.
-func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg, state *State) {
+func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg, state *tuicore.State) {
 	v.loading = false
 	if msg.Err != nil {
 		return
@@ -305,9 +306,9 @@ func (v *NotificationsView) markRead() tea.Cmd {
 }
 
 // handleMarkedRead updates state after marking read.
-func (v *NotificationsView) handleMarkedRead(msg NotificationMarkedReadMsg, state *State) {
+func (v *NotificationsView) handleMarkedRead(msg NotificationMarkedReadMsg, state *tuicore.State) {
 	if msg.Err != nil {
-		state.SetMessage("Failed to mark as read: "+msg.Err.Error(), MessageTypeError)
+		state.SetMessage("Failed to mark as read: "+msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	if msg.Index < len(v.meta) {
@@ -317,9 +318,9 @@ func (v *NotificationsView) handleMarkedRead(msg NotificationMarkedReadMsg, stat
 }
 
 // handleMarkedUnread updates state after marking unread.
-func (v *NotificationsView) handleMarkedUnread(msg NotificationMarkedUnreadMsg, state *State) {
+func (v *NotificationsView) handleMarkedUnread(msg NotificationMarkedUnreadMsg, state *tuicore.State) {
 	if msg.Err != nil {
-		state.SetMessage("Failed to mark as unread: "+msg.Err.Error(), MessageTypeError)
+		state.SetMessage("Failed to mark as unread: "+msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	if msg.Index < len(v.meta) {
@@ -462,19 +463,19 @@ func (v *NotificationsView) ToggleNotificationFilter() tea.Cmd {
 }
 
 // Render renders the notifications view.
-func (v *NotificationsView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *NotificationsView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
 	if v.loading {
-		content = Dim.Render("Loading...")
+		content = tuicore.Dim.Render("Loading...")
 	} else if len(v.cardlist.Items()) == 0 {
-		content = Dim.Render("No notifications")
+		content = tuicore.Dim.Render("No notifications")
 	} else {
 		content = v.cardlist.View()
 	}
 
-	footer := RenderFooter(state.Registry, Notifications, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Notifications, nil)
 	return wrapper.Render(content, footer)
 }
 
@@ -507,7 +508,7 @@ func (v *NotificationsView) GetItemCount() int {
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
-func (v *NotificationsView) GetDisplayItemAt(index int) (DisplayItem, bool) {
+func (v *NotificationsView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index], true

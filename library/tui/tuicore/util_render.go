@@ -753,7 +753,7 @@ func convertSubscripts(content string) string {
 func RenderSearchFooter(matchIndex, matchCount int, inputMode bool, hasQuery bool) string {
 	var parts []string
 	if matchCount > 0 {
-		parts = append(parts, labelStyle.Render(fmt.Sprintf("%d/%d", matchIndex, matchCount)))
+		parts = append(parts, LabelStyle.Render(fmt.Sprintf("%d/%d", matchIndex, matchCount)))
 	} else if hasQuery {
 		parts = append(parts, dimStyle.Render("No matches"))
 	}

@@ -1,4 +1,4 @@
-// view_history.go - Generic edit/version history view shared by all extensions.
+// component_history.go - Generic edit/version history view shared by all extensions.
 package tuicore
 
 import (

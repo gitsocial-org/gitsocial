@@ -1,5 +1,5 @@
 // view_errorlog.go - Error log view showing session warnings and errors
-package tuicore
+package tuiviews
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // ErrorLogView displays accumulated session warnings and errors.
@@ -20,23 +22,23 @@ func NewErrorLogView() *ErrorLogView {
 }
 
 // Bindings returns keybindings for the error log view.
-func (v *ErrorLogView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "j", Label: "scroll down", Contexts: []Context{ErrorLog}, Handler: noop},
-		{Key: "k", Label: "scroll up", Contexts: []Context{ErrorLog}, Handler: noop},
-		{Key: "x", Label: "clear all", Contexts: []Context{ErrorLog}, Handler: noop},
+func (v *ErrorLogView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "j", Label: "scroll down", Contexts: []tuicore.Context{tuicore.ErrorLog}, Handler: noop},
+		{Key: "k", Label: "scroll up", Contexts: []tuicore.Context{tuicore.ErrorLog}, Handler: noop},
+		{Key: "x", Label: "clear all", Contexts: []tuicore.Context{tuicore.ErrorLog}, Handler: noop},
 	}
 }
 
 // Activate resets scroll when the view becomes active.
-func (v *ErrorLogView) Activate(state *State) tea.Cmd {
+func (v *ErrorLogView) Activate(state *tuicore.State) tea.Cmd {
 	v.scroll = 0
 	return nil
 }
 
 // Update handles messages.
-func (v *ErrorLogView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *ErrorLogView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		switch msg.(type) {
@@ -63,7 +65,7 @@ func (v *ErrorLogView) Update(msg tea.Msg, state *State) tea.Cmd {
 			state.ClearErrorLog()
 			v.scroll = 0
 			return func() tea.Msg {
-				return LogErrorMsg{} // trigger nav badge update with zero count
+				return tuicore.LogErrorMsg{} // trigger nav badge update with zero count
 			}
 		}
 	}
@@ -71,33 +73,33 @@ func (v *ErrorLogView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // Render renders the error log view.
-func (v *ErrorLogView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *ErrorLogView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	width := wrapper.ContentWidth()
 
 	if len(state.ErrorLog) == 0 {
-		content := Dim.Render("No errors or warnings in this session")
-		footer := RenderFooter(state.Registry, ErrorLog, nil)
+		content := tuicore.Dim.Render("No errors or warnings in this session")
+		footer := tuicore.RenderFooter(state.Registry, tuicore.ErrorLog, nil)
 		return wrapper.Render(content, footer)
 	}
 
-	errorStyle := lipgloss.NewStyle().Foreground(StatusError)
-	warnStyle := lipgloss.NewStyle().Foreground(StatusWarning)
+	errorStyle := lipgloss.NewStyle().Foreground(tuicore.StatusError)
+	warnStyle := lipgloss.NewStyle().Foreground(tuicore.StatusWarning)
 
 	var lines []string
 	// Show entries newest-first
 	for i := len(state.ErrorLog) - 1; i >= 0; i-- {
 		entry := state.ErrorLog[i]
-		timestamp := Dim.Render(entry.Time.Format("15:04:05"))
+		timestamp := tuicore.Dim.Render(entry.Time.Format("15:04:05"))
 		var severity string
-		if entry.Severity == LogSeverityError {
+		if entry.Severity == tuicore.LogSeverityError {
 			severity = errorStyle.Render("ERROR")
 		} else {
 			severity = warnStyle.Render("WARN ")
 		}
 		context := ""
 		if entry.Context != "" {
-			context = Dim.Render(fmt.Sprintf("[%s]", entry.Context)) + " "
+			context = tuicore.Dim.Render(fmt.Sprintf("[%s]", entry.Context)) + " "
 		}
 		line := fmt.Sprintf("%s %s %s%s", timestamp, severity, context, entry.Message)
 		if width > 0 {
@@ -119,6 +121,6 @@ func (v *ErrorLogView) Render(state *State) string {
 	}
 	visible := strings.Join(lines[v.scroll:end], "\n")
 
-	footer := RenderFooter(state.Registry, ErrorLog, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.ErrorLog, nil)
 	return wrapper.Render(visible, footer)
 }

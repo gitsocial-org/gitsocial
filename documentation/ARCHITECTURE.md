@@ -298,7 +298,8 @@ Two panels on Bubbletea: navigation on the left, content on the right. Keys are 
 ```
 library/tui/
 ├── app.go, host.go      # the tea.Model, view dispatch, shared state
-├── tuicore/             # infrastructure and core views
+├── tuicore/             # infrastructure: utils, components, registries, the message bus
+├── tuiviews/            # the core routable views
 ├── tuinav/              # navigation items and the registry extensions register into
 ├── tuisocial/, tuipm/, tuirelease/, tuireview/, tuimemo/, tuiproposal/
 ├── tuikeydoc/           # keybinding documentation generator
@@ -307,7 +308,7 @@ library/tui/
 
 | Prefix | Purpose | Example |
 |--------|---------|---------|
-| `view_` | a routable view | `view_timeline.go` |
+| `view_` | a routable view, in `tuiviews/` or an extension's `tui<ext>/` | `view_timeline.go` |
 | `component_` | a reusable stateful component | `component_nav_panel.go` |
 | `registry_` | a global registry | `registry_nav.go` |
 | `form_` | a modal form | `form_issue.go` |

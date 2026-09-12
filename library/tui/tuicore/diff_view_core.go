@@ -1,8 +1,9 @@
 // diff_view_core.go - Shared state machine for commit + PR diff views.
 //
 // Owns the LogicalDiff/ViewState/DisplayPlan pipeline, cursor + scroll,
-// fold mutations, search, and shared keybindings. Wrappers (CommitDiffView,
-// tuireview.DiffView) embed this and add their own Activate + extra keys.
+// fold mutations, search, and shared keybindings. Wrappers
+// (tuiviews.CommitDiffView, tuireview.DiffView) embed this and add their own
+// Activate + extra keys.
 package tuicore
 
 import (

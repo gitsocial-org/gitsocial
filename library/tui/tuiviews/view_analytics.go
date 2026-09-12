@@ -1,5 +1,5 @@
 // view_analytics.go - Analytics dashboard with sparklines, bar charts, and extension sections
-package tuicore
+package tuiviews
 
 import (
 	"fmt"
@@ -11,11 +11,12 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 var (
 	sparkChars   = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
-	analyticsBar = lipgloss.NewStyle().Foreground(IdentityFollowing).Faint(true)
+	analyticsBar = lipgloss.NewStyle().Foreground(tuicore.IdentityFollowing).Faint(true)
 )
 
 // AnalyticsView displays commit activity, repository rankings, and extension stats.
@@ -42,21 +43,21 @@ func NewAnalyticsView() *AnalyticsView {
 }
 
 // Bindings returns keybindings for the analytics view.
-func (v *AnalyticsView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "r", Label: "refresh", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "j", Label: "scroll down", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "k", Label: "scroll up", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "ctrl+d", Label: "half-page down", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "ctrl+u", Label: "half-page up", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "home", Label: "top", Contexts: []Context{Analytics}, Handler: noop},
-		{Key: "end", Label: "bottom", Contexts: []Context{Analytics}, Handler: noop},
+func (v *AnalyticsView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "j", Label: "scroll down", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "k", Label: "scroll up", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "ctrl+d", Label: "half-page down", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "ctrl+u", Label: "half-page up", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "home", Label: "top", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
+		{Key: "end", Label: "bottom", Contexts: []tuicore.Context{tuicore.Analytics}, Handler: noop},
 	}
 }
 
 // Activate loads analytics data when the view becomes active.
-func (v *AnalyticsView) Activate(state *State) tea.Cmd {
+func (v *AnalyticsView) Activate(state *tuicore.State) tea.Cmd {
 	v.scroll = 0
 	v.workdir = state.Workdir
 	v.repoURL = state.Router.Location().Param("url")
@@ -97,7 +98,7 @@ func (v *AnalyticsView) loadAnalytics() tea.Cmd {
 }
 
 // Update handles messages.
-func (v *AnalyticsView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *AnalyticsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		switch msg.(type) {
@@ -147,17 +148,17 @@ func (v *AnalyticsView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // Render renders the analytics view.
-func (v *AnalyticsView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *AnalyticsView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	if v.data == nil {
-		content := Dim.Render("Loading analytics...")
-		footer := RenderFooter(state.Registry, Analytics, nil)
+		content := tuicore.Dim.Render("Loading analytics...")
+		footer := tuicore.RenderFooter(state.Registry, tuicore.Analytics, nil)
 		return wrapper.Render(content, footer)
 	}
 
 	d := v.data
 	contentWidth := wrapper.ContentWidth()
-	rs := DefaultRowStyles()
+	rs := tuicore.DefaultRowStyles()
 	var b strings.Builder
 
 	// --- Commits sparkline ---
@@ -167,21 +168,21 @@ func (v *AnalyticsView) Render(state *State) string {
 	if d.TotalCommits == 0 && len(d.CommitsPerDay) == 0 {
 		b.WriteString(sparkline(fillDays(nil)))
 		b.WriteString("\n\n")
-		b.WriteString(Dim.Render("0 commits · 0 repos tracked"))
+		b.WriteString(tuicore.Dim.Render("0 commits · 0 repos tracked"))
 		b.WriteString("\n\n")
-		b.WriteString(Dim.Render("Follow a repository or create a post to see activity here."))
+		b.WriteString(tuicore.Dim.Render("Follow a repository or create a post to see activity here."))
 	} else {
 		values := fillDays(d.CommitsPerDay)
 		b.WriteString(sparkline(values))
 		b.WriteString("\n")
-		b.WriteString(Dim.Render(dayLabels(30)))
+		b.WriteString(tuicore.Dim.Render(dayLabels(30)))
 		b.WriteString("\n\n")
 		avg := d.TotalCommits / 30
 		busiest := busiestDay(d.DayOfWeek)
 		summary := fmt.Sprintf("%d total %s  ·  avg %d/day  ·  busiest: %s",
 			d.TotalCommits, trend(d.TotalCommits, d.PrevTotalCommits),
 			avg, busiest)
-		b.WriteString(Dim.Render(summary))
+		b.WriteString(tuicore.Dim.Render(summary))
 		b.WriteString("\n\n\n")
 
 		// --- Contributors ---
@@ -202,16 +203,16 @@ func (v *AnalyticsView) Render(state *State) string {
 				barStr := bar(c.Count, maxCount, barWidth)
 				line := fmt.Sprintf("  %s  %s%s  %4d",
 					rs.Value.Render(nameStr),
-					Dim.Render(emailStr),
+					tuicore.Dim.Render(emailStr),
 					analyticsBar.Render(barStr),
 					c.Count)
 				b.WriteString(line)
 				b.WriteString("\n")
 			}
 			b.WriteString("\n")
-			b.WriteString(Dim.Render(fmt.Sprintf("  %d contributors across %d repos", d.TotalContributors, d.ActiveRepos)))
+			b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d contributors across %d repos", d.TotalContributors, d.ActiveRepos)))
 		} else {
-			b.WriteString(Dim.Render("  No contributor activity"))
+			b.WriteString(tuicore.Dim.Render("  No contributor activity"))
 		}
 		b.WriteString("\n\n\n")
 
@@ -270,7 +271,7 @@ func (v *AnalyticsView) Render(state *State) string {
 		// --- Network section (nav panel only) ---
 		if v.showNetwork && v.network != nil {
 			b.WriteString("\n\n\n")
-			netBold := lipgloss.NewStyle().Foreground(TextPrimary).Bold(true)
+			netBold := lipgloss.NewStyle().Foreground(tuicore.TextPrimary).Bold(true)
 			netLine := netBold.Render(strings.Repeat("═", contentWidth))
 			b.WriteString(netLine)
 			b.WriteString("\n")
@@ -302,7 +303,7 @@ func (v *AnalyticsView) Render(state *State) string {
 }
 
 // renderSocial renders the social extension section.
-func (v *AnalyticsView) renderSocial(b *strings.Builder, sa *cache.SocialAnalytics, rs RowStyles) {
+func (v *AnalyticsView) renderSocial(b *strings.Builder, sa *cache.SocialAnalytics, rs tuicore.RowStyles) {
 	b.WriteString(rs.Header.Render("Posts (30 days)"))
 	b.WriteString("\n\n")
 	for _, item := range []struct {
@@ -324,7 +325,7 @@ func (v *AnalyticsView) renderSocial(b *strings.Builder, sa *cache.SocialAnalyti
 }
 
 // renderPM renders the PM extension section.
-func (v *AnalyticsView) renderPM(b *strings.Builder, pa *cache.PMAnalytics, rs RowStyles, width int) {
+func (v *AnalyticsView) renderPM(b *strings.Builder, pa *cache.PMAnalytics, rs tuicore.RowStyles, width int) {
 	b.WriteString(rs.Header.Render("Issues"))
 	b.WriteString("\n\n")
 	barWidth := 30
@@ -367,20 +368,20 @@ func (v *AnalyticsView) renderPM(b *strings.Builder, pa *cache.PMAnalytics, rs R
 					line += fmt.Sprintf("  due %s (%d days)", due.Format("Jan 2"), days)
 				}
 			}
-			b.WriteString(Dim.Render(line))
+			b.WriteString(tuicore.Dim.Render(line))
 			b.WriteString("\n")
 		}
 	}
 }
 
 // renderRelease renders the release extension section.
-func (v *AnalyticsView) renderRelease(b *strings.Builder, ra *cache.ReleaseAnalytics, rs RowStyles) {
+func (v *AnalyticsView) renderRelease(b *strings.Builder, ra *cache.ReleaseAnalytics, rs tuicore.RowStyles) {
 	b.WriteString(rs.Header.Render("Releases"))
 	b.WriteString("\n\n")
 	if len(ra.Recent) > 0 {
 		parts := make([]string, 0, len(ra.Recent))
 		for _, r := range ra.Recent {
-			parts = append(parts, fmt.Sprintf("%s  %s", rs.Value.Render(r.Version), Dim.Render(FormatTime(r.Timestamp))))
+			parts = append(parts, fmt.Sprintf("%s  %s", rs.Value.Render(r.Version), tuicore.Dim.Render(tuicore.FormatTime(r.Timestamp))))
 		}
 		b.WriteString("  " + strings.Join(parts, "     "))
 		b.WriteString("\n\n")
@@ -397,7 +398,7 @@ func (v *AnalyticsView) renderRelease(b *strings.Builder, ra *cache.ReleaseAnaly
 }
 
 // renderReview renders the review extension section.
-func (v *AnalyticsView) renderReview(b *strings.Builder, rva *cache.ReviewAnalytics, rs RowStyles, width int) {
+func (v *AnalyticsView) renderReview(b *strings.Builder, rva *cache.ReviewAnalytics, rs tuicore.RowStyles, width int) {
 	b.WriteString(rs.Header.Render("Pull Requests"))
 	b.WriteString("\n\n")
 	barWidth := 30
@@ -424,7 +425,7 @@ func (v *AnalyticsView) renderReview(b *strings.Builder, rva *cache.ReviewAnalyt
 }
 
 // renderNetwork renders the cross-repo network rankings section.
-func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentWidth int) {
+func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, contentWidth int) {
 	na := v.network
 	barColor := analyticsBar
 	barWidth := contentWidth - 50
@@ -444,15 +445,15 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 			trendStr := trend(repo.Count, repo.PrevCount)
 			lastStr := ""
 			if !repo.LastSeen.IsZero() {
-				lastStr = FormatTime(repo.LastSeen)
+				lastStr = tuicore.FormatTime(repo.LastSeen)
 			}
 			fmt.Fprintf(b, "  %s  %s  %4d  %s  %s",
 				rs.Label.Render(nameStr), barColor.Render(barStr),
-				repo.Count, trendColor(trendStr), Dim.Render(lastStr))
+				repo.Count, trendColor(trendStr), tuicore.Dim.Render(lastStr))
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(Dim.Render(fmt.Sprintf("  %d repos tracked · %d active this month", na.TrackedRepos, na.ActiveRepos)))
+		b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d repos tracked · %d active this month", na.TrackedRepos, na.ActiveRepos)))
 		b.WriteString("\n\n\n")
 	}
 
@@ -472,7 +473,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(Dim.Render(fmt.Sprintf("  %d posts · %d comments · %d reposts this month",
+		b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d posts · %d comments · %d reposts this month",
 			na.Social.TotalPosts, na.Social.TotalComments, na.Social.TotalReposts)))
 		b.WriteString("\n\n\n")
 	}
@@ -494,7 +495,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(Dim.Render(fmt.Sprintf("  %d open · %d closed across network",
+		b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d open · %d closed across network",
 			na.PM.TotalOpen, na.PM.TotalClosed)))
 		b.WriteString("\n\n\n")
 	}
@@ -508,12 +509,12 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 			fmt.Fprintf(b, "  %s  %s  %s",
 				rs.Label.Render(truncate(name, 20)),
 				rs.Value.Render(rel.Version),
-				Dim.Render(FormatTime(rel.Timestamp)))
+				tuicore.Dim.Render(tuicore.FormatTime(rel.Timestamp)))
 			b.WriteString("\n")
 		}
 		if na.Release.TotalMonth > 0 {
 			b.WriteString("\n")
-			b.WriteString(Dim.Render(fmt.Sprintf("  %d releases this month across %d repos",
+			b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d releases this month across %d repos",
 				na.Release.TotalMonth, na.Release.RepoCount)))
 		}
 		b.WriteString("\n\n\n")
@@ -536,14 +537,14 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs RowStyles, contentW
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(Dim.Render(fmt.Sprintf("  %d open · %d merged across network",
+		b.WriteString(tuicore.Dim.Render(fmt.Sprintf("  %d open · %d merged across network",
 			na.Review.TotalOpen, na.Review.TotalMerged)))
 	}
 }
 
 // renderFooter renders the analytics footer.
-func (v *AnalyticsView) renderFooter(state *State) string {
-	return RenderFooter(state.Registry, Analytics, nil)
+func (v *AnalyticsView) renderFooter(state *tuicore.State) string {
+	return tuicore.RenderFooter(state.Registry, tuicore.Analytics, nil)
 }
 
 // sectionDivider renders a labeled divider line: ───── Label ─────
@@ -554,7 +555,7 @@ func sectionDivider(label string, width int) string {
 	if remaining < 0 {
 		remaining = 0
 	}
-	return Dim.Render("───── " + label + " " + strings.Repeat("─", 5+remaining))
+	return tuicore.Dim.Render("───── " + label + " " + strings.Repeat("─", 5+remaining))
 }
 
 // --- Rendering helpers ---
@@ -598,14 +599,14 @@ func ratioBar(a, b, width int) string {
 	}
 	filled := (a * width) / total
 	return analyticsBar.Render(strings.Repeat("█", filled)) +
-		Dim.Render(strings.Repeat("░", width-filled))
+		tuicore.Dim.Render(strings.Repeat("░", width-filled))
 }
 
 // progressBar renders a progress bar with filled and unfilled portions.
 func progressBar(pct, width int) string {
 	filled := (pct * width) / 100
 	return analyticsBar.Render(strings.Repeat("█", filled)) +
-		Dim.Render(strings.Repeat("░", width-filled))
+		tuicore.Dim.Render(strings.Repeat("░", width-filled))
 }
 
 // trend returns a trend indicator comparing current to previous period.
@@ -630,12 +631,12 @@ func trend(current, previous int) string {
 // trendColor applies color to a trend string.
 func trendColor(t string) string {
 	if strings.HasPrefix(t, "↑") {
-		return lipgloss.NewStyle().Foreground(StatusSuccess).Render(t)
+		return lipgloss.NewStyle().Foreground(tuicore.StatusSuccess).Render(t)
 	}
 	if strings.HasPrefix(t, "↓") {
-		return Dim.Render(t)
+		return tuicore.Dim.Render(t)
 	}
-	return Dim.Render(t)
+	return tuicore.Dim.Render(t)
 }
 
 // fillDays fills a 30-element array from sparse DayStat data, aligning to dates.

@@ -42,6 +42,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuirelease"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuireview"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuiviews"
 )
 
 // FocusedPanel identifies which panel has input focus
@@ -269,7 +270,7 @@ func NewModel(workdir, cacheDir string) Model {
 	identity.SetDNSVerificationEnabled(userSettings.Identity.DNSVerification)
 
 	// Register core views
-	settingsView := tuicore.NewSettingsView()
+	settingsView := tuiviews.NewSettingsView()
 	settingsView.SetDisplayChangeCallback(func(showEmail bool) {
 		state.ShowEmailOnCards = showEmail
 	})
@@ -278,31 +279,31 @@ func NewModel(workdir, cacheDir string) Model {
 	})
 	host.AddView("/settings", settingsView)
 
-	configView := tuicore.NewConfigView()
+	configView := tuiviews.NewConfigView()
 	host.AddView("/config", configView)
 
-	forksView := tuicore.NewForksView(workdir)
+	forksView := tuiviews.NewForksView(workdir)
 	host.AddView("/config/forks", forksView)
 
-	siteView := tuicore.NewSiteView(workdir)
+	siteView := tuiviews.NewSiteView(workdir)
 	host.AddView("/config/site", siteView)
 
-	identityView := tuicore.NewIdentityView(workdir)
+	identityView := tuiviews.NewIdentityView(workdir)
 	host.AddView("/config/identity", identityView)
 
-	cacheView := tuicore.NewCacheView()
+	cacheView := tuiviews.NewCacheView()
 	host.AddView("/cache", cacheView)
 
-	analyticsView := tuicore.NewAnalyticsView()
+	analyticsView := tuiviews.NewAnalyticsView()
 	host.AddView("/analytics", analyticsView)
 
-	helpView := tuicore.NewHelpView()
+	helpView := tuiviews.NewHelpView()
 	host.AddView("/help", helpView)
 
-	errorLogView := tuicore.NewErrorLogView()
+	errorLogView := tuiviews.NewErrorLogView()
 	host.AddView("/errorlog", errorLogView)
 
-	commitDiffView := tuicore.NewCommitDiffView(workdir)
+	commitDiffView := tuiviews.NewCommitDiffView(workdir)
 	host.AddView("/diff", commitDiffView)
 
 	// Register social views

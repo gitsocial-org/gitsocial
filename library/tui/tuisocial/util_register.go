@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuiviews"
 )
 
 // SocialHost provides social-specific item operations using universal DisplayItem interface.
@@ -144,18 +145,18 @@ func Register(host tuicore.ViewHost) {
 	post := NewPostView(state.Workdir)
 	post.SetUserEmail(state.UserEmail)
 	showEmailFn := func() bool { return state.ShowEmailOnCards }
-	search := tuicore.NewSearchView(
+	search := tuiviews.NewSearchView(
 		state.Workdir,
 		MakeSearchFunc(state.UserEmail, showEmailFn),
 		MakeResolveItemFunc(state.UserEmail),
 	)
-	notifications := tuicore.NewNotificationsView(
+	notifications := tuiviews.NewNotificationsView(
 		state.Workdir,
 		MakeGetNotificationsFunc(state.UserEmail, showEmailFn),
 		MakeMarkReadFunc(),
 		MakeMarkUnreadFunc(),
 		MakeResolveItemFunc(state.UserEmail),
-		tuicore.WithBulkMarkFuncs(MakeMarkAllReadFunc(), MakeMarkAllUnreadFunc()),
+		tuiviews.WithBulkMarkFuncs(MakeMarkAllReadFunc(), MakeMarkAllUnreadFunc()),
 	)
 	repository := NewRepositoryView(state.Workdir)
 	repository.SetUserEmail(state.UserEmail)
@@ -170,7 +171,7 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/timeline", timeline)
 	host.AddView("/social/detail", post)
 	host.AddView("/search", search)
-	host.AddView("/search/help", tuicore.NewSearchHelpView())
+	host.AddView("/search/help", tuiviews.NewSearchHelpView())
 	host.AddView("/social/repository", repository)
 	host.AddView("/notifications", notifications)
 	host.AddView("/lists", listPicker)
@@ -193,15 +194,15 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handlePostSubmitted(msg, ctx)
 	case ListsLoadedMsg:
 		return handleListsLoaded(msg, ctx)
-	case tuicore.NotificationsLoadedMsg:
+	case tuiviews.NotificationsLoadedMsg:
 		return handleNotificationsLoaded(msg, ctx)
-	case tuicore.NotificationMarkedReadMsg:
+	case tuiviews.NotificationMarkedReadMsg:
 		return handleNotificationMarkedRead(msg, ctx)
-	case tuicore.NotificationMarkedUnreadMsg:
+	case tuiviews.NotificationMarkedUnreadMsg:
 		return handleNotificationMarkedUnread(msg, ctx)
-	case tuicore.NotificationsAllMarkedReadMsg:
+	case tuiviews.NotificationsAllMarkedReadMsg:
 		return handleNotificationsAllMarkedRead(msg, ctx)
-	case tuicore.NotificationsAllMarkedUnreadMsg:
+	case tuiviews.NotificationsAllMarkedUnreadMsg:
 		return handleNotificationsAllMarkedUnread(msg, ctx)
 	case FetchCompletedMsg:
 		return handleFetchCompleted(msg, ctx)
@@ -272,7 +273,7 @@ func handleListsLoaded(msg ListsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	return true, ctx.Host().Update(msg)
 }
 
-func handleNotificationsLoaded(msg tuicore.NotificationsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleNotificationsLoaded(msg tuiviews.NotificationsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		unread := 0
 		for _, n := range msg.Result.Meta {
@@ -285,26 +286,26 @@ func handleNotificationsLoaded(msg tuicore.NotificationsLoadedMsg, ctx tuicore.A
 	return true, ctx.Host().Update(msg)
 }
 
-func handleNotificationMarkedRead(msg tuicore.NotificationMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleNotificationMarkedRead(msg tuiviews.NotificationMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		ctx.Nav().SetUnreadCount(msg.UnreadCount)
 	}
 	return true, ctx.Host().Update(msg)
 }
 
-func handleNotificationMarkedUnread(msg tuicore.NotificationMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleNotificationMarkedUnread(msg tuiviews.NotificationMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		ctx.Nav().SetUnreadCount(msg.UnreadCount)
 	}
 	return true, ctx.Host().Update(msg)
 }
 
-func handleNotificationsAllMarkedRead(msg tuicore.NotificationsAllMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleNotificationsAllMarkedRead(msg tuiviews.NotificationsAllMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Nav().SetUnreadCount(0)
 	return true, ctx.Host().Update(msg)
 }
 
-func handleNotificationsAllMarkedUnread(msg tuicore.NotificationsAllMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleNotificationsAllMarkedUnread(msg tuiviews.NotificationsAllMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Nav().SetUnreadCount(msg.UnreadCount)
 	return true, ctx.Host().Update(msg)
 }

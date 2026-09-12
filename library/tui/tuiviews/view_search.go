@@ -1,5 +1,5 @@
-// search.go - Search view with query input and filtered results
-package tuicore
+// view_search.go - Search view with query input and filtered results
+package tuiviews
 
 import (
 	"fmt"
@@ -7,11 +7,13 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // SearchResultsMsg is sent when search results are loaded.
 type SearchResultsMsg struct {
-	Result SearchResult
+	Result tuicore.SearchResult
 	Query  string
 	Append bool
 	Err    error
@@ -22,26 +24,26 @@ type SearchView struct {
 	input        textinput.Model
 	query        string
 	scope        string
-	results      *CardList
+	results      *tuicore.CardList
 	loading      bool
 	total        int
 	totalItems   int
 	inputMode    bool
 	workdir      string
-	searchFunc   SearchFunc
-	resolveFunc  ResolveItemFunc
+	searchFunc   tuicore.SearchFunc
+	resolveFunc  tuicore.ResolveItemFunc
 	restoreID    string // item ID to reselect after reload ("" = none)
-	pag          Pagination
+	pag          tuicore.Pagination
 	searchOffset int // current offset for pagination
 }
 
 // NewSearchView creates a new search view with injected dependencies.
-func NewSearchView(workdir string, searchFn SearchFunc, resolveFn ResolveItemFunc) *SearchView {
+func NewSearchView(workdir string, searchFn tuicore.SearchFunc, resolveFn tuicore.ResolveItemFunc) *SearchView {
 	input := textinput.New()
 	input.Placeholder = ""
 	input.CharLimit = 100
 	input.Prompt = "> "
-	StyleTextInput(&input, Title, Title, Dim)
+	tuicore.StyleTextInput(&input, tuicore.Title, tuicore.Title, tuicore.Dim)
 
 	v := &SearchView{
 		input:       input,
@@ -50,9 +52,9 @@ func NewSearchView(workdir string, searchFn SearchFunc, resolveFn ResolveItemFun
 		searchFunc:  searchFn,
 		resolveFunc: resolveFn,
 	}
-	v.results = NewCardList(nil)
+	v.results = tuicore.NewCardList(nil)
 	if resolveFn != nil {
-		v.results.SetItemResolver(func(itemID string) (DisplayItem, bool) {
+		v.results.SetItemResolver(func(itemID string) (tuicore.DisplayItem, bool) {
 			return resolveFn(workdir, itemID)
 		})
 	}
@@ -66,7 +68,7 @@ func (v *SearchView) SetSize(width, height int) {
 }
 
 // Activate initializes the search view.
-func (v *SearchView) Activate(state *State) tea.Cmd {
+func (v *SearchView) Activate(state *tuicore.State) tea.Cmd {
 	// Restore cursor position when returning from detail view (by ID)
 	v.restoreID = ""
 	if state.DetailSource != nil && state.DetailSource.Path == "/search" {
@@ -88,7 +90,7 @@ func (v *SearchView) Activate(state *State) tea.Cmd {
 			v.results.SetActive(true)
 			return nil
 		}
-		terms := ExtractSearchTerms(query)
+		terms := tuicore.ExtractSearchTerms(query)
 		if len(terms) >= 3 {
 			// Enough search terms - execute search immediately, focus results
 			v.query = query
@@ -124,7 +126,7 @@ func (v *SearchView) Activate(state *State) tea.Cmd {
 	v.input.Reset()
 	v.input.SetValue("")
 	v.input.Placeholder = ""
-	StyleTextInput(&v.input, Title, Title, Dim)
+	tuicore.StyleTextInput(&v.input, tuicore.Title, tuicore.Title, tuicore.Dim)
 	v.query = ""
 	v.results.SetItems(nil)
 	v.results.SetActive(false)
@@ -147,7 +149,7 @@ func (v *SearchView) doSearch() tea.Cmd {
 		if searchFn == nil {
 			return SearchResultsMsg{Err: fmt.Errorf("search not available"), Query: query}
 		}
-		result, err := searchFn(workdir, query, scope, PageSize+1, 0)
+		result, err := searchFn(workdir, query, scope, tuicore.PageSize+1, 0)
 		if err != nil {
 			return SearchResultsMsg{Err: err, Query: query}
 		}
@@ -167,7 +169,7 @@ func (v *SearchView) doSearchMore() tea.Cmd {
 		if searchFn == nil {
 			return SearchResultsMsg{Err: fmt.Errorf("search not available"), Query: query, Append: true}
 		}
-		result, err := searchFn(workdir, query, scope, PageSize+1, offset)
+		result, err := searchFn(workdir, query, scope, tuicore.PageSize+1, offset)
 		if err != nil {
 			return SearchResultsMsg{Err: err, Query: query, Append: true}
 		}
@@ -181,13 +183,13 @@ func (v *SearchView) LoadMorePosts() tea.Cmd {
 }
 
 // Update handles input for the search view.
-func (v *SearchView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *SearchView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if !v.inputMode {
 			consumed, activate, link := v.results.Update(msg)
 			if link != nil {
-				return func() tea.Msg { return NavigateMsg{Location: *link, Action: NavPush} }
+				return func() tea.Msg { return tuicore.NavigateMsg{Location: *link, Action: tuicore.NavPush} }
 			}
 			if activate {
 				return v.navigateToSelected()
@@ -219,11 +221,11 @@ func (v *SearchView) navigateToSelected() tea.Cmd {
 	}
 	query := v.query
 	total := v.total
-	loc := GetNavTarget(item)
+	loc := tuicore.GetNavTarget(item)
 	return func() tea.Msg {
-		return NavigateMsg{
+		return tuicore.NavigateMsg{
 			Location:    loc,
-			Action:      NavPush,
+			Action:      tuicore.NavPush,
 			SourcePath:  "/search",
 			SourceIndex: v.results.Selected(),
 			SourceTotal: total,
@@ -233,7 +235,7 @@ func (v *SearchView) navigateToSelected() tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *State) tea.Cmd {
+func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	if v.inputMode {
 		switch msg.String() {
 		case "enter":
@@ -262,12 +264,12 @@ func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *State) tea.Cmd {
 				v.results.SetActive(true)
 			} else {
 				return func() tea.Msg {
-					return NavigateMsg{Action: NavBack}
+					return tuicore.NavigateMsg{Action: tuicore.NavBack}
 				}
 			}
 		case "?":
 			return func() tea.Msg {
-				return NavigateMsg{Location: Location{Path: "/search/help"}, Action: NavPush}
+				return tuicore.NavigateMsg{Location: tuicore.Location{Path: "/search/help"}, Action: tuicore.NavPush}
 			}
 		default:
 			var cmd tea.Cmd
@@ -275,7 +277,7 @@ func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *State) tea.Cmd {
 			query := v.input.Value()
 			if query != v.query {
 				v.query = query
-				terms := ExtractSearchTerms(query)
+				terms := tuicore.ExtractSearchTerms(query)
 				if len(terms) >= 3 {
 					v.loading = true
 					return tea.Batch(cmd, v.doSearch())
@@ -293,16 +295,16 @@ func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *State) tea.Cmd {
 
 	consumed, activate, link := v.results.Update(msg)
 	if link != nil {
-		return func() tea.Msg { return NavigateMsg{Location: *link, Action: NavPush} }
+		return func() tea.Msg { return tuicore.NavigateMsg{Location: *link, Action: tuicore.NavPush} }
 	}
 	if activate {
 		return v.navigateToSelected()
 	}
 	if consumed {
 		if v.results.NearBottom() && v.pag.CanLoadMore() {
-			return tea.Batch(ConsumedCmd, v.doSearchMore())
+			return tea.Batch(tuicore.ConsumedCmd, v.doSearchMore())
 		}
-		return ConsumedCmd
+		return tuicore.ConsumedCmd
 	}
 	switch msg.String() {
 	case "/":
@@ -311,7 +313,7 @@ func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *State) tea.Cmd {
 		return v.input.Focus()
 	case "?":
 		return func() tea.Msg {
-			return NavigateMsg{Location: Location{Path: "/search/help"}, Action: NavPush}
+			return tuicore.NavigateMsg{Location: tuicore.Location{Path: "/search/help"}, Action: tuicore.NavPush}
 		}
 	case "up", "k":
 		if v.results.Selected() == 0 {
@@ -335,7 +337,7 @@ func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
 		return nil
 	}
 
-	items, trimmedMore := TrimPage(msg.Result.Items, PageSize)
+	items, trimmedMore := tuicore.TrimPage(msg.Result.Items, tuicore.PageSize)
 	v.pag.HasMore = trimmedMore || msg.Result.HasMore
 	v.total = msg.Result.Total
 	v.totalItems = msg.Result.TotalSearched
@@ -368,22 +370,22 @@ func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
 }
 
 // Render renders the search view.
-func (v *SearchView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *SearchView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 
 	var b strings.Builder
 	b.WriteString(v.input.View())
 	b.WriteString("\n\n")
 
 	if v.loading {
-		b.WriteString(Dim.Render("Searching..."))
+		b.WriteString(tuicore.Dim.Render("Searching..."))
 	} else if len(v.results.Items()) == 0 && v.query != "" {
-		b.WriteString(Dim.Render("No results"))
+		b.WriteString(tuicore.Dim.Render("No results"))
 	} else {
 		b.WriteString(v.results.View())
 	}
 
-	footer := RenderFooter(state.Registry, Search, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Search, nil)
 	return wrapper.Render(b.String(), footer)
 }
 
@@ -425,7 +427,7 @@ func (v *SearchView) GetItemCount() int {
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
-func (v *SearchView) GetDisplayItemAt(index int) (DisplayItem, bool) {
+func (v *SearchView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 	items := v.results.Items()
 	if index >= 0 && index < len(items) {
 		return items[index], true
@@ -434,27 +436,27 @@ func (v *SearchView) GetDisplayItemAt(index int) (DisplayItem, bool) {
 }
 
 // DisplayItems returns all search result items (extension-agnostic).
-func (v *SearchView) DisplayItems() []DisplayItem {
+func (v *SearchView) DisplayItems() []tuicore.DisplayItem {
 	return v.results.Items()
 }
 
 // SetDisplayItems replaces all search result items (extension-agnostic).
-func (v *SearchView) SetDisplayItems(items []DisplayItem) {
+func (v *SearchView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.results.SetItems(items)
 }
 
 // SelectedDisplayItem returns the currently selected item (extension-agnostic).
-func (v *SearchView) SelectedDisplayItem() (DisplayItem, bool) {
+func (v *SearchView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 	return v.results.SelectedItem()
 }
 
 // Bindings returns view-specific key bindings.
-func (v *SearchView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "esc", Label: "exit input", Contexts: []Context{Search}, Handler: noop},
-		{Key: "down", Label: "to results", Contexts: []Context{Search}, Handler: noop},
-		{Key: "up", Label: "to input", Contexts: []Context{Search}, Handler: noop},
-		{Key: "?", Label: "search help", Contexts: []Context{Search}, Handler: noop},
+func (v *SearchView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "esc", Label: "exit input", Contexts: []tuicore.Context{tuicore.Search}, Handler: noop},
+		{Key: "down", Label: "to results", Contexts: []tuicore.Context{tuicore.Search}, Handler: noop},
+		{Key: "up", Label: "to input", Contexts: []tuicore.Context{tuicore.Search}, Handler: noop},
+		{Key: "?", Label: "search help", Contexts: []tuicore.Context{tuicore.Search}, Handler: noop},
 	}
 }

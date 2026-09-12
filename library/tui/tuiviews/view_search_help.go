@@ -1,11 +1,13 @@
 // view_search_help.go - Search help view showing filter syntax and keyboard shortcuts
-package tuicore
+package tuiviews
 
 import (
 	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // SearchHelpView displays search syntax documentation.
@@ -20,26 +22,26 @@ func NewSearchHelpView() *SearchHelpView {
 }
 
 // Bindings returns keybindings for the search help view.
-func (v *SearchHelpView) Bindings() []Binding {
-	noop := func(ctx *HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "j", Label: "scroll down", Contexts: []Context{SearchHelp}, Handler: noop},
-		{Key: "k", Label: "scroll up", Contexts: []Context{SearchHelp}, Handler: noop},
-		{Key: "?", Label: "back to search", Contexts: []Context{SearchHelp}, Handler: noop},
+func (v *SearchHelpView) Bindings() []tuicore.Binding {
+	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "j", Label: "scroll down", Contexts: []tuicore.Context{tuicore.SearchHelp}, Handler: noop},
+		{Key: "k", Label: "scroll up", Contexts: []tuicore.Context{tuicore.SearchHelp}, Handler: noop},
+		{Key: "?", Label: "back to search", Contexts: []tuicore.Context{tuicore.SearchHelp}, Handler: noop},
 	}
 }
 
 // row formats a key-description pair with aligned columns.
 func row(key, desc string) string {
-	return fmt.Sprintf("  %s  %s", Bold.Render(fmt.Sprintf("%-20s", key)), Dim.Render(desc))
+	return fmt.Sprintf("  %s  %s", tuicore.Bold.Render(fmt.Sprintf("%-20s", key)), tuicore.Dim.Render(desc))
 }
 
 // Activate resets scroll and renders content when the view becomes active.
-func (v *SearchHelpView) Activate(_ *State) tea.Cmd {
+func (v *SearchHelpView) Activate(_ *tuicore.State) tea.Cmd {
 	v.scroll = 0
 	v.lines = []string{
 		"",
-		Title.Render("Filters"),
+		tuicore.Title.Render("Filters"),
 		"",
 		row("author:<email>", "Posts by author"),
 		row("type:<type>", "post, comment, repost, quote,"),
@@ -50,12 +52,12 @@ func (v *SearchHelpView) Activate(_ *State) tea.Cmd {
 		row("after:YYYY-MM-DD", "Posts after date"),
 		row("before:YYYY-MM-DD", "Posts before date"),
 		"",
-		Title.Render("Shortcuts"),
+		tuicore.Title.Render("Shortcuts"),
 		"",
 		row("@alice", "Same as author:alice"),
 		row("#abc123f", "Same as hash:abc123f (7+ hex chars)"),
 		"",
-		Title.Render("Examples"),
+		tuicore.Title.Render("Examples"),
 		"",
 		row("author:alice auth", `Posts by alice containing "auth"`),
 		row("type:comment", "All comments"),
@@ -63,14 +65,14 @@ func (v *SearchHelpView) Activate(_ *State) tea.Cmd {
 		row("@bob type:post", "Posts (not comments) by bob"),
 		row("repo:github.com/x/y", "Posts from a specific repo"),
 		"",
-		Title.Render("Sort"),
+		tuicore.Title.Render("Sort"),
 		"",
-		"  " + Dim.Render("Results are ranked by relevance:"),
+		"  " + tuicore.Dim.Render("Results are ranked by relevance:"),
 		row("Content match", "10 pts"),
 		row("Author match", "5 pts"),
 		row("Recency", "tiebreaker"),
 		"",
-		Title.Render("Navigation"),
+		tuicore.Title.Render("Navigation"),
 		"",
 		row("/", "Focus search input"),
 		row("Enter", "Execute search / open result"),
@@ -82,7 +84,7 @@ func (v *SearchHelpView) Activate(_ *State) tea.Cmd {
 }
 
 // Update handles messages.
-func (v *SearchHelpView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *SearchHelpView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		switch msg.(type) {
@@ -118,7 +120,7 @@ func (v *SearchHelpView) Update(msg tea.Msg, state *State) tea.Cmd {
 			v.scroll = 99999
 		case "?", "esc":
 			return func() tea.Msg {
-				return NavigateMsg{Action: NavBack}
+				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}
 		}
 	}
@@ -126,11 +128,11 @@ func (v *SearchHelpView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // Render renders the search help view.
-func (v *SearchHelpView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *SearchHelpView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	if len(v.lines) == 0 {
-		footer := RenderFooter(state.Registry, SearchHelp, nil)
-		return wrapper.Render(Dim.Render("Loading..."), footer)
+		footer := tuicore.RenderFooter(state.Registry, tuicore.SearchHelp, nil)
+		return wrapper.Render(tuicore.Dim.Render("Loading..."), footer)
 	}
 	height := wrapper.ContentHeight()
 	if v.scroll >= len(v.lines) {
@@ -144,6 +146,6 @@ func (v *SearchHelpView) Render(state *State) string {
 		end = len(v.lines)
 	}
 	visible := strings.Join(v.lines[v.scroll:end], "\n")
-	footer := RenderFooter(state.Registry, SearchHelp, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.SearchHelp, nil)
 	return wrapper.Render(visible, footer)
 }

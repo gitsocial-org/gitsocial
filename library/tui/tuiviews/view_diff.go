@@ -1,6 +1,6 @@
 // view_diff.go - Generic commit diff view for workdir commits. Thin
 // wrapper over DiffViewCore: adds commit loading, title, bindings.
-package tuicore
+package tuiviews
 
 import (
 	"fmt"
@@ -9,15 +9,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func init() {
-	RegisterViewMeta(ViewMeta{Path: "/diff", Context: CommitDiff, Title: "Commit Diff", Icon: "±"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/diff", Context: tuicore.CommitDiff, Title: "Commit Diff", Icon: "±"})
 }
 
 // CommitDiffView displays the diff for a single commit.
 type CommitDiffView struct {
-	core    *DiffViewCore
+	core    *tuicore.DiffViewCore
 	subject string
 	loadErr error
 }
@@ -32,7 +33,7 @@ type commitDiffLoadedMsg struct {
 
 // NewCommitDiffView creates a new generic commit diff view.
 func NewCommitDiffView(workdir string) *CommitDiffView {
-	return &CommitDiffView{core: NewDiffViewCore(workdir)}
+	return &CommitDiffView{core: tuicore.NewDiffViewCore(workdir)}
 }
 
 // SetSize sets the view dimensions.
@@ -42,7 +43,7 @@ func (v *CommitDiffView) SetSize(w, h int) { v.core.SetSize(w, h) }
 func (v *CommitDiffView) IsInputActive() bool { return v.core.IsInputActive() }
 
 // Activate loads diff data for the commit.
-func (v *CommitDiffView) Activate(state *State) tea.Cmd {
+func (v *CommitDiffView) Activate(state *tuicore.State) tea.Cmd {
 	v.core.Reset()
 	v.subject = ""
 	v.loadErr = nil
@@ -64,7 +65,7 @@ func (v *CommitDiffView) Activate(state *State) tea.Cmd {
 }
 
 // Update handles messages.
-func (v *CommitDiffView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *CommitDiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	if m, ok := msg.(commitDiffLoadedMsg); ok {
 		v.subject = m.subject
 		v.loadErr = m.err
@@ -77,20 +78,20 @@ func (v *CommitDiffView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // Render renders the view.
-func (v *CommitDiffView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *CommitDiffView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 	var content string
 	switch {
 	case !v.core.Loaded() && v.loadErr == nil:
 		content = "Loading diff..."
 	case v.loadErr != nil:
-		content = Dim.Render(fmt.Sprintf("Error: %s", v.loadErr.Error()))
+		content = tuicore.Dim.Render(fmt.Sprintf("Error: %s", v.loadErr.Error()))
 	case len(v.core.Diffs()) == 0:
-		content = Dim.Render("No file changes found")
+		content = tuicore.Dim.Render("No file changes found")
 	default:
 		content = v.core.RenderContent()
 	}
-	footer := v.core.RenderFooter(state, CommitDiff, wrapper.ContentWidth())
+	footer := v.core.RenderFooter(state, tuicore.CommitDiff, wrapper.ContentWidth())
 	return wrapper.Render(content, footer)
 }
 
@@ -100,10 +101,10 @@ func (v *CommitDiffView) Title() string {
 		return "±  Commit Diff"
 	}
 	s := v.core.Stats()
-	return fmt.Sprintf("±  %s · %s", TruncateToWidth(v.subject, 40), RenderDiffStatsBadge(s.Added, s.Removed))
+	return fmt.Sprintf("±  %s · %s", tuicore.TruncateToWidth(v.subject, 40), tuicore.RenderDiffStatsBadge(s.Added, s.Removed))
 }
 
 // Bindings returns keybindings for this view.
-func (v *CommitDiffView) Bindings() []Binding {
-	return v.core.SharedBindings(CommitDiff)
+func (v *CommitDiffView) Bindings() []tuicore.Binding {
+	return v.core.SharedBindings(tuicore.CommitDiff)
 }

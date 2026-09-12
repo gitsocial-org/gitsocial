@@ -1,5 +1,5 @@
-// cache.go - Cache management view for displaying and clearing cached data
-package tuicore
+// view_cache.go - Cache management view for displaying and clearing cached data
+package tuiviews
 
 import (
 	"fmt"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 // CacheView displays cache statistics and management.
@@ -31,42 +32,42 @@ type CacheView struct {
 }
 
 // Bindings returns keybindings for the cache view.
-func (v *CacheView) Bindings() []Binding {
-	return []Binding{
-		{Key: "x", Label: "delete selected", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+func (v *CacheView) Bindings() []tuicore.Binding {
+	return []tuicore.Binding{
+		{Key: "x", Label: "delete selected", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				return true, nil
 			}},
-		{Key: "C", Label: "clear all", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "C", Label: "clear all", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.ClearCacheAll()
 			}},
-		{Key: "D", Label: "clear db", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "D", Label: "clear db", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.ClearCacheDB()
 			}},
-		{Key: "X", Label: "clear repos", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "X", Label: "clear repos", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.ClearCacheRepos()
 			}},
-		{Key: "F", Label: "clear forks", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "F", Label: "clear forks", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
 				return true, ctx.Panel.ClearCacheForks()
 			}},
-		{Key: "r", Label: "refresh", Contexts: []Context{Cache},
-			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
+		{Key: "r", Label: "refresh", Contexts: []tuicore.Context{tuicore.Cache},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				if ctx.Panel == nil {
 					return false, nil
 				}
@@ -86,7 +87,7 @@ func (v *CacheView) SetCacheClearedCallback(fn func()) {
 }
 
 // Activate loads the cache stats when the view becomes active.
-func (v *CacheView) Activate(state *State) tea.Cmd {
+func (v *CacheView) Activate(state *tuicore.State) tea.Cmd {
 	v.cacheDir = state.CacheDir
 	v.scroll = 0
 	v.cursor = 0
@@ -169,7 +170,7 @@ func (v *CacheView) handleLoaded(msg CacheViewLoadedMsg) tea.Cmd {
 	v.err = ""
 	v.clampCursor()
 	return func() tea.Msg {
-		return CacheSizeMsg{Size: cache.FormatBytes(msg.Stats.TotalBytes)}
+		return tuicore.CacheSizeMsg{Size: cache.FormatBytes(msg.Stats.TotalBytes)}
 	}
 }
 
@@ -201,7 +202,7 @@ func (v *CacheView) handleRepoDeleted(msg CacheRepoDeletedMsg, cacheDir string) 
 }
 
 // Update handles messages and returns commands.
-func (v *CacheView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *CacheView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
@@ -230,7 +231,7 @@ func (v *CacheView) Update(msg tea.Msg, state *State) tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *CacheView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
+func (v *CacheView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	if v.confirm != "" {
 		switch msg.String() {
 		case "y", "Y":
@@ -248,7 +249,7 @@ func (v *CacheView) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 		switch msg.String() {
 		case "y", "Y":
 			v.repopulatePrompt = false
-			return func() tea.Msg { return TriggerFetchMsg{} }
+			return func() tea.Msg { return tuicore.TriggerFetchMsg{} }
 		case "n", "N", "esc":
 			v.repopulatePrompt = false
 			return nil
@@ -377,12 +378,12 @@ func (v *CacheView) IsInputActive() bool {
 }
 
 // Render renders the cache view to a string.
-func (v *CacheView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
+func (v *CacheView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
 
 	if v.stats == nil {
-		content := Dim.Render("Loading cache stats...")
-		footer := RenderFooter(state.Registry, Cache, nil)
+		content := tuicore.Dim.Render("Loading cache stats...")
+		footer := tuicore.RenderFooter(state.Registry, tuicore.Cache, nil)
 		return wrapper.Render(content, footer)
 	}
 
@@ -394,7 +395,7 @@ func (v *CacheView) Render(state *State) string {
 	if labelWidth < 20 {
 		labelWidth = 20
 	}
-	rs := RowStylesWithWidths(labelWidth, 10)
+	rs := tuicore.RowStylesWithWidths(labelWidth, 10)
 	dbSize := cache.FormatBytesMB(v.stats.DbSizeBytes)
 	repoSize := cache.FormatBytesMB(v.stats.RepoSizeBytes)
 	forkSize := cache.FormatBytesMB(v.stats.ForkSizeBytes)
@@ -406,7 +407,7 @@ func (v *CacheView) Render(state *State) string {
 		totalRepoCommits += repo.Commits
 	}
 
-	rowBg := lipgloss.NewStyle().Background(BgSelected).Width(wrapper.ContentWidth())
+	rowBg := lipgloss.NewStyle().Background(tuicore.BgSelected).Width(wrapper.ContentWidth())
 	cursorIndex := 0
 
 	var b strings.Builder
@@ -419,25 +420,25 @@ func (v *CacheView) Render(state *State) string {
 	// Cache header. The "C:clear all" hint uses local inline styles (no
 	// BgFooter background) because it renders inside content, not the footer.
 	cacheLabel := rs.Header.Width(labelWidth).Render("Cache")
-	keyHint := lipgloss.NewStyle().Foreground(BorderFocused).Bold(true).Render("C")
-	labelHint := lipgloss.NewStyle().Foreground(TextNormal).Render("clear all")
+	keyHint := lipgloss.NewStyle().Foreground(tuicore.BorderFocused).Bold(true).Render("C")
+	labelHint := lipgloss.NewStyle().Foreground(tuicore.TextNormal).Render("clear all")
 	fmt.Fprintf(&b, "%s  %s  %s", cacheLabel, rs.Value.Render(totalSize), keyHint+":"+labelHint)
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(TruncateToWidth(v.stats.Location, inner)))
+	b.WriteString(rs.Dim.Render(tuicore.TruncateToWidth(v.stats.Location, inner)))
 	b.WriteString("\n\n")
 
 	// Database header
 	dbHeader := rs.Header.Width(labelWidth).Render("Database")
-	fmt.Fprintf(&b, "%s  %s  %s", dbHeader, rs.Value.Render(dbSize), keyStyle.Render("D")+":"+labelStyle.Render("clear"))
+	fmt.Fprintf(&b, "%s  %s  %s", dbHeader, rs.Value.Render(dbSize), tuicore.KeyStyle.Render("D")+":"+tuicore.LabelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/cache.db)", v.stats.Repositories, v.stats.Items, v.stats.Location), inner)))
+	b.WriteString(rs.Dim.Render(tuicore.TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/cache.db)", v.stats.Repositories, v.stats.Items, v.stats.Location), inner)))
 	b.WriteString("\n\n")
 
 	// Repositories header
 	repoHeader := rs.Header.Width(labelWidth).Render("Repositories")
-	fmt.Fprintf(&b, "%s  %s  %s", repoHeader, rs.Value.Render(repoSize), keyStyle.Render("X")+":"+labelStyle.Render("clear"))
+	fmt.Fprintf(&b, "%s  %s  %s", repoHeader, rs.Value.Render(repoSize), tuicore.KeyStyle.Render("X")+":"+tuicore.LabelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/repositories)", v.stats.Repositories, totalRepoCommits, v.stats.Location), inner)))
+	b.WriteString(rs.Dim.Render(tuicore.TruncateToWidth(fmt.Sprintf("%d repos, %d commits (%s/repositories)", v.stats.Repositories, totalRepoCommits, v.stats.Location), inner)))
 	b.WriteString("\n")
 
 	if len(v.stats.TopRepos) > 0 {
@@ -456,7 +457,7 @@ func (v *CacheView) Render(state *State) string {
 			if isWorkspace {
 				suffix = "(workspace)"
 			} else if !repo.LastFetch.IsZero() {
-				suffix = FormatTime(repo.LastFetch)
+				suffix = tuicore.FormatTime(repo.LastFetch)
 			}
 			if isSelected {
 				v.cursorLine = strings.Count(b.String(), "\n")
@@ -468,7 +469,7 @@ func (v *CacheView) Render(state *State) string {
 			} else {
 				row := fmt.Sprintf("  %s  %s", rs.Label.Render(label), rs.Value.Render(size))
 				if suffix != "" {
-					row += "  " + Dim.Render(suffix)
+					row += "  " + tuicore.Dim.Render(suffix)
 				}
 				b.WriteString(row)
 			}
@@ -480,9 +481,9 @@ func (v *CacheView) Render(state *State) string {
 
 	// Forks header
 	forkHeader := rs.Header.Width(labelWidth).Render("Forks")
-	fmt.Fprintf(&b, "%s  %s  %s", forkHeader, rs.Value.Render(forkSize), keyStyle.Render("F")+":"+labelStyle.Render("clear"))
+	fmt.Fprintf(&b, "%s  %s  %s", forkHeader, rs.Value.Render(forkSize), tuicore.KeyStyle.Render("F")+":"+tuicore.LabelStyle.Render("clear"))
 	b.WriteString("\n")
-	b.WriteString(rs.Dim.Render(TruncateToWidth(fmt.Sprintf("%d forks (%s/forks)", v.stats.ForkCount, v.stats.Location), inner)))
+	b.WriteString(rs.Dim.Render(tuicore.TruncateToWidth(fmt.Sprintf("%d forks (%s/forks)", v.stats.ForkCount, v.stats.Location), inner)))
 	b.WriteString("\n")
 	if len(v.stats.TopForks) > 0 {
 		for _, fork := range v.stats.TopForks {
@@ -506,7 +507,7 @@ func (v *CacheView) Render(state *State) string {
 
 	if v.confirm != "" {
 		b.WriteString("\n")
-		confirmStyle := lipgloss.NewStyle().Foreground(ConfirmAction).Bold(true)
+		confirmStyle := lipgloss.NewStyle().Foreground(tuicore.ConfirmAction).Bold(true)
 		var what string
 		switch v.confirm {
 		case "db":
@@ -518,18 +519,18 @@ func (v *CacheView) Render(state *State) string {
 		case "all":
 			what = "all cache"
 		}
-		b.WriteString(confirmStyle.Render(fmt.Sprintf("Delete %s? ", what)) + keyStyle.Render("y") + labelStyle.Render("/") + keyStyle.Render("n"))
+		b.WriteString(confirmStyle.Render(fmt.Sprintf("Delete %s? ", what)) + tuicore.KeyStyle.Render("y") + tuicore.LabelStyle.Render("/") + tuicore.KeyStyle.Render("n"))
 	}
 
 	if v.repopulatePrompt {
 		b.WriteString("\n")
-		promptStyle := lipgloss.NewStyle().Foreground(StatusInfo).Bold(true)
-		b.WriteString(promptStyle.Render("Repopulate cache? ") + keyStyle.Render("y") + labelStyle.Render("/") + keyStyle.Render("n"))
+		promptStyle := lipgloss.NewStyle().Foreground(tuicore.StatusInfo).Bold(true)
+		b.WriteString(promptStyle.Render("Repopulate cache? ") + tuicore.KeyStyle.Render("y") + tuicore.LabelStyle.Render("/") + tuicore.KeyStyle.Render("n"))
 	}
 
 	if v.err != "" {
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.err))
+		b.WriteString(lipgloss.NewStyle().Foreground(tuicore.StatusError).Render("Error: " + v.err))
 	}
 
 	// Apply scroll offset, auto-scroll to keep cursor visible
@@ -552,7 +553,7 @@ func (v *CacheView) Render(state *State) string {
 	}
 	visible := strings.Join(lines[v.scroll:end], "\n")
 
-	footer := RenderFooter(state.Registry, Cache, nil)
+	footer := tuicore.RenderFooter(state.Registry, tuicore.Cache, nil)
 
 	return wrapper.Render(visible, footer)
 }

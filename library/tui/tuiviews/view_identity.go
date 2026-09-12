@@ -1,5 +1,5 @@
 // view_identity.go - Passive status view showing the workspace user's verification state
-package tuicore
+package tuiviews
 
 import (
 	"strings"
@@ -12,12 +12,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/identity"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-var CoreIdentity = RegisterContext("core.identity")
+var CoreIdentity = tuicore.RegisterContext("core.identity")
 
 func init() {
-	RegisterViewMeta(ViewMeta{Path: "/config/identity", Context: CoreIdentity, Title: "Identity", Icon: "⚿", NavItemID: "identity"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/identity", Context: CoreIdentity, Title: "Identity", Icon: "⚿", NavItemID: "identity"})
 }
 
 // IdentityView shows the user's git signing config and the cached binding for
@@ -37,7 +38,7 @@ func NewIdentityView(workdir string) *IdentityView {
 	input := textinput.New()
 	input.CharLimit = 254
 	input.Prompt = "> "
-	StyleTextInput(&input, Dim, lipgloss.NewStyle(), Dim)
+	tuicore.StyleTextInput(&input, tuicore.Dim, lipgloss.NewStyle(), tuicore.Dim)
 	return &IdentityView{workdir: workdir, input: input}
 }
 
@@ -45,13 +46,13 @@ func NewIdentityView(workdir string) *IdentityView {
 func (v *IdentityView) SetSize(width, height int) {}
 
 // Activate is a no-op — the view reads fresh state on each render.
-func (v *IdentityView) Activate(state *State) tea.Cmd { return nil }
+func (v *IdentityView) Activate(state *tuicore.State) tea.Cmd { return nil }
 
 // Deactivate is a no-op.
 func (v *IdentityView) Deactivate() {}
 
 // Update handles policy toggles and the on-demand email lookup.
-func (v *IdentityView) Update(msg tea.Msg, state *State) tea.Cmd {
+func (v *IdentityView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case identityResolvedMsg:
 		v.resolving = false
@@ -105,11 +106,11 @@ func (v *IdentityView) Update(msg tea.Msg, state *State) tea.Cmd {
 func (v *IdentityView) IsInputActive() bool { return v.resolving }
 
 // Bindings returns the policy-toggle and lookup keys.
-func (v *IdentityView) Bindings() []Binding {
-	noop := func(*HandlerContext) (bool, tea.Cmd) { return false, nil }
-	return []Binding{
-		{Key: "d", Label: "toggle DNS verification", Contexts: []Context{CoreIdentity}, Handler: noop},
-		{Key: "r", Label: "resolve email", Contexts: []Context{CoreIdentity}, Handler: noop},
+func (v *IdentityView) Bindings() []tuicore.Binding {
+	noop := func(*tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
+	return []tuicore.Binding{
+		{Key: "d", Label: "toggle DNS verification", Contexts: []tuicore.Context{CoreIdentity}, Handler: noop},
+		{Key: "r", Label: "resolve email", Contexts: []tuicore.Context{CoreIdentity}, Handler: noop},
 	}
 }
 
@@ -144,14 +145,14 @@ func (v *IdentityView) toggleDNSVerification() {
 }
 
 // Render renders the view.
-func (v *IdentityView) Render(state *State) string {
-	wrapper := NewViewWrapper(state)
-	rs := RowStylesWithWidths(16, 0)
-	verified := lipgloss.NewStyle().Foreground(IdentityMe)
+func (v *IdentityView) Render(state *tuicore.State) string {
+	wrapper := tuicore.NewViewWrapper(state)
+	rs := tuicore.RowStylesWithWidths(16, 0)
+	verified := lipgloss.NewStyle().Foreground(tuicore.IdentityMe)
 
 	var b strings.Builder
 
-	b.WriteString(RenderHeader(rs, "Git Signing Configuration"))
+	b.WriteString(tuicore.RenderHeader(rs, "Git Signing Configuration"))
 	b.WriteString("\n")
 
 	name := git.GetUserName(v.workdir)
@@ -163,33 +164,33 @@ func (v *IdentityView) Render(state *State) string {
 	}
 
 	if name != "" {
-		b.WriteString(RenderRow(rs, "Name", name, "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Name", name, "", false))
 		b.WriteString("\n")
 	}
 	if email != "" {
-		b.WriteString(RenderRow(rs, "Email", email, "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Email", email, "", false))
 		b.WriteString("\n")
 	} else {
-		b.WriteString(RenderRow(rs, "Email", Dim.Render("not configured (set git config user.email)"), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Email", tuicore.Dim.Render("not configured (set git config user.email)"), "", false))
 		b.WriteString("\n")
 	}
 	if signingKey != "" {
-		b.WriteString(RenderRow(rs, "Signing key", truncateKeyDisplay(signingKey), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Signing key", truncateKeyDisplay(signingKey), "", false))
 		b.WriteString("\n")
-		b.WriteString(RenderRow(rs, "Format", signingFormat, "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Format", signingFormat, "", false))
 		b.WriteString("\n")
 	} else {
-		b.WriteString(RenderRow(rs, "Signing key", Dim.Render("not configured (set git config user.signingkey)"), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Signing key", tuicore.Dim.Render("not configured (set git config user.signingkey)"), "", false))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(RenderHeader(rs, "Verification Status"))
+	b.WriteString(tuicore.RenderHeader(rs, "Verification Status"))
 	b.WriteString("\n")
 
 	if email == "" || signingKey == "" {
 		b.WriteString("  ")
-		b.WriteString(Dim.Render("configure name, email, and signing key to enable verification"))
+		b.WriteString(tuicore.Dim.Render("configure name, email, and signing key to enable verification"))
 		b.WriteString("\n")
 	} else {
 		repoURL := gitmsg.ResolveRepoURL(v.workdir)
@@ -197,77 +198,77 @@ func (v *IdentityView) Render(state *State) string {
 		if signerKey == "" {
 			gpgsign := git.GetGitConfig(v.workdir, "commit.gpgsign")
 			if gpgsign != "true" {
-				b.WriteString(RenderRow(rs, "Status", Dim.Render("commits are not auto-signed (set commit.gpgsign=true)"), "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Status", tuicore.Dim.Render("commits are not auto-signed (set commit.gpgsign=true)"), "", false))
 			} else {
-				b.WriteString(RenderRow(rs, "Status", Dim.Render("no signed commits cached (run gitsocial fetch)"), "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Status", tuicore.Dim.Render("no signed commits cached (run gitsocial fetch)"), "", false))
 			}
 			b.WriteString("\n")
 		} else {
 			binding := identity.LookupBinding(signerKey, email)
 			statusText, ok := identityStatusText(binding)
 			if ok {
-				b.WriteString(RenderRow(rs, "Status", verified.Render(SafeIcon("⚿")+" "+statusText), "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Status", verified.Render(tuicore.SafeIcon("⚿")+" "+statusText), "", false))
 			} else {
-				b.WriteString(RenderRow(rs, "Status", Dim.Render(statusText), "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Status", tuicore.Dim.Render(statusText), "", false))
 			}
 			b.WriteString("\n")
 			if binding != nil && binding.ForgeHost != "" {
-				b.WriteString(RenderRow(rs, "Forge", binding.ForgeHost, "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Forge", binding.ForgeHost, "", false))
 				b.WriteString("\n")
 			}
 			if binding != nil && binding.ForgeAccount != "" {
-				b.WriteString(RenderRow(rs, "Account", binding.ForgeAccount, "", false))
+				b.WriteString(tuicore.RenderRow(rs, "Account", binding.ForgeAccount, "", false))
 				b.WriteString("\n")
 			}
 		}
 	}
 
 	b.WriteString("\n")
-	b.WriteString(RenderHeader(rs, "Policies"))
+	b.WriteString(tuicore.RenderHeader(rs, "Policies"))
 	b.WriteString("\n")
 	dnsState := "off"
 	if identity.IsDNSVerificationEnabled() {
 		dnsState = "on"
 	}
-	b.WriteString(RenderRow(rs, "DNS verification", dnsState+"  "+Dim.Render("(d to toggle)"), "", false))
+	b.WriteString(tuicore.RenderRow(rs, "DNS verification", dnsState+"  "+tuicore.Dim.Render("(d to toggle)"), "", false))
 	b.WriteString("\n")
 
 	b.WriteString("\n")
-	b.WriteString(RenderHeader(rs, "Identity Lookup"))
+	b.WriteString(tuicore.RenderHeader(rs, "Identity Lookup"))
 	b.WriteString("\n")
 	if v.resolving {
-		b.WriteString(RenderRow(rs, "Resolve email", v.input.View(), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Resolve email", v.input.View(), "", false))
 		b.WriteString("\n")
 	} else {
-		b.WriteString(RenderRow(rs, "Resolve email", Dim.Render("(r to look up an email via DNS)"), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "Resolve email", tuicore.Dim.Render("(r to look up an email via DNS)"), "", false))
 		b.WriteString("\n")
 	}
 	if v.resolveErr != "" {
 		b.WriteString("  ")
-		b.WriteString(lipgloss.NewStyle().Foreground(StatusError).Render("Error: " + v.resolveErr))
+		b.WriteString(lipgloss.NewStyle().Foreground(tuicore.StatusError).Render("Error: " + v.resolveErr))
 		b.WriteString("\n")
 	} else if v.resolved != nil {
-		b.WriteString(RenderRow(rs, "  Email", v.resolved.Email, "", false))
+		b.WriteString(tuicore.RenderRow(rs, "  Email", v.resolved.Email, "", false))
 		b.WriteString("\n")
-		b.WriteString(RenderRow(rs, "  Key", truncateKeyDisplay(v.resolved.Key), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "  Key", truncateKeyDisplay(v.resolved.Key), "", false))
 		b.WriteString("\n")
-		b.WriteString(RenderRow(rs, "  Type", v.resolved.KeyType(), "", false))
+		b.WriteString(tuicore.RenderRow(rs, "  Type", v.resolved.KeyType(), "", false))
 		b.WriteString("\n")
 		if v.resolved.Repo != "" {
-			b.WriteString(RenderRow(rs, "  Repo", v.resolved.Repo, "", false))
+			b.WriteString(tuicore.RenderRow(rs, "  Repo", v.resolved.Repo, "", false))
 			b.WriteString("\n")
 		}
 		src := "fetched"
 		if v.resolved.Cached {
 			src = "cached"
 		}
-		b.WriteString(RenderRow(rs, "  Source", src, "", false))
+		b.WriteString(tuicore.RenderRow(rs, "  Source", src, "", false))
 		b.WriteString("\n")
 	}
 
-	footer := RenderFooter(state.Registry, CoreIdentity, nil)
+	footer := tuicore.RenderFooter(state.Registry, CoreIdentity, nil)
 	if v.resolving {
-		footer = Dim.Render("type an email · enter to resolve · esc to cancel")
+		footer = tuicore.Dim.Render("type an email · enter to resolve · esc to cancel")
 	}
 	return wrapper.Render(b.String(), footer)
 }

@@ -1,4 +1,4 @@
-// view_diff_anchor_test.go - Tests for row-anchor lookup and hunk-reveal
+// util_diff_anchor_test.go - Tests for row-anchor lookup and hunk-reveal
 // scroll math against the cell-model row model.
 package tuicore
 
