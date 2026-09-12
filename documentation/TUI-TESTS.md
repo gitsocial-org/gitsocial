@@ -18,10 +18,10 @@ Tests create temporary directories and need nothing external. Warm wall time:
 
 | Run | Time |
 |---|---|
-| quick tier | 40 s |
-| full tier | 206 s |
-| `TestSmoke` | 90 s |
-| `TestGolden/LayoutProperties` | 59 s |
+| quick tier | 13 s |
+| full tier | 78 s |
+| `TestSmoke` | 40 s |
+| `TestGolden/LayoutProperties` | 20 s |
 
 ## Layout
 
@@ -97,7 +97,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 
 | File | Tests | Covers |
 |---|---|---|
-| `smoke_test.go` | `TestSmoke/AllKeysAllViews`, `UnregisteredKeysIgnored` | every registered key on every view (6,364 subtests), and unbound keys, without a panic; full tier only |
+| `smoke_test.go` | `TestSmoke/AllKeysAllViews`, `GlobalShortcuts`, `UnregisteredKeysIgnored` | every view with the keys its own context binds and one key nothing binds, then each global shortcut once on the first view that binds it (86 subtests), without a panic; full tier only |
 | `display_test.go` | `TestDisplay/*`: Timeline, Search, MyRepository, Board, IssuesList, Milestones, Sprints, PRList, ReleasesList, Notifications, Memos, ProjectMemos, MemoDetail, MemoHistory, MemoInherits, Forks, Settings, Site, Cache, Help | seeded content appears on each view |
 | `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help}_120x40`, `LayoutProperties` | ANSI-stripped renders against `testdata/*.golden`; every view fits the height at 120x40, 80x24 and 200x60 (full tier only) |
 | `navigation_test.go` | `TestNavigation/GlobalKeys` (`S`, `P`, `R`, `V`, `M`), `Back`, `SiteEditToggle`, `MultiLevelBack`, `Detail`, `Search`, `Help`, `Notifications` | the global jump keys land on their routes; `esc`, `/`, `?` and `@` do what they say |
@@ -109,7 +109,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 
 ## Notes
 
-- Commands run synchronously to a depth of 50; `tea.BatchMsg` fans out. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`. These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
+- Commands run synchronously to a depth of 50; `tea.BatchMsg` fans out. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`, `tea.Tick` (message timeouts, the auto-fetch heartbeat). These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
 - `tui.Model.Update` returns either `tui.Model` or `*tui.Model`; `toModel` handles both.
 - The suite catches panics on empty data, render crashes, keys that stop working after a refactor, missing `Activate` calls, navigation dead ends, content regressions, registration-order bugs, context mismatches, broken box drawing and height overflow.
 - Not caught: horizontal overflow. `assertLineCount` bounds the line count only, so a line wider than the terminal passes everything but a golden diff.

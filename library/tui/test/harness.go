@@ -170,7 +170,8 @@ func shouldSkipCmd(cmd tea.Cmd) bool {
 	return strings.Contains(name, "BlinkCmd") ||
 		strings.Contains(name, "Blink") ||
 		strings.Contains(name, "blink") ||
-		strings.Contains(name, "startFetch")
+		strings.Contains(name, "startFetch") ||
+		strings.Contains(name, "bubbletea/v2.Tick")
 }
 
 // cmdTimeout bounds one command so a genuinely blocking one cannot hang the
