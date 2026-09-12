@@ -29,10 +29,9 @@ func StyleTextInput(input *textinput.Model, prompt, text, placeholder lipgloss.S
 
 // Content panel padding (applied globally by host.renderFrame)
 const (
-	ContentPaddingTop    = 1 // blank lines above content
-	ContentPaddingLeft   = 2 // spaces before content
-	ContentPaddingRight  = 3 // spaces after content
-	ContentPaddingBottom = 0 // lines below content (before footer)
+	ContentPaddingTop   = 1 // blank lines above content
+	ContentPaddingLeft  = 2 // spaces before content
+	ContentPaddingRight = 3 // spaces after content
 )
 
 var (
@@ -48,9 +47,6 @@ var (
 	Selected = lipgloss.NewStyle().
 			Background(BgSelected).
 			Foreground(TextPrimary)
-
-	Normal = lipgloss.NewStyle().
-		Foreground(TextNormal)
 
 	NormalSelected = lipgloss.NewStyle().
 			Foreground(TextNormal).
@@ -125,8 +121,6 @@ var (
 	ListIndicatorSelected = lipgloss.NewStyle().
 				Foreground(IdentityMeMuted).
 				Background(BgSelected)
-
-	Doc = lipgloss.NewStyle().Margin(1, 2)
 )
 
 // AuthorStyle returns MeTitle when authorEmail matches userEmail, otherwise base.
@@ -187,13 +181,6 @@ func DefaultRowStyles() RowStyles {
 		Header:   lipgloss.NewStyle().Foreground(TextPrimary).Bold(true),
 		Dim:      lipgloss.NewStyle().Foreground(TextSecondary),
 	}
-}
-
-// RowStylesWithValueWidth returns styles with a custom value width.
-func RowStylesWithValueWidth(width int) RowStyles {
-	s := DefaultRowStyles()
-	s.Value = s.Value.Width(width)
-	return s
 }
 
 // RowStylesWithWidths returns styles with custom label and value widths.

@@ -112,17 +112,6 @@ func (l *CardList) ReloadItems(items []DisplayItem) {
 	}
 }
 
-// UpdateItems updates items while preserving selection.
-func (l *CardList) UpdateItems(items []DisplayItem) {
-	l.items = items
-	if l.selected >= len(items) {
-		l.selected = max(0, len(items)-1)
-	}
-	l.invalidateHeightCache()
-	l.buildItemIndex()
-	l.adjustScroll()
-}
-
 // buildItemIndex builds the item ID to index map.
 func (l *CardList) buildItemIndex() {
 	l.itemIndex = make(map[string]int)
@@ -213,11 +202,6 @@ func (l *CardList) SelectByID(id string) bool {
 		return true
 	}
 	return false
-}
-
-// FocusedLink returns the index of the currently focused link (-1 = none).
-func (l *CardList) FocusedLink() int {
-	return l.focusedLink
 }
 
 // FocusedLinkLocation returns the Location of the currently focused link, if any.

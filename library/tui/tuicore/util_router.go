@@ -180,15 +180,6 @@ var LocPMBoard = Location{Path: "/pm/board"}
 // LocPMIssues creates a location for the PM issues list.
 var LocPMIssues = Location{Path: "/pm/issues"}
 
-// LocPMIssuesRepo creates a location for PM issues in a specific repository.
-func LocPMIssuesRepo(repoURL, branch string) Location {
-	params := map[string]string{"url": repoURL}
-	if branch != "" {
-		params["branch"] = branch
-	}
-	return Location{Path: "/pm/issues", Params: params}
-}
-
 // LocPMIssueDetail creates a location for a PM issue detail view.
 func LocPMIssueDetail(issueID string) Location {
 	return Location{Path: "/pm/issue", Params: map[string]string{"issueID": issueID}}
@@ -228,15 +219,6 @@ var LocPMConfig = Location{Path: "/pm/config"}
 // LocPMMilestones creates a location for the PM milestones list.
 var LocPMMilestones = Location{Path: "/pm/milestones"}
 
-// LocPMMilestonesRepo creates a location for PM milestones in a specific repository.
-func LocPMMilestonesRepo(repoURL, branch string) Location {
-	params := map[string]string{"url": repoURL}
-	if branch != "" {
-		params["branch"] = branch
-	}
-	return Location{Path: "/pm/milestones", Params: params}
-}
-
 // LocPMMilestoneDetail creates a location for a PM milestone detail view.
 func LocPMMilestoneDetail(milestoneID string) Location {
 	return Location{Path: "/pm/milestone", Params: map[string]string{"milestoneID": milestoneID}}
@@ -266,15 +248,6 @@ func LocPMMilestoneHistoryDiff(milestoneID, fromID, toID string) Location {
 
 // LocPMSprints creates a location for the PM sprints list.
 var LocPMSprints = Location{Path: "/pm/sprints"}
-
-// LocPMSprintsRepo creates a location for PM sprints in a specific repository.
-func LocPMSprintsRepo(repoURL, branch string) Location {
-	params := map[string]string{"url": repoURL}
-	if branch != "" {
-		params["branch"] = branch
-	}
-	return Location{Path: "/pm/sprints", Params: params}
-}
 
 // LocPMSprintDetail creates a location for a PM sprint detail view.
 func LocPMSprintDetail(sprintID string) Location {

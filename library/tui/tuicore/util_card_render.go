@@ -4,7 +4,6 @@ package tuicore
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -34,11 +33,6 @@ var (
 	htmlImgAltRe = regexp.MustCompile(`alt=["']([^"']+)["']`)
 	// Email styling
 	emailStyle = lipgloss.NewStyle().Foreground(AccentEmail)
-	// Known image file extensions
-	imageExtensions = map[string]bool{
-		".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
-		".svg": true, ".webp": true, ".bmp": true, ".tiff": true, ".ico": true,
-	}
 )
 
 // cachedGlamourRender calls renderer.Render with caching. variant identifies the renderer ("n" or "m").
@@ -177,14 +171,6 @@ func RestoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 		content = strings.Replace(content, placeholder, replacement, 1)
 	}
 	return content
-}
-
-// IsImageURL checks if a URL path ends with a known image extension (case-insensitive).
-func IsImageURL(url string) bool {
-	u := strings.SplitN(url, "?", 2)[0]
-	u = strings.SplitN(u, "#", 2)[0]
-	ext := strings.ToLower(path.Ext(u))
-	return imageExtensions[ext]
 }
 
 // ExtractURLs extracts bare URLs from content and replaces them with placeholders.
@@ -905,14 +891,6 @@ func TruncateToWidth(s string, maxWidth int) string {
 		b.WriteString("\x1b[0m")
 	}
 	return b.String()
-}
-
-// Pluralize returns the singular or plural form based on count
-func Pluralize(n int, singular, plural string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return fmt.Sprintf("%d %s", n, plural)
 }
 
 // Hyperlink wraps text in an OSC 8 terminal hyperlink with blue + underline styling.

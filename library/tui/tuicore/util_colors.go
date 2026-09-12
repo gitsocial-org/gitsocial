@@ -93,7 +93,7 @@ var (
 	BgFooter   = adaptive(grayFooterDark, grayFooterLight)
 )
 
-// UI accents. AccentHyperlink and AccentImage are also emitted as raw ANSI-256
+// UI accents. The hyperlink and image colors are emitted as raw ANSI-256
 // escapes (OSC 8 links bypass lipgloss), so their index strings are named here
 // and resolved per-theme via pickThemeColor at those sites.
 const (
@@ -106,8 +106,6 @@ const (
 var (
 	AccentEmail     = adaptive("39", "31")
 	AccentHighlight = adaptive("226", "220")
-	AccentHyperlink = adaptive(accentHyperlinkDark, accentHyperlinkLight)
-	AccentImage     = adaptive(accentImageDark, accentImageLight)
 	AccentPink      = adaptive("#F780E2", "#C724A8")
 )
 

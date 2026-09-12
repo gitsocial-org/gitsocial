@@ -61,7 +61,6 @@ type State struct {
 	Focused bool
 
 	// Loading/progress state
-	Loading    bool
 	Syncing    bool
 	Fetching   bool
 	Pushing    bool
@@ -114,7 +113,6 @@ type State struct {
 
 	// UI preferences
 	ShowEmailOnCards bool
-	ShowHelp         bool
 
 	// Error log (session-level warnings and errors for the error log panel)
 	ErrorLog []LogEntry
@@ -156,13 +154,6 @@ func (s *State) InnerHeight() int {
 	return s.Height - 2 - ContentPaddingTop
 }
 
-// ClearMessage clears the current message and error.
-func (s *State) ClearMessage() {
-	s.Message = ""
-	s.MessageType = MessageTypeNone
-	s.Err = nil
-}
-
 // SetMessage sets a status message with type. Bumps MessageID so any pending
 // auto-clear timer (from Host.SetMessageWithTimeout) is canceled — without it,
 // a fire-and-forget pre-toast can be wiped out by a stale ClearMessageMsg.
@@ -171,13 +162,6 @@ func (s *State) SetMessage(msg string, msgType MessageType) {
 	s.Message = msg
 	s.MessageType = msgType
 	s.Err = nil
-}
-
-// SetError sets an error message.
-func (s *State) SetError(err error) {
-	s.Err = err
-	s.Message = ""
-	s.MessageType = MessageTypeNone
 }
 
 // AddLogEntry appends a warning or error entry to the session error log.
