@@ -35,7 +35,7 @@ Apply to help, errors, TUI hints, site strings, log lines, guides, comments and 
 |---|---|---|
 | `Short` | verb first, no period, no parenthetical | 50 characters |
 | flag help | what the flag does; cobra prints the default | 60 characters, no parenthetical |
-| `Long` | one paragraph of what, then examples; anything longer goes to the guide and is linked | 12 lines |
+| `Long` | one paragraph of what, then the reference the terminal needs (values, inline syntax, scopes, what a command publishes, key tables), then examples; rationale goes to the commit body and guide sentences to the guide | 12 lines of prose; tables and examples are not counted |
 | error | one sentence naming the thing and the next action | one line |
 | stderr hint | same as error, prefixed `gitsocial:` | one line |
 
@@ -56,24 +56,32 @@ Hint (the original has an em-dash where `[em-dash]` stands):
 - `gitsocial: multiple s3 remotes; pushing to "backup" [em-dash] set git config gitsocial.pushRemote <name> to choose`
 - `gitsocial: several s3 remotes, pushing to "backup". Choose one with: gitsocial remote default <name>`
 
-`Long` for `push`, 73 lines today:
+`Long` for `push`, 73 lines before the sweep, 29 after it, and 40 once the published list came back:
 
 ```
 Publish local GitMsg data to one or more remotes. On an s3 remote with
-site.publish enabled, also publish the static site.
+site.publish enabled, also publish the browser static site.
 
-Remotes resolve in order: arguments, git config gitsocial.pushRemote,
+Remotes resolve in order: the arguments, git config gitsocial.pushRemote,
 then origin, or the first s3 remote when origin is not one. Diverged
-gitmsg/* branches merge automatically. Diverged code branches fail
-with a hint.
+gitmsg/* branches merge automatically; diverged code branches fail with a
+hint. See documentation/S3.md for remotes and thin fork buckets.
+
+Published:
+  branch commits  posts, comments, reposts, quotes
+  state refs      lists and configs under refs/gitmsg/
+  tags            every local tag
+  code branches   the default branch when it is ahead, and open PR heads
+  the site        on an s3 remote with site.publish
 
 Examples:
-  gitsocial push                # resolved remotes, data and site
-  gitsocial push r2 backup      # named remotes, in order
-  gitsocial push --site-only    # refresh the site, push no data
-  gitsocial push --dry-run      # show what would be pushed
-
-See documentation/S3.md for remotes and thin fork buckets.
+  gitsocial push                 # resolved remotes, data and site
+  gitsocial push r2 backup       # named remotes, in order
+  gitsocial push --dry-run       # show what would be pushed
+  gitsocial push --no-code       # data and site, no code branches
+  gitsocial push --site-only     # refresh the site, push no data
+  gitsocial push --all-branches  # every local branch
+  gitsocial push --full          # detach a thin fork bucket
 ```
 
 The current text's explanations (the remote heuristic, the thin-fork escape hatch, why gitmsg branches merge cleanly) become guide steps and reference rows in `S3.md`; the rest goes.
