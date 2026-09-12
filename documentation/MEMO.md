@@ -33,7 +33,7 @@ Sessions create themselves on first write. Two machines writing between syncs me
 gitsocial memo create "Cache writes use ExecLocked" --labels kind/policy,priority/high,topic/cache [--body ...] [--scope session|personal|project]
 gitsocial memo edit <ref> [--subject ...] [--body ...] [--labels ...]
 gitsocial memo retract <ref>
-gitsocial memo promote <ref> --to personal|project
+gitsocial memo promote <ref> --to project|personal|session
 gitsocial memo list | show <ref>
 ```
 
@@ -63,7 +63,7 @@ gitsocial memo inherit remove <url>
 gitsocial memo list --tier inherited | --tier external | --include-external
 ```
 
-`inherit add` records the source at `refs/gitmsg/memo/inherits/` and adds it to the managed social list `memo-inherits` with all branches, so every fetch picks up its memo branch; `remove` undoes both.
+`inherit add` records the source at `refs/gitmsg/memo/inherits/<urlHash>` and adds it to the managed social list `memo-inherits` with all branches, so every fetch picks up its memo branch. `remove` undoes both.
 
 ## Labels
 

@@ -155,4 +155,13 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 
 ## Checks
 
-`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts em-dashes outside `specs/`, comment blocks over 3 lines in Go, JS, CSS and HTML outside package docs, `Short` over 50 characters, and flag help over 60 characters or containing a parenthesis, and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts seven rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
+
+| Rule | Counts |
+|---|---|
+| `emdash` | em-dashes in any tracked file |
+| `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
+| `short-long` | a cobra `Short` over 50 characters |
+| `flag-help` | flag help over 60 characters, or containing a parenthesis |
+
+`specs/`, `testdata/`, golden files and the vendored web assets under `library/core/objstore/` are out of scope for every rule.

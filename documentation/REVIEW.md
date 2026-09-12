@@ -17,14 +17,15 @@ gitsocial review config get|set|list
 
 ```
 gitsocial review pr create "Add dark mode" --base '#branch:main' --head '#branch:dark-mode' \
-    [--reviewers bob@example.com,carol@example.com] [--closes <issue-ref>] [--draft] [--stack | --depends-on <pr-ref>]
+    [--reviewers bob@example.com,carol@example.com] [--closes <issue-ref>] [--draft] [-l area/ui] \
+    [--stack | --depends-on <pr-ref>] [--allow-unpublished-head]
 gitsocial review pr list [-s open]
 gitsocial review pr show <ref>
 gitsocial review pr edit <ref> [--title ...] [--body ...] [--reviewers ...] [--closes ...]
 gitsocial review pr update <ref>                       # record the current branch tips as a new version
 gitsocial review pr diff <ref> [--from <n> --to <m>]   # range-diff between two versions
 gitsocial review pr sync <ref> [--strategy rebase|merge]
-gitsocial review pr merge <ref> [--strategy fast-forward|squash|rebase|merge]
+gitsocial review pr merge <ref> [--strategy ff|squash|rebase|merge]
 gitsocial review pr close <ref>
 gitsocial review pr retract <ref>
 gitsocial review pr draft <ref> | ready <ref>
@@ -40,10 +41,10 @@ gitsocial review pr stack <ref> | rebase-stack <ref> | sync-stack <ref>
 gitsocial review feedback approve <pr-ref> [-m "LGTM"]
 gitsocial review feedback request-changes <pr-ref> -m "Why"
 gitsocial review feedback comment "Consider caching this" --pr <pr-ref> --commit <sha12> --file path/to.go \
-    --new-line 42 [--new-line-end 50] [--old-line 40] [--suggest]
+    --new-line 42 [--new-line-end 50] [--old-line 40] [--old-line-end 48] [--suggest]
 ```
 
-Feedback is tied to the version the reviewer saw. A later version never dismisses it; it is marked stale when the code changed.
+Feedback is tied to the version the reviewer saw. A later version does not dismiss it. It is marked stale when the code changed.
 
 ## Forks
 
@@ -148,7 +149,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
       ●  pr merge PR2: PR3 retargets              │
 ```
 
-`rebase-stack` rebases every member above the given one and records versions, stopping at the first conflict; `sync-stack` records tips without rebasing. `pr merge` refuses a member whose dependency is unmerged. Stacks span forges, since `depends-on` is a reference, and `gitsocial import review` detects them among imported pull requests by matching base and head branches.
+`rebase-stack` rebases every member above the given one and records versions, stopping at the first conflict. `sync-stack` records tips without rebasing. `pr merge` refuses a member whose dependency is unmerged. `depends-on` is a reference, so a stack spans forges. `gitsocial import review` detects stacks among imported pull requests by matching base and head branches.
 
 ### Other flows
 
@@ -157,7 +158,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
 - **Linked issues.** `--closes <issue-ref>,<issue-ref>` closes the issues when the pull request merges.
 - **Discussion.** General comments are social comments on the pull request, `gitsocial social comment <pr-ref> "..."`; replies nest with `reply-to`.
 - **Lifecycle.** `open` becomes `merged` or `closed` by an edit from the base owner. The author withdraws with `retract`. There is no reopen; create a new pull request.
-- **Merge strategies.** `pr merge --strategy fast-forward|squash|rebase|merge`, per pull request; fast-forward is the default. `merge-base` and `merge-head` are recorded before the merge, so the merged diff can be reconstructed. After a merge the base branch is pushed; a failed push is a warning, and the merge stands locally.
+- **Merge strategies.** `pr merge --strategy ff|squash|rebase|merge`, per pull request; `ff` is the default. `merge-base` and `merge-head` are recorded before the merge, so the merged diff can be reconstructed. After a merge the base branch is pushed; a failed push is a warning, and the merge stands locally.
 - **Branch sync.** `pr sync` rebases the head onto the base, or merges the base into it with `--strategy merge`, then records the new tips as a version.
 
 ## Reference

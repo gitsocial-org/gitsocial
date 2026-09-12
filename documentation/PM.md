@@ -19,7 +19,7 @@ gitsocial pm config get|set|list
 gitsocial pm issue create "Login page returns 500" -l kind/bug,priority/high -a alice@example.com -d 2026-06-01
 gitsocial pm issue create "Add OAuth" -m <milestone> -s <sprint> --parent <issue> --blocks <issue> --blocked-by <issue> --related <issue>
 gitsocial pm issue list [-s open] [-l kind/bug] [--sort <field>] [-n 50]
-gitsocial pm issue list -f 'state:open priority:high assignee:alice@example.com due:overdue'
+gitsocial pm issue list -f 'state:open priority:high assignees:alice@example.com due:overdue'
 gitsocial pm issue show <ref>
 gitsocial pm issue edit <ref> [--subject ...] [--body ...] [--state ...] [-l ...] [-a ...]
 gitsocial pm issue close <ref>
@@ -28,7 +28,9 @@ gitsocial pm issue comment <ref> "Repro steps below"
 gitsocial pm issue comments <ref>
 ```
 
-- `-f` takes `state:`, `priority:`, `assignee:`, `milestone:`, `sprint:` and `due:today|overdue|week` terms, a leading `-` to exclude, and free text for full-text search.
+- `-f` takes the field terms `state:`, `assignees:`, `milestone:`, `parent:`, `root:` and `due:`, a leading `-` to exclude, and quoted free text for full-text search. Any other `<scope>:<value>` term matches the label `<scope>/<value>`, so `priority:high` finds `priority/high`.
+- `due:` takes `today`, `overdue`, `week` or `<n>d`.
+- `--sort` takes `created`, `due` or `priority`, each with `:asc` or `:desc`.
 - A sub-issue names its `--parent`; `root` is derived. `--blocks`, `--blocked-by` and `--related` link issues.
 - An issue closes when a pull request whose `--closes` names it is merged.
 
@@ -47,12 +49,16 @@ gitsocial pm sprint list | show <ref> | edit <ref> | start <ref> | complete <ref
 
 Labels are the core `<scope>/<value>` field ([GITMSG.md §1.7](../specs/GITMSG.md#17-labels)).
 
-| Scope | Values |
-|---|---|
-| `kind/` | `bug`, `feature`, `task`, `story` |
-| `priority/` | `low`, `medium`, `high`, `critical` |
-| `status/` | the board columns: `backlog`, `in-progress`, `review`, `done` |
-| `area/`, `team/`, `needs/`, `release/` | free |
+The `framework` config declares the values for each scope. `minimal` declares none.
+
+| Scope | `kanban` | `scrum` |
+|---|---|---|
+| `kind/` | `bug`, `feature`, `task`, `chore` | `story`, `bug`, `task`, `spike` |
+| `priority/` | `critical`, `high`, `medium`, `low` | `critical`, `high`, `medium`, `low` |
+| `status/` | `in-progress`, `review`, `done` | `sprint-backlog`, `in-progress`, `review` |
+| `points/` | | `1`, `2`, `3`, `5`, `8`, `13` |
+
+`area/`, `team/`, `needs/` and `release/` are free.
 
 ## Forks
 
@@ -69,7 +75,7 @@ Issues opened on a registered fork appear in `pm issue list` and raise notificat
 gitsocial pm board          # a summary; the kanban board is in the TUI
 ```
 
-Columns come from the `framework` config (`minimal`, `kanban`, `scrum`) or a custom `boards` list ([GITPM.md §2](../specs/GITPM.md#2-config)).
+Columns come from a custom `boards` list, else from the `framework` config (`minimal`, `kanban`, `scrum`) ([GITPM.md §2](../specs/GITPM.md#2-config)).
 
 ## Reference
 

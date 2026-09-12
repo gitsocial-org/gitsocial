@@ -71,7 +71,7 @@ gitsocial mirror --dry-run <forge-url> <s3-url>            # the provider checkl
 ```
 
 - The forge URL stays `origin`; the bucket is a second remote. Every upstream branch is mirrored unless `--default-branch-only`.
-- `--url` sets `site.url` and turns the HTML pages on. `-n` caps items per type on import. `-y` never prompts; missing credentials then fail naming the `gitsocial config credentials set` command.
+- `--url` sets `site.url` and turns the HTML pages on. `-n` caps items per type on import. `-y` skips every prompt; missing credentials then fail naming the `gitsocial config credentials set` command.
 - Creating the bucket, allowing public reads and attaching a domain are provider dashboard steps.
 
 ### gitsocial clone
@@ -136,7 +136,7 @@ Forks are for two-way collaboration on the same items. Lists (`gitsocial social 
 ### gitsocial explore
 
 ```
-gitsocial explore [--list <name>]      # cached repositories
+gitsocial explore [--list <name>] [--limit <n>]   # cached repositories
 ```
 
 ### gitsocial related
@@ -277,8 +277,8 @@ References follow [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections):
 | Variable | Purpose |
 |---|---|
 | `XDG_CONFIG_HOME` | config root, default `~/.config`; gitsocial uses `<root>/gitsocial` |
-| `GITSOCIAL_PERSONAL_REPO` | path of the personal bare repo, default `<config>/personal` |
-| `GITSOCIAL_EDITOR` | editor for messages; falls back to `$EDITOR` |
+| `GITSOCIAL_PERSONAL_REPO` | path of the personal bare repo, default `~/.config/gitsocial/personal` |
+| `GITSOCIAL_EDITOR` | editor for messages; falls back to `$EDITOR`, `$VISUAL`, then `vi` |
 | `GM_PAGER` | pager for output; falls back to `$PAGER` |
 | `GITSOCIAL_PPROF` | `cpu`, `mem` or `trace`: write a profile to `/tmp/gitsocial-cpu.pprof`, `/tmp/gitsocial-mem.pprof` or `/tmp/gitsocial.trace` on exit |
 | S3 credentials, endpoints and tuning | see [S3.md](S3.md#environment-variables) |

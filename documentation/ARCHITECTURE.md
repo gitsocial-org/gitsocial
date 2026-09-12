@@ -30,9 +30,14 @@ bin/gitsocial tui
 
 ### Test and lint
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push, about 90 s warm when every package reruns and less after a change in one package. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, about 4 min warm; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
 
-The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release from `scripts/release.sh`. `-short` skips 66 real-git subtests and is a local smoke run, never a tier.
+| Tier | Warm wall time |
+|---|---|
+| `--quick`, the push tier | 90 s when every package reruns, less after a change in one |
+| full | 4 min |
+
+The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, and the `TestS3Helper_*` child-process tests. `-race` and the browser site battery run at release from `scripts/release.sh`. `-short` skips the real-git subtests. It is a local smoke run, not a tier.
 
 `scripts/prose-check.sh` is stage 0. It counts [STYLE.md](STYLE.md) violations and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts lowered counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 

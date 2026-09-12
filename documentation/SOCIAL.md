@@ -32,10 +32,11 @@ A list is a named set of repositories. The timeline shows posts from every list,
 
 ```
 gitsocial social list create following
-gitsocial social list add following https://github.com/user/repo [--all-branches]
+gitsocial social list add following https://github.com/user/repo [-b <branch> | --all-branches]
 gitsocial social list remove following https://github.com/user/repo
 gitsocial social list show [following]
 gitsocial social list ls
+gitsocial social list delete following
 gitsocial social list repo <repo-url>       # the lists a remote repository publishes
 gitsocial social timeline [-l following] [-r workspace] [-n 50]
 gitsocial social fetch                      # every repository in every list; `gitsocial fetch` does this and more

@@ -13,9 +13,8 @@ gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
 gitsocial mirror                       # later, from the workspace: refresh
 ```
 
-- `--url` is the site's public address and turns the [HTML pages](#html-pages) on; the other flags are in [CLI.md](CLI.md#gitsocial-mirror).
-- Re-running refreshes. It is safe from cron, and a crashed run resumes.
-- Creating the bucket, allowing public reads and attaching the domain are provider dashboard steps; `--dry-run` prints the checklist.
+- `--url` is the site's public address and turns the [HTML pages](#html-pages) on.
+- The remaining flags, the refresh behavior and the provider checklist are in [CLI.md](CLI.md#gitsocial-mirror).
 
 ## Publish
 
@@ -31,6 +30,7 @@ gitsocial push
 - The site needs public reads on the bucket or the domain in front of it. A private bucket still works as a remote, without a site.
 - A push from a newer binary re-uploads the [shell](#shell), the app's own files.
 - A [thin fork bucket](S3.md#thin-fork-buckets) gets no site. `gitsocial push --full` detaches it and the site returns.
+
 ## Customization
 
 ```bash
@@ -75,7 +75,9 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Page 1 is the oldest. The sealed page that was newest when it sealed keeps its `← newer` link to the head after it stops being newest, and the head's `older →` chain reaches every page, so a crawler walking either direction lands on a real document. Milestones and sprints fold into `issues`.
 - `index.html` is dual-owned: the page layer holds it whenever the layer is effective, the shell otherwise. Every effective push reclaims it, since the same push's shell upload may have written over it.
 - The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Its rows come from the code index, not a second git walk, so the list, the timeline and the front page's activity agree on which commits belong to the branch.
-- Sealed commits pages are re-derived after a rebase or force-push. `gitmsg/*` branches are append-only by protocol, but the default branch is not, so every pass re-locates the recorded frontier in the current list before sealing onward: the sha must still be there, with the same number of rows below it. A sha commits to its whole ancestry, so a frontier still present proves the sealed region intact, and the row count catches a re-attribution that inserted rows beneath it. Either check failing re-derives the whole chain. Two contracts follow: `commits/` gets no Atom feed, since the code corpus carries no bodies to syndicate, and a sealed commits page is `no-cache` rather than immutable, since a re-derived page has to be re-fetched.
+- Sealed commits pages are re-derived after a rebase or force-push. `gitmsg/*` branches are append-only by protocol; the default branch is not.
+- Every pass re-locates the recorded frontier in the current list before sealing onward. The sha must still be there, with the same number of rows below it. A sha commits to its ancestry, so a frontier still present proves the sealed region intact, and the row count catches a re-attribution that inserted rows beneath it. Either check failing re-derives the chain.
+- Two contracts follow. `commits/` gets no Atom feed, since the code corpus carries no bodies to syndicate. A sealed commits page is `no-cache` rather than immutable, since a re-derived page has to be re-fetched.
 - The commits pagination is published in the pages manifest and read back by both sides, so the app's `/commits` route renders the same rows the generated page shows and the boot swap moves nothing.
 - A file page renders one prose document on the default branch at `f/<path>.html` (`f/specs/GITMSG.html`). A document qualifies when:
   - it is markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) or an extensionless convention document (LICENSE, NOTICE, AUTHORS, CONTRIBUTING, CHANGELOG and their siblings, shown preformatted);
@@ -83,7 +85,8 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
   - its path has no space and none of `@ : # ? %`.
 - File pages follow the tree: a document that leaves it loses its page, one under 100 words stays out of the sitemap, and any renders whole up to 256 KB. `filesInclude` and `filesExclude` override the selection rule.
 - A file page's key mirrors the repo path with the extension swapped for `.html`, which is a one-to-one map onto the `file:<path>@<branch>` route the page stamps as its boot hook. Two documents that would claim one key put the second at `<path>.html`.
-- Discovery is the one place the page layer reads a git tree instead of the push's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb; a tree it cannot read carries the published set forward rather than reading as an empty repo. A changed default branch rewrites the whole set, since the branch is in every page's route and meta line. Each page's date comes from one history walk over the whole tree, not a `git log` per path.
+- Discovery is the one place the page layer reads a git tree instead of the push's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb. A tree it cannot read carries the published set forward rather than reading as an empty repo.
+- A changed default branch rewrites every page, since the branch is in each page's route and meta line. Each page's date comes from one history walk over the tree, not a `git log` per path.
 - The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app. The page has no heading of its own; the README's headings stand as written and the repo title is the `<title>` and the sidebar.
 - `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
 - `feed.xml` is Atom 1.0 with the newest 50 non-retracted top-level items, memos excluded. Each type directory has its own `feed.xml`.
@@ -100,7 +103,7 @@ Rules that hold on every page:
 - Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is the one card the page layer and the app still shape differently.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.
 - A thread reply is a comment card in both renderers, under a `Comments (N)` heading, with its type glyph leading the meta row and one rail per depth level. Ordering is the app's: a reply follows the one it answers, siblings run oldest first, depth caps at four. The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
-- First-time generation is budgeted at 5,000 pages per push and resumes on the next push: item pages, then file pages, then commits pages.
+- First-time generation runs item pages, then file pages, then commits pages. `GITSOCIAL_SITE_PAGES_BUDGET` caps the item pages one push writes ([S3.md](S3.md#environment-variables)); the rest resume on the next push. The cap is unset by default.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 
 Known divergence: the app renders markdown for `.md` and `.markdown` only, so an `.mdx` page reads as prose before the boot and as source after it.
@@ -115,7 +118,9 @@ bin/locals3 -root <dir>                                           # serve a push
 
 The harness is `library/core/objstore/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
 
-Every suite but one runs under a DOM shim that computes no styles. `verify_styles.js` is the exception: it drives a real Chrome, reads computed styles and child structure for a fixed selector list on ten routes in both themes, and compares them to the baselines in `sitetest/styles/`. Chrome resolves through `chrome.js` (a `CHROME` override, then a candidate list; never a bare name on PATH), the suite skips with a notice when there is none, and `release.sh` preflights the same resolver so a release cannot ship with the gate skipped.
+Every suite but one runs under a DOM shim that computes no styles. `verify_styles.js` is the exception: it drives a real Chrome, reads computed styles and child structure for a fixed selector list on ten routes in both themes, and compares them to the baselines in `sitetest/styles/`.
+
+Chrome resolves through `chrome.js`: a `CHROME` override, then a candidate list of absolute paths. A bare name on PATH is not accepted. The suite skips with a notice when there is no Chrome, and `release.sh` preflights the same resolver so a release cannot ship with the gate skipped.
 
 ```bash
 GS_STYLES_UPDATE=1 node library/core/objstore/sitetest/verify_styles.js   # recapture the baselines
@@ -139,9 +144,13 @@ A baseline records the distinct variants a selector renders, not whichever eleme
 | `prism.js`, `grammars/` | the base grammars and 47 lazy-loaded ones |
 | `icons.js`, `fonts/` | file-type icons; EB Garamond and IBM Plex Mono |
 
-`.js`, `.css`, `.html` and `.json` under `site/` upload brotli-compressed with `Content-Encoding: br`. Generated HTML, the sitemap, `robots.txt` and the feeds upload plain. Git objects never carry an encoding.
+`.js`, `.css`, `.html` and `.json` under `site/` upload brotli-compressed with `Content-Encoding: br`. Generated HTML, the sitemap, `robots.txt` and the feeds upload plain. Git objects carry no encoding.
 
-A generated page inlines `pages-core.css` into its head, comments stripped, and links `pages-full.css` behind a preload that flips to a stylesheet on load, with a `noscript` fallback. So first paint is the HTML plus the inlined bytes, and the component styling arrives after. The same two files govern the app, so the page and the booted app cannot drift. Two rules follow: `pages-core.css` carries no `url()`, since pages sit at several directory depths where a relative URL resolves against the page; and a change to it bumps `sitePagesVersion`, since every page's head carries a copy. A configured accent is site data, not part of the sheet: it is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
+A generated page inlines `pages-core.css` into its head, comments stripped, and links `pages-full.css` behind a preload that flips to a stylesheet on load, with a `noscript` fallback. First paint is the HTML plus the inlined bytes, and the component styling arrives after. The same two files govern the app, so the page and the booted app cannot drift.
+
+Two rules follow. `pages-core.css` carries no `url()`, since pages sit at several directory depths where a relative URL resolves against the page. A change to it bumps `sitePagesVersion`, since every page's head carries a copy.
+
+A configured accent is site data, not part of the sheet. It is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
 
 A grammar is chosen by file extension, then basename (`Dockerfile`, `Makefile`, `CMakeLists.txt`), then a fence's info string, with `markup` as the fallback. Code renders plain first and highlights when the grammar arrives.
 
@@ -160,14 +169,14 @@ At the prefix root, next to the shell; the cache classes are defined in [S3.md](
 | `robots.txt` | `Allow: /` and the sitemap location | no-cache |
 | `feed.xml`, `<dir>/feed.xml` | Atom feeds, 50 entries | no-cache |
 
-Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push. A manifest at any other version reads as absent, so a bump is a full regen under the per-push page budget.
+Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push. A manifest at any other version reads as absent, so a bump regenerates every page.
 
 ### Page entry
 
 A generated page hands the app three hooks: a `<meta name="gs-route">` route, a `data-base` attribute on the `<div id="gs-page">` mount, and the mount itself. `gs-upgrade.js` reads them, loads the shell relative to that base and lets `gs-app.js` render.
 
 - The page's own head script marks `<html>` with `gs-boot` before the body is parsed, so a visitor with JS starts on a loading line rather than on content that is about to change. It also stamps the theme the app stored in `localStorage`, so a visitor who chose one gets the page in it with no flip at boot.
-- The front page is the exception: its README is pre-rendered, so the served document is already what the home route shows and cloaking it would trade a finished page for a loading line plus the whole shell download. A fragment naming a different route cloaks as every other page does.
+- The front page is the exception: its README is pre-rendered, so the served document is already what the home route shows. Cloaking it would trade a finished page for a loading line and a shell download. A fragment naming a different route cloaks as every other page does.
 - The mark undoes itself on the load event, and on a 10 s timer for a document whose load event does not fire. Both defer to the flag `gs-upgrade.js` sets when it takes ownership, so an upgrade that fails to parse still leaves a readable page.
 - The takeover reveals twice: the app's chrome once `pages-full.css` governs the page, the content once the first view has settled. A page entered without a deep link keeps its served content until then.
 - A `location.hash` deep link wins over the page's own route when the fragment names a route. A bare in-page anchor addresses the page in hand, so the page's own route boots and the browser keeps the anchor.
@@ -222,6 +231,15 @@ A push classifies the state from both manifests and both live head counts, then 
 - Each entry carries an attributed branch: the default branch wherever the commit is reachable from it, else the first branch in default-first name order whose walk reached it. That is the reader's own rule, so switching the timeline to the index moves no card. Entries also carry parent shas, which is how the repository graph renders without a per-commit walk.
 - A commit carrying a `GitMsg:` header is walked for reachability and left out of the corpus, as the reader filters it.
 - A changed corpus tip takes the repair path rather than a gap append: membership is "reachable from any current tip", so a force-push can shrink it inside a sealed shard. With no bootstrap in flight the repair re-walks every tip and reseals; content-hash keying leaves unchanged shards untouched and drops the stale ones from the manifest. Backfilled parents inherit the frontier commit's own branch.
+
+### Push-time maintenance
+
+Every ref-moving push to an s3 remote runs the site's share of the upkeep pass ([S3.md](S3.md#push-maintenance)).
+
+- `.gitsocial/site/push-state` records the last full pass: the shell version, a digest over the `refs/` listing etags plus HEAD's, and the page layer's state. A matching marker skips the data-derived pass in two or three round trips.
+- The marker is stamped only at the end of a full pass, so a stale, missing or unreadable marker costs extra work rather than a skip. A per-remote override folds into the digest, since it moves no ref.
+- The marker is withheld while an index bootstrap or the page layer still owes work no ref move signals, and when a shell upload's reclaim of `index.html` failed.
+- The site walks read their commits from the pusher's local odb through one long-lived `git cat-file --batch`, not one bucket GET per commit. A push uploads objects before it moves refs and git objects are content-addressed, so a commit reachable from a bucket ref tip holds the same bytes in both stores. A local miss falls back to the bucket for that one object.
 
 ### Object reads
 

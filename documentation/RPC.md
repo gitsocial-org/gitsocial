@@ -6,7 +6,7 @@
 
 ## 1. Transport
 
-Communication uses JSON-RPC 2.0 over stdio (stdin/stdout). Each message is a single line of JSON terminated by `\n`. Stderr is reserved for logging.
+Communication uses JSON-RPC 2.0 over stdio (stdin/stdout). Each message is a single line of JSON terminated by `\n`. Stderr is reserved for logging. A line over 1 MB ends the session with no error response.
 
 ### 1.1. Message Format
 
@@ -34,7 +34,7 @@ Server notification (no id):
 
 ### 1.2. Batching
 
-Clients MAY send JSON-RPC batch requests (array of request objects). The server MUST respond with a batch response in the same order.
+Clients MAY send JSON-RPC batch requests (array of request objects). The server MUST respond with a batch response in the same order. An empty array returns a single `-32600` error.
 
 ## 2. Lifecycle
 
@@ -44,7 +44,7 @@ The client spawns `gitsocial rpc` as a subprocess. The server reads from stdin a
 
 ### 2.2. Initialize
 
-The first request MUST be `initialize`. The server opens the cache, resolves the workspace, and returns server capabilities.
+The first request MUST be `initialize`, except for `ping`, `subscribe`, `unsubscribe` and `shutdown`, which work before it. The server opens the cache, resolves the workspace, and returns server capabilities. A second `initialize` returns `-32007 CONFLICT`; a missing `workdir` returns `-32602`.
 
 **Method:** `initialize`
 
@@ -74,7 +74,9 @@ Result:
 
 Params: none
 
-The server closes the cache, flushes pending writes, and exits with code 0. Clients SHOULD send `shutdown` before killing the process.
+Result: `"ok"`
+
+The server closes the cache and stops the read loop. Clients SHOULD send `shutdown` before killing the process.
 
 ### 2.4. Ping
 
@@ -112,11 +114,13 @@ Application errors use the `-32000` to `-32099` range:
 | `-32007` | `CONFLICT` | Concurrent modification conflict |
 | `-32010` | `NOT_READY` | Server not yet initialized |
 
-Error responses include the application code in `data.appCode` for programmatic handling:
+An error built from a library `Result[T]` carries `data.appCode` and, when the library set one, `data.details`:
 
 ```json
 {"code":-32001,"message":"post not found","data":{"appCode":"NOT_FOUND"}}
 ```
+
+The table above is not exhaustive. `appCode` is the library's own code string passed through, so a `-32000` response can carry `INVALID_SCOPE`, `LIST_NOT_FOUND`, `GIT_ERROR`, `NO_SBOM`, `NO_VERSION`, `SBOM_FAILED` or `READ_FAILED`. Parameter validation (`-32602`) and the search methods return no `data` at all.
 
 ## 4. Methods
 
@@ -129,12 +133,13 @@ Methods are namespaced as `namespace.method`. The `workdir` set during `initiali
 Returns posts for a given scope.
 
 Params:
-- `scope` (string, required): `"timeline"`, `"workspace"`, `"mine"`, `"repo:<url>"`, `"list:<id>"`, `"post:<ref>"`, `"thread:<ref>"`
+- `scope` (string, required): `"timeline"`, `"repository:my"`, `"repository:workspace"`, `"repository:<url>"` or `"repository:<url>@<branch>"`, `"list:<id>"`, `"post:<ref>"`, `"thread:<ref>"`. Any other value returns `INVALID_SCOPE`
 - `limit` (int): Max posts to return (0 = all)
 - `types` (string[]): Filter by type: `"post"`, `"comment"`, `"repost"`, `"quote"`
-- `since` (string): ISO 8601 timestamp lower bound
-- `until` (string): ISO 8601 timestamp upper bound
-- `sort` (string): Sort order: `"newest"` (default), `"oldest"`
+- `since` (string): ISO 8601 timestamp lower bound; a value that does not parse is dropped
+- `until` (string): ISO 8601 timestamp upper bound; a value that does not parse is dropped
+- `includeImplicit` (boolean): Include implicit posts
+- `sort` (string): Accepted and ignored; results come back newest first
 
 Result: `Post[]`
 
@@ -209,7 +214,7 @@ Result: `List`
 Params:
 - `id` (string, required): List ID
 
-Result: `true`
+Result: `{}`
 
 #### social.addToList
 
@@ -227,12 +232,13 @@ Params:
 - `listId` (string, required): List ID
 - `repoURL` (string, required): Repository URL to remove
 
-Result: `true`
+Result: `{}`
 
 #### social.getRepositories
 
 Params:
-- `scope` (string): `"all"` (default), `"list:<id>"`
+- `scope` (string): `"list:<id>"` for one list; any other value returns every cached repository
+- `limit` (int): Max repositories to return
 
 Result: `Repository[]`
 
@@ -256,7 +262,7 @@ Params:
 - `repoURL` (string): Repository URL (default: workspace)
 - `branch` (string): Branch
 - `states` (string[]): Filter: `"open"`, `"closed"`, `"canceled"`
-- `limit` (int): Max results
+- `limit` (int): Max results; 0 means 1000
 
 Result: `Issue[]`
 
@@ -327,7 +333,7 @@ Params:
 - `repoURL` (string): Repository URL (default: workspace)
 - `branch` (string): Branch
 - `states` (string[]): Filter by state
-- `limit` (int): Max results
+- `limit` (int): Max results; 0 means 1000
 
 Result: `Milestone[]`
 
@@ -387,7 +393,7 @@ Params:
 - `repoURL` (string): Repository URL (default: workspace)
 - `branch` (string): Branch
 - `states` (string[]): Filter: `"planned"`, `"active"`, `"completed"`, `"canceled"`
-- `limit` (int): Max results
+- `limit` (int): Max results; 0 means 1000
 
 Result: `Sprint[]`
 
@@ -542,7 +548,8 @@ Result: `PullRequest`
 
 Params:
 - `ref` (string, required): PR ref
-- `strategy` (string): Merge strategy: `ff` (default), `squash`, `rebase`, `merge`
+
+Merges fast-forward. The other strategies the CLI offers are not reachable over RPC.
 
 Result: `PullRequest`
 
@@ -635,19 +642,24 @@ Result: `FileDiff[]`
 
 ```json
 [{
-  "oldFile": "a/theme.go",
-  "newFile": "b/theme.go",
-  "hunks": [{
-    "oldStart": 10, "oldCount": 5,
-    "newStart": 10, "newCount": 8,
-    "lines": [
-      {"type": "context", "content": "func init() {", "oldLine": 10, "newLine": 10},
-      {"type": "delete", "content": "\told := theme()", "oldLine": 11},
-      {"type": "add", "content": "\tnewTheme := darkTheme()", "newLine": 11}
+  "OldPath": "a/theme.go",
+  "NewPath": "b/theme.go",
+  "Status": 1,
+  "Binary": false,
+  "Hunks": [{
+    "OldStart": 10, "OldCount": 5,
+    "NewStart": 10, "NewCount": 8,
+    "Header": "@@ -10,5 +10,8 @@",
+    "Lines": [
+      {"Type": 0, "Content": "func init() {", "OldNum": 10, "NewNum": 10},
+      {"Type": 2, "Content": "\told := theme()", "OldNum": 11, "NewNum": 0},
+      {"Type": 1, "Content": "\tnewTheme := darkTheme()", "OldNum": 0, "NewNum": 11}
     ]
   }]
 }]
 ```
+
+`Type` is an integer: 0 context, 1 added, 2 removed.
 
 #### review.getDiffStats
 
@@ -657,7 +669,7 @@ Params:
 Result: `DiffStats`
 
 ```json
-{"filesChanged": 5, "insertions": 120, "deletions": 45}
+{"Files": 5, "Added": 120, "Removed": 45}
 ```
 
 #### review.getFileDiff
@@ -675,7 +687,7 @@ Returns file content at a specific ref.
 Params:
 - `ref` (string, required): PR ref
 - `file` (string, required): File path
-- `side` (string, required): `"base"` or `"head"`
+- `side` (string): `"base"` reads the base; any other value, including an absent one, reads the head
 
 Result: `string` (file contents)
 
@@ -865,11 +877,19 @@ The server sends `fetch.progress` and `fetch.complete` notifications for this `f
 Pushes local changes to the remote.
 
 Params:
-- `extensions` (string[]): Extensions to push (default: all initialized)
+- `remote` (string): Remote to push to (default: the resolved push remote)
+- `allBranches` (boolean): Publish every local branch
+- `noCode` (boolean): Skip code branches
+- `noSite` (boolean): Skip the static site
+- `extensions` (string[]): Accepted and ignored; every initialized extension is pushed
 
 Result:
 ```json
-{"pushed": ["social", "pm"]}
+{
+  "push": {"...": "per-branch push counts"},
+  "site": {"published": true, "complete": true},
+  "emptyBoot": false
+}
 ```
 
 #### core.status
@@ -885,12 +905,14 @@ Result:
   "repoURL": "https://github.com/user/repo",
   "extensions": {
     "social": {"initialized": true, "branch": "gitmsg/social", "unpushed": 3},
-    "pm": {"initialized": true, "branch": "gitmsg/pm", "unpushed": 0},
+    "pm": {"initialized": true, "branch": "gitmsg/pm"},
     "review": {"initialized": false},
     "release": {"initialized": false}
   }
 }
 ```
+
+`branch` and `unpushed` are omitted when empty or zero. `unpushed` counts posts and lists on the extension's branch.
 
 #### core.getConfig
 
@@ -962,8 +984,9 @@ Result: `MessageVersion[]`
 
 ```json
 [
-  {"hash": "abc123456789", "timestamp": "2025-01-06T10:00:00Z", "author": {...}, "content": "v1"},
-  {"hash": "def234567890", "timestamp": "2025-01-06T11:00:00Z", "author": {...}, "content": "v2 (edited)"}
+  {"ID": "#commit:abc123456789@gitmsg/social", "CommitHash": "abc123456789",
+   "Timestamp": "2025-01-06T10:00:00Z", "AuthorName": "Alice", "AuthorEmail": "alice@example.com",
+   "Extension": "social", "Type": "post", "Content": "v1", "EditOf": "", "IsRetracted": false}
 ]
 ```
 
@@ -1051,7 +1074,7 @@ Result: `true`
 ```json
 {"jsonrpc":"2.0","method":"fetch.progress","params":{
   "fetchId": "f-1",
-  "repository": "https://github.com/user/repo",
+  "repoURL": "https://github.com/user/repo",
   "processed": 3,
   "total": 10
 }}
@@ -1070,10 +1093,11 @@ Result: `true`
 
 #### fetch.error
 
+Sent once when the fetch as a whole fails, not per repository.
+
 ```json
 {"jsonrpc":"2.0","method":"fetch.error","params":{
   "fetchId": "f-1",
-  "repository": "https://github.com/user/repo",
   "message": "network timeout"
 }}
 ```
@@ -1082,7 +1106,7 @@ Result: `true`
 
 #### notifications.changed
 
-Sent when the unread notification count changes (after fetch, after new local commits, or after mark-as-read).
+Sent at the end of `core.fetch`. Mark-as-read and local commits send nothing; a client that changes read state updates its own count.
 
 ```json
 {"jsonrpc":"2.0","method":"notifications.changed","params":{
@@ -1094,7 +1118,7 @@ Sent when the unread notification count changes (after fetch, after new local co
 
 #### workspace.changed
 
-Sent when the server detects changes to gitmsg branches in the workspace (via filesystem watch on `.git/refs/heads/gitmsg/`).
+Reserved. `subscribe` accepts `"workspace"`, but the server has no emitter for this notification and sends none. The payload shape below is what a client should expect once one exists.
 
 ```json
 {"jsonrpc":"2.0","method":"workspace.changed","params":{
@@ -1104,155 +1128,93 @@ Sent when the server detects changes to gitmsg branches in the workspace (via fi
 
 ## 6. Type Reference
 
-Types returned by methods. JSON field names use camelCase. Null/absent fields are omitted.
+Types returned by methods. Most are Go structs with no JSON tags, so their field names serialize as written in Go, with a capital first letter and no omission of zero values: an unset pointer is `null`, an unset time is `"0001-01-01T00:00:00Z"`, an unset slice is `null`. The five tagged types, marked below, serialize under their tag names instead.
+
+Times are RFC 3339 strings. Refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` form. A library `Result[T]` maps to `result` or `error`.
+
+### Author, Actor
+
+`{"Name": "string", "Email": "string"}`. `pm.Label` is `{"Scope": "string", "Value": "string"}`. `IssueRef` and review's `Ref` are `{"RepoURL": "string", "Hash": "string", "Branch": "string"}`.
 
 ### Post
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "content": "string",
-  "type": "post | comment | repost | quote",
-  "interactions": {"comments": 0, "reposts": 0, "quotes": 0},
-  "originalPostId": "string (ref, optional)",
-  "parentCommentId": "string (ref, optional)",
-  "isEdited": false,
-  "isRetracted": false,
-  "isVirtual": false
-}
-```
+| Field | Type | Note |
+|---|---|---|
+| `ID` | string | ref |
+| `Repository`, `Branch` | string | |
+| `Author` | Author | |
+| `Timestamp` | string | RFC 3339 |
+| `Content`, `CleanContent` | string | raw message, and the message with the GitMsg header removed |
+| `Type` | string | `post`, `comment`, `repost`, `quote` |
+| `Source` | string | where the post was read from |
+| `OriginalPostID`, `ParentCommentID` | string | refs, empty when absent |
+| `EditOf`, `EditorName`, `EditorEmail` | string | the edit chain |
+| `EditRepoURL`, `EditHash`, `EditBranch` | string | the latest edit commit |
+| `IsRetracted`, `IsEdited`, `HasProposedEdits` | bool | |
+| `Depth` | int | thread nesting |
+| `Interactions` | object | `{"Comments": 0, "Reposts": 0, "Quotes": 0}` |
+| `Remote` | string | |
+| `IsVirtual`, `IsStale`, `IsWorkspacePost` | bool | |
+| `Display` | object | render hints: `RepositoryName`, `CommitURL`, `IsVerified`, `Badge` and siblings |
+| `OriginalExtension`, `OriginalType` | string | the referenced item's extension and type |
+| `HeaderExt`, `HeaderType`, `HeaderState` | string | raw GitMsg header fields |
+| `Labels` | string[] | |
+| `Origin` | object | import provenance, `null` when the post is native |
+| `Raw` | object | `{"Commit": {...}, "GitMsg": {...}}`, the parsed commit and message |
 
 ### Issue
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "subject": "string",
-  "body": "string",
-  "state": "open | closed | canceled",
-  "assignees": ["string (email)"],
-  "due": "string (ISO 8601, optional)",
-  "milestone": {"repoURL": "string", "hash": "string", "branch": "string"},
-  "sprint": {"repoURL": "string", "hash": "string", "branch": "string"},
-  "labels": [{"scope": "string", "value": "string"}],
-  "isEdited": false,
-  "isRetracted": false,
-  "comments": 0
-}
-```
+| Field | Type | Note |
+|---|---|---|
+| `ID`, `Repository`, `Branch` | string | |
+| `Author` | Author | |
+| `Timestamp` | string | RFC 3339 |
+| `Subject`, `Body` | string | |
+| `State` | string | `open`, `closed`, `canceled` |
+| `Assignees` | string[] | emails |
+| `Due` | string | RFC 3339, `null` when unset |
+| `Milestone`, `Sprint`, `Parent`, `Root` | IssueRef | `null` when unset |
+| `Blocks`, `BlockedBy`, `Related` | IssueRef[] | |
+| `Labels` | Label[] | |
+| `IsEdited`, `HasProposedEdits`, `IsRetracted`, `IsUnpushed` | bool | |
+| `Comments` | int | |
+| `Origin` | object | `null` when native |
 
 ### Milestone
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "title": "string",
-  "body": "string",
-  "state": "open | closed | canceled",
-  "due": "string (ISO 8601, optional)",
-  "isEdited": false,
-  "isRetracted": false,
-  "issueCount": 0,
-  "closedCount": 0
-}
-```
+`ID`, `Repository`, `Branch`, `Author`, `Timestamp`, `Title`, `Body`, `State`, `Due`, `Labels` (string[]), `IsEdited`, `HasProposedEdits`, `IsRetracted`, `IsUnpushed`, `IssueCount`, `ClosedCount`, `Origin`.
 
 ### Sprint
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "title": "string",
-  "body": "string",
-  "state": "planned | active | completed | canceled",
-  "start": "string (ISO 8601)",
-  "end": "string (ISO 8601)",
-  "isEdited": false,
-  "isRetracted": false,
-  "issueCount": 0,
-  "closedCount": 0
-}
-```
+The Milestone fields, with `Start` and `End` (RFC 3339) in place of `Due`, and `State` one of `planned`, `active`, `completed`, `canceled`.
 
 ### PullRequest
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "subject": "string",
-  "body": "string",
-  "state": "open | merged | closed",
-  "base": "string (branch ref)",
-  "baseTip": "string (12-char hash, base branch tip at creation/update)",
-  "head": "string (branch ref)",
-  "headTip": "string (12-char hash, head branch tip at creation/update)",
-  "closes": ["string (issue ref)"],
-  "reviewers": ["string (email)"],
-  "labels": ["string"],
-  "isEdited": false,
-  "isRetracted": false,
-  "comments": 0,
-  "reviewSummary": {
-    "approved": 0,
-    "changesRequested": 0,
-    "pending": 0,
-    "isBlocked": false,
-    "isApproved": false
-  },
-  "mergeBase": "string (12-char hash, merge-base at merge time, optional)",
-  "mergeHead": "string (12-char hash, head at merge time, optional)",
-  "mergedBy": {"name": "string", "email": "string"} | null,
-  "mergedAt": "string (ISO 8601)" | null,
-  "closedBy": {"name": "string", "email": "string"} | null,
-  "closedAt": "string (ISO 8601)" | null,
-  "originalAuthor": {"name": "string", "email": "string"} | null
-}
-```
+| Field | Type | Note |
+|---|---|---|
+| `ID`, `Repository`, `Branch` | string | |
+| `Author` | Author | |
+| `Timestamp` | string | RFC 3339 |
+| `Subject`, `Body` | string | |
+| `State` | string | `open`, `merged`, `closed` |
+| `IsDraft` | bool | |
+| `Base`, `BaseTip`, `Head`, `HeadTip` | string | refs and the tips recorded at the latest version |
+| `DependsOn`, `Closes`, `Reviewers`, `Labels` | string[] | |
+| `IsEdited`, `HasProposedEdits`, `IsRetracted`, `IsUnpushed` | bool | |
+| `Comments` | int | |
+| `ReviewSummary` | object | `{"Approved": 0, "ChangesRequested": 0, "Pending": 0, "IsBlocked": false, "IsApproved": false}` |
+| `MergeBase`, `MergeHead` | string | recorded before the merge |
+| `MergedBy`, `ClosedBy`, `OriginalAuthor` | Author | `null` when unset |
+| `MergedAt`, `ClosedAt`, `OriginalTime` | string | RFC 3339; the zero time when unset |
+| `Origin` | object | `null` when native |
 
 ### Feedback
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "content": "string",
-  "pullRequest": {"repoURL": "string", "hash": "string", "branch": "string"},
-  "commit": "string (optional)",
-  "file": "string (optional)",
-  "oldLine": 0,
-  "newLine": 0,
-  "reviewState": "approved | changes-requested (optional)",
-  "suggestion": false,
-  "isEdited": false,
-  "isRetracted": false,
-  "comments": 0
-}
-```
+`ID`, `Repository`, `Branch`, `Author`, `Timestamp`, `Content`, `PullRequest` (Ref), `Commit`, `File`, `OldLine`, `NewLine`, `OldLineEnd`, `NewLineEnd`, `ReviewState` (`comment`, `approved`, `changes-requested`), `Suggestion`, `IsEdited`, `IsRetracted`, `Comments`.
 
 ### PRVersion
+
+Tagged type.
 
 ```json
 {
@@ -1275,6 +1237,8 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
 
 ### VersionAwareReview
 
+Tagged type.
+
 ```json
 {
   "reviewer_name": "string",
@@ -1293,38 +1257,19 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
 
 ### Release
 
-```json
-{
-  "id": "string (ref)",
-  "repository": "string (URL)",
-  "branch": "string",
-  "author": {"name": "string", "email": "string"},
-  "timestamp": "string (ISO 8601)",
-  "subject": "string",
-  "body": "string",
-  "version": "string",
-  "tag": "string",
-  "prerelease": false,
-  "artifacts": ["string"],
-  "artifactURL": "string (optional)",
-  "checksums": "string (optional)",
-  "signedBy": "string (optional)",
-  "sbom": "string (optional, e.g. sbom.spdx.json)",
-  "isEdited": false,
-  "isRetracted": false,
-  "comments": 0
-}
-```
+`ID`, `Repository`, `Branch`, `Author`, `Timestamp`, `Subject`, `Body`, `Version`, `Tag`, `Prerelease`, `Artifacts` (string[]), `ArtifactURL`, `Checksums`, `SignedBy`, `SBOM`, `Labels` (string[]), `IsEdited`, `HasProposedEdits`, `IsRetracted`, `IsUnpushed`, `Comments`, `Origin`.
 
 ### SBOMSummary
+
+Tagged type. Every field is always present.
 
 ```json
 {
   "format": "spdx | cyclonedx | syft",
   "packages": 127,
-  "generator": "string (optional, e.g. syft-1.0.0)",
+  "generator": "string, e.g. syft-1.0.0",
   "licenses": {"MIT": 42, "Apache-2.0": 15},
-  "generated": "string (ISO 8601, optional)",
+  "generated": "string (ISO 8601)",
   "items": [
     {"name": "string", "version": "string", "license": "string"}
   ]
@@ -1333,24 +1278,29 @@ Types returned by methods. JSON field names use camelCase. Null/absent fields ar
 
 ### Notification
 
-```json
-{
-  "repoURL": "string",
-  "hash": "string",
-  "branch": "string",
-  "type": "string",
-  "source": "social | pm | review | core",
-  "actor": {"name": "string", "email": "string"},
-  "actorRepo": "string (optional)",
-  "timestamp": "string (ISO 8601)",
-  "isRead": false
-}
-```
+`RepoURL`, `Hash`, `Branch`, `Type` ([NOTIFICATIONS.md](NOTIFICATIONS.md#types)), `Source` (`social`, `pm`, `review`, `release`, `memo`, `core`), `Item` (the extension's own notification object), `Actor`, `ActorRepo`, `Timestamp`, `IsRead`.
+
+### MessageVersion
+
+`ID`, `CommitHash`, `Branch`, `RepoURL`, `AuthorName`, `AuthorEmail`, `Timestamp`, `Extension`, `Type`, `Content`, `EditOf`, `IsRetracted`, `Labels` (string[]), `Fields` (the parsed GitMsg header, key to value).
+
+### FileDiff, Hunk, DiffLine, DiffStats
+
+| Type | Fields |
+|---|---|
+| `FileDiff` | `OldPath`, `NewPath`, `Status` (int), `Hunks`, `Binary` |
+| `Hunk` | `OldStart`, `OldCount`, `NewStart`, `NewCount`, `Header`, `Lines` |
+| `DiffLine` | `Type` (int: 0 context, 1 added, 2 removed), `Content`, `OldNum`, `NewNum` |
+| `DiffStats` | `Files`, `Added`, `Removed` |
+
+### search.Result
+
+Tagged type; see the [search](#search--socialsearch) method for the shape.
 
 ## 7. Implementation Notes
 
-- Requests run concurrently. `core.fetch` returns at once and reports through notifications; reads never wait on writes. The cache serializes database access, and the server adds no locking of its own.
+- The read loop is single-threaded: one request is dispatched to completion before the next line is read, and a batch runs its entries in order. `core.fetch` is the exception; it starts a goroutine, returns a `fetchId` at once and reports through notifications.
 - A server serves the workspace given at `initialize`. For another workspace, shut down and spawn a new server; multi-root editors run one per workspace.
-- Times serialize as ISO 8601 strings, nil pointers are omitted, refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` form, and a `Result[T]` maps to `result` or `error`.
-- Methods of an extension that is not initialized return `-32003 NOT_INITIALIZED`; the `initialize` response says which extensions are available.
+- Serialization rules are in [Section 6](#6-type-reference).
+- `-32003 NOT_INITIALIZED` is defined but no method raises it today. Read the `initialize` response to learn which extensions are available.
 - Handlers live in `library/rpc/methods_*.go`, one file per namespace; each unmarshals its params, calls the extension API and returns the result. No business logic lives in the RPC layer.

@@ -14,7 +14,14 @@ go test ./library/tui/test/ -run TestGenerateFixture -generate   # regenerate th
 scripts/test.sh -run Smoke ./library/tui/test/           # any of the above with streamed per-test progress
 ```
 
-The full tier runs in about 206 s standalone; `TestSmoke` (90 s) and `TestGolden/LayoutProperties` (59 s) are most of it. The quick tier runs in about 40 s. Tests create temporary directories and need nothing external.
+Tests create temporary directories and need nothing external. Warm wall time:
+
+| Run | Time |
+|---|---|
+| quick tier | 40 s |
+| full tier | 206 s |
+| `TestSmoke` | 90 s |
+| `TestGolden/LayoutProperties` | 59 s |
 
 ## Layout
 
@@ -60,7 +67,9 @@ func (h *Harness) BindingsForContext(ctx tuicore.Context) []tuicore.Binding
 
 Every `SendKey` and `Navigate` drains the commands it produces. Key names: `enter`, `esc`, `tab`, `shift+tab`, the arrows, `ctrl+c`, `ctrl+d`, `ctrl+u`, `space`, `backspace`, `home`, `end`, `pgup`, `pgdown`; any other string is sent as runes.
 
-Assertions: `stripANSI`, `rendered(h)`, `assertContains(t, output, substr)`, `assertRendersItem(t, h, loc, want...)`, `assertNotEmpty`, `assertLineCount(t, output, maxLines)`. Prefer `assertRendersItem`: it navigates, requires every named fragment of seeded content, and fails on an empty expectation. `assertNotEmpty` passes on chrome alone, so it fits only views with no seeded data.
+Assertions: `stripANSI`, `rendered(h)`, `assertContains(t, output, substr)`, `assertRendersItem(t, h, loc, want...)`, `assertNotEmpty`, `assertLineCount(t, output, maxLines)`.
+
+Prefer `assertRendersItem`. It navigates, requires every named fragment of seeded content, and fails on an empty expectation. `assertNotEmpty` passes on chrome alone, so it fits only views with no seeded data.
 
 ## Fixture
 
@@ -82,7 +91,7 @@ Seeded through the extension APIs, with data from the protocol specs:
 - Memo: the project tier, 2 memos (one edited, one labeled), 1 inherited source; the personal and session tiers live outside the repository and are not seeded
 - Forks: 1 registered fork; the fork closes the workspace issue, which leaves an inert proposal
 
-The cache is filled with `SyncWorkspaceToCache` per extension, workspace first and fork second, since a cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending now, so relative times render as "just now" and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
+The cache is filled with `SyncWorkspaceToCache` per extension, workspace first and fork second. A cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending now, so relative times render as "just now" and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
 
 ## Inventory
 
@@ -100,7 +109,7 @@ The cache is filled with `SyncWorkspaceToCache` per extension, workspace first a
 
 ## Notes
 
-- Commands run synchronously to a depth of 50; `tea.BatchMsg` fans out. Commands are skipped by function name before execution when they would block (`BlinkCmd`, `startFetch`), and these messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
+- Commands run synchronously to a depth of 50; `tea.BatchMsg` fans out. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`. These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
 - `tui.Model.Update` returns either `tui.Model` or `*tui.Model`; `toModel` handles both.
 - The suite catches panics on empty data, render crashes, keys that stop working after a refactor, missing `Activate` calls, navigation dead ends, content regressions, registration-order bugs, context mismatches, broken box drawing and height overflow.
 - Not caught: horizontal overflow. `assertLineCount` bounds the line count only, so a line wider than the terminal passes everything but a golden diff.
