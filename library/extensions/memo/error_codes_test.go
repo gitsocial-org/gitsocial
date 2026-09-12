@@ -1,4 +1,4 @@
-// error_codes_test.go - Error codes the memo write paths return at the Result boundary
+// error_codes_test.go - Error codes the memo write, session and sync paths return at the Result boundary
 package memo
 
 import (
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
@@ -33,6 +34,15 @@ func skipWithoutFilesRefBackend(t *testing.T, dir string) {
 	if _, err := os.Stat(filepath.Join(dir, ".git", "reftable")); err == nil {
 		t.Skip("ref format is reftable, and a ref lock blocks writes on the files backend")
 	}
+}
+
+// homelessEnv clears every tier path override and $HOME, so tier directory resolution fails.
+func homelessEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("MEMO_SESSION_DIR", "")
+	t.Setenv("GITSOCIAL_PERSONAL_REPO", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
 }
 
 // lockInheritRef leaves a ref lock on a memo source URL's inherits ref, the way a crashed writer would.
@@ -184,5 +194,114 @@ func TestRemoveInherit_lockedRef(t *testing.T) {
 	}
 	if !IsInherited(dir, url) {
 		t.Error("the URL stopped being inherited after the failed ref delete")
+	}
+}
+
+// TestSessionCommands_noHomeDirectory asserts SESSION_DIR_FAILED when the session directory cannot be resolved.
+func TestSessionCommands_noHomeDirectory(t *testing.T) {
+	setupTestDB(t)
+	homelessEnv(t)
+
+	if res := ListSessions(""); res.Success || res.Error.Code != "SESSION_DIR_FAILED" {
+		t.Errorf("ListSessions() without a home directory = %+v, want SESSION_DIR_FAILED", res)
+	}
+	if res := GCSession("homeless"); res.Success || res.Error.Code != "SESSION_DIR_FAILED" {
+		t.Errorf("GCSession() without a home directory = %+v, want SESSION_DIR_FAILED", res)
+	}
+	if res := PushSession("homeless"); res.Success || res.Error.Code != "SESSION_DIR_FAILED" {
+		t.Errorf("PushSession() without a home directory = %+v, want SESSION_DIR_FAILED", res)
+	}
+	if res := FetchSession("homeless"); res.Success || res.Error.Code != "SESSION_DIR_FAILED" {
+		t.Errorf("FetchSession() without a home directory = %+v, want SESSION_DIR_FAILED", res)
+	}
+}
+
+// TestPersonalSync_noHomeDirectory asserts PERSONAL_DIR_FAILED when the personal repo path cannot be resolved.
+func TestPersonalSync_noHomeDirectory(t *testing.T) {
+	setupTestDB(t)
+	homelessEnv(t)
+
+	if res := PushPersonal(); res.Success || res.Error.Code != "PERSONAL_DIR_FAILED" {
+		t.Errorf("PushPersonal() without a home directory = %+v, want PERSONAL_DIR_FAILED", res)
+	}
+	if res := FetchPersonal(); res.Success || res.Error.Code != "PERSONAL_DIR_FAILED" {
+		t.Errorf("FetchPersonal() without a home directory = %+v, want PERSONAL_DIR_FAILED", res)
+	}
+}
+
+// TestGCSession_readonlySessionDir asserts GC_FAILED when the session repo cannot be removed.
+func TestGCSession_readonlySessionDir(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root ignores the directory mode that blocks the removal")
+	}
+	setupTestDB(t)
+	freshHome(t)
+	sessionDir := t.TempDir()
+	t.Setenv("MEMO_SESSION_DIR", sessionDir)
+
+	if res := InitSession("stuck-gc", ""); !res.Success {
+		t.Fatalf("InitSession() failed: %s", res.Error.Message)
+	}
+	if err := os.Chmod(sessionDir, 0o500); err != nil {
+		t.Fatalf("chmod %s: %v", sessionDir, err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sessionDir, 0o700) })
+
+	res := GCSession("stuck-gc")
+	if res.Success || res.Error.Code != "GC_FAILED" {
+		t.Errorf("GCSession() under a read-only session directory = %+v, want GC_FAILED", res)
+	}
+	if _, err := os.Stat(filepath.Join(sessionDir, "stuck-gc")); err != nil {
+		t.Errorf("the session directory is gone after the failed gc: %v", err)
+	}
+}
+
+// TestGCSession_cacheClosed asserts CACHE_CLEANUP_FAILED when the session's cache rows cannot be cleared.
+func TestGCSession_cacheClosed(t *testing.T) {
+	setupTestDB(t)
+	freshHome(t)
+	t.Setenv("MEMO_SESSION_DIR", t.TempDir())
+
+	if res := InitSession("orphan-rows", ""); !res.Success {
+		t.Fatalf("InitSession() failed: %s", res.Error.Message)
+	}
+	path, err := SessionRepoPath("orphan-rows")
+	if err != nil {
+		t.Fatalf("SessionRepoPath: %v", err)
+	}
+	cache.Reset()
+
+	res := GCSession("orphan-rows")
+	if res.Success || res.Error.Code != "CACHE_CLEANUP_FAILED" {
+		t.Errorf("GCSession() over a closed cache = %+v, want CACHE_CLEANUP_FAILED", res)
+	}
+	if git.BareRepoExists(path) {
+		t.Error("the session repo survived a gc that reported the cache cleanup failure")
+	}
+}
+
+// TestPushSession_remoteGone asserts PUSH_FAILED when the configured remote is not a repository.
+func TestPushSession_remoteGone(t *testing.T) {
+	setupTestDB(t)
+	freshHome(t)
+	dir := initTestRepo(t)
+	sessionID := "push-bad-remote"
+	t.Setenv("MEMO_SESSION_ID", sessionID)
+
+	if res := CreateMemo(dir, "unpushable memo", "", CreateMemoOptions{Tier: TierSession}); !res.Success {
+		t.Fatalf("CreateMemo() failed: %s", res.Error.Message)
+	}
+	path, err := SessionRepoPath(sessionID)
+	if err != nil {
+		t.Fatalf("SessionRepoPath: %v", err)
+	}
+	gone := filepath.Join(t.TempDir(), "no-such-remote.git")
+	if _, err := git.ExecGit(path, []string{"remote", "add", "origin", gone}); err != nil {
+		t.Fatalf("remote add: %v", err)
+	}
+
+	res := PushSession(sessionID)
+	if res.Success || res.Error.Code != "PUSH_FAILED" {
+		t.Errorf("PushSession() to a missing remote = %+v, want PUSH_FAILED", res)
 	}
 }
