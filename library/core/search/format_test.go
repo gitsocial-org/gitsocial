@@ -2,6 +2,7 @@
 package search
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -377,6 +378,83 @@ func TestFormatDate(t *testing.T) {
 		at := now.Add(-7 * 24 * time.Hour)
 		if got := formatDate(at); got != at.Format("Jan 2, 2006") {
 			t.Errorf("formatDate() = %q, want the absolute date %q", got, at.Format("Jan 2, 2006"))
+		}
+	})
+}
+
+// TestFormatGroupedResultFromCorpus pins the text block a user sees for
+// `search --group-by label` over the seeded corpus.
+func TestFormatGroupedResultFromCorpus(t *testing.T) {
+	seedCorpus(t)
+	result := Result{GroupBy: "label", Groups: corpusGroups(t, "label"), Total: 6}
+	want := strings.Join([]string{
+		"## bug (3)",
+		"  Alice (1): Broken parser",
+		"  Bob (1): Slow startup",
+		"  Carol (1): Hello world",
+		"## ui (3)",
+		"  Alice (2): Broken parser, Add the parser",
+		"  Bob (1): Cut v1.0.0",
+		"## (none) (1)",
+		"  Alice (1): Release 1.0",
+		"",
+		"Total: 6 (grouped by label)",
+	}, "\n")
+	if got := FormatResult(result); got != want {
+		t.Errorf("FormatResult() =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestFormatResultJSONShape pins the JSON the CLI prints under --json: the
+// group envelope, the per-item keys, and the fields omitted when empty.
+func TestFormatResultJSONShape(t *testing.T) {
+	seedCorpus(t)
+	result := Result{Query: "parser", GroupBy: "label", Groups: corpusGroups(t, "label"), Total: 6}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, ok := decoded["results"]; ok {
+		t.Errorf("grouped output carries a results key: %s", encoded)
+	}
+	if decoded["group_by"] != "label" || decoded["total"] != float64(6) {
+		t.Errorf("envelope = %v, want group_by label and total 6", decoded)
+	}
+	groups, ok := decoded["groups"].([]any)
+	if !ok || len(groups) != 3 {
+		t.Fatalf("groups = %v, want 3", decoded["groups"])
+	}
+	first, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first group = %v, want an object", groups[0])
+	}
+	if first["key"] != "bug" || first["count"] != float64(3) {
+		t.Errorf("first group = %v, want bug with count 3", first)
+	}
+	item, ok := first["items"].([]any)[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first item = %v, want an object", first["items"])
+	}
+	for _, key := range []string{"hash", "author", "subject", "timestamp", "repo_url"} {
+		if _, ok := item[key]; !ok {
+			t.Errorf("item is missing %q: %v", key, item)
+		}
+	}
+	if _, ok := item["labels"]; ok {
+		t.Errorf("item carries labels while grouping by label: %v", item)
+	}
+
+	t.Run("count only drops the items key", func(t *testing.T) {
+		encoded, err := json.Marshal(Result{GroupBy: "label", Groups: groupBy(nil, "label", 0, true)})
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if strings.Contains(string(encoded), `"items"`) {
+			t.Errorf("count-only output carries items: %s", encoded)
 		}
 	})
 }
