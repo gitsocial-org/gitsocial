@@ -1,7 +1,10 @@
 // putobject.go - upload a single arbitrary object to an s3 remote's bucket.
 package objstore
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 // PutObjectToRemote uploads data to key (under the remote's prefix) as a plain
 // object, overwriting any existing object at that key. It exists for foreign
@@ -26,10 +29,6 @@ func putObject(client *Client, prefix, key string, data []byte, contentType stri
 	if contentType != "" {
 		headers["Content-Type"] = contentType
 	}
-	resp, err := client.do(http.MethodPut, prefix+key, nil, data, headers)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
+	_, _, err := client.do(context.Background(), http.MethodPut, prefix+key, nil, data, headers)
+	return err
 }

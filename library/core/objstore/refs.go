@@ -43,7 +43,7 @@ func publishRefManifest(client *Client, prefix, mode string, refs map[string]str
 		return "", fmt.Errorf("marshal ref manifest: %w", err)
 	}
 	if mode == refModeGeneration {
-		return "", withRetry(func() error { return putObject(client, prefix, bucketRefsKey, data, "application/json") })
+		return "", putObject(client, prefix, bucketRefsKey, data, "application/json")
 	}
 	newETag, err := putRefManifestConditional(client, prefix+bucketRefsKey, data, etag)
 	if err != nil && !errors.Is(err, ErrPreconditionFailed) {
@@ -81,17 +81,11 @@ func putRefManifestConditional(client *Client, key string, data []byte, etag str
 	if etag == "" {
 		headers = map[string]string{"Content-Type": "application/json", "If-None-Match": "*"}
 	}
-	var newETag string
-	err := withRetry(func() error {
-		resp, err := client.do(http.MethodPut, key, nil, data, headers)
-		if err != nil {
-			return err
-		}
-		resp.Body.Close()
-		newETag = resp.Header.Get("ETag")
-		return nil
-	})
-	return newETag, err
+	_, respHeaders, err := client.do(context.Background(), http.MethodPut, key, nil, data, headers)
+	if err != nil {
+		return "", err
+	}
+	return respHeaders.Get("ETag"), nil
 }
 
 // genKey builds the bucket key for one generation of a ref.
@@ -190,7 +184,7 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 			sha, err := readChainTip(client, prefix, j.refName, j.gen)
 			return j.refName, sha, err
 		}
-		value, err := withReadRetry(ctx, func() ([]byte, error) { return client.Get(prefix + j.refName) })
+		value, err := client.getContext(ctx, prefix+j.refName)
 		if err != nil {
 			return "", "", fmt.Errorf("read ref %s: %w", j.refName, err)
 		}
@@ -225,7 +219,7 @@ func readRefsWithoutListing(client *Client, prefix string, progress Progress) (m
 		if claimWins {
 			return refName, claims[refName], nil
 		}
-		value, err := withReadRetry(ctx, func() ([]byte, error) { return client.Get(prefix + refName) })
+		value, err := client.getContext(ctx, prefix+refName)
 		if errors.Is(err, ErrNotFound) {
 			return refName, "", nil // deleted since the document was written
 		}
@@ -383,7 +377,7 @@ func readRefJobs[J any](total int, progress Progress, read func(context.Context,
 // readChainTip reads the ref value at a generation, re-listing the chain when the key was collected between list and read.
 func readChainTip(client *Client, prefix, refName string, gen uint64) (string, error) {
 	for attempt := 0; attempt < 3; attempt++ {
-		value, err := client.GetRetry(genKey(prefix, refName, gen))
+		value, err := client.Get(genKey(prefix, refName, gen))
 		if errors.Is(err, ErrNotFound) {
 			gen, err = maxGeneration(client, prefix, refName)
 			if err != nil {

@@ -17,7 +17,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
@@ -885,7 +884,7 @@ func uploadEncodedObjects(client *Client, prefix string, concurrency, total int,
 			defer wg.Done()
 			for obj := range work {
 				key := prefix + "objects/" + obj.sha[:2] + "/" + obj.sha[2:]
-				if err := putObjectWithRetry(ctx, client, key, obj.compressed); err != nil {
+				if err := client.putContext(ctx, key, obj.compressed); err != nil {
 					setErr(fmt.Errorf("upload object %s: %w", obj.sha, err))
 					continue
 				}
@@ -900,21 +899,6 @@ func uploadEncodedObjects(client *Client, prefix string, concurrency, total int,
 	close(work)
 	wg.Wait()
 	return firstErr
-}
-
-// putObjectWithRetry retries an object PUT past a transient fault; a re-PUT is idempotent, and a refusal surfaces at once.
-func putObjectWithRetry(ctx context.Context, client *Client, key string, body []byte) error {
-	var err error
-	for attempt := 0; ; attempt++ {
-		if err = client.Put(key, body); err == nil || attempt >= len(retryBackoff) || !isTransientFault(err) {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return err
-		case <-time.After(retryBackoff[attempt]):
-		}
-	}
 }
 
 // EncodeLooseObject builds git's loose-object format: zlib("<type> <size>\0" + content).

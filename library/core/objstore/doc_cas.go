@@ -2,22 +2,15 @@
 package objstore
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
-	"time"
 )
 
 // readCompressedJSONWithETag is ReadCompressedJSON plus the stored ETag a later conditional write compares against. A key that is present but does not parse is an error, not found=false, so nothing writes a zeroed document over it.
 func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, etag string, err error) {
-	data, err := withReadRetry(context.TODO(), func() ([]byte, error) {
-		body, tag, err := client.GetWithETag(key)
-		etag = tag
-		return body, err
-	})
+	data, etag, err := client.GetWithETag(key)
 	if errors.Is(err, ErrNotFound) {
 		return false, "", nil
 	}
@@ -34,7 +27,7 @@ func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, 
 	return true, etag, nil
 }
 
-// putCompressedIfMatch uploads pre-compressed JSON only while the key still carries etag, or only while it is absent for an empty one; a 412 is contention, not a fault, so the retry leaves it to the caller.
+// putCompressedIfMatch uploads pre-compressed JSON only while the key still carries etag, or only while it is absent for an empty one; a 412 is contention, not a fault, so it surfaces to the caller.
 func putCompressedIfMatch(client *Client, key string, compressed []byte, etag string) error {
 	headers := map[string]string{"Content-Type": "application/json", "Content-Encoding": "br"}
 	if etag == "" {
@@ -42,17 +35,7 @@ func putCompressedIfMatch(client *Client, key string, compressed []byte, etag st
 	} else {
 		headers["If-Match"] = etag
 	}
-	for attempt := 0; ; attempt++ {
-		resp, err := client.do(http.MethodPut, key, nil, compressed, headers)
-		if err == nil {
-			resp.Body.Close()
-			return nil
-		}
-		if attempt >= len(retryBackoff) || !isTransientFault(err) {
-			return err
-		}
-		time.Sleep(retryBackoff[attempt])
-	}
+	return client.PutWithHeaders(key, compressed, headers)
 }
 
 // updateCompressedJSON rewrites one mutable document under compare-and-swap, replaying the merge on contention. Any unusable conditional write falls back to an unconditional one, and a create-only provider takes that fallback on the first attempt rather than burning retries on a 412 it returns either way.

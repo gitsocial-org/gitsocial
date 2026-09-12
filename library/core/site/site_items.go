@@ -345,7 +345,7 @@ type bucketCommit struct {
 
 // getBucketCommit fetches and parses one commit from the bucket: the loose key first, then the pack map on a miss.
 func getBucketCommit(client *objstore.Client, prefix, sha string) (bucketCommit, error) {
-	compressed, err := client.GetRetry(prefix + "objects/" + sha[:2] + "/" + sha[2:])
+	compressed, err := client.Get(prefix + "objects/" + sha[:2] + "/" + sha[2:])
 	if errors.Is(err, objstore.ErrNotFound) {
 		c, ok, packErr := getPackedBucketCommit(client, prefix, sha)
 		if packErr != nil {

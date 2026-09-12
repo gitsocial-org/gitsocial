@@ -103,7 +103,7 @@ func putSiteText(client *objstore.Client, key, contentType string, body []byte) 
 	if class := siteCacheControl(key); class != "" {
 		headers["Cache-Control"] = class
 	}
-	if err := client.PutWithHeadersRetry(key, body, headers); err != nil {
+	if err := client.PutWithHeaders(key, body, headers); err != nil {
 		return fmt.Errorf("upload %s: %w", key, err)
 	}
 	return nil

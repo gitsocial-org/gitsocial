@@ -322,7 +322,7 @@ func bucketObjectInventory(client *Client, prefix string) (map[string]bool, erro
 		return nil, fmt.Errorf("list bucket packs: %w", err)
 	}
 	for _, name := range names {
-		idx, err := client.GetRetry(prefix + packKeyPrefix + name + ".idx")
+		idx, err := client.Get(prefix + packKeyPrefix + name + ".idx")
 		if err != nil {
 			return nil, fmt.Errorf("read pack index %s: %w", name, err)
 		}

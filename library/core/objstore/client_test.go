@@ -2,6 +2,7 @@
 package objstore
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -34,7 +35,7 @@ func TestNewClient_credentialModes(t *testing.T) {
 	if !client.Anonymous() {
 		t.Error("client with no credentials in its config is not anonymous")
 	}
-	_, err = client.do(http.MethodPut, "k", nil, []byte("x"), nil)
+	_, _, err = client.do(context.Background(), http.MethodPut, "k", nil, []byte("x"), nil)
 	if !errors.Is(err, ErrCredentialsRequired) || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
 		t.Errorf("anonymous write error = %v, want it to name both variable sets", err)
 	}

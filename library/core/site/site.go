@@ -101,7 +101,7 @@ func putSiteAsset(client *objstore.Client, key, name string, data []byte) error 
 		data = compressed
 		headers["Content-Encoding"] = "br"
 	}
-	if err := client.PutWithHeadersRetry(key, data, headers); err != nil {
+	if err := client.PutWithHeaders(key, data, headers); err != nil {
 		return fmt.Errorf("upload %s: %w", key, err)
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
@@ -23,6 +24,8 @@ func testClient(t *testing.T) (*Client, *membucket.Bucket) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
+	// Keep the attempt count and shrink the waits, so a retry test costs no real seconds.
+	client.retryBackoff = []time.Duration{time.Millisecond, time.Millisecond}
 	return client, bucket
 }
 

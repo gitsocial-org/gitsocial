@@ -355,7 +355,7 @@ var packSidecarSuffixes = []string{".pack", ".idx", ".rev"}
 
 // downloadPack fetches one packfile and indexes it locally, landing it under a temporary name and renaming it in only once indexed.
 func (h *remoteHelper) downloadPack(dir, name string) error {
-	data, err := h.client.GetRetry(h.prefix + packKeyPrefix + name + ".pack")
+	data, err := h.client.Get(h.prefix + packKeyPrefix + name + ".pack")
 	if err != nil {
 		return fmt.Errorf("download %s: %w", name, err)
 	}

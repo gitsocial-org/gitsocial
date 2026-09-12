@@ -7,7 +7,6 @@ package objstore
 import (
 	"bytes"
 	"compress/zlib"
-	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -223,7 +222,7 @@ func publishPack(client *Client, capability Capability, prefix string, built *bu
 		body   []byte
 	}{{".idx", built.idx}, {".pack", built.pack}} {
 		key := prefix + packKeyPrefix + built.name + part.suffix
-		if err := putObjectWithRetry(context.TODO(), client, key, part.body); err != nil {
+		if err := client.Put(key, part.body); err != nil {
 			return fmt.Errorf("upload %s: %w", built.name+part.suffix, err)
 		}
 	}
@@ -304,7 +303,7 @@ func ReadPackedObject(client *Client, prefix, sha string) (objType string, body 
 	if !found || len(at) != 3 || at[0] < 0 || at[0] >= int64(len(doc.Packs)) {
 		return "", nil, false, nil
 	}
-	raw, err := client.GetRangeRetry(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
+	raw, err := client.GetRange(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
 	if errors.Is(err, ErrNotFound) {
 		return "", nil, false, nil
 	}

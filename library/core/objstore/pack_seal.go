@@ -268,7 +268,7 @@ func roundKey(round packRound) string { return strings.Join(round.Packs, ",") }
 
 // advertisedPacks reads the pack names objects/info/packs lists; an absent listing is an empty set, not an error.
 func advertisedPacks(client *Client, prefix string) (map[string]bool, error) {
-	body, err := client.GetRetry(prefix + packsKey)
+	body, err := client.Get(prefix + packsKey)
 	if errors.Is(err, ErrNotFound) {
 		return map[string]bool{}, nil
 	}
@@ -337,7 +337,7 @@ func pendingRound(state *packState, key string) bool {
 func deleteRoundLooseObjects(client *Client, prefix string, round packRound, concurrency int) error {
 	var shas []string
 	for _, name := range round.Packs {
-		idx, err := client.GetRetry(prefix + packKeyPrefix + name + ".idx")
+		idx, err := client.Get(prefix + packKeyPrefix + name + ".idx")
 		if errors.Is(err, ErrNotFound) {
 			return fmt.Errorf("pack %s: index absent from the bucket, so nothing of this round is safe to delete", name)
 		}

@@ -7,14 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 )
-
-// Shrink the retry backoff so the pool tests exercise retries without real waits
-// (shared by the PUT pool and the read-retry paths).
-func init() {
-	retryBackoff = []time.Duration{time.Millisecond, time.Millisecond}
-}
 
 // feedObjects returns a producer that emits n synthetic objects (distinct
 // shas 0001…, distinct bytes), honoring ctx cancellation.

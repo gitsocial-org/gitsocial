@@ -30,13 +30,15 @@ type object struct {
 
 // Bucket is a threadsafe in-memory object store implementing http.Handler.
 type Bucket struct {
-	mu        sync.Mutex
-	objs      map[string]object
-	puts      map[string]int
-	gets      map[string]int  // per-key non-list GET count (skip-path assertions)
-	lists     int             // ListObjectsV2 request count
-	failPuts  map[string]bool // keys whose PUT returns 500 (simulated hard error)
-	flakyPuts map[string]int  // keys whose next N PUTs return 500, then succeed
+	mu          sync.Mutex
+	objs        map[string]object
+	puts        map[string]int
+	putAttempts map[string]int  // per-key PUT request count, refused attempts included
+	gets        map[string]int  // per-key non-list GET count (skip-path assertions)
+	lists       int             // ListObjectsV2 request count
+	failPuts    map[string]bool // keys whose PUT returns 500 (simulated hard error)
+	flakyPuts   map[string]int  // keys whose next N PUTs fail, then succeed
+	putStatus   map[string]int  // status a failing PUT answers with (0 = 500)
 
 	// rejectIfMatch models a create-only provider (Ceph RGW, DO Spaces): every
 	// If-Match is refused with a 412 even when the ETag matches, while
@@ -45,12 +47,17 @@ type Bucket struct {
 	rejectIfMatch bool
 	ifMatchTries  int
 	failGets      map[string]int // keys whose GETs return 500 forever (>0 = armed)
-	flakyGets     map[string]int // keys whose next N GETs return 500, then succeed
+	flakyGets     map[string]int // keys whose next N GETs fail, then succeed
+	getStatus     map[string]int // status a failing GET answers with (0 = 500)
 }
 
 // New returns an empty in-memory bucket.
 func New() *Bucket {
-	return &Bucket{objs: map[string]object{}, puts: map[string]int{}, gets: map[string]int{}, failPuts: map[string]bool{}, flakyPuts: map[string]int{}, failGets: map[string]int{}, flakyGets: map[string]int{}}
+	return &Bucket{
+		objs: map[string]object{}, puts: map[string]int{}, putAttempts: map[string]int{}, gets: map[string]int{},
+		failPuts: map[string]bool{}, flakyPuts: map[string]int{}, putStatus: map[string]int{},
+		failGets: map[string]int{}, flakyGets: map[string]int{}, getStatus: map[string]int{},
+	}
 }
 
 // FailPut marks a bucket-relative key so its next PUTs return HTTP 500.
@@ -68,10 +75,14 @@ func (m *Bucket) ClearFailPut(key string) {
 }
 
 // FlakyPut marks a bucket-relative key so its next n PUTs return HTTP 500, after which PUTs succeed.
-func (m *Bucket) FlakyPut(key string, n int) {
+func (m *Bucket) FlakyPut(key string, n int) { m.FlakyPutStatus(key, n, 500) }
+
+// FlakyPutStatus is FlakyPut with the status the refused PUTs answer with.
+func (m *Bucket) FlakyPutStatus(key string, n, status int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.flakyPuts[key] = n
+	m.putStatus[key] = status
 }
 
 // FailGet marks a bucket-relative key so every GET returns HTTP 500, a fault that does not clear.
@@ -82,10 +93,14 @@ func (m *Bucket) FailGet(key string) {
 }
 
 // FlakyGet marks a bucket-relative key so its next n GETs return HTTP 500, after which GETs succeed.
-func (m *Bucket) FlakyGet(key string, n int) {
+func (m *Bucket) FlakyGet(key string, n int) { m.FlakyGetStatus(key, n, 500) }
+
+// FlakyGetStatus is FlakyGet with the status the refused GETs answer with.
+func (m *Bucket) FlakyGetStatus(key string, n, status int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.flakyGets[key] = n
+	m.getStatus[key] = status
 }
 
 // RejectIfMatchWrites makes the bucket behave like a create-only provider.
@@ -102,11 +117,18 @@ func (m *Bucket) IfMatchCount() int {
 	return m.ifMatchTries
 }
 
-// PutCount returns how many times a key (bucket-relative) was PUT.
+// PutCount returns how many times a key (bucket-relative) was stored.
 func (m *Bucket) PutCount(key string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.puts[key]
+}
+
+// PutAttempts returns how many PUT requests a key received, refused attempts included.
+func (m *Bucket) PutAttempts(key string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.putAttempts[key]
 }
 
 // Seed stores one object's bytes directly, for a fixture the Client cannot write.
@@ -156,6 +178,14 @@ func (m *Bucket) TotalPuts() int {
 	return total
 }
 
+// failStatus returns the status an armed failure answers with, 500 when none was named.
+func failStatus(status int) int {
+	if status == 0 {
+		return 500
+	}
+	return status
+}
+
 // ETag returns the quoted md5 hex of bytes, matching S3 ETag shape.
 func ETag(b []byte) string { return fmt.Sprintf("%q", fmt.Sprintf("%x", md5.Sum(b))) }
 
@@ -182,12 +212,12 @@ func (m *Bucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		m.gets[key]++
 		if m.failGets[key] > 0 {
-			w.WriteHeader(500)
+			w.WriteHeader(failStatus(m.getStatus[key]))
 			return
 		}
 		if m.flakyGets[key] > 0 {
 			m.flakyGets[key]--
-			w.WriteHeader(500)
+			w.WriteHeader(failStatus(m.getStatus[key]))
 			return
 		}
 		obj, ok := m.objs[key]
@@ -220,13 +250,14 @@ func (m *Bucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	case http.MethodPut:
 		body, _ := io.ReadAll(r.Body)
+		m.putAttempts[key]++
 		if m.failPuts[key] {
-			w.WriteHeader(500)
+			w.WriteHeader(failStatus(m.putStatus[key]))
 			return
 		}
 		if m.flakyPuts[key] > 0 {
 			m.flakyPuts[key]--
-			w.WriteHeader(500)
+			w.WriteHeader(failStatus(m.putStatus[key]))
 			return
 		}
 		existing, exists := m.objs[key]

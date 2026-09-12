@@ -4,6 +4,7 @@ package objstore
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -147,12 +148,8 @@ func bucketTagTarget(client *Client, prefix string, src *LocalCommitSource, sha 
 
 // putText uploads a mutable text/plain transport key; cacheControlForKey makes it no-cache, so a reader revalidates its ref state.
 func putText(client *Client, key string, body []byte) error {
-	resp, err := client.do(http.MethodPut, key, nil, body, map[string]string{"Content-Type": "text/plain; charset=utf-8"})
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
+	_, _, err := client.do(context.Background(), http.MethodPut, key, nil, body, map[string]string{"Content-Type": "text/plain; charset=utf-8"})
+	return err
 }
 
 // LogDumbTransportInfo runs writeDumbTransportInfo and reports a failure to stderr; the surface self-heals on the next ref-moving push.
@@ -164,7 +161,7 @@ func LogDumbTransportInfo(client *Client, prefix string, src *LocalCommitSource,
 
 // readInfoRefsClaims reads the ref advertisement as refname to sha, the last listing-free ref source; peel lines are skipped.
 func readInfoRefsClaims(client *Client, prefix string) (map[string]string, bool) {
-	body, err := client.GetRetry(prefix + infoRefsKey)
+	body, err := client.Get(prefix + infoRefsKey)
 	if err != nil {
 		return nil, false
 	}
