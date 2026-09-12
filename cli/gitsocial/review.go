@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
@@ -50,8 +51,8 @@ func newReviewStatusCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			revConfig := review.GetReviewConfig(cfg.WorkDir)
 
@@ -179,8 +180,8 @@ func newReviewPRCreateCmd() *cobra.Command {
 
 			// Auto-detect stack relationship from base branch matching
 			if stack && dependsOnStr == "" && base != "" {
-				if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "review", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 				normalizedBase := protocol.EnsureBranchRef(base)
 				normalizedBase = protocol.LocalizeRef(normalizedBase, gitmsg.ResolveRepoURL(cfg.WorkDir))
@@ -275,8 +276,8 @@ func newReviewPRListCmd() *cobra.Command {
 				if !EnsureGitRepo(cmd) {
 					os.Exit(ExitNotRepo)
 				}
-				if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "review", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 			}
 
@@ -333,8 +334,8 @@ func newReviewPRShowCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := review.GetPR(args[0])
@@ -427,8 +428,8 @@ func newReviewPREditCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			opts := review.UpdatePROptions{}
@@ -501,8 +502,8 @@ branches, which signals that new code is ready for review.`,
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.UpdatePRTips(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -531,8 +532,8 @@ func newReviewPRMergeCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := review.MergePR(cfg.WorkDir, args[0], review.MergeStrategy(strategy))
@@ -571,8 +572,8 @@ func newReviewPRCloseCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := review.ClosePR(cfg.WorkDir, args[0])
@@ -601,8 +602,8 @@ func newReviewPRRetractCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := review.RetractPR(cfg.WorkDir, args[0])
@@ -633,8 +634,8 @@ func newReviewPRDiffCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			// Resolve default from/to if not set
@@ -693,8 +694,8 @@ func newReviewPRSyncCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := review.SyncPRBranch(cfg.WorkDir, args[0], strategy)
@@ -725,8 +726,8 @@ func newReviewPRReadyCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.MarkReady(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -752,8 +753,8 @@ func newReviewPRDraftCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.ConvertToDraft(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -779,8 +780,8 @@ func newReviewPRStackCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.GetStack(args[0])
 			if !result.Success {
@@ -826,8 +827,8 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.RebaseStack(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -856,8 +857,8 @@ func newReviewPRSyncStackCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := review.SyncStackTips(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -901,8 +902,8 @@ func newFeedbackApproveCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			if message == "" {
@@ -943,8 +944,8 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			if message == "" {
@@ -988,8 +989,8 @@ func newFeedbackCommentCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := review.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "review", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			content := args[0]

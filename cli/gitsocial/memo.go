@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/core/text"
@@ -52,6 +53,9 @@ func newMemoStatusCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
+			}
 			if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 				slog.Debug("memo sync", "error", err)
 			}
@@ -575,6 +579,9 @@ show by default; external memos, from repositories followed for other
 reasons, need --include-external.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
+			}
 			if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 				slog.Debug("memo sync", "error", err)
 			}

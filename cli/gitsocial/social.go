@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -157,6 +158,9 @@ func newSocialTimelineCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
+			}
 			scope := "timeline"
 			if repoURL != "" {
 				if repoURL == "workspace" || repoURL == "my" {

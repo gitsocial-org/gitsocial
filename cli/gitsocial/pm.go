@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -81,8 +82,8 @@ func newPMStatusCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			pmConfig := pm.GetPMConfig(cfg.WorkDir)
 
@@ -232,8 +233,8 @@ Sort by created, due or priority, each with :asc or :desc.`,
 				if !EnsureGitRepo(cmd) {
 					os.Exit(ExitNotRepo)
 				}
-				if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "pm", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 			}
 
@@ -468,8 +469,8 @@ func newPMIssueEditCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			opts := pm.UpdateIssueOptions{}
@@ -800,8 +801,8 @@ func newPMMilestoneListCmd() *cobra.Command {
 				if !EnsureGitRepo(cmd) {
 					os.Exit(ExitNotRepo)
 				}
-				if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "pm", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 			}
 
@@ -971,8 +972,8 @@ func newPMMilestoneEditCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			opts := pm.UpdateMilestoneOptions{}
@@ -1189,8 +1190,8 @@ func newPMSprintListCmd() *cobra.Command {
 				if !EnsureGitRepo(cmd) {
 					os.Exit(ExitNotRepo)
 				}
-				if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "pm", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 			}
 
@@ -1377,8 +1378,8 @@ func newPMSprintEditCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			opts := pm.UpdateSprintOptions{}
@@ -1778,8 +1779,8 @@ func newPMBoardCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := pm.GetBoardView(cfg.WorkDir)

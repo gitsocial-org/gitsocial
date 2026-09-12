@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/search"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
@@ -132,6 +133,9 @@ Examples:
 				if !strings.EqualFold(typeFilter, "memo") {
 					PrintError(cmd, "--tier is only valid with --type memo")
 					os.Exit(ExitInvalidArgs)
+				}
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 				if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 					slog.Debug("memo sync", "error", err)

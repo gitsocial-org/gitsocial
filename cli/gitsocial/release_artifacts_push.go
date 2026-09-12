@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 )
 
@@ -32,8 +33,8 @@ overridable per remote).`,
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			version := normalizeReleaseVersion(args[0])
 			result := release.PushArtifacts(cfg.WorkDir, version, args[1:], remote)

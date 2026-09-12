@@ -7,9 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
 // newHistoryCmd creates the command for viewing edit history of a message.
@@ -26,11 +25,8 @@ func newHistoryCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			ref := args[0]
 
-			if err := social.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "social", "error", err)
-			}
-			if err := pm.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "pm", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)

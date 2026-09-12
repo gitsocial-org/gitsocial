@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
@@ -430,6 +431,7 @@ func (v *MemosView) loadMemos() tea.Cmd {
 	workdir := v.workdir
 	variant := v.variant
 	return func() tea.Msg {
+		_, _ = client.SyncWorkspaceLocal(workdir)
 		_ = memo.SyncAllTierReposToCache(workdir)
 		opts := memo.ListOptions{IncludeSessions: "all"}
 		switch variant {

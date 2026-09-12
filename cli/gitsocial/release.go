@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -53,8 +54,8 @@ func newReleaseStatusCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			relConfig := release.GetReleaseConfig(cfg.WorkDir)
 
@@ -242,8 +243,8 @@ func newReleaseListCmd() *cobra.Command {
 				if !EnsureGitRepo(cmd) {
 					os.Exit(ExitNotRepo)
 				}
-				if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-					slog.Debug("sync workspace", "ext", "release", "error", err)
+				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+					slog.Debug("sync workspace", "error", err)
 				}
 			}
 
@@ -285,8 +286,8 @@ func newReleaseShowCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := release.GetSingleRelease(args[0])
@@ -326,8 +327,8 @@ func newReleaseEditCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			opts := release.EditReleaseOptions{}
@@ -405,8 +406,8 @@ func newReleaseRetractCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			result := release.RetractRelease(cfg.WorkDir, args[0])
@@ -483,8 +484,8 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			result := release.ListArtifacts(cfg.WorkDir, args[0])
 			if !result.Success {
@@ -526,8 +527,8 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 			version := args[0]
 			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
@@ -661,8 +662,8 @@ func newReleaseSBOMCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := release.SyncWorkspaceToCache(cfg.WorkDir); err != nil {
-				slog.Debug("sync workspace", "ext", "release", "error", err)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
 			}
 
 			res := release.GetSingleRelease(args[0])
