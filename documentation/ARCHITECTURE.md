@@ -115,7 +115,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 
 - Run git from an extension; use `core/git`.
 - Create a type for a single use.
-- Add package-level mutable state. The per-workdir caches in `core/gitmsg` and the in-flight map in `core/identity` are the standing exceptions.
+- Add package-level mutable state. The per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity` and the two credential warn-once flags in `core/objstore` are the standing exceptions.
 - Skip error handling.
 
 ### Patterns
@@ -188,7 +188,7 @@ Outside the tree:
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
-| `core/objstore`<br>S3 remote | `Client`, `Config`, `Capability`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
+| `core/objstore`<br>S3 remote | `Client`, `Config`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
 | `core/site`<br>Static site | `SiteCustomization` | `Push`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent`, `ValidSiteFavicon` |
 | `core/fetch`<br>Fetch orchestration | | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
