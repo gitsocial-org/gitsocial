@@ -58,47 +58,17 @@ func newMirrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mirror [forge-url] [s3-url]",
 		Short: "Mirror a forge project into a bucket",
-		Long: `Mirror a forge-hosted project (GitHub, GitLab, ...) into an S3 bucket as a
-full, browsable GitSocial site.
-
-mirror is the sync loop — upstream forge → local workspace → bucket. Unlike
-` + "`gitsocial push`" + `, which sends local state one way to a remote, mirror first
-fetches from the forge and imports new issues, PRs, releases, and discussions,
-then pushes data, code, and the browser site to the bucket. That is why the
-no-argument form is not push: it refreshes from the forge before publishing.
-
-Arity decides what happens; the two URLs are told apart by scheme, so their
-order is free:
-
-  gitsocial mirror <forge-url> <s3-url>   clone, import, push (cold start)
-  gitsocial mirror <s3-url>               in a workspace: attach the bucket, import, push
-  gitsocial mirror                        refresh an already-mirrored workspace (the cron form)
-
-Re-running with the same URLs is the update path, not an error: every step
-derives its state from the repo (the origin URL, the push remote, the import
-mapping file, the bucket's refs) and checks before it acts, so mirror can run
-from cron and a crashed run resumes where it left off.
-
-The workspace keeps the forge URL as origin — the bucket is a secondary
-remote, and every ref keeps its forge identity ("your project is also here").
-The whole project is mirrored (all upstream branches) unless
---default-branch-only.
-
-S3 credentials resolve via GITSOCIAL_S3_ACCESS_KEY/SECRET_KEY, then
-~/.config/gitsocial/credentials.json (per endpoint host), then AWS_*. When
-nothing resolves, mirror prompts on a TTY (unless -y) and otherwise fails
-printing the exact ` + "`gitsocial config credentials set <host>`" + ` command.
-
-Bucket creation, the public-read policy, and the public domain are provider
-dashboard steps mirror cannot automate; --dry-run prints that checklist plus
-the resolved plan without writing anything.
+		Long: `Mirror a forge-hosted project into an S3 bucket as a browsable site.
+mirror fetches from the forge, imports issues, pull requests, releases
+and discussions, then pushes data, code and the site to the bucket.
+The two URLs are told apart by scheme, so their order is free.
+Re-running refreshes, and a crashed run resumes.
 
 Examples:
-  gitsocial mirror https://github.com/octocat/Hello-World s3://<endpoint>/<bucket>/hello
-  gitsocial mirror s3://<endpoint>/<bucket>/hello    # inside an existing workspace
-  gitsocial mirror                                   # refresh (cron form)
-  gitsocial mirror --url https://hello.example.org/  # public URL: crawlable pages + canonical links
-  gitsocial mirror -n 50 --dry-run https://github.com/org/repo s3://<endpoint>/<bucket>/repo`,
+  gitsocial mirror <forge-url> <s3-url>  cold start: clone, import, push
+  gitsocial mirror <s3-url>              attach the bucket, import, push
+  gitsocial mirror                       refresh
+  gitsocial mirror --dry-run             the checklist and the plan`,
 		Args: cobra.MaximumNArgs(2),
 		// A long-running composite command: a mid-run failure (gh auth, S3
 		// credentials, push) is not a usage error, so keep the output to the

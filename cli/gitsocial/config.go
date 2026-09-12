@@ -167,31 +167,13 @@ func newSiteConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "site",
 		Short: "Manage static site customization",
-		Long: `Set the static browser site's title, accent color, and favicon. Values are
-stored under the "site" sub-object of the core config (refs/gitmsg/core/config)
-and published to the bucket as .gitsocial/site/site-config.json on the next
-` + "`gitsocial push`" + ` (or an explicit ` + "`gitsocial push --site-only`" + `).
+		Long: `Set the browser site's title, accent color, favicon and the other site
+keys. Values live in the site object of the core config ref and reach
+the bucket as .gitsocial/site/site-config.json on the next push.
 
-Keys:
-  title        plain text shown in the tab title and header
-  accent       accent color, strict #rgb or #rrggbb hex (e.g. #0a7)
-  accentDark   optional accent color for dark mode (same hex form)
-  favicon      an image path (@path/to/icon.png) or a data: URI; png/webp/svg,
-               32KB max
-  image        social-card image (og:image) stamped on every HTML page: a
-               bucket key relative to the site root (e.g. og-card.png) or an
-               absolute https:// URL
-  url          the site's public base URL, absolute https:// (http:// only for
-               localhost), no query/fragment; normalized to a trailing slash
-  description  plain text description of the site, 300 chars max
-  publish      true/false (default false): master switch for the static site;
-               unset or false, pushes move repo data only
-  pages        true/false (default false): the crawlable HTML page layer;
-               effective only with publish=true and a valid url
-  filesInclude comma-separated path globs the file pages publish beyond their
-               own prose-document rule (e.g. "handbook/**/*.text")
-  filesExclude comma-separated path globs the file pages never publish
-               (e.g. "**/help.md,internal/**")`,
+Keys: title, description, accent, accentDark, favicon, image, url,
+publish, pages, filesInclude, filesExclude. Their accepted values are in
+documentation/STATIC-SITE.md.`,
 	}
 	cmd.AddCommand(newSiteConfigGetCmd(), newSiteConfigSetCmd(), newSiteConfigListCmd())
 	return cmd
@@ -298,27 +280,13 @@ func newSiteConfigSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <key> <value>",
 		Short: "Set a site customization value",
-		Long: `Set a site customization value. Valid keys: title, accent, accentDark, favicon,
-image, url, description, publish, pages, filesInclude, filesExclude.
+		Long: `Set a site customization value. Valid keys: title, description, accent,
+accentDark, favicon, image, url, publish, pages, filesInclude,
+filesExclude. Their accepted values are in documentation/STATIC-SITE.md.
 
-  accent / accentDark  strict #rgb or #rrggbb hex (e.g. #0a7 or #00dddd)
-  favicon              @path/to/icon.png to read+encode a raw image (png/webp/
-                       svg), or a data: URI directly; 32KB max
-  image                social-card image (og:image) for the HTML pages: a
-                       bucket key relative to the site root (e.g. og-card.png,
-                       upload it with ` + "`gitsocial remote put`" + `) or an
-                       absolute https:// URL
-  url                  absolute https:// URL (http:// only for localhost), no
-                       query/fragment; normalized to a trailing slash
-  description          plain text, 300 chars max
-  publish / pages      true or false (both default false): publish enables the
-                       static site; pages enables the crawlable HTML page layer
-                       (effective only with publish=true and a valid url)
-
-With --remote <name>, the value is stored per-remote in git config
-(remote.<name>.gitsocial-site-<key>) instead of the shared config ref, so it
-applies only when publishing to that remote. Only the deployment keys url,
-publish, and pages are overridable per-remote; identity keys travel with the repo.`,
+With --remote <name> the value is stored in git config as
+remote.<name>.gitsocial-site-<key> and applies only to pushes to that
+remote. Only url, publish and pages are overridable per remote.`,
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

@@ -44,53 +44,11 @@ func newSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search [query]",
 		Short: "Search across all extensions",
-		Long: `Search across posts, issues, PRs, releases, and more.
+		Long: `Search posts, issues, pull requests, releases and memos.
 
-Filters can be specified as flags or inline in the query (flags take precedence).
-
-Inline filters (for backward compatibility):
-  author:<email>     Filter by author email
-  repo:<url>         Filter by repository URL
-  type:<type>        Filter by post type
-  hash:<prefix>      Filter by commit hash prefix
-  after:YYYY-MM-DD   Posts after date
-  before:YYYY-MM-DD  Posts before date
-
-Extension-specific filters:
-  --state            Filter by state (open, closed, merged, canceled)
-  --labels           Filter by labels (comma-separated, any match)
-  --assignee         Filter by assignee email (implies --type issue)
-  --reviewer         Filter by reviewer email (implies --type pr)
-  --milestone        Filter by milestone name (implies --type issue)
-  --sprint           Filter by sprint name (implies --type issue)
-  --draft            Filter draft PRs only (implies --type pr)
-  --prerelease       Filter pre-releases only (implies --type release)
-  --tag              Filter by release tag (implies --type release)
-  --base             Filter by PR base branch (implies --type pr)
-
-Scopes:
-  timeline           Search across entire timeline (default)
-  list:<name>        Search within a specific list
-  repository:<url>   Search within a specific repository
-
-Sort options:
-  score              Sort by relevance score (default)
-  date               Sort by date (newest first)
-
-Grouping:
-  --group-by <field>   Group results by: state, author, type, extension, repo, label, assignee, reviewer, milestone, base
-  --top N              Show only top N items per group (default: all)
-  --count-only         Show only group counts, no items
-
-Examples:
-  gitsocial search "hello world"
-  gitsocial search "feature" --author john@example.com --type post
-  gitsocial search "bug fix" --scope list:favorites --sort date
-  gitsocial search --type pr --state open --json
-  gitsocial search --type issue --state open --labels bug --assignee dev@example.com --json
-  gitsocial search --type pr --after 2025-03-23 --group-by state --json
-  gitsocial search --type pr --after 2025-03-23 --group-by author --top 5 --json
-  gitsocial search --type issue --state open --group-by label --count-only --json`,
+A filter is a flag or an inline term such as author:<email>, type:<type>
+or after:<date>, and the flag wins when both are given. The filter
+values, the scopes and the group-by fields are in documentation/CLI.md.`,
 		Args: cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

@@ -25,62 +25,18 @@ func newPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push [remote...]",
 		Short: "Publish local changes to remotes",
-		Long: `Publish all local GitMsg changes to the remote repository, and — for s3
-remotes with the site.publish guard enabled — the browsable static site
-alongside the data.
+		Long: `Publish local GitMsg data to one or more remotes. On an s3 remote with
+site.publish enabled, also publish the browser static site.
 
-The target remotes are resolved in this order: the positional [remote...]
-arguments, then git config gitsocial.pushRemote (multi-valued), then a heuristic
-(origin if it's an s3 remote, else the first s3 remote alphabetically, else
-origin). Set defaults with ` + "`gitsocial remote default <name...>`" + `. Several
-remotes push sequentially: a failed remote is reported and skipped, and the
-command exits non-zero if any remote failed.
-
-This publishes:
-  - Branch commits (posts, comments, reposts, quotes)
-  - GitMsg refs (lists, configs)
-  - Tags (all local tags)
-  - Code branches: the default branch when it's ahead of the remote, and heads
-    of open pull requests, so others can fetch the code your published data
-    points at (--no-code skips)
-  - The browser static site, for s3 remotes when the repo enables it with
-    ` + "`gitsocial config site set publish true`" + ` (default off; a bucket with
-    no site then gets one). --no-site skips per push, and ` + "`git config`" + `
-    ` + "`gitsocial.pushSite false`" + ` opts a machine out persistently. Non-s3
-    remotes skip this step silently.
-
-A first push to an empty remote bootstraps the whole bucket with no extra
-flags. Use --all-branches to publish every local branch, not just the default
-branch and open-PR heads.
-
---full detaches a thin fork bucket (one pushed with
-` + "`remote.<name>.gitsocial-thin`" + ` set): it uploads every object the bucket
-left to its upstream, restores the stock-git ref advertisement, drops the
-` + "`.gitsocial/upstream`" + ` marker, and clears the thin flag — the escape hatch
-for an upstream that is going away. It is a no-op on a bucket that is not thin.
-
---site-only publishes only the browser site — the explicit site refresh, e.g.
-to catch an already-pushed repo up right after enabling site.publish, without
-pushing new data. Where a plain push silently skips the site for repos without
-the guard, an explicit --site-only fails loudly when site.publish is off or
-the remote is not an s3 remote.
-
-Divergent histories on gitmsg/* branches (when two clones write between syncs)
-are auto-merged — the empty-tree append-only shape of those branches makes the
-merge conflict-free and preserves every commit hash on both sides. Code
-branches (and --all-branches extras) are never auto-merged; a diverged head
-(e.g. after a rebase) fails with a hint to force-push explicitly.
+Remotes resolve in order: the arguments, git config gitsocial.pushRemote,
+then origin, or the first s3 remote when origin is not one. Diverged
+gitmsg/* branches merge automatically; diverged code branches fail with a
+hint. See documentation/S3.md for remotes and thin fork buckets.
 
 Examples:
-  gitsocial push              # Publish to the resolved remote(s) (data + site)
-  gitsocial push backup       # Publish to the remote named "backup"
-  gitsocial push r2 s3local   # Publish to both "r2" and "s3local" in turn
-  gitsocial push --dry-run    # Preview what would be pushed
-  gitsocial push --no-code    # Skip code branches (default branch + PR heads)
-  gitsocial push --no-site    # Skip the browser site
-  gitsocial push --site-only  # Refresh only the browser site, no data push
-  gitsocial push --all-branches   # Publish every local branch
-  gitsocial push --full       # Detach a thin fork bucket (upload everything)`,
+  gitsocial push              # resolved remotes, data and site
+  gitsocial push r2 backup    # named remotes, in order
+  gitsocial push --site-only  # refresh the site, push no data`,
 		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

@@ -22,17 +22,16 @@ func newCredentialsConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "credentials",
 		Short: "Manage S3 credentials per endpoint host",
-		Long: `Manage S3 credentials stored per endpoint host in
-~/.config/gitsocial/credentials.json (0600; honors XDG_CONFIG_HOME), so a
-multi-remote push can authenticate to several providers in one invocation.
+		Long: `Manage S3 credentials, stored per endpoint host in
+~/.config/gitsocial/credentials.json with mode 0600, so one push can
+authenticate to several providers. XDG_CONFIG_HOME moves the file.
 
-Resolution precedence when signing requests to a bucket:
-  1. GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY (explicit override)
+Resolution when a request to a bucket is signed:
+  1. GITSOCIAL_S3_ACCESS_KEY and GITSOCIAL_S3_SECRET_KEY
   2. the credentials.json entry for the remote's endpoint host
-  3. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+  3. AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
 
-Credentials are keyed by endpoint host (e.g. <account>.r2.cloudflarestorage.com,
-s3.us-east-1.amazonaws.com, 127.0.0.1:9000) — the granularity providers scope
+Credentials are keyed by endpoint host, the granularity providers scope
 keys to.`,
 	}
 	cmd.AddCommand(newCredentialsSetCmd(), newCredentialsListCmd(), newCredentialsRemoveCmd())

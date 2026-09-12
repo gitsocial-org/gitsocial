@@ -144,21 +144,15 @@ func newRemoteAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add [name] <url>",
 		Short: "Add a git or s3 remote",
-		Long: `Add a git remote. When the URL is an s3:// remote or a pasted AWS S3
-console URL it is normalized to the canonical s3://<endpoint-host>/<bucket>/<prefix>
-form and the s3 helper alias is recorded, so both gitsocial and plain git work
-with no further setup. Name defaults to "origin".
-
---default appends the remote to the default push targets (the multi-valued
-git config gitsocial.pushRemote, same as ` + "`gitsocial remote default`" + `).
---site enables site publishing for this repo (site.publish true in the core
-config), so pushes to s3 remotes also publish the browser static site.
+		Long: `Add a git remote. An s3:// URL or a pasted AWS S3 console URL is
+normalized to s3://<endpoint-host>/<bucket>/<prefix> and the s3 helper
+alias is recorded, so plain git works there too. The name defaults to
+origin. The accepted URL shapes are in documentation/S3.md.
 
 Examples:
   gitsocial remote add s3://s3.us-east-1.amazonaws.com/my-bucket/repo
-  gitsocial remote add https://us-east-1.console.aws.amazon.com/s3/buckets/my-bucket
-  gitsocial remote add upstream s3://s3.us-east-1.amazonaws.com/my-bucket/repo
-  gitsocial remote add s3 s3://s3.us-east-1.amazonaws.com/my-bucket/repo --default --site`,
+  gitsocial remote add upstream s3://<endpoint-host>/<bucket>/repo
+  gitsocial remote add s3 s3://<endpoint-host>/<bucket>/repo --default`,
 		Args: cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

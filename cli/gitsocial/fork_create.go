@@ -43,20 +43,16 @@ func newForkCreateCmd() *cobra.Command {
 		Short: "Fork a repository and clone it",
 		Long: `Fork <upstream-url> and set up a local clone to work in.
 
-The destination is a fork on the same forge as upstream (created through the
-forge's fork API, which copies nothing server-side) or your own bucket:
+The destination is a fork on the same forge as upstream, or your own
+bucket with --to s3://<endpoint-host>/<bucket>/<prefix>. The clone is
+blobless, so blobs arrive on demand; --no-filter clones everything.
 
+Afterwards origin is your fork and upstream is the source. Nothing is
+pushed: commit your work, then run gitsocial push.
+
+Examples:
   gitsocial fork create https://github.com/org/repo
-  gitsocial fork create https://github.com/org/repo --to https://github.com/me/repo
-  gitsocial fork create https://github.com/org/repo --to s3://<endpoint-host>/<bucket>/<prefix>
-
-The clone is blobless (--filter=blob:none): blobs are fetched on demand, so a
-fork costs a fraction of a full clone. Servers that cannot honor the filter
-ignore it and send everything. Pass --no-filter for a complete clone.
-
-Afterwards origin is your fork and upstream is the source, matching the
-convention of forge CLIs. Nothing is pushed: commit your work, then run
-gitsocial push.`,
+  gitsocial fork create https://github.com/org/repo --to <s3-url>`,
 		Args: cobra.RangeArgs(1, 2),
 		// A composite command (forge API, clone, git config): a mid-run
 		// failure is not a usage error, so keep the output to the one message

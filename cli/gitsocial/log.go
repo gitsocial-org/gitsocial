@@ -23,22 +23,17 @@ func newLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log",
 		Short: "Show activity log",
-		Long: `Show activity log for the current repository or timeline.
+		Long: `Show the activity log of this repository, or of the timeline with
+--scope timeline.
 
-Scopes:
-  timeline              All activity from timeline
-  repository:my         Current repository (default)
-
-Types (comma-separated):
-  post, comment, repost, quote, list-create, list-delete,
-  repository-follow, repository-unfollow, config, metadata
+Types: post, comment, repost, quote, list-create, list-delete,
+repository-follow, repository-unfollow, config, metadata.
 
 Examples:
-  gitsocial log
   gitsocial log --scope timeline
   gitsocial log --type post,comment
   gitsocial log --after 2024-01-01 --before 2024-06-01
-  gitsocial log --author john@example.com`,
+  gitsocial log --author dev@example.com`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)

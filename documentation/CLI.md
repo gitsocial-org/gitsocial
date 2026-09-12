@@ -164,6 +164,12 @@ gitsocial search --type issue --labels bug --assignee dev@example.com
 gitsocial search --type pr --group-by state --count-only
 ```
 
+- `--type` takes post, comment, repost, quote, pr, issue, milestone, sprint, release or memo. The inline forms `author:`, `repo:`, `type:`, `hash:`, `after:` and `before:` work in the query; the flag wins.
+- `--scope` takes `timeline`, the default, `list:<name>` or `repository:<url>`. `--sort` takes `score`, the default, or `date`.
+- `--group-by` takes state, author, type, extension, repo, label, assignee, reviewer, milestone or base. `--top` caps the items per group and `--count-only` prints the counts alone.
+- `--assignee`, `--milestone` and `--sprint` imply `--type issue`; `--reviewer`, `--draft` and `--base` imply `--type pr`; `--prerelease` and `--tag` imply `--type release`.
+- `--tier` applies to `--type memo` and takes session, personal, project, inherited or external.
+
 ### gitsocial show
 
 ```

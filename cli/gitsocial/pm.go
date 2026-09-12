@@ -209,17 +209,14 @@ func newPMIssueListCmd() *cobra.Command {
 		Long: `List issues with optional filtering and sorting.
 
 Filter syntax:
-  state:open              - Filter by state
-  assignees:alice@x.com   - Filter by assignee
-  status:backlog          - Filter by label
-  priority:high           - Filter by label
-  -kind:chore             - Exclude label
-  due:today               - Due today
-  due:overdue             - Past due
-  due:week                - Due within 7 days
-  "search text"           - Text search
+  state:open              filter by state
+  assignees:alice@x.com   filter by assignee
+  status:backlog          filter by label
+  -kind:chore             exclude a label
+  due:today               also due:overdue and due:week
+  "search text"           text search
 
-Sort options: created, due, priority`,
+Sort by created, due or priority, each with :asc or :desc.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
