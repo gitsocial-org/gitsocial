@@ -7,40 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
-
-var (
-	buildOnce   sync.Once
-	binaryPath  string
-	binaryErr   error
-	harnessHome string
-)
-
-// cliBinary builds the gitsocial binary once per test run.
-func cliBinary(t *testing.T) string {
-	t.Helper()
-	buildOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "gitsocial-cli-test-*")
-		if err != nil {
-			binaryErr = err
-			return
-		}
-		binaryPath = filepath.Join(dir, "gitsocial")
-		out, err := exec.Command("go", "build", "-o", binaryPath, ".").CombinedOutput()
-		if err != nil {
-			binaryErr = err
-			binaryPath = string(out)
-			return
-		}
-		harnessHome, binaryErr = os.MkdirTemp("", "gitsocial-cli-home-*")
-	})
-	if binaryErr != nil {
-		t.Fatalf("build gitsocial binary: %v\n%s", binaryErr, binaryPath)
-	}
-	return binaryPath
-}
 
 // runCLI executes the binary in dir with an isolated HOME and per-call cache
 // dir, returning stdout, stderr, and the exit code.

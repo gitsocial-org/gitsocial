@@ -3,9 +3,22 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+)
+
+// Test-only state: the one CLI build and isolated HOME every child-process test shares.
+var (
+	cliBuildOnce   sync.Once
+	harnessRoot    string
+	cliBinaryPath  string
+	cliBuildOutput string
+	cliBuildErr    error
+	harnessHome    string
 )
 
 // TestMain strips the two variables a `gitsocial push` leaves in the
@@ -24,7 +37,43 @@ import (
 func TestMain(m *testing.M) {
 	git.UnsetRedirectEnv()
 	os.Unsetenv(git.DeferMaintenanceEnv)
-	os.Exit(m.Run())
+	code := m.Run()
+	// os.Exit skips deferred calls, so the shared build directory goes here.
+	if harnessRoot != "" {
+		os.RemoveAll(harnessRoot) // a failed removal leaves a temp dir, nothing more
+	}
+	os.Exit(code)
+}
+
+// cliBinary returns the gitsocial binary, building it once per test run.
+func cliBinary(t *testing.T) string {
+	t.Helper()
+	cliBuildOnce.Do(buildCLIBinary)
+	if cliBuildErr != nil {
+		t.Fatalf("build gitsocial binary: %v\n%s", cliBuildErr, cliBuildOutput)
+	}
+	return cliBinaryPath
+}
+
+// buildCLIBinary builds the CLI into harnessRoot and prepares the isolated HOME.
+func buildCLIBinary() {
+	harnessRoot, cliBuildErr = os.MkdirTemp("", "gitsocial-cli-test-*")
+	if cliBuildErr != nil {
+		return
+	}
+	// The helper tests put this directory on PATH, so it holds the binary alone.
+	binDir := filepath.Join(harnessRoot, "bin")
+	harnessHome = filepath.Join(harnessRoot, "home")
+	for _, dir := range []string{binDir, harnessHome} {
+		if cliBuildErr = os.MkdirAll(dir, 0o755); cliBuildErr != nil {
+			return
+		}
+	}
+	cliBinaryPath = filepath.Join(binDir, "gitsocial")
+	out, err := exec.Command("go", "build", "-o", cliBinaryPath, ".").CombinedOutput()
+	if err != nil {
+		cliBuildErr, cliBuildOutput = err, string(out)
+	}
 }
 
 // fullTierOnly skips the test unless GITSOCIAL_TEST_FULL=1 (scripts/check.sh without --quick).
