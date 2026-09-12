@@ -314,6 +314,6 @@ library/tui/
 | `registry_` | a global registry | `registry_nav.go` |
 | `form_` | a modal form | `form_issue.go` |
 | `version_item_` | a history-picker version item | `version_item_issue.go` |
-| `util_` | stateless helpers | `util_render.go` |
+| `util_` | helpers and the shared types they take | `util_render.go` |
 
 A new extension gets a `tui/tui<ext>/` directory with its `view_*.go` files and a `util_register.go` exposing `Register(host)`, called from `app.go`.

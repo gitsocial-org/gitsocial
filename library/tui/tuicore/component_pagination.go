@@ -1,4 +1,4 @@
-// util_pagination.go - Shared cursor-based infinite scroll pagination
+// component_pagination.go - Shared cursor-based infinite scroll pagination
 package tuicore
 
 import (

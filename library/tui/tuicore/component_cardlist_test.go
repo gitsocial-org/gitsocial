@@ -1,4 +1,4 @@
-// util_cardlist_test.go - Cursor-preservation behavior for CardList reloads
+// component_cardlist_test.go - Cursor-preservation behavior for CardList reloads
 package tuicore
 
 import (

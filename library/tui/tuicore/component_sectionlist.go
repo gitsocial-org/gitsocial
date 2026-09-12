@@ -1,4 +1,4 @@
-// util_sectionlist.go - Scrollable sectioned list for detail views with vim navigation, search, and mouse
+// component_sectionlist.go - Scrollable sectioned list for detail views with vim navigation, search, and mouse
 package tuicore
 
 import (

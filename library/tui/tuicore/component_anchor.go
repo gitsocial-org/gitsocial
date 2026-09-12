@@ -1,4 +1,4 @@
-// util_anchor.go - AnchorCollector unifies zone marking, collection, and focus styling for clickable card elements
+// component_anchor.go - AnchorCollector unifies zone marking, collection, and focus styling for clickable card elements
 package tuicore
 
 import (

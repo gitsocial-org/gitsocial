@@ -1,4 +1,4 @@
-// util_keys.go - Keybinding registry, handlers, and global shortcuts
+// registry_keys.go - Keybinding registry, handlers, and global shortcuts
 package tuicore
 
 import (

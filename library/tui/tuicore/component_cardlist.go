@@ -1,4 +1,4 @@
-// util_cardlist.go - Scrollable list component for displaying cards with vim navigation
+// component_cardlist.go - Scrollable list component for displaying cards with vim navigation
 package tuicore
 
 import (
