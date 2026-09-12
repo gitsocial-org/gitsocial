@@ -14,16 +14,6 @@ import (
 // should not also trigger back navigation).
 var ConsumedCmd tea.Cmd = func() tea.Msg { return nil }
 
-// CardRenderer renders a Card to a string and calculates its height.
-// This allows the rendering logic to live in components while CardList lives in tuicore.
-type CardRenderer interface {
-	RenderCard(card Card, opts CardOptions) string
-	CardHeight(card Card, opts CardOptions) int
-}
-
-// DefaultCardRenderer is set by components package on init
-var DefaultCardRenderer CardRenderer
-
 // cardCacheEntry stores a cached per-card render to avoid re-rendering unchanged cards.
 type cardCacheEntry struct {
 	rendered string
@@ -39,12 +29,9 @@ type CardList struct {
 	height       int
 	active       bool
 	cardOptions  CardOptions
-	renderer     CardRenderer
 	zonePrefix   string
-	// Cached calculations
-	itemHeights        []int
-	cachedVisibleCount int
-	heightCacheValid   bool
+	// Line count of each item's rendered card; 0 = not measured yet
+	itemHeights []int
 	// Item resolver for nested items
 	itemIndex        map[string]int // maps item ID to index in items
 	itemResolver     ItemResolver
@@ -66,7 +53,6 @@ func NewCardList(items []DisplayItem) *CardList {
 	l := &CardList{
 		items:       items,
 		active:      true,
-		renderer:    DefaultCardRenderer,
 		zonePrefix:  zone.NewPrefix(),
 		focusedLink: -1,
 		cardOptions: CardOptions{
@@ -77,12 +63,6 @@ func NewCardList(items []DisplayItem) *CardList {
 	}
 	l.buildItemIndex()
 	return l
-}
-
-// SetRenderer sets the card renderer.
-func (l *CardList) SetRenderer(r CardRenderer) {
-	l.renderer = r
-	l.invalidateHeightCache()
 }
 
 // SetActive sets whether the list is active.
@@ -188,6 +168,9 @@ func (l *CardList) SetDimmed(idx int, dimmed bool) {
 	}
 	l.dimmedOverrides[idx] = dimmed
 	delete(l.cardCache, idx)
+	if idx < len(l.itemHeights) {
+		l.itemHeights[idx] = 0
+	}
 	l.viewDirty = true
 }
 
@@ -367,76 +350,60 @@ func (l *CardList) updateKey(msg tea.KeyPressMsg) (consumed, activate bool, link
 	return false, false, nil
 }
 
-// invalidateHeightCache clears the cached item heights, per-card cache, and view cache.
+// invalidateHeightCache clears the measured item heights, per-card cache, and view cache.
 func (l *CardList) invalidateHeightCache() {
-	l.heightCacheValid = false
 	l.itemHeights = nil
-	l.cachedVisibleCount = 0
 	l.cardCache = nil
 	l.viewDirty = true
 }
 
-// ensureHeightCache calculates and caches item heights.
-func (l *CardList) ensureHeightCache() {
-	if l.heightCacheValid && len(l.itemHeights) == len(l.items) {
-		return
+// itemHeight returns the line count of item idx's rendered card, measuring it once per width.
+// The height the list scrolls by is the height RenderCard draws, so the selected card stays in frame.
+// Measuring uses the unselected render, which differs from the selected one in escapes alone.
+func (l *CardList) itemHeight(idx int) int {
+	if len(l.itemHeights) != len(l.items) {
+		l.itemHeights = make([]int, len(l.items))
 	}
-	l.itemHeights = make([]int, len(l.items))
-	totalHeight := 0
-	for i, item := range l.items {
-		h := l.calculateItemHeight(item)
-		l.itemHeights[i] = h
-		totalHeight += h
+	if l.itemHeights[idx] > 0 {
+		return l.itemHeights[idx]
 	}
-	if len(l.items) > 0 {
-		avgHeight := totalHeight / len(l.items)
-		if avgHeight < 1 {
-			avgHeight = 1
-		}
-		l.cachedVisibleCount = l.height / avgHeight
-	} else {
-		l.cachedVisibleCount = 1
-	}
-	l.heightCacheValid = true
+	rendered, _ := l.renderItem(idx, l.items[idx], false)
+	l.itemHeights[idx] = strings.Count(rendered, "\n") + 1
+	return l.itemHeights[idx]
 }
 
-// visibleItemCount returns approximate number of visible items.
+// visibleItemCount returns how many items fit the viewport from the selection down.
 func (l *CardList) visibleItemCount() int {
 	if l.height <= 0 || len(l.items) == 0 {
 		return 1
 	}
-	l.ensureHeightCache()
-	return l.cachedVisibleCount
+	lines, count := 0, 0
+	for i := l.selected; i < len(l.items) && lines < l.height; i++ {
+		lines += l.itemHeight(i)
+		count++
+	}
+	if count < 1 {
+		count = 1
+	}
+	return count
 }
 
 // adjustScroll adjusts scroll to keep selected item visible.
 func (l *CardList) adjustScroll() {
-	if len(l.items) == 0 || l.height <= 0 {
+	if len(l.items) == 0 || l.height <= 0 || l.selected < 0 || l.selected >= len(l.items) {
 		return
 	}
-	l.ensureHeightCache()
 	linePos := 0
 	for i := 0; i < l.selected; i++ {
-		linePos += l.itemHeights[i]
+		linePos += l.itemHeight(i)
 	}
-	selectedHeight := l.itemHeights[l.selected]
+	selectedHeight := l.itemHeight(l.selected)
 	if linePos < l.scrollOffset {
 		l.scrollOffset = linePos
 	}
 	if linePos+selectedHeight > l.scrollOffset+l.height {
 		l.scrollOffset = linePos + selectedHeight - l.height
 	}
-}
-
-// calculateItemHeight calculates the height of an item.
-func (l *CardList) calculateItemHeight(item DisplayItem) int {
-	if l.renderer == nil {
-		return 3 // fallback
-	}
-	card := item.ToCard(l.itemResolver)
-	opts := l.cardOptions
-	opts.Width = l.width
-	return l.renderer.CardHeight(card, opts)
 }
 
 // updateMouse handles mouse events.
@@ -507,12 +474,11 @@ func (l *CardList) View() string {
 	if !l.viewDirty && l.cachedView != "" {
 		return l.cachedView
 	}
-	l.ensureHeightCache()
 	l.linkZones = l.linkZones[:0] // reset link zones
 	var lines []string
 	currentLine := 0
 	for i, item := range l.items {
-		h := l.itemHeights[i]
+		h := l.itemHeight(i)
 		itemEndLine := currentLine + h
 		if itemEndLine <= l.scrollOffset {
 			currentLine = itemEndLine
@@ -565,9 +531,6 @@ func (l *CardList) View() string {
 // Uses per-card cache: non-selected cards with unchanged dimmed state return cached renders.
 // Selected cards always re-render to collect fresh anchor zones for link navigation.
 func (l *CardList) renderItem(idx int, item DisplayItem, selected bool) (string, *AnchorCollector) {
-	if l.renderer == nil {
-		return item.ItemID(), nil // fallback
-	}
 	dimmed := item.IsDimmed()
 	if d, ok := l.dimmedOverrides[idx]; ok {
 		dimmed = d
@@ -589,7 +552,7 @@ func (l *CardList) renderItem(idx int, item DisplayItem, selected bool) (string,
 		anchors = NewAnchorCollector(l.zonePrefix+fmt.Sprintf("_%d", idx), l.focusedLink)
 		opts.Anchors = anchors
 	}
-	rendered := l.renderer.RenderCard(card, opts)
+	rendered := RenderCard(card, opts)
 	if l.cardCache == nil {
 		l.cardCache = make(map[int]cardCacheEntry)
 	}

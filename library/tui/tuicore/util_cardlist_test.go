@@ -2,7 +2,9 @@
 package tuicore
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,58 @@ import (
 func TestMain(m *testing.M) {
 	zone.NewGlobal()
 	os.Exit(m.Run())
+}
+
+// longCardItem is a DisplayItem whose card body is a single long line.
+type longCardItem struct {
+	id   string
+	body string
+}
+
+// ItemID returns the item's identifier.
+func (i longCardItem) ItemID() string { return i.id }
+
+// ItemType returns a test extension and type.
+func (i longCardItem) ItemType() ItemType { return ItemType{Extension: "test", Type: "test"} }
+
+// ToCard renders the item as a card whose title is its ID.
+func (i longCardItem) ToCard(ItemResolver) Card {
+	return Card{Header: CardHeader{Title: i.id}, Content: CardContent{Text: i.body}}
+}
+
+// Timestamp returns a fixed time.
+func (i longCardItem) Timestamp() time.Time { return time.Unix(0, 0) }
+
+// IsDimmed reports that the item is never dimmed.
+func (i longCardItem) IsDimmed() bool { return false }
+
+// longCards builds twelve items whose card body is one 360-character line.
+func longCards() []DisplayItem {
+	body := strings.Repeat("x", 360)
+	out := make([]DisplayItem, 12)
+	for i := range out {
+		out[i] = longCardItem{id: fmt.Sprintf("card-%02d", i), body: body}
+	}
+	return out
+}
+
+// The selected card is inside the frame at every index, for each body limit.
+func TestSelectedCardStaysInFrame(t *testing.T) {
+	for _, maxLines := range []int{0, -1, 1} {
+		t.Run(fmt.Sprintf("maxlines_%d", maxLines), func(t *testing.T) {
+			cards := longCards()
+			for i := range cards {
+				l := NewCardList(cards)
+				l.SetCardOptions(CardOptions{MaxLines: maxLines, ShowStats: true, Separator: true})
+				l.SetSize(80, 24)
+				l.SetSelected(i)
+				title := cards[i].ItemID()
+				if !strings.Contains(l.View(), title) {
+					t.Fatalf("MaxLines %d, index %d: %q missing from the view", maxLines, i, title)
+				}
+			}
+		})
+	}
 }
 
 // items builds a CardList item slice with the given IDs.

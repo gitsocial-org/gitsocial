@@ -314,23 +314,8 @@ func ResolveContentURLs(text, repoURL, branch string) string {
 	return text
 }
 
-// cardRenderer implements CardRenderer
-type cardRenderer struct{}
-
-// RenderCard renders a card to a string.
-func (r cardRenderer) RenderCard(card Card, opts CardOptions) string {
-	return RenderCard(card, opts)
-}
-
-// CardHeight calculates the height in lines for a card.
-func (r cardRenderer) CardHeight(card Card, opts CardOptions) int {
-	return CardHeight(card, opts)
-}
-
 func init() {
 	buildMarkdownRenderers()
-	// Register as the default card renderer
-	DefaultCardRenderer = cardRenderer{}
 }
 
 // buildMarkdownRenderers constructs the glamour renderers for the current
@@ -865,90 +850,6 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 	}
 
 	return str.String()
-}
-
-// CardHeight returns the height in lines for a card with given options.
-// This unified calculation mirrors the RenderCard logic.
-func CardHeight(card Card, opts CardOptions) int {
-	if opts.MaxLines == 0 {
-		opts.MaxLines = 5
-	}
-
-	height := 1 // header
-
-	// Nested cards with Position="before"
-	for _, nested := range card.Nested {
-		if nested.Position == "before" {
-			height += nestedCardHeight(nested)
-		}
-	}
-
-	// Content
-	if card.Content.Text != "" {
-		height += cardContentHeight(card.Content, opts)
-	}
-
-	// Stats (before nested to match RenderCard)
-	if opts.ShowStats && len(card.Stats) > 0 {
-		height++
-	}
-
-	// Nested cards with Position="after" (includes blank line before each)
-	for _, nested := range card.Nested {
-		if nested.Position == "after" {
-			height += 1 + nestedCardHeight(nested) // +1 for blank line
-		}
-	}
-
-	// Separator (blank line + separator + blank line)
-	if opts.Separator {
-		height += 3
-	}
-
-	return height
-}
-
-// cardContentHeight calculates the height of content with truncation.
-func cardContentHeight(content CardContent, opts CardOptions) int {
-	text := strings.TrimSpace(content.Text)
-	contentLines := strings.Split(text, "\n")
-	numLines := len(contentLines)
-	truncated := false
-	if numLines > opts.MaxLines {
-		numLines = opts.MaxLines
-		truncated = true
-	}
-	height := numLines
-	if truncated {
-		height++ // "···" indicator
-	}
-	return height
-}
-
-// nestedCardHeight calculates the height of a nested card.
-func nestedCardHeight(nested NestedCard) int {
-	maxLines := nested.MaxLines
-	if maxLines == 0 {
-		maxLines = 5
-	}
-
-	content := strings.TrimSpace(nested.Card.Content.Text)
-	contentLines := strings.Split(content, "\n")
-	numLines := len(contentLines)
-	truncated := false
-	if numLines > maxLines {
-		numLines = maxLines
-		truncated = true
-	}
-
-	height := 1 + numLines // header + content lines
-	if truncated {
-		height++ // "···" indicator
-	}
-	if len(nested.Card.Stats) > 0 {
-		height++ // stats line
-	}
-	return height
 }
 
 // IsLocalPath returns true if the URL is a local filesystem path (not a remote URL)
