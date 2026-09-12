@@ -185,8 +185,8 @@ func TestBuildInfoRefs_FormatAndPeelPlacement(t *testing.T) {
 // by the dev servers) must classify them no-cache — never served stale.
 func TestDumbTransportKeysAreNoCache(t *testing.T) {
 	for _, key := range []string{infoRefsKey, packsKey, "myrepo/" + infoRefsKey, "myrepo/" + packsKey} {
-		if got := cacheControlForKey(key); got != CacheControlRevalidate {
-			t.Errorf("cacheControlForKey(%q) = %q, want %q", key, got, CacheControlRevalidate)
+		if got := cacheControlForKey(key); got != cacheControlRevalidate {
+			t.Errorf("cacheControlForKey(%q) = %q, want %q", key, got, cacheControlRevalidate)
 		}
 	}
 }

@@ -210,7 +210,7 @@ func packEntryRanges(idx []byte, packSize int64) ([]packMapEntry, error) {
 }
 
 // publishPack PUTs a pack's index and then the pack, then its map entries; the index lands first, so a reader that finds the pack can index it.
-func publishPack(client *Client, capability Capability, prefix string, built *builtPack, concurrency int) error {
+func publishPack(client *Client, capability writeCapability, prefix string, built *builtPack, concurrency int) error {
 	for _, part := range []struct {
 		suffix string
 		body   []byte
@@ -233,7 +233,7 @@ func publishPack(client *Client, capability Capability, prefix string, built *bu
 func packMapShardName(sha string) string { return sha[:2] }
 
 // writePackMap merges a pack's object ranges into the sha-prefixed pack map, shard by shard and concurrently.
-func writePackMap(client *Client, capability Capability, prefix, packName string, entries []packMapEntry, concurrency int) error {
+func writePackMap(client *Client, capability writeCapability, prefix, packName string, entries []packMapEntry, concurrency int) error {
 	byShard := map[string][]packMapEntry{}
 	for _, e := range entries {
 		name := packMapShardName(e.sha)
@@ -250,7 +250,7 @@ func writePackMap(client *Client, capability Capability, prefix, packName string
 }
 
 // writePackMapShard merges one pack's entries into a shard under compare-and-swap; an object is packed once, so nothing rewrites a lost entry.
-func writePackMapShard(client *Client, capability Capability, prefix, shard, packName string, entries []packMapEntry) error {
+func writePackMapShard(client *Client, capability writeCapability, prefix, shard, packName string, entries []packMapEntry) error {
 	return updateCompressedJSON(client, capability, prefix+packMapKeyPrefix+shard+".json", func(doc *packMapDoc, found bool) error {
 		if !found || doc.Version != packMapVersion || doc.Offsets == nil {
 			*doc = packMapDoc{Offsets: map[string][]int64{}}
@@ -297,7 +297,7 @@ func ReadPackedObject(client *Client, prefix, sha string) (objType string, body 
 	if !found || len(at) != 3 || at[0] < 0 || at[0] >= int64(len(doc.Packs)) {
 		return "", nil, false, nil
 	}
-	raw, err := client.GetRange(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
+	raw, err := client.getRange(prefix+packKeyPrefix+doc.Packs[at[0]]+".pack", at[1], at[1]+at[2])
 	if errors.Is(err, ErrNotFound) {
 		return "", nil, false, nil
 	}

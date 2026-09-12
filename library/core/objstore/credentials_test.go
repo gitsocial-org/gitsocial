@@ -145,7 +145,7 @@ func TestClientForRemote_credentialsByHost(t *testing.T) {
 		"b.example.com": {"accessKey": "ak-b", "secretKey": "sk-b"}
 	}`)
 	for host, wantAK := range map[string]string{"a.example.com": "ak-a", "b.example.com": "ak-b"} {
-		client, _, _, err := ClientForRemote("s3://"+host+"/bucket/repo", HelperEnv{})
+		client, _, err := ClientForRemote("s3://"+host+"/bucket/repo", HelperEnv{})
 		if err != nil {
 			t.Fatalf("ClientForRemote(%s): %v", host, err)
 		}

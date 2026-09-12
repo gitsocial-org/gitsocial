@@ -180,8 +180,8 @@ func TestPutIfAbsent_NoRetryOn412(t *testing.T) {
 		t.Fatalf("put: %v", err)
 	}
 	before := bucket.PutAttempts("k")
-	if err := client.PutIfAbsent("k", []byte("second")); !errors.Is(err, ErrPreconditionFailed) {
-		t.Fatalf("PutIfAbsent over an existing key = %v, want ErrPreconditionFailed", err)
+	if err := client.putIfAbsent("k", []byte("second")); !errors.Is(err, errPreconditionFailed) {
+		t.Fatalf("putIfAbsent over an existing key = %v, want errPreconditionFailed", err)
 	}
 	if n := bucket.PutAttempts("k") - before; n != 1 {
 		t.Errorf("bucket saw %d conditional PUT attempts, want 1 (a 412 is never retried)", n)

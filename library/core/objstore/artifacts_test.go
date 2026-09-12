@@ -107,13 +107,13 @@ func TestCacheControl_artifactKeys(t *testing.T) {
 	if got := cacheControlForKey("artifacts/1.4.2/app.tar.gz"); got != CacheControlImmutable {
 		t.Errorf("root-prefix version artifact = %q, want immutable", got)
 	}
-	if got := cacheControlForKey("repo/artifacts/latest.txt"); got != CacheControlRevalidate {
+	if got := cacheControlForKey("repo/artifacts/latest.txt"); got != cacheControlRevalidate {
 		t.Errorf("latest.txt = %q, want no-cache", got)
 	}
-	if got := cacheControlForKey("refs/heads/my-artifacts/x"); got != CacheControlRevalidate {
+	if got := cacheControlForKey("refs/heads/my-artifacts/x"); got != cacheControlRevalidate {
 		t.Errorf("non-boundary artifacts key = %q, want no-cache", got)
 	}
-	if got := cacheControlForKey("repo/refs/heads/artifacts/v1"); got != CacheControlRevalidate {
+	if got := cacheControlForKey("repo/refs/heads/artifacts/v1"); got != cacheControlRevalidate {
 		t.Errorf("artifacts-named ref key = %q, want no-cache", got)
 	}
 }

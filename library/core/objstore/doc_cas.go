@@ -10,7 +10,7 @@ import (
 
 // readCompressedJSONWithETag is ReadCompressedJSON plus the stored ETag a later conditional write compares against. A key that is present but does not parse is an error, not found=false, so nothing writes a zeroed document over it.
 func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, etag string, err error) {
-	data, etag, err := client.GetWithETag(key)
+	data, etag, err := client.getWithETag(key)
 	if errors.Is(err, ErrNotFound) {
 		return false, "", nil
 	}
@@ -39,20 +39,20 @@ func putCompressedIfMatch(client *Client, key string, compressed []byte, etag st
 }
 
 // updateCompressedJSON rewrites one mutable document under compare-and-swap, replaying the merge on contention. Any unusable conditional write falls back to an unconditional one, and a create-only provider takes that fallback on the first attempt rather than burning retries on a 412 it returns either way.
-func updateCompressedJSON[T any](client *Client, capability Capability, key string, merge func(doc *T, found bool) error) error {
+func updateCompressedJSON[T any](client *Client, capability writeCapability, key string, merge func(doc *T, found bool) error) error {
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
 		compressed, etag, err := mergeCompressedJSON(client, key, merge)
 		if err != nil {
 			return err
 		}
-		if capability == CapabilityCreateOnly && etag != "" {
+		if capability == capabilityCreateOnly && etag != "" {
 			return PutCompressed(client, key, compressed, "")
 		}
 		err = putCompressedIfMatch(client, key, compressed, etag)
 		if err == nil {
 			return nil
 		}
-		if !errors.Is(err, ErrPreconditionFailed) {
+		if !errors.Is(err, errPreconditionFailed) {
 			// Not contention, so re-reading would reproduce it; take the fallback instead.
 			fmt.Fprintf(os.Stderr, "gitsocial s3: conditional write %s: %v (falling back to an unconditional write)\n", key, err)
 			break

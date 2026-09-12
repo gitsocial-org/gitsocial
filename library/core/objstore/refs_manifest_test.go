@@ -82,7 +82,7 @@ func TestPublishRefManifest_ReListsWhenTheDocumentMoved(t *testing.T) {
 		bucketRefsKey:     `{"refs/heads/main":"` + shaA + `"}`,
 		"refs/heads/main": shaA + "\n",
 	})
-	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
+	client, prefix, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}

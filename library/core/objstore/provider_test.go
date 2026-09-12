@@ -6,13 +6,13 @@ import "testing"
 func TestHostCapability(t *testing.T) {
 	cases := []struct {
 		provider string
-		want     Capability
+		want     writeCapability
 	}{
-		{"aws", CapabilityFull},
-		{"r2", CapabilityFull},
-		{"do", CapabilityCreateOnly},
-		{"", CapabilityUnknown},
-		{"minio", CapabilityUnknown},
+		{"aws", capabilityFull},
+		{"r2", capabilityFull},
+		{"do", capabilityCreateOnly},
+		{"", capabilityUnknown},
+		{"minio", capabilityUnknown},
 	}
 	for _, c := range cases {
 		if got := hostCapability(c.provider); got != c.want {

@@ -30,8 +30,8 @@ const (
 	UpstreamConfigKey = "gitsocial-upstream"
 )
 
-// ThinPin is one frontier tip a thin push excluded against; a reader needs every pin fetchable from upstream.
-type ThinPin struct {
+// thinPin is one frontier tip a thin push excluded against; a reader needs every pin fetchable from upstream.
+type thinPin struct {
 	Ref string `json:"ref"`
 	SHA string `json:"sha"`
 }
@@ -40,7 +40,7 @@ type ThinPin struct {
 type thinUpstreamDoc struct {
 	Version int       `json:"version"`
 	URL     string    `json:"url"`
-	Pins    []ThinPin `json:"pins"`
+	Pins    []thinPin `json:"pins"`
 }
 
 // allowedUpstreamSchemes are the only transports a thin upstream URL may name; the URL is bucket content, so a bucket cannot pick what git executes.
@@ -98,7 +98,7 @@ func (h *remoteHelper) thinPush() (thin bool, upstreamURL string) {
 }
 
 // verifyUpstreamFrontier returns the shas a thin push may exclude against, from a fresh upstream fetch alone; an unreachable upstream adds none, since nothing else proves upstream still serves what a reader would need.
-func (h *remoteHelper) verifyUpstreamFrontier(upstreamURL string) (frontier []string, pins []ThinPin) {
+func (h *remoteHelper) verifyUpstreamFrontier(upstreamURL string) (frontier []string, pins []thinPin) {
 	refspec := "+refs/heads/*:refs/remotes/" + upstreamRemoteName + "/*"
 	if _, err := h.git("fetch", "--prune", "--no-tags", upstreamURL, refspec); err == nil {
 		out, listErr := h.git("for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes/"+upstreamRemoteName+"/")
@@ -110,7 +110,7 @@ func (h *remoteHelper) verifyUpstreamFrontier(upstreamURL string) (frontier []st
 				}
 				branch := strings.TrimPrefix(name, "refs/remotes/"+upstreamRemoteName+"/")
 				frontier = append(frontier, sha)
-				pins = append(pins, ThinPin{Ref: "refs/heads/" + branch, SHA: sha})
+				pins = append(pins, thinPin{Ref: "refs/heads/" + branch, SHA: sha})
 			}
 			return frontier, pins
 		}
@@ -180,7 +180,7 @@ func (h *remoteHelper) ensureUpstreamLocal() (ran bool, err error) {
 }
 
 // refreshLocalOdb restarts the long-running cat-file batch when it cannot see an object the overlay just fetched.
-func (h *remoteHelper) refreshLocalOdb(pins []ThinPin) {
+func (h *remoteHelper) refreshLocalOdb(pins []thinPin) {
 	for _, pin := range pins {
 		if _, err := h.git("cat-file", "-e", pin.SHA); err != nil {
 			continue // not fetched: tells us nothing about freshness
@@ -235,7 +235,7 @@ var ErrThinBucket = errors.New("thin fork bucket: its history is incomplete with
 
 // PushFull detaches a bucket from its thin relationship: upload what the bucket lacks, restore the ref advertisement, delete the marker. workdir's refs must cover the bucket's tips.
 func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress) error {
-	client, prefix, capability, err := ClientForRemote(remoteURL, env)
+	client, prefix, capability, err := clientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func bucketObjectInventory(client *Client, prefix string) (map[string]bool, erro
 
 // ThinUpstream reports the upstream a bucket is thin against and how many tips its last push pinned, from the bucket key rather than per-clone config.
 func ThinUpstream(remoteURL string, env HelperEnv) (url string, pins int, err error) {
-	client, prefix, _, err := ClientForRemote(remoteURL, env)
+	client, prefix, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return "", 0, err
 	}

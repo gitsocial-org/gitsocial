@@ -11,7 +11,7 @@ import (
 
 // RefsHeadDigest fingerprints every source a data-derived site artifact reads: the sorted refs/ listing etags plus HEAD's.
 func RefsHeadDigest(client *Client, prefix string) (string, error) {
-	objs, err := client.ListWithETags(prefix + "refs/")
+	objs, err := client.listWithETags(prefix + "refs/")
 	if err != nil {
 		return "", fmt.Errorf("list refs for push-state: %w", err)
 	}

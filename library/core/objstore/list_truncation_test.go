@@ -14,7 +14,7 @@ func TestList_truncatedWithoutToken(t *testing.T) {
 	}
 	bucket.TruncateListings()
 
-	_, err := client.ListWithETags("refs/")
+	_, err := client.listWithETags("refs/")
 	if err == nil {
 		t.Fatal("a truncated listing with no continuation token must be an error, not a short result")
 	}

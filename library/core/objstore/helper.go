@@ -94,7 +94,7 @@ type remoteHelper struct {
 	remoteName     string             // the git remote git invoked the helper for ("" = anonymous URL)
 	workdir        string             // explicit repo for CLI-side entry points ("" = the GIT_DIR git handed us)
 	fetched        map[string]bool    // object SHAs confirmed present this session
-	capability     Capability         // provider's declared conditional-write support
+	capability     writeCapability    // provider's declared conditional-write support
 	refMode        string             // resolved lazily on first push (refModeETag/refModeGeneration)
 	remoteRefs     map[string]string  // ref state from list, kept current by push for the maintenance pass
 	manifestETag   string             // the ref manifest as list for-push observed it ("" = absent); bounds remoteRefs' freshness
@@ -110,15 +110,21 @@ type remoteHelper struct {
 	thinResolved   bool               // the push relationship (thin.go) was read from git config this session
 	thin           bool               // pushes to this remote exclude upstream objects
 	upstreamURL    string             // the upstream this relationship is thin against
-	thinPins       []ThinPin          // frontier this push excluded against (nil = none computed)
+	thinPins       []thinPin          // frontier this push excluded against (nil = none computed)
 	after          PostPushHook       // post-push site maintenance (nil = the transport half alone)
 }
 
-// ClientForRemote builds the client, key prefix and provider capability for a canonical s3 remote URL.
-func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capability, error) {
+// ClientForRemote builds the client and key prefix for a canonical s3 remote URL.
+func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, error) {
+	client, prefix, _, err := clientForRemote(remoteURL, env)
+	return client, prefix, err
+}
+
+// clientForRemote is ClientForRemote plus the provider's conditional-write capability, which only the push path reads.
+func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, writeCapability, error) {
 	endpointHost, bucket, prefix, err := ParseS3URL(remoteURL)
 	if err != nil {
-		return nil, "", CapabilityUnknown, err
+		return nil, "", capabilityUnknown, err
 	}
 	// The URL's endpoint host is authoritative. Absent an override, an IP-literal or loopback host takes path-style addressing, which is the only shape that resolves there.
 	endpoint := env.Endpoint
@@ -134,7 +140,7 @@ func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 		endpoint = scheme + "://" + endpointHost
 	}
 	region := env.Region
-	capability := CapabilityUnknown
+	capability := capabilityUnknown
 	if provider, hostRegion, ok := protocol.S3HostInfo(endpointHost); ok {
 		region = hostRegion
 		capability = hostCapability(provider)
@@ -153,7 +159,7 @@ func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 		PathStyle: pathStyle,
 	})
 	if err != nil {
-		return nil, "", CapabilityUnknown, err
+		return nil, "", capabilityUnknown, err
 	}
 	return client, prefix, capability, nil
 }
@@ -163,7 +169,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	if env.GitDir == "" {
 		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
 	}
-	client, prefix, capability, err := ClientForRemote(remoteURL, env)
+	client, prefix, capability, err := clientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -255,7 +261,7 @@ func (h *remoteHelper) list(w io.Writer, forPush bool) error {
 		return err
 	}
 	h.remoteRefs = refs
-	if forPush && !h.client.Anonymous() {
+	if forPush && !h.client.anonymous {
 		stored, etag, err := readClaimsWithETag(h.client, h.prefix+bucketRefsKey)
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			return fmt.Errorf("read ref manifest: %w", err)

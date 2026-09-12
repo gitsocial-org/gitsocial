@@ -46,7 +46,7 @@ func publicBucket(t *testing.T, seed map[string]string, status int) string {
 	url := "s3://" + strings.TrimPrefix(srv.URL, "http://") + "/b/repo"
 	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "k")
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "s")
-	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
+	client, prefix, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,11 +64,11 @@ func anonClient(t *testing.T, url string) (*Client, string) {
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
-	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
+	client, prefix, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !client.Anonymous() {
+	if !client.anonymous {
 		t.Fatal("client should be anonymous")
 	}
 	return client, prefix
@@ -156,8 +156,8 @@ func TestAnon_PrivateBucketNamesCredentials(t *testing.T) {
 	url := publicNoListBucket(t, nil)
 	client, prefix := anonClient(t, url)
 	_, err := ReadRemoteRefs(client, prefix)
-	if !errors.Is(err, ErrCredentialsRequired) {
-		t.Errorf("err = %v, want ErrCredentialsRequired", err)
+	if !errors.Is(err, errCredentialsRequired) {
+		t.Errorf("err = %v, want errCredentialsRequired", err)
 	}
 }
 
@@ -168,11 +168,11 @@ func TestSigned_NoListFallsBackToManifest(t *testing.T) {
 		bucketRefsKey:     `{"refs/heads/main":"` + shaA + `"}`,
 		"refs/heads/main": shaA + "\n",
 	})
-	client, prefix, _, err := ClientForRemote(url, HelperEnv{})
+	client, prefix, err := ClientForRemote(url, HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.Anonymous() {
+	if client.anonymous {
 		t.Fatal("client should be signed")
 	}
 	refs, err := ReadRemoteRefs(client, prefix)
@@ -190,7 +190,7 @@ func TestSigned_RejectedCredentialKeepsItsError(t *testing.T) {
 	t.Cleanup(srv.Close)
 	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "k")
 	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "s")
-	client, prefix, _, err := ClientForRemote("s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo", HelperEnv{})
+	client, prefix, err := ClientForRemote("s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo", HelperEnv{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestGetWithETag_WeakETagIsStripped(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	client, prefix := anonClient(t, "s3://"+strings.TrimPrefix(srv.URL, "http://")+"/b/repo")
-	if _, etag, err := client.GetWithETag(prefix + bucketRefsKey); err != nil || etag != `"abc"` {
+	if _, etag, err := client.getWithETag(prefix + bucketRefsKey); err != nil || etag != `"abc"` {
 		t.Errorf("etag = %q, err = %v, want the strong value", etag, err)
 	}
 }

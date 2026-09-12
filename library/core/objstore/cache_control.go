@@ -15,8 +15,8 @@ import "strings"
 const (
 	// CacheControlImmutable marks a key whose bytes are sealed, for the writer that seals one.
 	CacheControlImmutable = "public, max-age=31536000, immutable"
-	// CacheControlRevalidate marks every mutable key: cache but always revalidate.
-	CacheControlRevalidate = "no-cache"
+	// cacheControlRevalidate marks every mutable key: cache but always revalidate.
+	cacheControlRevalidate = "no-cache"
 )
 
 // cacheControlForKey classifies a transport key by mutability and returns the
@@ -26,7 +26,7 @@ func cacheControlForKey(key string) string {
 	if isLooseObjectKey(key) || isPackKey(key) || isArtifactVersionKey(key) {
 		return CacheControlImmutable
 	}
-	return CacheControlRevalidate
+	return cacheControlRevalidate
 }
 
 // isPackKey reports whether a key is a packfile or its index

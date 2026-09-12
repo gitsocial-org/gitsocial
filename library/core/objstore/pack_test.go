@@ -142,8 +142,13 @@ func backdatePendingRounds(t *testing.T, client *Client) {
 	for i := range state.Pending {
 		state.Pending[i].SealedAt = time.Now().Add(-2 * packDeleteGraceWindow).Unix()
 	}
-	if err := writePackState(client, "", state); err != nil {
-		t.Fatalf("writePackState: %v", err)
+	state.Version = packStateVersion
+	compressed, err := CompressJSON(state, BrotliQualityFull)
+	if err != nil {
+		t.Fatalf("compress pack state: %v", err)
+	}
+	if err := PutCompressed(client, packStateKey, compressed, ""); err != nil {
+		t.Fatalf("write pack state: %v", err)
 	}
 }
 
@@ -410,8 +415,8 @@ func TestWriteDumbTransportInfo_ListsPacks(t *testing.T) {
 			}
 		}
 	}
-	if got := cacheControlForKey(packsKey); got != CacheControlRevalidate {
-		t.Errorf("cacheControlForKey(%q) = %q, want %q", packsKey, got, CacheControlRevalidate)
+	if got := cacheControlForKey(packsKey); got != cacheControlRevalidate {
+		t.Errorf("cacheControlForKey(%q) = %q, want %q", packsKey, got, cacheControlRevalidate)
 	}
 }
 
@@ -856,11 +861,11 @@ func TestCommitPackState_ConcurrentPassesMerge(t *testing.T) {
 		if !readOf(r, packStateKey) || !raced.CompareAndSwap(false, true) {
 			return
 		}
-		if err := commitPackState(c, CapabilityFull, "", second); err != nil {
+		if err := commitPackState(c, capabilityFull, "", second); err != nil {
 			t.Errorf("competing commitPackState: %v", err)
 		}
 	})
-	if err := commitPackState(client, CapabilityFull, "", first); err != nil {
+	if err := commitPackState(client, capabilityFull, "", first); err != nil {
 		t.Fatalf("commitPackState: %v", err)
 	}
 	if !raced.Load() {
@@ -896,16 +901,16 @@ func TestCommitPackState_DeletionMergesOntoAnotherPushersState(t *testing.T) {
 		if !armed.Load() || !readOf(r, packStateKey) || !raced.CompareAndSwap(false, true) {
 			return
 		}
-		if err := commitPackState(c, CapabilityFull, "", seal); err != nil {
+		if err := commitPackState(c, capabilityFull, "", seal); err != nil {
 			t.Errorf("competing commitPackState: %v", err)
 		}
 	})
-	if err := commitPackState(client, CapabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-old"}}}); err != nil {
+	if err := commitPackState(client, capabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-old"}}}); err != nil {
 		t.Fatalf("commitPackState: %v", err)
 	}
 	// Armed only now, so the seeding pass above is not the one that races.
 	armed.Store(true)
-	if err := commitPackState(client, CapabilityFull, "", packStateUpdate{deleted: map[string]bool{"pack-old": true}}); err != nil {
+	if err := commitPackState(client, capabilityFull, "", packStateUpdate{deleted: map[string]bool{"pack-old": true}}); err != nil {
 		t.Fatalf("commitPackState: %v", err)
 	}
 	if !raced.Load() {
@@ -930,7 +935,7 @@ func TestPutCompressedIfMatch_RetriesATransientFault(t *testing.T) {
 	client, bucket := testClient(t)
 	bucket.FlakyPut(packStateKey, 1) // one 5xx, then through
 
-	if err := commitPackState(client, CapabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err != nil {
+	if err := commitPackState(client, capabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err != nil {
 		t.Fatalf("commitPackState: %v", err)
 	}
 	// Counted before reading the state back, which is a read of its own. One read
@@ -984,7 +989,7 @@ func TestReadPackState_PresentButUnreadableIsNeverOverwritten(t *testing.T) {
 			if _, err := readPackState(client, ""); err == nil {
 				t.Error("readPackState returned a state for a document it cannot read; the pass would re-seal the whole bucket on every push")
 			}
-			if err := commitPackState(client, CapabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err == nil {
+			if err := commitPackState(client, capabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err == nil {
 				t.Error("commitPackState wrote over a document it cannot read")
 			}
 			after, err := client.Get(packStateKey)
@@ -1199,10 +1204,10 @@ func TestWritePackMapShard_MergesConcurrentPacks(t *testing.T) {
 	theirs := []packMapEntry{{sha: shard + strings.Repeat("2", 38), offset: 52, size: 40}}
 	// The competing write lands between this writer's read and its write, which
 	// is the whole window a plain read-merge-write leaves open.
-	if err := updateCompressedJSON(client, CapabilityFull, packMapKeyPrefix+shard+".json", func(doc *packMapDoc, found bool) error {
+	if err := updateCompressedJSON(client, capabilityFull, packMapKeyPrefix+shard+".json", func(doc *packMapDoc, found bool) error {
 		if !found {
 			*doc = packMapDoc{Version: packMapVersion, Offsets: map[string][]int64{}}
-			if err := writePackMapShard(client, CapabilityFull, "", shard, "pack-theirs", theirs); err != nil {
+			if err := writePackMapShard(client, capabilityFull, "", shard, "pack-theirs", theirs); err != nil {
 				return err
 			}
 		}
@@ -1243,7 +1248,7 @@ func TestUpdateCompressedJSON_CreateOnlyProviderSkipsTheDoomedUpdate(t *testing.
 	client, bucket := testClient(t)
 	bucket.RejectIfMatchWrites()
 	key := packMapKeyPrefix + "aa.json"
-	record := func(capability Capability, packName string) {
+	record := func(capability writeCapability, packName string) {
 		t.Helper()
 		if err := updateCompressedJSON(client, capability, key, func(doc *packMapDoc, found bool) error {
 			if !found {
@@ -1257,20 +1262,20 @@ func TestUpdateCompressedJSON_CreateOnlyProviderSkipsTheDoomedUpdate(t *testing.
 		}
 	}
 
-	record(CapabilityCreateOnly, "pack-created")
+	record(capabilityCreateOnly, "pack-created")
 	if got := bucket.IfMatchCount(); got != 0 {
 		t.Errorf("creating the document attempted %d If-Match writes, want 0 (an absent key takes If-None-Match: *)", got)
 	}
-	record(CapabilityCreateOnly, "pack-updated")
+	record(capabilityCreateOnly, "pack-updated")
 	if got := bucket.IfMatchCount(); got != 0 {
-		t.Errorf("updating under CapabilityCreateOnly attempted %d If-Match writes, want 0: every one of them can only 412", got)
+		t.Errorf("updating under capabilityCreateOnly attempted %d If-Match writes, want 0: every one of them can only 412", got)
 	}
 
 	// Positive control: the same bucket, declared full-capability, still pays the
 	// retries before falling back. That cost is what the declaration removes.
-	record(CapabilityFull, "pack-probed")
+	record(capabilityFull, "pack-probed")
 	if got := bucket.IfMatchCount(); got != maxCASRetries {
-		t.Errorf("updating under CapabilityFull attempted %d If-Match writes, want %d", got, maxCASRetries)
+		t.Errorf("updating under capabilityFull attempted %d If-Match writes, want %d", got, maxCASRetries)
 	}
 
 	doc, err := readPackMapShard(client, "", "aa")

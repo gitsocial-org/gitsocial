@@ -66,8 +66,8 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 		fmt.Fprint(w, "\n")
 	}
 	// No credentials, so every write below would be refused one object at a time.
-	if h.client.Anonymous() {
-		failAll(ErrCredentialsRequired)
+	if h.client.anonymous {
+		failAll(errCredentialsRequired)
 		return nil
 	}
 	// The seal trigger reads what this batch uploaded, so the count starts at zero for each one.
@@ -301,13 +301,13 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 	value := []byte(sha + "\n")
 	var lastErr error
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
-		currentRaw, etag, err := h.client.GetWithETag(key)
+		currentRaw, etag, err := h.client.getWithETag(key)
 		switch {
 		case errors.Is(err, ErrNotFound):
 			if _, leaseErr := h.checkLease(cmd.dst, ""); leaseErr != nil {
 				return "", leaseErr
 			}
-			err = h.client.PutIfAbsent(key, value)
+			err = h.client.putIfAbsent(key, value)
 		case err != nil:
 			return "", fmt.Errorf("read ref %s: %w", cmd.dst, err)
 		default:
@@ -324,9 +324,9 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 					return "", err
 				}
 			}
-			err = h.client.PutIfMatch(key, value, etag)
+			err = h.client.putIfMatch(key, value, etag)
 		}
-		if errors.Is(err, ErrPreconditionFailed) {
+		if errors.Is(err, errPreconditionFailed) {
 			lastErr = err
 			continue // ref moved underneath us — re-read and re-verify
 		}
@@ -378,8 +378,8 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 		} else if _, leaseErr := h.checkLease(cmd.dst, ""); leaseErr != nil {
 			return "", leaseErr
 		}
-		err = h.client.PutIfAbsent(genKey(h.prefix, cmd.dst, maxGen+1), []byte(sha+"\n"))
-		if errors.Is(err, ErrPreconditionFailed) {
+		err = h.client.putIfAbsent(genKey(h.prefix, cmd.dst, maxGen+1), []byte(sha+"\n"))
+		if errors.Is(err, errPreconditionFailed) {
 			lastErr = err
 			continue // another writer took this generation — re-list and re-verify
 		}
@@ -482,7 +482,7 @@ func (h *remoteHelper) resolveRefMode() error {
 			return err
 		}
 	}
-	if mode == refModeETag && h.capability == CapabilityCreateOnly {
+	if mode == refModeETag && h.capability == capabilityCreateOnly {
 		return fmt.Errorf("bucket uses etag ref mode but this provider cannot update refs conditionally (no If-Match support); push from a full-capability provider (aws, r2) or use a fresh prefix")
 	}
 	h.refMode = mode
@@ -492,7 +492,7 @@ func (h *remoteHelper) resolveRefMode() error {
 // refModeFromCapability picks the ref mode for a fresh bucket, probing conditional writes when no preset declares them.
 func (h *remoteHelper) refModeFromCapability() (string, error) {
 	capability := h.capability
-	if capability == CapabilityUnknown {
+	if capability == capabilityUnknown {
 		var err error
 		if capability, err = h.probeCapability(); err != nil {
 			return "", err
@@ -503,7 +503,7 @@ func (h *remoteHelper) refModeFromCapability() (string, error) {
 		// A declared capability still gets the create-CAS check, so a bucket that ignores conditional headers is rejected.
 		return "", err
 	}
-	if capability == CapabilityFull {
+	if capability == capabilityFull {
 		return refModeETag, nil
 	}
 	return refModeGeneration, nil
@@ -514,58 +514,58 @@ func (h *remoteHelper) probeCreateCAS() error {
 	probe := h.prefix + casProbeKey
 	// A leftover probe key from a crashed run would fail the first create.
 	_ = h.client.Delete(probe)
-	if err := h.client.PutIfAbsent(probe, []byte("probe\n")); err != nil {
+	if err := h.client.putIfAbsent(probe, []byte("probe\n")); err != nil {
 		return fmt.Errorf("conditional-write probe (create): %w", err)
 	}
 	defer func() { _ = h.client.Delete(probe) }()
-	err := h.client.PutIfAbsent(probe, []byte("probe2\n"))
+	err := h.client.putIfAbsent(probe, []byte("probe2\n"))
 	if err == nil {
 		return fmt.Errorf("bucket does not enforce conditional writes (If-None-Match), so ref updates would race silently; use a provider with conditional-write support (aws, r2, do)")
 	}
-	if !errors.Is(err, ErrPreconditionFailed) {
+	if !errors.Is(err, errPreconditionFailed) {
 		return fmt.Errorf("conditional-write probe: %w", err)
 	}
 	return nil
 }
 
 // probeCapability classifies an unknown endpoint: create-CAS must hold, then If-Match behavior decides full against create-only.
-func (h *remoteHelper) probeCapability() (Capability, error) {
+func (h *remoteHelper) probeCapability() (writeCapability, error) {
 	if err := h.probeCreateCAS(); err != nil {
-		return CapabilityUnknown, err
+		return capabilityUnknown, err
 	}
 	probe := h.prefix + casProbeKey
 	if err := h.client.Put(probe, []byte("probe\n")); err != nil {
-		return CapabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
 	}
 	defer func() { _ = h.client.Delete(probe) }()
 	// A wrong but well-formed ETag: success means If-Match is ignored, so only create-CAS can be trusted.
-	err := h.client.PutIfMatch(probe, []byte("probe3\n"), `"d41d8cd98f00b204e9800998ecf8427e"`)
+	err := h.client.putIfMatch(probe, []byte("probe3\n"), `"d41d8cd98f00b204e9800998ecf8427e"`)
 	if err == nil {
-		return CapabilityCreateOnly, nil
+		return capabilityCreateOnly, nil
 	}
-	if !errors.Is(err, ErrPreconditionFailed) {
-		return CapabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+	if !errors.Is(err, errPreconditionFailed) {
+		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
 	}
-	_, etag, err := h.client.GetWithETag(probe)
+	_, etag, err := h.client.getWithETag(probe)
 	if err != nil {
-		return CapabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
 	}
-	err = h.client.PutIfMatch(probe, []byte("probe4\n"), etag)
+	err = h.client.putIfMatch(probe, []byte("probe4\n"), etag)
 	switch {
 	case err == nil:
-		return CapabilityFull, nil
-	case errors.Is(err, ErrPreconditionFailed):
+		return capabilityFull, nil
+	case errors.Is(err, errPreconditionFailed):
 		// Ceph RGW shape: a matching If-Match still 412s — overwrites unsupported.
-		return CapabilityCreateOnly, nil
+		return capabilityCreateOnly, nil
 	default:
-		return CapabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
 	}
 }
 
 // publishRefMode records the bucket's ref mode with a create-CAS write, so concurrent first pushers converge.
 func (h *remoteHelper) publishRefMode(mode string) (string, error) {
-	err := h.client.PutIfAbsent(h.prefix+refModeKey, []byte(mode+"\n"))
-	if errors.Is(err, ErrPreconditionFailed) {
+	err := h.client.putIfAbsent(h.prefix+refModeKey, []byte(mode+"\n"))
+	if errors.Is(err, errPreconditionFailed) {
 		existing, err := readRefModeMarker(h.client, h.prefix)
 		if err != nil {
 			return "", err

@@ -34,10 +34,6 @@ type Client struct {
 	retryBackoff []time.Duration // waits between retry attempts; its length plus one is the attempt count
 }
 
-// Anonymous reports whether the client has no credentials, so callers can name
-// the reason a write is impossible before attempting one.
-func (c *Client) Anonymous() bool { return c.anonymous }
-
 // NewClient builds a client from a resolved config; one carrying neither credential half builds an anonymous, read-only client.
 func NewClient(cfg Config) (*Client, error) {
 	if cfg.Region == "" {
@@ -51,7 +47,7 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 	// Half a pair is a typo, not a request for anonymous access.
 	if (cfg.AccessKey == "") != (cfg.SecretKey == "") {
-		return nil, ErrCredentialsRequired
+		return nil, errCredentialsRequired
 	}
 	return &Client{
 		cfg:          cfg,
@@ -101,11 +97,11 @@ func (c *Client) objectURL(key string) (*url.URL, error) {
 // The sentinels callers branch on; every other non-2xx status surfaces as an httpStatusError.
 var (
 	ErrNotFound           = fmt.Errorf("objstore: not found")
-	ErrPreconditionFailed = fmt.Errorf("objstore: precondition failed")
-	// ErrAccessDenied is a 403 on a read; it wraps ErrNotFound, since a bucket that denies listing answers 403 for absent keys too.
-	ErrAccessDenied = fmt.Errorf("%w (access denied)", ErrNotFound)
-	// ErrCredentialsRequired replaces the 403 an unsigned write would earn.
-	ErrCredentialsRequired = fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
+	errPreconditionFailed = fmt.Errorf("objstore: precondition failed")
+	// errAccessDenied is a 403 on a read; it wraps ErrNotFound, since a bucket that denies listing answers 403 for absent keys too.
+	errAccessDenied = fmt.Errorf("%w (access denied)", ErrNotFound)
+	// errCredentialsRequired replaces the 403 an unsigned write would earn.
+	errCredentialsRequired = fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
 )
 
 // httpStatusError carries a non-2xx status code, so the retry can tell a transient server fault from a client error.
@@ -122,7 +118,7 @@ func isTransientFault(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPreconditionFailed) || errors.Is(err, ErrCredentialsRequired) {
+	if errors.Is(err, ErrNotFound) || errors.Is(err, errPreconditionFailed) || errors.Is(err, errCredentialsRequired) {
 		return false
 	}
 	var se *httpStatusError
@@ -149,7 +145,7 @@ func (c *Client) do(ctx context.Context, method, key string, query url.Values, b
 func (c *Client) doOnce(method, key string, query url.Values, body []byte, headers map[string]string) ([]byte, http.Header, error) {
 	// Refuse an unsigned write here, so the caller reports the cause and not a 403.
 	if c.anonymous && method != http.MethodGet && method != http.MethodHead {
-		return nil, nil, ErrCredentialsRequired
+		return nil, nil, errCredentialsRequired
 	}
 	u, err := c.objectURL(key)
 	if err != nil {
@@ -220,12 +216,12 @@ func (c *Client) statusError(method, key string, code int, snippet []byte) error
 	case code == http.StatusForbidden && (method == http.MethodGet || method == http.MethodHead):
 		// A no-listing bucket spells absent as 403, and a HEAD carries no body to tell a denial from an absence.
 		if c.anonymous || method == http.MethodHead || strings.Contains(body, "AccessDenied") {
-			return fmt.Errorf("%w: %s", ErrAccessDenied, key)
+			return fmt.Errorf("%w: %s", errAccessDenied, key)
 		}
 		return &httpStatusError{code: code, err: fmt.Errorf("objstore: %s %s: HTTP 403: %s", method, key, body)}
 	case code == http.StatusPreconditionFailed || code == http.StatusConflict:
 		// 412 is a failed If-Match or If-None-Match and 409 is AWS's conditional-write conflict; both mean re-read and retry.
-		return fmt.Errorf("%w: %s (HTTP %d: %s)", ErrPreconditionFailed, key, code, body)
+		return fmt.Errorf("%w: %s (HTTP %d: %s)", errPreconditionFailed, key, code, body)
 	}
 	return &httpStatusError{code: code, err: fmt.Errorf("objstore: %s %s: HTTP %d: %s", method, key, code, body)}
 }
@@ -259,8 +255,8 @@ func (c *Client) getContext(ctx context.Context, key string) ([]byte, error) {
 	return data, err
 }
 
-// GetRange downloads one byte range of an object, end exclusive; a server that ignores Range sends the whole body, which is sliced locally.
-func (c *Client) GetRange(key string, start, end int64) ([]byte, error) {
+// getRange downloads one byte range of an object, end exclusive; a server that ignores Range sends the whole body, which is sliced locally.
+func (c *Client) getRange(key string, start, end int64) ([]byte, error) {
 	headers := map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", start, end-1)}
 	data, respHeaders, err := c.do(context.Background(), http.MethodGet, key, nil, nil, headers)
 	if err != nil {
@@ -278,8 +274,8 @@ func (c *Client) GetRange(key string, start, end int64) ([]byte, error) {
 	return data[start:end], nil
 }
 
-// GetWithETag downloads an object and returns its ETag for a later If-Match write.
-func (c *Client) GetWithETag(key string) ([]byte, string, error) {
+// getWithETag downloads an object and returns its ETag for a later If-Match write.
+func (c *Client) getWithETag(key string) ([]byte, string, error) {
 	data, respHeaders, err := c.do(context.Background(), http.MethodGet, key, nil, nil, nil)
 	if err != nil {
 		return nil, "", err
@@ -318,14 +314,14 @@ func (c *Client) HeadObject(key string) (size int, etag string, err error) {
 	return size, etag, nil
 }
 
-// PutIfMatch writes an object only when its current ETag matches, and returns ErrPreconditionFailed when it changed underneath.
-func (c *Client) PutIfMatch(key string, data []byte, etag string) error {
+// putIfMatch writes an object only when its current ETag matches, and returns errPreconditionFailed when it changed underneath.
+func (c *Client) putIfMatch(key string, data []byte, etag string) error {
 	_, _, err := c.do(context.Background(), http.MethodPut, key, nil, data, map[string]string{"If-Match": etag})
 	return err
 }
 
-// PutIfAbsent writes an object only when the key does not exist yet, and returns ErrPreconditionFailed when it does.
-func (c *Client) PutIfAbsent(key string, data []byte) error {
+// putIfAbsent writes an object only when the key does not exist yet, and returns errPreconditionFailed when it does.
+func (c *Client) putIfAbsent(key string, data []byte) error {
 	_, _, err := c.do(context.Background(), http.MethodPut, key, nil, data, map[string]string{"If-None-Match": "*"})
 	return err
 }
@@ -349,15 +345,15 @@ type listBucketResult struct {
 	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
-// ListedObject is one key and its ETag from a bucket listing.
-type ListedObject struct {
+// listedObject is one key and its ETag from a bucket listing.
+type listedObject struct {
 	Key  string
 	ETag string
 }
 
 // List returns every key under the given prefix (ListObjectsV2, paginated).
 func (c *Client) List(prefix string) ([]string, error) {
-	objs, err := c.ListWithETags(prefix)
+	objs, err := c.listWithETags(prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -368,9 +364,9 @@ func (c *Client) List(prefix string) ([]string, error) {
 	return keys, nil
 }
 
-// ListWithETags returns every key under a prefix with its ETag; the ETag comes free in the listing, so a change check needs no per-key GET.
-func (c *Client) ListWithETags(prefix string) ([]ListedObject, error) {
-	var objs []ListedObject
+// listWithETags returns every key under a prefix with its ETag; the ETag comes free in the listing, so a change check needs no per-key GET.
+func (c *Client) listWithETags(prefix string) ([]listedObject, error) {
+	var objs []listedObject
 	token := ""
 	for {
 		q := url.Values{}
@@ -388,7 +384,7 @@ func (c *Client) ListWithETags(prefix string) ([]ListedObject, error) {
 			return nil, fmt.Errorf("objstore: decode list response: %w", err)
 		}
 		for _, obj := range result.Contents {
-			objs = append(objs, ListedObject{Key: obj.Key, ETag: obj.ETag})
+			objs = append(objs, listedObject{Key: obj.Key, ETag: obj.ETag})
 		}
 		if !result.IsTruncated {
 			return objs, nil

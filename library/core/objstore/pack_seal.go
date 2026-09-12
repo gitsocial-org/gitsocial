@@ -396,7 +396,7 @@ func readPackState(client *Client, prefix string) (*packState, error) {
 }
 
 // commitPackState applies one pass to the sealing state under compare-and-swap, so two pushers finishing at once merge instead of dropping each other's rounds.
-func commitPackState(client *Client, capability Capability, prefix string, update packStateUpdate) error {
+func commitPackState(client *Client, capability writeCapability, prefix string, update packStateUpdate) error {
 	return updateCompressedJSON(client, capability, prefix+packStateKey, func(state *packState, found bool) error {
 		if found && state.Version != packStateVersion {
 			return fmt.Errorf("%s: schema version %d, this binary writes %d", packStateKey, state.Version, packStateVersion)
@@ -405,14 +405,4 @@ func commitPackState(client *Client, capability Capability, prefix string, updat
 		applyPackStateUpdate(state, update)
 		return nil
 	})
-}
-
-// writePackState publishes the sealing state as is; only for a caller that owns the whole document, since a pass uses commitPackState.
-func writePackState(client *Client, prefix string, state *packState) error {
-	state.Version = packStateVersion
-	compressed, err := CompressJSON(state, BrotliQualityFull)
-	if err != nil {
-		return err
-	}
-	return PutCompressed(client, prefix+packStateKey, compressed, "")
 }

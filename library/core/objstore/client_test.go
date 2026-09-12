@@ -22,8 +22,8 @@ func TestNewClient_credentialModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.cfg.AccessKey != "explicit" || client.Anonymous() {
-		t.Errorf("creds = %q, anonymous = %v; want the config pair, signed", client.cfg.AccessKey, client.Anonymous())
+	if client.cfg.AccessKey != "explicit" || client.anonymous {
+		t.Errorf("creds = %q, anonymous = %v; want the config pair, signed", client.cfg.AccessKey, client.anonymous)
 	}
 
 	// No credentials in the config is anonymous, not an error: an unsigned client
@@ -32,17 +32,17 @@ func TestNewClient_credentialModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !client.Anonymous() {
+	if !client.anonymous {
 		t.Error("client with no credentials in its config is not anonymous")
 	}
 	_, _, err = client.do(context.Background(), http.MethodPut, "k", nil, []byte("x"), nil)
-	if !errors.Is(err, ErrCredentialsRequired) || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
+	if !errors.Is(err, errCredentialsRequired) || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
 		t.Errorf("anonymous write error = %v, want it to name both variable sets", err)
 	}
 
 	// Half a pair is a typo, not a request for anonymous access.
-	if _, err = NewClient(Config{Bucket: "b", AccessKey: "only-access"}); !errors.Is(err, ErrCredentialsRequired) {
-		t.Errorf("half credential pair error = %v, want ErrCredentialsRequired", err)
+	if _, err = NewClient(Config{Bucket: "b", AccessKey: "only-access"}); !errors.Is(err, errCredentialsRequired) {
+		t.Errorf("half credential pair error = %v, want errCredentialsRequired", err)
 	}
 }
 
@@ -52,11 +52,11 @@ func TestClientForRemote_strayHalfPairStaysAnonymous(t *testing.T) {
 	clearCredentialEnv(t)
 	setCredentialsFile(t, "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "stray")
-	client, _, _, err := ClientForRemote("s3://s3.example.com/bucket/repo", HelperEnv{})
+	client, _, err := ClientForRemote("s3://s3.example.com/bucket/repo", HelperEnv{})
 	if err != nil {
 		t.Fatalf("ClientForRemote: %v", err)
 	}
-	if !client.Anonymous() {
+	if !client.anonymous {
 		t.Error("a stray half env pair must leave the client anonymous")
 	}
 }

@@ -30,7 +30,7 @@ const (
 	legacySiteManifestKey = ".gitsocial/site/refs.json"
 )
 
-// publishRefManifest writes refs as the ref manifest and returns the new ETag; ErrPreconditionFailed means the document moved, so the caller re-derives and retries.
+// publishRefManifest writes refs as the ref manifest and returns the new ETag; errPreconditionFailed means the document moved, so the caller re-derives and retries.
 func publishRefManifest(client *Client, prefix, mode string, refs map[string]string, etag string) (string, error) {
 	if mode == "" {
 		var err error
@@ -46,7 +46,7 @@ func publishRefManifest(client *Client, prefix, mode string, refs map[string]str
 		return "", putObject(client, prefix, bucketRefsKey, data, "application/json")
 	}
 	newETag, err := putRefManifestConditional(client, prefix+bucketRefsKey, data, etag)
-	if err != nil && !errors.Is(err, ErrPreconditionFailed) {
+	if err != nil && !errors.Is(err, errPreconditionFailed) {
 		return "", fmt.Errorf("upload %s: %w", bucketRefsKey, err)
 	}
 	return newETag, err
@@ -66,7 +66,7 @@ func casRefManifest(client *Client, prefix, mode string, derive func(attempt int
 		if err == nil {
 			return newETag, nil
 		}
-		if !errors.Is(err, ErrPreconditionFailed) {
+		if !errors.Is(err, errPreconditionFailed) {
 			return "", err
 		}
 	}
@@ -140,7 +140,7 @@ func ReadRemoteRefs(client *Client, prefix string) (map[string]string, error) {
 
 // ListRemoteRefs returns refname to sha for every ref in the bucket behind a canonical s3 remote URL.
 func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) {
-	client, prefix, _, err := ClientForRemote(remoteURL, env)
+	client, prefix, err := ClientForRemote(remoteURL, env)
 	if err != nil {
 		return nil, err
 	}
@@ -149,9 +149,9 @@ func ListRemoteRefs(remoteURL string, env HelperEnv) (map[string]string, error) 
 
 // readRemoteRefsProgress is ReadRemoteRefs with a progress hook, reading the per-ref GETs through a bounded pool. A manifest claim whose MD5 matches the listing's ETag proves a ref's value with no GET; anything else falls back to the read.
 func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (map[string]string, error) {
-	listed, err := client.ListWithETags(prefix + "refs/")
+	listed, err := client.listWithETags(prefix + "refs/")
 	// A public web domain in front of a bucket answers a list request with 404.
-	if errors.Is(err, ErrAccessDenied) || (client.Anonymous() && errors.Is(err, ErrNotFound)) {
+	if errors.Is(err, errAccessDenied) || (client.anonymous && errors.Is(err, ErrNotFound)) {
 		return readRefsWithoutListing(client, prefix, progress)
 	}
 	if err != nil {
@@ -279,8 +279,8 @@ func noRefSourceError(client *Client, prefix string) error {
 			return fmt.Errorf("read %s: %w", key, err)
 		}
 	}
-	if client.Anonymous() {
-		return fmt.Errorf("%w: every read was denied, so the bucket is private or nothing has been pushed to it yet", ErrCredentialsRequired)
+	if client.anonymous {
+		return fmt.Errorf("%w: every read was denied, so the bucket is private or nothing has been pushed to it yet", errCredentialsRequired)
 	}
 	return fmt.Errorf("the credentials for this remote can neither list the bucket nor read its refs: the bucket is empty, or the key lacks s3:GetObject and s3:ListBucket")
 }
@@ -309,7 +309,7 @@ func readClaimsDoc(client *Client, key string) (map[string]string, bool) {
 
 // readClaimsWithETag is readClaimsDoc plus the stored ETag; an unparseable document yields nil claims with its ETag, so a rewrite can replace it.
 func readClaimsWithETag(client *Client, key string) (map[string]string, string, error) {
-	data, etag, err := client.GetWithETag(key)
+	data, etag, err := client.getWithETag(key)
 	if err != nil {
 		return nil, "", err
 	}

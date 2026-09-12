@@ -203,7 +203,7 @@ func SetRemoteHead(remoteURL string, env objstore.HelperEnv, branch string) erro
 	if branch == "" {
 		return nil
 	}
-	client, prefix, _, err := objstore.ClientForRemote(remoteURL, env)
+	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func SetRemoteHead(remoteURL string, env objstore.HelperEnv, branch string) erro
 
 // WriteSiteStats publishes the small stats blob the browser reads in one fetch, refreshed on `gitsocial push --site-only`.
 func WriteSiteStats(remoteURL string, env objstore.HelperEnv, stats map[string]any) error {
-	client, prefix, _, err := objstore.ClientForRemote(remoteURL, env)
+	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func WriteSiteStats(remoteURL string, env objstore.HelperEnv, stats map[string]a
 
 // Push uploads the shell, seeds the refs manifest and runs the item-artifact state machine over every data branch. The workspace's site.publish guard is the only enabler.
 func Push(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
-	client, prefix, _, err := objstore.ClientForRemote(remoteURL, env)
+	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
 		return false, false, err
 	}
