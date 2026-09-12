@@ -69,6 +69,17 @@ A branch that changes `core/objstore`, `core/gitmsg` or `core/cache`, or touches
 
 Go back to the note instead of another fix when a function is about to be rewritten a second time, a finding is a consequence of a decision, three findings share a cause, or a fix needs a concept the guide does not describe.
 
+### Definition of done
+
+A change is done when every line below holds; a review checks them in order.
+
+- The prose, help text and comments follow [STYLE.md](STYLE.md); every comment is one line, and the reason for the change is in the commit body.
+- The quick tier is green on the branch and the full tier before the fast-forward to `main`.
+- Every client the feature reaches is updated in the same branch: CLI, TUI, RPC and the site do not learn about a feature at different times.
+- The guide says what the reader types or sees, the reference table carries the values, and a spec change lands in `specs/` first.
+- A consistency-sensitive change has its design note, its one review and its triage recorded, and the note is gone at merge.
+- A number that the plan ratchets, a prose count, a lint ceiling, an import edge, a coverage floor, has moved toward its target or stayed.
+
 ## Code Rules
 
 ### Layers
