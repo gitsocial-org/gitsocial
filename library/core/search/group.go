@@ -245,9 +245,12 @@ func groupBy(items []ScoredItem, field string, top int, countOnly bool) []Group 
 		result = append(result, group)
 	}
 
-	// Sort groups by count descending
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Count > result[j].Count
+	// Largest group first, then by key, so equal counts keep one order.
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Count != result[j].Count {
+			return result[i].Count > result[j].Count
+		}
+		return result[i].Key < result[j].Key
 	})
 
 	return result
