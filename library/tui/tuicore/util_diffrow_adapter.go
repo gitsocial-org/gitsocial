@@ -77,7 +77,7 @@ func DefaultHighlight() diff.Highlight {
 			if value == "" {
 				continue
 			}
-			entry := chromaStyle.Get(tok.Type)
+			entry := currentTheme.chromaStyle.Get(tok.Type)
 			cell := diff.Cell{Text: value}
 			//nolint:misspell // chroma exposes the British spelling
 			if entry.Colour.IsSet() {

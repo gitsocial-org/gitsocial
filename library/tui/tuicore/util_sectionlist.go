@@ -365,7 +365,7 @@ func (sl *SectionList) View() string {
 	// Scroll to focused link if it's outside the viewport
 	if sl.focusedLink >= 0 {
 		for i, line := range allLines {
-			if strings.Contains(line, FocusedLinkMarker) {
+			if strings.Contains(line, currentTheme.focusedLinkMarker) {
 				if i < sl.scrollOffset {
 					sl.scrollOffset = i
 				} else if i >= sl.scrollOffset+sl.height {

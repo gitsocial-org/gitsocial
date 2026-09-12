@@ -116,7 +116,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 
 - Run git from an extension; use `core/git`.
 - Create a type for a single use.
-- Add package-level mutable state. The per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity` and the two credential warn-once flags in `core/objstore` are the standing exceptions.
+- Add package-level mutable state. The per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity`, the two credential warn-once flags in `core/objstore`, and the theme struct, the registries (contexts, views, cards, nav targets, message handlers) and the width-margin flag in `tui/tuicore` are the standing exceptions.
 - Skip error handling.
 
 ### Patterns

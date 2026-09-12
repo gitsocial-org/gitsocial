@@ -8,82 +8,10 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
-	"github.com/alecthomas/chroma/v2/styles"
 )
 
-var (
-	chromaFormatter chroma.Formatter
-	chromaStyle     *chroma.Style
-	chromaDimStyle  *chroma.Style
-
-	// highlightLineCache caches HighlightLine results keyed by language+dimmed+content.
-	highlightLineCache = make(map[string]string, 4096)
-	// highlightCodeCache caches HighlightCode results keyed by language+dimmed+content.
-	highlightCodeCache = make(map[string]string, 256)
-)
-
-func init() {
-	chromaFormatter = formatters.TTY256
-	// Build theme-dependent state for the default (dark) background. The TUI
-	// detects the real terminal background and applies display.theme in Run();
-	// doing it there rather than here keeps package init from issuing a blocking
-	// terminal query, which hangs headless test binaries that import tuicore.
-	refreshThemeState()
-}
-
-// refreshThemeState rebuilds every piece of theme-dependent render state from
-// the current DarkBackground. Called after detection and on SetDarkBackground.
-func refreshThemeState() {
-	selectChromaStyle()
-	buildChromaDimStyle()
-	buildMarkdownRenderers()
-	FocusedLinkMarker = focusedLinkMarker()
-}
-
-// selectChromaStyle picks the syntax highlighting theme matching DarkBackground.
-func selectChromaStyle() {
-	if DarkBackground {
-		chromaStyle = styles.Get("monokai")
-	} else {
-		chromaStyle = styles.Get("github")
-	}
-}
-
-// buildChromaDimStyle builds the dimmed syntax style for stale/retracted code:
-// grays that read as low-contrast against the current background (darker on
-// dark, lighter on light), preserving the relative dimming hierarchy.
-func buildChromaDimStyle() {
-	dim := pickThemeColor(grayDimDark, grayDimLight)
-	builder := chroma.NewStyleBuilder("dimmed")
-	builder.Add(chroma.Background, dim)
-	builder.Add(chroma.Text, dim)
-	builder.Add(chroma.Keyword, dim)
-	builder.Add(chroma.KeywordType, dim)
-	builder.Add(chroma.NameFunction, dim)
-	builder.Add(chroma.LiteralString, dim)
-	builder.Add(chroma.LiteralNumber, dim)
-	builder.Add(chroma.Comment, dim)
-	builder.Add(chroma.Operator, dim)
-	builder.Add(chroma.Punctuation, dim)
-	chromaDimStyle, _ = builder.Build()
-	if chromaDimStyle == nil {
-		chromaDimStyle = chromaStyle
-	}
-}
-
-// SetDarkBackground overrides the theme background (from the display.theme
-// setting) and refreshes theme-dependent syntax state. Call before the first
-// render; a no-op when the value is unchanged.
-func SetDarkBackground(dark bool) {
-	if dark == DarkBackground {
-		return
-	}
-	DarkBackground = dark
-	refreshThemeState()
-	clear(highlightLineCache)
-	clear(highlightCodeCache)
-	clear(glamourCache.entries)
-}
+// chromaFormatter renders chroma tokens as 256-color ANSI.
+var chromaFormatter chroma.Formatter = formatters.TTY256
 
 // highlight colors code with chroma and caches the result.
 // stripNewlines drops the newlines chroma places before reset codes, for single-line use.
@@ -93,16 +21,16 @@ func highlight(code, language string, dimmed, stripNewlines bool) string {
 		d = '1'
 	}
 	key := language + "\x00" + string(d) + "\x00" + code
-	cache, limit := highlightCodeCache, 256
+	cache, limit := currentTheme.codeCache, 256
 	if stripNewlines {
-		cache, limit = highlightLineCache, 4096
+		cache, limit = currentTheme.lineCache, 4096
 	}
 	if cached, ok := cache[key]; ok {
 		return cached
 	}
-	style := chromaStyle
+	style := currentTheme.chromaStyle
 	if dimmed {
-		style = chromaDimStyle
+		style = currentTheme.chromaDimStyle
 	}
 	tokens, err := chroma.Tokenise(resolveLexer(language), nil, code)
 	if err != nil {

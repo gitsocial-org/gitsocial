@@ -7,16 +7,6 @@ import (
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
-// FocusedLinkMarker is the ANSI prefix applied to focused links, used for
-// scroll detection. Rebuilt per theme by refreshThemeState.
-var FocusedLinkMarker = focusedLinkMarker()
-
-// focusedLinkMarker builds the focused-link ANSI prefix: bold + underline +
-// a theme-aware highlight background (dark gray on dark, light gray on light).
-func focusedLinkMarker() string {
-	return "\x1b[1;4;48;5;" + pickThemeColor(graySelectedDark, graySelectedLight) + "m"
-}
-
 // AnchorCollector tracks zone-marked clickable elements during rendering.
 // All methods are nil-safe: calling Mark/Zones/Count on a nil receiver is a no-op.
 type AnchorCollector struct {
@@ -43,7 +33,7 @@ func (a *AnchorCollector) Mark(text string, loc Location) string {
 		// useSpaceStyler which iterates character-by-character, shattering any existing
 		// ANSI escape codes in the text (from TitleStyle, Dim, etc.).
 		// Bold (\x1b[1m) + underline (\x1b[4m) + bg 236 (\x1b[48;5;236m) for focused links.
-		text = FocusedLinkMarker + text + "\x1b[22;24;49m"
+		text = currentTheme.focusedLinkMarker + text + "\x1b[22;24;49m"
 	}
 	return zone.Mark(id, text)
 }

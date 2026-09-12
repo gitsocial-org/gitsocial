@@ -7,13 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// DarkBackground selects which variant every adaptive color resolves to. It
-// defaults to dark; the TUI overrides it at startup from the display.theme
-// setting via SetDarkBackground. Read lazily by adaptiveColor.RGBA at render
-// time, so the package-level styles in util_render.go need no rebuild.
-var DarkBackground = true
-
-// adaptiveColor resolves to its dark or light variant based on DarkBackground.
+// adaptiveColor resolves to its dark or light variant based on the theme's background.
 // The raw strings are retained for ThemeString (the string-based diff pipeline).
 type adaptiveColor struct {
 	dark, light       color.Color
@@ -21,8 +15,9 @@ type adaptiveColor struct {
 }
 
 // RGBA implements color.Color, picking the variant for the current background.
+// Read at render time, so the package-level styles in util_render.go need no rebuild.
 func (c adaptiveColor) RGBA() (r, g, b, a uint32) {
-	if DarkBackground {
+	if currentTheme.dark {
 		return c.dark.RGBA()
 	}
 	return c.light.RGBA()
@@ -42,19 +37,13 @@ func ThemeString(c color.Color) string {
 	if !ok {
 		return ""
 	}
-	if DarkBackground {
-		return a.darkStr
-	}
-	return a.lightStr
+	return pickFor(currentTheme.dark, a.darkStr, a.lightStr)
 }
 
 // pickThemeColor returns the dark or light color string for the current
 // background — the string form the glamour/chroma/ANSI renderers need.
 func pickThemeColor(dark, light string) string {
-	if DarkBackground {
-		return dark
-	}
-	return light
+	return pickFor(currentTheme.dark, dark, light)
 }
 
 // Border states

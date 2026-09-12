@@ -18,9 +18,6 @@ import (
 )
 
 var (
-	// Package-level glamour renderers (no word wrap - done via lipgloss)
-	markdownRenderer      *glamour.TermRenderer
-	mutedMarkdownRenderer *glamour.TermRenderer
 	// Matches email autolinks like <user@domain.com> to escape them before glamour
 	emailAutolinkRe = regexp.MustCompile(`<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>`)
 	// Matches fenced code blocks (``` or ~~~)
@@ -44,25 +41,21 @@ var (
 	}
 )
 
-// glamourCache caches glamour.Render() output keyed by renderer variant + input text.
-var glamourCache = struct {
-	entries map[string]string
-}{entries: make(map[string]string, 256)}
-
-// cachedGlamourRender calls renderer.Render with caching. variant identifies the renderer (e.g. "n", "m", "b").
+// cachedGlamourRender calls renderer.Render with caching. variant identifies the renderer ("n" or "m").
 func cachedGlamourRender(renderer *glamour.TermRenderer, variant byte, input string) (string, error) {
 	key := string(variant) + input
-	if cached, ok := glamourCache.entries[key]; ok {
+	cache := currentTheme.glamourCache
+	if cached, ok := cache[key]; ok {
 		return cached, nil
 	}
 	rendered, err := renderer.Render(input)
 	if err != nil {
 		return "", err
 	}
-	if len(glamourCache.entries) >= 256 {
-		glamourCache.entries = make(map[string]string, 256)
+	if len(cache) >= 256 {
+		clear(cache)
 	}
-	glamourCache.entries[key] = rendered
+	cache[key] = rendered
 	return rendered, nil
 }
 
@@ -315,46 +308,6 @@ func ResolveContentURLs(text, repoURL, branch string) string {
 	return text
 }
 
-func init() {
-	buildMarkdownRenderers()
-}
-
-// buildMarkdownRenderers constructs the glamour renderers for the current
-// theme. Glamour's own light/dark detection is independent of ours and freezes
-// at init, so we drive its standard style from DarkBackground and rebuild these
-// whenever the theme flips (see SetDarkBackground). Called again after
-// background detection because init ordering builds these before it runs.
-func buildMarkdownRenderers() {
-	style := glamourStyle()
-	// WithStandardStyle themes headings/links/code per light/dark; we pin the
-	// body text color explicitly so dark stays its original 252 (glamour's
-	// "dark" paragraph is dimmer) and light is near-black instead of too light.
-	body := pickThemeColor(grayPrimaryDark, grayPrimaryLight)
-	bodyJSON := fmt.Sprintf(`{"document":{"margin":0,"color":%q},"paragraph":{"color":%q}}`, body, body)
-	markdownRenderer, _ = glamour.NewTermRenderer(
-		glamour.WithPreservedNewLines(),
-		glamour.WithStandardStyle(style),
-		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(bodyJSON)),
-	)
-	muted := pickThemeColor(graySecondaryDark, graySecondaryLight)
-	mutedJSON := fmt.Sprintf(`{"document":{"margin":0,"color":%q},"paragraph":{"color":%q},"code_block":{"color":%q},"link":{"color":%q},"link_text":{"color":%q}}`, muted, muted, muted, muted, muted)
-	mutedMarkdownRenderer, _ = glamour.NewTermRenderer(
-		glamour.WithPreservedNewLines(),
-		glamour.WithStandardStyle(style),
-		glamour.WithWordWrap(0),
-		glamour.WithStylesFromJSONBytes([]byte(mutedJSON)),
-	)
-}
-
-// glamourStyle returns the glamour standard style name for the current theme.
-func glamourStyle() string {
-	if DarkBackground {
-		return "dark"
-	}
-	return "light"
-}
-
 // RenderCard renders a Card with the given options using a unified compositional approach.
 // The card's Nested slice determines what embedded content is shown (parents, originals, etc.)
 // MaxLines: -1 = unlimited, 0 = default (5), >0 = specific limit
@@ -545,7 +498,7 @@ func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wr
 
 // RenderMarkdown renders text with markdown formatting, math, email colorization, and word wrapping.
 func RenderMarkdown(text string, wrapWidth int) string {
-	return renderGlamour(markdownRenderer, 'n', text, wrapWidth, false, nil, nil, nil, nil)
+	return renderGlamour(currentTheme.markdown, 'n', text, wrapWidth, false, nil, nil, nil, nil)
 }
 
 // RenderMarkdownWithAnchors renders markdown text with link extraction and anchor marking for tab navigation.
@@ -555,7 +508,7 @@ func RenderMarkdownWithAnchors(text string, wrapWidth int, anchors *AnchorCollec
 	textNoImages, mdImages := ExtractMarkdownImages(text)
 	textNoLinks, mdLinks := ExtractMarkdownLinks(textNoImages)
 	textNoURLs, urls := ExtractURLs(textNoLinks)
-	return renderGlamour(markdownRenderer, 'n', textNoURLs, wrapWidth, false, mdImages, mdLinks, urls, anchors)
+	return renderGlamour(currentTheme.markdown, 'n', textNoURLs, wrapWidth, false, mdImages, mdLinks, urls, anchors)
 }
 
 // renderContent renders the card content with optional truncation
@@ -577,9 +530,9 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 
 	if !opts.Raw {
 		if opts.Markdown {
-			renderer, variant := markdownRenderer, byte('n')
+			renderer, variant := currentTheme.markdown, byte('n')
 			if opts.Dimmed {
-				renderer, variant = mutedMarkdownRenderer, 'm'
+				renderer, variant = currentTheme.mutedMarkdown, 'm'
 			}
 			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
 		} else {
@@ -664,14 +617,6 @@ func colorizeEmails(text string) string {
 	})
 }
 
-// searchPatternCache caches the last compiled search pattern to avoid
-// recompilation on every render call. Only one search is active at a time
-// in the single-threaded bubbletea event loop.
-var searchPatternCache struct {
-	query   string
-	pattern *regexp.Regexp
-}
-
 // ExtractSearchTerms extracts the actual search terms from a query, removing scope prefixes.
 // E.g., "repository:url hello world" -> "hello world"
 func ExtractSearchTerms(query string) string {
@@ -693,17 +638,17 @@ func ExtractSearchTerms(query string) string {
 	return strings.TrimSpace(result)
 }
 
-// CompileSearchPattern compiles a case-insensitive search pattern, caching the result.
+// CompileSearchPattern compiles a case-insensitive search pattern, caching the last one.
 func CompileSearchPattern(query string) *regexp.Regexp {
 	if query == "" {
 		return nil
 	}
-	if searchPatternCache.query == query {
-		return searchPatternCache.pattern
+	if currentTheme.searchQuery == query {
+		return currentTheme.searchPattern
 	}
-	searchPatternCache.query = query
-	searchPatternCache.pattern = regexp.MustCompile("(?i)" + regexp.QuoteMeta(query))
-	return searchPatternCache.pattern
+	currentTheme.searchQuery = query
+	currentTheme.searchPattern = regexp.MustCompile("(?i)" + regexp.QuoteMeta(query))
+	return currentTheme.searchPattern
 }
 
 // HighlightInText highlights all occurrences of query in text (case-insensitive).
