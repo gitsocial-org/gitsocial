@@ -179,11 +179,13 @@ func (l *CardList) Selected() int {
 	return l.selected
 }
 
-// SetSelected sets the selected index.
+// SetSelected sets the selected index. Every cursor move dirties the view cache.
 func (l *CardList) SetSelected(idx int) {
 	if idx >= 0 && idx < len(l.items) {
 		l.selected = idx
+		l.focusedLink = -1
 		l.adjustScroll()
+		l.viewDirty = true
 	}
 }
 

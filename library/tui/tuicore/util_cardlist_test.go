@@ -55,10 +55,10 @@ func TestSelectedCardStaysInFrame(t *testing.T) {
 	for _, maxLines := range []int{0, -1, 1} {
 		t.Run(fmt.Sprintf("maxlines_%d", maxLines), func(t *testing.T) {
 			cards := longCards()
+			l := NewCardList(cards)
+			l.SetCardOptions(CardOptions{MaxLines: maxLines, ShowStats: true, Separator: true})
+			l.SetSize(80, 24)
 			for i := range cards {
-				l := NewCardList(cards)
-				l.SetCardOptions(CardOptions{MaxLines: maxLines, ShowStats: true, Separator: true})
-				l.SetSize(80, 24)
 				l.SetSelected(i)
 				title := cards[i].ItemID()
 				if !strings.Contains(l.View(), title) {
@@ -66,6 +66,25 @@ func TestSelectedCardStaysInFrame(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A cursor change is visible on the next View, through SetSelected and SelectByID.
+func TestCursorChangeShowsOnNextView(t *testing.T) {
+	l := NewCardList(longCards())
+	l.SetSize(80, 24)
+	first := l.View()
+	l.SetSelected(2)
+	if l.View() == first {
+		t.Fatal("SetSelected: the view is unchanged")
+	}
+	l.SetSelected(0)
+	if l.View() != first {
+		t.Fatal("SetSelected back to the top: the view differs")
+	}
+	l.SelectByID("card-05")
+	if l.View() == first {
+		t.Fatal("SelectByID: the view is unchanged")
 	}
 }
 
