@@ -108,7 +108,7 @@ func newSocialInitCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize GitSocial in the current repository",
+		Short: "Initialize GitSocial in this repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -737,7 +737,7 @@ func newSocialFetchCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "fetch [url]",
-		Short: "Fetch social updates from subscribed repositories",
+		Short: "Fetch social updates",
 		Long: `Fetch social updates from subscribed repositories and populate the cache.
 
 Examples:
@@ -818,7 +818,7 @@ Examples:
 func newSocialFollowersCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "followers",
-		Short: "List repositories that follow your workspace",
+		Short: "List repositories that follow you",
 		Long: `List repositories that follow your workspace.
 
 A repository "follows" you if they have your repository URL in one of their lists.

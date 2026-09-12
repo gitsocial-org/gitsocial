@@ -166,7 +166,7 @@ func effectiveSiteConfigMap(workdir, remote string) map[string]interface{} {
 func newSiteConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "site",
-		Short: "Manage static-site customization (title, accent, favicon)",
+		Short: "Manage static site customization",
 		Long: `Set the static browser site's title, accent color, and favicon. Values are
 stored under the "site" sub-object of the core config (refs/gitmsg/core/config)
 and published to the bucket as .gitsocial/site/site-config.json on the next
@@ -229,7 +229,7 @@ func newSiteConfigGetCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
 		Use:   "get <key>",
-		Short: "Get a site customization value (effective, with --remote overrides)",
+		Short: "Get a site customization value",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -258,7 +258,7 @@ func newSiteConfigListCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List all site customization values (effective, with --remote overrides)",
+		Short: "List site customization values",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

@@ -14,7 +14,7 @@ import (
 func newGitRemoteS3Cmd() *cobra.Command {
 	return &cobra.Command{
 		Use:    "__git-remote-s3 <remote> [<url>]",
-		Short:  "git remote helper for s3:// remotes (invoked by git, not directly)",
+		Short:  "git remote helper for s3:// remotes",
 		Hidden: true,
 		Args:   cobra.RangeArgs(1, 2),
 		// No PersistentPreRunE side effects wanted here (cache open, logging

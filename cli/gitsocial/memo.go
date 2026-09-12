@@ -22,7 +22,7 @@ const memoExt = "memo"
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "memo",
-		Short: "Memos: knowledge stored as commits across tiers",
+		Short: "Memos stored as commits across tiers",
 		Register: func(cmd *cobra.Command) {
 			cmd.AddCommand(
 				newMemoStatusCmd(),
@@ -137,7 +137,7 @@ func newMemoProjectCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "init",
-		Short: "Initialize the project memo branch (idempotent)",
+		Short: "Initialize the project memo branch",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -162,7 +162,7 @@ func newMemoPersonalCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "init",
-		Short: "Initialize the personal bare repo (idempotent)",
+		Short: "Initialize the personal bare repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			res := memo.InitPersonal()
 			if !res.Success {
@@ -183,7 +183,7 @@ func newMemoSessionCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "init [id]",
-		Short: "Create or resume a session (prints resolved id)",
+		Short: "Create or resume a session",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			id := ""
@@ -240,7 +240,7 @@ func newMemoSessionCmd() *cobra.Command {
 	})
 	syncCmd := &cobra.Command{
 		Use:   "sync <id>",
-		Short: "Sync a session's memos with its remote (fetch then push)",
+		Short: "Sync a session's memos with its remote",
 		Args:  cobra.ExactArgs(1),
 	}
 	var pushOnly, fetchOnly bool
@@ -273,7 +273,7 @@ func newMemoSessionCmd() *cobra.Command {
 	cmd.AddCommand(syncCmd)
 	gcCmd := &cobra.Command{
 		Use:   "gc [id]",
-		Short: "Delete a session, or sessions inactive past --older-than",
+		Short: "Delete a session or idle sessions",
 		Args:  cobra.MaximumNArgs(1),
 	}
 	var olderThan string
@@ -317,11 +317,11 @@ func newMemoSessionCmd() *cobra.Command {
 func newMemoInheritCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inherit",
-		Short: "Manage repos this project inherits memos from (binding policy sources)",
+		Short: "Manage inherited memo sources",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "add <url>",
-		Short: "Register a memo source repo (auto-follows via the memo-inherits list)",
+		Short: "Register a memo source repository",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -364,7 +364,7 @@ func newMemoInheritCmd() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "remove <url>",
-		Short: "Remove a memo source repo (also removes from the memo-inherits list)",
+		Short: "Remove a memo source repository",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -387,7 +387,7 @@ func newMemoCreateCmd() *cobra.Command {
 	var labels, scope, body string
 	cmd := &cobra.Command{
 		Use:   "create <subject>",
-		Short: "Create a new memo (defaults to session tier)",
+		Short: "Create a memo",
 		Long: `Create a new memo. The body comes from --body, stdin (with --body -), or
 the editor ($GITSOCIAL_EDITOR > $EDITOR > $VISUAL > vi) when --body is omitted
 and the command runs interactively.`,
@@ -462,7 +462,7 @@ func newMemoEditCmd() *cobra.Command {
 	var setSubject, setBody, setLabels bool
 	cmd := &cobra.Command{
 		Use:   "edit <ref>",
-		Short: "Edit a memo on its source tier (creates a new version)",
+		Short: "Edit a memo on its source tier",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
@@ -500,7 +500,7 @@ func newMemoEditCmd() *cobra.Command {
 func newMemoRetractCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retract <ref>",
-		Short: "Retract a memo (marks as removed via the edit chain)",
+		Short: "Retract a memo",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
@@ -519,7 +519,7 @@ func newMemoPromoteCmd() *cobra.Command {
 	var to string
 	cmd := &cobra.Command{
 		Use:   "promote <ref> --to <tier>",
-		Short: "Promote a memo to a higher tier (copy as fresh commit; source untouched)",
+		Short: "Promote a memo to a higher tier",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
@@ -551,7 +551,7 @@ func newMemoListCmd() *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List memos (session + personal + project + inherited by default; external hidden)",
+		Short: "List memos across tiers",
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
 			if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {

@@ -16,7 +16,7 @@ func newRelatedCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "related <repository>",
-		Short: "Find repositories related to a given repository",
+		Short: "Find repositories related to one",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {

@@ -42,7 +42,7 @@ type cacheStatus struct {
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show GitSocial status for current repository",
+		Short: "Show GitSocial status for this repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)

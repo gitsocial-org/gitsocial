@@ -24,7 +24,7 @@ func newPushCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "push [remote...]",
-		Short: "Publish local changes (data + browser site) to one or more remotes",
+		Short: "Publish local changes to remotes",
 		Long: `Publish all local GitMsg changes to the remote repository, and — for s3
 remotes with the site.publish guard enabled — the browsable static site
 alongside the data.

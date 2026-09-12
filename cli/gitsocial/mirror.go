@@ -57,7 +57,7 @@ func newMirrorCmd() *cobra.Command {
 	var f mirrorFlags
 	cmd := &cobra.Command{
 		Use:   "mirror [forge-url] [s3-url]",
-		Short: "Mirror a forge-hosted project into an S3 bucket as a browsable site",
+		Short: "Mirror a forge project into a bucket",
 		Long: `Mirror a forge-hosted project (GitHub, GitLab, ...) into an S3 bucket as a
 full, browsable GitSocial site.
 

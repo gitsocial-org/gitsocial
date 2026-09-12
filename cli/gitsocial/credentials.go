@@ -21,7 +21,7 @@ import (
 func newCredentialsConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "credentials",
-		Short: "Manage per-endpoint S3 credentials (credentials.json)",
+		Short: "Manage S3 credentials per endpoint host",
 		Long: `Manage S3 credentials stored per endpoint host in
 ~/.config/gitsocial/credentials.json (0600; honors XDG_CONFIG_HOME), so a
 multi-remote push can authenticate to several providers in one invocation.
@@ -74,7 +74,7 @@ func maskKey(key string) string {
 func newCredentialsSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <remote-or-host>",
-		Short: "Store an access/secret key pair for a remote's endpoint host",
+		Short: "Store a key pair for an endpoint host",
 		Long: `Store an S3 key pair for a remote (resolved to its endpoint host) or a bare
 endpoint host. Reads two lines from stdin — the access key, then the secret
 key — so it works both interactively and piped:
@@ -132,7 +132,7 @@ The file is written with 0600 permissions.`,
 func newCredentialsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List stored credential hosts with masked access keys",
+		Short: "List stored credential hosts",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)
@@ -168,7 +168,7 @@ func newCredentialsListCmd() *cobra.Command {
 func newCredentialsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <host>",
-		Short: "Remove the stored credentials for an endpoint host",
+		Short: "Remove the credentials for a host",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)

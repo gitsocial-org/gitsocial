@@ -38,7 +38,7 @@ func newRemotePutCmd() *cobra.Command {
 	var contentType string
 	cmd := &cobra.Command{
 		Use:   "put <key> <file>",
-		Short: "Upload a single local file as a plain object to an s3 remote's bucket",
+		Short: "Upload one file to an s3 remote's bucket",
 		Long: `Upload <file> to the s3 remote's bucket at <key> (under the remote's prefix)
 as a plain object, overwriting any existing object at that key. Remote defaults
 to the gitsocial push remote. Used by the release driver to publish foreign
@@ -90,7 +90,7 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 func newRemoteDefaultCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "default [name...]",
-		Short: "Set or show the default push remote(s) (gitsocial.pushRemote)",
+		Short: "Set or show the default push remotes",
 		Long: `Set the remote(s) gitsocial pushes to by default, stored in
 git config gitsocial.pushRemote (multi-valued). With no argument, prints the
 current resolution: the configured names, or "heuristic: <resolved>" when unset.
@@ -143,7 +143,7 @@ func newRemoteAddCmd() *cobra.Command {
 	var enableSite bool
 	cmd := &cobra.Command{
 		Use:   "add [name] <url>",
-		Short: "Add a remote (accepts s3:// and pasted AWS S3 console URLs)",
+		Short: "Add a git or s3 remote",
 		Long: `Add a git remote. When the URL is an s3:// remote or a pasted AWS S3
 console URL it is normalized to the canonical s3://<endpoint-host>/<bucket>/<prefix>
 form and the s3 helper alias is recorded, so both gitsocial and plain git work

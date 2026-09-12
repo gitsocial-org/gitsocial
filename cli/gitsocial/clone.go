@@ -31,7 +31,7 @@ const (
 func newCloneCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "clone <url> [directory]",
-		Short: "Clone a repository (s3:// remotes work with no extra setup)",
+		Short: "Clone a repository, s3:// included",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)

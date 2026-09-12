@@ -55,7 +55,7 @@ func runRootThenWarn(cmd *cobra.Command, args []string, feature string) error {
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "pm",
-		Short: "Project management (issues, milestones, sprints)",
+		Short: "Manage issues, milestones and sprints",
 		Register: func(cmd *cobra.Command) {
 			cmd.AddCommand(
 				newPMStatusCmd(),
@@ -123,7 +123,7 @@ func newPMInitCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize GitPM in the current repository",
+		Short: "Initialize GitPM in this repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)

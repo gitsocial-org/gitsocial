@@ -90,7 +90,7 @@ func newReviewInitCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize GitReview in the current repository",
+		Short: "Initialize GitReview in this repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -419,7 +419,7 @@ func newReviewPREditCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "edit <pr-ref>",
-		Short: "Edit a pull request's metadata (title, body, reviewers, links)",
+		Short: "Edit a pull request's metadata",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -492,7 +492,7 @@ func newReviewPREditCmd() *cobra.Command {
 func newReviewPRUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <pr-ref>",
-		Short: "Update PR with current branch tips (signals new code ready for review)",
+		Short: "Update a PR with current branch tips",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -683,7 +683,7 @@ func newReviewPRSyncCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync <pr-ref>",
-		Short: "Update PR head branch with base branch changes",
+		Short: "Sync a PR head with its base branch",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -716,7 +716,7 @@ func newReviewPRSyncCmd() *cobra.Command {
 func newReviewPRReadyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ready <pr-ref>",
-		Short: "Mark a draft pull request as ready for review",
+		Short: "Mark a draft pull request ready",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -817,7 +817,7 @@ func newReviewPRStackCmd() *cobra.Command {
 func newReviewPRRebaseStackCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rebase-stack <pr-ref>",
-		Short: "Cascade rebase all PRs above this one in the stack",
+		Short: "Rebase the PRs above this one",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -847,7 +847,7 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 func newReviewPRSyncStackCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync-stack <pr-ref>",
-		Short: "Update branch tips for all open PRs in the stack",
+		Short: "Update branch tips across the stack",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -876,7 +876,7 @@ func newReviewPRSyncStackCmd() *cobra.Command {
 func newReviewFeedbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "feedback",
-		Short: "Code review feedback (approve, request changes, inline comments)",
+		Short: "Review feedback on pull requests",
 	}
 	cmd.AddCommand(
 		newFeedbackApproveCmd(),

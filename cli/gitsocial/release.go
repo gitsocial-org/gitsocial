@@ -25,7 +25,7 @@ const releaseExt = "release"
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "release",
-		Short: "Release management (versions, artifacts, changelogs)",
+		Short: "Manage releases and their artifacts",
 		Register: func(cmd *cobra.Command) {
 			cmd.AddCommand(
 				newReleaseStatusCmd(),
@@ -88,7 +88,7 @@ func newReleaseInitCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize GitRelease in the current repository",
+		Short: "Initialize GitRelease in this repository",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
 				os.Exit(ExitNotRepo)
@@ -443,7 +443,7 @@ func newReleaseArtifactsCmd() *cobra.Command {
 func newReleaseArtifactsRecordCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "record <version> <file...>",
-		Short: "Record artifacts on a release's local artifact ref (no upload)",
+		Short: "Record artifacts on a release",
 		Long: `Commit the given files and their SHA-256 checksums to the release's local
 artifact ref (refs/gitmsg/release/<version>/artifacts). Nothing is uploaded:
 "record" writes the release's artifact record, "release artifacts push"

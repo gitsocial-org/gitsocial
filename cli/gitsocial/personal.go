@@ -20,7 +20,7 @@ import (
 func newPersonalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "personal",
-		Short: "Manage the personal bare repo (user state synced across machines)",
+		Short: "Manage the personal bare repository",
 	}
 	cmd.AddCommand(
 		newPersonalInitCmd(),
@@ -34,7 +34,7 @@ func newPersonalInitCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Create the personal bare repo (and optionally attach a remote)",
+		Short: "Create the personal bare repository",
 		Run: func(cmd *cobra.Command, _ []string) {
 			path, err := settings.EnsurePersonalRepo()
 			if err != nil {
@@ -69,7 +69,7 @@ func newPersonalSyncCmd() *cobra.Command {
 	var pushOnly, fetchOnly bool
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "Push/fetch the personal repo (gitmsg/* branches auto-merge on divergence)",
+		Short: "Sync the personal repo with its remote",
 		Long: `Sync the personal bare repo with its remote.
 
 Per-branch handling: each refs/heads/gitmsg/* branch is fetched/pushed via the
@@ -150,7 +150,7 @@ memos are re-indexed into the cache so "gitsocial memo list" reflects them.`,
 func newPersonalStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show personal repo path, initialization state, and remote",
+		Short: "Show the personal repository state",
 		Run: func(cmd *cobra.Command, _ []string) {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {

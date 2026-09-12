@@ -29,7 +29,7 @@ func newIDCmd() *cobra.Command {
 func newIDVerifyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify <commit>",
-		Short: "Verify a commit against forge or DNS attestations",
+		Short: "Verify a commit signature",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if !EnsureGitRepo(cmd) {
@@ -90,7 +90,7 @@ func newIDVerifyCmd() *cobra.Command {
 func newIDResolveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve <email>",
-		Short: "Resolve an identity via DNS well-known endpoint",
+		Short: "Resolve an identity over DNS",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := GetConfig(cmd)

@@ -17,7 +17,7 @@ func newReleaseArtifactsPushCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "push <version> <file...>",
-		Short: "Upload release artifacts to the s3 push remote (artifacts/<version>/)",
+		Short: "Upload release artifacts to the bucket",
 		Long: `Upload a release's artifact files as plain objects to the s3 push remote's
 bucket at artifacts/<version>/<filename>, maintain artifacts/latest.txt (the
 newest non-prerelease version pushed), and set artifact-url on the release

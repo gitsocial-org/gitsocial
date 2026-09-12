@@ -40,7 +40,7 @@ func newForkCreateCmd() *cobra.Command {
 	var f forkCreateFlags
 	cmd := &cobra.Command{
 		Use:   "create <upstream-url> [directory]",
-		Short: "Fork a repository: create it on the destination, clone it, and wire up remotes",
+		Short: "Fork a repository and clone it",
 		Long: `Fork <upstream-url> and set up a local clone to work in.
 
 The destination is a fork on the same forge as upstream (created through the
