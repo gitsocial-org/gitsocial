@@ -30,6 +30,27 @@ const ROUTES = [
   { name: "pr-detail", subject: "Expand notes with more lines" },
 ];
 
+// VERDICT_BORDER pins the C.2 state colours a feedback card's left border
+// carries; both are theme-independent, so one value holds in light and dark.
+const VERDICT_BORDER = { approved: "rgb(31, 157, 85)", changesRequested: "rgb(207, 34, 46)" };
+
+// checkFeedbackCard asserts the feedback variant takes a plain card's padding
+// and marks its verdict on the left border. cards is a list route's .card
+// record, feedback the pull request route's .card.feedback record.
+function checkFeedbackCard(theme, cards, feedback) {
+  if (!cards || !feedback) {
+    ok("feedback card " + theme + ": both records captured", false, "cards=" + !!cards + " feedback=" + !!feedback);
+    return;
+  }
+  const pads = new Set(cards.map((r) => r.padding));
+  const fbPads = new Set(feedback.map((r) => r.padding));
+  ok("feedback card " + theme + ": padding is the card's own", pads.size === 1 && fbPads.size === 1 && pads.has([...fbPads][0]),
+    "cards=" + [...pads].join("|") + " feedback=" + [...fbPads].join("|"));
+  const borders = new Set(feedback.map((r) => r.borderLeftColor));
+  ok("feedback card " + theme + ": the verdict rides the left border", borders.has(VERDICT_BORDER.approved) && borders.has(VERDICT_BORDER.changesRequested),
+    [...borders].join("|"));
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -64,6 +85,7 @@ function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
+  const listCards = {}, feedbackCards = {};
   for (const route of ROUTES) {
     let hash = route.hash;
     if (!hash) {
@@ -73,6 +95,8 @@ function main() {
     for (const [theme, flags] of Object.entries(THEMES)) {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
+      if (route.name === "issues") listCards[theme] = got[".card"];
+      if (route.name === "pr-detail") feedbackCards[theme] = got[".card.feedback"];
       const file = path.join(DIR, route.name + "." + theme + ".json");
       if (update) { fs.writeFileSync(file, JSON.stringify(got, null, 2) + "\n"); continue; }
       if (!fs.existsSync(file)) { ok(route.name + " " + theme + ": baseline exists", false, "missing " + path.basename(file) + "; capture with GS_STYLES_UPDATE=1"); continue; }
@@ -89,6 +113,7 @@ function main() {
       ok(route.name + " " + theme + ": styles and structure match the baseline", diffs.length === 0, diffs.slice(0, 6).join("; "));
     }
   }
+  if (!update) for (const theme of Object.keys(THEMES)) checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
   if (update) console.log("baselines written to " + DIR);
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

@@ -571,7 +571,7 @@
      rhythm, flex-row labels take none). The sidebar's #nav .nav-section keeps
      its own denser voice. */
   .assets-head, .thread-head, .contrib-head, .version-history-head,
-  .review-summary-head, .fb-offscreen-head, .pm-members-head, .pm-subissues-head,
+  .review-summary-head, .diff-offscreen-head, .pm-members-head, .pm-subissues-head,
   .pm-rel-label, .board-col-head, .board-groupby-label, .board-lane-head,
   .facet-label, .search-group-head, .config-head, .view-count {
     font-size: var(--fs-ui); color: var(--muted); text-transform: uppercase;
@@ -582,7 +582,7 @@
   .view-count { margin: 0.1rem 0 0.7rem; }
   .view-count:empty { display: none; }
   .assets-head, .thread-head, .contrib-head,
-  .version-history-head, .review-summary-head, .fb-offscreen-head {
+  .version-history-head, .review-summary-head, .diff-offscreen-head {
     margin: 0.9rem 0 0.5rem;
   }
   .asset-list { margin-bottom: 0.6rem; }
@@ -617,7 +617,7 @@
   .comment-row { display: flex; align-items: stretch; }
   .thread-rail { display: flex; flex: 0 0 auto; }
   .rail-guide { width: 1.25rem; border-left: 2px solid var(--line); }
-  .comment-row > .card.comment { flex: 1 1 auto; min-width: 0; }
+  .comment-row > .card { flex: 1 1 auto; min-width: 0; }
   /* Detail meta line: author/time on the left, the small Rendered|Raw toggle
      right-aligned on the same line (the blob-head pattern). */
   .detail-meta { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.1rem 0; }
@@ -798,38 +798,25 @@
   .review-summary { margin-top: 1.2rem; }
   .review-summary-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
   .review-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-  .chip.reviewer-chip { color: var(--text); }
-  .chip.reviewer-chip.fb-approved { background: var(--open-t2); }
-  .chip.reviewer-chip.fb-changes-requested { background: var(--danger-t2); }
-  .chip.reviewer-chip.fb-commented { background: var(--chip); }
-  /* The signed-tag chip is a positive verdict: the approved reviewer-chip
-     treatment (open t2 tint, tinted text), not the bare base chip. */
+  /* verdict-<state> tints a chip and colors a feedback card's left border. */
+  .chip.verdict-approved { background: var(--open-t2); color: var(--text); }
+  .chip.verdict-changes-requested { background: var(--danger-t2); color: var(--text); }
+  .chip.verdict-commented { background: var(--chip); color: var(--text); }
+  /* The signed-tag chip is a positive verdict: the approved tint, not the base chip. */
   .chip.chip-signed { background: var(--open-t2); color: var(--text); }
-  /* Inline PR feedback cards on the diff (and offscreen block). */
-  .diff-feedback { grid-column: 1 / -1; padding: 0.3rem 0.6rem 0.3rem 2.4rem; background: var(--link-t1); border-top: 1px dashed var(--line); }
-  /* The left border here (and on .embedded) is a KIND marker — the feedback's
-     verdict, a quote's rail — never selection, which signals by fill + weight
-     per the active-state doctrine. */
-  .fb-card {
-    border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: var(--r-ctl);
-    background: var(--panel); padding: 0.4rem 0.6rem; font-size: var(--fs-ui); margin: 0.2rem 0;
-  }
-  .fb-card.fb-approved { border-left-color: var(--open); }
-  .fb-card.fb-changes-requested { border-left-color: var(--danger); }
-  .fb-head { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.2rem; }
-  .fb-icon { font-family: var(--mono); font-weight: 700; }
-  .fb-author { font-weight: 600; }
-  .fb-card.fb-approved .fb-icon { color: var(--open); }
-  .fb-card.fb-changes-requested .fb-icon { color: var(--danger); }
-  .chip.fb-count { background: var(--link-t2); color: var(--text); }
+  /* The diff's feedback containers hold its dense size; the cards inherit it. */
+  .diff-feedback { grid-column: 1 / -1; padding: 0.3rem 0.6rem 0.3rem 2.4rem; background: var(--link-t1); border-top: 1px dashed var(--line); font-size: var(--fs-ui); }
+  /* The left border is a kind marker, the verdict, never selection; padding and radius come from .card. */
+  .card.feedback { border-left: 3px solid var(--muted); }
+  .card.feedback.verdict-approved { border-left-color: var(--open); }
+  .card.feedback.verdict-changes-requested { border-left-color: var(--danger); }
+  .diff-feedback > .card { margin-bottom: 0; }
   .suggestion { margin-top: 0.3rem; }
   .suggestion-head { font-size: var(--fs-ui); color: var(--muted); margin-bottom: 0.2rem; }
   pre.suggestion-code { background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0.5rem 0.7rem; overflow: auto; }
   pre.suggestion-code code { font-family: var(--mono); font-size: var(--fs-code); }
-  .fb-offscreen { border-top: 1px solid var(--line); padding: 0.4rem 0.7rem; }
-  .fb-offscreen-item { display: flex; align-items: flex-start; gap: 0.4rem; margin-top: 0.3rem; }
-  .fb-offscreen-item > .meta { flex: 0 0 auto; padding-top: 0.5rem; }
-  .fb-offscreen-item > .fb-card { flex: 1 1 auto; min-width: 0; }
+  .diff-offscreen { border-top: 1px solid var(--line); padding: 0.4rem 0.7rem; font-size: var(--fs-ui); }
+  .diff-offscreen > .card { margin-bottom: 0.3rem; }
   /* Sidebar footer: fixed to the viewport bottom, spanning exactly the sidebar's
      width (--nav-w) at the sidebar's horizontal position. The shell is centered
      (max-width --shell-max, margin auto) with --shell-pad inset, so the sidebar's

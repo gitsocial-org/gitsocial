@@ -78,9 +78,9 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const css = await get(TD + "pages-full.css");
   ok("pages-full.css is served", css.status === 200);
   ok("pages-full.css carries the class vocabulary the front page's markup needs", /\.card\s*\{/.test(css.text) && /\.card-head\s*\{/.test(css.text) && /\.type-glyph\s*\{/.test(css.text), "len=" + css.text.length);
-  // The chip vocabulary is the app's own (.chip.state fills, reviewer-chip
-  // verdicts, chip-retracted).
-  ok("pages-full.css styles the app's chip classes", /\.chip\.state\s*\{/.test(css.text) && /\.chip\.reviewer-chip\.fb-approved\s*\{/.test(css.text) && /\.chip\.chip-retracted\s*\{/.test(css.text));
+  // The chip vocabulary is the app's own (.chip.state fills, verdict tints,
+  // chip-retracted).
+  ok("pages-full.css styles the app's chip classes", /\.chip\.state\s*\{/.test(css.text) && /\.chip\.verdict-approved\s*\{/.test(css.text) && /\.chip\.chip-retracted\s*\{/.test(css.text));
   // The inlined core carries the page-structural rules (scoped to #gs-page) and
   // gates dark on the boot-stamped theme class with a media fallback.
   ok("front inlines the core sheet with the page-structural rules", /<style data-gs-core>/.test(front.text) && /:where\(#gs-page\) h2/.test(front.text) && /ul\.files/.test(front.text));
@@ -144,7 +144,8 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("PR page exists", !!pr);
   ok("PR page inlines line-anchored feedback", !!pr && pr.includes("This wording is clearer, nice.") && pr.includes("notes.txt:2"));
   ok("PR page shows range anchors + suggestion bit", !!pr && pr.includes("notes.txt:4-5") && pr.includes("suggestion"));
-  ok("PR page shows review-state chips (the app's reviewer-chip classes)", !!pr && /class="chip reviewer-chip fb-approved">approved/.test(pr) && /class="chip reviewer-chip fb-changes-requested">changes requested/.test(pr));
+  ok("PR page renders feedback as the app's card variant", !!pr && /<div class="card feedback verdict-approved">/.test(pr) && /<div class="card feedback verdict-changes-requested">/.test(pr));
+  ok("PR page carries the verdict and the anchor as chips", !!pr && /class="chip verdict-approved">approved/.test(pr) && /class="chip verdict-changes-requested">changes requested/.test(pr) && /class="chip">notes\.txt:2/.test(pr));
   ok("PR page shows head → base", !!pr && pr.includes("feature/notes-expand → main"));
   const issue = pages.find((p) => p.includes("Static site: thread view needs live fixture"));
   ok("issue page inlines cross-extension social comments", !!issue && issue.includes("I can build the fixture this week.") && issue.includes("Great, assign it to me."));

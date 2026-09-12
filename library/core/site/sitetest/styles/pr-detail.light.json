@@ -1,4 +1,46 @@
 {
+  ".card": [
+    {
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px 0px 11.2px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "rgb(207, 34, 46)",
+      "borderRadius": "10px"
+    },
+    {
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px 0px 11.2px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "rgb(31, 157, 85)",
+      "borderRadius": "10px"
+    },
+    {
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "10px"
+    },
+    {
+      "shape": "span.meta.meta-lead > div.suggestion",
+      "padding": "12px 14.4px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "10px"
+    }
+  ],
   ".meta": [
     {
       "shape": "",
@@ -21,9 +63,29 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.reltime",
+      "shape": "span.type-glyph > span.author > span.reltime",
       "padding": "0px",
-      "margin": "0px 0px 0px 28px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.chip.verdict-approved > span.author > span.reltime",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.chip.verdict-changes-requested > span.author > span.reltime",
+      "padding": "0px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "color": "srgb(0.38 0.37 0.34)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -58,16 +120,6 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0 0.67 0.47 / 0.14)",
-      "borderLeftColor": "rgb(26, 26, 26)",
-      "borderRadius": "999px"
-    },
-    {
-      "shape": "",
-      "padding": "0.8px 8px",
-      "margin": "0px",
-      "fontSize": "12.8px",
-      "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.12 0.62 0.33 / 0.2)",
       "borderLeftColor": "rgb(26, 26, 26)",
       "borderRadius": "999px"
@@ -80,6 +132,16 @@
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.81 0.13 0.18 / 0.2)",
       "borderLeftColor": "rgb(26, 26, 26)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "",
+      "padding": "0.8px 8px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "srgb(0.1 0.1 0.1 / 0.09)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
       "borderRadius": "999px"
     }
   ],
@@ -127,46 +189,58 @@
       "borderRadius": "0px"
     }
   ],
-  ".fb-card": [
+  ".card.feedback": [
     {
-      "shape": "div.fb-head > div.markdown",
-      "padding": "6.4px 9.6px",
-      "margin": "3.2px 0px",
-      "fontSize": "12.8px",
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px 0px 11.2px",
+      "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
       "borderLeftColor": "rgb(207, 34, 46)",
-      "borderRadius": "6px"
+      "borderRadius": "10px"
     },
     {
-      "shape": "div.fb-head > div.markdown",
-      "padding": "6.4px 9.6px",
-      "margin": "3.2px 0px",
-      "fontSize": "12.8px",
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px 0px 11.2px",
+      "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
       "borderLeftColor": "rgb(31, 157, 85)",
-      "borderRadius": "6px"
+      "borderRadius": "10px"
     },
     {
-      "shape": "div.fb-head > div.markdown",
-      "padding": "6.4px 9.6px",
-      "margin": "3.2px 0px",
+      "shape": "span.meta.meta-lead > div.markdown",
+      "padding": "12px 14.4px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
-      "borderRadius": "6px"
+      "borderRadius": "10px"
     },
     {
-      "shape": "div.fb-head > div.suggestion",
-      "padding": "6.4px 9.6px",
-      "margin": "3.2px 0px",
+      "shape": "span.meta.meta-lead > div.suggestion",
+      "padding": "12px 14.4px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
-      "borderRadius": "6px"
+      "borderRadius": "10px"
+    }
+  ],
+  ".type-glyph": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 3.84px 0px 0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.38 0.37 0.34)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "borderRadius": "0px"
     }
   ]
 }

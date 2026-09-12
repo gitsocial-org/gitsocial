@@ -290,7 +290,7 @@
   :where(#gs-page) img { max-width: 100%; height: auto; }
   /* A reply is a card, not a section, so without this it has no separation at
      all during the async sheet's load window. Full's version wins once it lands. */
-  :where(#gs-page) .card.comment { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0.5rem 0.7rem; margin: 0.6rem 0; }
+  :where(#gs-page) .card.comment, :where(#gs-page) .card.feedback { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0.5rem 0.7rem; margin: 0.6rem 0; }
   /* The pages' meta lines are static text joined with literal separators, not
      the app's flex rows: block flow, flush left, with only a card's meta
      keeping the app's glyph-column indent. The id weight is deliberate — it
