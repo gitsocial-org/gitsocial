@@ -30,7 +30,8 @@ a command to run by hand.`,
 			if len(args) == 2 {
 				name, url = args[0], args[1]
 			}
-			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), os.Stdin, os.Stdout)
+			// The hook is the only path from a plain git push to the site.
+			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), os.Stdin, os.Stdout, objstore.PostPushMaintenance)
 		},
 	}
 }

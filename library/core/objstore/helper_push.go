@@ -80,8 +80,7 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 	}
 
 	branchPushed := ""
-	updates := map[string]string{}   // dst -> new sha ("" = deleted)
-	extPushed := map[string]string{} // ext -> new tip ("" = branch deleted)
+	updates := map[string]string{} // dst -> new sha ("" = deleted)
 	// No two commands in a batch share a write target, so the CAS contract stays per-ref while the round trips overlap; the report keeps command order.
 	shas := make([]string, len(cmds))
 	errs := RunParallel(len(cmds), func(i int) error {
@@ -104,9 +103,6 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 				h.remoteRefs[cmd.dst] = sha
 			}
 		}
-		if ext := siteItemsExt(cmd.dst); ext != "" {
-			extPushed[ext] = sha
-		}
 		if cmd.src != "" && strings.HasPrefix(cmd.dst, "refs/heads/") {
 			if branchPushed == "" || cmd.dst == "refs/heads/main" {
 				branchPushed = cmd.dst
@@ -122,12 +118,42 @@ func (h *remoteHelper) push(batch []string, w io.Writer) error {
 			return err
 		}
 	}
-	h.postPushMaintenance(branchPushed, updates, extPushed)
+	h.postPushMaintenance(branchPushed, updates)
 	return nil
 }
 
+// PushOutcome is what the transport pass knows and a post-push hook needs.
+type PushOutcome struct {
+	Client        *Client
+	Prefix        string
+	GitDir        string
+	Refs          map[string]string // the bucket's refs as the push left them
+	Updates       map[string]string // dst -> new sha ("" = deleted)
+	DefaultBranch string            // the pushing repo's HEAD branch, "" when it cannot be read
+	Override      SiteOverride
+	Thin          bool
+	ManifestOK    bool
+	Progress      Progress
+}
+
+// PostPushHook runs after the transport half of the post-push pass, on the refs it reports.
+type PostPushHook func(PushOutcome)
+
+// runPostPushHook calls the hook under a recover: the site pass is best-effort and runs after the report is flushed.
+func (h *remoteHelper) runPostPushHook(out PushOutcome) {
+	if h.after == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: post-push site maintenance panicked: %v\n", r)
+		}
+	}()
+	h.after(out)
+}
+
 // postPushMaintenance runs the best-effort bucket upkeep after a push, strictly after the report is flushed to git.
-func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPushed map[string]string) {
+func (h *remoteHelper) postPushMaintenance(branchPushed string, updates map[string]string) {
 	// The manifest follows every ref-moving transfer, deferred or not, since a later one may move nothing.
 	refsMoved := len(updates) > 0
 	manifestOK := true
@@ -142,7 +168,8 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 		return
 	}
 	// Advertise the repo's own HEAD symref as the bucket HEAD, falling back to a pushed branch when it cannot be read.
-	head := localDefaultBranchRef()
+	localHead := localDefaultBranchRef()
+	head := localHead
 	if head == "" {
 		head = branchPushed
 	}
@@ -179,134 +206,19 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates, extPush
 	// Sealing packs loose history and, after a grace period, deletes the loose copies.
 	h.progress.Call("maintenance: packs", 0, 0)
 	h.maintainPacks(refs)
-	// A thin bucket publishes no site, since the site reads a history it does not carry.
-	if thin {
-		if enabled, _, probeErr := siteEnabled(h.client, h.prefix); probeErr == nil && enabled {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: thin fork bucket; its existing site is no longer maintained (detach with `gitsocial push --full`)\n")
-		}
-		return
-	}
-	// The pushed site.publish guard is the only enabler, so a plain s3:// remote stays clean.
-	h.progress.Call("maintenance: site artifacts", 0, 0)
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site config: %v\n", err)
-		return
-	}
-	if !cfgOK || cfg.Publish != "true" {
-		if enabled, _, probeErr := siteEnabled(h.client, h.prefix); probeErr == nil && enabled {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: bucket has a site; set `gitsocial config site set publish true` to keep maintaining it\n")
-		}
-		return
-	}
-	// The refs-derived artifacts depend only on the refs listing and HEAD, so the marker can skip them. The items append below is not gated on it.
-	shellVersion, verErr := siteVersion()
-	upToDate, digest := false, ""
-	if verErr == nil {
-		upToDate, digest = siteMaintenanceUpToDate(h.client, h.prefix, shellVersion, h.override)
-	}
-	shellUploaded := false
-	if !upToDate {
-		// Shell first, so no reader sees data artifacts without an entry page.
-		var err error
-		if shellUploaded, err = ensureSiteShell(h.client, h.prefix); err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: site refresh: %v\n", err)
-		}
-		h.writeSitePMConfig(src)
-		h.writeSiteCustomization(src)
-	}
-	h.updateSiteItems(extPushed)
-	// A shell upload overwrites the dual-owned index.html, so reclaim the front page in the one case the marker below would still be stamped.
-	reclaimOK := true
-	if shellUploaded {
-		reclaimOK = h.reclaimSitePagesFront(refs, src)
-	}
-	// Stamp the marker only when this pass left nothing a later site pass must still do; a withheld marker costs one extra pass, a wrong one costs a skip.
-	if !upToDate && reclaimOK && manifestOK {
-		pagesState, pagesPending := sitePagesState(h.client, h.prefix, refs, h.override, src)
-		if !siteItemsBootstrapPending(h.client, h.prefix, refs) && !pagesPending {
-			writeSitePushState(h.client, h.prefix, shellVersion, digest, pagesState)
-		}
-	}
-}
-
-// writeSitePMConfig publishes the resolved PM board config after every push.
-func (h *remoteHelper) writeSitePMConfig(src *LocalCommitSource) {
-	refs := h.remoteRefs
-	if err := writeSitePMConfig(h.client, h.prefix, refs, src); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site pm config: %v\n", err)
-	}
-}
-
-// writeSiteCustomization publishes the validated site customization after every push.
-func (h *remoteHelper) writeSiteCustomization(src *LocalCommitSource) {
-	refs := h.remoteRefs
-	if err := writeSiteCustomization(h.client, h.prefix, refs, h.override, src); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
-	}
-}
-
-// updateSiteItems maintains the site artifacts for every pushed data branch, plus the code index; the repair machine heals whatever a failure leaves.
-func (h *remoteHelper) updateSiteItems(extPushed map[string]string) {
-	// Every commit the walk visits is an ancestor of a just-pushed tip, so read it from the local odb rather than the bucket.
-	src := NewLocalCommitSource(h.gitDir, "")
-	defer src.Close()
-	for ext, sha := range extPushed {
-		var err error
-		if sha == "" {
-			err = deleteSiteArtifacts(h.client, h.prefix, ext)
-		} else {
-			err = updateSiteItemsIndex(h.client, h.prefix, ext, sha, &siteProgress{progress: h.progress, ext: ext, src: src})
-		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gitsocial s3: items index %s: %v\n", ext, err)
-		}
-	}
-	h.updateSiteCodeItems(src)
-}
-
-// reclaimSitePagesFront re-writes index.html after a shell upload clobbered it, but only when the page set is complete and current; ok=false only on a failed reclaim.
-func (h *remoteHelper) reclaimSitePagesFront(refs map[string]string, src *LocalCommitSource) (ok bool) {
-	cfg, cfgOK, err := readSiteCustomization(h.client, h.prefix, refs, h.override, src)
-	if err != nil {
-		return false // can't tell if a reclaim was needed: withhold the marker
-	}
-	url, on := sitePagesEffective(cfg, cfgOK)
-	if !on {
-		return true // layer off: index.html is legitimately the shell
-	}
-	site := sitePageSiteFor(h.prefix, cfg, url)
-	manifest, err := readSitePagesManifest(h.client, h.prefix)
-	if err != nil {
-		return false
-	}
-	if manifest == nil || manifest.Cursor != nil || manifest.SiteHash != sitePageSiteHash(site) {
-		return true // page set pending/stale: a site push rebuilds+reclaims
-	}
-	manifests, tips, err := readSitePagesManifests(h.client, h.prefix, refs)
-	if err != nil {
-		return false
-	}
-	if !sitePagesTipsCurrent(manifest, tips) {
-		return true // tips moved: pending, a site push rebuilds+reclaims
-	}
-	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(h.client, h.prefix))
-	if err := reclaimSiteFrontPage(h.client, h.prefix, site, manifests, home); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: reclaim front page: %v\n", err)
-		return false
-	}
-	return true
-}
-
-// updateSiteCodeItems maintains the single code items index across every code branch the bucket carries.
-func (h *remoteHelper) updateSiteCodeItems(src *LocalCommitSource) {
-	refs := h.remoteRefs
-	defaultBranch := strings.TrimPrefix(localDefaultBranchRef(), "refs/heads/")
-	tips := codeBranchTips(refs, defaultBranch)
-	sp := &siteProgress{progress: h.progress, ext: siteCodeExt, src: src}
-	if err := updateSiteCodeIndex(h.client, h.prefix, tips, defaultBranch, sp); err != nil {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: code index: %v\n", err)
-	}
+	// The site half of the pass is the hook's; the transport knows nothing about what it writes.
+	h.runPostPushHook(PushOutcome{
+		Client:        h.client,
+		Prefix:        h.prefix,
+		GitDir:        h.gitDir,
+		Refs:          refs,
+		Updates:       updates,
+		DefaultBranch: strings.TrimPrefix(localHead, "refs/heads/"),
+		Override:      h.override,
+		Thin:          thin,
+		ManifestOK:    manifestOK,
+		Progress:      h.progress,
+	})
 }
 
 // publishRefManifest writes the helper's ref view as the manifest after a push, re-deriving it from a listing when the document moved.

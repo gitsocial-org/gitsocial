@@ -110,6 +110,7 @@ type remoteHelper struct {
 	thin           bool               // pushes to this remote exclude upstream objects
 	upstreamURL    string             // the upstream this relationship is thin against
 	thinPins       []ThinPin          // frontier this push excluded against (nil = none computed)
+	after          PostPushHook       // post-push site maintenance (nil = the transport half alone)
 }
 
 // ClientForRemote builds the client, key prefix and provider capability for a canonical s3 remote URL.
@@ -156,8 +157,8 @@ func ClientForRemote(remoteURL string, env HelperEnv) (*Client, string, Capabili
 	return client, prefix, capability, nil
 }
 
-// RunHelper speaks the git remote-helper protocol on in and out until EOF or an empty command line; remoteName supplies the per-remote site overrides, and "" means none.
-func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io.Writer) error {
+// RunHelper speaks the git remote-helper protocol on in and out until EOF or an empty command line; remoteName supplies the per-remote site overrides, "" means none, and a nil after runs no site maintenance.
+func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io.Writer, after PostPushHook) error {
 	if env.GitDir == "" {
 		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
 	}
@@ -170,7 +171,7 @@ func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io
 	if os.Getenv("GIT_QUIET") == "" {
 		pw = newProgressWriter(os.Stderr, stderrIsTTY())
 	}
-	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, remoteName: remoteName, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName)}
+	h := &remoteHelper{client: client, prefix: prefix, gitDir: env.GitDir, remoteName: remoteName, fetched: map[string]bool{}, capability: capability, progress: pw.Progress(), override: readRemoteSiteOverride(remoteName), after: after}
 	defer pw.finish()
 	defer func() { h.local.Close() }()
 

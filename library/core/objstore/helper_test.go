@@ -1,10 +1,96 @@
-// helper_test.go - Remote URL parsing and option command tests
+// helper_test.go - Remote URL parsing, option command and post-push hook tests
 package objstore
 
 import (
+	"bytes"
+	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/objstore/membucket"
 )
+
+// siteHookProbeKey is the key the recording hook below writes, in the namespace only the site layer claims.
+const siteHookProbeKey = ".gitsocial/site/version"
+
+// runHelperPush drives one `git push refs/heads/main` through RunHelper against a fresh bucket, reporting into out; arm may fault the bucket first.
+func runHelperPush(t *testing.T, dir string, out *bytes.Buffer, arm func(*membucket.Bucket), after PostPushHook) *membucket.Bucket {
+	t.Helper()
+	bucket := membucket.New()
+	if arm != nil {
+		arm(bucket)
+	}
+	srv := httptest.NewServer(bucket)
+	t.Cleanup(srv.Close)
+	t.Setenv("GITSOCIAL_S3_ACCESS_KEY", "k")
+	t.Setenv("GITSOCIAL_S3_SECRET_KEY", "s")
+	t.Setenv("GIT_QUIET", "1")
+	gitDir := filepath.Join(dir, ".git")
+	t.Setenv("GIT_DIR", gitDir)
+	remoteURL := "s3://" + strings.TrimPrefix(srv.URL, "http://") + "/b/"
+	in := strings.NewReader("push refs/heads/main:refs/heads/main\n\n")
+	if err := RunHelper("", remoteURL, HelperEnv{GitDir: gitDir}, in, out, after); err != nil {
+		t.Fatalf("RunHelper: %v", err)
+	}
+	return bucket
+}
+
+// TestRunHelper_postPushHook pins the one path from a plain git push to the site:
+// the hook runs on the refs the push left, after the report's terminating blank
+// line reached git, and a nil hook writes no site key.
+func TestRunHelper_postPushHook(t *testing.T) {
+	dir := packTestRepo(t, 1)
+	sha := gitRun(t, dir, "rev-parse", "HEAD")
+
+	var seen PushOutcome
+	reportAtHook := ""
+	var out bytes.Buffer
+	bucket := runHelperPush(t, dir, &out, nil, func(o PushOutcome) {
+		seen, reportAtHook = o, out.String()
+		if !o.ManifestOK {
+			t.Error("a push whose manifest write landed must reach the hook as ManifestOK true")
+		}
+		if err := o.Client.Put(o.Prefix+siteHookProbeKey, []byte("hook\n")); err != nil {
+			t.Errorf("hook write: %v", err)
+		}
+	})
+	if seen.Updates["refs/heads/main"] != sha || seen.Refs["refs/heads/main"] != sha {
+		t.Errorf("hook saw updates=%v refs=%v, want refs/heads/main at %s", seen.Updates, seen.Refs, sha)
+	}
+	if !strings.HasSuffix(reportAtHook, "ok refs/heads/main\n\n") {
+		t.Errorf("the hook ran before the report was flushed; writer held %q", reportAtHook)
+	}
+	if _, ok := bucket.Object(siteHookProbeKey); !ok {
+		t.Error("the hook's write never reached the bucket")
+	}
+
+	var nilOut bytes.Buffer
+	nilBucket := runHelperPush(t, dir, &nilOut, nil, nil)
+	if _, ok := nilBucket.Object(siteHookProbeKey); ok {
+		t.Error("a nil hook must leave the bucket without a site key")
+	}
+
+	// The marker the hook withholds is keyed on a manifest the transport may have
+	// failed to write, so the transport has to report that failure to the hook.
+	t.Run("a lost ref manifest reaches the hook as ManifestOK false", func(t *testing.T) {
+		var failOut bytes.Buffer
+		ran := false
+		manifestOK := true
+		runHelperPush(t, dir, &failOut, func(b *membucket.Bucket) { b.FailPut(bucketRefsKey) }, func(o PushOutcome) {
+			ran, manifestOK = true, o.ManifestOK
+		})
+		if !strings.Contains(failOut.String(), "ok refs/heads/main\n") {
+			t.Errorf("the refs landed, so the push must still report them ok; writer held %q", failOut.String())
+		}
+		if !ran {
+			t.Fatal("the hook must still run after a failed manifest write")
+		}
+		if manifestOK {
+			t.Error("a failed ref manifest write must reach the hook as ManifestOK false")
+		}
+	})
+}
 
 // TestHelperOption covers the "option" protocol command: cas leases are
 // recorded (zero oid normalized to "" = must-not-exist), malformed values

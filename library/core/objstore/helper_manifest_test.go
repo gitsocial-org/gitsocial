@@ -40,7 +40,7 @@ func TestPostPushMaintenance_FailedManifestRetriesNextPush(t *testing.T) {
 	}
 
 	bucket.FailPut(bucketRefsKey)
-	h.postPushMaintenance("refs/heads/main", map[string]string{"refs/heads/main": shaA}, nil)
+	h.postPushMaintenance("refs/heads/main", map[string]string{"refs/heads/main": shaA})
 	if bucket.PutCount(bucketRefsKey) != 1 {
 		t.Fatalf("the failing manifest PUT must not have been stored (stored %d, want just the seed's)", bucket.PutCount(bucketRefsKey))
 	}
@@ -48,7 +48,7 @@ func TestPostPushMaintenance_FailedManifestRetriesNextPush(t *testing.T) {
 	// The retry, against the SAME refs. If the failed write had stamped the
 	// marker, this pass would report itself up to date and write nothing.
 	bucket.ClearFailPut(bucketRefsKey)
-	h.postPushMaintenance("refs/heads/main", map[string]string{"refs/heads/main": shaA}, nil)
+	h.postPushMaintenance("refs/heads/main", map[string]string{"refs/heads/main": shaA})
 	if bucket.PutCount(bucketRefsKey) < 2 {
 		t.Error("the next push must retry the manifest write it lost, not skip on a marker stamped over the failure")
 	}

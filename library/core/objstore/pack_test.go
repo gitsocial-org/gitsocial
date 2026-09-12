@@ -76,7 +76,7 @@ func pushHelper(t *testing.T, client *Client, dir string) *remoteHelper {
 	t.Helper()
 	gitDir := filepath.Join(dir, ".git")
 	t.Setenv("GIT_DIR", gitDir)
-	return &remoteHelper{client: client, gitDir: gitDir, fetched: map[string]bool{}}
+	return &remoteHelper{client: client, gitDir: gitDir, fetched: map[string]bool{}, after: PostPushMaintenance}
 }
 
 // pushCmds turns refnames into the push batch a plain `git push <refs>` sends

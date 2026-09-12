@@ -30,7 +30,7 @@ func TestPostPushMaintenance_ManifestOnDeferredTransfer(t *testing.T) {
 	if err := h.list(io.Discard, true); err != nil {
 		t.Fatal(err)
 	}
-	h.postPushMaintenance("", map[string]string{"refs/heads/main": shaA}, nil)
+	h.postPushMaintenance("", map[string]string{"refs/heads/main": shaA})
 
 	got, found := readClaimsDoc(client, bucketRefsKey)
 	if !found {
