@@ -26,6 +26,7 @@ bin/gitsocial tui
 
 - `gitmsg/*` and `gitsocial` are protocol and data branches, not feature branches.
 - Give parallel builds distinct output names so they do not clobber each other.
+- A review fix folds into the branch commit it corrects; a fix for something already on `main` is its own commit.
 - A branch that changes the cache schema runs with its own `--cache-dir`: the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it, and older binaries then refuse it. Delete the cache to rebuild.
 
 ### Test and lint
