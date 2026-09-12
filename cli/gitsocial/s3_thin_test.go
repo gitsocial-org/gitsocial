@@ -219,21 +219,25 @@ func TestThinPush_pinDriftUploadsUncoveredObjects(t *testing.T) {
 	}
 }
 
-// TestThinPush_offlineFallsBackToRecordedPins: with the upstream fetch
-// unavailable the push falls back to the pins the bucket records and still
-// excludes upstream's history.
-func TestThinPush_offlineFallsBackToRecordedPins(t *testing.T) {
+// TestThinPush_offlinePushesTheFullHistory: an unreachable upstream excludes only what the bucket's own tips cover, never a recorded pin.
+func TestThinPush_offlinePushesTheFullHistory(t *testing.T) {
 	tf := newThinFork(t)
-	upstreamTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "main"))
-	commitIn(t, tf.forkDir, tf.env, "fork.txt", "fork work")
-	gitIn(t, tf.forkDir, tf.env, "push", "fork", "main")
+	releaseTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "release"))
 
-	// Upstream goes unreachable (a dead endpoint, not an empty bucket).
-	gitIn(t, tf.forkDir, tf.env, "config", "remote.fork.gitsocial-upstream", "s3://127.0.0.1:1/dead/repo")
+	// A first reachable push records the frontier, release pinned and not uploaded.
+	gitIn(t, tf.forkDir, tf.env, "switch", "-q", "-c", "topic", "main")
+	commitIn(t, tf.forkDir, tf.env, "topic.txt", "topic work")
+	gitIn(t, tf.forkDir, tf.env, "push", "fork", "topic")
+	if forkHasObject(tf.fixture, releaseTip) {
+		t.Fatal("precondition: the reachable push should pin the release tip, not upload it")
+	}
 
-	// A fresh branch, so only the recorded pins can exclude upstream's history
-	// (the bucket carries no tip that covers it).
-	gitIn(t, tf.forkDir, tf.env, "switch", "-q", "-c", "offline", "main")
+	// Upstream goes unreachable. An https URL, since GITSOCIAL_S3_ENDPOINT would
+	// redirect an s3 one back to the live fixture.
+	gitIn(t, tf.forkDir, tf.env, "config", "remote.fork.gitsocial-upstream", "https://127.0.0.1:1/dead.git")
+
+	// Work off the pinned release tip: nothing the bucket carries covers it.
+	gitIn(t, tf.forkDir, tf.env, "switch", "-q", "-c", "offline", "release")
 	commitIn(t, tf.forkDir, tf.env, "offline.txt", "offline work")
 	offlineTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "offline"))
 	gitIn(t, tf.forkDir, tf.env, "push", "fork", "offline")
@@ -241,8 +245,8 @@ func TestThinPush_offlineFallsBackToRecordedPins(t *testing.T) {
 	if !forkHasObject(tf.fixture, offlineTip) {
 		t.Error("the offline push did not land the fork's own commit")
 	}
-	if forkHasObject(tf.fixture, upstreamTip) {
-		t.Error("the offline push uploaded upstream's history; the recorded pins were not used")
+	if !forkHasObject(tf.fixture, releaseTip) {
+		t.Error("the offline push excluded against a recorded pin it cannot prove upstream still serves")
 	}
 }
 

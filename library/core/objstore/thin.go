@@ -97,7 +97,7 @@ func (h *remoteHelper) thinPush() (thin bool, upstreamURL string) {
 	return h.thin, h.upstreamURL
 }
 
-// verifyUpstreamFrontier returns the shas a thin push may exclude against, in three tiers: a fresh upstream fetch, the pins the bucket records, then no exclusion at all.
+// verifyUpstreamFrontier returns the shas a thin push may exclude against, from a fresh upstream fetch alone; an unreachable upstream adds none, since nothing else proves upstream still serves what a reader would need.
 func (h *remoteHelper) verifyUpstreamFrontier(upstreamURL string) (frontier []string, pins []ThinPin) {
 	refspec := "+refs/heads/*:refs/remotes/" + upstreamRemoteName + "/*"
 	if _, err := h.git("fetch", "--prune", "--no-tags", upstreamURL, refspec); err == nil {
@@ -115,20 +115,7 @@ func (h *remoteHelper) verifyUpstreamFrontier(upstreamURL string) (frontier []st
 			return frontier, pins
 		}
 	}
-	doc, err := readThinUpstream(h.client, h.prefix)
-	if err == nil && doc != nil {
-		for _, pin := range doc.Pins {
-			if _, err := h.git("cat-file", "-e", pin.SHA); err == nil {
-				frontier = append(frontier, pin.SHA)
-				pins = append(pins, pin)
-			}
-		}
-	}
-	if len(pins) > 0 {
-		fmt.Fprintf(os.Stderr, "gitsocial s3: upstream %s unreachable; excluding against the %d recorded pin(s)\n", upstreamURL, len(pins))
-		return frontier, pins
-	}
-	fmt.Fprintf(os.Stderr, "gitsocial s3: upstream %s unreachable and no usable pins recorded; pushing the full history\n", upstreamURL)
+	fmt.Fprintf(os.Stderr, "gitsocial s3: upstream %s unreachable; excluding only what the bucket already holds\n", upstreamURL)
 	return nil, nil
 }
 
@@ -161,8 +148,13 @@ func (h *remoteHelper) ensureUpstreamLocal() (ran bool, err error) {
 	h.upstreamURL = doc.URL
 	// One branch fetch covers every pin still reachable from a current tip.
 	refspec := "+refs/heads/*:refs/remotes/" + upstreamRemoteName + "/*"
+	fetched := false
+	var branchErr error
 	if _, err := h.git("fetch", "--no-tags", doc.URL, refspec); err != nil {
+		branchErr = err
 		fmt.Fprintf(os.Stderr, "gitsocial s3: thin fork: fetching upstream %s failed: %v\n", doc.URL, err)
+	} else {
+		fetched = true
 	}
 	// Ask for any uncovered pin by sha, and name the commit on failure rather than surfacing a bare missing object later.
 	for _, pin := range doc.Pins {
@@ -171,7 +163,13 @@ func (h *remoteHelper) ensureUpstreamLocal() (ran bool, err error) {
 		}
 		if _, err := h.git("fetch", "--no-tags", doc.URL, pin.SHA); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: thin fork: commit %s (%s) is not available from upstream %s\n", pin.SHA, pin.Ref, doc.URL)
+		} else {
+			fetched = true
 		}
+	}
+	// ran reports that the overlay brought something in, so a network failure is not reported as upstream dropping the object.
+	if !fetched {
+		return false, fmt.Errorf("thin fork: upstream %s is unreachable, so the objects this bucket excluded cannot be resolved: %w", doc.URL, branchErr)
 	}
 	// Record the dependency as a visible remote; idempotent, and a failure is ignored.
 	if _, err := h.git("config", "--get", "remote."+upstreamRemoteName+".url"); err != nil {
