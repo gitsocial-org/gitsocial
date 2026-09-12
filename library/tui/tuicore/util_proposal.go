@@ -46,14 +46,14 @@ func handleProposalAccepted(msg ProposalAcceptedMsg, ctx AppContext) (bool, tea.
 	})
 }
 
-// ownsCanonical reports whether this workspace owns the item named by ref (its
+// OwnsCanonical reports whether this workspace owns the item named by ref (its
 // canonical lives here), i.e. accepting proposals on it is possible.
 func OwnsCanonical(ref, workspaceURL string) bool {
 	repo := protocol.ParseRef(ref).Repository
 	return repo == "" || protocol.NormalizeURL(repo) == workspaceURL
 }
 
-// proposalTag returns a history-row tag: a not-yet-accepted cross-repo edit on an
+// ProposalTag returns a history-row tag: a not-yet-accepted cross-repo edit on an
 // owned canonical is an acceptable proposal; an already-accepted one is dimmed.
 // Empty when the version isn't an actionable proposal (own version, or not owned).
 func ProposalTag(owned bool, workspaceURL, repoURL, hash, branch string) string {
@@ -70,10 +70,10 @@ func ProposalTag(owned bool, workspaceURL, repoURL, hash, branch string) string 
 	return "✎ proposal · " + shortRepo(repoURL)
 }
 
-// isOpenProposalTag reports whether a tag marks an unaccepted (acceptable) proposal.
+// IsOpenProposalTag reports whether a tag marks an unaccepted (acceptable) proposal.
 func IsOpenProposalTag(tag string) bool { return strings.HasPrefix(tag, "✎") }
 
-// renderProposalTag styles a proposal tag for a history row (empty input → "").
+// RenderProposalTag styles a proposal tag for a history row (empty input → "").
 func RenderProposalTag(tag string) string {
 	if tag == "" {
 		return ""

@@ -383,7 +383,7 @@ type NestedCard struct {
 
 // CardOptions controls how a card is rendered
 type CardOptions struct {
-	MaxLines      int              // 0 = unlimited, 1 = single line, 5 = default
+	MaxLines      int              // 0 = default (5), 1 = single line, -1 = unlimited
 	ShowStats     bool             // Whether to show stats line
 	Selected      bool             // Whether card is currently selected
 	Width         int              // Width for padding/separator

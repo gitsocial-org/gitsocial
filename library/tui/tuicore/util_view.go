@@ -119,6 +119,7 @@ var (
 	Help       = RegisterContext("core.help")
 	CommitDiff = RegisterContext("core.diff")
 	ErrorLog   = RegisterContext("core.errorlog")
+	CoreForks  = RegisterContext("core.forks")
 )
 
 // Social extension contexts - registered via init()
@@ -175,7 +176,6 @@ var (
 	ReviewPRHistoryDiff = RegisterContext("review.pr_history_diff")
 	ReviewDiff          = RegisterContext("review.diff")
 	ReviewInterdiff     = RegisterContext("review.interdiff")
-	CoreForks           = RegisterContext("core.forks")
 )
 
 // Memo extension contexts - registered via init()

@@ -207,7 +207,6 @@ var CoreKeys = []GlobalKey{
 }
 
 // ExtensionKeys defines global extension shortcuts (uppercase, highlighted in sidebar).
-// See KEYS.md for design rationale.
 var ExtensionKeys = []GlobalKey{
 	{Key: "S", Domain: DomainSocial, Target: Timeline, Label: "timeline"},
 	{Key: "P", Domain: DomainPM, Target: PMBoard, Label: "boards"},

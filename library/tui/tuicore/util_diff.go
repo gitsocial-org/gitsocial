@@ -1,9 +1,4 @@
-// util_diff.go - Surviving non-cell-model helpers used by views outside
-// the diff package: file-header / stats badge for summary lines and the
-// hunk-reveal scroll math.
-//
-// Everything else (the legacy ANSI string pipeline) was deleted in the
-// cell-model migration; see HIGHLIGHT-DESIGN.md and DIFF-DESIGN.md.
+// util_diff.go - Diff helpers used outside the diff package: the file header, the stats badge and the hunk-reveal scroll
 package tuicore
 
 import (
