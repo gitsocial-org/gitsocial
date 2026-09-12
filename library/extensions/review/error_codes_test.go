@@ -1,10 +1,12 @@
-// error_codes_test.go - Error codes the PR merge path returns at the Result boundary
+// error_codes_test.go - Error codes the PR merge, stack and version paths return at the Result boundary
 package review
 
 import (
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
 // initConflictingPRRepo builds a repo whose `conflict-head` branch and `main` change the same line.
@@ -218,5 +220,144 @@ func TestSyncPRBranch_conflictingBranches(t *testing.T) {
 	merged := SyncPRBranch(dir, created.Data.ID, "merge")
 	if merged.Success || merged.Error.Code != "SYNC_FAILED" {
 		t.Errorf("SyncPRBranch(merge) over a conflict = %+v, want SYNC_FAILED", merged)
+	}
+}
+
+// TestMergePR_foreignBase asserts INVALID_TARGET when the pull request targets another repository.
+func TestMergePR_foreignBase(t *testing.T) {
+	setupTestDB(t)
+
+	upstream := cloneAs(t, initBareOrigin(t), "alice", "alice@test.com")
+	fork := cloneAs(t, initBareOrigin(t), "bob", "bob@test.com")
+	upstreamURL := gitmsg.ResolveRepoURL(upstream)
+
+	if _, err := git.ExecGit(fork, []string{"checkout", "-b", "feature"}); err != nil {
+		t.Fatalf("checkout feature: %v", err)
+	}
+	if _, err := git.CreateCommit(fork, git.CommitOptions{Message: "fork work", AllowEmpty: true}); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if _, err := git.ExecGit(fork, []string{"push", "origin", "feature"}); err != nil {
+		t.Fatalf("push feature: %v", err)
+	}
+	created := CreatePR(fork, "Upstream work", "", CreatePROptions{Base: upstreamURL + "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+
+	res := MergePR(fork, created.Data.ID, MergeStrategyFF)
+	if res.Success || res.Error.Code != "INVALID_TARGET" {
+		t.Errorf("MergePR() from the fork = %+v, want INVALID_TARGET", res)
+	}
+	closed := ClosePR(fork, created.Data.ID)
+	if closed.Success || closed.Error.Code != "INVALID_TARGET" {
+		t.Errorf("ClosePR() from the fork = %+v, want INVALID_TARGET", closed)
+	}
+	if pr := GetPR(created.Data.ID); pr.Success && pr.Data.State != PRStateOpen {
+		t.Errorf("PR state = %q after the refused merge and close, want open", pr.Data.State)
+	}
+}
+
+// TestGetStack_standalonePR asserts NOT_A_STACK when the pull request has no stack neighbors.
+func TestGetStack_standalonePR(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreatePR(dir, "On its own", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	res := GetStack(created.Data.ID)
+	if res.Success || res.Error.Code != "NOT_A_STACK" {
+		t.Errorf("GetStack() on a standalone PR = %+v, want NOT_A_STACK", res)
+	}
+}
+
+// TestRebaseStack_conflictingDependent asserts REBASE_FAILED when a dependent cannot be rebased.
+func TestRebaseStack_conflictingDependent(t *testing.T) {
+	setupTestDB(t)
+	dir := initConflictingPRRepo(t)
+
+	lower := CreatePR(dir, "Lower PR", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !lower.Success {
+		t.Fatalf("CreatePR(lower) failed: %s", lower.Error.Message)
+	}
+	upper := CreatePR(dir, "Upper PR", "", CreatePROptions{
+		Base: "main", Head: "conflict-head", DependsOn: []string{lower.Data.ID},
+	})
+	if !upper.Success {
+		t.Fatalf("CreatePR(upper) failed: %s", upper.Error.Message)
+	}
+	headTip, err := git.ReadRef(dir, "conflict-head")
+	if err != nil {
+		t.Fatalf("read conflict-head: %v", err)
+	}
+
+	res := RebaseStack(dir, lower.Data.ID)
+	if res.Success || res.Error.Code != "REBASE_FAILED" {
+		t.Errorf("RebaseStack() over a conflicting dependent = %+v, want REBASE_FAILED", res)
+	}
+	if got, _ := git.ReadRef(dir, "conflict-head"); got != headTip {
+		t.Errorf("conflict-head = %s after the failed stack rebase, want it untouched at %s", got, headTip)
+	}
+}
+
+// TestGetPRVersions_cacheClosed asserts RESOLVE_FAILED when the version lookup has no cache to read.
+func TestGetPRVersions_cacheClosed(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreatePR(dir, "Versions without a cache", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	cache.Reset()
+
+	res := GetPRVersions(created.Data.ID, reviewTestRepoURL)
+	if res.Success || res.Error.Code != "RESOLVE_FAILED" {
+		t.Errorf("GetPRVersions() over a closed cache = %+v, want RESOLVE_FAILED", res)
+	}
+}
+
+// TestComparePRVersions_missingTips asserts MISSING_TIPS when a version records no base-tip.
+func TestComparePRVersions_missingTips(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreatePR(dir, "Onto a ghost base", "", CreatePROptions{Base: "no-such-base", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	res := ComparePRVersions(dir, t.TempDir(), created.Data.ID, 0, 0)
+	if res.Success || res.Error.Code != "MISSING_TIPS" {
+		t.Errorf("ComparePRVersions() without a base-tip = %+v, want MISSING_TIPS", res)
+	}
+}
+
+// TestComparePRVersions_tipsOutsideWorkdir asserts TIPS_UNAVAILABLE when the version tips are not local.
+func TestComparePRVersions_tipsOutsideWorkdir(t *testing.T) {
+	setupTestDB(t)
+	dir, _, _ := initDivergedPRRepo(t)
+
+	created := CreatePR(dir, "Add feature", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	git.ExecGit(dir, []string{"checkout", "feature"})
+	commitFile(t, dir, "feature.txt", "one\ntwo\n", "feature two")
+	publish(t, dir, "feature")
+	git.ExecGit(dir, []string{"checkout", "main"})
+	if updated := UpdatePRTips(dir, created.Data.ID); !updated.Success {
+		t.Fatalf("UpdatePRTips() failed: %s", updated.Error.Message)
+	}
+	versions := GetPRVersions(created.Data.ID, reviewTestRepoURL)
+	if !versions.Success || len(versions.Data) < 2 {
+		t.Fatalf("GetPRVersions() = %+v, want at least two versions", versions)
+	}
+
+	elsewhere := initTestRepo(t)
+	res := ComparePRVersions(elsewhere, t.TempDir(), created.Data.ID, 0, len(versions.Data)-1)
+	if res.Success || res.Error.Code != "TIPS_UNAVAILABLE" {
+		t.Errorf("ComparePRVersions() from a repository without the tips = %+v, want TIPS_UNAVAILABLE", res)
 	}
 }
