@@ -107,9 +107,6 @@ type Item struct {
 	// the raw message header. Nil for non-imported items. Mirrors the native
 	// list-view path so search-reached cards render origin identically.
 	Origin *protocol.Origin `json:"origin,omitempty"`
-
-	// Internal field for grouping, not serialized, populated by enrichForGrouping.
-	groupLabels string
 }
 
 // ScoredItem wraps an Item with a relevance score.

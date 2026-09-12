@@ -323,7 +323,7 @@ func TestGroupByLabelReachesEveryItemType(t *testing.T) {
 		t.Errorf("post is not in the bug group: %v", members["bug"])
 	}
 	if containsHash(members["(none)"], hashRelease) || containsHash(members["(none)"], hashPost) {
-		t.Errorf("a labelled item fell into (none): %v", members["(none)"])
+		t.Errorf("a labeled item fell into (none): %v", members["(none)"])
 	}
 }
 

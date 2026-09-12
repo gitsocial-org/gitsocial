@@ -178,7 +178,6 @@ func Search(workdir string, params Params) (Result, error) {
 
 	// Grouped output path
 	if params.GroupBy != "" {
-		enrichForGrouping(results, params.GroupBy)
 		groups := groupBy(results, params.GroupBy, params.Top, params.CountOnly)
 		return Result{
 			Query:           params.Query,
