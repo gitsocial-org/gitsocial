@@ -150,8 +150,8 @@ alias is recorded, so plain git works there too. The name defaults to
 origin. The accepted URL shapes are in documentation/S3.md.
 
 --default appends the remote to git config gitsocial.pushRemote.
---site sets site.publish in the core config, so pushes to s3 remotes also
-publish the browser static site.
+--site sets site.publish in the core config, so a push to an s3 remote
+also rebuilds the browser static site.
 
 Examples:
   gitsocial remote add s3://s3.us-east-1.amazonaws.com/my-bucket/repo
@@ -200,12 +200,12 @@ Examples:
 					PrintError(cmd, err.Error())
 					os.Exit(ExitError)
 				}
-				PrintSuccess(cmd, "Site publishing enabled (site.publish = true)")
+				PrintSuccess(cmd, "Site rebuild enabled (site.publish = true)")
 			}
 		},
 	}
 	cmd.Flags().BoolVar(&makeDefault, "default", false, "Append the remote to the default push targets")
-	cmd.Flags().BoolVar(&enableSite, "site", false, "Enable site publishing for this repository")
+	cmd.Flags().BoolVar(&enableSite, "site", false, "Set site.publish so a push rebuilds the site")
 	return cmd
 }
 

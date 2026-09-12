@@ -59,27 +59,27 @@ Hint (the original has an em-dash where `[em-dash]` stands):
 `Long` for `push`, 73 lines before the sweep, 29 after it, and 40 once the published list came back:
 
 ```
-Publish local GitMsg data to one or more remotes. On an s3 remote with
-site.publish enabled, also publish the browser static site.
+Send local GitMsg data to one or more remotes. A push to an s3 remote
+with site.publish then rebuilds the browser static site.
 
 Remotes resolve in order: the arguments, git config gitsocial.pushRemote,
 then origin, or the first s3 remote when origin is not one. Diverged
 gitmsg/* branches merge automatically; diverged code branches fail with a
 hint. See documentation/S3.md for remotes and thin fork buckets.
 
-Published:
+Each push:
   branch commits  posts, comments, reposts, quotes
   state refs      lists and configs under refs/gitmsg/
   tags            every local tag
   code branches   the default branch when it is ahead, and open PR heads
-  the site        on an s3 remote with site.publish
+  the site        rebuilt on an s3 remote with site.publish
 
 Examples:
   gitsocial push                 # resolved remotes, data and site
   gitsocial push r2 backup       # named remotes, in order
-  gitsocial push --dry-run       # show what would be pushed
+  gitsocial push --dry-run       # print the plan, send nothing
   gitsocial push --no-code       # data and site, no code branches
-  gitsocial push --site-only     # refresh the site, push no data
+  gitsocial push --site-only     # rebuild the site, send no refs
   gitsocial push --all-branches  # every local branch
   gitsocial push --full          # detach a thin fork bucket
 ```

@@ -24,11 +24,7 @@ import (
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
 
-// mirrorSitePassCap bounds the site-drain loop. A push publishes the whole page
-// set by default, so the loop normally does not run at all; it earns its keep
-// when a bootstrap is deliberately budgeted short (GITSOCIAL_SITE_PAGES_BUDGET)
-// or an items walk defers, where each pass advances the cursor by one budget.
-// The cap covers any realistic backlog and guarantees termination regardless.
+// mirrorSitePassCap bounds the site page drain loop so it terminates.
 const mirrorSitePassCap = 16
 
 type mirrorFlags struct {
@@ -60,7 +56,7 @@ func newMirrorCmd() *cobra.Command {
 		Short: "Mirror a forge project into a bucket",
 		Long: `Mirror a forge-hosted project into an S3 bucket as a browsable site.
 mirror fetches from the forge, imports issues, pull requests, releases
-and discussions, then pushes data, code and the site to the bucket.
+and discussions, then pushes data and code, and rebuilds the site.
 Re-running refreshes, and a crashed run resumes.
 
 The two URLs are told apart by scheme, so their order is free:
@@ -102,7 +98,7 @@ Examples:
 	cmd.Flags().BoolVar(&f.noImport, "no-import", false, "Skip the forge import step")
 	cmd.Flags().IntVarP(&f.limit, "limit", "n", 0, "Max items per type to import")
 	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "Do not prompt")
-	cmd.Flags().BoolVar(&f.noSite, "no-site", false, "Skip the browser site")
+	cmd.Flags().BoolVar(&f.noSite, "no-site", false, "Skip the site rebuild")
 	cmd.Flags().BoolVar(&f.fullFetch, "full-fetch", false, "Also fetch forks, followed repos and identity bindings")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Print the provider checklist and the plan")
 	return cmd
@@ -223,9 +219,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 		return err
 	}
 
-	// Step 8: push data + code + site, publishing every upstream branch the
-	// fetch tracked (local branches are materialized first — the push
-	// enumerates refs/heads/*).
+	// Step 8: push data and code, then rebuild the site.
 	if err := syncMirrorBranches(wsCfg, f.defaultBranchOnly); err != nil {
 		return err
 	}
@@ -563,7 +557,7 @@ func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error
 		return err
 	}
 	if !cfg.JSONOutput && !alreadyOn {
-		fmt.Println("Site publishing enabled (site.publish = true)")
+		fmt.Println("Site rebuild enabled (site.publish = true)")
 	}
 	return nil
 }
@@ -710,7 +704,7 @@ func applyMirrorSiteConfig(cfg *Config, f *mirrorFlags) (string, error) {
 }
 
 // syncMirrorBranches materializes the fetched upstream branches as local
-// branches so the all-branches push can publish them: the push enumerates
+// branches so the all-branches push can send them: the push enumerates
 // refs/heads/*, while the fetch lands upstream branches in
 // refs/remotes/origin/*. Creation and fast-forward only — a diverged local
 // branch is skipped with a warning, never overwritten. gitmsg/* branches are
@@ -772,9 +766,7 @@ func syncMirrorBranches(cfg *Config, defaultOnly bool) error {
 	return nil
 }
 
-// runMirrorPush publishes data + code + site to every target, then drains the
-// site pages cursor with follow-up site-only passes so a large imported item
-// set gets its crawlable pages in this run rather than over many.
+// runMirrorPush pushes to every target, then drains the site pages cursor.
 func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 	var siteProgress objstore.Progress
 	siteDone := func() {}
@@ -879,9 +871,9 @@ func printMirrorPlan(forgeURL, wsDir, wsAction string, targets []mirrorTarget, f
 	case f.noSite:
 		fmt.Println("  Site:       skipped (--no-site)")
 	case f.url != "":
-		fmt.Printf("  Site:       publish + crawlable pages at %s\n", f.url)
+		fmt.Printf("  Site:       rebuild + crawlable pages at %s\n", f.url)
 	default:
-		fmt.Println("  Site:       publish (no public URL yet; pass --url to enable crawlable pages)")
+		fmt.Println("  Site:       rebuild (no public URL yet; pass --url to enable crawlable pages)")
 	}
 	scope := "all branches"
 	if f.defaultBranchOnly {
@@ -890,7 +882,7 @@ func printMirrorPlan(forgeURL, wsDir, wsAction string, targets []mirrorTarget, f
 	if f.noCode {
 		scope += ", no code branches"
 	}
-	fmt.Printf("  Push:       data + code + site, %s\n", scope)
+	fmt.Printf("  Push:       data + code, %s\n", scope)
 	fmt.Println("\nProvider checklist (dashboard steps mirror cannot automate):")
 	fmt.Println("  1. Create the bucket and grant the credentials write access")
 	fmt.Println("  2. Enable public read on the bucket so browsers and git can fetch it")

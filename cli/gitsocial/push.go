@@ -1,4 +1,4 @@
-// push.go - CLI command for publishing local changes (data + browser site) to a remote
+// push.go - CLI command for sending local data to a remote and rebuilding the site
 package main
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 )
 
-// newPushCmd creates the command for publishing local changes to a remote.
+// newPushCmd creates the push command.
 func newPushCmd() *cobra.Command {
 	var dryRun bool
 	var noCode bool
@@ -24,28 +24,28 @@ func newPushCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "push [remote...]",
-		Short: "Publish local changes to remotes",
-		Long: `Publish local GitMsg data to one or more remotes. On an s3 remote with
-site.publish enabled, also publish the browser static site.
+		Short: "Send local changes to remotes",
+		Long: `Send local GitMsg data to one or more remotes. A push to an s3 remote
+with site.publish then rebuilds the browser static site.
 
 Remotes resolve in order: the arguments, git config gitsocial.pushRemote,
 then origin, or the first s3 remote when origin is not one. Diverged
 gitmsg/* branches merge automatically; diverged code branches fail with a
 hint. See documentation/S3.md for remotes and thin fork buckets.
 
-Published:
+Each push:
   branch commits  posts, comments, reposts, quotes
   state refs      lists and configs under refs/gitmsg/
   tags            every local tag
   code branches   the default branch when it is ahead, and open PR heads
-  the site        on an s3 remote with site.publish
+  the site        rebuilt on an s3 remote with site.publish
 
 Examples:
   gitsocial push                 # resolved remotes, data and site
   gitsocial push r2 backup       # named remotes, in order
-  gitsocial push --dry-run       # show what would be pushed
+  gitsocial push --dry-run       # print the plan, send nothing
   gitsocial push --no-code       # data and site, no code branches
-  gitsocial push --site-only     # refresh the site, push no data
+  gitsocial push --site-only     # rebuild the site, send no refs
   gitsocial push --all-branches  # every local branch
   gitsocial push --full          # detach a thin fork bucket`,
 		Args: cobra.ArbitraryArgs,
@@ -96,7 +96,7 @@ Examples:
 					resolved := client.ResolveRemote(cfg.WorkDir, remote)
 					fmt.Printf("Pushing to %s ...\n", resolved)
 					if gitmsg.RemoteIsEmpty(cfg.WorkDir, resolved) {
-						fmt.Printf("Publishing to empty remote %q ...\n", resolved)
+						fmt.Printf("Sending to empty remote %q ...\n", resolved)
 					}
 				}
 				result, err := client.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
@@ -132,16 +132,16 @@ Examples:
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without pushing")
 	cmd.Flags().BoolVar(&noCode, "no-code", false, "Skip code branches")
-	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the browser static site")
-	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Publish only the browser site, no data")
-	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Publish every local branch")
+	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the site rebuild for this push")
+	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Rebuild the site, send no refs")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Send every local branch")
 	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket and upload every object")
 	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 
 	return cmd
 }
 
-// printPushResult renders the combined data + site publish result for humans.
+// printPushResult renders the push and site result for humans.
 func printPushResult(result *client.Result, dryRun bool) {
 	p := result.Push
 	nothing := p.Commits == 0 && p.CodeCommits == 0 && p.Refs == 0 && p.Tags == 0 && p.AllBranches == 0
@@ -178,7 +178,7 @@ func printPushResult(result *client.Result, dryRun bool) {
 
 	switch {
 	case result.Site.Published && !result.Site.Complete:
-		fmt.Println("Site: published (incomplete — a bootstrap is still in progress; push again to finish)")
+		fmt.Println("Site: published (incomplete: a bootstrap is still in progress, push again to finish)")
 	case result.Site.Published:
 		fmt.Println("Site: published")
 	case result.Site.Err != nil:
