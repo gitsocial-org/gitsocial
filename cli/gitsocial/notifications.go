@@ -76,9 +76,9 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 		},
 	}
 
-	cmd.Flags().BoolVarP(&all, "all", "a", false, "Show all notifications (not just unread)")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Show read notifications too")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of notifications")
-	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by type (comma-separated)")
+	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by comma-separated types")
 
 	cmd.AddCommand(
 		newNotificationsCountCmd(),

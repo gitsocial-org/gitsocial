@@ -79,7 +79,7 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 			PrintSuccess(cmd, fmt.Sprintf("Uploaded %s (%d bytes) to %s", key, len(data), remote))
 		},
 	}
-	cmd.Flags().StringVar(&remote, "remote", "", "Target remote (default: the push remote)")
+	cmd.Flags().StringVar(&remote, "remote", "", "Target remote, default the push remote")
 	cmd.Flags().StringVar(&contentType, "content-type", "", "Content-Type for the uploaded object")
 	return cmd
 }
@@ -205,8 +205,8 @@ Examples:
 			}
 		},
 	}
-	cmd.Flags().BoolVar(&makeDefault, "default", false, "Append the remote to the default push targets (gitsocial.pushRemote)")
-	cmd.Flags().BoolVar(&enableSite, "site", false, "Enable site publishing for this repo (site.publish true)")
+	cmd.Flags().BoolVar(&makeDefault, "default", false, "Append the remote to the default push targets")
+	cmd.Flags().BoolVar(&enableSite, "site", false, "Enable site publishing for this repository")
 	return cmd
 }
 

@@ -136,7 +136,7 @@ func newSocialInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to use for social content (default: auto-detect)")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to use for social content")
 
 	return cmd
 }
@@ -187,7 +187,7 @@ func newSocialTimelineCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Filter by repository URL (use 'workspace' for current repo)")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Filter by repository URL, or workspace")
 	cmd.Flags().StringVarP(&listName, "list", "l", "", "Filter by list name")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of posts")
 
@@ -244,7 +244,7 @@ func newSocialPostCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as topic/release")
 
 	return cmd
 }
@@ -306,7 +306,7 @@ func newSocialEditCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
 	return cmd
 }
 
@@ -388,7 +388,7 @@ func newSocialCommentCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as topic/release")
 
 	return cmd
 }
@@ -425,7 +425,7 @@ func newSocialRepostCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as topic/release")
 
 	return cmd
 }
@@ -476,7 +476,7 @@ func newSocialQuoteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., topic/release,area/tui)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as topic/release")
 
 	return cmd
 }
@@ -689,7 +689,7 @@ func newSocialListAddCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to track (default: auto-detect)")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to track")
 	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Follow all branches")
 
 	return cmd

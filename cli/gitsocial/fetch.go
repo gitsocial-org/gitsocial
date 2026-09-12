@@ -118,7 +118,7 @@ For extension-specific options, use the extension's fetch command directly:
 
 	cmd.Flags().StringVarP(&listID, "list", "l", "", "Fetch only repos from this list")
 	cmd.Flags().IntVarP(&parallel, "parallel", "p", 4, "Number of concurrent fetches")
-	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "First-run fetch mode: track all upstream branches (skips the prompt)")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Track all upstream branches on the first fetch")
 
 	return cmd
 }

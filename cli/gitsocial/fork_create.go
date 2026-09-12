@@ -67,9 +67,9 @@ gitsocial push.`,
 			return runForkCreate(cmd, args, &f)
 		},
 	}
-	cmd.Flags().StringVar(&f.to, "to", "", "Destination for the fork (a forge URL, or s3://<endpoint-host>/<bucket>/<prefix>)")
+	cmd.Flags().StringVar(&f.to, "to", "", "Destination forge URL or s3:// URL for the fork")
 	cmd.Flags().BoolVar(&f.noFilter, "no-filter", false, "Clone every blob instead of fetching them on demand")
-	cmd.Flags().BoolVar(&f.full, "full", false, "Pushes to the fork upload everything (no upstream exclusion); default for an s3 destination is thin")
+	cmd.Flags().BoolVar(&f.full, "full", false, "Push every object to the fork, not a thin bucket")
 	return cmd
 }
 

@@ -67,8 +67,8 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
-	cmd.PersistentFlags().StringVarP(&workdir, "workdir", "C", "", "Working directory (default: current directory)")
-	cmd.PersistentFlags().StringVar(&cacheDir, "cache-dir", "", "Cache directory (default: ~/.cache/gitsocial)")
+	cmd.PersistentFlags().StringVarP(&workdir, "workdir", "C", "", "Working directory, default the current directory")
+	cmd.PersistentFlags().StringVar(&cacheDir, "cache-dir", "", "Cache directory, default ~/.cache/gitsocial")
 
 	cmd.CompletionOptions.HiddenDefaultCmd = true
 

@@ -244,8 +244,8 @@ func newMemoSessionCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 	}
 	var pushOnly, fetchOnly bool
-	syncCmd.Flags().BoolVar(&pushOnly, "push-only", false, "push only (skip fetch)")
-	syncCmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "fetch only (skip push)")
+	syncCmd.Flags().BoolVar(&pushOnly, "push-only", false, "push only, skip the fetch")
+	syncCmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "fetch only, skip the push")
 	syncCmd.Run = func(cmd *cobra.Command, args []string) {
 		doFetch := !pushOnly
 		doPush := !fetchOnly
@@ -277,7 +277,7 @@ func newMemoSessionCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 	}
 	var olderThan string
-	gcCmd.Flags().StringVar(&olderThan, "older-than", "", "delete sessions inactive past this duration (e.g. 30d, 7d, 24h)")
+	gcCmd.Flags().StringVar(&olderThan, "older-than", "", "delete sessions idle past this duration, such as 30d")
 	gcCmd.Run = func(cmd *cobra.Command, args []string) {
 		if olderThan != "" {
 			d, err := parseDurationFriendly(olderThan)
@@ -421,8 +421,8 @@ and the command runs interactively.`,
 			fmt.Printf("memo created: %s\n", res.Data.ID)
 		},
 	}
-	cmd.Flags().StringVar(&labels, "labels", "", "comma-separated labels (e.g. kind/policy,priority/high)")
-	cmd.Flags().StringVar(&scope, "scope", "", "tier: session | personal | project (default: session)")
+	cmd.Flags().StringVar(&labels, "labels", "", "comma-separated labels, such as kind/policy")
+	cmd.Flags().StringVar(&scope, "scope", "", "tier: session, personal or project")
 	cmd.Flags().StringVar(&body, "body", "", "memo body text; `-` to read from stdin; omit to open editor")
 	return cmd
 }
@@ -487,7 +487,7 @@ func newMemoEditCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&subject, "subject", "", "new subject")
 	cmd.Flags().StringVar(&body, "body", "", "new body")
-	cmd.Flags().StringVar(&labels, "labels", "", "new labels (comma-separated)")
+	cmd.Flags().StringVar(&labels, "labels", "", "new comma-separated labels")
 	cmd.PreRun = func(cmd *cobra.Command, args []string) {
 		setSubject = cmd.Flags().Changed("subject")
 		setBody = cmd.Flags().Changed("body")
@@ -587,12 +587,12 @@ func newMemoListCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&tier, "tier", "", "restrict to one tier (session | personal | project | inherited | external)")
-	cmd.Flags().StringVar(&includeSessions, "include-sessions", "", `widen session visibility ("all" or a specific id)`)
+	cmd.Flags().StringVar(&tier, "tier", "", "tier: session, personal, project, inherited or external")
+	cmd.Flags().StringVar(&includeSessions, "include-sessions", "", "widen session visibility to all or one session id")
 	cmd.Flags().BoolVar(&includeExpired, "include-expired", false, "include expired memos")
 	cmd.Flags().BoolVar(&onlyExpired, "expired", false, "show only expired memos")
-	cmd.Flags().BoolVar(&includeExternal, "include-external", false, "include memos from incidentally-followed repos (default merge plus external)")
-	cmd.Flags().StringVar(&labels, "labels", "", "filter by labels (comma-separated, AND semantics)")
+	cmd.Flags().BoolVar(&includeExternal, "include-external", false, "also include memos from followed repositories")
+	cmd.Flags().StringVar(&labels, "labels", "", "filter by labels, all must match")
 	cmd.Flags().IntVar(&limit, "limit", 0, "max number of memos to return")
 	return cmd
 }

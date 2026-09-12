@@ -164,11 +164,11 @@ Examples:
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without pushing")
-	cmd.Flags().BoolVar(&noCode, "no-code", false, "Skip code branches (default branch and open-PR heads)")
-	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the browser static site (s3 remotes)")
-	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Publish only the browser site, no data push (errors when site.publish is off)")
-	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Publish every local branch, not just the default branch and open-PR heads")
-	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket: upload every object it lacks and restore its stock-git ref advertisement")
+	cmd.Flags().BoolVar(&noCode, "no-code", false, "Skip code branches")
+	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the browser static site")
+	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Publish only the browser site, no data")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Publish every local branch")
+	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket and upload every object")
 	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 
 	return cmd

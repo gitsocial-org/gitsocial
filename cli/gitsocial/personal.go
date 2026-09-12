@@ -142,8 +142,8 @@ memos are re-indexed into the cache so "gitsocial memo list" reflects them.`,
 			}
 		},
 	}
-	cmd.Flags().BoolVar(&pushOnly, "push-only", false, "Push only (skip fetch)")
-	cmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "Fetch only (skip push)")
+	cmd.Flags().BoolVar(&pushOnly, "push-only", false, "Push only, skip the fetch")
+	cmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "Fetch only, skip the push")
 	return cmd
 }
 

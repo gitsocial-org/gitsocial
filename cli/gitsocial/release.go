@@ -208,15 +208,15 @@ func newReleaseCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Git tag name (e.g., v1.0.0)")
-	cmd.Flags().StringVarP(&version, "version", "v", "", "Semver version (e.g., 1.0.0)")
+	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Git tag name, such as v1.0.0")
+	cmd.Flags().StringVarP(&version, "version", "v", "", "Semver version, such as 1.0.0")
 	cmd.Flags().BoolVar(&prerelease, "prerelease", false, "Mark as pre-release")
-	cmd.Flags().StringVar(&artifactsStr, "artifacts", "", "Artifact filenames (comma-separated)")
+	cmd.Flags().StringVar(&artifactsStr, "artifacts", "", "Comma-separated artifact filenames")
 	cmd.Flags().StringVar(&artifactURL, "artifact-url", "", "Base URL for externally hosted artifacts")
-	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename (e.g., SHA256SUMS)")
+	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename, such as SHA256SUMS")
 	cmd.Flags().StringVar(&signedBy, "signed-by", "", "Key fingerprint for release signature")
-	cmd.Flags().StringVar(&sbom, "sbom", "", "SBOM filename (e.g., sbom.spdx.json)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
+	cmd.Flags().StringVar(&sbom, "sbom", "", "SBOM filename, such as sbom.spdx.json")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as area/tui")
 	cmd.Flags().BoolVar(&allowDuplicate, "allow-duplicate", false, "Allow creating a release with a tag that already exists")
 
 	return cmd
@@ -268,8 +268,8 @@ func newReleaseListCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of releases")
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL (default: current workspace)")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name (default: configured release branch)")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the current workspace")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name, default the release branch")
 
 	return cmd
 }
@@ -384,12 +384,12 @@ func newReleaseEditCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Updated git tag")
 	cmd.Flags().StringVarP(&version, "version", "v", "", "Updated version")
 	cmd.Flags().StringVar(&sbom, "sbom", "", "Updated SBOM filename")
-	cmd.Flags().StringVar(&artifactsStr, "artifacts", "", "Artifact filenames (comma-separated)")
+	cmd.Flags().StringVar(&artifactsStr, "artifacts", "", "Comma-separated artifact filenames")
 	cmd.Flags().StringVar(&artifactURL, "artifact-url", "", "Base URL for externally hosted artifacts")
-	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename (e.g., SHA256SUMS)")
+	cmd.Flags().StringVar(&checksums, "checksums", "", "Checksums filename, such as SHA256SUMS")
 	cmd.Flags().StringVar(&signedBy, "signed-by", "", "Key fingerprint for release signature")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
-	cmd.Flags().BoolVar(&prerelease, "prerelease", false, "Mark as pre-release (use --prerelease=false to clear)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
+	cmd.Flags().BoolVar(&prerelease, "prerelease", false, "Mark as pre-release; --prerelease=false clears it")
 
 	return cmd
 }

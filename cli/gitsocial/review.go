@@ -242,13 +242,13 @@ func newReviewPRCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&base, "base", "", "Target branch ref (e.g., #branch:main)")
-	cmd.Flags().StringVar(&head, "head", "", "Source branch ref (e.g., #branch:feature)")
-	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "PR refs this depends on (comma-separated)")
+	cmd.Flags().StringVar(&base, "base", "", "Target branch ref, such as #branch:main")
+	cmd.Flags().StringVar(&head, "head", "", "Source branch ref, such as #branch:feature")
+	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "Comma-separated PR refs this depends on")
 	cmd.Flags().BoolVar(&stack, "stack", false, "Auto-detect depends-on from base branch matching")
-	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated)")
-	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer email addresses (comma-separated)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
+	cmd.Flags().StringVar(&closesStr, "closes", "", "Comma-separated PM issue refs to close on merge")
+	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Comma-separated reviewer email addresses")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as area/tui")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as a draft pull request")
 	cmd.Flags().BoolVar(&allowUnpublished, "allow-unpublished-head", false, "Allow creation when head branch is not resolvable on origin")
 
@@ -312,7 +312,7 @@ func newReviewPRListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&state, "state", "s", "open", "Filter by state (open, merged, closed)")
+	cmd.Flags().StringVarP(&state, "state", "s", "open", "Filter by state: open, merged, closed")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 50, "Maximum number of results")
 	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL")
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name")
@@ -479,12 +479,12 @@ func newReviewPREditCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&title, "title", "", "Updated title/subject")
 	cmd.Flags().StringVar(&body, "body", "", "Updated body/description")
-	cmd.Flags().StringVar(&base, "base", "", "Target branch ref (e.g., #branch:main)")
-	cmd.Flags().StringVar(&head, "head", "", "Source branch ref (e.g., #branch:feature)")
-	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Reviewer emails (comma-separated; replaces existing)")
-	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge (comma-separated; replaces existing)")
-	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "PR refs this depends on (comma-separated; replaces existing)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+	cmd.Flags().StringVar(&base, "base", "", "Target branch ref, such as #branch:main")
+	cmd.Flags().StringVar(&head, "head", "", "Source branch ref, such as #branch:feature")
+	cmd.Flags().StringVar(&reviewersStr, "reviewers", "", "Comma-separated reviewer emails, replacing any set")
+	cmd.Flags().StringVar(&closesStr, "closes", "", "PM issue refs to close on merge, replacing any set")
+	cmd.Flags().StringVar(&dependsOnStr, "depends-on", "", "PR refs this depends on, replacing any set")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
 
 	return cmd
 }
@@ -924,7 +924,7 @@ func newFeedbackApproveCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&message, "message", "m", "", "Feedback message (default: LGTM!)")
+	cmd.Flags().StringVarP(&message, "message", "m", "", "Feedback message, default LGTM!")
 	return cmd
 }
 
@@ -967,7 +967,7 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&message, "message", "m", "", "Feedback message (required)")
+	cmd.Flags().StringVarP(&message, "message", "m", "", "Feedback message, required")
 	return cmd
 }
 
@@ -1024,9 +1024,9 @@ func newFeedbackCommentCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&prRef, "pr", "", "Pull request ref (required)")
-	cmd.Flags().StringVar(&file, "file", "", "File path (required for inline)")
-	cmd.Flags().StringVar(&commitHash, "commit", "", "Commit hash, 12 chars (required for inline)")
+	cmd.Flags().StringVar(&prRef, "pr", "", "Pull request ref, required")
+	cmd.Flags().StringVar(&file, "file", "", "File path, required for inline feedback")
+	cmd.Flags().StringVar(&commitHash, "commit", "", "Commit hash of 12 chars, required for inline")
 	cmd.Flags().IntVar(&oldLine, "old-line", 0, "Line in old file version, 1-indexed")
 	cmd.Flags().IntVar(&newLine, "new-line", 0, "Line in new file version, 1-indexed")
 	cmd.Flags().IntVar(&oldLineEnd, "old-line-end", 0, "End line in old file version")

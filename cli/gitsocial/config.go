@@ -250,7 +250,7 @@ func newSiteConfigGetCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective value for this remote (config ref overlaid by its url/publish/pages overrides)")
+	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective value for this remote")
 	return cmd
 }
 
@@ -281,7 +281,7 @@ func newSiteConfigListCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective values for this remote (config ref overlaid by its url/publish/pages overrides)")
+	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective values for this remote")
 	return cmd
 }
 
@@ -350,7 +350,7 @@ publish, and pages are overridable per-remote; identity keys travel with the rep
 			}
 		},
 	}
-	cmd.Flags().StringVar(&remote, "remote", "", "Store the value per-remote in git config (only url/publish/pages)")
+	cmd.Flags().StringVar(&remote, "remote", "", "Store the value per remote in git config")
 	return cmd
 }
 

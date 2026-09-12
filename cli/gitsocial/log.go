@@ -95,10 +95,10 @@ Examples:
 	}
 
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of entries")
-	cmd.Flags().StringVarP(&scope, "scope", "s", "", "Scope: timeline, repository:my (default)")
-	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by types (comma-separated)")
-	cmd.Flags().StringVar(&after, "after", "", "Show entries after date (YYYY-MM-DD)")
-	cmd.Flags().StringVar(&before, "before", "", "Show entries before date (YYYY-MM-DD)")
+	cmd.Flags().StringVarP(&scope, "scope", "s", "", "Scope: timeline or repository:my")
+	cmd.Flags().StringVarP(&typeFilter, "type", "t", "", "Filter by comma-separated types")
+	cmd.Flags().StringVar(&after, "after", "", "Show entries after this date, YYYY-MM-DD")
+	cmd.Flags().StringVar(&before, "before", "", "Show entries before this date, YYYY-MM-DD")
 	cmd.Flags().StringVarP(&author, "author", "a", "", "Filter by author email")
 
 	return cmd

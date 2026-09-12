@@ -58,7 +58,7 @@ overridable per remote).`,
 		},
 	}
 
-	cmd.Flags().StringVar(&remote, "remote", "", "Target remote (default: the push remote)")
+	cmd.Flags().StringVar(&remote, "remote", "", "Target remote, default the push remote")
 	return cmd
 }
 

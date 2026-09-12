@@ -168,7 +168,7 @@ func newPMInitCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&branch, "branch", "b", "gitmsg/pm", "Branch to use for PM content")
-	cmd.Flags().StringVarP(&framework, "framework", "f", "kanban", "Framework to use (minimal, kanban, scrum)")
+	cmd.Flags().StringVarP(&framework, "framework", "f", "kanban", "Framework to use: minimal, kanban, scrum")
 
 	return cmd
 }
@@ -291,13 +291,13 @@ Sort options: created, due, priority`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state (open, closed, all)")
+	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state: open, closed, all")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of issues")
-	cmd.Flags().StringVarP(&labels, "labels", "l", "", "Filter by labels (comma-separated)")
-	cmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter query (e.g., 'state:open priority:high')")
-	cmd.Flags().StringVar(&sort, "sort", "", "Sort by field (created, due, priority) with optional :asc/:desc")
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL (default: current workspace)")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name (default: configured PM branch)")
+	cmd.Flags().StringVarP(&labels, "labels", "l", "", "Filter by comma-separated labels")
+	cmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter query, such as state:open priority:high")
+	cmd.Flags().StringVar(&sort, "sort", "", "Sort by created, due or priority, with :asc or :desc")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the current workspace")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name, default the configured PM branch")
 
 	return cmd
 }
@@ -440,15 +440,15 @@ func newPMIssueCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., kind/bug,priority/high)")
-	cmd.Flags().StringVarP(&assigneesStr, "assignees", "a", "", "Assignees (comma-separated emails)")
-	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
-	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone reference (commit hash)")
-	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint reference (commit hash)")
-	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue reference (commit hash); creates a sub-issue")
-	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Issues this blocks (comma-separated hashes)")
-	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Issues blocking this (comma-separated hashes)")
-	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes)")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as kind/bug")
+	cmd.Flags().StringVarP(&assigneesStr, "assignees", "a", "", "Comma-separated assignee emails")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date, YYYY-MM-DD")
+	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone reference, a commit hash")
+	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint reference, a commit hash")
+	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue commit hash; makes this a sub-issue")
+	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Comma-separated hashes of issues this blocks")
+	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Comma-separated hashes of blocking issues")
+	cmd.Flags().StringVar(&relatedStr, "related", "", "Comma-separated hashes of related issues")
 
 	return cmd
 }
@@ -558,16 +558,16 @@ func newPMIssueEditCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&subject, "subject", "", "Updated subject/title")
 	cmd.Flags().StringVar(&body, "body", "", "Updated body/description")
-	cmd.Flags().StringVar(&state, "state", "", "State (open, closed, canceled)")
-	cmd.Flags().StringVarP(&assigneesStr, "assignees", "a", "", "Assignees (comma-separated emails; replaces existing)")
-	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
-	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone ref (commit hash; empty to clear)")
-	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint ref (commit hash; empty to clear)")
-	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue ref (commit hash; empty to clear hierarchy)")
-	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Issues this blocks (comma-separated hashes; replaces existing)")
-	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Issues blocking this (comma-separated hashes; replaces existing)")
-	cmd.Flags().StringVar(&relatedStr, "related", "", "Related issues (comma-separated hashes; replaces existing)")
+	cmd.Flags().StringVar(&state, "state", "", "State: open, closed, canceled")
+	cmd.Flags().StringVarP(&assigneesStr, "assignees", "a", "", "Comma-separated assignee emails, replacing any set")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date, YYYY-MM-DD")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
+	cmd.Flags().StringVarP(&milestoneRef, "milestone", "m", "", "Milestone commit hash, empty to clear")
+	cmd.Flags().StringVarP(&sprintRef, "sprint", "s", "", "Sprint commit hash, empty to clear")
+	cmd.Flags().StringVar(&parentRef, "parent", "", "Parent issue commit hash, empty to clear")
+	cmd.Flags().StringVar(&blocksStr, "blocks", "", "Hashes of issues this blocks, replacing any set")
+	cmd.Flags().StringVar(&blockedByStr, "blocked-by", "", "Hashes of blocking issues, replacing any set")
+	cmd.Flags().StringVar(&relatedStr, "related", "", "Hashes of related issues, replacing any set")
 
 	return cmd
 }
@@ -834,10 +834,10 @@ func newPMMilestoneListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state (open, closed, canceled, all)")
+	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state: open, closed, canceled, all")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of milestones")
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL (default: current workspace)")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name (default: configured PM branch)")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the current workspace")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name, default the configured PM branch")
 
 	return cmd
 }
@@ -950,8 +950,8 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date, YYYY-MM-DD")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as area/tui")
 	cmd.Flags().BoolVar(&allowDuplicate, "allow-duplicate", false, "Allow creating a milestone with a title that already exists")
 
 	return cmd
@@ -1021,9 +1021,9 @@ func newPMMilestoneEditCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&title, "title", "", "Updated title")
 	cmd.Flags().StringVar(&body, "body", "", "Updated description")
-	cmd.Flags().StringVar(&state, "state", "", "State (open, closed, canceled)")
-	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date (YYYY-MM-DD)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+	cmd.Flags().StringVar(&state, "state", "", "State: open, closed, canceled")
+	cmd.Flags().StringVarP(&dueDateStr, "due", "d", "", "Due date, YYYY-MM-DD")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
 
 	return cmd
 }
@@ -1228,10 +1228,10 @@ func newPMSprintListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state (planned, active, completed, canceled, all)")
+	cmd.Flags().StringVarP(&state, "state", "s", "", "Filter by state: planned, active, completed, all")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum number of sprints")
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL (default: current workspace)")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name (default: configured PM branch)")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the current workspace")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name, default the configured PM branch")
 
 	return cmd
 }
@@ -1356,9 +1356,9 @@ func newPMSprintCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date (YYYY-MM-DD, required)")
-	cmd.Flags().StringVar(&endDateStr, "end", "", "End date (YYYY-MM-DD, required)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated, e.g., area/tui,team/core)")
+	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date, YYYY-MM-DD, required")
+	cmd.Flags().StringVar(&endDateStr, "end", "", "End date, YYYY-MM-DD, required")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, such as area/tui")
 
 	return cmd
 }
@@ -1431,10 +1431,10 @@ func newPMSprintEditCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&title, "title", "", "Updated title")
 	cmd.Flags().StringVar(&body, "body", "", "Updated description")
-	cmd.Flags().StringVar(&state, "state", "", "State (planned, active, completed, canceled)")
-	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date (YYYY-MM-DD)")
-	cmd.Flags().StringVar(&endDateStr, "end", "", "End date (YYYY-MM-DD)")
-	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Labels (comma-separated; replaces existing)")
+	cmd.Flags().StringVar(&state, "state", "", "State: planned, active, completed, canceled")
+	cmd.Flags().StringVar(&startDateStr, "start", "", "Start date, YYYY-MM-DD")
+	cmd.Flags().StringVar(&endDateStr, "end", "", "End date, YYYY-MM-DD")
+	cmd.Flags().StringVarP(&labelsStr, "labels", "l", "", "Comma-separated labels, replacing any set")
 
 	return cmd
 }

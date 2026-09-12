@@ -43,7 +43,7 @@ func newExploreCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&listName, "list", "l", "", "Filter by list name")
-	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum number of repositories to show (0 for unlimited)")
+	cmd.Flags().IntVar(&limit, "limit", 100, "Maximum repositories to show, 0 for all")
 
 	return cmd
 }

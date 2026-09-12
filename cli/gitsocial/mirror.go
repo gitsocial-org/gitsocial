@@ -109,16 +109,16 @@ Examples:
 			return runMirror(cmd, args, &f)
 		},
 	}
-	cmd.Flags().StringVar(&f.dir, "dir", "", "Workspace directory for the cold start (default: ./<repo-name>)")
-	cmd.Flags().StringVar(&f.url, "url", "", "Public URL the bucket is served at (sets site.url and enables site.pages)")
+	cmd.Flags().StringVar(&f.dir, "dir", "", "Workspace directory for the cold start")
+	cmd.Flags().StringVar(&f.url, "url", "", "Public URL the bucket is served at")
 	cmd.Flags().BoolVar(&f.noCode, "no-code", false, "Skip pushing code branches")
-	cmd.Flags().BoolVar(&f.defaultBranchOnly, "default-branch-only", false, "Mirror only the default branch instead of every upstream branch")
+	cmd.Flags().BoolVar(&f.defaultBranchOnly, "default-branch-only", false, "Mirror only the default branch")
 	cmd.Flags().BoolVar(&f.noImport, "no-import", false, "Skip the forge import step")
-	cmd.Flags().IntVarP(&f.limit, "limit", "n", 0, "Max items per type to import (0 = unlimited)")
-	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "Never prompt (cron-safe); missing credentials fail with the setup command")
-	cmd.Flags().BoolVar(&f.noSite, "no-site", false, "Skip the browser site entirely (also skips enabling site.publish)")
-	cmd.Flags().BoolVar(&f.fullFetch, "full-fetch", false, "Also fetch registered forks, followed repos and identity bindings (local viewing state; nothing mirror publishes depends on it)")
-	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Print the provider checklist and the resolved plan without writing anything")
+	cmd.Flags().IntVarP(&f.limit, "limit", "n", 0, "Max items per type to import")
+	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "Do not prompt")
+	cmd.Flags().BoolVar(&f.noSite, "no-site", false, "Skip the browser site")
+	cmd.Flags().BoolVar(&f.fullFetch, "full-fetch", false, "Also fetch forks, followed repos and identity bindings")
+	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Print the provider checklist and the plan")
 	return cmd
 }
 
