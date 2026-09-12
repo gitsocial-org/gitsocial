@@ -19,8 +19,8 @@ type SelectedList struct {
 	Name string
 }
 
-// PanelActions defines actions that handlers can invoke on the content panel
-type PanelActions interface {
+// panelActions defines actions that handlers can invoke on the content panel
+type panelActions interface {
 	// State
 	GetSelectedDisplayItem() (DisplayItem, bool)
 	GetSelectedList() *SelectedList
@@ -80,18 +80,18 @@ type HandlerContext struct {
 	StartImport  func() tea.Cmd
 
 	// Panel for direct action calls
-	Panel PanelActions
+	Panel panelActions
 }
 
-// Handler processes a keybinding, returns whether it handled the key and any command
-type Handler func(ctx *HandlerContext) (handled bool, cmd tea.Cmd)
+// handler processes a keybinding, returns whether it handled the key and any command
+type handler func(ctx *HandlerContext) (handled bool, cmd tea.Cmd)
 
 // Binding defines a single keybinding
 type Binding struct {
 	Key      string
 	Label    string
 	Contexts []Context
-	Handler  Handler
+	Handler  handler
 }
 
 // BindingProvider is implemented by views that define keybindings
@@ -171,8 +171,8 @@ func containsContext(contexts []Context, ctx Context) bool {
 	return false
 }
 
-// AllContextsExcept returns all contexts except the specified ones.
-func AllContextsExcept(exclude ...Context) []Context {
+// allContextsExcept returns all contexts except the specified ones.
+func allContextsExcept(exclude ...Context) []Context {
 	all := AllContexts()
 	result := make([]Context, 0, len(all))
 	for _, ctx := range all {
@@ -190,8 +190,8 @@ func AllContextsExcept(exclude ...Context) []Context {
 	return result
 }
 
-// GlobalKey defines a global shortcut key
-type GlobalKey struct {
+// globalKey defines a global shortcut key
+type globalKey struct {
 	Key    string  // Shortcut key
 	Domain string  // Domain/extension ID (or "_core" for core features)
 	Target Context // Target context to navigate to
@@ -200,19 +200,19 @@ type GlobalKey struct {
 
 // CoreKeys defines global shortcuts for core features (shown in footer).
 // "/" for search is registered separately with special handling.
-var CoreKeys = []GlobalKey{
+var CoreKeys = []globalKey{
 	{Key: "@", Domain: "_core", Target: Notifications, Label: "notifications"},
 	{Key: "%", Domain: "_core", Target: Analytics, Label: "analytics"},
 	{Key: "!", Domain: "_core", Target: ErrorLog, Label: "errors"},
 }
 
 // ExtensionKeys defines global extension shortcuts (uppercase, highlighted in sidebar).
-var ExtensionKeys = []GlobalKey{
-	{Key: "S", Domain: DomainSocial, Target: Timeline, Label: "timeline"},
-	{Key: "P", Domain: DomainPM, Target: PMBoard, Label: "boards"},
-	{Key: "R", Domain: DomainReview, Target: ReviewPRs, Label: "reviews"},
-	{Key: "V", Domain: DomainRelease, Target: ReleaseList, Label: "releases"},
-	{Key: "M", Domain: DomainMemo, Target: MemoList, Label: "memos"},
+var ExtensionKeys = []globalKey{
+	{Key: "S", Domain: domainSocial, Target: Timeline, Label: "timeline"},
+	{Key: "P", Domain: domainPM, Target: PMBoard, Label: "boards"},
+	{Key: "R", Domain: domainReview, Target: ReviewPRs, Label: "reviews"},
+	{Key: "V", Domain: domainRelease, Target: ReleaseList, Label: "releases"},
+	{Key: "M", Domain: domainMemo, Target: MemoList, Label: "memos"},
 	// Reserved for extensions that do not exist yet; Target Global skips registration.
 	{Key: "C", Domain: "cicd", Target: Global, Label: "actions"},
 	{Key: "O", Domain: "ops", Target: Global, Label: "operations"},
@@ -221,8 +221,8 @@ var ExtensionKeys = []GlobalKey{
 	{Key: "F", Domain: "portfolio", Target: Global, Label: "overview"},
 }
 
-// GetExtensionKey returns the GlobalKey for a domain, or nil if not found.
-func GetExtensionKey(domain string) *GlobalKey {
+// getExtensionKey returns the globalKey for a domain, or nil if not found.
+func getExtensionKey(domain string) *globalKey {
 	for i := range ExtensionKeys {
 		if ExtensionKeys[i].Domain == domain {
 			return &ExtensionKeys[i]
@@ -240,7 +240,7 @@ func RegisterGlobalKeys(r *Registry) {
 		}
 		return false, nil
 	}
-	backContexts := AllContextsExcept(Timeline)
+	backContexts := allContextsExcept(Timeline)
 	r.Register(Binding{
 		Key:      "esc",
 		Label:    "back",
@@ -253,7 +253,7 @@ func RegisterGlobalKeys(r *Registry) {
 		r.Register(Binding{
 			Key:      ck.Key,
 			Label:    ck.Label,
-			Contexts: AllContextsExcept(ck.Target),
+			Contexts: allContextsExcept(ck.Target),
 			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 				if ctx.Navigate != nil {
 					return true, ctx.Navigate(ck.Target)
@@ -272,7 +272,7 @@ func RegisterGlobalKeys(r *Registry) {
 		r.Register(Binding{
 			Key:      ek.Key,
 			Label:    ek.Label,
-			Contexts: AllContextsExcept(ek.Target),
+			Contexts: allContextsExcept(ek.Target),
 			Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 				if ctx.Navigate != nil {
 					return true, ctx.Navigate(ek.Target)
@@ -286,7 +286,7 @@ func RegisterGlobalKeys(r *Registry) {
 	r.Register(Binding{
 		Key:      "f",
 		Label:    "fetch",
-		Contexts: AllContextsExcept(Detail, Thread, History),
+		Contexts: allContextsExcept(Detail, Thread, History),
 		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 			if ctx.StartFetch != nil {
 				return true, ctx.StartFetch()
@@ -314,7 +314,7 @@ func RegisterGlobalKeys(r *Registry) {
 	r.Register(Binding{
 		Key:      "/",
 		Label:    "search",
-		Contexts: AllContextsExcept(Search),
+		Contexts: allContextsExcept(Search),
 		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 			if ctx.Navigate != nil {
 				return true, ctx.Navigate(Search)
@@ -354,7 +354,7 @@ func RegisterGlobalKeys(r *Registry) {
 	r.Register(Binding{
 		Key:      "?",
 		Label:    "help",
-		Contexts: AllContextsExcept(Help),
+		Contexts: allContextsExcept(Help),
 		Handler: func(ctx *HandlerContext) (bool, tea.Cmd) {
 			if ctx.Navigate != nil {
 				return true, ctx.Navigate(Help)

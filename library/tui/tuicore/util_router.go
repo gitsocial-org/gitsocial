@@ -57,8 +57,8 @@ var (
 	LocTimeline      = Location{Path: "/social/timeline"}
 	LocSearch        = Location{Path: "/search"}
 	LocNotifications = Location{Path: "/notifications"}
-	LocSettings      = Location{Path: "/settings"}
-	LocCache         = Location{Path: "/cache"}
+	locSettings      = Location{Path: "/settings"}
+	locCache         = Location{Path: "/cache"}
 	LocMyRepo        = Location{Path: "/social/repository"}
 	LocLists         = Location{Path: "/lists"}
 	LocAnalytics     = Location{Path: "/analytics"}
@@ -126,8 +126,8 @@ func LocExternalListRepos(ownerRepoURL, listID string) Location {
 	}}
 }
 
-// LocExplore is the repository discovery (browse all known repos) view.
-var LocExplore = Location{Path: "/social/explore"}
+// locExplore is the repository discovery (browse all known repos) view.
+var locExplore = Location{Path: "/social/explore"}
 
 // LocExploreRelated creates a location listing repositories related to url.
 // Served by the same /social/explore view; the `related` param switches modes.
@@ -135,8 +135,8 @@ func LocExploreRelated(url string) Location {
 	return Location{Path: "/social/explore", Params: map[string]string{"related": url}}
 }
 
-// LocFollowers lists the workspaces that follow this workspace.
-var LocFollowers = Location{Path: "/social/followers"}
+// locFollowers lists the workspaces that follow this workspace.
+var locFollowers = Location{Path: "/social/followers"}
 
 // LocConfig creates a location for the configuration view.
 func LocConfig(extension string) Location {
@@ -177,8 +177,8 @@ func LocCommitDiff(commit string) Location {
 // LocPMBoard creates a location for the PM board view.
 var LocPMBoard = Location{Path: "/pm/board"}
 
-// LocPMIssues creates a location for the PM issues list.
-var LocPMIssues = Location{Path: "/pm/issues"}
+// locPMIssues creates a location for the PM issues list.
+var locPMIssues = Location{Path: "/pm/issues"}
 
 // LocPMIssueDetail creates a location for a PM issue detail view.
 func LocPMIssueDetail(issueID string) Location {
@@ -213,11 +213,11 @@ func LocPMIssueHistoryDiff(issueID, fromID, toID string) Location {
 	}}
 }
 
-// LocPMConfig creates a location for PM configuration.
-var LocPMConfig = Location{Path: "/pm/config"}
+// locPMConfig creates a location for PM configuration.
+var locPMConfig = Location{Path: "/pm/config"}
 
-// LocPMMilestones creates a location for the PM milestones list.
-var LocPMMilestones = Location{Path: "/pm/milestones"}
+// locPMMilestones creates a location for the PM milestones list.
+var locPMMilestones = Location{Path: "/pm/milestones"}
 
 // LocPMMilestoneDetail creates a location for a PM milestone detail view.
 func LocPMMilestoneDetail(milestoneID string) Location {
@@ -246,8 +246,8 @@ func LocPMMilestoneHistoryDiff(milestoneID, fromID, toID string) Location {
 	}}
 }
 
-// LocPMSprints creates a location for the PM sprints list.
-var LocPMSprints = Location{Path: "/pm/sprints"}
+// locPMSprints creates a location for the PM sprints list.
+var locPMSprints = Location{Path: "/pm/sprints"}
 
 // LocPMSprintDetail creates a location for a PM sprint detail view.
 func LocPMSprintDetail(sprintID string) Location {
@@ -317,23 +317,23 @@ var LocReviewPRs = Location{Path: "/review/prs"}
 // LocForks creates a location for the forks management view.
 var LocForks = Location{Path: "/config/forks"}
 
-// LocSite creates a location for the site customization view.
-var LocSite = Location{Path: "/config/site"}
+// locSite creates a location for the site customization view.
+var locSite = Location{Path: "/config/site"}
 
-// LocMemoList creates a location for the merged memo list view.
-var LocMemoList = Location{Path: "/memo/list"}
+// locMemoList creates a location for the merged memo list view.
+var locMemoList = Location{Path: "/memo/list"}
 
 // LocMemoProject creates a location for the project-tier memo list view.
 var LocMemoProject = Location{Path: "/memo/project"}
 
-// LocMemoInherited creates a location for the inherited (binding) memo list view.
-var LocMemoInherited = Location{Path: "/memo/inherited"}
+// locMemoInherited creates a location for the inherited (binding) memo list view.
+var locMemoInherited = Location{Path: "/memo/inherited"}
 
-// LocMemoPersonal creates a location for the personal-tier memo list view.
-var LocMemoPersonal = Location{Path: "/memo/personal"}
+// locMemoPersonal creates a location for the personal-tier memo list view.
+var locMemoPersonal = Location{Path: "/memo/personal"}
 
-// LocMemoSession creates a location for the session-picker view (list of sessions).
-var LocMemoSession = Location{Path: "/memo/session"}
+// locMemoSession creates a location for the session-picker view (list of sessions).
+var locMemoSession = Location{Path: "/memo/session"}
 
 // LocMemoSessionItems creates a location for a specific session's memos.
 func LocMemoSessionItems(sessionID string) Location {
@@ -373,8 +373,8 @@ func LocMemoHistoryDiff(memoID, fromID, toID string) Location {
 	}}
 }
 
-// LocIdentity creates a location for the identity management view.
-var LocIdentity = Location{Path: "/config/identity"}
+// locIdentity creates a location for the identity management view.
+var locIdentity = Location{Path: "/config/identity"}
 
 // LocReviewPRDetail creates a location for a review PR detail view.
 func LocReviewPRDetail(prID string) Location {

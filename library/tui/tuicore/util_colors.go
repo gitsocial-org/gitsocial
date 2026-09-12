@@ -90,7 +90,7 @@ var (
 // Backgrounds
 var (
 	BgSelected = adaptive(graySelectedDark, graySelectedLight)
-	BgFooter   = adaptive(grayFooterDark, grayFooterLight)
+	bgFooter   = adaptive(grayFooterDark, grayFooterLight)
 )
 
 // UI accents. The hyperlink and image colors are emitted as raw ANSI-256
@@ -104,9 +104,9 @@ const (
 )
 
 var (
-	AccentEmail     = adaptive("39", "31")
-	AccentHighlight = adaptive("226", "220")
-	AccentPink      = adaptive("#F780E2", "#C724A8")
+	accentEmail     = adaptive("39", "31")
+	accentHighlight = adaptive("226", "220")
+	accentPink      = adaptive("#F780E2", "#C724A8")
 )
 
 // Social identity colors — hue carries meaning (own items, mutual follows,
@@ -114,31 +114,31 @@ var (
 // distinction survives on a light background.
 var (
 	IdentityMe            = adaptive("207", "163")
-	IdentityMeMuted       = adaptive("133", "132")
-	IdentityOwnRepo       = adaptive("44", "30")
-	IdentityOwnRepoMuted  = adaptive("30", "24")
-	IdentityMutual        = adaptive("220", "136")
-	IdentityMutualMuted   = adaptive("178", "136")
+	identityMeMuted       = adaptive("133", "132")
+	identityOwnRepo       = adaptive("44", "30")
+	identityOwnRepoMuted  = adaptive("30", "24")
+	identityMutual        = adaptive("220", "136")
+	identityMutualMuted   = adaptive("178", "136")
 	IdentityFollowing     = adaptive("34", "28")
-	IdentityMuted         = adaptive("28", "65")
-	IdentityAssigned      = adaptive("135", "97")
-	IdentityAssignedMuted = adaptive("97", "60")
+	identityMuted         = adaptive("28", "65")
+	identityAssigned      = adaptive("135", "97")
+	identityAssignedMuted = adaptive("97", "60")
 )
 
 // Confirmations
 var (
-	ConfirmDestructive = adaptive("196", "160")
+	confirmDestructive = adaptive("196", "160")
 	ConfirmAction      = adaptive("226", "130")
 )
 
 // Form accents
 var (
-	FormGreen     color.Color = adaptive("#02BF87", "#017a56")
-	FormGreenDark color.Color = adaptive("#018858", "#015f3d")
+	formGreen     color.Color = adaptive("#02BF87", "#017a56")
+	formGreenDark color.Color = adaptive("#018858", "#015f3d")
 )
 
 // Diff colors. The unexported dark/light string pairs feed both the adaptive
-// vars below (general FG styling) and DefaultDiffPalette, whose Cell pipeline
+// vars below (general FG styling) and defaultDiffPalette, whose Cell pipeline
 // is string-based — referencing the same consts keeps the two in sync.
 const (
 	diffAddedDark    = "#4ae04a" // soft green
@@ -172,7 +172,7 @@ var (
 	DiffAdded      = adaptive(diffAddedDark, diffAddedLight)
 	DiffRemoved    = adaptive(diffRemovedDark, diffRemovedLight)
 	DiffHunkHeader = adaptive(diffHunkHeaderDark, diffHunkHeaderLight)
-	DiffLineNum    = adaptive(graySecondaryDark, graySecondaryLight)
+	diffLineNum    = adaptive(graySecondaryDark, graySecondaryLight)
 )
 
 // Renderer grays that can't reuse the adaptiveColor tiers directly: chroma

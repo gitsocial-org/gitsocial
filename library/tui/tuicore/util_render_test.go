@@ -35,9 +35,9 @@ func TestRenderMath_greekLetters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := RenderMath(tt.input)
+			got := renderMath(tt.input)
 			if got != tt.want {
-				t.Errorf("RenderMath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("renderMath(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
@@ -56,33 +56,33 @@ func TestRenderMath_operators(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := RenderMath(tt.input)
+			got := renderMath(tt.input)
 			if got != tt.want {
-				t.Errorf("RenderMath(%q) = %q, want %q", tt.input, got, tt.want)
+				t.Errorf("renderMath(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
 	}
 }
 
 func TestRenderMath_relations(t *testing.T) {
-	got := RenderMath(`$\leq$`)
+	got := renderMath(`$\leq$`)
 	if got != "\u2264" {
-		t.Errorf("RenderMath(leq) = %q, want %q", got, "\u2264")
+		t.Errorf("renderMath(leq) = %q, want %q", got, "\u2264")
 	}
 }
 
 func TestRenderMath_blockMath(t *testing.T) {
-	got := RenderMath(`$$\alpha + \beta$$`)
+	got := renderMath(`$$\alpha + \beta$$`)
 	if got != "\u03B1 + \u03B2" {
-		t.Errorf("RenderMath(block) = %q", got)
+		t.Errorf("renderMath(block) = %q", got)
 	}
 }
 
 func TestRenderMath_noMath(t *testing.T) {
 	input := "Just regular text"
-	got := RenderMath(input)
+	got := renderMath(input)
 	if got != input {
-		t.Errorf("RenderMath(no math) = %q, want %q", got, input)
+		t.Errorf("renderMath(no math) = %q, want %q", got, input)
 	}
 }
 
@@ -221,7 +221,7 @@ func TestExtractBraceContent(t *testing.T) {
 }
 
 func TestRenderMathWithPlaceholders(t *testing.T) {
-	content, extracted := RenderMathWithPlaceholders("Text $\\alpha$ more")
+	content, extracted := renderMathWithPlaceholders("Text $\\alpha$ more")
 	if len(extracted) != 1 {
 		t.Fatalf("len(extracted) = %d, want 1", len(extracted))
 	}
@@ -233,22 +233,22 @@ func TestRenderMathWithPlaceholders(t *testing.T) {
 func TestRestoreMath(t *testing.T) {
 	content := "\x00MATH0\x00"
 	extracted := []string{"\x01hello\x01"}
-	got := RestoreMath(content, extracted)
+	got := restoreMath(content, extracted)
 	if got != "hello" {
-		t.Errorf("RestoreMath() = %q, want %q", got, "hello")
+		t.Errorf("restoreMath() = %q, want %q", got, "hello")
 	}
 }
 
 func TestRenderMath_arrows(t *testing.T) {
-	got := RenderMath(`$\rightarrow$`)
+	got := renderMath(`$\rightarrow$`)
 	if got != "\u2192" {
-		t.Errorf("RenderMath(rightarrow) = %q, want %q", got, "\u2192")
+		t.Errorf("renderMath(rightarrow) = %q, want %q", got, "\u2192")
 	}
 }
 
 func TestRenderMath_functions(t *testing.T) {
-	got := RenderMath(`$\sin$`)
+	got := renderMath(`$\sin$`)
 	if got != "sin" {
-		t.Errorf("RenderMath(sin) = %q, want %q", got, "sin")
+		t.Errorf("renderMath(sin) = %q, want %q", got, "sin")
 	}
 }

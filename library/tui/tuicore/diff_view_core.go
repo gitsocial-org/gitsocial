@@ -386,7 +386,7 @@ func (c *DiffViewCore) layoutFromMode() diff.Layout {
 
 // rebuild rebuilds plan and decorates with layers.
 func (c *DiffViewCore) rebuild() {
-	c.plan = diff.BuildPlan(c.logical, c.state, DefaultDiffPalette(), DefaultHighlight())
+	c.plan = diff.BuildPlan(c.logical, c.state, defaultDiffPalette(), defaultHighlight())
 	for _, lr := range c.layers {
 		c.plan = lr.Decorate(c.plan, c.state)
 	}
@@ -627,7 +627,7 @@ func (c *DiffViewCore) revealHunkAtRow(headerRow int) {
 		}
 		end++
 	}
-	c.scroll = HunkRevealScroll(headerRow, end-headerRow, c.viewportHeight(), len(c.plan.Rows))
+	c.scroll = hunkRevealScroll(headerRow, end-headerRow, c.viewportHeight(), len(c.plan.Rows))
 }
 
 // CursorIdx returns the current cursor plan-row index.
@@ -721,7 +721,7 @@ func (c *DiffViewCore) renderSingleRow(row diff.Row, cols int) []string {
 func (c *DiffViewCore) renderSplitRow(dr diff.DisplayRow, cols int) []string {
 	leftWidth := (cols - 1) / 2
 	rightWidth := cols - 1 - leftWidth
-	sep := lipgloss.NewStyle().Foreground(DiffLineNum).Render("│")
+	sep := lipgloss.NewStyle().Foreground(diffLineNum).Render("│")
 	leftLines := c.renderSplitHalf(dr.Left, leftWidth)
 	rightLines := c.renderSplitHalf(dr.Right, rightWidth)
 	rows := len(leftLines)
@@ -813,7 +813,7 @@ func (c *DiffViewCore) renderPinnedFileHeader() string {
 			break
 		}
 	}
-	return Dim.Render("▸ ") + RenderDiffHeader(c.diffs[fileIdx])
+	return Dim.Render("▸ ") + renderDiffHeader(c.diffs[fileIdx])
 }
 
 // SharedBindings returns the keybindings every diff view exposes. Wrappers

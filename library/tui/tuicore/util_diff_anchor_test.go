@@ -71,10 +71,10 @@ func TestFindRowByAnchor_noMatch(t *testing.T) {
 // TestHunkRevealScroll_smallHunkTopPadded asserts a small hunk is positioned
 // with ~25% top padding when there's room.
 func TestHunkRevealScroll_smallHunkTopPadded(t *testing.T) {
-	got := HunkRevealScroll(100, 5, 40, 200)
+	got := hunkRevealScroll(100, 5, 40, 200)
 	want := 100 - 40/4 // = 90
 	if got != want {
-		t.Errorf("HunkRevealScroll small-hunk = %d, want %d", got, want)
+		t.Errorf("hunkRevealScroll small-hunk = %d, want %d", got, want)
 	}
 }
 
@@ -82,11 +82,11 @@ func TestHunkRevealScroll_smallHunkTopPadded(t *testing.T) {
 // preferred top padding would clip the hunk's bottom, scroll is bumped down
 // so the entire hunk fits.
 func TestHunkRevealScroll_smallHunkBottomKept(t *testing.T) {
-	got := HunkRevealScroll(100, 30, 40, 200)
+	got := hunkRevealScroll(100, 30, 40, 200)
 	if got != 90 {
 		t.Errorf("got %d, want 90 (= target − pad)", got)
 	}
-	got = HunkRevealScroll(100, 35, 40, 200)
+	got = hunkRevealScroll(100, 35, 40, 200)
 	if got != 95 {
 		t.Errorf("got %d, want 95 (bottom-visible bump)", got)
 	}
@@ -94,7 +94,7 @@ func TestHunkRevealScroll_smallHunkBottomKept(t *testing.T) {
 
 // TestHunkRevealScroll_tallHunk asserts hunks taller than viewport align top.
 func TestHunkRevealScroll_tallHunk(t *testing.T) {
-	got := HunkRevealScroll(100, 200, 40, 500)
+	got := hunkRevealScroll(100, 200, 40, 500)
 	if got != 90 {
 		t.Errorf("got %d, want 90 (= target − pad, ignore bottom for tall hunk)", got)
 	}
@@ -102,7 +102,7 @@ func TestHunkRevealScroll_tallHunk(t *testing.T) {
 
 // TestHunkRevealScroll_atDocStart asserts scroll never goes negative.
 func TestHunkRevealScroll_atDocStart(t *testing.T) {
-	got := HunkRevealScroll(2, 5, 40, 200)
+	got := hunkRevealScroll(2, 5, 40, 200)
 	if got != 0 {
 		t.Errorf("got %d, want 0 (clamped to doc start)", got)
 	}
@@ -111,7 +111,7 @@ func TestHunkRevealScroll_atDocStart(t *testing.T) {
 // TestHunkRevealScroll_atDocEnd asserts scroll is clamped to keep the
 // viewport in bounds.
 func TestHunkRevealScroll_atDocEnd(t *testing.T) {
-	got := HunkRevealScroll(195, 5, 40, 200)
+	got := hunkRevealScroll(195, 5, 40, 200)
 	want := 200 - 40 // = 160
 	if got != want {
 		t.Errorf("got %d, want %d (clamped to doc end)", got, want)

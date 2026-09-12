@@ -30,7 +30,7 @@ type HistoryExtraKey struct {
 	Key     string
 	Label   string
 	OnPress func(v *HistoryView, state *State) tea.Cmd // handled in Update; nil = not update-handled
-	Handler Handler                                    // registry handler for the footer binding; nil = display-only
+	Handler handler                                    // registry handler for the footer binding; nil = display-only
 }
 
 // HistoryConfig parameterizes the shared history view for one extension.
@@ -92,7 +92,7 @@ func (v *HistoryView) Activate(state *State) tea.Cmd {
 		WorkspaceURL: v.workspaceURL,
 		Ref:          ref,
 		ShowEmail:    v.showEmail,
-		Owned:        OwnsCanonical(ref, v.workspaceURL),
+		Owned:        ownsCanonical(ref, v.workspaceURL),
 	}
 	v.picker.SetLoading(true)
 	return func() tea.Msg {
@@ -111,7 +111,7 @@ func (v *HistoryView) Update(msg tea.Msg, state *State) tea.Cmd {
 	case tea.KeyPressMsg:
 		key := msg.String()
 		if key == "d" && v.cfg.DiffLoc != nil {
-			return OpenHistoryDiff(v.picker, state, v.cfg.ParamName, v.cfg.DiffLoc, 1, nil)
+			return openHistoryDiff(v.picker, state, v.cfg.ParamName, v.cfg.DiffLoc, 1, nil)
 		}
 		if v.cfg.Detail != nil {
 			switch key {
@@ -152,7 +152,7 @@ func (v *HistoryView) runProposal(action ProposalActionFn, declined bool, verb s
 	}
 	if repoURL == v.workspaceURL {
 		return func() tea.Msg {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to %s", verb)}
+			return proposalAcceptedMsg{Err: fmt.Errorf("select a proposed edit from another repo to %s", verb)}
 		}
 	}
 	ref := protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch)
@@ -160,9 +160,9 @@ func (v *HistoryView) runProposal(action ProposalActionFn, declined bool, verb s
 	return func() tea.Msg {
 		ok, errMsg, canonicalRef := action(workdir, ref)
 		if !ok {
-			return ProposalAcceptedMsg{Err: fmt.Errorf("%s", errMsg)}
+			return proposalAcceptedMsg{Err: fmt.Errorf("%s", errMsg)}
 		}
-		return ProposalAcceptedMsg{Declined: declined, Location: detail(canonicalRef)}
+		return proposalAcceptedMsg{Declined: declined, Location: detail(canonicalRef)}
 	}
 }
 
@@ -215,7 +215,7 @@ func (v *HistoryView) Title() string {
 	title := v.cfg.TitleLabel + " · " + canonical.AuthorDisplay(v.showEmail)
 	title += " · " + FormatFullTime(canonical.GetTimestamp())
 	repoURL, hash, branch := canonical.Ref()
-	if ref := BuildCommitRef(repoURL, hash, branch, v.workspaceURL); ref != "" {
+	if ref := buildCommitRef(repoURL, hash, branch, v.workspaceURL); ref != "" {
 		title += " · " + ref
 	}
 	return title

@@ -1,5 +1,5 @@
 // util_footer.go - Footer content builders (keybinding hints + status messages).
-// The BgFooter background bar is applied centrally by ViewWrapper.Render, so
+// The bgFooter background bar is applied centrally by viewWrapper.Render, so
 // every builder here returns plain styled content; never wrap with footerStyle
 // directly from a builder.
 package tuicore
@@ -14,34 +14,34 @@ import (
 )
 
 var (
-	// Every footer-side style includes BgFooter as its background. lipgloss
+	// Every footer-side style includes bgFooter as its background. lipgloss
 	// wraps each rendered span with an ANSI reset (`ESC[0m`) at the end —
 	// that reset clears the *outer* footerStyle bg for everything after the
 	// span. To keep the bar continuous, each inner span (and the plain
 	// separator strings between them) re-establishes bg explicitly.
 	footerStyle = lipgloss.NewStyle().
 			Foreground(TextSecondary).
-			Background(BgFooter).
+			Background(bgFooter).
 			Padding(0, 1, 0, 3)
 
 	// KeyStyle renders a key glyph; view packages reuse it for inline key hints.
 	KeyStyle = lipgloss.NewStyle().
 			Foreground(BorderFocused).
-			Background(BgFooter).
+			Background(bgFooter).
 			Bold(true)
 
 	// LabelStyle renders the label after a key glyph.
 	LabelStyle = lipgloss.NewStyle().
 			Foreground(TextNormal).
-			Background(BgFooter)
+			Background(bgFooter)
 
 	dimStyle = lipgloss.NewStyle().
 			Foreground(TextSecondary).
-			Background(BgFooter)
+			Background(bgFooter)
 
 	// sepStyle wraps plain separator strings (":" between key/label, "  "
 	// between bindings) so they paint bg too.
-	sepStyle = lipgloss.NewStyle().Background(BgFooter)
+	sepStyle = lipgloss.NewStyle().Background(bgFooter)
 
 	// Global keys that appear dimmed in footer, in display order.
 	// "/" and "@" are shown in sidebar instead (Search [/], Notifications [@]).
@@ -73,15 +73,15 @@ func joinFooter(parts []string) string {
 	return strings.Join(parts, sepStyle.Render("  "))
 }
 
-// RenderSyncingFooter renders the syncing progress message.
-func RenderSyncingFooter() string {
+// renderSyncingFooter renders the syncing progress message.
+func renderSyncingFooter() string {
 	return KeyStyle.Render("Syncing workspace...")
 }
 
-// RenderBackgroundSyncFooter renders a dim indicator while the post-startup
+// renderBackgroundSyncFooter renders a dim indicator while the post-startup
 // background goroutine continues processing older commits and verifying
 // identity bindings. The timeline is already interactive at this point.
-func RenderBackgroundSyncFooter() string {
+func renderBackgroundSyncFooter() string {
 	return dimStyle.Render("Background sync in progress...")
 }
 
@@ -90,8 +90,8 @@ func RenderLoadingFooter() string {
 	return dimStyle.Render("Loading...")
 }
 
-// RenderFetchingFooter renders the fetching progress with dynamic info.
-func RenderFetchingFooter(repos, lists int) string {
+// renderFetchingFooter renders the fetching progress with dynamic info.
+func renderFetchingFooter(repos, lists int) string {
 	return KeyStyle.Render("Fetching...") + sepStyle.Render("  ") +
 		LabelStyle.Render(fmt.Sprintf("%d repos from %d lists", repos, lists))
 }
@@ -99,11 +99,11 @@ func RenderFetchingFooter(repos, lists int) string {
 // importSpinnerFrames cycles for the animated glyph next to the import header.
 var importSpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// RenderImportingFooter renders the import progress message with an animated
+// renderImportingFooter renders the import progress message with an animated
 // spinner glyph. The glyph is derived from wall-clock time so it advances on
 // every render — callers still need to drive periodic re-renders (e.g. via a
 // ticker) for the animation to be visible.
-func RenderImportingFooter(repoURL, phase, detail string) string {
+func renderImportingFooter(repoURL, phase, detail string) string {
 	frame := int(time.Now().UnixMilli()/100) % len(importSpinnerFrames)
 	glyph := importSpinnerFrames[frame]
 	head := "Importing"
@@ -120,8 +120,8 @@ func RenderImportingFooter(repoURL, phase, detail string) string {
 	return result
 }
 
-// RenderPushingFooter renders the pushing progress message.
-func RenderPushingFooter(remote string) string {
+// renderPushingFooter renders the pushing progress message.
+func renderPushingFooter(remote string) string {
 	content := "Pushing..."
 	if remote != "" {
 		content = "Pushing to " + remote + "..."
@@ -129,13 +129,13 @@ func RenderPushingFooter(remote string) string {
 	return KeyStyle.Render(content)
 }
 
-// RenderSavingFooter renders the saving progress message.
-func RenderSavingFooter() string {
+// renderSavingFooter renders the saving progress message.
+func renderSavingFooter() string {
 	return KeyStyle.Render("Saving...")
 }
 
-// RenderRetractingFooter renders the retracting progress message.
-func RenderRetractingFooter() string {
+// renderRetractingFooter renders the retracting progress message.
+func renderRetractingFooter() string {
 	return KeyStyle.Render("Retracting...")
 }
 
@@ -154,7 +154,7 @@ func RenderMessageFooter(message string, msgType MessageType) string {
 	}
 	return lipgloss.NewStyle().
 		Foreground(color).
-		Background(BgFooter).
+		Background(bgFooter).
 		Render(message)
 }
 

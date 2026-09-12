@@ -32,7 +32,7 @@ var (
 	htmlImgSrcRe = regexp.MustCompile(`src=["']([^"']+)["']`)
 	htmlImgAltRe = regexp.MustCompile(`alt=["']([^"']+)["']`)
 	// Email styling
-	emailStyle = lipgloss.NewStyle().Foreground(AccentEmail)
+	emailStyle = lipgloss.NewStyle().Foreground(accentEmail)
 )
 
 // cachedGlamourRender calls renderer.Render with caching. variant identifies the renderer ("n" or "m").
@@ -73,8 +73,8 @@ type mdImage struct {
 	url string
 }
 
-// ExtractCodeBlocks extracts fenced code blocks from content and replaces them with placeholders.
-func ExtractCodeBlocks(content string) (string, []codeBlock) {
+// extractCodeBlocks extracts fenced code blocks from content and replaces them with placeholders.
+func extractCodeBlocks(content string) (string, []codeBlock) {
 	var blocks []codeBlock
 	result := codeBlockRe.ReplaceAllStringFunc(content, func(match string) string {
 		subs := codeBlockRe.FindStringSubmatch(match)
@@ -93,19 +93,19 @@ func ExtractCodeBlocks(content string) (string, []codeBlock) {
 	return result, blocks
 }
 
-// RestoreCodeBlocks replaces code block placeholders with Chroma-highlighted output.
-func RestoreCodeBlocks(content string, blocks []codeBlock, dimmed bool) string {
+// restoreCodeBlocks replaces code block placeholders with Chroma-highlighted output.
+func restoreCodeBlocks(content string, blocks []codeBlock, dimmed bool) string {
 	for i, block := range blocks {
 		placeholder := fmt.Sprintf("%s%d\x00", codePlaceholderPrefix, i)
-		highlighted := HighlightCode(strings.TrimRight(block.code, "\n"), block.language, dimmed)
+		highlighted := highlightCode(strings.TrimRight(block.code, "\n"), block.language, dimmed)
 		content = strings.Replace(content, placeholder, highlighted, 1)
 	}
 	return content
 }
 
-// ExtractMarkdownLinks extracts [text](http-url) patterns and replaces them with placeholders.
-// Must run BEFORE ExtractURLs so bare URL extraction doesn't eat URLs inside markdown links.
-func ExtractMarkdownLinks(content string) (string, []mdLink) {
+// extractMarkdownLinks extracts [text](http-url) patterns and replaces them with placeholders.
+// Must run BEFORE extractURLs so bare URL extraction doesn't eat URLs inside markdown links.
+func extractMarkdownLinks(content string) (string, []mdLink) {
 	var links []mdLink
 	result := mdLinkExtractRe.ReplaceAllStringFunc(content, func(match string) string {
 		subs := mdLinkExtractRe.FindStringSubmatch(match)
@@ -116,8 +116,8 @@ func ExtractMarkdownLinks(content string) (string, []mdLink) {
 	return result, links
 }
 
-// RestoreMarkdownLinks replaces markdown link placeholders with styled OSC 8 terminal hyperlinks.
-func RestoreMarkdownLinks(content string, links []mdLink, anchors *AnchorCollector) string {
+// restoreMarkdownLinks replaces markdown link placeholders with styled OSC 8 terminal hyperlinks.
+func restoreMarkdownLinks(content string, links []mdLink, anchors *AnchorCollector) string {
 	for i, link := range links {
 		placeholder := fmt.Sprintf("%s%d\x00", mdLinkPlaceholderPrefix, i)
 		replacement := anchors.MarkLink(link.text, link.url, Location{Path: link.url})
@@ -126,8 +126,8 @@ func RestoreMarkdownLinks(content string, links []mdLink, anchors *AnchorCollect
 	return content
 }
 
-// ConvertHTMLImages converts HTML <img> tags to markdown ![alt](src) syntax.
-func ConvertHTMLImages(text string) string {
+// convertHTMLImages converts HTML <img> tags to markdown ![alt](src) syntax.
+func convertHTMLImages(text string) string {
 	return htmlImgRe.ReplaceAllStringFunc(text, func(match string) string {
 		srcMatch := htmlImgSrcRe.FindStringSubmatch(match)
 		if len(srcMatch) < 2 {
@@ -141,9 +141,9 @@ func ConvertHTMLImages(text string) string {
 	})
 }
 
-// ExtractMarkdownImages extracts ![alt](url) patterns and replaces them with placeholders.
-// Must run BEFORE ExtractMarkdownLinks so link extraction doesn't eat the [alt](url) inside images.
-func ExtractMarkdownImages(content string) (string, []mdImage) {
+// extractMarkdownImages extracts ![alt](url) patterns and replaces them with placeholders.
+// Must run BEFORE extractMarkdownLinks so link extraction doesn't eat the [alt](url) inside images.
+func extractMarkdownImages(content string) (string, []mdImage) {
 	var images []mdImage
 	result := mdImageExtractRe.ReplaceAllStringFunc(content, func(match string) string {
 		subs := mdImageExtractRe.FindStringSubmatch(match)
@@ -154,8 +154,8 @@ func ExtractMarkdownImages(content string) (string, []mdImage) {
 	return result, images
 }
 
-// RestoreMarkdownImages replaces image placeholders with styled [IMAGE: alt] indicators.
-func RestoreMarkdownImages(content string, images []mdImage, anchors *AnchorCollector) string {
+// restoreMarkdownImages replaces image placeholders with styled [IMAGE: alt] indicators.
+func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorCollector) string {
 	for i, img := range images {
 		placeholder := fmt.Sprintf("%s%d\x00", mdImagePlaceholderPrefix, i)
 		label := "IMAGE"
@@ -173,9 +173,9 @@ func RestoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 	return content
 }
 
-// ExtractURLs extracts bare URLs from content and replaces them with placeholders.
+// extractURLs extracts bare URLs from content and replaces them with placeholders.
 // URLs inside markdown link syntax [text](url) are skipped to avoid breaking glamour rendering.
-func ExtractURLs(content string) (string, []string) {
+func extractURLs(content string) (string, []string) {
 	mdSpans := mdLinkExtractRe.FindAllStringIndex(content, -1)
 	urlMatches := urlRe.FindAllStringIndex(content, -1)
 	if len(urlMatches) == 0 {
@@ -208,8 +208,8 @@ func ExtractURLs(content string) (string, []string) {
 	return content, urls
 }
 
-// RestoreURLs replaces URL placeholders with styled, zone-marked URLs (when anchors != nil) or plain styled URLs.
-func RestoreURLs(content string, urls []string, anchors *AnchorCollector) string {
+// restoreURLs replaces URL placeholders with styled, zone-marked URLs (when anchors != nil) or plain styled URLs.
+func restoreURLs(content string, urls []string, anchors *AnchorCollector) string {
 	for i, u := range urls {
 		placeholder := fmt.Sprintf("%s%d\x00", urlPlaceholderPrefix, i)
 		replacement := anchors.MarkLink(u, u, Location{Path: u})
@@ -221,7 +221,7 @@ func RestoreURLs(content string, urls []string, anchors *AnchorCollector) string
 // ExtractContentLinks extracts markdown images, markdown links, and bare URLs from text and returns them as CardLinks.
 // When repoURL and branch are provided, relative paths are resolved to raw file URLs.
 func ExtractContentLinks(text, repoURL, branch string) []CardLink {
-	text = ConvertHTMLImages(text)
+	text = convertHTMLImages(text)
 	imgMatches := mdImageExtractRe.FindAllStringSubmatch(text, -1)
 	links := make([]CardLink, 0, len(imgMatches))
 	for _, match := range imgMatches {
@@ -237,7 +237,7 @@ func ExtractContentLinks(text, repoURL, branch string) []CardLink {
 	for _, match := range matches {
 		links = append(links, CardLink{Label: match[1], Location: Location{Path: resolveContentURL(match[2], repoURL, branch)}})
 	}
-	_, urls := ExtractURLs(textWithoutImages)
+	_, urls := extractURLs(textWithoutImages)
 	for _, u := range urls {
 		links = append(links, CardLink{Label: u, Location: Location{Path: u}})
 	}
@@ -271,7 +271,7 @@ func ResolveContentURLs(text, repoURL, branch string) string {
 	if repoURL == "" {
 		return text
 	}
-	text = ConvertHTMLImages(text)
+	text = convertHTMLImages(text)
 	// Resolve images: ![alt](relative) → ![alt](https://...)
 	text = mdImageExtractRe.ReplaceAllStringFunc(text, func(match string) string {
 		subs := mdImageExtractRe.FindStringSubmatch(match)
@@ -384,7 +384,7 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 		str.WriteString("  ")
 	}
 	if header.IsRetracted {
-		str.WriteString(RetractedBadge.Render("[RETRACTED]"))
+		str.WriteString(retractedBadge.Render("[RETRACTED]"))
 		str.WriteString(" ")
 	}
 	titleText := header.TitleStyle(opts.Dimmed).Render(stripVerifiedIcon(header.Title))
@@ -463,19 +463,19 @@ func renderStats(card Card, opts CardOptions) string {
 func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wrapWidth int, dimmedCode bool, images []mdImage, links []mdLink, urls []string, anchors *AnchorCollector) string {
 	text = strings.TrimSpace(text)
 	text = escapeEmailAutolinks(text)
-	textWithCodePlaceholders, codeBlocks := ExtractCodeBlocks(text)
-	contentWithPlaceholders, extractedMath := RenderMathWithPlaceholders(textWithCodePlaceholders)
+	textWithCodePlaceholders, codeBlocks := extractCodeBlocks(text)
+	contentWithPlaceholders, extractedMath := renderMathWithPlaceholders(textWithCodePlaceholders)
 	rendered, err := cachedGlamourRender(renderer, variant, contentWithPlaceholders)
 	if err != nil {
-		text = RenderMath(text)
+		text = renderMath(text)
 	} else {
-		text = strings.TrimSpace(RestoreMath(rendered, extractedMath))
+		text = strings.TrimSpace(restoreMath(rendered, extractedMath))
 	}
-	text = RestoreCodeBlocks(text, codeBlocks, dimmedCode)
+	text = restoreCodeBlocks(text, codeBlocks, dimmedCode)
 	text = colorizeEmails(text)
-	text = RestoreMarkdownImages(text, images, anchors)
-	text = RestoreMarkdownLinks(text, links, anchors)
-	text = RestoreURLs(text, urls, anchors)
+	text = restoreMarkdownImages(text, images, anchors)
+	text = restoreMarkdownLinks(text, links, anchors)
+	text = restoreURLs(text, urls, anchors)
 	if wrapWidth > 0 {
 		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
 	}
@@ -490,10 +490,10 @@ func RenderMarkdown(text string, wrapWidth int) string {
 // RenderMarkdownWithAnchors renders markdown text with link extraction and anchor marking for tab navigation.
 // Use this instead of RenderMarkdown when body content needs clickable/focusable links.
 func RenderMarkdownWithAnchors(text string, wrapWidth int, anchors *AnchorCollector) string {
-	text = ConvertHTMLImages(strings.TrimSpace(text))
-	textNoImages, mdImages := ExtractMarkdownImages(text)
-	textNoLinks, mdLinks := ExtractMarkdownLinks(textNoImages)
-	textNoURLs, urls := ExtractURLs(textNoLinks)
+	text = convertHTMLImages(strings.TrimSpace(text))
+	textNoImages, mdImages := extractMarkdownImages(text)
+	textNoLinks, mdLinks := extractMarkdownLinks(textNoImages)
+	textNoURLs, urls := extractURLs(textNoLinks)
 	return renderGlamour(currentTheme.markdown, 'n', textNoURLs, wrapWidth, false, mdImages, mdLinks, urls, anchors)
 }
 
@@ -508,10 +508,10 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 	var extractedMdLinks []mdLink
 	var extractedURLs []string
 	if !opts.Raw {
-		text = ConvertHTMLImages(text)
-		text, extractedMdImages = ExtractMarkdownImages(text)
-		text, extractedMdLinks = ExtractMarkdownLinks(text)
-		text, extractedURLs = ExtractURLs(text)
+		text = convertHTMLImages(text)
+		text, extractedMdImages = extractMarkdownImages(text)
+		text, extractedMdLinks = extractMarkdownLinks(text)
+		text, extractedURLs = extractURLs(text)
 	}
 
 	if !opts.Raw {
@@ -522,10 +522,10 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 			}
 			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
 		} else {
-			text = RenderMath(text)
-			text = RestoreMarkdownImages(text, extractedMdImages, opts.Anchors)
-			text = RestoreMarkdownLinks(text, extractedMdLinks, opts.Anchors)
-			text = RestoreURLs(text, extractedURLs, opts.Anchors)
+			text = renderMath(text)
+			text = restoreMarkdownImages(text, extractedMdImages, opts.Anchors)
+			text = restoreMarkdownLinks(text, extractedMdLinks, opts.Anchors)
+			text = restoreURLs(text, extractedURLs, opts.Anchors)
 			if opts.WrapWidth > 0 {
 				text = lipgloss.NewStyle().Width(opts.WrapWidth).Render(text)
 			}
@@ -563,7 +563,7 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 		str.WriteString(selectionBar)
 		str.WriteString(iconPad)
 		if opts.Retracted {
-			str.WriteString(Retracted.Render(line))
+			str.WriteString(retracted.Render(line))
 		} else if opts.Dimmed && !opts.Markdown {
 			// Only apply dim styling if not using markdown renderer (which handles its own styling)
 			str.WriteString(Dim.Render(line))
@@ -580,7 +580,7 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 		str.WriteString(selectionBar)
 		str.WriteString(iconPad)
 		if opts.Retracted {
-			str.WriteString(Retracted.Render("···"))
+			str.WriteString(retracted.Render("···"))
 		} else {
 			str.WriteString("···")
 		}
@@ -684,7 +684,7 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 
 	// Content (trimmed)
 	content := strings.TrimSpace(nested.Card.Content.Text)
-	content = RenderMath(content)
+	content = renderMath(content)
 	// Word wrap to fit within panel: subtract selectionBar(1) + padding(3) + iconPad
 	wrapWidth := width - 4 - nestedIconPadWidth
 	if wrapWidth > 0 {
@@ -737,8 +737,8 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 	return str.String()
 }
 
-// IsLocalPath returns true if the URL is a local filesystem path (not a remote URL)
-func IsLocalPath(url string) bool {
+// isLocalPath returns true if the URL is a local filesystem path (not a remote URL)
+func isLocalPath(url string) bool {
 	return strings.HasPrefix(url, "/") ||
 		(!strings.HasPrefix(url, "http://") &&
 			!strings.HasPrefix(url, "https://") &&
@@ -754,7 +754,7 @@ func buildRef(repoURL, hash, branch string, isWorkspace bool) string {
 		hash = hash[:12]
 	}
 	ref := repoURL + "#commit:" + hash
-	if isWorkspace || IsLocalPath(repoURL) {
+	if isWorkspace || isLocalPath(repoURL) {
 		ref = "#" + hash
 	}
 	if branch != "" {
@@ -763,8 +763,8 @@ func buildRef(repoURL, hash, branch string, isWorkspace bool) string {
 	return ref
 }
 
-// BuildCommitRef builds a reference from a commit hash, against the workspace URL.
-func BuildCommitRef(repoURL, hash, branch, workspaceURL string) string {
+// buildCommitRef builds a reference from a commit hash, against the workspace URL.
+func buildCommitRef(repoURL, hash, branch, workspaceURL string) string {
 	return buildRef(repoURL, hash, branch, repoURL == workspaceURL)
 }
 

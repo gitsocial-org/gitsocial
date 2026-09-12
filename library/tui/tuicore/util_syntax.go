@@ -51,8 +51,8 @@ func highlight(code, language string, dimmed, stripNewlines bool) string {
 	return result
 }
 
-// HighlightCode highlights a full code block with syntax coloring.
-func HighlightCode(code, language string, dimmed bool) string {
+// highlightCode highlights a full code block with syntax coloring.
+func highlightCode(code, language string, dimmed bool) string {
 	return highlight(code, language, dimmed, false)
 }
 
@@ -61,8 +61,8 @@ func HighlightLine(line, language string, dimmed bool) string {
 	return highlight(line, language, dimmed, true)
 }
 
-// DetectLanguage detects the programming language from a filename.
-func DetectLanguage(filename string) string {
+// detectLanguage detects the programming language from a filename.
+func detectLanguage(filename string) string {
 	lexer := lexers.Match(filename)
 	if lexer == nil {
 		return ""
@@ -89,9 +89,9 @@ func resolveLexer(language string) chroma.Lexer {
 func DetectLanguageFromPath(path string) string {
 	ext := filepath.Ext(path)
 	if ext == "" {
-		return DetectLanguage(path)
+		return detectLanguage(path)
 	}
-	lang := DetectLanguage("file" + ext)
+	lang := detectLanguage("file" + ext)
 	if lang == "diff" {
 		return ""
 	}

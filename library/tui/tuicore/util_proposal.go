@@ -14,24 +14,24 @@ import (
 
 func init() {
 	RegisterMessageHandler(func(msg tea.Msg, ctx AppContext) (bool, tea.Cmd) {
-		if m, ok := msg.(ProposalAcceptedMsg); ok {
+		if m, ok := msg.(proposalAcceptedMsg); ok {
 			return handleProposalAccepted(m, ctx)
 		}
 		return false, nil
 	})
 }
 
-// ProposalAcceptedMsg is sent when a cross-repo proposed edit is accepted (or
+// proposalAcceptedMsg is sent when a cross-repo proposed edit is accepted (or
 // declined) from a history picker. Location is the item detail view to reload
 // so the now-applied edit is visible.
-type ProposalAcceptedMsg struct {
+type proposalAcceptedMsg struct {
 	Location Location
 	Declined bool
 	Err      error
 }
 
 // handleProposalAccepted reports the outcome and navigates back to the detail view.
-func handleProposalAccepted(msg ProposalAcceptedMsg, ctx AppContext) (bool, tea.Cmd) {
+func handleProposalAccepted(msg proposalAcceptedMsg, ctx AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), MessageTypeError)
 		return true, nil
@@ -46,9 +46,9 @@ func handleProposalAccepted(msg ProposalAcceptedMsg, ctx AppContext) (bool, tea.
 	})
 }
 
-// OwnsCanonical reports whether this workspace owns the item named by ref (its
+// ownsCanonical reports whether this workspace owns the item named by ref (its
 // canonical lives here), i.e. accepting proposals on it is possible.
-func OwnsCanonical(ref, workspaceURL string) bool {
+func ownsCanonical(ref, workspaceURL string) bool {
 	repo := protocol.ParseRef(ref).Repository
 	return repo == "" || protocol.NormalizeURL(repo) == workspaceURL
 }

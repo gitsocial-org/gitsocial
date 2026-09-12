@@ -14,18 +14,18 @@ type ItemType struct {
 	Type      string // "post", "comment", "issue", "milestone", etc.
 }
 
-// ItemToCardFunc renders items of a specific ext/type to Cards.
+// itemToCardFunc renders items of a specific ext/type to Cards.
 // Extensions register these for their types; unknown types fall back to defaultItemToCard.
-type ItemToCardFunc func(data any, resolver ItemResolver) Card
+type itemToCardFunc func(data any, resolver ItemResolver) Card
 
-// DimmedCheckFunc checks if an item should be rendered dimmed.
+// dimmedCheckFunc checks if an item should be rendered dimmed.
 // Extensions register these for their types.
-type DimmedCheckFunc func(data any) bool
+type dimmedCheckFunc func(data any) bool
 
 // Navigation messages
 type NavigateMsg struct {
 	Location    Location
-	Action      NavAction
+	Action      navAction
 	SourcePath  string // Source view path for detail navigation
 	SourceIndex int    // Current index in source list
 	SourceTotal int    // Total items in source list
@@ -33,10 +33,10 @@ type NavigateMsg struct {
 	KeepFocus   bool   // Don't switch focus to content (used for nav-panel auto-preview)
 }
 
-type NavAction int
+type navAction int
 
 const (
-	NavPush NavAction = iota
+	NavPush navAction = iota
 	NavReplace
 	NavBack
 )
@@ -217,7 +217,7 @@ type NavVisibilityMsg struct {
 
 // LogErrorMsg adds an entry to the session error log via the Update loop.
 type LogErrorMsg struct {
-	Severity LogSeverity
+	Severity logSeverity
 	Message  string
 	Context  string
 }
@@ -311,27 +311,27 @@ func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
 	case h.IsMe:
 		c = IdentityMe
 		if dimmed {
-			c = IdentityMeMuted
+			c = identityMeMuted
 		}
 	case h.IsAssigned:
-		c = IdentityAssigned
+		c = identityAssigned
 		if dimmed {
-			c = IdentityAssignedMuted
+			c = identityAssignedMuted
 		}
 	case h.IsOwnRepo:
-		c = IdentityOwnRepo
+		c = identityOwnRepo
 		if dimmed {
-			c = IdentityOwnRepoMuted
+			c = identityOwnRepoMuted
 		}
 	case h.IsMutualFollow:
-		c = IdentityMutual
+		c = identityMutual
 		if dimmed {
-			c = IdentityMutualMuted
+			c = identityMutualMuted
 		}
 	default:
 		c = IdentityFollowing
 		if dimmed {
-			c = IdentityMuted
+			c = identityMuted
 		}
 	}
 	return lipgloss.NewStyle().Foreground(c)
@@ -340,30 +340,30 @@ func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
 func (h CardHeader) TitleStyle(dimmed bool) lipgloss.Style {
 	if h.IsMe {
 		if dimmed {
-			return MutedMeTitle
+			return mutedMeTitle
 		}
 		return MeTitle
 	}
 	if h.IsAssigned {
 		if dimmed {
-			return MutedAssignedTitle
+			return mutedAssignedTitle
 		}
-		return AssignedTitle
+		return assignedTitle
 	}
 	if h.IsOwnRepo {
 		if dimmed {
-			return MutedOwnRepoTitle
+			return mutedOwnRepoTitle
 		}
-		return OwnRepoTitle
+		return ownRepoTitle
 	}
 	if h.IsMutualFollow {
 		if dimmed {
-			return MutedMutualTitle
+			return mutedMutualTitle
 		}
 		return MutualTitle
 	}
 	if dimmed {
-		return MutedTitle
+		return mutedTitle
 	}
 	return Title
 }

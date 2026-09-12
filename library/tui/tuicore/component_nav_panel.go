@@ -281,21 +281,21 @@ func (p *NavPanel) cursorToLocation() Location {
 	case "social.lists":
 		return LocLists
 	case "social.explore":
-		return LocExplore
+		return locExplore
 	case "social.followers":
-		return LocFollowers
+		return locFollowers
 	case "settings":
-		return LocSettings
+		return locSettings
 	case "config", "config.core":
 		return LocConfig("core")
 	case "config.forks":
 		return LocForks
 	case "config.site":
-		return LocSite
+		return locSite
 	case "config.social":
 		return LocConfig("social")
 	case "config.pm":
-		return LocPMConfig
+		return locPMConfig
 	case "config.release":
 		return LocConfig("release")
 	case "config.review":
@@ -303,17 +303,17 @@ func (p *NavPanel) cursorToLocation() Location {
 	case "config.memo":
 		return LocConfig("memo")
 	case "identity":
-		return LocIdentity
+		return locIdentity
 	case "cache":
-		return LocCache
+		return locCache
 	case "pm", "pm.board":
 		return LocPMBoard
 	case "pm.issues":
-		return LocPMIssues
+		return locPMIssues
 	case "pm.milestones":
-		return LocPMMilestones
+		return locPMMilestones
 	case "pm.sprints":
-		return LocPMSprints
+		return locPMSprints
 	case "release":
 		return LocReleaseList
 	case "review", "review.prs":
@@ -321,15 +321,15 @@ func (p *NavPanel) cursorToLocation() Location {
 	case "memo":
 		return LocMemoProject
 	case "memo.list":
-		return LocMemoList
+		return locMemoList
 	case "memo.project":
 		return LocMemoProject
 	case "memo.inherited":
-		return LocMemoInherited
+		return locMemoInherited
 	case "memo.personal":
-		return LocMemoPersonal
+		return locMemoPersonal
 	case "memo.session":
-		return LocMemoSession
+		return locMemoSession
 	default:
 		if strings.HasPrefix(p.cursorID, "social.lists.") {
 			listID := strings.TrimPrefix(p.cursorID, "social.lists.")
@@ -655,7 +655,7 @@ func (p *NavPanel) View() string {
 	// Directory path with background (similar to footer)
 	footerStyle := lipgloss.NewStyle().
 		Foreground(TextSecondary).
-		Background(BgFooter)
+		Background(bgFooter)
 	dirPath := p.truncatePath(innerWidth)
 	dirLine := footerStyle.Width(innerWidth).Render(dirPath)
 	contentLines = append(contentLines, dirLine)
@@ -779,7 +779,7 @@ func iconWithSpacing(icon string) string {
 
 // getDomainKey returns the extension key for a domain, or empty string.
 func getDomainKey(itemID string) string {
-	if ek := GetExtensionKey(itemID); ek != nil {
+	if ek := getExtensionKey(itemID); ek != nil {
 		return ek.Key
 	}
 	return ""

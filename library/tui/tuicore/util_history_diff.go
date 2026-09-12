@@ -5,7 +5,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// OpenHistoryDiff returns a command that navigates to a history-diff route
+// openHistoryDiff returns a command that navigates to a history-diff route
 // comparing the picker's current item to its older neighbor.
 //
 // olderOffset is the offset (in items[]) to the older neighbor: +1 for
@@ -17,7 +17,7 @@ import (
 // item.GetID(); pass a custom function when the picker's IDs differ from
 // what the diff loader produces (e.g., PR versions whose loader emits
 // synthetic "v<N>" IDs while the picker carries commit hashes).
-func OpenHistoryDiff(
+func openHistoryDiff(
 	picker *VersionPicker,
 	state *State,
 	idParam string,

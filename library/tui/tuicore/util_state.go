@@ -8,18 +8,18 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuinav"
 )
 
-// LogSeverity defines the severity of a log entry.
-type LogSeverity int
+// logSeverity defines the severity of a log entry.
+type logSeverity int
 
 const (
-	LogSeverityWarn LogSeverity = iota
+	LogSeverityWarn logSeverity = iota
 	LogSeverityError
 )
 
-// LogEntry is a single entry in the TUI error/warning log.
-type LogEntry struct {
+// logEntry is a single entry in the TUI error/warning log.
+type logEntry struct {
 	Time     time.Time
-	Severity LogSeverity
+	Severity logSeverity
 	Message  string
 	Context  string // e.g. "fetch", "push", "settings", "editor"
 }
@@ -83,7 +83,7 @@ type State struct {
 	PushRemote string
 
 	// Import info (for progress display). Spinner glyph derives from
-	// time.Now() in RenderImportingFooter, so no frame counter is stored here.
+	// time.Now() in renderImportingFooter, so no frame counter is stored here.
 	ImportRepoURL string
 	ImportPhase   string // e.g. "Counting", "PM", "Releases", "PRs", "Posts"
 	ImportDetail  string // e.g. "45/250" or "23 so far"
@@ -115,7 +115,7 @@ type State struct {
 	ShowEmailOnCards bool
 
 	// Error log (session-level warnings and errors for the error log panel)
-	ErrorLog []LogEntry
+	ErrorLog []logEntry
 
 	// IdentityGeneration is bumped after each fetch (when verified bindings may
 	// have changed), so card lists know to re-render verified badges on next
@@ -165,8 +165,8 @@ func (s *State) SetMessage(msg string, msgType MessageType) {
 }
 
 // AddLogEntry appends a warning or error entry to the session error log.
-func (s *State) AddLogEntry(severity LogSeverity, message, context string) {
-	s.ErrorLog = append(s.ErrorLog, LogEntry{
+func (s *State) AddLogEntry(severity logSeverity, message, context string) {
+	s.ErrorLog = append(s.ErrorLog, logEntry{
 		Time:     time.Now(),
 		Severity: severity,
 		Message:  message,
@@ -184,41 +184,37 @@ func (s *State) ClearErrorLog() {
 	s.ErrorLog = nil
 }
 
-// ViewWrapper handles vertical padding and footer rendering consistently across views.
-type ViewWrapper struct {
+// viewWrapper handles vertical padding and footer rendering consistently across views.
+type viewWrapper struct {
 	state *State
 }
 
 // NewViewWrapper creates a new view wrapper.
-func NewViewWrapper(state *State) *ViewWrapper {
-	return &ViewWrapper{state: state}
+func NewViewWrapper(state *State) *viewWrapper {
+	return &viewWrapper{state: state}
 }
 
-// Render wraps content with vertical padding and appends the footer.
-// Status messages and choice prompts override the view-provided footer.
-// The footer (whether view-provided or transient) is wrapped in the standard
-// BgFooter bar at the wrapper's content width — every footer-rendering helper
-// returns plain styled content, the bar is applied exactly here.
-func (w *ViewWrapper) Render(content, footer string) string {
+// Render pads the content and appends the footer, applying the bgFooter bar at the wrapper width; a status message or prompt overrides the footer.
+func (w *viewWrapper) Render(content, footer string) string {
 	switch {
 	case w.state.ChoicePrompt != "":
 		footer = w.state.ChoicePrompt
 	case w.state.Syncing:
-		footer = RenderSyncingFooter()
+		footer = renderSyncingFooter()
 	case w.state.Fetching:
-		footer = RenderFetchingFooter(w.state.FetchRepos, w.state.FetchLists)
+		footer = renderFetchingFooter(w.state.FetchRepos, w.state.FetchLists)
 	case w.state.Pushing:
-		footer = RenderPushingFooter(w.state.PushRemote)
+		footer = renderPushingFooter(w.state.PushRemote)
 	case w.state.Importing:
-		footer = RenderImportingFooter(w.state.ImportRepoURL, w.state.ImportPhase, w.state.ImportDetail)
+		footer = renderImportingFooter(w.state.ImportRepoURL, w.state.ImportPhase, w.state.ImportDetail)
 	case w.state.Saving:
-		footer = RenderSavingFooter()
+		footer = renderSavingFooter()
 	case w.state.Retracting:
-		footer = RenderRetractingFooter()
+		footer = renderRetractingFooter()
 	case w.state.Message != "":
 		footer = RenderMessageFooter(w.state.Message, w.state.MessageType)
 	case w.state.BackgroundSyncing:
-		footer = RenderBackgroundSyncFooter()
+		footer = renderBackgroundSyncFooter()
 	}
 	if footer != "" {
 		// Render the footer at the full frame inner width (between borders),
@@ -244,11 +240,11 @@ func (w *ViewWrapper) Render(content, footer string) string {
 }
 
 // ContentHeight returns available height for main content (excluding footer).
-func (w *ViewWrapper) ContentHeight() int {
+func (w *viewWrapper) ContentHeight() int {
 	return w.state.InnerHeight() - 3
 }
 
 // ContentWidth returns available width for content.
-func (w *ViewWrapper) ContentWidth() int {
+func (w *viewWrapper) ContentWidth() int {
 	return w.state.InnerWidth()
 }

@@ -70,56 +70,53 @@ var (
 		Bold(true).
 		Foreground(IdentityMe)
 
-	MutedMeTitle = lipgloss.NewStyle().
+	mutedMeTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(IdentityMeMuted)
+			Foreground(identityMeMuted)
 
-	MutedTitle = lipgloss.NewStyle().
+	mutedTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(IdentityMuted)
+			Foreground(identityMuted)
 
 	MutualTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(IdentityMutual)
+			Foreground(identityMutual)
 
-	MutedMutualTitle = lipgloss.NewStyle().
+	mutedMutualTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(IdentityMutualMuted)
+				Foreground(identityMutualMuted)
 
-	OwnRepoTitle = lipgloss.NewStyle().
+	ownRepoTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(IdentityOwnRepo)
+			Foreground(identityOwnRepo)
 
-	MutedOwnRepoTitle = lipgloss.NewStyle().
+	mutedOwnRepoTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(IdentityOwnRepoMuted)
+				Foreground(identityOwnRepoMuted)
 
-	AssignedTitle = lipgloss.NewStyle().
+	assignedTitle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(IdentityAssigned)
+			Foreground(identityAssigned)
 
-	MutedAssignedTitle = lipgloss.NewStyle().
+	mutedAssignedTitle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(IdentityAssignedMuted)
-
-	Error = lipgloss.NewStyle().
-		Foreground(StatusError)
+				Foreground(identityAssignedMuted)
 
 	Highlight = lipgloss.NewStyle().
-			Background(AccentHighlight).
+			Background(accentHighlight).
 			Foreground(lipgloss.Color("0"))
 
-	Retracted = lipgloss.NewStyle().
+	retracted = lipgloss.NewStyle().
 			Foreground(TextSecondary)
 
-	RetractedBadge = lipgloss.NewStyle().
+	retractedBadge = lipgloss.NewStyle().
 			Foreground(BorderWarning)
 
 	ListIndicator = lipgloss.NewStyle().
-			Foreground(IdentityMeMuted)
+			Foreground(identityMeMuted)
 
 	ListIndicatorSelected = lipgloss.NewStyle().
-				Foreground(IdentityMeMuted).
+				Foreground(identityMeMuted).
 				Background(BgSelected)
 )
 
@@ -256,8 +253,8 @@ func init() {
 	})
 }
 
-// RenderMath processes content, replacing math blocks with Unicode.
-func RenderMath(content string) string {
+// renderMath processes content, replacing math blocks with Unicode.
+func renderMath(content string) string {
 	// Process block math ($$...$$)
 	content = mathBlockRe.ReplaceAllStringFunc(content, func(match string) string {
 		latex := strings.TrimPrefix(strings.TrimSuffix(match, "$$"), "$$")
@@ -275,8 +272,8 @@ func RenderMath(content string) string {
 	return content
 }
 
-// RenderMathWithPlaceholders converts math and returns placeholders for Glamour.
-func RenderMathWithPlaceholders(content string) (string, []string) {
+// renderMathWithPlaceholders converts math and returns placeholders for Glamour.
+func renderMathWithPlaceholders(content string) (string, []string) {
 	var extracted []string
 	m := mathBoundaryMarker
 
@@ -304,8 +301,8 @@ func RenderMathWithPlaceholders(content string) (string, []string) {
 // Matches whitespace and ANSI codes between consecutive math markers
 var consecutiveMathRe = regexp.MustCompile("\x01(?:\\s|\x1b\\[[0-9;]*m)*\x01")
 
-// RestoreMath replaces placeholders with rendered math.
-func RestoreMath(content string, extracted []string) string {
+// restoreMath replaces placeholders with rendered math.
+func restoreMath(content string, extracted []string) string {
 	m := mathBoundaryMarker
 	for i, math := range extracted {
 		placeholder := fmt.Sprintf("%s%d\x00", mathPlaceholderPrefix, i)
@@ -736,8 +733,8 @@ func convertSubscripts(content string) string {
 }
 
 // RenderSearchFooter renders the standard search-mode navigation hints
-// (match count + n/N/enter/esc bindings). The surrounding BgFooter bar is
-// applied by ViewWrapper.Render.
+// (match count + n/N/enter/esc bindings). The surrounding bgFooter bar is
+// applied by viewWrapper.Render.
 func RenderSearchFooter(matchIndex, matchCount int, inputMode bool, hasQuery bool) string {
 	var parts []string
 	if matchCount > 0 {
@@ -756,8 +753,8 @@ func RenderSearchFooter(matchIndex, matchCount int, inputMode bool, hasQuery boo
 	return joinFooter(parts)
 }
 
-// WrapRawLines wraps the text block to fit the given width, then prepends selection bars.
-func WrapRawLines(text, selectionBar string, wrapWidth int) []string {
+// wrapRawLines wraps the text block to fit the given width, then prepends selection bars.
+func wrapRawLines(text, selectionBar string, wrapWidth int) []string {
 	if wrapWidth > 0 {
 		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
 	}
@@ -784,6 +781,6 @@ func RenderCommitMessage(id, selectionBar string, wrapWidth int) []string {
 	lines = append(lines, selectionBar+Dim.Render(fmt.Sprintf("Author: %s <%s>", c.AuthorName, c.AuthorEmail)))
 	lines = append(lines, selectionBar+Dim.Render("Date:   "+c.Timestamp.Format("Mon Jan 2 15:04:05 2006 -0700")))
 	lines = append(lines, selectionBar)
-	lines = append(lines, WrapRawLines(c.Message, selectionBar, wrapWidth)...)
+	lines = append(lines, wrapRawLines(c.Message, selectionBar, wrapWidth)...)
 	return lines
 }

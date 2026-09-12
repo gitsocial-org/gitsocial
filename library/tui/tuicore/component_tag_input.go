@@ -331,8 +331,8 @@ func (t *TagField) updateInputMode(km tea.KeyPressMsg) (huh.Model, tea.Cmd) {
 func (t *TagField) View() string {
 	styles := t.activeStyles()
 	dim := lipgloss.NewStyle().Foreground(TextSecondary)
-	pink := lipgloss.NewStyle().Foreground(AccentPink)
-	tagStyle := lipgloss.NewStyle().Foreground(FormGreen)
+	pink := lipgloss.NewStyle().Foreground(accentPink)
+	tagStyle := lipgloss.NewStyle().Foreground(formGreen)
 	tagSelectedStyle := lipgloss.NewStyle().Foreground(TextPrimary).Background(BgSelected)
 	removeStyle := lipgloss.NewStyle().Foreground(TextSecondary)
 	removeSelectedStyle := lipgloss.NewStyle().Foreground(StatusError).Background(BgSelected)

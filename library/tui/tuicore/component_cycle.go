@@ -33,7 +33,7 @@ func RequiredLabel(s string) string {
 // every other footer in the TUI. Pass withEditor=true for forms whose body
 // implements EditorEscapeForm so the ctrl+e $EDITOR escape-hatch is
 // advertised. Validation errors render after the bindings in StatusError red.
-// The surrounding BgFooter bar is applied by ViewWrapper.Render.
+// The surrounding bgFooter bar is applied by viewWrapper.Render.
 func FormFooter(withEditor bool, errs []error) string {
 	bindings := []Binding{
 		{Key: "tab/shift+tab", Label: "navigate"},
@@ -50,7 +50,7 @@ func FormFooter(withEditor bool, errs []error) string {
 	}
 	errStyle := lipgloss.NewStyle().
 		Foreground(StatusError).
-		Background(BgFooter)
+		Background(bgFooter)
 	for _, e := range errs {
 		if e != nil {
 			parts = append(parts, errStyle.Render(e.Error()))
@@ -116,15 +116,15 @@ func FormTheme() huh.Theme {
 		t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(dim)
 		t.Focused.NextIndicator = t.Focused.NextIndicator.Foreground(dim)
 		t.Focused.PrevIndicator = t.Focused.PrevIndicator.Foreground(dim)
-		t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(FormGreen)
-		t.Focused.SelectedPrefix = lipgloss.NewStyle().Foreground(FormGreen).SetString("✓ ")
+		t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(formGreen)
+		t.Focused.SelectedPrefix = lipgloss.NewStyle().Foreground(formGreen).SetString("✓ ")
 
 		t.Focused.FocusedButton = t.Focused.FocusedButton.
 			Foreground(lipgloss.Color("255")).
-			Background(FormGreen)
+			Background(formGreen)
 
-		t.Blurred.SelectedOption = t.Blurred.SelectedOption.Foreground(FormGreen)
-		t.Blurred.SelectedPrefix = lipgloss.NewStyle().Foreground(FormGreen).SetString("✓ ")
+		t.Blurred.SelectedOption = t.Blurred.SelectedOption.Foreground(formGreen)
+		t.Blurred.SelectedPrefix = lipgloss.NewStyle().Foreground(formGreen).SetString("✓ ")
 
 		t.FieldSeparator = lipgloss.NewStyle().SetString("\n")
 
@@ -250,7 +250,7 @@ func (c *CycleField) View() string {
 	var sb strings.Builder
 	sb.WriteString(styles.Title.Render(PadLabel(c.title)))
 
-	pink := lipgloss.NewStyle().Foreground(AccentPink)
+	pink := lipgloss.NewStyle().Foreground(accentPink)
 	sb.WriteString(pink.Render("> "))
 
 	selectedLabel := ""
@@ -417,7 +417,7 @@ func (s *SubmitField) View() string {
 	if s.focused {
 		btn := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("255")).
-			Background(FormGreenDark).
+			Background(formGreenDark).
 			Padding(0, 2)
 		return base.Width(s.width).Render(btn.Render(s.label))
 	}

@@ -11,7 +11,7 @@ import (
 // snippet. The second arg is a file path; the adapter detects the
 // language from it.
 func TestDefaultHighlight_returnsCellsWithFG(t *testing.T) {
-	hi := DefaultHighlight()
+	hi := defaultHighlight()
 	cells := hi("func main() { println(42) }", "main.go")
 	if len(cells) == 0 {
 		t.Fatal("got no cells")
@@ -35,7 +35,7 @@ func TestDefaultHighlight_returnsCellsWithFG(t *testing.T) {
 // TestDefaultHighlight_unknownPathFallsBack asserts an empty / unknown
 // path still yields a usable cell list.
 func TestDefaultHighlight_unknownPathFallsBack(t *testing.T) {
-	hi := DefaultHighlight()
+	hi := defaultHighlight()
 	cells := hi("hello world", "")
 	if len(cells) == 0 {
 		t.Fatal("got no cells")
@@ -52,7 +52,7 @@ func TestDefaultHighlight_unknownPathFallsBack(t *testing.T) {
 // TestDefaultDiffPalette_populated verifies key fields are set from
 // tuicore constants.
 func TestDefaultDiffPalette_populated(t *testing.T) {
-	p := DefaultDiffPalette()
+	p := defaultDiffPalette()
 	if want := pickThemeColor(diffAddedDark, diffAddedLight); p.AddedFG != want {
 		t.Errorf("AddedFG = %q, want %q", p.AddedFG, want)
 	}

@@ -15,10 +15,10 @@ var (
 	diffRemovedStyle = lipgloss.NewStyle().Foreground(DiffRemoved)
 )
 
-// RenderDiffHeader renders a file diff header with status icon and path.
+// renderDiffHeader renders a file diff header with status icon and path.
 // Used by views' renderPinnedFileHeader plus a few stats summary lines
 // outside the diff view itself.
-func RenderDiffHeader(diff git.FileDiff) string {
+func renderDiffHeader(diff git.FileDiff) string {
 	icon := "~"
 	switch diff.Status {
 	case git.DiffStatusAdded:
@@ -74,10 +74,10 @@ func RenderDiffStatsBadge(added, removed int) string {
 	return strings.Join(parts, " ")
 }
 
-// HunkRevealScroll computes the scroll position that brings a hunk into
+// hunkRevealScroll computes the scroll position that brings a hunk into
 // view with ~25% top padding, clamped so the hunk's bottom doesn't clip
 // when it fits. Hunks taller than viewport align their top.
-func HunkRevealScroll(targetRow, sectionHeight, viewH, totalLines int) int {
+func hunkRevealScroll(targetRow, sectionHeight, viewH, totalLines int) int {
 	if viewH <= 0 {
 		return 0
 	}

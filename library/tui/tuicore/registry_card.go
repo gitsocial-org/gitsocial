@@ -11,25 +11,25 @@ import (
 // itemToCardRegistry maps ext/type to card renderers
 type itemToCardRegistry struct {
 	mu             sync.RWMutex
-	renderers      map[ItemType]ItemToCardFunc
-	dimmedCheckers map[ItemType]DimmedCheckFunc
+	renderers      map[ItemType]itemToCardFunc
+	dimmedCheckers map[ItemType]dimmedCheckFunc
 }
 
 var globalItemRenderers = &itemToCardRegistry{
-	renderers:      make(map[ItemType]ItemToCardFunc),
-	dimmedCheckers: make(map[ItemType]DimmedCheckFunc),
+	renderers:      make(map[ItemType]itemToCardFunc),
+	dimmedCheckers: make(map[ItemType]dimmedCheckFunc),
 }
 
 // RegisterCardRenderer registers a card renderer for an item type.
 // Use Type: "*" as a wildcard fallback for an extension.
-func RegisterCardRenderer(itemType ItemType, renderer ItemToCardFunc) {
+func RegisterCardRenderer(itemType ItemType, renderer itemToCardFunc) {
 	globalItemRenderers.mu.Lock()
 	defer globalItemRenderers.mu.Unlock()
 	globalItemRenderers.renderers[itemType] = renderer
 }
 
 // RegisterDimmedChecker registers a dimmed checker for an item type.
-func RegisterDimmedChecker(itemType ItemType, checker DimmedCheckFunc) {
+func RegisterDimmedChecker(itemType ItemType, checker dimmedCheckFunc) {
 	globalItemRenderers.mu.Lock()
 	defer globalItemRenderers.mu.Unlock()
 	globalItemRenderers.dimmedCheckers[itemType] = checker
@@ -37,7 +37,7 @@ func RegisterDimmedChecker(itemType ItemType, checker DimmedCheckFunc) {
 
 // GetItemToCardFunc returns a card renderer for the given item type.
 // Lookup order: exact match, extension wildcard, basic fallback.
-func GetItemToCardFunc(itemType ItemType) ItemToCardFunc {
+func GetItemToCardFunc(itemType ItemType) itemToCardFunc {
 	globalItemRenderers.mu.RLock()
 	defer globalItemRenderers.mu.RUnlock()
 
@@ -57,7 +57,7 @@ func GetItemToCardFunc(itemType ItemType) ItemToCardFunc {
 }
 
 // GetDimmedCheckFunc returns a dimmed checker for the given item type.
-func GetDimmedCheckFunc(itemType ItemType) DimmedCheckFunc {
+func GetDimmedCheckFunc(itemType ItemType) dimmedCheckFunc {
 	globalItemRenderers.mu.RLock()
 	defer globalItemRenderers.mu.RUnlock()
 

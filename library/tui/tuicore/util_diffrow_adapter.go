@@ -1,6 +1,6 @@
 // util_diffrow_adapter.go - Bridges tuicore (Chroma + color constants) and
-// the package-pure diff row model. DiffViewCore calls DefaultDiffPalette()
-// and DefaultHighlight() to feed BuildPlan without the diff package
+// the package-pure diff row model. DiffViewCore calls defaultDiffPalette()
+// and defaultHighlight() to feed BuildPlan without the diff package
 // reaching back into tuicore.
 package tuicore
 
@@ -25,10 +25,10 @@ func init() {
 	}
 }
 
-// DefaultDiffPalette returns a diff.Palette populated from the tuicore color
+// defaultDiffPalette returns a diff.Palette populated from the tuicore color
 // constants. The diff renderer's Cell pipeline is string-based, so colors are
 // resolved to the current theme's variant here rather than via adaptiveColor.
-func DefaultDiffPalette() diff.Palette {
+func defaultDiffPalette() diff.Palette {
 	return diff.Palette{
 		AddedFG:            pickThemeColor(diffAddedDark, diffAddedLight),
 		RemovedFG:          pickThemeColor(diffRemovedDark, diffRemovedLight),
@@ -43,7 +43,7 @@ func DefaultDiffPalette() diff.Palette {
 	}
 }
 
-// DefaultHighlight returns a diff.Highlight closure that tokenizes via
+// defaultHighlight returns a diff.Highlight closure that tokenizes via
 // Chroma and emits one Cell per token. Falls back to a single plain-text
 // cell on tokenize error or unknown language. `path` is mapped to a
 // chroma language via DetectLanguageFromPath.
@@ -51,7 +51,7 @@ func DefaultDiffPalette() diff.Palette {
 // The closure memoizes the resolved lexer per path: chroma's filename
 // matching walks every registered lexer's glob patterns via filepath.Match
 // — without this cache, a 10k-line file becomes 10k pattern-match scans.
-func DefaultHighlight() diff.Highlight {
+func defaultHighlight() diff.Highlight {
 	lexerCache := make(map[string]chroma.Lexer)
 	return func(line, path string) []diff.Cell {
 		if line == "" {
