@@ -4,6 +4,7 @@ package fetch
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -26,6 +27,7 @@ type workspaceSyncContext struct {
 	procs         []WorkspaceSyncFunc
 	combinedTip   string
 	tipKey        string
+	since         *time.Time
 }
 
 // resolveWorkspaceSyncContext gathers the per-sync state once. Returns nil
@@ -54,7 +56,8 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *wor
 	combinedTip := strings.Join(tipParts, "\x00")
 	tipKey := "workspace:" + repoURL
 
-	if persisted, err := cache.GetSyncTip(tipKey); err == nil && persisted == combinedTip {
+	persisted, err := cache.GetSyncTip(tipKey)
+	if err == nil && persisted == combinedTip {
 		return nil
 	}
 
@@ -67,7 +70,21 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *wor
 		procs:         procs,
 		combinedTip:   combinedTip,
 		tipKey:        tipKey,
+		since:         workspaceSyncWindow(repoURL, persisted),
 	}
+}
+
+// workspaceSyncWindow returns the commit date the walk starts from, nil while the cache may still miss old history.
+func workspaceSyncWindow(repoURL, persistedTip string) *time.Time {
+	// A recorded tip means an earlier sync finalized, so the cache holds every commit up to it.
+	if persistedTip == "" {
+		return nil
+	}
+	meta, err := cache.GetRepositoryFetchMeta(repoURL)
+	if err != nil || !meta.HasCommits {
+		return nil
+	}
+	return sinceWithOverlap(meta.NewestCommitTime)
 }
 
 // processCommitBatch inserts a batch of git commits into the cache and runs
@@ -147,7 +164,12 @@ func SyncWorkspaceQuick(workdir string, procs []WorkspaceSyncFunc) error {
 		return nil // tips unchanged
 	}
 
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Limit: quickPassLimit})
+	opts := &git.GetCommitsOptions{All: true, Since: ctx.since}
+	// Inside a window the quick pass takes every new commit, so none falls between the two passes.
+	if ctx.since == nil {
+		opts.Limit = quickPassLimit
+	}
+	commits, err := git.GetCommits(workdir, opts)
 	if err != nil {
 		return err
 	}
@@ -167,7 +189,7 @@ func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress
 		return nil // tips unchanged, the quick pass covered everything
 	}
 
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true})
+	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Since: ctx.since})
 	if err != nil {
 		return err
 	}
@@ -175,7 +197,7 @@ func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress
 	// Skip the head of the list (already processed by SyncWorkspace) and
 	// process the tail in chunks.
 	if len(commits) <= quickPassLimit {
-		return finalizeWorkspaceSync(ctx, commits)
+		return finalizeWorkspaceSync(ctx)
 	}
 	rest := commits[quickPassLimit:]
 	total := len(rest)
@@ -192,16 +214,18 @@ func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress
 		}
 	}
 
-	return finalizeWorkspaceSync(ctx, commits)
+	return finalizeWorkspaceSync(ctx)
 }
 
 // finalizeWorkspaceSync marks commits that left the repo stale and records the sync tip.
-func finalizeWorkspaceSync(ctx *workspaceSyncContext, allCommits []git.Commit) error {
-	liveHashes := make(map[string]bool, len(allCommits))
-	for _, c := range allCommits {
-		liveHashes[c.Hash] = true
+func finalizeWorkspaceSync(ctx *workspaceSyncContext) error {
+	// The stale check reads every live commit, not the window the walk used.
+	liveHashes, err := git.GetAllCommitHashes(ctx.workdir)
+	if err != nil {
+		log.Warn("list live commits", "error", err, "repo", ctx.repoURL)
+	} else if _, err := cache.MarkCommitsStaleByRepo(ctx.repoURL, liveHashes); err != nil {
+		log.Warn("mark stale commits", "error", err, "repo", ctx.repoURL)
 	}
-	_, _ = cache.MarkCommitsStaleByRepo(ctx.repoURL, liveHashes)
 	_ = cache.SetSyncTip(ctx.tipKey, ctx.combinedTip)
 	return nil
 }
