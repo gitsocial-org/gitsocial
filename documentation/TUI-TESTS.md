@@ -91,7 +91,7 @@ Seeded through the extension APIs, with data from the protocol specs:
 - Memo: the project tier, 2 memos (one edited, one labeled), 1 inherited source; the personal and session tiers live outside the repository and are not seeded
 - Forks: 1 registered fork; the fork closes the workspace issue, which leaves an inert proposal
 
-The cache is filled with `SyncWorkspaceToCache` per extension, workspace first and fork second. A cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending now, so relative times render as "just now" and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
+The cache is filled with `client.SyncWorkspace`, workspace first and fork second. A cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending now, so relative times render as "just now" and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
 
 ## Inventory
 

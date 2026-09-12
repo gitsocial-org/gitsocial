@@ -15,69 +15,6 @@ func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, _ string) {
 	ProcessWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "release"))
 }
 
-// SyncWorkspaceToCache synchronizes release commits from the workspace to the cache.
-func SyncWorkspaceToCache(workdir string) error {
-	branch := gitmsg.GetExtBranch(workdir, "release")
-	repoURL := gitmsg.ResolveRepoURL(workdir)
-
-	tip, err := git.ReadRef(workdir, branch)
-	if err != nil {
-		return nil
-	}
-	key := workdir + "\x00" + branch
-	if prev, ok := gitmsg.SyncedTip(workdir, branch); ok && prev == tip {
-		return nil
-	}
-	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == tip {
-		gitmsg.SetSyncedTip(workdir, branch, tip)
-		return nil
-	}
-
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{
-		Branch: branch,
-	})
-	if err != nil {
-		return err
-	}
-
-	cacheCommits := make([]cache.Commit, 0, len(commits))
-	for _, c := range commits {
-		cacheCommits = append(cacheCommits, cache.Commit{
-			Hash:        c.Hash,
-			RepoURL:     repoURL,
-			Branch:      branch,
-			AuthorName:  c.Author,
-			AuthorEmail: c.Email,
-			Message:     c.Message,
-			Timestamp:   c.Timestamp,
-		})
-	}
-	if err := cache.InsertCommits(cacheCommits); err != nil {
-		return err
-	}
-	liveHashes := make(map[string]bool, len(commits))
-	for _, c := range commits {
-		liveHashes[c.Hash] = true
-	}
-	_, _ = cache.MarkCommitsStale(repoURL, branch, liveHashes)
-
-	var editKeys []cache.EditKey
-	for _, gc := range commits {
-		msg := protocol.ParseMessage(gc.Message)
-		processReleaseCommit(gc, msg, repoURL, branch)
-		if isReleaseEdit(msg) {
-			editKeys = append(editKeys, cache.EditKey{RepoURL: repoURL, Hash: gc.Hash, Branch: branch})
-		}
-	}
-	// Re-propagate after the whole batch: commits arrive newest-first, so a
-	// canonical's raw row is inserted after its edit was applied, clobbering
-	// the propagated fields.
-	cache.SyncEditExtensionFields(editKeys)
-	gitmsg.SetSyncedTip(workdir, branch, tip)
-	_ = cache.SetSyncTip(key, tip)
-	return nil
-}
-
 // isReleaseEdit reports whether a parsed message is a release edit commit.
 func isReleaseEdit(msg *protocol.Message) bool {
 	return msg != nil && msg.Header.Ext == "release" && msg.Header.Fields["edits"] != ""
@@ -97,8 +34,8 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 			editKeys = append(editKeys, cache.EditKey{RepoURL: repoURL, Hash: gc.Hash, Branch: branch})
 		}
 	}
-	// See SyncWorkspaceToCache: re-propagate after the batch so processing
-	// order can't leave a canonical with its raw (pre-edit) fields.
+	// Re-propagate after the batch so processing order cannot leave a
+	// canonical with its raw, pre-edit fields.
 	cache.SyncEditExtensionFields(editKeys)
 }
 

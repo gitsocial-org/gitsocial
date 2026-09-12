@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
-	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
 func TestGCSessionsOlderThan_deletesOnlyStale(t *testing.T) {
@@ -155,10 +154,9 @@ func TestPersonalPushFetch_notInitialized(t *testing.T) {
 	}
 }
 
-// TestSyncAllTierReposToCache_syncsWorkspaceAndSession verifies the tier sweep
-// indexes the workspace and session repos and silently skips the missing
-// personal repo.
-func TestSyncAllTierReposToCache_syncsWorkspaceAndSession(t *testing.T) {
+// TestSyncAllTierReposToCache_syncsSessionRepo verifies the tier sweep indexes
+// the session repo and skips the missing personal repo.
+func TestSyncAllTierReposToCache_syncsSessionRepo(t *testing.T) {
 	setupTestDB(t)
 	freshHome(t)
 	dir := initTestRepo(t)
@@ -170,9 +168,6 @@ func TestSyncAllTierReposToCache_syncsWorkspaceAndSession(t *testing.T) {
 	if r := InitProject(dir); !r.Success {
 		t.Fatalf("InitProject: %s", r.Error.Message)
 	}
-	if r := CreateMemo(dir, "workspace memo", "", CreateMemoOptions{Tier: TierProject}); !r.Success {
-		t.Fatalf("CreateMemo project: %s", r.Error.Message)
-	}
 	if r := CreateMemo(dir, "session memo", "", CreateMemoOptions{Tier: TierSession}); !r.Success {
 		t.Fatalf("CreateMemo session: %s", r.Error.Message)
 	}
@@ -181,11 +176,6 @@ func TestSyncAllTierReposToCache_syncsWorkspaceAndSession(t *testing.T) {
 		t.Fatalf("SyncAllTierReposToCache: %v", err)
 	}
 
-	workspaceURL := gitmsg.ResolveRepoURL(dir)
-	wsItems, err := GetMemoItems(MemoQuery{RepoURL: workspaceURL, Branch: MemoBranch})
-	if err != nil || len(wsItems) == 0 {
-		t.Errorf("workspace memos not in cache after sweep (err %v, n=%d)", err, len(wsItems))
-	}
 	path, _ := SessionRepoPath(sessionID)
 	sessItems, err := GetMemoItems(MemoQuery{RepoURL: LocalRepoURL(path), Branch: MemoBranch})
 	if err != nil || len(sessItems) == 0 {

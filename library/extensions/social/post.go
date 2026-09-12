@@ -3,7 +3,6 @@ package social
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -20,100 +19,6 @@ import (
 func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, defaultBranch string) {
 	ProcessWorkspaceBatch(commits, repoURL, defaultBranch)
 	SyncListsToCache(workdir)
-}
-
-// SyncWorkspaceToCache synchronizes workspace commits and lists to the cache.
-func SyncWorkspaceToCache(workdir string) error {
-	repoURL := gitmsg.ResolveRepoURL(workdir)
-	socialBranch := gitmsg.GetExtBranch(workdir, "social")
-	defaultBranch, _ := git.GetDefaultBranch(workdir)
-	if defaultBranch == "" {
-		defaultBranch = "main"
-	}
-	// Quick tip check to skip redundant syncs
-	socialTip, _ := git.ReadRef(workdir, socialBranch)
-	defaultTip, _ := git.ReadRef(workdir, defaultBranch)
-	combinedTip := socialTip + "\x00" + defaultTip
-	key := workdir + "\x00" + repoURL
-	if prev, ok := gitmsg.SyncedTip(workdir, repoURL); ok && prev == combinedTip {
-		return nil
-	}
-	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == combinedTip {
-		gitmsg.SetSyncedTip(workdir, repoURL, combinedTip)
-		return nil
-	}
-	if err := cache.InsertRepository(cache.Repository{
-		URL:         repoURL,
-		Branch:      "*",
-		StoragePath: workdir,
-	}); err != nil {
-		return fmt.Errorf("insert repository: %w", err)
-	}
-	// Get all commits across all branches (default limit 10k)
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true})
-	if err != nil {
-		return fmt.Errorf("get commits: %w", err)
-	}
-	cacheCommits := make([]cache.Commit, 0, len(commits))
-	for _, gc := range commits {
-		branch := fetch.CleanRefname(gc.Refname)
-		if branch == "" {
-			branch = defaultBranch
-		}
-		cacheCommits = append(cacheCommits, cache.Commit{
-			Hash:        gc.Hash,
-			RepoURL:     repoURL,
-			Branch:      branch,
-			AuthorName:  gc.Author,
-			AuthorEmail: gc.Email,
-			Message:     gc.Message,
-			Timestamp:   gc.Timestamp,
-		})
-	}
-	if err := cache.InsertCommits(cacheCommits); err != nil {
-		return fmt.Errorf("insert commits: %w", err)
-	}
-	if _, err := cache.ReconcileVersions(); err != nil {
-		return fmt.Errorf("reconcile versions: %w", err)
-	}
-	// Batch collect social items, then insert in one transaction
-	var socialItems []SocialItem
-	var virtualItems []SocialItem
-	for _, gc := range commits {
-		branch := fetch.CleanRefname(gc.Refname)
-		if branch == "" {
-			branch = defaultBranch
-		}
-		msg := protocol.ParseMessage(gc.Message)
-		if msg != nil && msg.Header.Ext == "social" {
-			socialItems = append(socialItems, buildSocialItem(gc, msg, repoURL, branch))
-			for _, ref := range msg.References {
-				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
-					virtualItems = append(virtualItems, *vi)
-				}
-			}
-		} else {
-			upgradeVirtualItem(gc, repoURL)
-		}
-	}
-	if err := InsertSocialItems(socialItems); err != nil {
-		log.Warn("batch insert social items failed", "error", err)
-	}
-	for _, vi := range virtualItems {
-		if err := InsertSocialItem(vi); err != nil {
-			log.Debug("insert virtual social item failed", "hash", vi.Hash, "error", err)
-		}
-	}
-	// Mark stale across all branches
-	liveHashes := make(map[string]bool, len(commits))
-	for _, c := range commits {
-		liveHashes[c.Hash] = true
-	}
-	_, _ = cache.MarkCommitsStaleByRepo(repoURL, liveHashes)
-	SyncListsToCache(workdir)
-	gitmsg.SetSyncedTip(workdir, repoURL, combinedTip)
-	_ = cache.SetSyncTip(key, combinedTip)
-	return nil
 }
 
 // ProcessWorkspaceBatch processes pre-fetched commits for social extension items.
@@ -464,9 +369,6 @@ func CountListPosts(listID string) int {
 
 // getMyPosts retrieves posts from the current workspace repository.
 func getMyPosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		log.Warn("sync workspace to cache failed", "error", err)
-	}
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetAllItems(SocialQuery{
@@ -521,9 +423,6 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 
 // getWorkspaceRepository retrieves all posts from the workspace repository.
 func getWorkspaceRepository(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		log.Warn("sync workspace to cache failed", "error", err)
-	}
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetAllItems(SocialQuery{

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
@@ -50,6 +51,12 @@ func TestMain(m *testing.M) {
 func setupTestDB(t *testing.T) {
 	t.Helper()
 	testutil.OpenTempCache(t, testCacheDir)
+}
+
+// syncWorkspace runs the batch workspace sync with this extension's sync func.
+func syncWorkspace(workdir string) error {
+	_, err := fetch.SyncWorkspaceLocal(workdir, []fetch.WorkspaceSyncFunc{SyncWorkspaceBatch})
+	return err
 }
 
 const reviewTestBranch = "gitmsg/review"
@@ -354,8 +361,8 @@ func TestSyncWorkspace(t *testing.T) {
 	t.Run("noBranch", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		if err := SyncWorkspaceToCache(dir); err != nil {
-			t.Fatalf("SyncWorkspaceToCache() error = %v", err)
+		if err := syncWorkspace(dir); err != nil {
+			t.Fatalf("syncWorkspace() error = %v", err)
 		}
 	})
 
@@ -365,8 +372,8 @@ func TestSyncWorkspace(t *testing.T) {
 		git.CreateCommitOnBranch(dir, "gitmsg/review", "Add feature\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; v="0.1.0"`)
 		git.CreateCommitOnBranch(dir, "gitmsg/review", "Fix bug\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:bugfix"; v="0.1.0"`)
 
-		if err := SyncWorkspaceToCache(dir); err != nil {
-			t.Fatalf("SyncWorkspaceToCache() error = %v", err)
+		if err := syncWorkspace(dir); err != nil {
+			t.Fatalf("syncWorkspace() error = %v", err)
 		}
 
 		res := GetPullRequests("https://github.com/test/repo", "gitmsg/review", nil, "", 10)
@@ -377,22 +384,6 @@ func TestSyncWorkspace(t *testing.T) {
 			t.Errorf("expected at least 2 PRs, got %d", len(res.Data))
 		}
 	})
-}
-
-func TestSyncWorkspaceToCache_cacheError(t *testing.T) {
-	dir := initTestRepo(t)
-	git.CreateCommitOnBranch(dir, "gitmsg/review", "PR\n\n"+`GitMsg: ext="review"; type="pull-request"; v="0.1.0"`)
-
-	cache.Reset()
-	t.Cleanup(func() {
-		cache.Reset()
-		cache.Open(testCacheDir)
-	})
-
-	err := SyncWorkspaceToCache(dir)
-	if err == nil {
-		t.Error("should fail with cache not open")
-	}
 }
 
 func TestProcessReviewCommit_feedbackWithNoBranchInPRRef(t *testing.T) {

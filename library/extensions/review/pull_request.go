@@ -463,16 +463,9 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		return res
 	}
 
-	// Auto-close PM issues referenced in closes
+	// Auto-close PM issues referenced in closes; the caller's workspace sync
+	// is what keeps the pm rows this reads current.
 	if len(res.Data.Closes) > 0 {
-		// Refresh PM cache so we don't auto-close on stale state — a
-		// teammate may have retracted or already closed the issue since
-		// this PR was created. The fetch is bounded to the workspace's
-		// gitmsg/pm branch and is fast in practice.
-		if err := pm.SyncWorkspaceToCache(workdir); err != nil {
-			log.Warn("auto-close: PM sync failed; cache may be stale",
-				"error", err)
-		}
 		for _, closeRef := range res.Data.Closes {
 			closeResult := pm.CloseIssue(workdir, closeRef)
 			if !closeResult.Success {

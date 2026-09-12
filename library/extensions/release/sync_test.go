@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
@@ -38,6 +39,12 @@ func TestMain(m *testing.M) {
 func setupTestDB(t *testing.T) {
 	t.Helper()
 	testutil.OpenTempCache(t, testCacheDir)
+}
+
+// syncWorkspace runs the batch workspace sync with this extension's sync func.
+func syncWorkspace(workdir string) error {
+	_, err := fetch.SyncWorkspaceLocal(workdir, []fetch.WorkspaceSyncFunc{SyncWorkspaceBatch})
+	return err
 }
 
 const relSyncTestRepoURL = "https://github.com/test/repo"
@@ -181,15 +188,15 @@ func TestProcessReleaseCommit_withEditsRef(t *testing.T) {
 	}
 }
 
-func TestSyncWorkspaceToCache(t *testing.T) {
+func TestSyncWorkspace(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)
 
 	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v1.0.0\n\n"+`GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`)
 	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release v2.0.0\n\n"+`GitMsg: ext="release"; tag="v2.0.0"; version="2.0.0"; v="0.1.0"`)
 
-	if err := SyncWorkspaceToCache(dir); err != nil {
-		t.Fatalf("SyncWorkspaceToCache() error = %v", err)
+	if err := syncWorkspace(dir); err != nil {
+		t.Fatalf("syncWorkspace() error = %v", err)
 	}
 
 	res := GetReleases("https://github.com/test/repo", "gitmsg/release", "", 10)
@@ -212,22 +219,6 @@ func TestProcessReleaseCommit_dbError(t *testing.T) {
 	msg := protocol.ParseMessage(content)
 	gc := git.Commit{Hash: "abc123456789", Timestamp: time.Now()}
 	processReleaseCommit(gc, msg, "https://github.com/test/repo", "gitmsg/release")
-}
-
-func TestSyncWorkspaceToCache_cacheError(t *testing.T) {
-	dir := initTestRepo(t)
-	git.CreateCommitOnBranch(dir, "gitmsg/release", "Release\n\n"+`GitMsg: ext="release"; v="0.1.0"`)
-
-	cache.Reset()
-	t.Cleanup(func() {
-		cache.Reset()
-		cache.Open(testCacheDir)
-	})
-
-	err := SyncWorkspaceToCache(dir)
-	if err == nil {
-		t.Error("should fail with cache not open")
-	}
 }
 
 func TestProcessReleaseCommit_crossRepoEdit(t *testing.T) {
@@ -287,7 +278,7 @@ func queryReleaseItem(t *testing.T, repoURL, hash, branch string) ReleaseItem {
 	return item
 }
 
-func TestSyncWorkspaceToCache_editSurvivesResync(t *testing.T) {
+func TestSyncWorkspace_editSurvivesResync(t *testing.T) {
 	setupTestDB(t)
 	workdir := initTestRepo(t)
 	if res := CreateRelease(workdir, "v3.0.0", "", CreateReleaseOptions{Tag: "v3.0.0", Version: "3.0.0"}); !res.Success {
@@ -304,8 +295,8 @@ func TestSyncWorkspaceToCache_editSurvivesResync(t *testing.T) {
 	}
 	// A fresh sync re-processes the branch newest-first (edit before its
 	// canonical); the canonical's propagated fields must survive it.
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		t.Fatalf("SyncWorkspaceToCache: %v", err)
+	if err := syncWorkspace(workdir); err != nil {
+		t.Fatalf("syncWorkspace: %v", err)
 	}
 	resynced, err := GetReleaseItemByTagOrVersion("3.0.0")
 	if err != nil {

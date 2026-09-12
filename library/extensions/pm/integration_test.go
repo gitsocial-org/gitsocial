@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 
@@ -47,6 +48,12 @@ func initWorkspace(t *testing.T) string {
 	workdir := cloneFixture(t)
 	setupTestDB(t)
 	return workdir
+}
+
+// syncWorkspace runs the batch workspace sync with this extension's sync func.
+func syncWorkspace(workdir string) error {
+	_, err := fetch.SyncWorkspaceLocal(workdir, []fetch.WorkspaceSyncFunc{SyncWorkspaceBatch})
+	return err
 }
 
 // --- Issue CRUD ---
@@ -1112,7 +1119,7 @@ func TestCommentIntegration(t *testing.T) {
 
 // --- Sync (sequential — resets shared DB) ---
 
-func TestSyncWorkspaceToCache(t *testing.T) {
+func TestSyncWorkspace(t *testing.T) {
 	workdir := initWorkspace(t)
 	CreateIssue(workdir, "Sync issue 1", "", CreateIssueOptions{})
 	CreateIssue(workdir, "Sync issue 2", "", CreateIssueOptions{})
@@ -1127,8 +1134,8 @@ func TestSyncWorkspaceToCache(t *testing.T) {
 		cache.Open(testCacheDir)
 	})
 
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		t.Fatalf("SyncWorkspaceToCache() error = %v", err)
+	if err := syncWorkspace(workdir); err != nil {
+		t.Fatalf("syncWorkspace() error = %v", err)
 	}
 
 	items, err := GetPMItems(PMQuery{Types: []string{string(ItemTypeIssue)}, Limit: 100})

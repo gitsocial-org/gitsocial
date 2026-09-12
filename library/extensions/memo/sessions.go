@@ -110,7 +110,6 @@ func GCSession(id string) Result[bool] {
 	if err := cache.ResetRepositoryData(repoURL); err != nil {
 		return result.Err[bool]("CACHE_CLEANUP_FAILED", err.Error())
 	}
-	gitmsg.InvalidateSyncedTip(path, MemoBranch)
 	return result.Ok(true)
 }
 
@@ -136,7 +135,6 @@ func GCSessionsOlderThan(d time.Duration) Result[[]string] {
 		if err := cache.ResetRepositoryData(repoURL); err != nil {
 			return result.Err[[]string]("CACHE_CLEANUP_FAILED", err.Error())
 		}
-		gitmsg.InvalidateSyncedTip(s.Path, MemoBranch)
 		deleted = append(deleted, s.ID)
 	}
 	return result.Ok(deleted)

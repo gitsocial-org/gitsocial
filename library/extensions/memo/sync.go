@@ -29,37 +29,6 @@ func BackfillSpec() fetch.ExtBackfillSpec {
 	return fetch.ExtBackfillSpec{Extension: "memo", ItemsTable: "memo_items"}
 }
 
-// SyncWorkspaceToCache replays memo commits from the workspace's gitmsg/memo
-// branch into the cache. Skips work when the tip hasn't moved since last sync.
-func SyncWorkspaceToCache(workdir string) error {
-	branch := MemoBranch
-	repoURL := gitmsg.ResolveRepoURL(workdir)
-
-	tip, err := git.ReadRef(workdir, branch)
-	if err != nil {
-		return nil
-	}
-	key := workdir + "\x00" + branch
-	if prev, ok := gitmsg.SyncedTip(workdir, branch); ok && prev == tip {
-		return nil
-	}
-	if persisted, err := cache.GetSyncTip(key); err == nil && persisted == tip {
-		gitmsg.SetSyncedTip(workdir, branch, tip)
-		return nil
-	}
-
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{Branch: branch})
-	if err != nil {
-		return err
-	}
-	if err := indexCommits(repoURL, branch, commits); err != nil {
-		return err
-	}
-	gitmsg.SetSyncedTip(workdir, branch, tip)
-	_ = cache.SetSyncTip(key, tip)
-	return nil
-}
-
 // SyncTierRepoToCache reads gitmsg/memo from a bare tier repo (personal or
 // session) and indexes its commits under repo_url = `local:<path>`.
 func SyncTierRepoToCache(repoPath string) error {
@@ -75,14 +44,11 @@ func SyncTierRepoToCache(repoPath string) error {
 	return indexCommits(repoURL, MemoBranch, commits)
 }
 
-// SyncAllTierReposToCache syncs the workspace plus the personal repo and
-// every session repo recorded under this workspace (legacy untagged sessions
-// also sync, since their visibility is workspace-wide). Missing repos are
-// silently skipped.
+// SyncAllTierReposToCache syncs the personal repo and every session repo
+// recorded under this workspace (legacy untagged sessions also sync, since
+// their visibility is workspace-wide). Missing repos are skipped. The
+// workspace tier arrives through the client's workspace sync.
 func SyncAllTierReposToCache(workdir string) error {
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		return err
-	}
 	if path, err := settings.PersonalRepoPath(); err == nil && git.BareRepoExists(path) {
 		if err := SyncTierRepoToCache(path); err != nil {
 			log.Debug("memo personal sync failed", "path", path, "error", err)

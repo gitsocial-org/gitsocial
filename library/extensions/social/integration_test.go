@@ -65,6 +65,12 @@ func initWorkspace(t *testing.T) string {
 	return workdir
 }
 
+// syncWorkspace runs the batch workspace sync with this extension's sync func.
+func syncWorkspace(workdir string) error {
+	_, err := fetch.SyncWorkspaceLocal(workdir, []fetch.WorkspaceSyncFunc{SyncWorkspaceBatch})
+	return err
+}
+
 // --- Post CRUD ---
 
 func TestPostCRUD(t *testing.T) {
@@ -126,7 +132,7 @@ func TestPostCRUD(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := EditPost(workdir, post.Data.ID, "Updated content", nil)
 		if !result.Success {
@@ -167,7 +173,7 @@ func TestPostCRUD(t *testing.T) {
 	t.Run("EditPost_success", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		postResult := CreatePost(workdir, "Original content", nil)
 		if !postResult.Success {
 			t.Fatalf("CreatePost failed: %s", postResult.Error.Message)
@@ -188,7 +194,7 @@ func TestPostCRUD(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := RetractPost(workdir, post.Data.ID)
 		if !result.Success {
@@ -214,7 +220,7 @@ func TestPostCRUD(t *testing.T) {
 	t.Run("RetractPost_success", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		postResult := CreatePost(workdir, "Post to retract", nil)
 		if !postResult.Success {
 			t.Fatalf("CreatePost failed: %s", postResult.Error.Message)
@@ -237,7 +243,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Timeline post 1", nil)
 		CreatePost(workdir, "Timeline post 2", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := GetPosts(workdir, "timeline", nil)
 		if !result.Success {
@@ -284,7 +290,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !created.Success {
 			t.Fatal(created.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := GetPosts(workdir, "post:"+created.Data.ID, nil)
 		if !result.Success {
@@ -305,13 +311,13 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		comment := CreateComment(workdir, post.Data.ID, "A reply", nil)
 		if !comment.Success {
 			t.Fatalf("CreateComment() failed: %s", comment.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := GetPosts(workdir, "thread:"+post.Data.ID, nil)
 		if !result.Success {
@@ -338,7 +344,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "External repo test post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 
 		result := GetPosts(workdir, "repository:"+workspaceURL, nil)
@@ -364,7 +370,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Options test", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		opts := &GetPostsOptions{Limit: 1}
 		result := GetPosts(workdir, "repository:my", opts)
@@ -380,7 +386,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Branch scope post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
 		branch := gitmsg.GetExtBranch(workdir, "social")
 		result := GetPosts(workdir, "repository:"+wsURL+"@"+branch, nil)
@@ -396,17 +402,17 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !root.Success {
 			t.Fatal(root.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		c1 := CreateComment(workdir, root.Data.ID, "First comment", nil)
 		if !c1.Success {
 			t.Fatal(c1.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		c2 := CreateComment(workdir, c1.Data.ID, "Nested reply", nil)
 		if !c2.Success {
 			t.Fatal(c2.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result := GetPosts(workdir, "thread:"+root.Data.ID, nil)
 		if !result.Success {
 			t.Fatalf("error: %s", result.Error.Message)
@@ -423,19 +429,19 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !root.Success {
 			t.Fatal(root.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		c1 := CreateComment(workdir, root.Data.ID, "First level comment", nil)
 		if !c1.Success {
 			t.Fatal(c1.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		c2 := CreateComment(workdir, c1.Data.ID, "Second level comment", nil)
 		if !c2.Success {
 			t.Fatal(c2.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Request thread from c1 - root should appear in parent chain
 		result := GetPosts(workdir, "thread:"+c1.Data.ID, nil)
@@ -540,7 +546,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		CreateList(workdir, "tl-list", "Timeline List")
 		externalRepo := "https://github.com/tl/external"
 		AddRepositoryToList(workdir, "tl-list", externalRepo, "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Insert external post
 		_ = cache.InsertCommits([]cache.Commit{{
@@ -582,7 +588,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		externalRepo := "https://github.com/lspd/repo"
 		CreateList(workdir, "lspd-list", "LSPD")
 		AddRepositoryToList(workdir, "lspd-list", externalRepo, "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Insert a post for the external repo
 		_ = cache.InsertCommits([]cache.Commit{{
 			Hash: "lspd12345678", RepoURL: externalRepo, Branch: "main",
@@ -608,7 +614,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		// Build a ref WITHOUT branch -> triggers branch="" -> defaulting to "main" in getThreadPosts
 		refNoBranch := parsed.Repository + "#commit:" + parsed.Value
@@ -627,7 +633,7 @@ func TestGetPostsIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result := GetPosts(workdir, "post:"+post.Data.ID, nil)
 		if !result.Success {
 			t.Fatalf("error: %s", result.Error.Message)
@@ -674,9 +680,9 @@ func TestGetPostsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		CreatePost(workdir, "WS repo post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		branch := gitmsg.GetExtBranch(workdir, "social")
 		// Query by the workspace URL as a repository scope (not "my" or "workspace")
 		result := GetPosts(workdir, "repository:"+wsURL+"@"+branch, nil)
@@ -726,7 +732,7 @@ func TestGetPostsIntegration(t *testing.T) {
 	})
 }
 
-func TestSyncWorkspaceToCache(t *testing.T) {
+func TestSyncWorkspace(t *testing.T) {
 	workdir := initWorkspace(t)
 	CreatePost(workdir, "Sync test post 1", nil)
 	CreatePost(workdir, "Sync test post 2", nil)
@@ -739,8 +745,8 @@ func TestSyncWorkspaceToCache(t *testing.T) {
 	}
 	t.Cleanup(func() { cache.Reset() })
 
-	if err := SyncWorkspaceToCache(workdir); err != nil {
-		t.Fatalf("SyncWorkspaceToCache() error = %v", err)
+	if err := syncWorkspace(workdir); err != nil {
+		t.Fatalf("syncWorkspace() error = %v", err)
 	}
 
 	// Verify items are queryable
@@ -766,7 +772,7 @@ func TestCommentOps(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := CreateComment(workdir, post.Data.ID, "Nice post!", nil)
 		if !result.Success {
@@ -811,13 +817,13 @@ func TestCommentOps(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		comment := CreateComment(workdir, post.Data.ID, "First comment", nil)
 		if !comment.Success {
 			t.Fatalf("first comment failed: %s", comment.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		nested := CreateComment(workdir, comment.Data.ID, "Nested reply", nil)
 		if !nested.Success {
@@ -938,7 +944,7 @@ func TestCommentOps(t *testing.T) {
 			Message: "Remote post content", Timestamp: time.Now(),
 		}})
 		_ = InsertSocialItem(SocialItem{RepoURL: extRepo, Hash: extHash, Branch: "main", Type: "post"})
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		postRef := protocol.CreateRef(protocol.RefTypeCommit, extHash, extRepo, "main")
 		result := CreateComment(workdir, postRef, "Comment on remote", nil)
 		if !result.Success {
@@ -963,7 +969,7 @@ func TestRepostAndQuote(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := CreateRepost(workdir, post.Data.ID, nil)
 		if !result.Success {
@@ -981,13 +987,13 @@ func TestRepostAndQuote(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		repost := CreateRepost(workdir, post.Data.ID, nil)
 		if !repost.Success {
 			t.Fatal(repost.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Repost of repost should fail
 		result := CreateRepost(workdir, repost.Data.ID, nil)
@@ -1006,7 +1012,7 @@ func TestRepostAndQuote(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := CreateQuote(workdir, post.Data.ID, "My commentary", nil)
 		if !result.Success {
@@ -1039,13 +1045,13 @@ func TestRepostAndQuote(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		repost := CreateRepost(workdir, post.Data.ID, nil)
 		if !repost.Success {
 			t.Fatal(repost.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result := CreateQuote(workdir, repost.Data.ID, "Quote of repost", nil)
 		if result.Success {
@@ -1482,7 +1488,7 @@ func TestSearchIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Go is awesome", nil)
 		CreatePost(workdir, "Rust is fast", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result, err := search.Search(workdir, search.Params{Query: "awesome", Scope: "repository:my"})
 		if err != nil {
@@ -1497,7 +1503,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Hello world", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result, err := search.Search(workdir, search.Params{Query: "nonexistenttermxyz", Scope: "repository:my"})
 		if err != nil {
@@ -1512,7 +1518,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Author test post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result, err := search.Search(workdir, search.Params{Query: "author:test", Scope: "repository:my"})
 		if err != nil {
@@ -1529,7 +1535,7 @@ func TestSearchIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "First post", nil)
 		CreatePost(workdir, "Second post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		result, err := search.Search(workdir, search.Params{Sort: "date", Scope: "repository:my"})
 		if err != nil {
@@ -1547,7 +1553,7 @@ func TestSearchIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		shortHash := parsed.Value[:7]
 		result, err := search.Search(workdir, search.Params{Query: shortHash, Scope: "repository:my"})
@@ -1563,7 +1569,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Repos scope test", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
 		result, err := search.Search(workdir, search.Params{Scope: "repos:" + wsURL})
 		if err != nil {
@@ -1588,7 +1594,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Filtered search test", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		_, err := search.Search(workdir, search.Params{
 			Query:  "after:2020-01-01 before:2030-12-31 author:test Filtered",
 			Scope:  "repository:workspace",
@@ -1606,7 +1612,7 @@ func TestSearchIntegration(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			CreatePost(workdir, fmt.Sprintf("Limit test post %d", i), nil)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result, err := search.Search(workdir, search.Params{Scope: "repository:my", Limit: 2})
 		if err != nil {
 			t.Fatal(err)
@@ -1623,7 +1629,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Type filter post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		_, err := search.Search(workdir, search.Params{
 			Query: "type:post filter",
 			Scope: "repository:my",
@@ -1637,7 +1643,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "List filter search", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		_, err := search.Search(workdir, search.Params{
 			Query: "list:some-list filter",
 			Scope: "repository:my",
@@ -1654,7 +1660,7 @@ func TestSearchIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		result, err := search.Search(workdir, search.Params{Hash: parsed.Value[:7], Scope: "repository:my"})
 		if err != nil {
@@ -1669,7 +1675,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Repo filter test", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
 		_, err := search.Search(workdir, search.Params{Repo: wsURL, Scope: "repository:my"})
 		if err != nil {
@@ -1684,7 +1690,7 @@ func TestSearchIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		// Use commit: filter syntax in query
 		_, err := search.Search(workdir, search.Params{Query: "commit:" + parsed.Value[:7], Scope: "repository:my"})
@@ -1697,7 +1703,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Search author mismatch", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result, err := search.Search(workdir, search.Params{
 			Query:  "Search",
 			Author: "nonexistent-author-xyz",
@@ -1736,7 +1742,7 @@ func TestSearchIntegration(t *testing.T) {
 		CreatePost(workdir, "Tiebreak older", nil)
 		time.Sleep(10 * time.Millisecond)
 		CreatePost(workdir, "Tiebreak newer", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result, err := search.Search(workdir, search.Params{Query: "Tiebreak"})
 		if err != nil {
 			t.Fatalf("error: %s", err)
@@ -1753,7 +1759,7 @@ func TestSearchIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Some content without the search term", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Search for the author name - should match via author field scoring
 		_, err := search.Search(workdir, search.Params{Query: "Test User"})
 		if err != nil {
@@ -1904,7 +1910,7 @@ func TestStatusAndRepositories(t *testing.T) {
 		externalRepo := "https://github.com/frange/repo"
 		CreateList(workdir, "fr-list", "FR List")
 		AddRepositoryToList(workdir, "fr-list", externalRepo, "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Insert fetch range for the repo
 		_ = cache.ExecLocked(func(db *sql.DB) error {
 			_, err := db.Exec(`INSERT INTO core_fetch_ranges (repo_url, range_start, range_end, status, fetched_at, commit_count)
@@ -2120,7 +2126,7 @@ func TestLogsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Timeline log", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result := GetLogs(workdir, "timeline", nil)
 		if !result.Success {
 			t.Fatalf("GetLogs(timeline) failed: %s", result.Error.Message)
@@ -2199,14 +2205,14 @@ func TestVersionAndResolve(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 
 		edit := EditPost(workdir, post.Data.ID, "Updated", nil)
 		if !edit.Success {
 			t.Fatalf("EditPost() failed: %s", edit.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Parse the original post ref to get repo, hash, branch
 		parsed := parseRefForTest(post.Data.ID)
@@ -2226,14 +2232,14 @@ func TestVersionAndResolve(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		wsURL := gitmsg.ResolveRepoURL(workdir)
 
 		edit := EditPost(workdir, post.Data.ID, "Version 2", nil)
 		if !edit.Success {
 			t.Fatal(edit.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Resolve using the EDIT hash - should resolve to canonical
 		editParsed := parseRefForTest(edit.Data.ID)
@@ -2259,13 +2265,13 @@ func TestVersionAndResolve(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		edit := EditPost(workdir, post.Data.ID, "Version 2", nil)
 		if !edit.Success {
 			t.Fatalf("EditPost() failed: %s", edit.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		parsed := parseRefForTest(post.Data.ID)
 		posts, err := GetEditHistoryPosts(parsed.repo, parsed.hash, parsed.branch, gitmsg.ResolveRepoURL(workdir))
@@ -2284,7 +2290,7 @@ func TestVersionAndResolve(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		item := resolveItem(workdir, post.Data.ID)
 		if item == nil {
 			t.Fatal("resolveItem should find cached post")
@@ -2516,7 +2522,7 @@ func TestNotificationIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		for i := 0; i < 3; i++ {
 			extRepo := fmt.Sprintf("https://github.com/ext%d/repo", i)
@@ -2632,7 +2638,7 @@ func TestNotificationIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		// Insert external comment with unique hash to avoid collisions across -count runs
 		suffix := fmt.Sprintf("%06d", atomic.AddInt64(&extInteractionCounter, 1))
@@ -2757,7 +2763,7 @@ func TestNotificationIntegration(t *testing.T) {
 		if !post.Success {
 			t.Fatal(post.Error.Message)
 		}
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		parsed := protocol.ParseRef(post.Data.ID)
 		// Insert 2 external comments
 		for i := 0; i < 2; i++ {
@@ -3017,7 +3023,7 @@ func TestRelatedRepos(t *testing.T) {
 		related := "https://github.com/related/shared"
 		CreateList(workdir, "shared-list", "Shared")
 		AddRepositoryToList(workdir, "shared-list", target, "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Insert items from both repos with shared author
 		for _, r := range []string{target, related} {
 			_ = cache.InsertCommits([]cache.Commit{{
@@ -3053,7 +3059,7 @@ func TestRelatedRepos(t *testing.T) {
 
 		// Create post in workspace
 		CreatePost(workdir, "My post", nil)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 
 		// Create post in another repo by same author
 		authorEmail := ""
@@ -3103,7 +3109,7 @@ func TestRelatedRepos(t *testing.T) {
 		AddRepositoryToList(workdir, "eq-list2", repo2, "main", false)
 		AddRepositoryToList(workdir, "eq-list1", repo2, "main", false)
 		AddRepositoryToList(workdir, "eq-list2", repo1, "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		result := GetRelatedRepositories(workdir, targetURL)
 		if !result.Success {
 			t.Fatalf("error: %s", result.Error.Message)
@@ -3131,7 +3137,7 @@ func setupExternalInteraction(t *testing.T, workdir, interactionType string) (ex
 	if !post.Success {
 		t.Fatal(post.Error.Message)
 	}
-	_ = SyncWorkspaceToCache(workdir)
+	_ = syncWorkspace(workdir)
 	parsed := protocol.ParseRef(post.Data.ID)
 	suffix := fmt.Sprintf("%06d", atomic.AddInt64(&extInteractionCounter, 1))
 	externalRepo = "https://github.com/external/" + interactionType + "/" + suffix
@@ -3347,7 +3353,7 @@ func TestFetchIntegration(t *testing.T) {
 			ID: "malformed-list", Name: "Malformed", Version: "0.1.0",
 			Repositories: []string{"not-a-valid-url", ""},
 		})
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Fetch should skip malformed refs without crashing
 		result := Fetch(workdir, t.TempDir(), &FetchOptions{ListID: "malformed-list"})
 		// May succeed with 0 repos or fail for other reasons, but shouldn't panic
@@ -3361,7 +3367,7 @@ func TestFetchIntegration(t *testing.T) {
 		CreateList(workdir, "fetch-b", "B")
 		AddRepositoryToList(workdir, "fetch-a", "https://github.com/fetch-a/repo", "main", false)
 		AddRepositoryToList(workdir, "fetch-b", "https://github.com/fetch-b/repo", "main", false)
-		_ = SyncWorkspaceToCache(workdir)
+		_ = syncWorkspace(workdir)
 		// Only fetch list "fetch-a", should skip "fetch-b"
 		result := Fetch(workdir, t.TempDir(), &FetchOptions{ListID: "fetch-a"})
 		_ = result // Just verify no panic
@@ -3386,7 +3392,7 @@ func TestResolveItem_fromWorkspaceCommitWithOriginal(t *testing.T) {
 	if !post.Success {
 		t.Fatal(post.Error.Message)
 	}
-	_ = SyncWorkspaceToCache(workdir)
+	_ = syncWorkspace(workdir)
 
 	comment := CreateComment(workdir, post.Data.ID, "Comment for resolve", nil)
 	if !comment.Success {

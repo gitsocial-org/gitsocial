@@ -190,8 +190,8 @@ func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch strin
 }
 
 // InsertSocialItems batch-inserts multiple non-virtual social items in a single transaction.
-// Used by SyncWorkspaceToCache for reduced lock contention. Skips interaction count
-// updates since workspace sync processes the full history (counts are rebuilt on fetch).
+// Used by the workspace sync for reduced lock contention. Skips interaction count
+// updates since the workspace sync processes the full history (counts are rebuilt on fetch).
 func InsertSocialItems(items []SocialItem) error {
 	if len(items) == 0 {
 		return nil
