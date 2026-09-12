@@ -7,9 +7,11 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -652,7 +654,7 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 	if opts.MaxLines == 1 {
 		// Single line: flatten content
 		text = strings.ReplaceAll(text, "\n", " ")
-		if len(text) > opts.Width-10 && opts.Width > 10 {
+		if opts.Width > 10 {
 			text = TruncateToWidth(text, opts.Width-10)
 		}
 		contentLines = []string{text}
@@ -910,19 +912,98 @@ func BuildRef(id, repoURL, branch string, isWorkspace bool) string {
 	return ref
 }
 
-// TruncateToWidth truncates a string to fit within maxWidth characters
+// escapeEnd returns the index just past the escape sequence starting at i.
+func escapeEnd(s string, i int) int {
+	if i >= len(s) || s[i] != '\x1b' {
+		return i + 1
+	}
+	j := i + 1
+	if j < len(s) && s[j] == ']' {
+		// An OSC ends at BEL or at ST (ESC backslash).
+		for j < len(s) {
+			if s[j] == '\x07' {
+				return j + 1
+			}
+			if s[j] == '\x1b' && j+1 < len(s) && s[j+1] == '\\' {
+				return j + 2
+			}
+			j++
+		}
+		return j
+	}
+	for j < len(s) {
+		c := s[j]
+		j++
+		if (c >= 0x40 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) {
+			break
+		}
+	}
+	return j
+}
+
+// isSGRReset reports whether an escape sequence clears every style attribute.
+func isSGRReset(seq string) bool {
+	return seq == "\x1b[0m" || seq == "\x1b[m"
+}
+
+// osc8 reports whether seq is an OSC 8 hyperlink, and whether it opens one rather than closing it.
+func osc8(seq string) (link, opens bool) {
+	const prefix = "\x1b]8;;"
+	if !strings.HasPrefix(seq, prefix) {
+		return false, false
+	}
+	body := strings.TrimSuffix(seq, "\x07")
+	body = strings.TrimSuffix(body, "\x1b\\")
+	return true, len(body) > len(prefix)
+}
+
+// TruncateToWidth truncates a string to maxWidth printable cells, keeping escape
+// sequences whole and closing a style or hyperlink the cut left open.
 func TruncateToWidth(s string, maxWidth int) string {
 	if AnsiWidth(s) <= maxWidth {
 		return s
 	}
-	runes := []rune(s)
-	for i := len(runes) - 1; i >= 0; i-- {
-		truncated := string(runes[:i]) + "..."
-		if AnsiWidth(truncated) <= maxWidth {
-			return truncated
-		}
+	const ellipsis = "..."
+	if maxWidth <= 0 {
+		return ""
 	}
-	return "..."
+	if maxWidth < len(ellipsis) {
+		return ellipsis[:maxWidth]
+	}
+	var b strings.Builder
+	budget := maxWidth - len(ellipsis)
+	width := 0
+	styleOpen, linkOpen := false, false
+	for i := 0; i < len(s); {
+		if s[i] == '\x1b' {
+			end := escapeEnd(s, i)
+			seq := s[i:end]
+			b.WriteString(seq)
+			if link, opens := osc8(seq); link {
+				linkOpen = opens
+			} else if strings.HasSuffix(seq, "m") {
+				styleOpen = !isSGRReset(seq)
+			}
+			i = end
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		w := runewidth.RuneWidth(r)
+		if width+w > budget {
+			break
+		}
+		b.WriteString(s[i : i+size])
+		width += w
+		i += size
+	}
+	b.WriteString(ellipsis)
+	if linkOpen {
+		b.WriteString("\x1b]8;;\x07")
+	}
+	if styleOpen {
+		b.WriteString("\x1b[0m")
+	}
+	return b.String()
 }
 
 // Pluralize returns the singular or plural form based on count
