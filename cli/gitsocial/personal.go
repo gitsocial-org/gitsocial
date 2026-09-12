@@ -72,11 +72,11 @@ func newPersonalSyncCmd() *cobra.Command {
 		Short: "Sync the personal repo with its remote",
 		Long: `Sync the personal bare repo with its remote.
 
-Per-branch handling: each refs/heads/gitmsg/* branch is fetched/pushed via the
-auto-merge helper — empty-tree append-only branches reconcile divergent
-histories without conflicts. State refs under refs/gitmsg/* (settings config,
-list metadata, etc.) sync as a single bulk refspec. After a fetch, personal-tier
-memos are re-indexed into the cache so "gitsocial memo list" reflects them.`,
+Each refs/heads/gitmsg/* branch is fetched and pushed through the
+auto-merge helper, since empty-tree append-only branches reconcile
+without conflicts. State refs under refs/gitmsg/* sync as one bulk
+refspec. After a fetch, personal-tier memos are re-indexed into the
+cache.`,
 		Run: func(cmd *cobra.Command, _ []string) {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {

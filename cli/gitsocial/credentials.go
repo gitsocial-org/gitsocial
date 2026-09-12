@@ -74,9 +74,9 @@ func newCredentialsSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <remote-or-host>",
 		Short: "Store a key pair for an endpoint host",
-		Long: `Store an S3 key pair for a remote (resolved to its endpoint host) or a bare
-endpoint host. Reads two lines from stdin — the access key, then the secret
-key — so it works both interactively and piped:
+		Long: `Store an S3 key pair for a remote, resolved to its endpoint host, or for
+a bare endpoint host. Reads two lines from stdin, the access key then the
+secret key, so it works interactively and piped:
 
   gitsocial config credentials set r2
   printf '%s\n%s\n' "$ACCESS" "$SECRET" | gitsocial config credentials set r2
