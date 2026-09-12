@@ -465,11 +465,11 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 
 	rest := ""
 	if header.Badge != "" {
-		rest += " " + header.Badge
+		rest += " " + stripVerifiedIcon(header.Badge)
 	}
 	if header.IsEdited {
 		if header.EditedBy != "" {
-			rest += " · ✎ " + header.EditedBy
+			rest += " · ✎ " + stripVerifiedIcon(header.EditedBy)
 			if header.IsEditorVerified {
 				rest += " " + SafeIcon("⚿")
 			}
@@ -495,7 +495,7 @@ func renderHeader(header CardHeader, selectionBar string, opts CardOptions) stri
 			break
 		}
 		str.WriteString(Dim.Render(" · "))
-		text := part.Text
+		text := stripVerifiedIcon(part.Text)
 		if part.Link != nil {
 			text = Dim.Render(text)
 			text = opts.Anchors.Mark(text, *part.Link)
@@ -786,15 +786,15 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 		str.WriteString(Dim.Render(nested.Card.Header.Icon))
 		str.WriteString("  ")
 	}
-	str.WriteString(nested.Card.Header.TitleStyle(nested.Dimmed).Render(nested.Card.Header.Title))
+	str.WriteString(nested.Card.Header.TitleStyle(nested.Dimmed).Render(stripVerifiedIcon(nested.Card.Header.Title)))
 	rest := ""
 	if nested.Card.Header.Badge != "" {
-		rest += " " + nested.Card.Header.Badge
+		rest += " " + stripVerifiedIcon(nested.Card.Header.Badge)
 	}
 	str.WriteString(Dim.Render(rest))
 	for _, part := range nested.Card.Header.Subtitle {
 		str.WriteString(Dim.Render(" · "))
-		str.WriteString(Dim.Render(part.Text))
+		str.WriteString(Dim.Render(stripVerifiedIcon(part.Text)))
 	}
 
 	// Content (trimmed)
@@ -950,7 +950,7 @@ func LinkStyle(text string) string {
 	return "\x1b[38;5;" + pickThemeColor(accentHyperlinkDark, accentHyperlinkLight) + ";4m" + text + "\x1b[39;24m"
 }
 
-// stripVerifiedIcon removes the verified icon from user-controlled text to prevent spoofing.
+// stripVerifiedIcon removes the verified icon from user-controlled text, so the badge comes from the flags alone.
 func stripVerifiedIcon(s string) string {
 	return strings.ReplaceAll(s, "⚿", "")
 }
