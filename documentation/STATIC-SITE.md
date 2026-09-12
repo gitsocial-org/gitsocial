@@ -1,12 +1,12 @@
 # Static Site
 
-`gitsocial mirror` and `gitsocial push` publish a browsable website of the repository into a bucket, as static files the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics.
+`gitsocial mirror` and `gitsocial push` build a browsable website of the repository in a bucket, as static files the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics.
 
 [Mirror](#mirror) · [Publish](#publish) · [Customization](#customization) · [HTML pages](#html-pages) · [Testing](#testing) · [Reference](#reference)
 
 ## Mirror
 
-For a project hosted on a forge, one command clones it, imports its issues, pull requests, releases and discussions, and publishes data, code and the site:
+For a project hosted on a forge, one command clones it, imports its issues, pull requests, releases and discussions, pushes data and code, and builds the site:
 
 ```bash
 gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix> --url https://your-domain/
@@ -24,11 +24,11 @@ gitsocial config site set publish true
 gitsocial push
 ```
 
-- `publish` is off by default. It lives in the pushed config ref, so a plain `git push` that carries it maintains the site too.
-- `--no-site` skips the site for one push. `git config gitsocial.pushSite false` opts a machine out. Neither turns the site on.
-- `gitsocial push --site-only [remote...]` rebuilds the site without pushing data. It fails when `publish` is off or the remote is not s3.
+- `publish` is off by default. It lives in the pushed config ref, so a plain `git push` that carries it rebuilds the site too.
+- `--no-site` skips the rebuild for one push. `git config gitsocial.pushSite false` opts a machine out. Neither turns the site on.
+- `gitsocial push --site-only [remote...]` rebuilds the site and sends no refs. It fails when `publish` is off or the remote is not s3.
 - The site needs public reads on the bucket or the domain in front of it. A private bucket still works as a remote, without a site.
-- A push from a newer binary re-uploads the [shell](#shell), the app's own files.
+- A rebuild from a newer binary re-uploads the [shell](#shell), the app's own files.
 - A [thin fork bucket](S3.md#thin-fork-buckets) gets no site. `gitsocial push --full` detaches it and the site returns.
 
 ## Customization
@@ -53,7 +53,7 @@ Values live in the `site` object of the core config ref and reach the bucket as 
 
 ### Per-remote overrides
 
-Only `url`, `publish` and `pages` can differ per remote; the other keys travel with the repo. An override lives in local git config as `remote.<name>.gitsocial-site-<key>`, regenerates that remote's site in full on the next push, and applies to pushes by remote name, not by URL.
+Only `url`, `publish` and `pages` can differ per remote; the other keys travel with the repo. An override lives in local git config as `remote.<name>.gitsocial-site-<key>`, rebuilds that remote's site in full on the next push, and applies to pushes by remote name, not by URL.
 
 ```bash
 gitsocial config site set publish false --remote backup
@@ -69,11 +69,11 @@ gitsocial config site set pages true
 gitsocial config site set url "https://example.com/"   # absolute base for canonicals, OG tags and the sitemap
 ```
 
-Effective when `publish`, `pages` and a valid `url` are all set. Every push then maintains the [page keys](#page-keys):
+Effective when `publish`, `pages` and a valid `url` are all set. Every rebuild then maintains the [page keys](#page-keys):
 
 - An item page inlines its thread: replies in time order, edits resolved with an "edited" marker, tombstones for retractions, review chips and `file:line` feedback on pull requests, artifact blocks on releases. A thread caps at about 100 replies or 200 KB with a "N more replies" marker.
 - A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Page 1 is the oldest. The sealed page that was newest when it sealed keeps its `← newer` link to the head after it stops being newest, and the head's `older →` chain reaches every page, so a crawler walking either direction lands on a real document. Milestones and sprints fold into `issues`.
-- `index.html` is dual-owned: the page layer holds it whenever the layer is effective, the shell otherwise. Every effective push reclaims it, since the same push's shell upload may have written over it.
+- `index.html` is dual-owned: the page layer holds it whenever the layer is effective, the shell otherwise. Every effective rebuild reclaims it, since the same rebuild's shell upload may have written over it.
 - The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Its rows come from the code index, not a second git walk, so the list, the timeline and the front page's activity agree on which commits belong to the branch.
 - Sealed commits pages are re-derived after a rebase or force-push. `gitmsg/*` branches are append-only by protocol; the default branch is not.
 - Every pass re-locates the recorded frontier in the current list before sealing onward. The sha must still be there, with the same number of rows below it. A sha commits to its ancestry, so a frontier still present proves the sealed region intact, and the row count catches a re-attribution that inserted rows beneath it. Either check failing re-derives the chain.
@@ -85,7 +85,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
   - its path has no space and none of `@ : # ? %`.
 - File pages follow the tree: a document that leaves it loses its page, one under 100 words stays out of the sitemap, and any renders whole up to 256 KB. `filesInclude` and `filesExclude` override the selection rule.
 - A file page's key mirrors the repo path with the extension swapped for `.html`, which is a one-to-one map onto the `file:<path>@<branch>` route the page stamps as its boot hook. Two documents that would claim one key put the second at `<path>.html`.
-- Discovery is the one place the page layer reads a git tree instead of the push's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb. A tree it cannot read carries the published set forward rather than reading as an empty repo.
+- Discovery is the one place the page layer reads a git tree instead of the rebuild's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb. A tree it cannot read carries the published set forward rather than reading as an empty repo.
 - A changed default branch rewrites every page, since the branch is in each page's route and meta line. Each page's date comes from one history walk over the tree, not a `git log` per path.
 - The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app. The page has no heading of its own; the README's headings stand as written and the repo title is the `<title>` and the sidebar.
 - `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
@@ -103,7 +103,7 @@ Rules that hold on every page:
 - Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is the one card the page layer and the app still shape differently.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.
 - A thread reply is a comment card in both renderers, under a `Comments (N)` heading, with its type glyph leading the meta row and one rail per depth level. Ordering is the app's: a reply follows the one it answers, siblings run oldest first, depth caps at four. The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
-- First-time generation runs item pages, then file pages, then commits pages. `GITSOCIAL_SITE_PAGES_BUDGET` caps the item pages one push writes ([S3.md](S3.md#environment-variables)); the rest resume on the next push. The cap is unset by default.
+- First-time generation runs item pages, then file pages, then commits pages. `GITSOCIAL_SITE_PAGES_BUDGET` caps the item pages one rebuild writes ([S3.md](S3.md#environment-variables)); the rest resume on the next push. The cap is unset by default.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 
 Known divergence: the app renders markdown for `.md` and `.markdown` only, so an `.mdx` page reads as prose before the boot and as source after it.
@@ -206,9 +206,9 @@ A first view stays under half a megabyte at 100,000 commits: the shell is about 
 
 Each extension keeps two corpora: `items/<ext>/` for metadata and `bodies/<ext>/` for the searchable message text. Both are append-only and split oldest-first into fixed groups. A full group seals into a content-hash-keyed shard, the trailing group is the mutable head, and a manifest lists the shards, the head, the branch tip at write time and the corpus's compressed size. A sealed shard's membership does not change under append, so its key is stable and a rebuild re-uploads nothing. Both corpora are built from the bucket's own objects, which are uploaded before any ref moves, so an artifact cannot name a commit a reader is unable to resolve.
 
-One push writes both corpora in a pinned order: bodies shards, items shards, bodies head, items head, bodies manifest, items manifest, and the cursor last. Manifests are the only commit points, so an interruption leaves at worst bodies ahead of items. A document at any other schema version reads as absent, and the reader falls back to a bounded object walk until a push rewrites it.
+One rebuild writes both corpora in a pinned order: bodies shards, items shards, bodies head, items head, bodies manifest, items manifest, and the cursor last. Manifests are the only commit points, so an interruption leaves at worst bodies ahead of items. A document at any other schema version reads as absent, and the reader falls back to a bounded object walk until a rebuild rewrites it.
 
-A push classifies the state from both manifests and both live head counts, then takes one action:
+A rebuild classifies the state from both manifests and both live head counts, then takes one action:
 
 | Action | State | Work |
 |---|---|---|
@@ -234,9 +234,9 @@ A push classifies the state from both manifests and both live head counts, then 
 
 ### Push-time maintenance
 
-Every ref-moving push to an s3 remote runs the site's share of the upkeep pass ([S3.md](S3.md#push-maintenance)).
+Every ref-moving push to an s3 remote runs the site rebuild as its share of the upkeep pass ([S3.md](S3.md#push-maintenance)).
 
-- The transport hands that share to a hook, `site.PostPushMaintenance`, which the CLI supplies to the remote helper. A binary that wires no hook pushes data and leaves the site to the next `gitsocial push`.
+- The transport hands that share to a hook, `site.PostPushMaintenance`, which the CLI supplies to the remote helper. A binary that wires no hook sends the refs and leaves the rebuild to the next `gitsocial push`.
 
 - `.gitsocial/site/push-state` records the last full pass: the shell version, a digest over the `refs/` listing etags plus HEAD's, and the page layer's state. A matching marker skips the data-derived pass in two or three round trips.
 - The marker is stamped only at the end of a full pass, so a stale, missing or unreadable marker costs extra work rather than a skip. A per-remote override folds into the digest, since it moves no ref.

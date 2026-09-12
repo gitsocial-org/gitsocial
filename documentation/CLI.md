@@ -51,17 +51,17 @@ The first fetch in a workspace asks whether to track the default branch only or 
 
 ### gitsocial push
 
-Publishes the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, open PR heads, and on an s3 remote with `site.publish` the site. Flags and remote resolution are in [S3.md](S3.md#push).
+Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, and open PR heads to the remote. A push to an s3 remote with `site.publish` then rebuilds the site. Flags and remote resolution are in [S3.md](S3.md#push).
 
 ```
 gitsocial push [remote...]
-gitsocial push --dry-run
-gitsocial push --site-only
+gitsocial push --dry-run       # print the plan, send nothing
+gitsocial push --site-only     # rebuild the site, send no refs
 ```
 
 ### gitsocial mirror
 
-Mirrors a forge-hosted project into a bucket: fetch from the forge, import issues, pull requests, releases and discussions, then push data, code and the site. Re-running refreshes. It is safe from cron, and a crashed run resumes.
+Mirrors a forge-hosted project into a bucket: fetch from the forge, import issues, pull requests, releases and discussions, then push data and code, and rebuild the site. Re-running refreshes. It is safe from cron, and a crashed run resumes.
 
 ```
 gitsocial mirror <forge-url> <s3-url> --url <public-url>   # cold start: clone, import, push
