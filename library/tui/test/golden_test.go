@@ -61,10 +61,16 @@ func normalizeGolden(s string) string {
 	return strings.Join(lines, "\n")
 }
 
+// The terminal size every golden route is rendered at.
+const (
+	goldenCols  = 120
+	goldenLines = 40
+)
+
 func TestGolden(t *testing.T) {
 	f := getFixture(t)
 	h := New(t, f.Workdir, f.CacheDir)
-	h.SetSize(120, 40)
+	h.SetSize(goldenCols, goldenLines)
 
 	views := []struct {
 		name string
@@ -82,7 +88,9 @@ func TestGolden(t *testing.T) {
 	for _, v := range views {
 		t.Run(v.name, func(t *testing.T) {
 			h.Navigate(v.path)
-			got := normalizeGolden(stripANSI(h.Rendered()))
+			frame := h.Rendered()
+			assertFrameFits(t, frame, goldenCols, goldenLines)
+			got := normalizeGolden(stripANSI(frame))
 			golden := filepath.Join("testdata", v.name+".golden")
 
 			if *updateGolden {
@@ -137,6 +145,24 @@ func TestGolden(t *testing.T) {
 			})
 		}
 	})
+}
+
+// The overflow that shipped: a styled nav panel one column past a 120-column terminal.
+func TestGoldenWidth_rejectsNavOneColumnTooWide(t *testing.T) {
+	frame := func(navCols int) string {
+		lines := make([]string, goldenLines)
+		for i := range lines {
+			lines[i] = strings.Repeat(" ", goldenCols)
+		}
+		lines[1] = "\x1b[34m│\x1b[0m" + strings.Repeat("─", navCols-2) + "\x1b[34m┐\x1b[0m"
+		return strings.Join(lines, "\n")
+	}
+	if over := frameOverflow(frame(goldenCols+1), goldenCols); len(over) != 1 {
+		t.Errorf("a nav row of %d columns: got %d overflow reports, want 1: %v", goldenCols+1, len(over), over)
+	}
+	if over := frameOverflow(frame(goldenCols), goldenCols); len(over) != 0 {
+		t.Errorf("a nav row of %d columns: got %d overflow reports, want 0: %v", goldenCols, len(over), over)
+	}
 }
 
 // diffLines produces a simple diff between two line slices, showing up to 20 differences.

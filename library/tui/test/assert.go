@@ -2,10 +2,10 @@
 package test
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -75,22 +75,38 @@ func assertLineCount(t *testing.T, output string, maxLines int) {
 	}
 }
 
-// lineWidth returns the visible column count of one already ANSI-stripped line.
-// Runes, not bytes, because the UI is full of multi-byte box-drawing characters;
-// trailing padding is ignored, since views pad rows out with spaces.
+// lineWidth returns the printable cell width of one line, trailing padding excluded.
 func lineWidth(line string) int {
-	return utf8.RuneCountInString(strings.TrimRight(line, " "))
+	return tuicore.AnsiWidth(strings.TrimRight(stripANSI(line), " "))
 }
 
-// assertMaxWidth checks that no rendered line is wider than maxCols. This is the
-// horizontal counterpart to assertLineCount: without it a panel border pushed
-// past the terminal edge passes every assertion except a golden diff.
+// frameOverflow returns one message per line of a rendered frame wider than maxCols.
+func frameOverflow(frame string, maxCols int) []string {
+	var over []string
+	for i, line := range strings.Split(frame, "\n") {
+		if w := lineWidth(line); w > maxCols {
+			over = append(over, fmt.Sprintf("line %d is %d columns wide, max %d:\n%s", i+1, w, maxCols, stripANSI(line)))
+		}
+	}
+	return over
+}
+
+// assertFrameFits checks one rendered frame against the terminal size it was rendered at.
+func assertFrameFits(t *testing.T, frame string, cols, lines int) {
+	t.Helper()
+	for _, msg := range frameOverflow(frame, cols) {
+		t.Error(msg)
+	}
+	if got := len(strings.Split(frame, "\n")); got != lines {
+		t.Errorf("frame has %d lines, want %d", got, lines)
+	}
+}
+
+// assertMaxWidth checks that no rendered line is wider than maxCols.
 func assertMaxWidth(t *testing.T, output string, maxCols int) {
 	t.Helper()
-	for i, line := range strings.Split(stripANSI(output), "\n") {
-		if w := lineWidth(line); w > maxCols {
-			t.Errorf("line %d is %d columns wide, max %d:\n%s", i+1, w, maxCols, line)
-		}
+	for _, msg := range frameOverflow(output, maxCols) {
+		t.Error(msg)
 	}
 }
 

@@ -67,7 +67,7 @@ func (h *Harness) BindingsForContext(ctx tuicore.Context) []tuicore.Binding
 
 Every `SendKey` and `Navigate` drains the commands it produces. Key names: `enter`, `esc`, `tab`, `shift+tab`, the arrows, `ctrl+c`, `ctrl+d`, `ctrl+u`, `space`, `backspace`, `home`, `end`, `pgup`, `pgdown`; any other string is sent as runes.
 
-Assertions: `stripANSI`, `rendered(h)`, `assertContains(t, output, substr)`, `assertRendersItem(t, h, loc, want...)`, `assertNotEmpty`, `assertLineCount(t, output, maxLines)`.
+Assertions: `stripANSI`, `rendered(h)`, `assertContains(t, output, substr)`, `assertRendersItem(t, h, loc, want...)`, `assertNotEmpty`, `assertLineCount(t, output, maxLines)`, `assertMaxWidth(t, output, maxCols)`, `assertFitsTerminal(t, h)`, `assertFrameFits(t, frame, cols, lines)`.
 
 Prefer `assertRendersItem`. It navigates, requires every named fragment of seeded content, and fails on an empty expectation. `assertNotEmpty` passes on chrome alone, so it fits only views with no seeded data.
 
@@ -99,7 +99,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 |---|---|---|
 | `smoke_test.go` | `TestSmoke/AllKeysAllViews`, `GlobalShortcuts`, `UnregisteredKeysIgnored` | every view with the keys its own context binds and one key nothing binds, then each global shortcut once on the first view that binds it (86 subtests), without a panic; full tier only |
 | `display_test.go` | `TestDisplay/*`: Timeline, Search, MyRepository, Board, IssuesList, Milestones, Sprints, PRList, ReleasesList, Notifications, Memos, ProjectMemos, MemoDetail, MemoHistory, MemoInherits, Forks, Settings, Site, Cache, Help | seeded content appears on each view |
-| `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help}_120x40`, `LayoutProperties` | ANSI-stripped renders against `testdata/*.golden`; every view fits the height at 120x40, 80x24 and 200x60 (full tier only) |
+| `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help}_120x40`, `LayoutProperties`, `TestGoldenWidth_rejectsNavOneColumnTooWide` | ANSI-stripped renders against `testdata/*.golden`, each frame also 120 columns wide and 40 lines; every view fits the height at 120x40, 80x24 and 200x60 (full tier only); a nav row one column too wide is rejected |
 | `navigation_test.go` | `TestNavigation/GlobalKeys` (`S`, `P`, `R`, `V`, `M`), `Back`, `SiteEditToggle`, `MultiLevelBack`, `Detail`, `Search`, `Help`, `Notifications` | the global jump keys land on their routes; `esc`, `/`, `?` and `@` do what they say |
 | `sequence_test.go` | `TestSequence/*`: AllExtensions, BrowseAndReturn, IssuesFlow, SettingsAndBack, QuickJumpOverridesHistory, the `*OpensForm` and `*Navigates` flows per item type, PostRetractShowsConfirm, SearchFlow, PRDiffNavigates, MultipleViewRenders, PushConfirmNamesRemote | multi-step flows; full tier only |
 | `cursor_test.go` | `TestTimelineCursorSurvivesFetch`, `TestTimelineCursorSurvivesBackNav` | the timeline selection survives a fetch and a detail round trip |
@@ -112,4 +112,5 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 - Commands run synchronously to a depth of 50; `tea.BatchMsg` fans out. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`, `tea.Tick` (message timeouts, the auto-fetch heartbeat). These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
 - `tui.Model.Update` returns either `tui.Model` or `*tui.Model`; `toModel` handles both.
 - The suite catches panics on empty data, render crashes, keys that stop working after a refactor, missing `Activate` calls, navigation dead ends, content regressions, registration-order bugs, context mismatches, broken box drawing and height overflow.
-- Not caught: horizontal overflow. `assertLineCount` bounds the line count only, so a line wider than the terminal passes everything but a golden diff.
+- Horizontal overflow is caught by `assertFrameFits` on every golden route and by `assertFitsTerminal` on every `TestDisplay` view. Both measure printable cells with `tuicore.AnsiWidth`, so a border past the terminal edge fails on its own line, not as a golden diff.
+- Not caught: overflow at 80x24. `TestGolden/LayoutProperties` bounds the line count at each size and leaves the width to the golden routes, which render at 120x40.
