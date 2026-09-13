@@ -349,6 +349,52 @@ func recountInteractions(db *sql.DB, targets []itemKey) {
 	}
 }
 
+// recountAllInteractionsQuery rebuilds every target's counts in one pass: each
+// live interaction against its original, and each live comment against every
+// ancestor its reply-to chain reaches.
+const recountAllInteractionsQuery = `
+	WITH RECURSIVE live AS (
+		SELECT s.repo_url, s.hash, s.branch, s.type,
+		       s.original_repo_url, s.original_hash, s.original_branch,
+		       s.reply_to_repo_url, s.reply_to_hash, s.reply_to_branch
+		FROM social_items s
+		JOIN core_commits c ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
+		WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND s.type IN ('comment', 'repost', 'quote')
+	), chain(repo_url, hash, branch, item_hash) AS (
+		SELECT reply_to_repo_url, reply_to_hash, reply_to_branch, hash FROM live
+		WHERE type = 'comment' AND reply_to_hash IS NOT NULL
+		UNION
+		SELECT p.reply_to_repo_url, p.reply_to_hash, p.reply_to_branch, ch.item_hash
+		FROM chain ch
+		JOIN social_items p ON p.repo_url = ch.repo_url AND p.hash = ch.hash AND p.branch = ch.branch
+		WHERE p.reply_to_hash IS NOT NULL
+	), pairs AS (
+		SELECT original_repo_url AS repo_url, original_hash AS hash, original_branch AS branch, type, hash AS item_hash
+		FROM live WHERE original_hash IS NOT NULL
+		UNION
+		SELECT repo_url, hash, branch, 'comment', item_hash FROM chain
+	)
+	INSERT INTO social_interactions (repo_url, hash, branch, comments, reposts, quotes)
+	SELECT repo_url, hash, branch,
+	       COUNT(DISTINCT CASE WHEN type = 'comment' THEN item_hash END),
+	       COUNT(DISTINCT CASE WHEN type = 'repost' THEN item_hash END),
+	       COUNT(DISTINCT CASE WHEN type = 'quote' THEN item_hash END)
+	FROM pairs
+	WHERE hash IS NOT NULL AND item_hash != hash
+	GROUP BY repo_url, hash, branch
+`
+
+// recountAllInteractions rebuilds the whole counter table from live rows.
+func recountAllInteractions(db *sql.DB) {
+	if _, err := db.Exec(`DELETE FROM social_interactions`); err != nil {
+		log.Warn("clear interaction counts failed", "error", err)
+		return
+	}
+	if _, err := db.Exec(recountAllInteractionsQuery); err != nil {
+		log.Warn("recount every interaction target failed", "error", err)
+	}
+}
+
 // interactionTargets returns every item whose counts an item changes: its
 // original, its reply-to chain, and the same for the canonical an edit replaces.
 func interactionTargets(db *sql.DB, item SocialItem) []itemKey {

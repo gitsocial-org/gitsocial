@@ -1,10 +1,48 @@
 // schema.go - Social extension database schema
 package social
 
-import "github.com/gitsocial-org/gitsocial/library/core/cache"
+import (
+	"database/sql"
+
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
+)
 
 func init() {
 	cache.RegisterSchema("social", schema)
+	cache.RegisterMigration(retireLegacySocialTables)
+}
+
+// retireLegacySocialTables copies the legacy read markers into the core table
+// once, recounts every interaction target from live rows, and drops the two
+// tables the incremental counter needed. It runs once: after the drop the
+// guard finds neither table and the migration is a no-op.
+func retireLegacySocialTables(db *sql.DB) {
+	if !socialTableExists(db, "social_notification_reads") && !socialTableExists(db, "social_counted_sources") {
+		return
+	}
+	if socialTableExists(db, "social_notification_reads") {
+		if _, err := db.Exec(`
+			INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at)
+			SELECT repo_url, hash, branch, read_at FROM social_notification_reads`); err != nil {
+			log.Warn("copy legacy notification reads failed", "error", err)
+		} else if _, err := db.Exec(`DROP TABLE social_notification_reads`); err != nil {
+			// The markers are in the core table; a failed drop retries on the next open.
+			log.Warn("drop legacy notification reads failed", "error", err)
+		}
+	}
+	recountAllInteractions(db)
+	// The gate table has no readers left, so a failed drop costs nothing but a retry.
+	if _, err := db.Exec(`DROP TABLE IF EXISTS social_counted_sources`); err != nil {
+		log.Warn("drop legacy counted sources failed", "error", err)
+	}
+}
+
+// socialTableExists reports whether a table is present in the cache.
+func socialTableExists(db *sql.DB, name string) bool {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&count)
+	return err == nil && count > 0
 }
 
 const schema = `
@@ -36,14 +74,6 @@ CREATE TABLE IF NOT EXISTS social_interactions (
     reposts INTEGER DEFAULT 0,
     quotes INTEGER DEFAULT 0,
     PRIMARY KEY (repo_url, hash, branch)
-);
-
--- Tracks source commits whose interaction effect on the target counter has
--- already been applied. Fork mirrors of a workspace commit share the same hash;
--- gating the increment on INSERT OR IGNORE here makes counter updates
--- order-independent across workspace/fork fetch.
-CREATE TABLE IF NOT EXISTS social_counted_sources (
-    hash TEXT PRIMARY KEY
 );
 
 -- Extension: Social resolved view (unified read interface).
@@ -85,19 +115,6 @@ SELECT
 FROM core_commits c
 LEFT JOIN social_items s ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
 LEFT JOIN social_interactions i ON c.repo_url = i.repo_url AND c.hash = i.hash AND c.branch = i.branch;
-
--- Extension: Social notifications read state (legacy, migrated to core_notification_reads)
-CREATE TABLE IF NOT EXISTS social_notification_reads (
-    repo_url TEXT NOT NULL,
-    hash TEXT NOT NULL,
-    branch TEXT NOT NULL,
-    read_at TEXT,
-    PRIMARY KEY (repo_url, hash, branch)
-);
-
--- Migration: copy social_notification_reads to core_notification_reads
-INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at)
-SELECT repo_url, hash, branch, read_at FROM social_notification_reads;
 
 -- Extension: Social followers (tracks which repos follow a workspace)
 CREATE TABLE IF NOT EXISTS social_followers (

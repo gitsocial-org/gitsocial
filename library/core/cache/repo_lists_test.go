@@ -27,10 +27,6 @@ SELECT r.*, COALESCE(s.type, 'post') as type,
 FROM core_commits r
 LEFT JOIN social_items s ON r.repo_url = s.repo_url AND r.hash = s.hash AND r.branch = s.branch
 LEFT JOIN social_interactions i ON r.repo_url = i.repo_url AND r.hash = i.hash AND r.branch = i.branch;
-CREATE TABLE IF NOT EXISTS social_notification_reads (
-    repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, read_at TEXT,
-    PRIMARY KEY (repo_url, hash, branch)
-);
 CREATE TABLE IF NOT EXISTS social_followers (
     repo_url TEXT NOT NULL, workspace_url TEXT NOT NULL, detected_at TEXT, list_id TEXT, commit_hash TEXT,
     PRIMARY KEY (repo_url, workspace_url)
