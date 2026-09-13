@@ -196,7 +196,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 	}
 
 	if interactionType == PostTypeRepost && content == "" {
-		content = generateRepostContentFromItem(targetItem)
+		content = generateRepostContentFromItem(targetItem, repoURL)
 	}
 
 	if labelStr := joinSocialLabels(labels); labelStr != "" {
@@ -302,22 +302,45 @@ func buildRefFromItem(item *SocialItem) protocol.Ref {
 	}
 }
 
-// generateRepostContentFromItem creates repost content from the original item.
-func generateRepostContentFromItem(item *SocialItem) string {
+// generateRepostContentFromItem writes the repost subject of GITSOCIAL.md 1.2:
+// the local form for a workspace post, the "@ owner/repo" form for a remote one.
+func generateRepostContentFromItem(item *SocialItem, workspaceURL string) string {
 	author := item.AuthorName
 	if author == "" {
 		author = "Unknown"
 	}
 
-	repoName := protocol.GetFullDisplayName(item.RepoURL)
 	firstLine := strings.Split(item.Content, "\n")[0]
-	// Runes, not bytes: this line is stored as commit content, and a byte cut
-	// through a multi-byte character writes invalid UTF-8.
+	// Runes, not bytes: a byte cut through a multi-byte character writes invalid UTF-8.
 	if runes := []rune(firstLine); len(runes) > 50 {
 		firstLine = string(runes[:47]) + "..."
 	}
 
-	return "# " + author + " @ " + repoName + ": " + firstLine
+	if item.RepoURL == "" || item.RepoURL == workspaceURL {
+		return "# " + author + ": " + firstLine
+	}
+	return "# " + author + " @ " + protocol.GetFullDisplayName(item.RepoURL) + ": " + firstLine
+}
+
+// addThreadFields carries an item's original and reply-to onto the edit or
+// retraction that replaces it, so the new commit names its thread on its own
+// (GITSOCIAL.md, the Edit Comment example).
+func addThreadFields(fields map[string]string, item *SocialItem, workspaceURL string) {
+	if ref := localItemRef(item.OriginalRepoURL, item.OriginalHash, item.OriginalBranch, workspaceURL); ref != "" {
+		fields["original"] = ref
+	}
+	if ref := localItemRef(item.ReplyToRepoURL, item.ReplyToHash, item.ReplyToBranch, workspaceURL); ref != "" {
+		fields["reply-to"] = ref
+	}
+}
+
+// localItemRef builds a ref from an item's stored key, relative to the workspace.
+func localItemRef(repoURL, hash, branch sql.NullString, workspaceURL string) string {
+	if !repoURL.Valid || !hash.Valid || hash.String == "" {
+		return ""
+	}
+	ref := protocol.CreateRef(protocol.RefTypeCommit, hash.String, repoURL.String, branch.String)
+	return protocol.LocalizeRef(ref, workspaceURL)
 }
 
 // EditPostOptions configures post edits. When Labels is nil the canonical's
@@ -366,6 +389,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 		"type":  targetItem.Type,
 		"edits": editsRef,
 	}
+	addThreadFields(fields, targetItem, repoURL)
 	if opts != nil && opts.Labels != nil {
 		fields["labels"] = joinSocialLabels(*opts.Labels)
 	}
@@ -452,6 +476,7 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 		"edits":     editsRef,
 		"retracted": "true",
 	}
+	addThreadFields(fields, targetItem, repoURL)
 
 	header := protocol.Header{
 		Ext:        "social",

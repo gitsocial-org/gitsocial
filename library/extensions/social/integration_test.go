@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -143,6 +144,87 @@ func TestPostCRUD(t *testing.T) {
 		}
 		if result.Data.EditOf == "" {
 			t.Error("EditOf should reference canonical post")
+		}
+	})
+
+	// The edit of a nested comment names its thread, as GITSOCIAL.md's Edit Comment example does.
+	t.Run("EditPost_commentCarriesItsThread", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		post := CreatePost(workdir, "Thread root", nil)
+		if !post.Success {
+			t.Fatal(post.Error.Message)
+		}
+		comment := CreateComment(workdir, post.Data.ID, "First reply", nil)
+		if !comment.Success {
+			t.Fatal(comment.Error.Message)
+		}
+		nested := CreateComment(workdir, comment.Data.ID, "Nested reply", nil)
+		if !nested.Success {
+			t.Fatal(nested.Error.Message)
+		}
+
+		edit := EditPost(workdir, nested.Data.ID, "Nested reply, corrected", nil)
+		if !edit.Success {
+			t.Fatalf("EditPost() failed: %s", edit.Error.Message)
+		}
+		commit, err := git.GetCommit(workdir, protocol.ParseRef(edit.Data.ID).Value)
+		if err != nil || commit == nil {
+			t.Fatalf("GetCommit() error = %v", err)
+		}
+		msg := protocol.ParseMessage(commit.Message)
+		if msg == nil {
+			t.Fatal("the edit commit carries no GitMsg header")
+		}
+		wantOriginal := protocol.ParseRef(post.Data.ID).Value
+		wantReplyTo := protocol.ParseRef(comment.Data.ID).Value
+		if got := protocol.ParseRef(msg.Header.Fields["original"]).Value; got != wantOriginal {
+			t.Errorf("original = %q, want the thread root %q", got, wantOriginal)
+		}
+		if got := protocol.ParseRef(msg.Header.Fields["reply-to"]).Value; got != wantReplyTo {
+			t.Errorf("reply-to = %q, want the parent comment %q", got, wantReplyTo)
+		}
+	})
+
+	// A retraction names its thread the way an edit does.
+	t.Run("RetractPost_commentCarriesItsThread", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		post := CreatePost(workdir, "Thread root", nil)
+		if !post.Success {
+			t.Fatal(post.Error.Message)
+		}
+		comment := CreateComment(workdir, post.Data.ID, "First reply", nil)
+		if !comment.Success {
+			t.Fatal(comment.Error.Message)
+		}
+		nested := CreateComment(workdir, comment.Data.ID, "Nested reply", nil)
+		if !nested.Success {
+			t.Fatal(nested.Error.Message)
+		}
+		if r := RetractPost(workdir, nested.Data.ID); !r.Success {
+			t.Fatalf("RetractPost() failed: %s", r.Error.Message)
+		}
+
+		branch := gitmsg.GetExtBranch(workdir, "social")
+		commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{Branch: branch, Limit: 1})
+		if err != nil || len(commits) == 0 {
+			t.Fatalf("GetCommits() error = %v", err)
+		}
+		msg := protocol.ParseMessage(commits[0].Message)
+		if msg == nil {
+			t.Fatal("the retraction commit carries no GitMsg header")
+		}
+		if msg.Header.Fields["retracted"] != "true" {
+			t.Fatalf("retracted = %q, want true", msg.Header.Fields["retracted"])
+		}
+		wantOriginal := protocol.ParseRef(post.Data.ID).Value
+		wantReplyTo := protocol.ParseRef(comment.Data.ID).Value
+		if got := protocol.ParseRef(msg.Header.Fields["original"]).Value; got != wantOriginal {
+			t.Errorf("original = %q, want the thread root %q", got, wantOriginal)
+		}
+		if got := protocol.ParseRef(msg.Header.Fields["reply-to"]).Value; got != wantReplyTo {
+			t.Errorf("reply-to = %q, want the parent comment %q", got, wantReplyTo)
 		}
 	})
 
@@ -995,6 +1077,30 @@ func TestCommentOps(t *testing.T) {
 func TestRepostAndQuote(t *testing.T) {
 	t.Parallel()
 
+	// The writer follows GITSOCIAL.md 1.2: a workspace post gets the local subject.
+	t.Run("CreateRepost_localSubjectForWorkspacePost", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		post := CreatePost(workdir, "Repost subject test", nil)
+		if !post.Success {
+			t.Fatal(post.Error.Message)
+		}
+		_ = syncWorkspace(workdir)
+
+		result := CreateRepost(workdir, post.Data.ID, nil)
+		if !result.Success {
+			t.Fatalf("CreateRepost() failed: %s", result.Error.Message)
+		}
+		commit, err := git.GetCommit(workdir, protocol.ParseRef(result.Data.ID).Value)
+		if err != nil || commit == nil {
+			t.Fatalf("GetCommit() error = %v", err)
+		}
+		subject := strings.SplitN(commit.Message, "\n", 2)[0]
+		if subject != "# Test User: Repost subject test" {
+			t.Errorf("subject = %q, want the local form", subject)
+		}
+	})
+
 	t.Run("CreateRepost_integration", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
@@ -1156,7 +1262,7 @@ func TestGenerateRepostContentFromItem(t *testing.T) {
 		RepoURL:    "https://github.com/alice/repo",
 		Content:    "Short message",
 	}
-	got := generateRepostContentFromItem(item)
+	got := generateRepostContentFromItem(item, "")
 	if got == "" {
 		t.Error("generateRepostContentFromItem should not return empty")
 	}
@@ -1170,7 +1276,7 @@ func TestGenerateRepostContentFromItem_noAuthor(t *testing.T) {
 		Content: "Some content",
 		RepoURL: "https://github.com/a/b",
 	}
-	got := generateRepostContentFromItem(item)
+	got := generateRepostContentFromItem(item, "")
 	if got == "" {
 		t.Error("should not return empty")
 	}
@@ -1186,7 +1292,7 @@ func TestGenerateRepostContentFromItem_longContent(t *testing.T) {
 		RepoURL:    "https://github.com/b/c",
 		Content:    "This is a very long message that should be truncated at fifty characters to prevent overly long repost content",
 	}
-	got := generateRepostContentFromItem(item)
+	got := generateRepostContentFromItem(item, "")
 	// First line > 50 chars should be truncated to 47 + "..."
 	if len(got) > 200 {
 		t.Errorf("content too long: %d chars", len(got))
