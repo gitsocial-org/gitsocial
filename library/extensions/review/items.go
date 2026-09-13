@@ -3,6 +3,7 @@ package review
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -191,12 +192,66 @@ func GetReviewItem(repoURL, hash, branch string) (*ReviewItem, error) {
 }
 
 // GetReviewItemByRef looks up a review item by its ref string.
+// A ref carrying no branch is resolved by hash, never by guessing the review branch.
 func GetReviewItemByRef(refStr string, defaultRepoURL string) (*ReviewItem, error) {
-	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, "gitmsg/review")
-	if ref.Hash == "" {
+	parsed := protocol.ParseRef(refStr)
+	if parsed.Value == "" {
 		return nil, sql.ErrNoRows
 	}
-	return GetReviewItem(ref.RepoURL, ref.Hash, ref.Branch)
+	if parsed.Branch == "" {
+		return findByHash(parsed.Repository, parsed.Value)
+	}
+	repoURL := parsed.Repository
+	if repoURL == "" {
+		repoURL = defaultRepoURL
+	}
+	return GetReviewItem(repoURL, parsed.Value, parsed.Branch)
+}
+
+// findByHash resolves a full or short commit hash to one review item, refusing an ambiguous prefix.
+func findByHash(repoURL, prefix string) (*ReviewItem, error) {
+	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		query := `SELECT DISTINCT hash FROM review_items_resolved
+			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted`
+		args := []interface{}{escapeLike(prefix) + "%"}
+		if repoURL != "" {
+			query += " AND repo_url = ?"
+			args = append(args, repoURL)
+		}
+		rows, err := db.Query(query+" LIMIT 2", args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				return nil, err
+			}
+			out = append(out, hash)
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(hashes) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if len(hashes) > 1 {
+		return nil, fmt.Errorf("hash %q is ambiguous: %s and %s both match", prefix, hashes[0], hashes[1])
+	}
+	return cache.QueryLocked(func(db *sql.DB) (*ReviewItem, error) {
+		query := baseSelectFromView + `
+			WHERE v.hash = ? AND NOT v.is_edit_commit AND NOT v.is_retracted`
+		args := []interface{}{hashes[0]}
+		if repoURL != "" {
+			query += " AND v.repo_url = ?"
+			args = append(args, repoURL)
+		}
+		return scanResolvedRow(db.QueryRow(query+" ORDER BY v.timestamp DESC LIMIT 1", args...))
+	})
 }
 
 type ReviewQuery struct {

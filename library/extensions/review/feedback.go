@@ -63,28 +63,16 @@ func CreateFeedback(workdir, content string, opts CreateFeedbackOptions) Result[
 	return result.Ok(ReviewItemToFeedback(*item))
 }
 
-// GetFeedback retrieves a single feedback item by reference.
+// GetFeedback retrieves a single feedback item by reference, full ref or bare hash.
 func GetFeedback(feedbackRef string) Result[Feedback] {
-	// Try direct indexed lookup first (covers full refs and full hashes)
 	item, err := GetReviewItemByRef(feedbackRef, "")
-	if err == nil && item.Type == string(ItemTypeFeedback) {
-		return result.Ok(ReviewItemToFeedback(*item))
-	}
-	// Fall back to prefix scan for short hashes
-	items, err := GetReviewItems(ReviewQuery{
-		Types: []string{string(ItemTypeFeedback)},
-		Limit: 1000,
-	})
 	if err != nil {
-		return result.Err[Feedback]("QUERY_FAILED", err.Error())
+		return result.Err[Feedback]("NOT_FOUND", notFoundMessage("feedback", feedbackRef, err))
 	}
-	for _, item := range items {
-		r := ReviewItemToFeedback(item)
-		if r.ID == feedbackRef || strings.HasPrefix(r.ID, feedbackRef) {
-			return result.Ok(r)
-		}
+	if item.Type != string(ItemTypeFeedback) {
+		return result.Err[Feedback]("NOT_FOUND", "not feedback: "+feedbackRef)
 	}
-	return result.Err[Feedback]("NOT_FOUND", "feedback not found: "+feedbackRef)
+	return result.Ok(ReviewItemToFeedback(*item))
 }
 
 type UpdateFeedbackOptions struct {

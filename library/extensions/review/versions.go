@@ -3,6 +3,7 @@ package review
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,26 +37,16 @@ type PRVersion struct {
 
 // GetPRVersions retrieves all versions of a PR ordered by timestamp ascending (oldest first).
 func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
-	parsed := protocol.ParseRef(prRef)
-	if parsed.Value == "" {
-		// Try as a short hash via GetPR
-		pr := GetPR(prRef)
-		if !pr.Success {
-			return result.Err[[]PRVersion]("NOT_FOUND", "pull request not found: "+prRef)
-		}
-		parsed = protocol.ParseRef(pr.Data.ID)
+	// The item's own row answers where the pull request lives; no branch is guessed.
+	item, err := GetReviewItemByRef(prRef, workspaceURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return result.Err[[]PRVersion]("NOT_FOUND", "pull request not found: "+prRef)
 	}
-	repoURL := parsed.Repository
-	if repoURL == "" {
-		repoURL = workspaceURL
-	}
-	commitHash := parsed.Value
-	branch := parsed.Branch
-	if branch == "" {
-		branch = "gitmsg/review"
+	if err != nil {
+		return result.Err[[]PRVersion]("RESOLVE_FAILED", err.Error())
 	}
 
-	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(repoURL, commitHash, branch)
+	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(item.RepoURL, item.Hash, item.Branch)
 	if err != nil {
 		return result.Err[[]PRVersion]("RESOLVE_FAILED", err.Error())
 	}

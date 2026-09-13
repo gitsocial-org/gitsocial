@@ -5,12 +5,63 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
+
+// TestGetPR_ambiguousPrefix refuses a hash prefix that two pull requests share.
+func TestGetPR_ambiguousPrefix(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/ambiguous"
+	for _, hash := range []string{"amb012345678", "amb912345678"} {
+		insertReviewTestCommit(t, repoURL, hash)
+		if err := InsertReviewItem(ReviewItem{
+			RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request",
+			State: cache.ToNullString("open"),
+		}); err != nil {
+			t.Fatalf("InsertReviewItem() failed: %v", err)
+		}
+	}
+	res := GetPR("amb")
+	if res.Success || res.Error.Code != "NOT_FOUND" {
+		t.Fatalf("GetPR() of an ambiguous prefix = %+v, want NOT_FOUND", res)
+	}
+	if !strings.Contains(res.Error.Message, "ambiguous") {
+		t.Errorf("the message should name the ambiguity, got %q", res.Error.Message)
+	}
+	if res := GetPR("amb0"); !res.Success {
+		t.Errorf("GetPR() of a prefix matching one pull request failed: %s", res.Error.Message)
+	}
+}
+
+// TestGetPR_mirrorHashResolvesByRepository resolves a hash shared by two repository URLs to the row the ref names.
+func TestGetPR_mirrorHashResolvesByRepository(t *testing.T) {
+	setupTestDB(t)
+	const hash = "0a1b2c3d4e5f"
+	for _, repoURL := range []string{"https://github.com/test/upstream", "https://github.com/test/fork"} {
+		insertReviewTestCommit(t, repoURL, hash)
+		if err := InsertReviewItem(ReviewItem{
+			RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request",
+			State: cache.ToNullString("open"),
+		}); err != nil {
+			t.Fatalf("InsertReviewItem() failed: %v", err)
+		}
+	}
+	for _, repoURL := range []string{"https://github.com/test/upstream", "https://github.com/test/fork"} {
+		res := GetPR(repoURL + "#commit:" + hash)
+		if !res.Success {
+			t.Fatalf("GetPR(%s) failed: %s", repoURL, res.Error.Message)
+		}
+		if res.Data.Repository != repoURL {
+			t.Errorf("GetPR(%s) resolved to %q, want its own row", repoURL, res.Data.Repository)
+		}
+	}
+}
 
 func TestPROperations(t *testing.T) {
 	t.Parallel()
@@ -56,20 +107,45 @@ func TestPROperations(t *testing.T) {
 		}
 	})
 
-	t.Run("GetPR_byHashPrefix", func(t *testing.T) {
+	t.Run("GetPR_onConfiguredBranch", func(t *testing.T) {
+		t.Parallel()
+		dir := initTestRepo(t)
+		if err := SaveReviewConfig(dir, ReviewConfig{Branch: "gitmsg/pr"}); err != nil {
+			t.Fatalf("SaveReviewConfig() failed: %v", err)
+		}
+		created := CreatePR(dir, "PR on another branch", "", CreatePROptions{Base: "main", Head: "feature"})
+		if !created.Success {
+			t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+		}
+		hash := protocol.ParseRef(created.Data.ID).Value
+		if res := GetPR(hash); !res.Success {
+			t.Errorf("GetPR() of the full hash failed: %s", res.Error.Message)
+		}
+		if res := GetPR(hash[:8]); !res.Success {
+			t.Errorf("GetPR() of an eight-character prefix failed: %s", res.Error.Message)
+		}
+		versions := GetPRVersions(hash, gitmsg.ResolveRepoURL(dir))
+		if !versions.Success {
+			t.Fatalf("GetPRVersions() failed: %s", versions.Error.Message)
+		}
+		if len(versions.Data) != 1 {
+			t.Errorf("GetPRVersions() returned %d versions, want 1", len(versions.Data))
+		}
+	})
+
+	t.Run("GetPR_byBareHash", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
 		created := CreatePR(dir, "Prefix PR", "", CreatePROptions{Base: "main", Head: "feature"})
 		if !created.Success {
 			t.Fatalf("CreatePR() failed: %s", created.Error.Message)
 		}
-		hash := created.Data.ID
-		if len(hash) > 12 {
-			hash = hash[:12]
-		}
-		res := GetPR(hash)
+		res := GetPR(protocol.ParseRef(created.Data.ID).Value)
 		if !res.Success {
-			t.Fatalf("GetPR() with prefix failed: %s", res.Error.Message)
+			t.Fatalf("GetPR() with a bare hash failed: %s", res.Error.Message)
+		}
+		if res.Data.ID != created.Data.ID {
+			t.Errorf("GetPR() = %q, want %q", res.Data.ID, created.Data.ID)
 		}
 	})
 

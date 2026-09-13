@@ -2,7 +2,9 @@
 package review
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -89,32 +91,24 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 	return result.Ok(ReviewItemToPullRequest(*item))
 }
 
-// GetPR retrieves a single pull request by reference.
+// GetPR retrieves a single pull request by reference, full ref or bare hash.
 func GetPR(prRef string) Result[PullRequest] {
-	// Try direct indexed lookup first (covers full refs and full hashes)
 	item, err := GetReviewItemByRef(prRef, "")
-	if err == nil && item.Type == string(ItemTypePullRequest) {
-		return result.Ok(ReviewItemToPullRequest(*item))
-	}
-	// Fall back to prefix scan for short hashes
-	items, err := GetReviewItems(ReviewQuery{
-		Types: []string{string(ItemTypePullRequest)},
-		Limit: 1000,
-	})
 	if err != nil {
-		return result.Err[PullRequest]("QUERY_FAILED", err.Error())
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
-	for _, item := range items {
-		pr := ReviewItemToPullRequest(item)
-		if pr.ID == prRef || strings.HasPrefix(pr.ID, prRef) {
-			return result.Ok(pr)
-		}
-		parsed := protocol.ParseRef(pr.ID)
-		if parsed.Value != "" && strings.HasPrefix(parsed.Value, prRef) {
-			return result.Ok(pr)
-		}
+	if item.Type != string(ItemTypePullRequest) {
+		return result.Err[PullRequest]("NOT_FOUND", "not a pull request: "+prRef)
 	}
-	return result.Err[PullRequest]("NOT_FOUND", "pull request not found: "+prRef)
+	return result.Ok(ReviewItemToPullRequest(*item))
+}
+
+// notFoundMessage names an ambiguous hash prefix, and the ref itself otherwise.
+func notFoundMessage(kind, ref string, err error) string {
+	if errors.Is(err, sql.ErrNoRows) {
+		return kind + " not found: " + ref
+	}
+	return err.Error()
 }
 
 type UpdatePROptions struct {
