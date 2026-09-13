@@ -177,20 +177,24 @@ func TestGetReviewItems_filterByRepo(t *testing.T) {
 	}
 }
 
-func TestGetReviewItems_filterByReviewer(t *testing.T) {
+// TestReviewRequested_filterByReviewer exercises the reviewer filter production reads.
+func TestReviewRequested_filterByReviewer(t *testing.T) {
 	setupTestDB(t)
 	repoURL := reviewTestRepoURL
 	insertReviewTestCommit(t, repoURL, "rv1_12345678")
 	insertReviewTestCommit(t, repoURL, "rv2_12345678")
-	InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: "rv1_12345678", Branch: reviewTestBranch, Type: "pull-request", Reviewers: cache.ToNullString("alice@test.com")})
-	InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: "rv2_12345678", Branch: reviewTestBranch, Type: "pull-request", Reviewers: cache.ToNullString("bob@test.com")})
+	InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: "rv1_12345678", Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open"), Reviewers: cache.ToNullString("alice@test.com")})
+	InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: "rv2_12345678", Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open"), Reviewers: cache.ToNullString("bob@test.com")})
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Reviewer: "alice@test.com"})
+	notifs, err := getReviewRequestedNotifications("alice@test.com", false)
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewRequestedNotifications() error = %v", err)
 	}
-	if len(items) != 1 {
-		t.Errorf("expected 1 item for alice, got %d", len(items))
+	if len(notifs) != 1 {
+		t.Fatalf("expected 1 notification for alice, got %d", len(notifs))
+	}
+	if notifs[0].Hash != "rv1_12345678" {
+		t.Errorf("notification hash = %q, want alice's pull request", notifs[0].Hash)
 	}
 }
 
@@ -253,29 +257,11 @@ func TestGetReviewItems_limit(t *testing.T) {
 	}
 }
 
-func TestGetReviewItems_offset(t *testing.T) {
+// TestGetReviewItems_cursor pages with the keyset cursor production uses.
+func TestGetReviewItems_cursor(t *testing.T) {
 	setupTestDB(t)
 	repoURL := reviewTestRepoURL
-	for i := 0; i < 3; i++ {
-		hash := []string{"of1_12345678", "of2_12345678", "of3_12345678"}[i]
-		insertReviewTestCommit(t, repoURL, hash)
-		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
-	}
-
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 2, Offset: 1})
-	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
-	}
-	if len(items) != 2 {
-		t.Errorf("expected 2 items with offset=1 limit=2, got %d", len(items))
-	}
-}
-
-func TestGetReviewItems_sortAsc(t *testing.T) {
-	setupTestDB(t)
-	repoURL := reviewTestRepoURL
-	hashes := []string{"sa1_12345678", "sa2_12345678"}
-	for i, hash := range hashes {
+	for i, hash := range []string{"of1_12345678", "of2_12345678", "of3_12345678"} {
 		if err := cache.InsertCommits([]cache.Commit{{
 			Hash: hash, RepoURL: repoURL, Branch: reviewTestBranch,
 			AuthorName: "Test", AuthorEmail: "test@test.com", Message: "test",
@@ -286,15 +272,22 @@ func TestGetReviewItems_sortAsc(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, SortOrder: "asc"})
+	first, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 1})
 	if err != nil {
 		t.Fatalf("GetReviewItems() error = %v", err)
 	}
-	if len(items) < 2 {
-		t.Fatalf("expected at least 2 items, got %d", len(items))
+	if len(first) != 1 || first[0].Hash != "of3_12345678" {
+		t.Fatalf("first page = %+v, want the newest item", first)
 	}
-	if items[0].Timestamp.After(items[1].Timestamp) {
-		t.Error("first item should be older when sorted asc")
+	next, err := GetReviewItems(ReviewQuery{
+		RepoURL: repoURL, Branch: reviewTestBranch, Limit: 1,
+		Cursor: first[0].Timestamp.Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatalf("GetReviewItems() error = %v", err)
+	}
+	if len(next) != 1 || next[0].Hash != "of2_12345678" {
+		t.Fatalf("second page = %+v, want the next older item", next)
 	}
 }
 
@@ -536,7 +529,7 @@ func TestGetReviewItems_sortByTimestamp(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, SortField: "timestamp", SortOrder: "desc"})
+	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}

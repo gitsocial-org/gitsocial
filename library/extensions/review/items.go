@@ -214,16 +214,11 @@ type ReviewQuery struct {
 	States    []string
 	RepoURL   string
 	Branch    string
-	Reviewer  string
-	PRRef     string // filter feedback by pull-request composite key
 	PRRepoURL string
 	PRHash    string
 	PRBranch  string
 	Limit     int
-	Offset    int
 	Cursor    string // RFC3339 timestamp — items older than this (keyset pagination)
-	SortField string
-	SortOrder string
 }
 
 // GetReviewItems queries review items with filtering and pagination.
@@ -260,11 +255,6 @@ func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
 			args = append(args, q.Branch)
 		}
 
-		if q.Reviewer != "" {
-			where = append(where, "v.reviewers LIKE ?")
-			args = append(args, "%"+q.Reviewer+"%")
-		}
-
 		if q.PRRepoURL != "" && q.PRHash != "" {
 			where = append(where, "v.pull_request_repo_url = ? AND v.pull_request_hash = ?")
 			args = append(args, q.PRRepoURL, q.PRHash)
@@ -287,19 +277,11 @@ func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
 			sqlQuery += " WHERE " + strings.Join(where, " AND ")
 		}
 
-		order := "v.timestamp DESC"
-		if q.SortOrder == "asc" {
-			order = "v.timestamp ASC"
-		}
-		sqlQuery += " ORDER BY " + order
+		sqlQuery += " ORDER BY v.timestamp DESC"
 
 		if q.Limit > 0 {
 			sqlQuery += " LIMIT ?"
 			args = append(args, q.Limit)
-		}
-		if q.Offset > 0 && q.Cursor == "" {
-			sqlQuery += " OFFSET ?"
-			args = append(args, q.Offset)
 		}
 
 		rows, err := db.Query(sqlQuery, args...)
