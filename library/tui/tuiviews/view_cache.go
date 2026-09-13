@@ -3,12 +3,12 @@ package tuiviews
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -302,18 +302,7 @@ func (v *CacheView) deleteRepo() tea.Cmd {
 	path := target.Path
 	name := target.URL
 	return func() tea.Msg {
-		var firstErr error
-		if repoURL != "" {
-			if err := cache.DeleteRepository(repoURL); err != nil {
-				firstErr = err
-			}
-		}
-		if path != "" {
-			if err := os.RemoveAll(path); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-		return CacheRepoDeletedMsg{Name: name, Err: firstErr}
+		return CacheRepoDeletedMsg{Name: name, Err: client.RemoveRepository(repoURL, path)}
 	}
 }
 

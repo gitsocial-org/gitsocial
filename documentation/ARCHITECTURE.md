@@ -231,7 +231,7 @@ Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits`
 - `core_notification_reads`, `core_mentions`, `core_labels`, `core_trailer_refs`: read markers, `@` mentions, labels, and `Closes:`/`Refs:` trailers per commit
 - `core_identity_dns` (24 h TTL), `core_verified_bindings`: identity caches; see [IDENTITY.md](IDENTITY.md)
 - `core_edit_acceptances`, `core_edit_declines`: outcomes of cross-repo proposals
-- `social_items`, `social_interactions`, `social_followers`, `social_repo_lists`, `social_repo_list_repositories`, `social_counted_sources`, `social_notification_reads`
+- `social_items`, `social_interactions` (recounted from live items on every write), `social_followers`, `social_repo_lists`, `social_repo_list_repositories`
 - `pm_items`, `pm_assignees`, `pm_links` (blocks, blocked-by, related)
 - `review_items`, `review_reviewers`, `review_branch_observations` (live tips of every branch an open PR points at, refreshed after fetch)
 - `release_items`, `release_sbom_cache`

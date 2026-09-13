@@ -367,6 +367,14 @@ const recountAllInteractionsQuery = `
 	GROUP BY repo_url, hash, branch
 `
 
+// RecountAllInteractions rebuilds every target's counts, for a caller that removed items behind them.
+func RecountAllInteractions() error {
+	return cache.ExecLocked(func(db *sql.DB) error {
+		recountAllInteractions(db)
+		return nil
+	})
+}
+
 // recountAllInteractions rebuilds the whole counter table from live rows.
 func recountAllInteractions(db *sql.DB) {
 	if _, err := db.Exec(`DELETE FROM social_interactions`); err != nil {
