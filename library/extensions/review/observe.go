@@ -14,8 +14,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// BranchObservation is a snapshot of one (repo_url, branch) pair.
-type BranchObservation struct {
+// branchObservation is a snapshot of one (repo_url, branch) pair.
+type branchObservation struct {
 	RepoURL    string
 	Branch     string
 	Tip        string
@@ -23,8 +23,8 @@ type BranchObservation struct {
 	ObservedAt time.Time
 }
 
-// RefreshOpenPRBranches records the live remote tip of every branch an open pull request names.
-func RefreshOpenPRBranches(workdir string) error {
+// refreshOpenPRBranches records the live remote tip of every branch an open pull request names.
+func refreshOpenPRBranches(workdir string) error {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
 		return nil
@@ -37,7 +37,7 @@ func RefreshOpenPRBranches(workdir string) error {
 	}
 	now := time.Now()
 	seen := make(map[[2]string]struct{})
-	rows := make([]BranchObservation, 0, len(res.Data)*2)
+	rows := make([]branchObservation, 0, len(res.Data)*2)
 	collect := func(parsed protocol.ParsedRef) {
 		if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 			return
@@ -92,8 +92,8 @@ func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation 
 	baseParsed := protocol.ParseRef(pr.Base)
 	headRepo, headBranch := refRepoAndBranch(headParsed, workspaceURL)
 	baseRepo, baseBranch := refRepoAndBranch(baseParsed, workspaceURL)
-	headObs, _ := GetBranchObservation(headRepo, headBranch)
-	baseObs, _ := GetBranchObservation(baseRepo, baseBranch)
+	headObs, _ := getBranchObservation(headRepo, headBranch)
+	baseObs, _ := getBranchObservation(baseRepo, baseBranch)
 	if headObs == nil && baseObs == nil {
 		return nil
 	}
@@ -110,9 +110,9 @@ func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation 
 }
 
 // observeBranch resolves the live tip of (repoURL, branch) for upsert.
-func observeBranch(workdir, repoURL, branch string, now time.Time) BranchObservation {
-	tip, err := ResolveBranchTip(workdir, repoURL, branch)
-	obs := BranchObservation{
+func observeBranch(workdir, repoURL, branch string, now time.Time) branchObservation {
+	tip, err := resolveBranchTip(workdir, repoURL, branch)
+	obs := branchObservation{
 		RepoURL:    repoURL,
 		Branch:     branch,
 		Exists:     err == nil && tip != "",
@@ -140,7 +140,7 @@ func resolveTipShortObs(workdir, workspaceURL string, parsed protocol.ParsedRef)
 }
 
 // upsertBranchObservations writes the observation rows in one transaction.
-func upsertBranchObservations(rows []BranchObservation) error {
+func upsertBranchObservations(rows []branchObservation) error {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -177,18 +177,18 @@ func upsertBranchObservations(rows []BranchObservation) error {
 	})
 }
 
-// GetBranchObservation reads one observation, returning sql.ErrNoRows when none was recorded.
-func GetBranchObservation(repoURL, branch string) (*BranchObservation, error) {
+// getBranchObservation reads one observation, returning sql.ErrNoRows when none was recorded.
+func getBranchObservation(repoURL, branch string) (*branchObservation, error) {
 	if repoURL == "" || branch == "" {
 		return nil, sql.ErrNoRows
 	}
-	return cache.QueryLocked(func(db *sql.DB) (*BranchObservation, error) {
+	return cache.QueryLocked(func(db *sql.DB) (*branchObservation, error) {
 		row := db.QueryRow(`
             SELECT repo_url, branch, tip, branch_exists, observed_at
             FROM review_branch_observations
             WHERE repo_url = ? AND branch = ?`,
 			repoURL, branch)
-		var obs BranchObservation
+		var obs branchObservation
 		var tip sql.NullString
 		var exists int
 		var observedAt string
@@ -270,7 +270,7 @@ func IsHeadUnpushed(workdir string, pr PullRequest) bool {
 	if repoURL == "" {
 		repoURL = wsURL
 	}
-	obs, err := GetBranchObservation(repoURL, parsed.Value)
+	obs, err := getBranchObservation(repoURL, parsed.Value)
 	if err != nil || obs == nil || !obs.Exists {
 		return false
 	}

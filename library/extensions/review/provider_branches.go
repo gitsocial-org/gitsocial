@@ -32,8 +32,8 @@ func getBranchStateNotifications(workdir, workspaceURL, userEmail string, forkUR
 func branchStateForPR(workspaceURL string, pr PullRequest) []notifications.Notification {
 	headRepo, headBranch := refRepoAndBranch(protocol.ParseRef(pr.Head), workspaceURL)
 	baseRepo, baseBranch := refRepoAndBranch(protocol.ParseRef(pr.Base), workspaceURL)
-	headObs, _ := GetBranchObservation(headRepo, headBranch)
-	baseObs, _ := GetBranchObservation(baseRepo, baseBranch)
+	headObs, _ := getBranchObservation(headRepo, headBranch)
+	baseObs, _ := getBranchObservation(baseRepo, baseBranch)
 	prRef := protocol.CreateRef(protocol.RefTypeCommit, protocol.ParseRef(pr.ID).Value, pr.Repository, pr.Branch)
 	if headObs != nil && !headObs.Exists {
 		return []notifications.Notification{branchStateNotif(prRef, pr,

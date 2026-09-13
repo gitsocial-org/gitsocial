@@ -710,7 +710,7 @@ func fetchHeadIntoTemp(workdir, sourceURL, branch, tempBranch string) error {
 // retargetDependents retargets open dependents onto the merged pull request's base and returns one error per failed edit.
 func retargetDependents(workdir string, merged PullRequest) []*result.Error {
 	var failures []*result.Error
-	for _, dep := range GetDependents(merged.Repository, merged.Branch, extractRefHash(merged.ID)) {
+	for _, dep := range getDependents(extractRefHash(merged.ID)) {
 		if dep.State != PRStateOpen || dep.Base != merged.Head {
 			continue
 		}

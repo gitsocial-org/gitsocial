@@ -31,7 +31,7 @@ func PostFetchHooks() []fetch.PostFetchHook {
 
 // refreshBranchObservationsHook records the live tips of every open pull request's branches after a fetch.
 func refreshBranchObservationsHook(workdir, _, _, _ string) {
-	if err := RefreshOpenPRBranches(workdir); err != nil {
+	if err := refreshOpenPRBranches(workdir); err != nil {
 		log.Debug("refresh branch observations", "error", err)
 	}
 }

@@ -14,11 +14,11 @@ import (
 
 // SyncWorkspaceBatch ingests pre-fetched workspace commits from the review branch.
 func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, _ string) {
-	ProcessWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "review"))
+	processWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "review"))
 }
 
-// ProcessWorkspaceBatch processes pre-fetched commits into review items.
-func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
+// processWorkspaceBatch processes pre-fetched commits into review items.
+func processWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 	var reviewItems []ReviewItem
 	for _, gc := range commits {
 		if fetch.CleanRefname(gc.Refname) != branch {
@@ -29,7 +29,7 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 			reviewItems = append(reviewItems, *item)
 		}
 	}
-	if err := InsertReviewItems(reviewItems); err != nil {
+	if err := insertReviewItems(reviewItems); err != nil {
 		log.Debug("batch insert review items failed", "error", err)
 	}
 	syncEditFields(reviewItems)

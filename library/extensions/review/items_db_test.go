@@ -131,9 +131,9 @@ func TestGetReviewItems_filterByType(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: typ, State: cache.ToNullString("open")})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{Types: []string{"pull-request"}, RepoURL: repoURL, Branch: reviewTestBranch})
+	items, err := getReviewItems(reviewQuery{Types: []string{"pull-request"}, RepoURL: repoURL, Branch: reviewTestBranch})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 2 {
 		t.Errorf("expected 2 pull-requests, got %d", len(items))
@@ -150,9 +150,9 @@ func TestGetReviewItems_filterByState(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hashes[i], Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString(states[i])})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{States: []string{"open"}, RepoURL: repoURL, Branch: reviewTestBranch})
+	items, err := getReviewItems(reviewQuery{States: []string{"open"}, RepoURL: repoURL, Branch: reviewTestBranch})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 open item, got %d", len(items))
@@ -168,9 +168,9 @@ func TestGetReviewItems_filterByRepo(t *testing.T) {
 	InsertReviewItem(ReviewItem{RepoURL: repo1, Hash: "rp1_12345678", Branch: reviewTestBranch, Type: "pull-request"})
 	InsertReviewItem(ReviewItem{RepoURL: repo2, Hash: "rp2_12345678", Branch: reviewTestBranch, Type: "pull-request"})
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repo1, Branch: reviewTestBranch})
+	items, err := getReviewItems(reviewQuery{RepoURL: repo1, Branch: reviewTestBranch})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 item for repo1, got %d", len(items))
@@ -212,9 +212,9 @@ func TestGetReviewItems_filterByPR(t *testing.T) {
 		PullRequestRepoURL: cache.ToNullString(repoURL), PullRequestHash: cache.ToNullString("pr456"), PullRequestBranch: cache.ToNullString(reviewTestBranch),
 	})
 
-	items, err := GetReviewItems(ReviewQuery{PRRepoURL: repoURL, PRHash: "pr123", PRBranch: reviewTestBranch})
+	items, err := getReviewItems(reviewQuery{PRRepoURL: repoURL, PRHash: "pr123", PRBranch: reviewTestBranch})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 feedback for pr123, got %d", len(items))
@@ -230,9 +230,9 @@ func TestGetReviewItems_filterByPR_noBranch(t *testing.T) {
 		PullRequestRepoURL: cache.ToNullString(repoURL), PullRequestHash: cache.ToNullString("pr789"),
 	})
 
-	items, err := GetReviewItems(ReviewQuery{PRRepoURL: repoURL, PRHash: "pr789"})
+	items, err := getReviewItems(reviewQuery{PRRepoURL: repoURL, PRHash: "pr789"})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 feedback, got %d", len(items))
@@ -248,9 +248,9 @@ func TestGetReviewItems_limit(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 2})
+	items, err := getReviewItems(reviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 2})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(items) != 2 {
 		t.Errorf("expected 2 items with limit=2, got %d", len(items))
@@ -272,19 +272,19 @@ func TestGetReviewItems_cursor(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
 	}
 
-	first, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 1})
+	first, err := getReviewItems(reviewQuery{RepoURL: repoURL, Branch: reviewTestBranch, Limit: 1})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(first) != 1 || first[0].Hash != "of3_12345678" {
 		t.Fatalf("first page = %+v, want the newest item", first)
 	}
-	next, err := GetReviewItems(ReviewQuery{
+	next, err := getReviewItems(reviewQuery{
 		RepoURL: repoURL, Branch: reviewTestBranch, Limit: 1,
 		Cursor: first[0].Timestamp.Format(time.RFC3339),
 	})
 	if err != nil {
-		t.Fatalf("GetReviewItems() error = %v", err)
+		t.Fatalf("getReviewItems() error = %v", err)
 	}
 	if len(next) != 1 || next[0].Hash != "of2_12345678" {
 		t.Fatalf("second page = %+v, want the next older item", next)
@@ -529,7 +529,7 @@ func TestGetReviewItems_sortByTimestamp(t *testing.T) {
 		InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request"})
 	}
 
-	items, err := GetReviewItems(ReviewQuery{RepoURL: repoURL, Branch: reviewTestBranch})
+	items, err := getReviewItems(reviewQuery{RepoURL: repoURL, Branch: reviewTestBranch})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -568,7 +568,7 @@ func TestGetReviewItems_viewError(t *testing.T) {
 		db.Exec("DROP VIEW IF EXISTS review_items_resolved")
 		return nil
 	})
-	_, err := GetReviewItems(ReviewQuery{Limit: 10})
+	_, err := getReviewItems(reviewQuery{Limit: 10})
 	if err == nil {
 		t.Error("should fail when view is dropped")
 	}
@@ -589,7 +589,7 @@ func TestGetReviewItems_scanError(t *testing.T) {
 		return nil
 	})
 	// The query names a comments column the table lacks, so the scan fails.
-	_, err := GetReviewItems(ReviewQuery{Limit: 10})
+	_, err := getReviewItems(reviewQuery{Limit: 10})
 	if err == nil {
 		t.Error("should fail when view has wrong columns")
 	}

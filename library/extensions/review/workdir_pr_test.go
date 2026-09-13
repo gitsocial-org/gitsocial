@@ -35,9 +35,9 @@ func TestResolveBranchTip_PrefersRemoteTracking(t *testing.T) {
 		t.Fatalf("WriteRef remote-tracking: %v", err)
 	}
 
-	got, err := ResolveBranchTip(dir, repoURL, "feature")
+	got, err := resolveBranchTip(dir, repoURL, "feature")
 	if err != nil {
-		t.Fatalf("ResolveBranchTip: %v", err)
+		t.Fatalf("resolveBranchTip: %v", err)
 	}
 	if got == localTip {
 		t.Errorf("resolved to local tip %q; expected the remote-tracking tip", got)
@@ -57,8 +57,8 @@ func TestResolveBranchTip_StrictRemote(t *testing.T) {
 	if _, err := git.CreateCommitOnBranch(dir, "local-only-branch", "local-only"); err != nil {
 		t.Fatalf("CreateCommitOnBranch: %v", err)
 	}
-	if _, err := ResolveBranchTip(dir, repoURL, "local-only-branch"); err == nil {
-		t.Fatal("ResolveBranchTip should error for branch not present on remote")
+	if _, err := resolveBranchTip(dir, repoURL, "local-only-branch"); err == nil {
+		t.Fatal("resolveBranchTip should error for branch not present on remote")
 	}
 }
 

@@ -44,13 +44,13 @@ func TestRefreshOpenPRBranches_DetectsAdvance(t *testing.T) {
 		t.Fatalf("WriteRef origin/feature v2: %v", err)
 	}
 
-	if err := RefreshOpenPRBranches(dir); err != nil {
-		t.Fatalf("RefreshOpenPRBranches: %v", err)
+	if err := refreshOpenPRBranches(dir); err != nil {
+		t.Fatalf("refreshOpenPRBranches: %v", err)
 	}
 
-	obs, err := GetBranchObservation(reviewTestRepoURL, "feature")
+	obs, err := getBranchObservation(reviewTestRepoURL, "feature")
 	if err != nil {
-		t.Fatalf("GetBranchObservation: %v", err)
+		t.Fatalf("getBranchObservation: %v", err)
 	}
 	if !obs.Exists {
 		t.Errorf("Exists = false; expected true")
@@ -83,13 +83,13 @@ func TestRefreshOpenPRBranches_DetectsDeletion(t *testing.T) {
 		t.Fatalf("update-ref -d origin/doomed: %v", err)
 	}
 
-	if err := RefreshOpenPRBranches(dir); err != nil {
-		t.Fatalf("RefreshOpenPRBranches: %v", err)
+	if err := refreshOpenPRBranches(dir); err != nil {
+		t.Fatalf("refreshOpenPRBranches: %v", err)
 	}
 
-	obs, err := GetBranchObservation(reviewTestRepoURL, "doomed")
+	obs, err := getBranchObservation(reviewTestRepoURL, "doomed")
 	if err != nil {
-		t.Fatalf("GetBranchObservation: %v", err)
+		t.Fatalf("getBranchObservation: %v", err)
 	}
 	if obs.Exists {
 		t.Errorf("Exists = true; expected false (origin/doomed was deleted)")
@@ -119,8 +119,8 @@ func TestNotifications_HeadAdvancedFiresForAuthor(t *testing.T) {
 	if err := git.WriteRef(dir, "refs/remotes/origin/feature-adv", v2Hash); err != nil {
 		t.Fatalf("WriteRef v2: %v", err)
 	}
-	if err := RefreshOpenPRBranches(dir); err != nil {
-		t.Fatalf("RefreshOpenPRBranches: %v", err)
+	if err := refreshOpenPRBranches(dir); err != nil {
+		t.Fatalf("refreshOpenPRBranches: %v", err)
 	}
 
 	prov := &reviewNotificationProvider{}
@@ -161,8 +161,8 @@ func TestNotifications_HeadAdvancedClearsAfterUpdate(t *testing.T) {
 	if err := git.WriteRef(dir, "refs/remotes/origin/feature-clear", v2Hash); err != nil {
 		t.Fatalf("WriteRef v2: %v", err)
 	}
-	if err := RefreshOpenPRBranches(dir); err != nil {
-		t.Fatalf("RefreshOpenPRBranches: %v", err)
+	if err := refreshOpenPRBranches(dir); err != nil {
+		t.Fatalf("refreshOpenPRBranches: %v", err)
 	}
 
 	// Update PR tips so the stored head-tip catches up to origin.

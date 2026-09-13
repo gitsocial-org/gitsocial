@@ -66,11 +66,11 @@ var baseSelectFromView = cache.ResolvedSelect("review_items_resolved", reviewExt
 
 // InsertReviewItem inserts or updates one review item in the cache database.
 func InsertReviewItem(item ReviewItem) error {
-	return InsertReviewItems([]ReviewItem{item})
+	return insertReviewItems([]ReviewItem{item})
 }
 
-// InsertReviewItems inserts or updates review items and rebuilds review_reviewers in one transaction, so search reads no half-linked state.
-func InsertReviewItems(items []ReviewItem) error {
+// insertReviewItems inserts or updates review items and rebuilds review_reviewers in one transaction, so search reads no half-linked state.
+func insertReviewItems(items []ReviewItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -204,7 +204,7 @@ func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 	})
 }
 
-type ReviewQuery struct {
+type reviewQuery struct {
 	Types     []string
 	States    []string
 	RepoURL   string
@@ -216,8 +216,8 @@ type ReviewQuery struct {
 	Cursor    string // RFC3339 timestamp; items older than this, for keyset paging
 }
 
-// GetReviewItems queries review items with filtering and pagination.
-func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
+// getReviewItems queries review items with filtering and pagination.
+func getReviewItems(q reviewQuery) ([]ReviewItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]ReviewItem, error) {
 		var args []interface{}
 		var where []string
@@ -322,7 +322,7 @@ func CountPullRequests(repoURL string, states []string) (int, error) {
 
 // GetPullRequests retrieves pull requests with optional filtering.
 func GetPullRequests(repoURL, branch string, states []string, cursor string, limit int) Result[[]PullRequest] {
-	q := ReviewQuery{
+	q := reviewQuery{
 		Types:   []string{string(ItemTypePullRequest)},
 		States:  states,
 		RepoURL: repoURL,
@@ -330,7 +330,7 @@ func GetPullRequests(repoURL, branch string, states []string, cursor string, lim
 		Cursor:  cursor,
 		Limit:   limit,
 	}
-	items, err := GetReviewItems(q)
+	items, err := getReviewItems(q)
 	if err != nil {
 		return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 	}
@@ -453,19 +453,19 @@ func forkPRTargetsWorkspace(item ReviewItem, workspaceURL string) bool {
 
 // GetFeedbackForPR retrieves all feedback for a specific pull request.
 func GetFeedbackForPR(prRepoURL, prHash, prBranch string) Result[[]Feedback] {
-	q := ReviewQuery{
-		Types:     []string{string(ItemTypeFeedback)},
+	q := reviewQuery{
+		Types:     []string{string(itemTypeFeedback)},
 		PRRepoURL: prRepoURL,
 		PRHash:    prHash,
 		PRBranch:  prBranch,
 	}
-	items, err := GetReviewItems(q)
+	items, err := getReviewItems(q)
 	if err != nil {
 		return result.Err[[]Feedback]("QUERY_FAILED", err.Error())
 	}
 	feedback := make([]Feedback, len(items))
 	for i, item := range items {
-		feedback[i] = ReviewItemToFeedback(item)
+		feedback[i] = reviewItemToFeedback(item)
 	}
 	return result.Ok(feedback)
 }
@@ -607,8 +607,8 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 	return pr
 }
 
-// ReviewItemToFeedback converts a ReviewItem to a Feedback.
-func ReviewItemToFeedback(item ReviewItem) Feedback {
+// reviewItemToFeedback converts a ReviewItem to a Feedback.
+func reviewItemToFeedback(item ReviewItem) Feedback {
 	content := joinSubjectBody(protocol.SplitSubjectBody(item.Content))
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 	var oldLine, newLine, oldLineEnd, newLineEnd int

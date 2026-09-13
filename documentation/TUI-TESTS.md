@@ -104,7 +104,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 | `sequence_test.go` | `TestSequence/*`: AllExtensions, BrowseAndReturn, IssuesFlow, SettingsAndBack, QuickJumpOverridesHistory, the `*OpensForm` and `*Navigates` flows per item type, PostRetractShowsConfirm, SearchFlow, PRDiffNavigates, MultipleViewRenders, PushConfirmNamesRemote | multi-step flows; full tier only |
 | `cursor_test.go` | `TestTimelineCursorSurvivesFetch`, `TestTimelineCursorSurvivesBackNav` | the timeline selection survives a fetch and a detail round trip |
 | `history_diff_test.go` | `TestHistoryDiffFooter`, `PostHistoryDiffRenders` | every history-diff context registers its footer entries without duplicates, and the view renders |
-| `stack_test.go` | `TestStackDisplay/BadgeOnPRList`, `TestStackBindings`, `TestStackNavigationBackend` | the stack badge, the stack keys, and `GetStack` and `GetDependents` behind them |
+| `stack_test.go` | `TestStackDisplay/BadgeOnPRList`, `TestStackBindings`, `TestStackNavigationBackend` | the stack badge, the stack keys, and `GetStack` and `getDependents` behind them |
 | `proposal_test.go` | `TestProposalDisplay/{IssueListMarker,IssueDetailBanner,HistoryRow,HistoryFooterOffersAcceptAndDecline}`, `TestProposalAccept`, `TestProposalDecline` | the ✎ marker, the banner, the history row, and `A` and `X` applying or declining a proposal on an isolated fixture |
 
 ## Notes

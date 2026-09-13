@@ -10,8 +10,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// ResolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error.
-func ResolveBranchTip(workdir, repoURL, branch string) (string, error) {
+// resolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error.
+func resolveBranchTip(workdir, repoURL, branch string) (string, error) {
 	if branch == "" {
 		return "", errors.New("branch required")
 	}
@@ -44,7 +44,7 @@ func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef)
 	if repoURL == "" {
 		repoURL = workspaceURL
 	}
-	if tip, err := ResolveBranchTip(workdir, repoURL, parsed.Value); err == nil {
+	if tip, err := resolveBranchTip(workdir, repoURL, parsed.Value); err == nil {
 		return tip, nil
 	} else if !isWorkspaceURL(workdir, protocol.NormalizeURL(repoURL)) {
 		return "", err
@@ -66,7 +66,7 @@ func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef
 			return tip, nil
 		}
 	}
-	return ResolveBranchTip(workdir, repoURL, parsed.Value)
+	return resolveBranchTip(workdir, repoURL, parsed.Value)
 }
 
 // resolveTipForObservation returns the remote tip with no local fallback, so a deletion surfaces.
@@ -78,7 +78,7 @@ func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.Pars
 	if repoURL == "" {
 		repoURL = workspaceURL
 	}
-	return ResolveBranchTip(workdir, repoURL, parsed.Value)
+	return resolveBranchTip(workdir, repoURL, parsed.Value)
 }
 
 // findRemoteForURL returns the remote whose URL matches normalizedURL, or the empty string.

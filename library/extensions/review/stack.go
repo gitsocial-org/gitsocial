@@ -49,7 +49,7 @@ func GetStack(prRef string) Result[[]StackEntry] {
 
 	current := root
 	for {
-		dependents := GetDependents(current.Repository, current.Branch, extractRefHash(current.ID))
+		dependents := getDependents(extractRefHash(current.ID))
 		var next *PullRequest
 		for _, dep := range dependents {
 			if !visited[dep.ID] {
@@ -124,7 +124,7 @@ func RebaseStack(workdir, prRef string) Result[[]PullRequest] {
 	current := start
 	visited := map[string]bool{current.ID: true}
 	for {
-		dependents := GetDependents(current.Repository, current.Branch, extractRefHash(current.ID))
+		dependents := getDependents(extractRefHash(current.ID))
 		var next *PullRequest
 		for _, dep := range dependents {
 			if !visited[dep.ID] && dep.State == PRStateOpen {
@@ -191,8 +191,8 @@ func qualifyRefWithRepo(ref, defaultRepo string) string {
 	return protocol.CreateRef(parsed.Type, parsed.Value, defaultRepo, parsed.Branch)
 }
 
-// GetDependents finds the pull requests whose depends-on names the given hash.
-func GetDependents(repoURL, branch, hash string) []PullRequest {
+// getDependents finds the pull requests whose depends-on names the given hash.
+func getDependents(hash string) []PullRequest {
 	if hash == "" {
 		return nil
 	}

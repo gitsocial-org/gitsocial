@@ -60,7 +60,7 @@ func CreateFeedback(workdir, content string, opts CreateFeedbackOptions) Result[
 	if err != nil {
 		return result.Err[Feedback]("GET_FAILED", err.Error())
 	}
-	return result.Ok(ReviewItemToFeedback(*item))
+	return result.Ok(reviewItemToFeedback(*item))
 }
 
 // GetFeedback retrieves a single feedback item by reference, full ref or bare hash.
@@ -69,10 +69,10 @@ func GetFeedback(feedbackRef string) Result[Feedback] {
 	if err != nil {
 		return result.Err[Feedback]("NOT_FOUND", notFoundMessage("feedback", feedbackRef, err))
 	}
-	if item.Type != string(ItemTypeFeedback) {
+	if item.Type != string(itemTypeFeedback) {
 		return result.Err[Feedback]("NOT_FOUND", "not feedback: "+feedbackRef)
 	}
-	return result.Ok(ReviewItemToFeedback(*item))
+	return result.Ok(reviewItemToFeedback(*item))
 }
 
 type UpdateFeedbackOptions struct {
@@ -90,7 +90,7 @@ func UpdateFeedback(workdir, feedbackRef string, opts UpdateFeedbackOptions) Res
 
 	branch := gitmsg.GetExtBranch(workdir, "review")
 
-	rv := ReviewItemToFeedback(*existing)
+	rv := reviewItemToFeedback(*existing)
 	createOpts := CreateFeedbackOptions{
 		PullRequest: protocol.LocalizeRef(protocol.CreateRef(protocol.RefTypeCommit, rv.PullRequest.Hash, rv.PullRequest.RepoURL, rv.PullRequest.Branch), repoURL),
 		Commit:      rv.Commit,
@@ -129,7 +129,7 @@ func UpdateFeedback(workdir, feedbackRef string, opts UpdateFeedbackOptions) Res
 	if err != nil {
 		return result.Err[Feedback]("GET_FAILED", err.Error())
 	}
-	return result.Ok(ReviewItemToFeedback(*item))
+	return result.Ok(reviewItemToFeedback(*item))
 }
 
 // RetractFeedback marks a feedback item as retracted.
@@ -259,7 +259,7 @@ func GetBatchReviewSummaries(keys []PRKey) map[string]ReviewSummary {
 // buildFeedbackContent builds a feedback commit's message from its options.
 func buildFeedbackContent(content string, opts CreateFeedbackOptions, editsRef string) string {
 	fields := map[string]string{
-		"type":         string(ItemTypeFeedback),
+		"type":         string(itemTypeFeedback),
 		"pull-request": opts.PullRequest,
 	}
 	if editsRef != "" {

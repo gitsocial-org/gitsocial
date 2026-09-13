@@ -71,8 +71,8 @@ func TestMultiCloneCollab(t *testing.T) {
 	if _, err := git.ExecGit(alice, []string{"fetch", "origin"}); err != nil {
 		t.Fatalf("alice fetch after bob push: %v", err)
 	}
-	if err := RefreshOpenPRBranches(alice); err != nil {
-		t.Fatalf("RefreshOpenPRBranches: %v", err)
+	if err := refreshOpenPRBranches(alice); err != nil {
+		t.Fatalf("refreshOpenPRBranches: %v", err)
 	}
 
 	prov := &reviewNotificationProvider{}
@@ -96,8 +96,8 @@ func TestMultiCloneCollab(t *testing.T) {
 	if !strings.HasPrefix(v2Tip, upd.Data.HeadTip) && !strings.HasPrefix(upd.Data.HeadTip, v2Tip) {
 		t.Errorf("UpdatePRTips HeadTip %q does not match bob's pushed tip %q", upd.Data.HeadTip, v2Tip)
 	}
-	if err := RefreshOpenPRBranches(alice); err != nil {
-		t.Fatalf("RefreshOpenPRBranches after update: %v", err)
+	if err := refreshOpenPRBranches(alice); err != nil {
+		t.Fatalf("refreshOpenPRBranches after update: %v", err)
 	}
 	notifs, _ = prov.GetNotifications(alice, notifications.Filter{})
 	if hasNotifType(notifs, "head-advanced") {
@@ -112,8 +112,8 @@ func TestMultiCloneCollab(t *testing.T) {
 	if _, err := git.ExecGit(alice, []string{"fetch", "origin", "--prune"}); err != nil {
 		t.Fatalf("alice fetch --prune: %v", err)
 	}
-	if err := RefreshOpenPRBranches(alice); err != nil {
-		t.Fatalf("RefreshOpenPRBranches after delete: %v", err)
+	if err := refreshOpenPRBranches(alice); err != nil {
+		t.Fatalf("refreshOpenPRBranches after delete: %v", err)
 	}
 	notifs, _ = prov.GetNotifications(alice, notifications.Filter{})
 	if !hasNotifType(notifs, "head-deleted") {

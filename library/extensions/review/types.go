@@ -14,7 +14,7 @@ type ItemType string
 
 const (
 	ItemTypePullRequest ItemType = "pull-request"
-	ItemTypeFeedback    ItemType = "feedback"
+	itemTypeFeedback    ItemType = "feedback"
 )
 
 // Spec-defined field ordering per GITREVIEW.md 1.2; accepts is placed by the core header writer.

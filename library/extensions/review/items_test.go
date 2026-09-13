@@ -91,7 +91,7 @@ func TestReviewItemToFeedback(t *testing.T) {
 		RepoURL:            "https://github.com/user/repo",
 		Hash:               "fb123def456",
 		Branch:             "gitmsg/review",
-		Type:               string(ItemTypeFeedback),
+		Type:               string(itemTypeFeedback),
 		PullRequestRepoURL: sql.NullString{String: "https://github.com/user/repo", Valid: true},
 		PullRequestHash:    sql.NullString{String: "pr123", Valid: true},
 		PullRequestBranch:  sql.NullString{String: "gitmsg/review", Valid: true},
@@ -111,7 +111,7 @@ func TestReviewItemToFeedback(t *testing.T) {
 		Comments:           1,
 	}
 
-	fb := ReviewItemToFeedback(item)
+	fb := reviewItemToFeedback(item)
 	if fb.Content != "Looks good" {
 		t.Errorf("Content = %q", fb.Content)
 	}
@@ -161,7 +161,7 @@ func TestReviewItemToFeedback_nullLines(t *testing.T) {
 		AuthorEmail:      "bob@example.com",
 	}
 
-	fb := ReviewItemToFeedback(item)
+	fb := reviewItemToFeedback(item)
 	if fb.OldLine != 0 {
 		t.Errorf("OldLine = %d, want 0", fb.OldLine)
 	}
@@ -322,7 +322,7 @@ func TestReviewItemToFeedback_withBody(t *testing.T) {
 		AuthorName:  "Bob",
 		AuthorEmail: "bob@test.com",
 	}
-	fb := ReviewItemToFeedback(item)
+	fb := reviewItemToFeedback(item)
 	if fb.Content != "Subject line\n\nBody text here" {
 		t.Errorf("Content = %q, want combined subject+body", fb.Content)
 	}
