@@ -116,7 +116,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 
 - Run git from an extension; use `core/git`.
 - Create a type for a single use.
-- Add package-level mutable state. The per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity`, the two credential warn-once flags in `core/objstore`, and the theme struct, the registries (contexts, views, cards, nav targets, message handlers) and the width-margin flag in `tui/tuicore` are the standing exceptions.
+- Add package-level mutable state. The per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity`, the two credential warn-once flags in `core/objstore`, the fetched-refs memo in `extensions/review`, and the theme struct, the registries (contexts, views, cards, nav targets, message handlers) and the width-margin flag in `tui/tuicore` are the standing exceptions.
 - Skip error handling.
 
 ### Patterns
@@ -201,7 +201,7 @@ Outside the tree:
 | `extensions/social`<br>Posts, lists, timeline | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `CreateComment`, `Fetch` |
 | `extensions/pm`<br>Issues, milestones, sprints | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `MessageToPMItem`, `FetchRepository`, `Processors` |
 | `extensions/release`<br>Releases | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
-| `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `FetchRepository`, `GetPullRequestsWithForks`, `GetStack`, `GetDependents`, `Processors` |
+| `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `GetPullRequests`, `GetPullRequestsWithForks`, `ResolvePRDiff`, `GetStack`, `RebaseStack`, `Processors` |
 | `extensions/memo`<br>Memos across tiers | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
 | `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
 | `import`<br>Forge import | `SourceAdapter`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |

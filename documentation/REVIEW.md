@@ -44,7 +44,7 @@ gitsocial review feedback comment "Consider caching this" --pr <pr-ref> --commit
     --new-line 42 [--new-line-end 50] [--old-line 40] [--old-line-end 48] [--suggest]
 ```
 
-Feedback is tied to the version the reviewer saw. A later version does not dismiss it. It is marked stale when the code changed.
+Feedback is tied to the version the reviewer saw. A later version does not dismiss it. A verdict is marked stale when the code changed; an inline comment keeps the commit and lines it was written against.
 
 ## Forks
 
@@ -128,7 +128,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
       │                                   ●  approve
 ```
 
-`pr update` records `base-tip` and `head-tip` as a new version, and the edits chain is the version history. Feedback stays current when the head tip is unchanged or the patches are identical, and is marked stale when the code changed. Nothing is dismissed automatically.
+`pr update` records `base-tip` and `head-tip` as a new version, and the edits chain is the version history. A verdict stays current when the head tip is unchanged or the patches are identical, and is marked stale when the code changed; an inline comment keeps its anchor. Nothing is dismissed automatically.
 
 ### Stacks
 
@@ -159,11 +159,12 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
 - **Discussion.** General comments are social comments on the pull request, `gitsocial social comment <pr-ref> "..."`; replies nest with `reply-to`.
 - **Lifecycle.** `open` becomes `merged` or `closed` by an edit from the base owner. The author withdraws with `retract`. There is no reopen; create a new pull request.
 - **Merge strategies.** `pr merge --strategy ff|squash|rebase|merge`, per pull request; `ff` is the default. `merge-base` and `merge-head` are recorded before the merge, so the merged diff can be reconstructed. After a merge the base branch is pushed; a failed push is a warning, and the merge stands locally.
-- **Branch sync.** `pr sync` rebases the head onto the base, or merges the base into it with `--strategy merge`, then records the new tips as a version.
+- **Branch sync.** `pr sync` rebases the head onto the base, or merges the base into it with `--strategy merge`, then records the new tips as a version. It works on a head in this repository; a head in another repository fails with `INVALID_TARGET`.
 
 ## Reference
 
 - Versions and review aggregation: [GITREVIEW.md §1.5](../specs/GITREVIEW.md#15-editing-and-retracting) and [§1.8](../specs/GITREVIEW.md#18-review-aggregation).
+- Applying a suggestion, from the TUI or RPC `review.applySuggestion`, fails with `NOT_SUGGESTION`, `INVALID_PATH`, `PARSE_ERROR`, `FILE_ERROR`, `RANGE_ERROR` or `WRITE_ERROR`.
 - `review config set require-review true` makes approval a merge condition; `pr merge` then fails with `REVIEW_REQUIRED` until every reviewer's latest verdict is `approved`.
 - `pr list` shows this repository's pull requests and those from [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations live at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
