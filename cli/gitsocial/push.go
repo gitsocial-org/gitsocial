@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -59,9 +60,11 @@ Examples:
 			// Resolve the target remotes: explicit positionals win, else the
 			// (multi-valued) configured defaults / heuristic.
 			remotes := args
+			resolution := git.PushConfigured
 			if len(remotes) == 0 {
-				remotes = git.PushRemotes(cfg.WorkDir)
+				remotes, resolution = git.ResolvePushRemotes(cfg.WorkDir)
 			}
+			printRemoteHint(cfg.WorkDir, remotes, resolution)
 
 			if dryRun && !cfg.JSONOutput {
 				fmt.Println("Dry run - no changes will be pushed")
@@ -139,6 +142,17 @@ Examples:
 	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 
 	return cmd
+}
+
+// printRemoteHint writes the one hint a resolution earns, once per command.
+func printRemoteHint(workdir string, remotes []string, resolution git.PushResolution) {
+	switch resolution {
+	case git.PushAmbiguous:
+		fmt.Fprintf(os.Stderr, "gitsocial: several s3 remotes, pushing to %q. Choose one with: gitsocial remote default <name>\n", remotes[0])
+	case git.PushStale:
+		configured := strings.Join(git.ConfiguredPushRemotes(workdir), " ")
+		fmt.Fprintf(os.Stderr, "gitsocial: configured push remote %q does not exist, pushing to %q. Set it with: gitsocial remote default <name>\n", configured, remotes[0])
+	}
 }
 
 // printPushResult renders the push and site result for humans.

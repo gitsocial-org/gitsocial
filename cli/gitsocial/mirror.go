@@ -538,7 +538,7 @@ func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error
 				return err
 			}
 		}
-		if err := appendConfiguredPushRemote(cfg.WorkDir, t.name); err != nil {
+		if err := git.AppendConfiguredPushRemote(cfg.WorkDir, t.name); err != nil {
 			return err
 		}
 		if !cfg.JSONOutput {

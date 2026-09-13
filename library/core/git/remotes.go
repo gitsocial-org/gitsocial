@@ -3,11 +3,9 @@ package git
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 )
 
 // FetchRemote fetches updates from a remote repository.
@@ -134,38 +132,51 @@ func ReadRemoteRef(workdir, remoteURL, branch string) (string, error) {
 	return parts[0], nil
 }
 
-// ambiguityWarnOnce ensures the heuristic-ambiguity warning fires at most once
-// per process, not once per branch/ref during a push.
-var ambiguityWarnOnce sync.Once
+// PushResolution names how the default push remotes were resolved.
+type PushResolution string
 
-// misconfiguredRemoteWarnOnce ensures the configured-remote-missing warning
-// fires at most once per process, not once per PushRemote resolution.
-var misconfiguredRemoteWarnOnce sync.Once
+const (
+	// PushConfigured: the user named the remotes, as arguments or in git config.
+	PushConfigured PushResolution = "configured"
+	// PushOrigin: nothing configured, no s3 remote to prefer.
+	PushOrigin PushResolution = "origin"
+	// PushS3: nothing configured, one s3 remote.
+	PushS3 PushResolution = "s3"
+	// PushAmbiguous: nothing configured, several s3 remotes, the first alphabetically.
+	PushAmbiguous PushResolution = "ambiguous"
+	// PushStale: every configured name is missing, the heuristic took over.
+	PushStale PushResolution = "stale"
+)
 
-// PushRemote returns the remote gitsocial publishes to. Resolution order:
-// git config gitsocial.pushRemote (a configured name that doesn't exist as a
-// remote falls through to the heuristic with a stderr warning), then the
-// heuristic: "origin" normally, or the configured s3 remote when one exists
-// ("origin" still wins when it is itself s3; ties between multiple s3 remotes
-// break alphabetically). Warns once per process when the heuristic must pick
-// among 2+ s3 remotes with nothing configured.
-func PushRemote(workdir string) string {
+// ResolvePushRemotes returns the remotes a default push reaches and why.
+func ResolvePushRemotes(workdir string) ([]string, PushResolution) {
 	remotes, err := ListRemotes(workdir)
 	if err != nil {
-		return "origin"
+		return []string{"origin"}, PushOrigin
 	}
-
-	if configured := configuredPushRemote(workdir); configured != "" {
-		for _, r := range remotes {
-			if r.Name == configured {
-				return configured
-			}
+	exists := make(map[string]bool, len(remotes))
+	for _, r := range remotes {
+		exists[r.Name] = true
+	}
+	configured := ConfiguredPushRemotes(workdir)
+	var valid []string
+	for _, name := range configured {
+		if exists[name] {
+			valid = append(valid, name)
 		}
-		misconfiguredRemoteWarnOnce.Do(func() {
-			fmt.Fprintf(os.Stderr, "gitsocial: configured push remote %q (gitsocial.pushRemote) does not exist; falling back to heuristic\n", configured)
-		})
 	}
+	if len(valid) > 0 {
+		return valid, PushConfigured
+	}
+	name, reason := heuristicPushRemote(remotes)
+	if len(configured) > 0 {
+		reason = PushStale
+	}
+	return []string{name}, reason
+}
 
+// heuristicPushRemote picks origin, or the first s3 remote alphabetically when origin is not one.
+func heuristicPushRemote(remotes []Remote) (string, PushResolution) {
 	s3Name := ""
 	s3Count := 0
 	for _, r := range remotes {
@@ -174,28 +185,32 @@ func PushRemote(workdir string) string {
 		}
 		s3Count++
 		if r.Name == "origin" {
-			return "origin"
+			return "origin", PushOrigin
 		}
 		if s3Name == "" || r.Name < s3Name {
 			s3Name = r.Name
 		}
 	}
-	if s3Name != "" {
-		if s3Count >= 2 {
-			ambiguityWarnOnce.Do(func() {
-				fmt.Fprintf(os.Stderr, "gitsocial: multiple s3 remotes; pushing to %q — set `git config gitsocial.pushRemote <name>` to choose\n", s3Name)
-			})
-		}
-		return s3Name
+	switch {
+	case s3Name == "":
+		return "origin", PushOrigin
+	case s3Count >= 2:
+		return s3Name, PushAmbiguous
+	default:
+		return s3Name, PushS3
 	}
-	return "origin"
 }
 
-// ConfiguredPushRemote returns the first value of git config
-// gitsocial.pushRemote, or "" when unset. Exposed for the `remote default`
-// command's no-arg report.
-func ConfiguredPushRemote(workdir string) string {
-	return configuredPushRemote(workdir)
+// PushRemote returns the single remote the single-remote paths publish to.
+func PushRemote(workdir string) string {
+	names, _ := ResolvePushRemotes(workdir)
+	return names[0]
+}
+
+// PushRemotes returns every remote a default push reaches.
+func PushRemotes(workdir string) []string {
+	names, _ := ResolvePushRemotes(workdir)
+	return names
 }
 
 // ConfiguredPushRemotes returns every configured gitsocial.pushRemote value
@@ -215,31 +230,6 @@ func ConfiguredPushRemotes(workdir string) []string {
 	return names
 }
 
-// PushRemotes returns the remotes gitsocial publishes to by default: every
-// configured gitsocial.pushRemote that exists as a remote, or a single-element
-// slice from the PushRemote heuristic when none are configured/valid. Callers
-// that push to one remote still use PushRemote; multi-remote push uses this.
-func PushRemotes(workdir string) []string {
-	remotes, err := ListRemotes(workdir)
-	if err != nil {
-		return []string{PushRemote(workdir)}
-	}
-	exists := map[string]bool{}
-	for _, r := range remotes {
-		exists[r.Name] = true
-	}
-	var valid []string
-	for _, name := range ConfiguredPushRemotes(workdir) {
-		if exists[name] {
-			valid = append(valid, name)
-		}
-	}
-	if len(valid) == 0 {
-		return []string{PushRemote(workdir)}
-	}
-	return valid
-}
-
 // SetConfiguredPushRemotes replaces the multi-valued gitsocial.pushRemote config
 // with the given names (per-clone, like remotes themselves). An empty list
 // unsets the key entirely, reverting to the PushRemote heuristic.
@@ -255,16 +245,18 @@ func SetConfiguredPushRemotes(workdir string, names []string) error {
 	return nil
 }
 
-// SetConfiguredPushRemote persists a single default push remote (per-clone, like
-// remotes themselves), replacing any previously configured set. Used by the TUI
-// push picker's "persist this choice" action.
-func SetConfiguredPushRemote(workdir, name string) error {
-	return SetConfiguredPushRemotes(workdir, []string{name})
+// AppendConfiguredPushRemote appends a remote to the gitsocial.pushRemote defaults, once.
+func AppendConfiguredPushRemote(workdir, name string) error {
+	configured := ConfiguredPushRemotes(workdir)
+	for _, n := range configured {
+		if n == name {
+			return nil
+		}
+	}
+	return SetConfiguredPushRemotes(workdir, append(configured, name))
 }
 
 // S3Remotes returns the names of all s3-scheme remotes, sorted alphabetically.
-// The TUI push picker uses this to decide whether to prompt for a target: 2+
-// candidates with nothing configured is the ambiguous case.
 func S3Remotes(workdir string) []string {
 	remotes, err := ListRemotes(workdir)
 	if err != nil {
@@ -278,17 +270,6 @@ func S3Remotes(workdir string) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// configuredPushRemote returns the first value of git config
-// gitsocial.pushRemote, or "" when unset. Reads via --get-all (the key is
-// multi-valued; a plain --get errors when several values are set).
-func configuredPushRemote(workdir string) string {
-	names := ConfiguredPushRemotes(workdir)
-	if len(names) == 0 {
-		return ""
-	}
-	return names[0]
 }
 
 // PushSiteEnabled reports whether this machine allows the site step of a

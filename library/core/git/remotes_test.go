@@ -112,15 +112,102 @@ func TestPushRemote_missingConfiguredFallsBack(t *testing.T) {
 	}
 }
 
-func TestConfiguredPushRemote(t *testing.T) {
+// TestResolvePushRemotes covers every reason the resolver reports.
+func TestResolvePushRemotes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		remotes    [][2]string
+		configured []string
+		want       []string
+		reason     PushResolution
+	}{
+		{
+			name:       "configured names in config order",
+			remotes:    [][2]string{{"origin", "https://example.com/repo"}, {"r2", "s3://r2.example.com/b/p"}},
+			configured: []string{"r2", "origin"},
+			want:       []string{"r2", "origin"},
+			reason:     PushConfigured,
+		},
+		{
+			name:    "no s3 remote falls to origin",
+			remotes: [][2]string{{"origin", "https://example.com/repo"}},
+			want:    []string{"origin"},
+			reason:  PushOrigin,
+		},
+		{
+			name:    "an s3 origin wins over another s3 remote",
+			remotes: [][2]string{{"origin", "s3://s3.example.com/b/p"}, {"backup", "s3://s3.example.com/o/p"}},
+			want:    []string{"origin"},
+			reason:  PushOrigin,
+		},
+		{
+			name:    "one s3 remote beside a plain origin",
+			remotes: [][2]string{{"origin", "https://example.com/repo"}, {"r2", "s3://r2.example.com/b/p"}},
+			want:    []string{"r2"},
+			reason:  PushS3,
+		},
+		{
+			name:    "several s3 remotes take the first alphabetically",
+			remotes: [][2]string{{"origin", "https://example.com/repo"}, {"r2", "s3://r2.example.com/b/p"}, {"backup", "s3://s3.example.com/b/p"}},
+			want:    []string{"backup"},
+			reason:  PushAmbiguous,
+		},
+		{
+			name:       "a missing configured name falls to the heuristic",
+			remotes:    [][2]string{{"origin", "s3://s3.example.com/b/p"}},
+			configured: []string{"ghost"},
+			want:       []string{"origin"},
+			reason:     PushStale,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := initTestRepo(t)
+			for _, r := range tc.remotes {
+				ExecGit(dir, []string{"remote", "add", r[0], r[1]})
+			}
+			if len(tc.configured) > 0 {
+				if err := SetConfiguredPushRemotes(dir, tc.configured); err != nil {
+					t.Fatalf("SetConfiguredPushRemotes: %v", err)
+				}
+			}
+			got, reason := ResolvePushRemotes(dir)
+			if reason != tc.reason {
+				t.Errorf("reason = %q, want %q", reason, tc.reason)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("remotes = %v, want %v", got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("remote %d = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestAppendConfiguredPushRemote checks appending keeps order and never duplicates a name.
+func TestAppendConfiguredPushRemote(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
-	if got := ConfiguredPushRemote(dir); got != "" {
-		t.Errorf("ConfiguredPushRemote() = %q, want empty when unset", got)
+	if err := AppendConfiguredPushRemote(dir, "a"); err != nil {
+		t.Fatalf("AppendConfiguredPushRemote a: %v", err)
 	}
-	ExecGit(dir, []string{"config", "gitsocial.pushRemote", "backup"})
-	if got := ConfiguredPushRemote(dir); got != "backup" {
-		t.Errorf("ConfiguredPushRemote() = %q, want backup", got)
+	if err := AppendConfiguredPushRemote(dir, "b"); err != nil {
+		t.Fatalf("AppendConfiguredPushRemote b: %v", err)
+	}
+	got := ConfiguredPushRemotes(dir)
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("ConfiguredPushRemotes() = %v, want [a b]", got)
+	}
+	if err := AppendConfiguredPushRemote(dir, "a"); err != nil {
+		t.Fatalf("AppendConfiguredPushRemote a again: %v", err)
+	}
+	if got := ConfiguredPushRemotes(dir); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("after re-appending a, ConfiguredPushRemotes() = %v, want [a b]", got)
 	}
 }
 
@@ -136,11 +223,6 @@ func TestSetConfiguredPushRemotes_multiValued(t *testing.T) {
 	got := ConfiguredPushRemotes(dir)
 	if len(got) != 2 || got[0] != "r2" || got[1] != "s3" {
 		t.Fatalf("ConfiguredPushRemotes() = %v, want [r2 s3]", got)
-	}
-	// The first value stays available via the singular accessor (a plain --get
-	// would error on a multi-valued key).
-	if first := ConfiguredPushRemote(dir); first != "r2" {
-		t.Errorf("ConfiguredPushRemote() = %q, want r2 (first value)", first)
 	}
 	// Replacing with a shorter list drops the stale trailing values.
 	if err := SetConfiguredPushRemotes(dir, []string{"only"}); err != nil {

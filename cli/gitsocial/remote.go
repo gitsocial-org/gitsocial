@@ -108,15 +108,15 @@ Examples:
 			cfg := GetConfig(cmd)
 
 			if len(args) == 0 {
-				configured := git.ConfiguredPushRemotes(cfg.WorkDir)
+				resolved, resolution := git.ResolvePushRemotes(cfg.WorkDir)
 				if cfg.JSONOutput {
-					PrintJSON(map[string]any{"configured": configured, "resolved": git.PushRemotes(cfg.WorkDir)})
+					PrintJSON(map[string]any{"configured": git.ConfiguredPushRemotes(cfg.WorkDir), "resolved": resolved})
 					return
 				}
-				if len(configured) > 0 {
-					fmt.Println(strings.Join(configured, " "))
+				if resolution == git.PushConfigured {
+					fmt.Println(strings.Join(resolved, " "))
 				} else {
-					fmt.Printf("heuristic: %s\n", strings.Join(git.PushRemotes(cfg.WorkDir), " "))
+					fmt.Printf("heuristic: %s\n", strings.Join(resolved, " "))
 				}
 				return
 			}
@@ -189,7 +189,7 @@ Examples:
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Added remote %q → %s", name, remoteURL))
 			if makeDefault {
-				if err := appendConfiguredPushRemote(cfg.WorkDir, name); err != nil {
+				if err := git.AppendConfiguredPushRemote(cfg.WorkDir, name); err != nil {
 					PrintError(cmd, err.Error())
 					os.Exit(ExitError)
 				}
@@ -207,17 +207,4 @@ Examples:
 	cmd.Flags().BoolVar(&makeDefault, "default", false, "Append the remote to the default push targets")
 	cmd.Flags().BoolVar(&enableSite, "site", false, "Set site.publish so a push rebuilds the site")
 	return cmd
-}
-
-// appendConfiguredPushRemote appends a remote to the multi-valued
-// gitsocial.pushRemote defaults, keeping the existing order; already-listed
-// names are left alone.
-func appendConfiguredPushRemote(workdir, name string) error {
-	configured := git.ConfiguredPushRemotes(workdir)
-	for _, n := range configured {
-		if n == name {
-			return nil
-		}
-	}
-	return git.SetConfiguredPushRemotes(workdir, append(configured, name))
 }

@@ -1034,7 +1034,7 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			// configured. A single candidate or a configured default resolves
 			// silently and goes straight to the confirm.
 			s3 := git.S3Remotes(m.workdir)
-			if len(s3) >= 2 && git.ConfiguredPushRemote(m.workdir) == "" {
+			if len(s3) >= 2 && len(git.ConfiguredPushRemotes(m.workdir)) == 0 {
 				return m.showPushRemotePicker(s3)
 			}
 			return m.showPushConfirm("")
@@ -1224,7 +1224,7 @@ func (m *Model) showPushRemotePicker(s3 []string) tea.Cmd {
 			return m.showPushConfirm(defaultRemote)
 		case "D":
 			// Persist the resolved default, then confirm against it.
-			if err := git.SetConfiguredPushRemote(m.workdir, defaultRemote); err != nil {
+			if err := git.AppendConfiguredPushRemote(m.workdir, defaultRemote); err != nil {
 				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 			}
 			return m.showPushConfirm(defaultRemote)
