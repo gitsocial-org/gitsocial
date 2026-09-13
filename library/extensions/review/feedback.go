@@ -39,6 +39,10 @@ func CreateFeedback(workdir, content string, opts CreateFeedbackOptions) Result[
 	if hasLocation && (opts.File == "" || opts.Commit == "" || (opts.OldLine == 0 && opts.NewLine == 0)) {
 		return result.Err[Feedback]("VALIDATION_ERROR", "inline feedback must include file, commit, and at least one of old-line or new-line")
 	}
+	// GITREVIEW.md 1.4: a suggestion carries its replacement in a suggestion fence.
+	if opts.Suggestion && !fencePattern.MatchString(content) {
+		return result.Err[Feedback]("VALIDATION_ERROR", "a suggestion must include a suggestion fenced code block")
+	}
 
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	opts.PullRequest = protocol.LocalizeRef(opts.PullRequest, repoURL)

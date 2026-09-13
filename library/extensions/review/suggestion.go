@@ -11,9 +11,10 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
-var fencePattern = regexp.MustCompile("(?s)```[^\n]*\n(.*?)\n```")
+// fencePattern matches the suggestion fence GITREVIEW.md 1.4 requires; no other fence is a suggestion.
+var fencePattern = regexp.MustCompile("(?s)```suggestion[ \t]*\n(.*?)\n```")
 
-// ParseSuggestionCode extracts code from a markdown fenced code block in feedback content.
+// ParseSuggestionCode extracts the replacement code from a feedback body's suggestion fence.
 func ParseSuggestionCode(content string) string {
 	match := fencePattern.FindStringSubmatch(content)
 	if len(match) < 2 {

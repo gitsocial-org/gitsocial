@@ -15,39 +15,44 @@ func TestParseSuggestionCode(t *testing.T) {
 		want    string
 	}{
 		{
-			"simple code block",
-			"```go\nfmt.Println(\"hello\")\n```",
+			"suggestion fence",
+			"```suggestion\nfmt.Println(\"hello\")\n```",
 			"fmt.Println(\"hello\")",
 		},
 		{
-			"no language specifier",
-			"```\nsome code\n```",
-			"some code",
-		},
-		{
-			"multiline code",
-			"```go\nline1\nline2\nline3\n```",
+			"multiline suggestion",
+			"```suggestion\nline1\nline2\nline3\n```",
 			"line1\nline2\nline3",
 		},
 		{
 			"with surrounding text",
-			"Consider using:\n```go\nfmt.Println(\"hello\")\n```\nThis is better.",
+			"Consider using:\n```suggestion\nfmt.Println(\"hello\")\n```\nThis is better.",
 			"fmt.Println(\"hello\")",
 		},
 		{
-			"no code block",
+			"a language fence before the suggestion fence",
+			"Today it reads:\n```go\ncurrent\n```\nMake it:\n```suggestion\nreplacement\n```",
+			"replacement",
+		},
+		{
+			"a language fence alone is not a suggestion",
+			"```go\nfmt.Println(\"hello\")\n```",
+			"",
+		},
+		{
+			"a fence with no language is not a suggestion",
+			"```\nsome code\n```",
+			"",
+		},
+		{
+			"no fence",
 			"Just regular text without fences",
 			"",
 		},
 		{
-			"empty code block",
-			"```\n\n```",
+			"empty suggestion fence",
+			"```suggestion\n\n```",
 			"",
-		},
-		{
-			"multiple code blocks - first wins",
-			"```go\nfirst\n```\n\n```go\nsecond\n```",
-			"first",
 		},
 	}
 
@@ -72,7 +77,7 @@ func TestApplySuggestion(t *testing.T) {
 		File:       "main.go",
 		NewLine:    2,
 		NewLineEnd: 3,
-		Content:    "Replace lines 2-3:\n```go\nnewLine2\nnewLine3\n```",
+		Content:    "Replace lines 2-3:\n```suggestion\nnewLine2\nnewLine3\n```",
 	}
 
 	res := ApplySuggestion(dir, fb)
@@ -95,20 +100,44 @@ func TestApplySuggestion(t *testing.T) {
 	}
 }
 
-func TestApplySuggestion_singleLine(t *testing.T) {
+// TestApplySuggestion_afterLanguageFence applies the suggestion, not the code it quotes.
+func TestApplySuggestion_afterLanguageFence(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "main.go")
-	content := "line1\nline2\nline3\n"
-	os.WriteFile(filePath, []byte(content), 0644)
+	os.WriteFile(filePath, []byte("line1\ncurrent\nline3\n"), 0644)
 
-	fb := Feedback{
+	res := ApplySuggestion(dir, Feedback{
 		Suggestion: true,
 		File:       "main.go",
 		NewLine:    2,
-		Content:    "```go\nreplacement\n```",
+		Content:    "Today it reads:\n```go\ncurrent\n```\nMake it:\n```suggestion\nreplacement\n```",
+	})
+	if !res.Success {
+		t.Fatalf("ApplySuggestion() failed: %s", res.Error.Message)
 	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "replacement") {
+		t.Errorf("file should hold the suggestion, got:\n%s", data)
+	}
+	if strings.Contains(string(data), "current") {
+		t.Errorf("the quoted current code was written back:\n%s", data)
+	}
+}
 
-	res := ApplySuggestion(dir, fb)
+func TestApplySuggestion_singleLine(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "main.go")
+	os.WriteFile(filePath, []byte("line1\nline2\nline3\n"), 0644)
+
+	res := ApplySuggestion(dir, Feedback{
+		Suggestion: true,
+		File:       "main.go",
+		NewLine:    2,
+		Content:    "```suggestion\nreplacement\n```",
+	})
 	if !res.Success {
 		t.Fatalf("ApplySuggestion() failed: %s", res.Error.Message)
 	}
@@ -117,17 +146,14 @@ func TestApplySuggestion_singleLine(t *testing.T) {
 func TestApplySuggestion_usesOldLine(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "main.go")
-	content := "line1\nline2\nline3\n"
-	os.WriteFile(filePath, []byte(content), 0644)
+	os.WriteFile(filePath, []byte("line1\nline2\nline3\n"), 0644)
 
-	fb := Feedback{
+	res := ApplySuggestion(dir, Feedback{
 		Suggestion: true,
 		File:       "main.go",
 		OldLine:    2,
-		Content:    "```go\nreplacement\n```",
-	}
-
-	res := ApplySuggestion(dir, fb)
+		Content:    "```suggestion\nreplacement\n```",
+	})
 	if !res.Success {
 		t.Fatalf("ApplySuggestion() failed: %s", res.Error.Message)
 	}
@@ -144,6 +170,22 @@ func TestApplySuggestion_noFile(t *testing.T) {
 	res := ApplySuggestion(t.TempDir(), Feedback{Suggestion: true})
 	if res.Success {
 		t.Error("should fail when no file reference")
+	}
+}
+
+// TestApplySuggestion_noSuggestionFence refuses a stored suggestion carrying another fence.
+func TestApplySuggestion_noSuggestionFence(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("line1\n"), 0644)
+
+	res := ApplySuggestion(dir, Feedback{
+		Suggestion: true,
+		File:       "main.go",
+		NewLine:    1,
+		Content:    "```go\ncode\n```",
+	})
+	if res.Success {
+		t.Error("should fail when the body carries no suggestion fence")
 	}
 }
 
@@ -169,7 +211,7 @@ func TestApplySuggestion_noLine(t *testing.T) {
 	res := ApplySuggestion(dir, Feedback{
 		Suggestion: true,
 		File:       "main.go",
-		Content:    "```go\ncode\n```",
+		Content:    "```suggestion\ncode\n```",
 	})
 	if res.Success {
 		t.Error("should fail when no line reference")
@@ -181,7 +223,7 @@ func TestApplySuggestion_fileNotFound(t *testing.T) {
 		Suggestion: true,
 		File:       "nonexistent.go",
 		NewLine:    1,
-		Content:    "```go\ncode\n```",
+		Content:    "```suggestion\ncode\n```",
 	})
 	if res.Success {
 		t.Error("should fail when file not found")
@@ -196,7 +238,7 @@ func TestApplySuggestion_lineOutOfRange(t *testing.T) {
 		Suggestion: true,
 		File:       "main.go",
 		NewLine:    999,
-		Content:    "```go\ncode\n```",
+		Content:    "```suggestion\ncode\n```",
 	})
 	if res.Success {
 		t.Error("should fail when line out of range")
@@ -212,9 +254,35 @@ func TestApplySuggestion_endLineBeyondFile(t *testing.T) {
 		File:       "main.go",
 		NewLine:    1,
 		NewLineEnd: 999,
-		Content:    "```go\nreplaced\n```",
+		Content:    "```suggestion\nreplaced\n```",
 	})
 	if !res.Success {
 		t.Fatalf("should clamp end line: %s", res.Error.Message)
+	}
+}
+
+// TestCreateFeedback_suggestionNeedsFence refuses a suggestion with no suggestion fence.
+func TestCreateFeedback_suggestionNeedsFence(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	opts := CreateFeedbackOptions{
+		PullRequest: "#commit:ab0c12345678@gitmsg/review",
+		Commit:      "abc123456789",
+		File:        "main.go",
+		NewLine:     2,
+		Suggestion:  true,
+	}
+	res := CreateFeedback(dir, "Use this instead:\n```go\nreplacement\n```", opts)
+	if res.Success || res.Error.Code != "VALIDATION_ERROR" {
+		t.Fatalf("CreateFeedback with no suggestion fence: want VALIDATION_ERROR, got success=%v code=%q", res.Success, res.Error.Code)
+	}
+
+	ok := CreateFeedback(dir, "Use this instead:\n```suggestion\nreplacement\n```", opts)
+	if !ok.Success {
+		t.Fatalf("CreateFeedback with a suggestion fence: %s", ok.Error.Message)
+	}
+	if !ok.Data.Suggestion {
+		t.Error("the stored feedback should be a suggestion")
 	}
 }
