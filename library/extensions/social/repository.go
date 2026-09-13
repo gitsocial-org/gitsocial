@@ -30,10 +30,10 @@ func GetRepositories(workdir, scope string, limit int) Result[[]Repository] {
 func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 	data, err := gitmsg.ReadList(workdir, socialExtension, listID)
 	if err != nil {
-		return FailureWithDetails[[]Repository]("GIT_ERROR", "Failed to read list", err)
+		return failureWithDetails[[]Repository]("GIT_ERROR", "Failed to read list", err)
 	}
 	if data == nil {
-		return Failure[[]Repository]("LIST_NOT_FOUND", "List '"+listID+"' not found")
+		return failure[[]Repository]("LIST_NOT_FOUND", "List '"+listID+"' not found")
 	}
 
 	repos := make([]Repository, 0, len(data.Repositories))
@@ -45,7 +45,7 @@ func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 			URL:    url,
 			Name:   protocol.GetFullDisplayName(url),
 			Branch: branch,
-			Type:   RepositoryTypeOther,
+			Type:   repositoryTypeOther,
 			Lists:  []string{listID},
 		}
 		if ranges, err := cache.GetFetchRanges(url); err == nil && len(ranges) > 0 {
@@ -57,14 +57,14 @@ func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 		repos = append(repos, repo)
 	}
 
-	return Success(repos)
+	return success(repos)
 }
 
 // getAllRepositories retrieves all repositories from lists and cache.
 func getAllRepositories(workdir string) Result[[]Repository] {
 	listsResult := GetLists(workdir)
 	if !listsResult.Success {
-		return Failure[[]Repository](listsResult.Error.Code, listsResult.Error.Message)
+		return failure[[]Repository](listsResult.Error.Code, listsResult.Error.Message)
 	}
 
 	repoMap := make(map[string]*Repository)
@@ -80,7 +80,7 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 					URL:    url,
 					Name:   protocol.GetFullDisplayName(url),
 					Branch: branch,
-					Type:   RepositoryTypeOther,
+					Type:   repositoryTypeOther,
 					Lists:  []string{list.ID},
 				}
 			}
@@ -96,7 +96,7 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 					URL:    cached.URL,
 					Name:   protocol.GetFullDisplayName(cached.URL),
 					Branch: cached.Branch,
-					Type:   RepositoryTypeOther,
+					Type:   repositoryTypeOther,
 					Lists:  []string{},
 				}
 			}
@@ -118,14 +118,14 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 		return repos[i].Name < repos[j].Name
 	})
 
-	return Success(repos)
+	return success(repos)
 }
 
 // GetRelatedRepositories finds repositories related by shared lists or authors.
 func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepository] {
 	listsResult := GetLists(workdir)
 	if !listsResult.Success {
-		return Failure[[]RelatedRepository](listsResult.Error.Code, listsResult.Error.Message)
+		return failure[[]RelatedRepository](listsResult.Error.Code, listsResult.Error.Message)
 	}
 
 	targetLists := make(map[string]bool)
@@ -143,7 +143,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 		}
 	}
 
-	items, err := GetSocialItems(SocialQuery{Limit: 1000})
+	items, err := getSocialItems(socialQuery{Limit: 1000})
 	if err != nil {
 		items = []SocialItem{}
 	}
@@ -177,7 +177,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 					URL:    url,
 					Name:   protocol.GetFullDisplayName(url),
 					Branch: "main",
-					Type:   RepositoryTypeOther,
+					Type:   repositoryTypeOther,
 				},
 				Relationships: RelationshipInfo{
 					SharedLists: sharedLists,
@@ -206,7 +206,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 						URL:    url,
 						Name:   protocol.GetFullDisplayName(url),
 						Branch: "main",
-						Type:   RepositoryTypeOther,
+						Type:   repositoryTypeOther,
 					},
 					Relationships: RelationshipInfo{
 						SharedAuthors: sharedAuthors,
@@ -230,5 +230,5 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 		return related[i].Name < related[j].Name
 	})
 
-	return Success(related)
+	return success(related)
 }

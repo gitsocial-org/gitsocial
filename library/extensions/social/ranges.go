@@ -11,8 +11,8 @@ type MonthRange struct {
 	End   string // "2006-01-02"
 }
 
-// GetMonthRange returns the first and last day of a given month.
-func GetMonthRange(year int, month time.Month) MonthRange {
+// getMonthRange returns the first and last day of a given month.
+func getMonthRange(year int, month time.Month) MonthRange {
 	first := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
 	last := first.AddDate(0, 1, -1)
 	return MonthRange{
@@ -27,14 +27,14 @@ func InitialFetchMonths() []MonthRange {
 	now := time.Now()
 	year, month, day := now.Year(), now.Month(), now.Day()
 	var months []MonthRange
-	months = append(months, GetMonthRange(year, month))
+	months = append(months, getMonthRange(year, month))
 	if day < 15 {
 		prevYear, prevMonth := year, month-1
 		if prevMonth < 1 {
 			prevMonth = 12
 			prevYear--
 		}
-		months = append(months, GetMonthRange(prevYear, prevMonth))
+		months = append(months, getMonthRange(prevYear, prevMonth))
 	}
 	return months
 }
@@ -50,7 +50,7 @@ func PreviousMonthRange(yearMonth string) MonthRange {
 		prevMonth = 12
 		prevYear--
 	}
-	return GetMonthRange(prevYear, prevMonth)
+	return getMonthRange(prevYear, prevMonth)
 }
 
 // NextMonthRange returns the month range after the given YYYY-MM string.
@@ -64,7 +64,7 @@ func NextMonthRange(yearMonth string) MonthRange {
 		nextMonth = 1
 		nextYear++
 	}
-	return GetMonthRange(nextYear, nextMonth)
+	return getMonthRange(nextYear, nextMonth)
 }
 
 // FormatMonthDisplay formats "2006-01" as "Jan 2006".

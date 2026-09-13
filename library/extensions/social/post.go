@@ -18,12 +18,12 @@ import (
 
 // SyncWorkspaceBatch ingests pre-fetched workspace commits and the workspace lists.
 func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, defaultBranch string) {
-	ProcessWorkspaceBatch(commits, repoURL, defaultBranch)
-	SyncListsToCache(workdir)
+	processWorkspaceBatch(commits, repoURL, defaultBranch)
+	syncListsToCache(workdir)
 }
 
-// ProcessWorkspaceBatch ingests pre-fetched workspace commits as social items.
-func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) {
+// processWorkspaceBatch ingests pre-fetched workspace commits as social items.
+func processWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) {
 	var socialItems []SocialItem
 	var virtualItems []SocialItem
 	for _, gc := range commits {
@@ -35,7 +35,7 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) 
 		if msg != nil && msg.Header.Ext == "social" {
 			socialItems = append(socialItems, buildSocialItem(gc, msg, repoURL, branch))
 			for _, ref := range msg.References {
-				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
+				if vi := createVirtualSocialItem(ref, repoURL, branch); vi != nil {
 					virtualItems = append(virtualItems, *vi)
 				}
 			}
@@ -43,7 +43,7 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) 
 			upgradeVirtualItem(gc, repoURL)
 		}
 	}
-	if err := InsertSocialItems(socialItems); err != nil {
+	if err := insertSocialItems(socialItems); err != nil {
 		log.Warn("batch insert social items failed", "error", err)
 	}
 	for _, vi := range virtualItems {
@@ -53,8 +53,8 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) 
 	}
 }
 
-// SyncListsToCache persists all workspace lists to the cache database.
-func SyncListsToCache(workdir string) {
+// syncListsToCache persists all workspace lists to the cache database.
+func syncListsToCache(workdir string) {
 	result := GetLists(workdir)
 	if !result.Success {
 		return
@@ -72,7 +72,7 @@ func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 		RepoURL:         repoURL,
 		Hash:            gc.Hash,
 		Branch:          branch,
-		Type:            string(GetPostType(msg)),
+		Type:            string(getPostType(msg)),
 		OriginalRepoURL: cache.ToNullString(originalRepoURL),
 		OriginalHash:    cache.ToNullString(originalHash),
 		OriginalBranch:  cache.ToNullString(originalBranch),
@@ -112,7 +112,7 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 	var result Result[[]Post]
 	switch {
 	case scope == "timeline":
-		result = getTimeline(workdir, workspaceURL, opts)
+		result = getTimelinePosts(workdir, workspaceURL, opts)
 	case scope == "repository:my", scope == "repository:workspace":
 		result = getWorkspacePosts(workdir, workspaceURL, opts)
 	case strings.HasPrefix(scope, "repository:"):
@@ -134,7 +134,7 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 		postID := strings.TrimPrefix(scope, "thread:")
 		result = getThreadPosts(workdir, postID, workspaceURL)
 	default:
-		return Failure[[]Post]("INVALID_SCOPE", "Unknown scope: "+scope)
+		return failure[[]Post]("INVALID_SCOPE", "Unknown scope: "+scope)
 	}
 	if result.Success {
 		annotateVerified(result.Data)
@@ -164,7 +164,7 @@ type CreatePostOptions struct {
 // CreatePost creates a new post as a git commit in the workspace.
 func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 	if strings.TrimSpace(content) == "" {
-		return Failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
+		return failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
@@ -190,7 +190,7 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
 	now := time.Now()
@@ -201,7 +201,7 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 		Type:    "post",
 	}, message, author, now)
 
-	return Success(Post{
+	return success(Post{
 		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
 		Repository:      repoURL,
 		Branch:          branch,
@@ -256,8 +256,8 @@ func recordSocialCommit(item SocialItem, message string, author Author, timestam
 	}
 }
 
-// getTimeline retrieves posts from all subscribed lists and workspace.
-func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
+// getTimelinePosts retrieves posts from all subscribed lists and workspace.
+func getTimelinePosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	gitRoot := opts.GitRoot
 	if gitRoot == "" {
 		var err error
@@ -275,9 +275,9 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
 	forkURLs := gitmsg.GetForks(workdir)
-	items, err := GetTimeline(listIDs, workspaceURL, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
+	items, err := getTimeline(listIDs, workspaceURL, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get timeline", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get timeline", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -290,7 +290,7 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 		posts = append(posts, post)
 	}
 
-	return Success(posts)
+	return success(posts)
 }
 
 // CountTimeline returns the total number of timeline posts for the workspace.
@@ -305,7 +305,7 @@ func CountTimeline(workdir, gitRoot string) int {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	listIDs, _ := cache.GetListIDs(gitRoot)
 	forkURLs := gitmsg.GetForks(workdir)
-	count, _ := GetTimelineCount(listIDs, workspaceURL, forkURLs)
+	count, _ := getTimelineCount(listIDs, workspaceURL, forkURLs)
 	return count
 }
 
@@ -313,16 +313,16 @@ func CountTimeline(workdir, gitRoot string) int {
 func CountRepository(workdir, repoURL, branch string, isWorkspace bool) int {
 	if isWorkspace {
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
-		count, _ := GetAllItemsCount(SocialQuery{RepoURL: workspaceURL})
+		count, _ := getAllItemsCount(socialQuery{RepoURL: workspaceURL})
 		return count
 	}
-	count, _ := GetAllItemsCount(SocialQuery{RepoURL: repoURL, Branch: branch})
+	count, _ := getAllItemsCount(socialQuery{RepoURL: repoURL, Branch: branch})
 	return count
 }
 
 // CountListPosts returns the total number of posts in a list.
 func CountListPosts(listID string) int {
-	count, _ := GetTimelineCount([]string{listID}, "", nil)
+	count, _ := getTimelineCount([]string{listID}, "", nil)
 	return count
 }
 
@@ -330,7 +330,7 @@ func CountListPosts(listID string) int {
 func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
-	items, err := GetSocialItems(SocialQuery{
+	items, err := getSocialItems(socialQuery{
 		RepoURL:          workspaceURL,
 		Limit:            opts.Limit,
 		Cursor:           opts.Cursor,
@@ -339,7 +339,7 @@ func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOption
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -350,12 +350,12 @@ func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOption
 		posts = append(posts, post)
 	}
 
-	return Success(posts)
+	return success(posts)
 }
 
 // getRepositoryPosts retrieves posts from a specific external repository.
 func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	items, err := GetSocialItems(SocialQuery{
+	items, err := getSocialItems(socialQuery{
 		RepoURL:          repoURL,
 		Branch:           branch,
 		Limit:            opts.Limit,
@@ -365,7 +365,7 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -377,7 +377,7 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 		posts = append(posts, post)
 	}
 
-	return Success(posts)
+	return success(posts)
 }
 
 // getListPosts retrieves posts from repositories in a specific list.
@@ -389,9 +389,9 @@ func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Res
 		cursor = opts.Cursor
 	}
 	// The empty workspace leaves workspace posts out of a list scope; the follower mark still reads against it.
-	items, err := GetTimeline([]string{listID}, "", workspaceURL, nil, limit, cursor)
+	items, err := getTimeline([]string{listID}, "", workspaceURL, nil, limit, cursor)
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -399,7 +399,7 @@ func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Res
 		posts = append(posts, SocialItemToPost(item))
 	}
 
-	return Success(posts)
+	return success(posts)
 }
 
 // getSinglePost retrieves a single post by its ID.
@@ -407,17 +407,17 @@ func getSinglePost(postID string, workspaceURL string) Result[[]Post] {
 	postID = cache.ResolveRefToCanonical(postID)
 	item, err := GetSocialItemByRef(postID, workspaceURL)
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get post", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get post", err)
 	}
 
 	if item == nil {
-		return Success([]Post{})
+		return success([]Post{})
 	}
 	post := SocialItemToPost(*item)
 	if item.RepoURL == workspaceURL {
 		post.Display.IsWorkspacePost = true
 	}
-	return Success([]Post{post})
+	return success([]Post{post})
 }
 
 // isInFamily reports whether url is the workspace or one of its registered forks.
@@ -438,7 +438,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	canonicalPostID := cache.ResolveRefToCanonical(postID)
 	parsed := protocol.ParseRef(canonicalPostID)
 	if parsed.Value == "" {
-		return Failure[[]Post]("INVALID_REF", "Invalid post ID: "+postID)
+		return failure[[]Post]("INVALID_REF", "Invalid post ID: "+postID)
 	}
 
 	branch := parsed.Branch
@@ -455,12 +455,13 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	if isInFamily(parsed.Repository, workspaceURL, forks) {
 		forkURLs = append([]string{workspaceURL}, forks...)
 	}
-	items, err := GetThread(parsed.Repository, parsed.Value, branch, workspaceURL, forkURLs)
+	items, err := getThread(parsed.Repository, parsed.Value, branch, workspaceURL, forkURLs)
 	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get thread", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get thread", err)
 	}
 
-	parentItems := getParentChain(parsed.Repository, parsed.Value, branch, workspaceURL)
+	// A failed ancestor read drops the thread context, not the thread.
+	parentItems, _ := getParentChain(parsed.Repository, parsed.Value, branch, workspaceURL)
 
 	posts := make([]Post, 0, len(items))
 	var rootPost Post
@@ -490,7 +491,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		}
 	}
 
-	sorted := SortThreadTree(canonicalPostID, posts)
+	sorted := sortThreadTree(canonicalPostID, posts)
 
 	result := make([]Post, 0, len(parentItems)+len(sorted)+1)
 	for _, item := range parentItems {
@@ -506,7 +507,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	}
 	result = append(result, sorted...)
 
-	return Success(result)
+	return success(result)
 }
 
 // annotateVerified stamps Display.IsVerified and IsEditorVerified in two batched passes.
@@ -578,13 +579,4 @@ func batchVerify(posts []Post, key func(*Post) (repo, hash, email string)) []boo
 		}
 	}
 	return out
-}
-
-// getParentChain retrieves ancestor posts for building thread context.
-func getParentChain(repoURL, hash, branch, workspaceURL string) []SocialItem {
-	parents, err := GetParentChain(repoURL, hash, branch, workspaceURL)
-	if err != nil {
-		return nil
-	}
-	return parents
 }

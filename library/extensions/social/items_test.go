@@ -16,21 +16,21 @@ import (
 
 func TestCreateVirtualSocialItem_wrongExt(t *testing.T) {
 	ref := protocol.Ref{Ext: "pm", Metadata: "> Hello", Ref: "#commit:abc123@main"}
-	if got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
+	if got := createVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
 		t.Error("wrong ext should return nil")
 	}
 }
 
 func TestCreateVirtualSocialItem_noMetadata(t *testing.T) {
 	ref := protocol.Ref{Ext: "social", Metadata: "", Ref: "#commit:abc123@main"}
-	if got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
+	if got := createVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
 		t.Error("empty metadata should return nil")
 	}
 }
 
 func TestCreateVirtualSocialItem_noContent(t *testing.T) {
 	ref := protocol.Ref{Ext: "social", Metadata: "not a quote line", Ref: "#commit:abc123@main"}
-	if got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
+	if got := createVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
 		t.Error("no quoted content should return nil")
 	}
 }
@@ -42,7 +42,7 @@ func TestCreateVirtualSocialItem_noTimestamp(t *testing.T) {
 		Ref:      "#commit:abc123@main",
 		Time:     "",
 	}
-	if got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
+	if got := createVirtualSocialItem(ref, "https://github.com/a/b", "main"); got != nil {
 		t.Error("invalid timestamp should return nil")
 	}
 }
@@ -59,7 +59,7 @@ func TestCreateVirtualSocialItem_happyPath(t *testing.T) {
 		Fields:   map[string]string{"type": "post"},
 		Metadata: "> Hello world\n> Second line",
 	}
-	got := CreateVirtualSocialItem(ref, "https://github.com/fallback/repo", "develop")
+	got := createVirtualSocialItem(ref, "https://github.com/fallback/repo", "develop")
 	if got == nil {
 		t.Fatal("should return non-nil item")
 	}
@@ -94,7 +94,7 @@ func TestCreateVirtualSocialItem_fallbackBranch(t *testing.T) {
 		Ref:      "#commit:abc123def456",
 		Metadata: "> content",
 	}
-	got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "develop")
+	got := createVirtualSocialItem(ref, "https://github.com/a/b", "develop")
 	if got == nil {
 		t.Fatal("should return non-nil")
 	}
@@ -115,7 +115,7 @@ func TestCreateVirtualSocialItem_defaultType(t *testing.T) {
 		Metadata: "> content",
 		Fields:   map[string]string{},
 	}
-	got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main")
+	got := createVirtualSocialItem(ref, "https://github.com/a/b", "main")
 	if got == nil {
 		t.Fatal("should return non-nil")
 	}
@@ -469,9 +469,9 @@ func TestGetCachedCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	item, err := GetCachedCommit(itemsTestRepoURL, "ccmt12345678", itemsTestBranch)
+	item, err := getCachedCommit(itemsTestRepoURL, "ccmt12345678", itemsTestBranch)
 	if err != nil {
-		t.Fatalf("GetCachedCommit() error = %v", err)
+		t.Fatalf("getCachedCommit() error = %v", err)
 	}
 	if item.Hash != "ccmt12345678" {
 		t.Errorf("Hash = %q", item.Hash)
@@ -489,7 +489,7 @@ func TestGetCachedCommit(t *testing.T) {
 
 func TestGetCachedCommit_notFound(t *testing.T) {
 	setupTestDB(t)
-	_, err := GetCachedCommit("https://github.com/no/repo", "nonexistent", "main")
+	_, err := getCachedCommit("https://github.com/no/repo", "nonexistent", "main")
 	if err == nil {
 		t.Error("expected error for missing commit")
 	}
@@ -550,9 +550,9 @@ func TestGetSocialItems_filterByType(t *testing.T) {
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "typ2_1234567", Branch: itemsTestBranch, Type: "comment",
 		OriginalRepoURL: cache.ToNullString(itemsTestRepoURL), OriginalHash: cache.ToNullString("typ1_1234567"), OriginalBranch: cache.ToNullString(itemsTestBranch)})
 
-	items, err := GetSocialItems(SocialQuery{Types: []string{"post"}, RepoURL: itemsTestRepoURL})
+	items, err := getSocialItems(socialQuery{Types: []string{"post"}, RepoURL: itemsTestRepoURL})
 	if err != nil {
-		t.Fatalf("GetSocialItems() error = %v", err)
+		t.Fatalf("getSocialItems() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 post, got %d", len(items))
@@ -577,7 +577,7 @@ func TestGetSocialItems_limitOffset(t *testing.T) {
 		InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: hash, Branch: itemsTestBranch, Type: "post"})
 	}
 
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Limit: 2})
+	items, err := getSocialItems(socialQuery{RepoURL: itemsTestRepoURL, Limit: 2})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -603,7 +603,7 @@ func TestGetSocialItems_sinceUntil(t *testing.T) {
 
 	since := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	until := time.Date(2025, 6, 30, 0, 0, 0, 0, time.UTC)
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Since: &since, Until: &until})
+	items, err := getSocialItems(socialQuery{RepoURL: itemsTestRepoURL, Since: &since, Until: &until})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -612,7 +612,7 @@ func TestGetSocialItems_sinceUntil(t *testing.T) {
 	}
 
 	before := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
-	items2, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Until: &before})
+	items2, err := getSocialItems(socialQuery{RepoURL: itemsTestRepoURL, Until: &before})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -627,9 +627,9 @@ func TestGetTimeline(t *testing.T) {
 	insertItemsTestCommit(t, wsURL, "tl_112345678")
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tl_112345678", Branch: itemsTestBranch, Type: "post"})
 
-	items, err := GetTimeline(nil, wsURL, wsURL, nil, 10, "")
+	items, err := getTimeline(nil, wsURL, wsURL, nil, 10, "")
 	if err != nil {
-		t.Fatalf("GetTimeline() error = %v", err)
+		t.Fatalf("getTimeline() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 timeline item, got %d", len(items))
@@ -638,9 +638,9 @@ func TestGetTimeline(t *testing.T) {
 
 func TestGetTimeline_empty(t *testing.T) {
 	setupTestDB(t)
-	items, err := GetTimeline(nil, "", "", nil, 10, "")
+	items, err := getTimeline(nil, "", "", nil, 10, "")
 	if err != nil {
-		t.Fatalf("GetTimeline(empty) error = %v", err)
+		t.Fatalf("getTimeline(empty) error = %v", err)
 	}
 	if items != nil {
 		t.Errorf("expected nil for empty timeline, got %v", items)
@@ -666,9 +666,9 @@ func TestGetThread(t *testing.T) {
 		ReplyToBranch:   cache.ToNullString(itemsTestBranch),
 	})
 
-	items, err := GetThread(itemsTestRepoURL, "thrd_root123", itemsTestBranch, "", nil)
+	items, err := getThread(itemsTestRepoURL, "thrd_root123", itemsTestBranch, "", nil)
 	if err != nil {
-		t.Fatalf("GetThread() error = %v", err)
+		t.Fatalf("getThread() error = %v", err)
 	}
 	if len(items) < 2 {
 		t.Errorf("expected at least 2 thread items, got %d", len(items))
@@ -709,9 +709,9 @@ func TestGetParentChain(t *testing.T) {
 		ReplyToBranch:   cache.ToNullString(itemsTestBranch),
 	})
 
-	parents, err := GetParentChain(itemsTestRepoURL, "pc_grch12345", itemsTestBranch, "")
+	parents, err := getParentChain(itemsTestRepoURL, "pc_grch12345", itemsTestBranch, "")
 	if err != nil {
-		t.Fatalf("GetParentChain() error = %v", err)
+		t.Fatalf("getParentChain() error = %v", err)
 	}
 	if len(parents) < 1 {
 		t.Errorf("expected at least 1 parent, got %d", len(parents))
@@ -872,7 +872,7 @@ func TestInteractionCounts_forkMirrorCountsOnce(t *testing.T) {
 }
 
 func TestFailureWithDetails(t *testing.T) {
-	r := FailureWithDetails[string]("CODE", "message", "details")
+	r := failureWithDetails[string]("CODE", "message", "details")
 	if r.Success {
 		t.Error("should not succeed")
 	}
@@ -895,7 +895,7 @@ func TestGetSocialItems_byBranch(t *testing.T) {
 	}
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "br_112345678", Branch: "dev", Type: "post"})
 
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Branch: "dev"})
+	items, err := getSocialItems(socialQuery{RepoURL: itemsTestRepoURL, Branch: "dev"})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1045,7 +1045,7 @@ func TestGetTimeline_withListIDs(t *testing.T) {
 	})
 	insertItemsTestCommit(t, itemsTestRepoURL, "tlli12345678")
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "tlli12345678", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetTimeline([]string{"tl-list-ids"}, "", "", nil, 10, "")
+	items, err := getTimeline([]string{"tl-list-ids"}, "", "", nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1074,7 +1074,7 @@ func TestGetTimeline_withListIDsAndWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tlbth_ws___1", Branch: "main", Type: "post"})
-	items, err := GetTimeline([]string{"tl-both"}, wsURL, wsURL, nil, 10, "")
+	items, err := getTimeline([]string{"tl-both"}, wsURL, wsURL, nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1117,7 +1117,7 @@ func TestGetTimeline_withForks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := GetTimeline(nil, wsURL, wsURL, []string{forkURL}, 10, "")
+	items, err := getTimeline(nil, wsURL, wsURL, []string{forkURL}, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1147,7 +1147,7 @@ func TestCreateVirtualSocialItem_nonCommitRef(t *testing.T) {
 		Ref:      "#branch:main",
 		Metadata: "> content",
 	}
-	got := CreateVirtualSocialItem(ref, "https://github.com/a/b", "main")
+	got := createVirtualSocialItem(ref, "https://github.com/a/b", "main")
 	if got != nil {
 		t.Error("non-commit ref should return nil")
 	}
@@ -1187,7 +1187,7 @@ func TestInsertSocialItem_editCommitSkipsInteractions(t *testing.T) {
 
 func TestResolveCurrentVersion_notFound(t *testing.T) {
 	setupTestDB(t)
-	_, err := ResolveCurrentVersion(itemsTestRepoURL, "nonexistent12", itemsTestBranch, "")
+	_, err := resolveCurrentVersion(itemsTestRepoURL, "nonexistent12", itemsTestBranch, "")
 	if err == nil {
 		t.Error("expected error for nonexistent item")
 	}
@@ -1197,7 +1197,7 @@ func TestResolveCurrentVersion_basicPost(t *testing.T) {
 	setupTestDB(t)
 	insertItemsTestCommit(t, itemsTestRepoURL, "rcv_12345678")
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "rcv_12345678", Branch: itemsTestBranch, Type: "post"})
-	resolved, err := ResolveCurrentVersion(itemsTestRepoURL, "rcv_12345678", itemsTestBranch, "")
+	resolved, err := resolveCurrentVersion(itemsTestRepoURL, "rcv_12345678", itemsTestBranch, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1222,9 +1222,9 @@ func TestGetThread_withWorkspaceURL(t *testing.T) {
 		ReplyToRepoURL: cache.ToNullString(itemsTestRepoURL), ReplyToHash: cache.ToNullString("tw_root12345"), ReplyToBranch: cache.ToNullString(itemsTestBranch),
 	})
 
-	items, err := GetThread(itemsTestRepoURL, "tw_root12345", itemsTestBranch, wsURL, nil)
+	items, err := getThread(itemsTestRepoURL, "tw_root12345", itemsTestBranch, wsURL, nil)
 	if err != nil {
-		t.Fatalf("GetThread() error = %v", err)
+		t.Fatalf("getThread() error = %v", err)
 	}
 	if len(items) < 2 {
 		t.Errorf("expected at least 2 thread items, got %d", len(items))
@@ -1233,11 +1233,11 @@ func TestGetThread_withWorkspaceURL(t *testing.T) {
 
 func TestGetEditHistory_noVersions(t *testing.T) {
 	setupTestDB(t)
-	// GetEditHistory delegates to gitmsg.GetHistory which requires git refs
+	// getEditHistory delegates to gitmsg.GetHistory which requires git refs
 	// With no version data in cache, it should return empty without error
-	items, err := GetEditHistory(itemsTestRepoURL, "eh_orig12345", itemsTestBranch, "")
+	items, err := getEditHistory(itemsTestRepoURL, "eh_orig12345", itemsTestBranch, "")
 	if err != nil {
-		t.Fatalf("GetEditHistory() error = %v", err)
+		t.Fatalf("getEditHistory() error = %v", err)
 	}
 	if len(items) != 0 {
 		t.Errorf("expected 0 versions for non-versioned item, got %d", len(items))
@@ -1261,8 +1261,8 @@ func TestGetSocialItems_forFollowerCheck(t *testing.T) {
 	insertItemsTestCommit(t, itemsTestRepoURL, "fc_112345678")
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "fc_112345678", Branch: itemsTestBranch, Type: "post"})
 	// Insert follower
-	_ = InsertFollower(itemsTestRepoURL, wsURL, "list1", "", time.Now())
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, ForFollowerCheck: wsURL})
+	_ = insertFollower(itemsTestRepoURL, wsURL, "list1", "", time.Now())
+	items, err := getSocialItems(socialQuery{RepoURL: itemsTestRepoURL, ForFollowerCheck: wsURL})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1288,8 +1288,8 @@ func TestGetListPosts_followerMark(t *testing.T) {
 	})
 	insertItemsTestCommit(t, repoURL, "c11100000001")
 	InsertSocialItem(SocialItem{RepoURL: repoURL, Hash: "c11100000001", Branch: itemsTestBranch, Type: "post"})
-	if err := InsertFollower(repoURL, wsURL, "follow-list", "", time.Now()); err != nil {
-		t.Fatalf("InsertFollower() error = %v", err)
+	if err := insertFollower(repoURL, wsURL, "follow-list", "", time.Now()); err != nil {
+		t.Fatalf("insertFollower() error = %v", err)
 	}
 
 	result := getListPosts("follow-list", wsURL, &GetPostsOptions{})
@@ -1355,7 +1355,7 @@ func TestInsertSocialItem_quoteAncestorInteraction(t *testing.T) {
 func TestGetTimeline_noUnionsReturnsNil(t *testing.T) {
 	setupTestDB(t)
 	// No list IDs and no workspace URL → empty unions → returns nil
-	items, err := GetTimeline(nil, "", "", nil, 0, "")
+	items, err := getTimeline(nil, "", "", nil, 0, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1372,7 +1372,7 @@ func TestGetTimeline_withLimit(t *testing.T) {
 		insertItemsTestCommit(t, wsURL, h)
 		InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: h, Branch: itemsTestBranch, Type: "post"})
 	}
-	items, err := GetTimeline(nil, wsURL, wsURL, nil, 2, "")
+	items, err := getTimeline(nil, wsURL, wsURL, nil, 2, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}

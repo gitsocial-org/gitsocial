@@ -47,7 +47,7 @@ func GetComments(repoURL, hash, branch, rootRef string) ([]Post, error) {
 		posts[i] = SocialItemToPost(item)
 	}
 	if len(posts) > 0 {
-		posts = SortThreadTree(rootRef, posts)
+		posts = sortThreadTree(rootRef, posts)
 	}
 	return posts, nil
 }
@@ -61,8 +61,8 @@ func normalizedKey(id string) string {
 	return parsed.Repository + "|" + parsed.Value + "|" + parsed.Branch
 }
 
-// SortThreadTree organizes posts into a depth-first tree structure.
-func SortThreadTree(rootID string, posts []Post) []Post {
+// sortThreadTree organizes posts into a depth-first tree structure.
+func sortThreadTree(rootID string, posts []Post) []Post {
 	normalizedRootID := normalizedKey(rootID)
 	childrenMap := make(map[string][]Post)
 	for _, p := range posts {

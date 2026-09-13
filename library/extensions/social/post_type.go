@@ -52,8 +52,8 @@ const (
 	PostTypeQuote   PostType = "quote"
 )
 
-// GetPostType returns the social post type from a message.
-func GetPostType(msg *protocol.Message) PostType {
+// getPostType returns the social post type from a message.
+func getPostType(msg *protocol.Message) PostType {
 	if msg == nil || msg.Header.Ext != "social" {
 		return PostTypePost
 	}
@@ -69,8 +69,8 @@ func GetPostType(msg *protocol.Message) PostType {
 	}
 }
 
-// IsEmptyRepost checks if a repost has no additional content.
-func IsEmptyRepost(msg *protocol.Message) bool {
+// isEmptyRepost checks if a repost has no additional content.
+func isEmptyRepost(msg *protocol.Message) bool {
 	if msg == nil || !protocol.IsMessageType(&msg.Header, "social", "repost") {
 		return false
 	}

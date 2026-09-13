@@ -57,9 +57,9 @@ func TestGetPostType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetPostType(tt.msg)
+			got := getPostType(tt.msg)
 			if got != tt.want {
-				t.Errorf("GetPostType() = %q, want %q", got, tt.want)
+				t.Errorf("getPostType() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -128,9 +128,9 @@ func TestIsEmptyRepost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := IsEmptyRepost(tt.msg)
+			got := isEmptyRepost(tt.msg)
 			if got != tt.want {
-				t.Errorf("IsEmptyRepost() = %v, want %v", got, tt.want)
+				t.Errorf("isEmptyRepost() = %v, want %v", got, tt.want)
 			}
 		})
 	}

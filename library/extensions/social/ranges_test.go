@@ -23,7 +23,7 @@ func TestGetMonthRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.wantStart, func(t *testing.T) {
-			got := GetMonthRange(tt.year, tt.month)
+			got := getMonthRange(tt.year, tt.month)
 			if got.Start != tt.wantStart {
 				t.Errorf("Start = %q, want %q", got.Start, tt.wantStart)
 			}
@@ -41,7 +41,7 @@ func TestInitialFetchMonths(t *testing.T) {
 	}
 	// Always includes current month
 	now := time.Now()
-	current := GetMonthRange(now.Year(), now.Month())
+	current := getMonthRange(now.Year(), now.Month())
 	if months[0].Start != current.Start {
 		t.Errorf("First month start = %q, want %q", months[0].Start, current.Start)
 	}

@@ -65,7 +65,7 @@ type ListInfo struct {
 // Status returns the current social extension status for a workspace.
 func Status(workdir, cacheDir string) Result[StatusData] {
 	if !gitmsg.IsExtInitialized(workdir, "social") {
-		return Failure[StatusData]("NOT_INITIALIZED", "Social extension not initialized. Run 'gitsocial social init' to initialize.")
+		return failure[StatusData]("NOT_INITIALIZED", "Social extension not initialized. Run 'gitsocial social init' to initialize.")
 	}
 	branch := gitmsg.GetExtBranch(workdir, "social")
 
@@ -112,5 +112,5 @@ func Status(workdir, cacheDir string) Result[StatusData] {
 		data.FromWorkspace = extStats.BySource["workspace"]
 	}
 
-	return Success(data)
+	return success(data)
 }

@@ -36,7 +36,7 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 
 	result := GetLists(workdir)
 	if !result.Success {
-		return Failure[fetch.Stats](result.Error.Code, result.Error.Message)
+		return failure[fetch.Stats](result.Error.Code, result.Error.Message)
 	}
 
 	var repos []fetch.RepoInfo
@@ -108,7 +108,7 @@ func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch s
 		_ = InsertSocialItem(buildSocialItem(gc, msg, repoURL, branch))
 
 		for _, ref := range msg.References {
-			if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
+			if vi := createVirtualSocialItem(ref, repoURL, branch); vi != nil {
 				if err := InsertSocialItem(*vi); err != nil {
 					log.Debug("insert virtual item failed", "ref", ref, "error", err)
 				}
@@ -185,7 +185,7 @@ func checkIfRepoFollowsWorkspace(storageDir, repoURL, _, workspaceURL string) {
 				if !found {
 					followedAt = time.Now()
 				}
-				if err := InsertFollower(repoURL, workspaceURL, listName, commitHash, followedAt); err != nil {
+				if err := insertFollower(repoURL, workspaceURL, listName, commitHash, followedAt); err != nil {
 					log.Debug("insert follower failed", "repo", repoURL, "workspace", workspaceURL, "error", err)
 				}
 				return

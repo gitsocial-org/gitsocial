@@ -105,8 +105,8 @@ var baseDirectSelect = `
 	LEFT JOIN social_followers sf ON c.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
-// GetCachedCommit retrieves a commit from the cache and parses it as a social item.
-func GetCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
+// getCachedCommit retrieves a commit from the cache and parses it as a social item.
+func getCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
 		var item SocialItem
 		var ts string
@@ -122,7 +122,7 @@ func GetCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
 		item.Type = "post"
 		item.Timestamp, _ = time.Parse(time.RFC3339, ts) // RFC3339 from DB; zero value ok
 		if msg := protocol.ParseMessage(item.Content); msg != nil {
-			item.Type = string(GetPostType(msg))
+			item.Type = string(getPostType(msg))
 			item.Content = msg.Content
 			item.HeaderExt = msg.Header.Ext
 			item.HeaderType = msg.Header.Fields["type"]
@@ -132,8 +132,8 @@ func GetCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
 	})
 }
 
-// CreateVirtualSocialItem creates a placeholder item from a protocol reference.
-func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch string) *SocialItem {
+// createVirtualSocialItem creates a placeholder item from a protocol reference.
+func createVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch string) *SocialItem {
 	if ref.Ext != "social" || ref.Metadata == "" {
 		return nil
 	}
@@ -204,8 +204,8 @@ func socialItemArgs(item SocialItem) []interface{} {
 	}
 }
 
-// InsertSocialItems batch-inserts non-virtual items, then recounts each target once.
-func InsertSocialItems(items []SocialItem) error {
+// insertSocialItems batch-inserts non-virtual items, then recounts each target once.
+func insertSocialItems(items []SocialItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -478,7 +478,7 @@ func GetSocialItemByRef(refStr string, workspaceURL string) (*SocialItem, error)
 	return GetSocialItem(ref.RepoURL, ref.Hash, ref.Branch, workspaceURL)
 }
 
-type SocialQuery struct {
+type socialQuery struct {
 	Types            []string
 	RepoURL          string
 	Branch           string
@@ -490,7 +490,7 @@ type SocialQuery struct {
 }
 
 // socialWhere builds the WHERE clauses and args every social item query shares.
-func socialWhere(q SocialQuery) ([]string, []interface{}) {
+func socialWhere(q socialQuery) ([]string, []interface{}) {
 	var where []string
 	var args []interface{}
 
@@ -530,8 +530,8 @@ func socialWhere(q SocialQuery) ([]string, []interface{}) {
 	return where, args
 }
 
-// GetSocialItems queries social items with filtering and pagination.
-func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
+// getSocialItems queries social items with filtering and pagination.
+func getSocialItems(q socialQuery) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		where, whereArgs := socialWhere(q)
 		args := append([]interface{}{q.ForFollowerCheck}, whereArgs...)
@@ -600,8 +600,8 @@ func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cu
 	return wheres, args
 }
 
-// GetTimeline reads the lists, the workspace and the forks; followerURL carries the FollowsYou mark.
-func GetTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
+// getTimeline reads the lists, the workspace and the forks; followerURL carries the FollowsYou mark.
+func getTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		wheres, whereArgs := timelineWheres(listIDs, workspaceURL, forkURLs, cursor)
 		if len(wheres) == 0 {
@@ -631,8 +631,8 @@ func GetTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []
 	})
 }
 
-// GetTimelineCount returns the total number of timeline items (without pagination).
-func GetTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) (int, error) {
+// getTimelineCount returns the total number of timeline items (without pagination).
+func getTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		wheres, whereArgs := timelineWheres(listIDs, workspaceURL, forkURLs, "")
 		if len(wheres) == 0 {
@@ -652,8 +652,8 @@ func GetTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) 
 	})
 }
 
-// GetAllItemsCount returns the total count of items matching the query (ignoring Limit and Cursor).
-func GetAllItemsCount(q SocialQuery) (int, error) {
+// getAllItemsCount returns the total count of items matching the query (ignoring Limit and Cursor).
+func getAllItemsCount(q socialQuery) (int, error) {
 	q.Limit = 0
 	q.Cursor = ""
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
@@ -676,8 +676,8 @@ func uniqueURLs(root string, extras []string) []string {
 	return out
 }
 
-// GetThread retrieves a root post's replies, widened to the comments forkURLs authored.
-func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, forkURLs []string) ([]SocialItem, error) {
+// getThread retrieves a root post's replies, widened to the comments forkURLs authored.
+func getThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, forkURLs []string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		matchURLs := uniqueURLs(rootRepoURL, forkURLs)
 		matchPlaceholders := placeholders(len(matchURLs))
@@ -716,29 +716,29 @@ func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 	})
 }
 
-// ResolvedVersion carries a resolved post and whether it was edited.
-type ResolvedVersion struct {
+// resolvedVersion carries a resolved post and whether it was edited.
+type resolvedVersion struct {
 	Item     *SocialItem
 	IsEdited bool
 }
 
-// ResolveCurrentVersion finds the latest version of a post.
-func ResolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (ResolvedVersion, error) {
+// resolveCurrentVersion finds the latest version of a post.
+func resolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (resolvedVersion, error) {
 	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(repoURL, hash, branch)
 	if err != nil {
-		return ResolvedVersion{}, err
+		return resolvedVersion{}, err
 	}
 
 	item, err := GetSocialItem(canonicalRepoURL, canonicalHash, canonicalBranch, workspaceURL)
 	if err != nil {
-		return ResolvedVersion{}, err
+		return resolvedVersion{}, err
 	}
 
-	return ResolvedVersion{Item: item, IsEdited: item.IsEdited}, nil
+	return resolvedVersion{Item: item, IsEdited: item.IsEdited}, nil
 }
 
-// GetEditHistory returns every version of a post, latest first.
-func GetEditHistory(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
+// getEditHistory returns every version of a post, latest first.
+func getEditHistory(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	canonicalID := protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch)
 	versions, err := gitmsg.GetHistory(canonicalID, workspaceURL)
 	if err != nil {
@@ -773,7 +773,7 @@ func GetEditHistory(repoURL, hash, branch string, workspaceURL string) ([]Social
 
 // GetEditHistoryPosts returns all versions of a post as Post structs.
 func GetEditHistoryPosts(repoURL, hash, branch string, workspaceURL string) ([]Post, error) {
-	items, err := GetEditHistory(repoURL, hash, branch, workspaceURL)
+	items, err := getEditHistory(repoURL, hash, branch, workspaceURL)
 	if err != nil {
 		return nil, err
 	}
@@ -948,8 +948,8 @@ func SocialItemToPost(item SocialItem) Post {
 	}
 }
 
-// GetParentChain retrieves ancestor posts in a reply chain.
-func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
+// getParentChain retrieves ancestor posts in a reply chain.
+func getParentChain(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		// The CTE walks the reply-to chain up, then joins core_commits rather than the view.
 		query := `

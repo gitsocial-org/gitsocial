@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// InsertFollower records a repository that follows the workspace.
-func InsertFollower(repoURL, workspaceURL, listID, commitHash string, followedAt time.Time) error {
+// insertFollower records a repository that follows the workspace.
+func insertFollower(repoURL, workspaceURL, listID, commitHash string, followedAt time.Time) error {
 	ts := followedAt.UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
 		_, err := db.Exec(`

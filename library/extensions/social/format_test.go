@@ -258,18 +258,18 @@ func TestFormatRepository(t *testing.T) {
 		Lists:  []string{"list1", "list2"},
 	}
 
-	got := FormatRepository(repo)
+	got := formatRepository(repo)
 	if !strings.Contains(got, "user/repo") {
-		t.Error("FormatRepository should contain name")
+		t.Error("formatRepository should contain name")
 	}
 	if !strings.Contains(got, "https://github.com/user/repo") {
-		t.Error("FormatRepository should contain URL")
+		t.Error("formatRepository should contain URL")
 	}
 	if !strings.Contains(got, "branch: main") {
-		t.Error("FormatRepository should contain branch")
+		t.Error("formatRepository should contain branch")
 	}
 	if !strings.Contains(got, "lists: list1, list2") {
-		t.Error("FormatRepository should contain lists")
+		t.Error("formatRepository should contain lists")
 	}
 }
 
@@ -312,12 +312,12 @@ func TestFormatRelatedRepository(t *testing.T) {
 		},
 	}
 
-	got := FormatRelatedRepository(repo)
+	got := formatRelatedRepository(repo)
 	if !strings.Contains(got, "shared lists: list1") {
-		t.Error("FormatRelatedRepository should contain shared lists")
+		t.Error("formatRelatedRepository should contain shared lists")
 	}
 	if !strings.Contains(got, "shared authors: alice@example.com") {
-		t.Error("FormatRelatedRepository should contain shared authors")
+		t.Error("formatRelatedRepository should contain shared authors")
 	}
 }
 
@@ -359,19 +359,19 @@ func TestFormatLogEntry(t *testing.T) {
 		Hash:      "abc123def456",
 		Timestamp: time.Now().Add(-5 * time.Minute),
 		Author:    Author{Name: "Alice"},
-		Type:      LogTypePost,
+		Type:      logTypePost,
 		Details:   "Created a post",
 	}
 
-	got := FormatLogEntry(entry)
+	got := formatLogEntry(entry)
 	if !strings.Contains(got, "abc123d") {
-		t.Error("FormatLogEntry should truncate hash to 7 chars")
+		t.Error("formatLogEntry should truncate hash to 7 chars")
 	}
 	if !strings.Contains(got, "post") {
-		t.Error("FormatLogEntry should contain entry type")
+		t.Error("formatLogEntry should contain entry type")
 	}
 	if !strings.Contains(got, "Alice") {
-		t.Error("FormatLogEntry should contain author")
+		t.Error("formatLogEntry should contain author")
 	}
 }
 
@@ -384,8 +384,8 @@ func TestFormatLogs_empty(t *testing.T) {
 
 func TestFormatLogs(t *testing.T) {
 	entries := []LogEntry{
-		{Hash: "abc123def456", Timestamp: time.Now(), Author: Author{Name: "Alice"}, Type: LogTypePost, Details: "Post 1"},
-		{Hash: "def456abc123", Timestamp: time.Now(), Author: Author{Name: "Bob"}, Type: LogTypeComment, Details: "Comment 1"},
+		{Hash: "abc123def456", Timestamp: time.Now(), Author: Author{Name: "Alice"}, Type: logTypePost, Details: "Post 1"},
+		{Hash: "def456abc123", Timestamp: time.Now(), Author: Author{Name: "Bob"}, Type: logTypeComment, Details: "Comment 1"},
 	}
 
 	got := FormatLogs(entries)

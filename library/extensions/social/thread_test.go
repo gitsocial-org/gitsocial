@@ -135,9 +135,9 @@ func TestGetComments_withoutBranch(t *testing.T) {
 }
 
 func TestSortThreadTree_empty(t *testing.T) {
-	result := SortThreadTree("root-id", nil)
+	result := sortThreadTree("root-id", nil)
 	if len(result) != 0 {
-		t.Errorf("SortThreadTree(empty) = %d items, want 0", len(result))
+		t.Errorf("sortThreadTree(empty) = %d items, want 0", len(result))
 	}
 }
 
@@ -145,9 +145,9 @@ func TestSortThreadTree_noChildren(t *testing.T) {
 	posts := []Post{
 		{ID: "root-id", Content: "Root post"},
 	}
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 0 {
-		t.Errorf("SortThreadTree(root only) = %d items, want 0 (root excluded)", len(result))
+		t.Errorf("sortThreadTree(root only) = %d items, want 0 (root excluded)", len(result))
 	}
 }
 
@@ -159,9 +159,9 @@ func TestSortThreadTree_directChildren(t *testing.T) {
 		{ID: "child-2", OriginalPostID: "root-id", Timestamp: now, Content: "Second"},
 	}
 
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 2 {
-		t.Fatalf("SortThreadTree() = %d items, want 2", len(result))
+		t.Fatalf("sortThreadTree() = %d items, want 2", len(result))
 	}
 	// Depth 1 children are sorted by comments (desc), then timestamp (asc)
 	for _, r := range result {
@@ -179,9 +179,9 @@ func TestSortThreadTree_nestedChildren(t *testing.T) {
 		{ID: "grandchild-1", ParentCommentID: "child-1", Timestamp: now, Content: "Reply"},
 	}
 
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 2 {
-		t.Fatalf("SortThreadTree() = %d items, want 2", len(result))
+		t.Fatalf("sortThreadTree() = %d items, want 2", len(result))
 	}
 	if result[0].Depth != 1 {
 		t.Errorf("First item depth = %d, want 1", result[0].Depth)
@@ -198,10 +198,10 @@ func TestSortThreadTree_reposts_not_grouped(t *testing.T) {
 		{ID: "repost-1", OriginalPostID: "root-id", Type: PostTypeRepost, Timestamp: now, Content: ""},
 	}
 
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	// Reposts with OriginalPostID set but Type=repost are excluded from children grouping
 	if len(result) != 0 {
-		t.Errorf("SortThreadTree() should not include reposts as children, got %d", len(result))
+		t.Errorf("sortThreadTree() should not include reposts as children, got %d", len(result))
 	}
 }
 
@@ -213,9 +213,9 @@ func TestSortThreadTree_deduplicates(t *testing.T) {
 		{ID: "child-1", OriginalPostID: "root-id", Timestamp: now, Content: "Comment"}, // duplicate
 	}
 
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 1 {
-		t.Errorf("SortThreadTree() should deduplicate, got %d items, want 1", len(result))
+		t.Errorf("sortThreadTree() should deduplicate, got %d items, want 1", len(result))
 	}
 }
 
@@ -273,7 +273,7 @@ func TestSortThreadTree_depth1SortByComments(t *testing.T) {
 		{ID: "child-2", OriginalPostID: "root-id", Timestamp: now, Content: "Popular", Interactions: Interactions{Comments: 10}},
 	}
 
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 2 {
 		t.Fatalf("len = %d, want 2", len(result))
 	}

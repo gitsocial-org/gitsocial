@@ -11,7 +11,7 @@ import (
 )
 
 func TestMatchesLogFilters_noFilters(t *testing.T) {
-	entry := LogEntry{Type: LogTypePost, Timestamp: time.Now()}
+	entry := LogEntry{Type: logTypePost, Timestamp: time.Now()}
 	opts := &GetLogsOptions{}
 	if !matchesLogFilters(entry, opts) {
 		t.Error("entry with no filters should match")
@@ -19,19 +19,19 @@ func TestMatchesLogFilters_noFilters(t *testing.T) {
 }
 
 func TestMatchesLogFilters_typeFilter(t *testing.T) {
-	entry := LogEntry{Type: LogTypePost, Timestamp: time.Now()}
-	opts := &GetLogsOptions{Types: []LogEntryType{LogTypeComment}}
+	entry := LogEntry{Type: logTypePost, Timestamp: time.Now()}
+	opts := &GetLogsOptions{Types: []LogEntryType{logTypeComment}}
 	if matchesLogFilters(entry, opts) {
 		t.Error("post should not match comment filter")
 	}
-	opts.Types = []LogEntryType{LogTypePost, LogTypeComment}
+	opts.Types = []LogEntryType{logTypePost, logTypeComment}
 	if !matchesLogFilters(entry, opts) {
 		t.Error("post should match when post is in types")
 	}
 }
 
 func TestMatchesLogFilters_authorFilter(t *testing.T) {
-	entry := LogEntry{Type: LogTypePost, Author: Author{Email: "alice@test.com"}, Timestamp: time.Now()}
+	entry := LogEntry{Type: logTypePost, Author: Author{Email: "alice@test.com"}, Timestamp: time.Now()}
 	opts := &GetLogsOptions{Author: "alice"}
 	if !matchesLogFilters(entry, opts) {
 		t.Error("should match partial author email")
@@ -43,7 +43,7 @@ func TestMatchesLogFilters_authorFilter(t *testing.T) {
 }
 
 func TestMatchesLogFilters_authorCaseInsensitive(t *testing.T) {
-	entry := LogEntry{Type: LogTypePost, Author: Author{Email: "Alice@Test.com"}, Timestamp: time.Now()}
+	entry := LogEntry{Type: logTypePost, Author: Author{Email: "Alice@Test.com"}, Timestamp: time.Now()}
 	opts := &GetLogsOptions{Author: "alice"}
 	if !matchesLogFilters(entry, opts) {
 		t.Error("author filter should be case-insensitive")
@@ -52,7 +52,7 @@ func TestMatchesLogFilters_authorCaseInsensitive(t *testing.T) {
 
 func TestMatchesLogFilters_dateFilters(t *testing.T) {
 	ts := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-	entry := LogEntry{Type: LogTypePost, Timestamp: ts}
+	entry := LogEntry{Type: logTypePost, Timestamp: ts}
 
 	after := time.Date(2025, 7, 1, 0, 0, 0, 0, time.UTC)
 	opts := &GetLogsOptions{After: &after}
@@ -76,10 +76,10 @@ func TestMatchesLogFilters_dateFilters(t *testing.T) {
 
 func TestMatchesLogFilters_combined(t *testing.T) {
 	ts := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-	entry := LogEntry{Type: LogTypePost, Author: Author{Email: "alice@test.com"}, Timestamp: ts}
+	entry := LogEntry{Type: logTypePost, Author: Author{Email: "alice@test.com"}, Timestamp: ts}
 
 	after := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
-	opts := &GetLogsOptions{Types: []LogEntryType{LogTypePost}, Author: "alice", After: &after}
+	opts := &GetLogsOptions{Types: []LogEntryType{logTypePost}, Author: "alice", After: &after}
 	if !matchesLogFilters(entry, opts) {
 		t.Error("should match all combined filters")
 	}
@@ -118,15 +118,15 @@ func TestGetLogs_entryTypes(t *testing.T) {
 	for _, entry := range result.Data {
 		seen[entry.Type] = entry
 	}
-	for _, want := range []LogEntryType{LogTypePost, LogTypeComment, LogTypeRepost, LogTypeQuote, LogTypeListCreate} {
+	for _, want := range []LogEntryType{logTypePost, logTypeComment, logTypeRepost, logTypeQuote, logTypeListCreate} {
 		if _, ok := seen[want]; !ok {
 			t.Errorf("no %q entry in the log; got %v", want, seen)
 		}
 	}
-	if details := seen[LogTypeComment].Details; !strings.HasPrefix(details, "Re: ") {
+	if details := seen[logTypeComment].Details; !strings.HasPrefix(details, "Re: ") {
 		t.Errorf("comment details = %q, want a Re: prefix", details)
 	}
-	if details := seen[LogTypeListCreate].Details; details != "Created list" {
+	if details := seen[logTypeListCreate].Details; details != "Created list" {
 		t.Errorf("list details = %q, want %q", details, "Created list")
 	}
 }
@@ -134,21 +134,21 @@ func TestGetLogs_entryTypes(t *testing.T) {
 func TestDetectLogEntryType_defaultPost(t *testing.T) {
 	msg := &protocol.Message{Header: protocol.Header{Fields: map[string]string{}}}
 	got := detectLogEntryType(git.Commit{Hash: "xyz"}, msg, nil)
-	if got != LogTypePost {
-		t.Errorf("detectLogEntryType() = %q, want %q", got, LogTypePost)
+	if got != logTypePost {
+		t.Errorf("detectLogEntryType() = %q, want %q", got, logTypePost)
 	}
 }
 
 func TestDetectLogEntryType_nilMsg(t *testing.T) {
 	got := detectLogEntryType(git.Commit{Hash: "xyz"}, nil, nil)
-	if got != LogTypePost {
-		t.Errorf("detectLogEntryType(nil msg) = %q, want %q", got, LogTypePost)
+	if got != logTypePost {
+		t.Errorf("detectLogEntryType(nil msg) = %q, want %q", got, logTypePost)
 	}
 }
 
 func TestFormatLogDetails_post(t *testing.T) {
 	commit := git.Commit{Message: "Hello world"}
-	got := formatLogDetails(commit, nil, LogTypePost)
+	got := formatLogDetails(commit, nil, logTypePost)
 	if got != "Hello world" {
 		t.Errorf("formatLogDetails(post) = %q, want %q", got, "Hello world")
 	}
@@ -156,7 +156,7 @@ func TestFormatLogDetails_post(t *testing.T) {
 
 func TestFormatLogDetails_comment(t *testing.T) {
 	commit := git.Commit{Message: "Nice work"}
-	got := formatLogDetails(commit, nil, LogTypeComment)
+	got := formatLogDetails(commit, nil, logTypeComment)
 	if got != "Re: Nice work" {
 		t.Errorf("formatLogDetails(comment) = %q, want %q", got, "Re: Nice work")
 	}
@@ -164,7 +164,7 @@ func TestFormatLogDetails_comment(t *testing.T) {
 
 func TestFormatLogDetails_repost(t *testing.T) {
 	commit := git.Commit{Message: "Content"}
-	got := formatLogDetails(commit, nil, LogTypeRepost)
+	got := formatLogDetails(commit, nil, logTypeRepost)
 	if got != "Repost: Content" {
 		t.Errorf("formatLogDetails(repost) = %q", got)
 	}
@@ -172,35 +172,35 @@ func TestFormatLogDetails_repost(t *testing.T) {
 
 func TestFormatLogDetails_quote(t *testing.T) {
 	commit := git.Commit{Message: "Content"}
-	got := formatLogDetails(commit, nil, LogTypeQuote)
+	got := formatLogDetails(commit, nil, logTypeQuote)
 	if got != "Quote: Content" {
 		t.Errorf("formatLogDetails(quote) = %q", got)
 	}
 }
 
 func TestFormatLogDetails_listCreate(t *testing.T) {
-	got := formatLogDetails(git.Commit{}, nil, LogTypeListCreate)
+	got := formatLogDetails(git.Commit{}, nil, logTypeListCreate)
 	if got != "Created list" {
 		t.Errorf("formatLogDetails(list-create) = %q", got)
 	}
 }
 
 func TestFormatLogDetails_listDelete(t *testing.T) {
-	got := formatLogDetails(git.Commit{}, nil, LogTypeListDelete)
+	got := formatLogDetails(git.Commit{}, nil, logTypeListDelete)
 	if got != "Deleted list" {
 		t.Errorf("formatLogDetails(list-delete) = %q", got)
 	}
 }
 
 func TestFormatLogDetails_config(t *testing.T) {
-	got := formatLogDetails(git.Commit{}, nil, LogTypeConfig)
+	got := formatLogDetails(git.Commit{}, nil, logTypeConfig)
 	if got != "Updated config" {
 		t.Errorf("formatLogDetails(config) = %q", got)
 	}
 }
 
 func TestFormatLogDetails_metadata(t *testing.T) {
-	got := formatLogDetails(git.Commit{}, nil, LogTypeMetadata)
+	got := formatLogDetails(git.Commit{}, nil, logTypeMetadata)
 	if got != "Metadata update" {
 		t.Errorf("formatLogDetails(metadata) = %q", got)
 	}
@@ -249,7 +249,7 @@ func TestCommitToLogEntry(t *testing.T) {
 	if entry.Author.Email != "alice@test.com" {
 		t.Errorf("Author.Email = %q", entry.Author.Email)
 	}
-	if entry.Type != LogTypePost {
+	if entry.Type != logTypePost {
 		t.Errorf("Type = %q, want post", entry.Type)
 	}
 	if entry.Repository != "origin" {

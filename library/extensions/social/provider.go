@@ -14,11 +14,11 @@ func init() {
 
 // GetNotifications returns social notifications converted to core Notification type.
 func (p *notificationProvider) GetNotifications(workdir string, filter notifications.Filter) ([]notifications.Notification, error) {
-	sf := NotificationFilter{
+	sf := notificationFilter{
 		UnreadOnly: filter.UnreadOnly,
 		Limit:      filter.Limit,
 	}
-	items, err := GetNotifications(workdir, sf)
+	items, err := getNotifications(workdir, sf)
 	if err != nil {
 		return nil, err
 	}
@@ -49,5 +49,5 @@ func (p *notificationProvider) GetNotifications(workdir string, filter notificat
 
 // GetUnreadCount returns the social unread notification count.
 func (p *notificationProvider) GetUnreadCount(workdir string) (int, error) {
-	return GetUnreadCount(workdir)
+	return getUnreadCount(workdir)
 }

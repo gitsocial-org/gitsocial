@@ -54,8 +54,8 @@ const notifiableItems = `
 	  )
 `
 
-// GetNotifications retrieves notifications for interactions on workspace posts and threads the user participates in.
-func GetNotifications(workdir string, filter NotificationFilter) ([]Notification, error) {
+// getNotifications retrieves notifications for interactions on workspace posts and threads the user participates in.
+func getNotifications(workdir string, filter notificationFilter) ([]Notification, error) {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
 		return nil, nil
@@ -236,8 +236,8 @@ func sortNotificationsByTime(notifications []Notification) {
 	})
 }
 
-// GetUnreadCount returns the count of unread notifications.
-func GetUnreadCount(workdir string) (int, error) {
+// getUnreadCount returns the count of unread notifications.
+func getUnreadCount(workdir string) (int, error) {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
 		return 0, nil
@@ -246,7 +246,7 @@ func GetUnreadCount(workdir string) (int, error) {
 
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var itemCount, followCount int
-		// Drive from social_items, not the view, as GetNotifications does.
+		// Drive from social_items, not the view, as getNotifications does.
 		if err := db.QueryRow(`
 			WITH `+userThreadsCTE+`
 			SELECT COUNT(*) FROM social_items s
@@ -268,8 +268,8 @@ func GetUnreadCount(workdir string) (int, error) {
 	})
 }
 
-// MarkAllAsRead marks all social notifications for the workspace as read.
-func MarkAllAsRead(workdir string) error {
+// markAllAsRead marks all social notifications for the workspace as read.
+func markAllAsRead(workdir string) error {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
 		return nil
@@ -278,7 +278,7 @@ func MarkAllAsRead(workdir string) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not the view, as GetNotifications does.
+		// Drive from social_items, not the view, as getNotifications does.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
@@ -304,15 +304,15 @@ func MarkAllAsRead(workdir string) error {
 	})
 }
 
-// MarkAllAsUnread marks all notifications for the workspace as unread.
-func MarkAllAsUnread(workdir string) error {
+// markAllAsUnread marks all notifications for the workspace as unread.
+func markAllAsUnread(workdir string) error {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
 		return nil
 	}
 	userEmail := git.GetUserEmail(workdir)
 	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not the view, as GetNotifications does.
+		// Drive from social_items, not the view, as getNotifications does.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			DELETE FROM core_notification_reads

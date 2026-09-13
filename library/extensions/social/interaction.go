@@ -28,7 +28,7 @@ func resolveItem(workdir, itemID string) *SocialItem {
 		msg := protocol.ParseMessage(commit.Message)
 		postType := "post"
 		if msg != nil {
-			postType = string(GetPostType(msg))
+			postType = string(getPostType(msg))
 		}
 		wsRepoURL := gitmsg.ResolveRepoURL(workdir)
 		// The item is attributed to its origin author and time, not to the importer git recorded.
@@ -66,7 +66,7 @@ func resolveItem(workdir, itemID string) *SocialItem {
 	if cacheBranch == "" {
 		cacheBranch = branch
 	}
-	item, _ = GetCachedCommit(parsed.Repository, parsed.Value, cacheBranch)
+	item, _ = getCachedCommit(parsed.Repository, parsed.Value, cacheBranch)
 	return item
 }
 
@@ -90,7 +90,7 @@ type CreateRepostOptions struct {
 // CreateComment creates a comment on an existing post.
 func CreateComment(workdir, targetPostID, content string, opts *CreateCommentOptions) Result[Post] {
 	if strings.TrimSpace(content) == "" {
-		return Failure[Post]("EMPTY_CONTENT", "Comment content cannot be empty")
+		return failure[Post]("EMPTY_CONTENT", "Comment content cannot be empty")
 	}
 	var origin *protocol.Origin
 	var labels []string
@@ -113,7 +113,7 @@ func CreateRepost(workdir, targetPostID string, opts *CreateRepostOptions) Resul
 // CreateQuote creates a quote post with commentary on an existing post.
 func CreateQuote(workdir, targetPostID, content string, opts *CreateQuoteOptions) Result[Post] {
 	if strings.TrimSpace(content) == "" {
-		return Failure[Post]("EMPTY_CONTENT", "Quote content cannot be empty")
+		return failure[Post]("EMPTY_CONTENT", "Quote content cannot be empty")
 	}
 	var origin *protocol.Origin
 	var labels []string
@@ -128,16 +128,16 @@ func CreateQuote(workdir, targetPostID, content string, opts *CreateQuoteOptions
 func createInteraction(workdir string, interactionType PostType, targetPostID, content string, origin *protocol.Origin, labels []string) Result[Post] {
 	targetItem := resolveItem(workdir, targetPostID)
 	if targetItem == nil {
-		return Failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
+		return failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
 
 	// GITSOCIAL.md 1.3: a repost or quote references an original post, never another repost.
 	if interactionType == PostTypeRepost && targetItem.Type == "repost" {
-		return Failure[Post]("INVALID_TARGET", "Cannot repost a repost; reposts must reference original posts")
+		return failure[Post]("INVALID_TARGET", "Cannot repost a repost; reposts must reference original posts")
 	}
 
 	if interactionType == PostTypeQuote && targetItem.Type == "repost" {
-		return Failure[Post]("INVALID_TARGET", "Cannot quote a repost; quotes must reference original posts")
+		return failure[Post]("INVALID_TARGET", "Cannot quote a repost; quotes must reference original posts")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
@@ -164,7 +164,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 	if isNested {
 		// GITSOCIAL.md 1.3: original names the thread's first post, not the parent comment.
 		if !targetItem.OriginalRepoURL.Valid || !targetItem.OriginalHash.Valid {
-			return Failure[Post]("INVALID_TARGET", "Cannot comment on a comment without a valid root post reference")
+			return failure[Post]("INVALID_TARGET", "Cannot comment on a comment without a valid root post reference")
 		}
 		origBranch := ""
 		if targetItem.OriginalBranch.Valid {
@@ -173,10 +173,10 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 		originalID := protocol.CreateRef(protocol.RefTypeCommit, targetItem.OriginalHash.String, targetItem.OriginalRepoURL.String, origBranch)
 		originalItem := resolveItem(workdir, originalID)
 		if originalItem == nil {
-			return Failure[Post]("NOT_FOUND", "Root post not found for comment thread")
+			return failure[Post]("NOT_FOUND", "Root post not found for comment thread")
 		}
 		if originalItem.Type == "comment" {
-			return Failure[Post]("INVALID_TARGET", "Comment thread root cannot be another comment")
+			return failure[Post]("INVALID_TARGET", "Comment thread root cannot be another comment")
 		}
 		fields["reply-to"] = protocol.CreateRef(protocol.RefTypeCommit, targetItem.Hash, targetItem.RepoURL, getRefBranch(targetItem))
 		fields["original"] = protocol.CreateRef(protocol.RefTypeCommit, originalItem.Hash, originalItem.RepoURL, getRefBranch(originalItem))
@@ -222,7 +222,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
 	originalID := fields["original"]
@@ -244,7 +244,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 		ReplyToBranch:   cache.ToNullString(replyToBranch),
 	}, message, author, now)
 
-	return Success(Post{
+	return success(Post{
 		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
 		Repository:      repoURL,
 		Branch:          branch,
@@ -340,22 +340,22 @@ type EditPostOptions struct {
 // EditPost creates a new version of an existing post with updated content.
 func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) Result[Post] {
 	if strings.TrimSpace(newContent) == "" {
-		return Failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
+		return failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
 	}
 
 	targetItem := resolveItem(workdir, targetPostID)
 	if targetItem == nil {
-		return Failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
+		return failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
 	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
-		return Failure[Post]("INVALID_TARGET", "Cannot edit posts on code branches; reply with a comment instead")
+		return failure[Post]("INVALID_TARGET", "Cannot edit posts on code branches; reply with a comment instead")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
 	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
-		return Failure[Post]("INVALID_TARGET", "Cannot edit posts owned by another repository")
+		return failure[Post]("INVALID_TARGET", "Cannot edit posts owned by another repository")
 	}
 
 	targetRepoURL := targetItem.RepoURL
@@ -391,7 +391,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
 	now := time.Now()
@@ -408,7 +408,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 		ReplyToBranch:   targetItem.ReplyToBranch,
 	}, message, author, now)
 
-	return Success(Post{
+	return success(Post{
 		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
 		Repository:      repoURL,
 		Branch:          branch,
@@ -431,17 +431,17 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 func RetractPost(workdir, targetPostID string) Result[bool] {
 	targetItem := resolveItem(workdir, targetPostID)
 	if targetItem == nil {
-		return Failure[bool]("NOT_FOUND", "Target post not found: "+targetPostID)
+		return failure[bool]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
 	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
-		return Failure[bool]("INVALID_TARGET", "Cannot retract posts on code branches")
+		return failure[bool]("INVALID_TARGET", "Cannot retract posts on code branches")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
 	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
-		return Failure[bool]("INVALID_TARGET", "Cannot retract posts owned by another repository")
+		return failure[bool]("INVALID_TARGET", "Cannot retract posts owned by another repository")
 	}
 
 	targetRepoURL := targetItem.RepoURL
@@ -475,7 +475,7 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 
 	hash, author, _, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return FailureWithDetails[bool]("COMMIT_ERROR", "Failed to create commit", err)
+		return failureWithDetails[bool]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
 	recordSocialCommit(SocialItem{
@@ -491,5 +491,5 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 		ReplyToBranch:   targetItem.ReplyToBranch,
 	}, message, author, time.Now())
 
-	return Success(true)
+	return success(true)
 }

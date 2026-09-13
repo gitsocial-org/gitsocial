@@ -42,16 +42,16 @@ func GetLogs(workdir, scope string, opts *GetLogsOptions) Result[[]LogEntry] {
 	case scope == "timeline":
 		gitOpts.All = true
 	case strings.HasPrefix(scope, "list:"):
-		return Failure[[]LogEntry]("INVALID_SCOPE", "list scope not supported for logs; use search command instead")
+		return failure[[]LogEntry]("INVALID_SCOPE", "list scope not supported for logs; use search command instead")
 	case strings.HasPrefix(scope, "repository:"):
-		return Failure[[]LogEntry]("INVALID_SCOPE", "external repository scope not supported for logs; use search command instead")
+		return failure[[]LogEntry]("INVALID_SCOPE", "external repository scope not supported for logs; use search command instead")
 	default:
-		return Failure[[]LogEntry]("INVALID_SCOPE", "unknown scope: "+scope)
+		return failure[[]LogEntry]("INVALID_SCOPE", "unknown scope: "+scope)
 	}
 
 	commits, err := git.GetCommits(workdir, gitOpts)
 	if err != nil {
-		return FailureWithDetails[[]LogEntry]("GIT_ERROR", "Failed to get commits", err)
+		return failureWithDetails[[]LogEntry]("GIT_ERROR", "Failed to get commits", err)
 	}
 
 	refs, err := git.ListRefs(workdir, "social/")
@@ -82,7 +82,7 @@ func GetLogs(workdir, scope string, opts *GetLogsOptions) Result[[]LogEntry] {
 		}
 	}
 
-	return Success(entries)
+	return success(entries)
 }
 
 // matchesLogFilters checks if a log entry matches the filter criteria.
@@ -143,26 +143,26 @@ func detectLogEntryType(commit git.Commit, msg *protocol.Message, refMap map[str
 	if ref, ok := refMap[commit.Hash]; ok {
 		if strings.HasPrefix(ref, "social/lists/") {
 			if strings.Contains(commit.Message, "deleted") || strings.Contains(commit.Message, "remove") {
-				return LogTypeListDelete
+				return logTypeListDelete
 			}
-			return LogTypeListCreate
+			return logTypeListCreate
 		}
 		if strings.HasPrefix(ref, "social/config") {
-			return LogTypeConfig
+			return logTypeConfig
 		}
-		return LogTypeMetadata
+		return logTypeMetadata
 	}
 
 	// An entry names the item by its own header type, not by what it references.
-	switch GetPostType(msg) {
+	switch getPostType(msg) {
 	case PostTypeComment:
-		return LogTypeComment
+		return logTypeComment
 	case PostTypeRepost:
-		return LogTypeRepost
+		return logTypeRepost
 	case PostTypeQuote:
-		return LogTypeQuote
+		return logTypeQuote
 	}
-	return LogTypePost
+	return logTypePost
 }
 
 // formatLogDetails creates a summary string for a log entry.
@@ -172,19 +172,19 @@ func formatLogDetails(commit git.Commit, _ *protocol.Message, entryType LogEntry
 	content = strings.ReplaceAll(content, "\n", " ")
 
 	switch entryType {
-	case LogTypeComment:
+	case logTypeComment:
 		return "Re: " + content
-	case LogTypeRepost:
+	case logTypeRepost:
 		return "Repost: " + content
-	case LogTypeQuote:
+	case logTypeQuote:
 		return "Quote: " + content
-	case LogTypeListCreate:
+	case logTypeListCreate:
 		return "Created list"
-	case LogTypeListDelete:
+	case logTypeListDelete:
 		return "Deleted list"
-	case LogTypeConfig:
+	case logTypeConfig:
 		return "Updated config"
-	case LogTypeMetadata:
+	case logTypeMetadata:
 		return "Metadata update"
 	default:
 		return content

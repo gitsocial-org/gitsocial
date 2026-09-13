@@ -123,8 +123,8 @@ func FormatLists(lists []List) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// FormatRepository formats a repository with its URL, branch, and lists.
-func FormatRepository(repo Repository) string {
+// formatRepository formats a repository with its URL, branch, and lists.
+func formatRepository(repo Repository) string {
 	var lines []string
 	lines = append(lines, repo.Name)
 	lines = append(lines, fmt.Sprintf("  %s", repo.URL))
@@ -144,13 +144,13 @@ func FormatRepositories(repos []Repository) string {
 	}
 	parts := make([]string, 0, len(repos))
 	for _, repo := range repos {
-		parts = append(parts, FormatRepository(repo))
+		parts = append(parts, formatRepository(repo))
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// FormatRelatedRepository formats a related repository with its relationships.
-func FormatRelatedRepository(repo RelatedRepository) string {
+// formatRelatedRepository formats a related repository with its relationships.
+func formatRelatedRepository(repo RelatedRepository) string {
 	var lines []string
 	lines = append(lines, repo.Name)
 	lines = append(lines, fmt.Sprintf("  %s", repo.URL))
@@ -170,13 +170,13 @@ func FormatRelatedRepositories(repos []RelatedRepository) string {
 	}
 	var parts []string
 	for _, repo := range repos {
-		parts = append(parts, FormatRelatedRepository(repo))
+		parts = append(parts, formatRelatedRepository(repo))
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// FormatLogEntry formats a single log entry as a compact line.
-func FormatLogEntry(entry LogEntry) string {
+// formatLogEntry formats a single log entry as a compact line.
+func formatLogEntry(entry LogEntry) string {
 	hash := entry.Hash
 	if len(hash) > 7 {
 		hash = hash[:7]
@@ -192,7 +192,7 @@ func FormatLogs(entries []LogEntry) string {
 	}
 	var lines []string
 	for _, entry := range entries {
-		lines = append(lines, FormatLogEntry(entry))
+		lines = append(lines, formatLogEntry(entry))
 	}
 	return strings.Join(lines, "\n")
 }

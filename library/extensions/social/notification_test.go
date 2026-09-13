@@ -112,7 +112,7 @@ func TestGetFollowNotifications_withData(t *testing.T) {
 	wsURL := "https://github.com/ws/followers"
 	followerURL := "https://github.com/follower/repo"
 	// Insert follower
-	_ = InsertFollower(followerURL, wsURL, "list1", "commit1", time.Now())
+	_ = insertFollower(followerURL, wsURL, "list1", "commit1", time.Now())
 	// Insert a commit so author name can be resolved
 	_ = cache.InsertCommits([]cache.Commit{{
 		Hash: "flw_commit01", RepoURL: followerURL, Branch: "main",
@@ -153,7 +153,7 @@ func TestGetFollowNotifications_unreadOnly(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/fol-unread"
 	followerURL := "https://github.com/fol-unread/repo"
-	_ = InsertFollower(followerURL, wsURL, "list1", "", time.Now())
+	_ = insertFollower(followerURL, wsURL, "list1", "", time.Now())
 	// Mark as read
 	_ = notifications.MarkAsRead(followerURL, "follow", "")
 	notifs, err := getFollowNotifications(wsURL, true)
@@ -169,7 +169,7 @@ func TestGetFollowNotifications_noAuthor(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/fol-noauth"
 	followerURL := "https://github.com/fol-noauth/repo"
-	_ = InsertFollower(followerURL, wsURL, "", "", time.Now())
+	_ = insertFollower(followerURL, wsURL, "", "", time.Now())
 	notifs, err := getFollowNotifications(wsURL, false)
 	if err != nil {
 		t.Fatal(err)

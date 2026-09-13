@@ -8,12 +8,17 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
-// Result type aliases for internal use
+// Result names the result type every social API returns.
 type Result[T any] = result.Result[T]
 
-func Success[T any](data T) Result[T]               { return result.Ok(data) }
-func Failure[T any](code, message string) Result[T] { return result.Err[T](code, message) }
-func FailureWithDetails[T any](code, message string, details interface{}) Result[T] {
+// success wraps data in a successful result.
+func success[T any](data T) Result[T] { return result.Ok(data) }
+
+// failure builds a failed result from an error code and message.
+func failure[T any](code, message string) Result[T] { return result.Err[T](code, message) }
+
+// failureWithDetails builds a failed result carrying the underlying error.
+func failureWithDetails[T any](code, message string, details interface{}) Result[T] {
 	return result.ErrWithDetails[T](code, message, details)
 }
 
@@ -96,7 +101,7 @@ type List struct {
 
 type RepositoryType string
 
-const RepositoryTypeOther RepositoryType = "other"
+const repositoryTypeOther RepositoryType = "other"
 
 type Repository struct {
 	ID            string
@@ -120,14 +125,14 @@ type FetchedRange struct {
 type LogEntryType string
 
 const (
-	LogTypePost       LogEntryType = "post"
-	LogTypeComment    LogEntryType = "comment"
-	LogTypeRepost     LogEntryType = "repost"
-	LogTypeQuote      LogEntryType = "quote"
-	LogTypeListCreate LogEntryType = "list-create"
-	LogTypeListDelete LogEntryType = "list-delete"
-	LogTypeConfig     LogEntryType = "config"
-	LogTypeMetadata   LogEntryType = "metadata"
+	logTypePost       LogEntryType = "post"
+	logTypeComment    LogEntryType = "comment"
+	logTypeRepost     LogEntryType = "repost"
+	logTypeQuote      LogEntryType = "quote"
+	logTypeListCreate LogEntryType = "list-create"
+	logTypeListDelete LogEntryType = "list-delete"
+	logTypeConfig     LogEntryType = "config"
+	logTypeMetadata   LogEntryType = "metadata"
 )
 
 type LogEntry struct {
@@ -153,9 +158,9 @@ type RelationshipInfo struct {
 type NotificationType string
 
 const (
-	NotificationTypeComment NotificationType = "comment"
-	NotificationTypeRepost  NotificationType = "repost"
-	NotificationTypeQuote   NotificationType = "quote"
+	notificationTypeComment NotificationType = "comment"
+	notificationTypeRepost  NotificationType = "repost"
+	notificationTypeQuote   NotificationType = "quote"
 	NotificationTypeFollow  NotificationType = "follow"
 )
 
@@ -173,7 +178,7 @@ type Notification struct {
 	IsRead     bool
 }
 
-type NotificationFilter struct {
+type notificationFilter struct {
 	UnreadOnly bool
 	Types      []NotificationType
 	Limit      int

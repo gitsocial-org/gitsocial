@@ -866,7 +866,7 @@ func TestSyncWorkspace(t *testing.T) {
 
 	// Verify items are queryable
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	items, err := GetSocialItems(SocialQuery{RepoURL: workspaceURL, Limit: 100})
+	items, err := getSocialItems(socialQuery{RepoURL: workspaceURL, Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2222,7 +2222,7 @@ func TestLogsIntegration(t *testing.T) {
 		CreatePost(workdir, "Filtered log post", nil)
 
 		opts := &GetLogsOptions{
-			Types:  []LogEntryType{LogTypePost},
+			Types:  []LogEntryType{logTypePost},
 			Author: "test",
 		}
 		result := GetLogs(workdir, "", opts)
@@ -2281,14 +2281,14 @@ func TestLogsIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		CreatePost(workdir, "Type exclude log", nil)
-		opts := &GetLogsOptions{Types: []LogEntryType{LogTypeComment}}
+		opts := &GetLogsOptions{Types: []LogEntryType{logTypeComment}}
 		result := GetLogs(workdir, "", opts)
 		if !result.Success {
 			t.Fatalf("error: %s", result.Error.Message)
 		}
 		// Posts should be excluded when filtering for comments only
 		for _, entry := range result.Data {
-			if entry.Type == LogTypePost {
+			if entry.Type == logTypePost {
 				t.Error("post should not appear when filtering for comments")
 			}
 		}
@@ -2317,7 +2317,7 @@ func TestLogsIntegration(t *testing.T) {
 func TestVersionAndResolve(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ResolveCurrentVersion", func(t *testing.T) {
+	t.Run("resolveCurrentVersion", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		post := CreatePost(workdir, "Original", nil)
@@ -2335,9 +2335,9 @@ func TestVersionAndResolve(t *testing.T) {
 
 		// Parse the original post ref to get repo, hash, branch
 		parsed := parseRefForTest(post.Data.ID)
-		resolved, err := ResolveCurrentVersion(parsed.repo, parsed.hash, parsed.branch, workspaceURL)
+		resolved, err := resolveCurrentVersion(parsed.repo, parsed.hash, parsed.branch, workspaceURL)
 		if err != nil {
-			t.Fatalf("ResolveCurrentVersion() error = %v", err)
+			t.Fatalf("resolveCurrentVersion() error = %v", err)
 		}
 		if resolved.Item == nil {
 			t.Fatal("resolved.Item should not be nil")
@@ -2362,7 +2362,7 @@ func TestVersionAndResolve(t *testing.T) {
 
 		// Resolve using the EDIT hash - should resolve to canonical
 		editParsed := parseRefForTest(edit.Data.ID)
-		resolved, err := ResolveCurrentVersion(editParsed.repo, editParsed.hash, editParsed.branch, wsURL)
+		resolved, err := resolveCurrentVersion(editParsed.repo, editParsed.hash, editParsed.branch, wsURL)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2479,9 +2479,9 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		git.ExecGit(workdir, []string{"config", "user.email", "notif-empty@test.com"})
-		notifications, err := GetNotifications(workdir, NotificationFilter{})
+		notifications, err := getNotifications(workdir, notificationFilter{})
 		if err != nil {
-			t.Fatalf("GetNotifications() error = %v", err)
+			t.Fatalf("getNotifications() error = %v", err)
 		}
 		if len(notifications) != 0 {
 			t.Errorf("expected 0 notifications, got %d", len(notifications))
@@ -2491,9 +2491,9 @@ func TestNotificationIntegration(t *testing.T) {
 	t.Run("GetUnreadCount_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		_, err := GetUnreadCount(workdir)
+		_, err := getUnreadCount(workdir)
 		if err != nil {
-			t.Fatalf("GetUnreadCount() error = %v", err)
+			t.Fatalf("getUnreadCount() error = %v", err)
 		}
 		// Count may be non-zero due to thread participation from parallel tests sharing the cache
 	})
@@ -2501,16 +2501,16 @@ func TestNotificationIntegration(t *testing.T) {
 	t.Run("MarkAllAsRead_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		if err := MarkAllAsRead(workdir); err != nil {
-			t.Fatalf("MarkAllAsRead() error = %v", err)
+		if err := markAllAsRead(workdir); err != nil {
+			t.Fatalf("markAllAsRead() error = %v", err)
 		}
 	})
 
 	t.Run("MarkAllAsUnread_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		if err := MarkAllAsUnread(workdir); err != nil {
-			t.Fatalf("MarkAllAsUnread() error = %v", err)
+		if err := markAllAsUnread(workdir); err != nil {
+			t.Fatalf("markAllAsUnread() error = %v", err)
 		}
 	})
 
@@ -2518,7 +2518,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		git.ExecGit(workdir, []string{"config", "user.email", "notif-filter@test.com"})
-		notifications, err := GetNotifications(workdir, NotificationFilter{UnreadOnly: true, Limit: 5})
+		notifications, err := getNotifications(workdir, notificationFilter{UnreadOnly: true, Limit: 5})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2535,7 +2535,7 @@ func TestNotificationIntegration(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			setupExternalInteraction(t, workdir, "comment")
 		}
-		notifs, err := GetNotifications(workdir, NotificationFilter{Limit: 2})
+		notifs, err := getNotifications(workdir, notificationFilter{Limit: 2})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2550,8 +2550,8 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
 		// Mark all as read
-		_ = MarkAllAsRead(workdir)
-		notifs, err := GetNotifications(workdir, NotificationFilter{UnreadOnly: true})
+		_ = markAllAsRead(workdir)
+		notifs, err := getNotifications(workdir, notificationFilter{UnreadOnly: true})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2565,7 +2565,7 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		git.ExecGit(workdir, []string{"config", "user.email", "notif-extcomment@test.com"})
 		setupExternalInteraction(t, workdir, "comment")
-		notifs, err := GetNotifications(workdir, NotificationFilter{})
+		notifs, err := getNotifications(workdir, notificationFilter{})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2573,7 +2573,7 @@ func TestNotificationIntegration(t *testing.T) {
 			t.Fatal("expected at least 1 notification")
 		}
 		n := notifs[0]
-		if n.Type != NotificationTypeComment {
+		if n.Type != notificationTypeComment {
 			t.Errorf("Type = %q, want comment", n.Type)
 		}
 		if n.Actor.Name != "External User" {
@@ -2594,7 +2594,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "repost")
-		notifs, err := GetNotifications(workdir, NotificationFilter{})
+		notifs, err := getNotifications(workdir, notificationFilter{})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2607,7 +2607,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "quote")
-		notifs, err := GetNotifications(workdir, NotificationFilter{})
+		notifs, err := getNotifications(workdir, notificationFilter{})
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2621,12 +2621,12 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		extRepo, extHash := setupExternalInteraction(t, workdir, "comment")
 		_ = notifications.MarkAsRead(extRepo, extHash, "main")
-		notifs, err := GetNotifications(workdir, NotificationFilter{UnreadOnly: true})
+		notifs, err := getNotifications(workdir, notificationFilter{UnreadOnly: true})
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, n := range notifs {
-			if n.ActorRepo == extRepo && n.Type == NotificationTypeComment {
+			if n.ActorRepo == extRepo && n.Type == notificationTypeComment {
 				t.Error("marked-as-read notification should not appear with UnreadOnly")
 			}
 		}
@@ -2658,7 +2658,7 @@ func TestNotificationIntegration(t *testing.T) {
 				OriginalBranch:  sql.NullString{String: branch, Valid: true},
 			})
 		}
-		notifs, err := GetNotifications(workdir, NotificationFilter{Limit: 2})
+		notifs, err := getNotifications(workdir, notificationFilter{Limit: 2})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2672,13 +2672,13 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		followerRepo := "https://github.com/follower/repo"
-		_ = InsertFollower(followerRepo, workspaceURL, "following", "", time.Now())
+		_ = insertFollower(followerRepo, workspaceURL, "following", "", time.Now())
 		_ = cache.InsertCommits([]cache.Commit{{
 			Hash: "fol_commit01", RepoURL: followerRepo, Branch: "main",
 			AuthorName: "Follower", AuthorEmail: "follower@test.com",
 			Message: "a post", Timestamp: time.Now(),
 		}})
-		notifs, err := GetNotifications(workdir, NotificationFilter{})
+		notifs, err := getNotifications(workdir, notificationFilter{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2700,7 +2700,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		count, err := GetUnreadCount(workdir)
+		count, err := getUnreadCount(workdir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2713,8 +2713,8 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		if err := MarkAllAsRead(workdir); err != nil {
-			t.Fatalf("MarkAllAsRead() error = %v", err)
+		if err := markAllAsRead(workdir); err != nil {
+			t.Fatalf("markAllAsRead() error = %v", err)
 		}
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
@@ -2723,13 +2723,13 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		_ = MarkAllAsRead(workdir)
-		if err := MarkAllAsUnread(workdir); err != nil {
+		_ = markAllAsRead(workdir)
+		if err := markAllAsUnread(workdir); err != nil {
 			t.Fatalf("error = %v", err)
 		}
-		count, _ := GetUnreadCount(workdir)
+		count, _ := getUnreadCount(workdir)
 		if count == 0 {
-			t.Error("expected non-zero after MarkAllAsUnread")
+			t.Error("expected non-zero after markAllAsUnread")
 		}
 	})
 
@@ -2737,8 +2737,8 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
-		_ = InsertFollower("https://github.com/cnt/follower", workspaceURL, "list1", "", time.Now())
-		count, err := GetUnreadCount(workdir)
+		_ = insertFollower("https://github.com/cnt/follower", workspaceURL, "list1", "", time.Now())
+		count, err := getUnreadCount(workdir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2774,7 +2774,7 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalHash:    sql.NullString{String: parsed.Value, Valid: true},
 			OriginalBranch:  sql.NullString{String: branch, Valid: true},
 		})
-		_ = InsertFollower("https://github.com/prov/follower", workspaceURL, "list1", "", time.Now())
+		_ = insertFollower("https://github.com/prov/follower", workspaceURL, "list1", "", time.Now())
 		p := &notificationProvider{}
 		result, err := p.GetNotifications(workdir, notifications.Filter{})
 		if err != nil {
@@ -2841,15 +2841,15 @@ func TestNotificationIntegration(t *testing.T) {
 		setupExternalInteraction(t, workdir, "comment")
 		// Setup follower
 		followerRepo := "https://github.com/fol/markall"
-		_ = InsertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
+		_ = insertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
 		// Verify both are unread
-		countBefore, _ := GetUnreadCount(workdir)
+		countBefore, _ := getUnreadCount(workdir)
 		if countBefore < 2 {
 			t.Errorf("expected at least 2 unread (item + follower), got %d", countBefore)
 		}
 		// Mark all as read
-		if err := MarkAllAsRead(workdir); err != nil {
-			t.Fatalf("MarkAllAsRead() error = %v", err)
+		if err := markAllAsRead(workdir); err != nil {
+			t.Fatalf("markAllAsRead() error = %v", err)
 		}
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
@@ -2860,15 +2860,15 @@ func TestNotificationIntegration(t *testing.T) {
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		setupExternalInteraction(t, workdir, "comment")
 		followerRepo := "https://github.com/fol/markallun"
-		_ = InsertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
-		_ = MarkAllAsRead(workdir)
+		_ = insertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
+		_ = markAllAsRead(workdir)
 		// Now unread all
-		if err := MarkAllAsUnread(workdir); err != nil {
+		if err := markAllAsUnread(workdir); err != nil {
 			t.Fatalf("error = %v", err)
 		}
-		countAfter, _ := GetUnreadCount(workdir)
+		countAfter, _ := getUnreadCount(workdir)
 		if countAfter < 2 {
-			t.Errorf("expected at least 2 after MarkAllAsUnread, got %d", countAfter)
+			t.Errorf("expected at least 2 after markAllAsUnread, got %d", countAfter)
 		}
 	})
 
@@ -2901,9 +2901,9 @@ func TestNotificationIntegration(t *testing.T) {
 			})
 		}
 		// Also add a follower
-		_ = InsertFollower("https://github.com/trunc/follower", workspaceURL, "list1", "", time.Now())
+		_ = insertFollower("https://github.com/trunc/follower", workspaceURL, "list1", "", time.Now())
 		// Limit=2 but we have 2 items + 1 follower = 3 total → should truncate to 2
-		notifs, err := GetNotifications(workdir, NotificationFilter{Limit: 2})
+		notifs, err := getNotifications(workdir, notificationFilter{Limit: 2})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2945,8 +2945,8 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		setupExternalInteraction(t, workdir, "comment")
-		_ = InsertFollower("https://github.com/fol/count", workspaceURL, "list1", "", time.Now())
-		count, err := GetUnreadCount(workdir)
+		_ = insertFollower("https://github.com/fol/count", workspaceURL, "list1", "", time.Now())
+		count, err := getUnreadCount(workdir)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -2982,7 +2982,7 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalHash:    cache.ToNullString(postHash),
 			OriginalBranch:  cache.ToNullString(branch),
 		})
-		count, err := GetUnreadCount(workdir)
+		count, err := getUnreadCount(workdir)
 		if err != nil {
 			t.Fatalf("GetUnreadCount error: %v", err)
 		}
@@ -3017,10 +3017,10 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalBranch:  cache.ToNullString(branch),
 		})
 		// Also add a follower
-		_ = InsertFollower(extRepo, wsURL, "", "", time.Now())
+		_ = insertFollower(extRepo, wsURL, "", "", time.Now())
 
-		if err := MarkAllAsRead(workdir); err != nil {
-			t.Fatalf("MarkAllAsRead error: %v", err)
+		if err := markAllAsRead(workdir); err != nil {
+			t.Fatalf("markAllAsRead error: %v", err)
 		}
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
@@ -3051,21 +3051,21 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalBranch:  cache.ToNullString(branch),
 		})
 		// Mark all as read first
-		_ = MarkAllAsRead(workdir)
+		_ = markAllAsRead(workdir)
 		// Then unread
-		if err := MarkAllAsUnread(workdir); err != nil {
-			t.Fatalf("MarkAllAsUnread error: %v", err)
+		if err := markAllAsUnread(workdir); err != nil {
+			t.Fatalf("markAllAsUnread error: %v", err)
 		}
-		count, _ := GetUnreadCount(workdir)
+		count, _ := getUnreadCount(workdir)
 		if count < 1 {
-			t.Errorf("expected at least 1 unread after MarkAllAsUnread, got %d", count)
+			t.Errorf("expected at least 1 unread after markAllAsUnread, got %d", count)
 		}
 	})
 } // end TestNotificationIntegration
 
 func TestGetUnreadCount_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	count, err := GetUnreadCount("")
+	count, err := getUnreadCount("")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -3076,7 +3076,7 @@ func TestGetUnreadCount_emptyWorkdir(t *testing.T) {
 
 func TestGetNotifications_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	notifications, err := GetNotifications("", NotificationFilter{})
+	notifications, err := getNotifications("", notificationFilter{})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -3087,14 +3087,14 @@ func TestGetNotifications_emptyWorkdir(t *testing.T) {
 
 func TestMarkAllAsRead_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	if err := MarkAllAsRead(""); err != nil {
+	if err := markAllAsRead(""); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 }
 
 func TestMarkAllAsUnread_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	if err := MarkAllAsUnread(""); err != nil {
+	if err := markAllAsUnread(""); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -3313,7 +3313,7 @@ func TestResolveItem_fromWorkspaceCommit(t *testing.T) {
 
 // (TestGetPosts_threadWithNestedComments is in TestGetPostsIntegration group)
 
-// --- ProcessWorkspaceBatch ---
+// --- processWorkspaceBatch ---
 
 func TestProcessWorkspaceBatch_withComments(t *testing.T) {
 	setupTestDB(t)
@@ -3334,7 +3334,7 @@ func TestProcessWorkspaceBatch_withComments(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: content, Timestamp: time.Now(),
 	}})
-	ProcessWorkspaceBatch(commits, repoURL, branch)
+	processWorkspaceBatch(commits, repoURL, branch)
 	item, err := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
 		err := db.QueryRow(`SELECT type, original_hash, reply_to_hash FROM social_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
@@ -3368,7 +3368,7 @@ func TestProcessWorkspaceBatch_nonSocial(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: "plain commit", Timestamp: time.Now(),
 	}})
-	ProcessWorkspaceBatch(commits, repoURL, "main")
+	processWorkspaceBatch(commits, repoURL, "main")
 	// Non-social commits try to upgrade virtual items (noop if none)
 }
 
@@ -3398,7 +3398,7 @@ func TestProcessWorkspaceBatch_withVirtualRef(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: content, Timestamp: time.Now(),
 	}})
-	ProcessWorkspaceBatch(commits, repoURL, branch)
+	processWorkspaceBatch(commits, repoURL, branch)
 	count, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var c int
 		err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE hash = ? AND is_virtual = 1`, "aabb00112233").Scan(&c)
@@ -3497,7 +3497,7 @@ func TestFetchIntegration(t *testing.T) {
 
 // (TestGetPosts_threadFromComment, TestGetPosts_threadInvalidRef, TestGetPosts_singlePost_notFound are in TestGetPostsIntegration group)
 
-// --- MarkAllAsRead/MarkAllAsUnread with BOTH items AND followers ---
+// --- markAllAsRead/markAllAsUnread with BOTH items AND followers ---
 
 // --- GetLogs edge cases ---
 
@@ -3661,7 +3661,7 @@ func TestUpgradeVirtualItem_withVirtualCommit(t *testing.T) {
 
 // (TestGetPosts_timelineWithListPosts is in TestGetPostsIntegration group)
 
-// --- ProcessWorkspaceBatch with non-social commits ---
+// --- processWorkspaceBatch with non-social commits ---
 
 func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 	setupTestDB(t)
@@ -3685,7 +3685,7 @@ func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 		Message:   "just a regular commit with no gitmsg header",
 		Timestamp: time.Now(),
 	}}
-	ProcessWorkspaceBatch(commits, repoURL, branch)
+	processWorkspaceBatch(commits, repoURL, branch)
 	// Verify virtual flag cleared
 	isVirtual, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var v int
@@ -3697,7 +3697,7 @@ func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 	}
 }
 
-// --- Branch default coverage in ProcessWorkspaceBatch ---
+// --- Branch default coverage in processWorkspaceBatch ---
 
 func TestProcessWorkspaceBatch_originalNoBranch(t *testing.T) {
 	setupTestDB(t)
@@ -3718,7 +3718,7 @@ func TestProcessWorkspaceBatch_originalNoBranch(t *testing.T) {
 		Hash: "onb_112233445", Author: "Test", Email: "t@t.com",
 		Message: content, Timestamp: time.Now(),
 	}}
-	ProcessWorkspaceBatch(commits, repoURL, branch)
+	processWorkspaceBatch(commits, repoURL, branch)
 	// Verify the social item was created with branch defaulted to current branch
 	item, _ := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
@@ -3750,7 +3750,7 @@ func TestProcessWorkspaceBatch_replyToNoBranch(t *testing.T) {
 		Hash: "rnb_112233445", Author: "Test", Email: "t@t.com",
 		Message: content, Timestamp: time.Now(),
 	}}
-	ProcessWorkspaceBatch(commits, repoURL, branch)
+	processWorkspaceBatch(commits, repoURL, branch)
 	item, _ := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
 		err := db.QueryRow(`SELECT reply_to_branch FROM social_items WHERE repo_url = ? AND hash = ?`,
@@ -3844,7 +3844,7 @@ func TestProcessSocialCommit_replyToNoBranch(t *testing.T) {
 
 // (TestFetch_malformedRepoRef, TestFetch_listIDFilterSkipsOther are in TestFetchIntegration group)
 
-// --- SortThreadTree parentCommentID empty ---
+// --- sortThreadTree parentCommentID empty ---
 
 func TestSortThreadTree_directChildNoBranching(t *testing.T) {
 	now := time.Now()
@@ -3852,7 +3852,7 @@ func TestSortThreadTree_directChildNoBranching(t *testing.T) {
 		{ID: "root-id", Content: "Root"},
 		{ID: "child-1", OriginalPostID: "root-id", Timestamp: now, Content: "Direct child"},
 	}
-	result := SortThreadTree("root-id", posts)
+	result := sortThreadTree("root-id", posts)
 	if len(result) != 1 {
 		t.Fatalf("expected 1, got %d", len(result))
 	}
@@ -3865,12 +3865,12 @@ func TestSortThreadTree_directChildNoBranching(t *testing.T) {
 
 // --- GetUnreadCount integration ---
 
-// --- MarkAllAsRead / MarkAllAsUnread integration ---
+// --- markAllAsRead / markAllAsUnread integration ---
 
 // --- EditPost / RetractPost ---
 // (TestEditPost_success and TestRetractPost_success are in TestPostCRUD group)
 
-// --- GetThread / GetParentChain DB tests ---
+// --- getThread / getParentChain DB tests ---
 
 func TestGetThread_withReplies(t *testing.T) {
 	setupTestDB(t)
@@ -3893,9 +3893,9 @@ func TestGetThread_withReplies(t *testing.T) {
 		ReplyToHash:     cache.ToNullString(rootHash),
 		ReplyToBranch:   cache.ToNullString(branch),
 	})
-	items, err := GetThread(repoURL, rootHash, branch, "", nil)
+	items, err := getThread(repoURL, rootHash, branch, "", nil)
 	if err != nil {
-		t.Fatalf("GetThread error: %v", err)
+		t.Fatalf("getThread error: %v", err)
 	}
 	if len(items) < 2 {
 		t.Errorf("expected at least 2 items in thread, got %d", len(items))
@@ -3923,16 +3923,16 @@ func TestGetParentChain_withParent(t *testing.T) {
 		ReplyToHash:     cache.ToNullString(parentHash),
 		ReplyToBranch:   cache.ToNullString(branch),
 	})
-	parents, err := GetParentChain(repoURL, childHash, branch, "")
+	parents, err := getParentChain(repoURL, childHash, branch, "")
 	if err != nil {
-		t.Fatalf("GetParentChain error: %v", err)
+		t.Fatalf("getParentChain error: %v", err)
 	}
 	if len(parents) != 1 {
 		t.Errorf("expected 1 parent, got %d", len(parents))
 	}
 }
 
-// --- ResolveCurrentVersion / GetEditHistory ---
+// --- resolveCurrentVersion / getEditHistory ---
 
 func TestResolveCurrentVersion_simple(t *testing.T) {
 	setupTestDB(t)
@@ -3944,7 +3944,7 @@ func TestResolveCurrentVersion_simple(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "t@t.com",
 		Message: "A post", Timestamp: time.Now(),
 	}})
-	resolved, err := ResolveCurrentVersion(repoURL, hash, branch, "")
+	resolved, err := resolveCurrentVersion(repoURL, hash, branch, "")
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -3966,7 +3966,7 @@ func TestGetEditHistory_noEdits(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "t@t.com",
 		Message: "Original", Timestamp: time.Now(),
 	}})
-	items, err := GetEditHistory(repoURL, hash, branch, "")
+	items, err := getEditHistory(repoURL, hash, branch, "")
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -3999,8 +3999,8 @@ func TestGetEditHistoryPosts_noEdits(t *testing.T) {
 func TestGetFollowerSet_withData(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/follset"
-	_ = InsertFollower("https://github.com/f1/r", wsURL, "", "", time.Now())
-	_ = InsertFollower("https://github.com/f2/r", wsURL, "", "", time.Now())
+	_ = insertFollower("https://github.com/f1/r", wsURL, "", "", time.Now())
+	_ = insertFollower("https://github.com/f2/r", wsURL, "", "", time.Now())
 	set, err := GetFollowerSet(wsURL)
 	if err != nil {
 		t.Fatalf("error: %v", err)
@@ -4013,8 +4013,8 @@ func TestGetFollowerSet_withData(t *testing.T) {
 func TestGetFollowers_withData(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/followers2"
-	_ = InsertFollower("https://github.com/f1/r2", wsURL, "", "", time.Now())
-	_ = InsertFollower("https://github.com/f2/r2", wsURL, "", "", time.Now())
+	_ = insertFollower("https://github.com/f1/r2", wsURL, "", "", time.Now())
+	_ = insertFollower("https://github.com/f2/r2", wsURL, "", "", time.Now())
 	followers, err := GetFollowers(wsURL)
 	if err != nil {
 		t.Fatalf("error: %v", err)
