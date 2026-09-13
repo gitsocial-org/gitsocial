@@ -2335,6 +2335,21 @@
     return { artifactUrl: base, artifacts, checksums, sbom, signedBy: header["signed-by"] || "" };
   }
 
+  // headSubject titles a card or detail head: a release leads with its tag, every other type with its first line. Mirrors siteHeadSubject in site_pages_html.go.
+  function headSubject(header, ext, subject) {
+    const h = header || {};
+    if ((h.type || ext) !== "release") return subjectText(subject) || "(untitled)";
+    if (h.tag) return h.tag;
+    if (h.version) return "v" + h.version;
+    return subjectText(subject) || "(release)";
+  }
+
+  // releaseVersionChip labels a release head's version chip, "" when the head already names the version. Mirrors siteReleaseVersionChip in site_pages_html.go.
+  function releaseVersionChip(version, head) {
+    if (!version || head === version || head === "v" + version) return "";
+    return "v" + version;
+  }
+
   // stateCounts tallies items by header state and returns the total with a per-state map.
   function stateCounts(items) {
     const byState = {};
@@ -3985,7 +4000,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary,

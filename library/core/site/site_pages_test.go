@@ -1437,6 +1437,40 @@ func pageTitleOf(t *testing.T, page string) string {
 
 // TestSitePages_CrawlHygiene: tombstones and empty lists keep their pages but
 // leave the sitemap, descriptions are markdown-stripped, titles are unique.
+// TestSitePages_releaseHeadCarriesTagAndVersionChip: a release row and item page
+// head with the tag and carry the version on one chip, never twice.
+func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	header := func(tag, version string) string {
+		return "\n\nnotes\n\nGitMsg: ext=\"release\"; type=\"release\"; tag=\"" + tag + "\"; version=\"" + version + "\"; v=\"0.1.0\""
+	}
+	rel := seedExtMessages(t, client, "release", "", []pageMsgSpec{
+		{msg: "Ship the rewrite" + header("v2.0.0", "2.0.0"), ts: 2000},
+		{msg: "Nightly build" + header("nightly", "1.3.0"), ts: 2100},
+	})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	list := getKey(t, client, "releases/index.html")
+	if !strings.Contains(list, `<a class="subject" href="../i/`+rel[0][:12]+`.html">v2.0.0</a></div>`) {
+		t.Errorf("a tagged release row must head with the tag and no version chip:\n%s", list)
+	}
+	if !strings.Contains(list, `<a class="subject" href="../i/`+rel[1][:12]+`.html">nightly</a> <span class="chip">v1.3.0</span></div>`) {
+		t.Errorf("a named tag must carry the version on one trailing chip:\n%s", list)
+	}
+	if strings.Count(list, "v2.0.0") != 1 || strings.Count(list, "2.0.0") != 1 {
+		t.Errorf("the version renders twice on the releases list:\n%s", list)
+	}
+	page := getKey(t, client, "i/"+rel[1][:12]+".html")
+	if !strings.Contains(page, "<h1>nightly</h1>") || !strings.Contains(page, `<span class="chip">v1.3.0</span>`) {
+		t.Errorf("a release page must head with its tag and one version chip:\n%s", page)
+	}
+	if strings.Contains(page, "tag nightly") {
+		t.Error("the meta line must not repeat the tag the heading carries")
+	}
+}
+
 func TestSitePages_CrawlHygiene(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "true", "url": "https://example.com/", "title": "Crawl"})

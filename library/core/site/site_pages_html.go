@@ -163,8 +163,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{if .Chip}}{{template "chip" .Chip}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a></div>
+{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{range .Chips}}{{template "chip" .}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
 <span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
@@ -273,7 +273,7 @@ type sitePageChip struct{ Class, Label string }
 // sitePageSection is one thread section on an item page: a reply, a tombstone
 // line, or the release artifacts block.
 type sitePageSection struct {
-	Chip  *sitePageChip
+	Chips []sitePageChip
 	Meta  []string
 	Paras [][]string
 	Pre   string
@@ -305,7 +305,7 @@ type siteItemPageData struct {
 	// Subject titles the document; Heading is empty on a body-only type, whose first line is prose.
 	Subject   string
 	Heading   string
-	Chip      *sitePageChip
+	Chips     []sitePageChip // head chips: the state or prerelease pill, then a release's version
 	Meta      []string
 	Paras     [][]string
 	Tomb      string
@@ -337,6 +337,7 @@ type sitePageListEntry struct {
 	GlyphClass string // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
 	GlyphTitle string // the glyph's title attribute (sitePageGlyphTitle)
 	Chip       *sitePageChip
+	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
 	Href       string
 	Title      string
 	Meta       []string
@@ -596,6 +597,43 @@ func sitePageItemChip(it *sitePageItem) *sitePageChip {
 	return nil
 }
 
+// siteHeadSubject titles a card or detail head: a release leads with its tag, every other type with its first line. Mirrors headSubject in gs-core.js.
+func siteHeadSubject(itemType, tag, version, subject string) string {
+	if itemType != "release" {
+		return sitePageSubjectOrPlaceholder(subject)
+	}
+	if tag != "" {
+		return tag
+	}
+	if version != "" {
+		return "v" + version
+	}
+	if stripped := siteSubjectText(subject); stripped != "" {
+		return stripped
+	}
+	return "(release)"
+}
+
+// siteReleaseVersionChip labels a release head's version chip, "" when the head already names the version. Mirrors releaseVersionChip in gs-core.js.
+func siteReleaseVersionChip(version, head string) string {
+	if version == "" || head == version || head == "v"+version {
+		return ""
+	}
+	return "v" + version
+}
+
+// siteReleaseVersionChips returns a release head's version chip as the head's trailing chip list, empty on every other type.
+func siteReleaseVersionChips(it *sitePageItem, head string) []sitePageChip {
+	if pageItemType(it) != "release" {
+		return nil
+	}
+	label := siteReleaseVersionChip(pageItemField(it, "version"), head)
+	if label == "" {
+		return nil
+	}
+	return []sitePageChip{{Label: label}}
+}
+
 // sitePageAuthorBit formats a message's author meta bit ("name <email>").
 func sitePageAuthorBit(m *sitePageMsg) string {
 	name, email := pageDisplayAuthor(m)
@@ -635,10 +673,6 @@ func siteItemPageMeta(it *sitePageItem) []string {
 	case "pull-request":
 		if bh := sitePageBaseHead(it); bh != "" {
 			bits = append(bits, bh)
-		}
-	case "release":
-		if tag := pageItemField(it, "tag"); tag != "" {
-			bits = append(bits, "tag "+tag)
 		}
 	case "milestone":
 		if due := pageItemField(it, "due"); due != "" {
@@ -748,11 +782,11 @@ func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
 	return &sitePageSection{Meta: meta, Pre: strings.Join(lines, "\n")}
 }
 
-// sitePageItemSubject returns the subject an item page is titled by: its first line, or the type and tag when retracted.
+// sitePageItemSubject returns the subject an item page is titled by: its head subject, or the type and tag when retracted.
 func sitePageItemSubject(it *sitePageItem) string {
 	if !it.Retracted {
 		subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-		return sitePageSubjectOrPlaceholder(subject)
+		return siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 	}
 	subject := "retracted " + sitePageTypeLabel(pageItemType(it))
 	if tag := pageItemField(it, "tag"); tag != "" {
@@ -826,12 +860,15 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		ListDir:   list.Dir,
 		ListLabel: list.NavLabel,
 		Subject:   sitePageItemSubject(it),
-		Chip:      sitePageItemChip(it),
 		Meta:      siteItemPageMeta(it),
+	}
+	if chip := sitePageItemChip(it); chip != nil {
+		d.Chips = append(d.Chips, *chip)
 	}
 	robots := ""
 	if !bodyOnly {
-		d.Heading = sitePageSubjectOrPlaceholder(subject)
+		d.Heading = siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), subject)
+		d.Chips = append(d.Chips, siteReleaseVersionChips(it, d.Heading)...)
 	}
 	if it.Retracted {
 		// A tombstone is the page's own words, so it heads every type.
@@ -900,7 +937,7 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-	subject = sitePageSubjectOrPlaceholder(subject)
+	subject = siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 	name, _ := pageDisplayAuthor(it.Msg)
 	var meta []string
 	if t != defaultType {
@@ -920,6 +957,7 @@ func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageList
 		GlyphClass: glyphClass,
 		GlyphTitle: sitePageGlyphTitle(classType, state),
 		Chip:       sitePageListChip(it),
+		TailChips:  siteReleaseVersionChips(it, subject),
 		Href:       base + "i/" + it.Msg.Short + ".html",
 		Title:      subject,
 		Meta:       meta,
@@ -961,15 +999,16 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 				continue
 			}
 			subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-			subject = sitePageSubjectOrPlaceholder(subject)
-			name, _ := pageDisplayAuthor(it.Msg)
 			itemType := pageItemType(it)
+			subject = siteHeadSubject(itemType, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
+			name, _ := pageDisplayAuthor(it.Msg)
 			classType := sitePageGlyphClassType(it)
 			state := pageItemField(it, "state")
 			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
 			row := sitePageListEntry{
 				Href:       "./i/" + it.Msg.Short + ".html",
 				Title:      subject,
+				TailChips:  siteReleaseVersionChips(it, subject),
 				Meta:       []string{name, sitePageDate(pageEffectiveTime(it.Msg))},
 				Glyph:      glyph,
 				GlyphClass: glyphClass,

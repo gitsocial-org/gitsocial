@@ -62,6 +62,13 @@ for (const c of FIX.feedbackCards) {
   eq(GS.feedbackAnchorLabel(c.header), c.expectAnchor, c.name + ": anchor label");
 }
 
+console.log("=== parity invariant: release head subject + version chip ===");
+for (const c of FIX.releaseHeads) {
+  const subject = GS.headSubject(c.header, "release", c.firstLine);
+  eq(subject, c.expectSubject, c.name + ": subject");
+  eq(GS.releaseVersionChip(c.header.version || "", subject), c.expectVersionChip, c.name + ": version chip");
+}
+
 require("../assets/gs-render.js");
 const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");

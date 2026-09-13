@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -136,6 +136,57 @@
       "header": { "review-state": "approved", "file": "notes.txt", "new-line": "9", "new-line-end": "9" },
       "expectVerdict": "approved",
       "expectAnchor": "notes.txt:9"
+    }
+  ],
+  "releaseHeads": [
+    {
+      "name": "tag-names-the-version",
+      "header": { "tag": "v2.0.0", "version": "2.0.0" },
+      "firstLine": "v2.0.0",
+      "expectSubject": "v2.0.0",
+      "expectVersionChip": ""
+    },
+    {
+      "name": "bare-tag-equals-the-version",
+      "header": { "tag": "2.0.0", "version": "2.0.0" },
+      "firstLine": "Ship the rewrite",
+      "expectSubject": "2.0.0",
+      "expectVersionChip": ""
+    },
+    {
+      "name": "named-tag-keeps-the-version-chip",
+      "header": { "tag": "nightly", "version": "1.3.0" },
+      "firstLine": "Nightly build",
+      "expectSubject": "nightly",
+      "expectVersionChip": "v1.3.0"
+    },
+    {
+      "name": "version-only-heads-with-the-version",
+      "header": { "version": "1.3.0" },
+      "firstLine": "Release notes",
+      "expectSubject": "v1.3.0",
+      "expectVersionChip": ""
+    },
+    {
+      "name": "tag-only",
+      "header": { "tag": "v0.9" },
+      "firstLine": "Beta",
+      "expectSubject": "v0.9",
+      "expectVersionChip": ""
+    },
+    {
+      "name": "neither-falls-back-to-the-first-line",
+      "header": {},
+      "firstLine": "# Big news",
+      "expectSubject": "Big news",
+      "expectVersionChip": ""
+    },
+    {
+      "name": "nothing-left-after-the-strip",
+      "header": {},
+      "firstLine": "<br/>",
+      "expectSubject": "(release)",
+      "expectVersionChip": ""
     }
   ],
   "listHeadings": {

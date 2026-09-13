@@ -1,4 +1,4 @@
-// site_parity_test.go - writer/reader parity invariants: subject/header, and the feedback card.
+// site_parity_test.go - writer/reader parity invariants: subject/header, the feedback card and the release head.
 // The Go writer's subjectOf / extractHeaderLine (site_items.go) and the JS
 // reader's cleanContent / parseGitmsg (site/gs-core.js) must derive the same
 // subject and GitMsg header line from a commit message. This test pins the Go
@@ -45,12 +45,22 @@ type parityFeedbackCase struct {
 	ExpectAnchor  string            `json:"expectAnchor"`
 }
 
+// parityReleaseHeadCase pins the subject and version chip a release head yields.
+type parityReleaseHeadCase struct {
+	Name              string            `json:"name"`
+	Header            map[string]string `json:"header"`
+	FirstLine         string            `json:"firstLine"`
+	ExpectSubject     string            `json:"expectSubject"`
+	ExpectVersionChip string            `json:"expectVersionChip"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
-	MessageCases   []parityMessageCase   `json:"messageCases"`
-	RawObjectCases []parityRawObjectCase `json:"rawObjectCases"`
-	FeedbackCards  []parityFeedbackCase  `json:"feedbackCards"`
-	ListHeadings   map[string]string     `json:"listHeadings"`
+	MessageCases   []parityMessageCase     `json:"messageCases"`
+	RawObjectCases []parityRawObjectCase   `json:"rawObjectCases"`
+	FeedbackCards  []parityFeedbackCase    `json:"feedbackCards"`
+	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
+	ListHeadings   map[string]string       `json:"listHeadings"`
 }
 
 // loadParityFixtures reads the shared JSON fixtures the JS half also consumes.
@@ -137,6 +147,39 @@ func TestParityFeedbackCardVariant(t *testing.T) {
 		if reply.Chips[i] != want[i] {
 			t.Errorf("chip %d = %v, want %v", i, reply.Chips[i], want[i])
 		}
+	}
+}
+
+// TestParityReleaseHead asserts a release head takes the tag as its subject and
+// the version as one chip, against the fixture the app's half (unit_parity.js)
+// asserts, so no version string renders twice on either renderer's head.
+func TestParityReleaseHead(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ReleaseHeads) == 0 {
+		t.Fatal("no release head cases in parity fixtures")
+	}
+	for _, c := range f.ReleaseHeads {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: "release", Header: &protocol.Header{Ext: "release", Fields: c.Header}}
+			it := &sitePageItem{Msg: msg, Resolved: msg}
+			subject := siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), c.FirstLine)
+			if subject != c.ExpectSubject {
+				t.Errorf("subject = %q, want %q", subject, c.ExpectSubject)
+			}
+			chips := siteReleaseVersionChips(it, subject)
+			var got string
+			if len(chips) == 1 {
+				got = chips[0].Label
+			} else if len(chips) > 1 {
+				t.Fatalf("chips = %v, want at most one", chips)
+			}
+			if got != c.ExpectVersionChip {
+				t.Errorf("version chip = %q, want %q", got, c.ExpectVersionChip)
+			}
+			if got != "" && strings.Contains(subject, c.Header["version"]) {
+				t.Errorf("subject %q already names version %q, so the chip %q repeats it", subject, c.Header["version"], got)
+			}
+		})
 	}
 }
 

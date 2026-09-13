@@ -253,8 +253,10 @@ async function main() {
   ok("memo card renders labels via the shared enrichment chip row", mchips.includes("area/cache") && mchips.includes("kind/policy"), mchips.join(" | "));
   const relItem = { commit: { hash: "b".repeat(40), short: "bbbbbbbbbbbb" }, header: { type: "release", tag: "v2.0", version: "2.0", labels: "area/build", "origin-platform": "github", "origin-url": "https://x/y" }, content: "v2.0\n\nnotes", author: "Ada", effectiveTime: 1, versions: [] };
   const rcard = GS.releaseCard(relItem);
-  const rHeadChips = findClass(findClass(rcard, "card-head")[0] || { _children: [] }, "chip").map(textOf);
-  ok("release card keeps its version chip in the head", rHeadChips.some((t) => t === "v2.0"), rHeadChips.join(" | "));
+  const headChips = (node) => findClass(findClass(node, "card-head")[0] || { _children: [] }, "chip").map(textOf);
+  ok("release card drops the version chip its tag already names", !headChips(rcard).includes("v2.0"), headChips(rcard).join(" | "));
+  const namedTag = GS.releaseCard({ commit: relItem.commit, header: { type: "release", tag: "nightly", version: "1.3.0" }, content: "Nightly build", author: "Ada", effectiveTime: 1, versions: [] });
+  ok("release card keeps a version chip its tag does not name", headChips(namedTag).includes("v1.3.0"), headChips(namedTag).join(" | "));
   const rEnrich = findClass(rcard, "card-chips").flatMap((r) => findClass(r, "chip").map(textOf));
   ok("release card renders labels + origin via the shared enrichment chip row", rEnrich.includes("area/build") && rEnrich.some((t) => /↗/.test(t)), rEnrich.join(" | "));
 
@@ -380,7 +382,7 @@ async function main() {
     const pre = GS.releaseCard({ header: { type: "release", tag: "v2.0.0", version: "2.0.0", prerelease: "true" }, content: "v2.0.0", commit });
     ok("a prerelease leads its head with the prerelease chip", headOrder(pre)[1] === "chip:prerelease" && headOrder(pre)[2] === "subject:v2.0.0", JSON.stringify(headOrder(pre)));
     const stable = GS.releaseCard({ header: { type: "release", tag: "v1.0.0", version: "1.0.0" }, content: "v1.0.0", commit });
-    ok("a stable release leads its head with the subject", headOrder(stable)[1] === "subject:v1.0.0", JSON.stringify(headOrder(stable)));
+    ok("a stable release heads with its tag alone, the version rendered once", JSON.stringify(headOrder(stable)) === JSON.stringify(["glyph:⏏", "subject:v1.0.0"]), JSON.stringify(headOrder(stable)));
     const post = GS.timelineCard({ header: { type: "post" }, content: "First line\n\nRest", commit }, null);
     ok("a post promotes its first line to the subject", headOrder(post)[1] === "subject:First line", JSON.stringify(headOrder(post)));
     for (const type of ["comment", "repost", "quote"]) {
