@@ -161,15 +161,15 @@ func TestApplySuggestion_usesOldLine(t *testing.T) {
 
 func TestApplySuggestion_notSuggestion(t *testing.T) {
 	res := ApplySuggestion(t.TempDir(), Feedback{Suggestion: false})
-	if res.Success {
-		t.Error("should fail when not a suggestion")
+	if res.Success || res.Error.Code != "NOT_SUGGESTION" {
+		t.Errorf("ApplySuggestion() on plain feedback = %+v, want NOT_SUGGESTION", res)
 	}
 }
 
 func TestApplySuggestion_noFile(t *testing.T) {
 	res := ApplySuggestion(t.TempDir(), Feedback{Suggestion: true})
-	if res.Success {
-		t.Error("should fail when no file reference")
+	if res.Success || res.Error.Code != "NOT_SUGGESTION" {
+		t.Errorf("ApplySuggestion() with no file = %+v, want NOT_SUGGESTION", res)
 	}
 }
 
@@ -184,8 +184,8 @@ func TestApplySuggestion_noSuggestionFence(t *testing.T) {
 		NewLine:    1,
 		Content:    "```go\ncode\n```",
 	})
-	if res.Success {
-		t.Error("should fail when the body carries no suggestion fence")
+	if res.Success || res.Error.Code != "PARSE_ERROR" {
+		t.Errorf("ApplySuggestion() with no suggestion fence = %+v, want PARSE_ERROR", res)
 	}
 }
 
@@ -199,8 +199,8 @@ func TestApplySuggestion_noCodeBlock(t *testing.T) {
 		NewLine:    1,
 		Content:    "No code block here",
 	})
-	if res.Success {
-		t.Error("should fail when no code block found")
+	if res.Success || res.Error.Code != "PARSE_ERROR" {
+		t.Errorf("ApplySuggestion() with no fence = %+v, want PARSE_ERROR", res)
 	}
 }
 
@@ -213,8 +213,21 @@ func TestApplySuggestion_noLine(t *testing.T) {
 		File:       "main.go",
 		Content:    "```suggestion\ncode\n```",
 	})
-	if res.Success {
-		t.Error("should fail when no line reference")
+	if res.Success || res.Error.Code != "NOT_SUGGESTION" {
+		t.Errorf("ApplySuggestion() with no line = %+v, want NOT_SUGGESTION", res)
+	}
+}
+
+// TestApplySuggestion_pathOutsideRepository refuses a file path that leaves the working tree.
+func TestApplySuggestion_pathOutsideRepository(t *testing.T) {
+	res := ApplySuggestion(t.TempDir(), Feedback{
+		Suggestion: true,
+		File:       "../outside.go",
+		NewLine:    1,
+		Content:    "```suggestion\ncode\n```",
+	})
+	if res.Success || res.Error.Code != "INVALID_PATH" {
+		t.Errorf("ApplySuggestion() with a path outside the repository = %+v, want INVALID_PATH", res)
 	}
 }
 
@@ -225,8 +238,8 @@ func TestApplySuggestion_fileNotFound(t *testing.T) {
 		NewLine:    1,
 		Content:    "```suggestion\ncode\n```",
 	})
-	if res.Success {
-		t.Error("should fail when file not found")
+	if res.Success || res.Error.Code != "FILE_ERROR" {
+		t.Errorf("ApplySuggestion() on a missing file = %+v, want FILE_ERROR", res)
 	}
 }
 
@@ -240,8 +253,8 @@ func TestApplySuggestion_lineOutOfRange(t *testing.T) {
 		NewLine:    999,
 		Content:    "```suggestion\ncode\n```",
 	})
-	if res.Success {
-		t.Error("should fail when line out of range")
+	if res.Success || res.Error.Code != "RANGE_ERROR" {
+		t.Errorf("ApplySuggestion() past the end of the file = %+v, want RANGE_ERROR", res)
 	}
 }
 
