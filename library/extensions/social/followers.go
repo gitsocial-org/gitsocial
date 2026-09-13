@@ -21,30 +21,7 @@ func InsertFollower(repoURL, workspaceURL, listID, commitHash string, followedAt
 	})
 }
 
-// GetFollowerSet returns a set of repository URLs that follow the workspace.
-func GetFollowerSet(workspaceURL string) (map[string]bool, error) {
-	return cache.QueryLocked(func(db *sql.DB) (map[string]bool, error) {
-		rows, err := db.Query(`
-			SELECT repo_url FROM social_followers WHERE workspace_url = ?
-		`, protocol.NormalizeURL(workspaceURL))
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		followers := make(map[string]bool)
-		for rows.Next() {
-			var repoURL string
-			if err := rows.Scan(&repoURL); err != nil {
-				continue
-			}
-			followers[repoURL] = true
-		}
-		return followers, nil
-	})
-}
-
-// GetFollowers returns a list of repository URLs that follow the workspace.
+// GetFollowers returns the repository URLs that follow the workspace, newest first.
 func GetFollowers(workspaceURL string) ([]string, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query(`
@@ -65,4 +42,17 @@ func GetFollowers(workspaceURL string) ([]string, error) {
 		}
 		return followers, nil
 	})
+}
+
+// GetFollowerSet returns the same repository URLs as a lookup set.
+func GetFollowerSet(workspaceURL string) (map[string]bool, error) {
+	urls, err := GetFollowers(workspaceURL)
+	if err != nil {
+		return nil, err
+	}
+	followers := make(map[string]bool, len(urls))
+	for _, url := range urls {
+		followers[url] = true
+	}
+	return followers, nil
 }

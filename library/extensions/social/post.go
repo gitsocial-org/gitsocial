@@ -89,38 +89,20 @@ func processWorkspaceCommits(commits []git.Commit, repoURL, branch string) {
 
 // buildSocialItem constructs a SocialItem from a parsed commit and message.
 func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) SocialItem {
-	itemType := string(extractPostType(msg))
-	originalRepoURL, originalHash, originalBranch := parseRefField(msg, "original", repoURL, branch)
-	replyToRepoURL, replyToHash, replyToBranch := parseRefField(msg, "reply-to", repoURL, branch)
+	originalRepoURL, originalHash, originalBranch := parseSocialRefField(msg.Header.Fields["original"], repoURL, branch)
+	replyToRepoURL, replyToHash, replyToBranch := parseSocialRefField(msg.Header.Fields["reply-to"], repoURL, branch)
 	return SocialItem{
 		RepoURL:         repoURL,
 		Hash:            gc.Hash,
 		Branch:          branch,
-		Type:            itemType,
-		OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
-		OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
-		OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
-		ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
-		ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
-		ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
+		Type:            string(GetPostType(msg)),
+		OriginalRepoURL: cache.ToNullString(originalRepoURL),
+		OriginalHash:    cache.ToNullString(originalHash),
+		OriginalBranch:  cache.ToNullString(originalBranch),
+		ReplyToRepoURL:  cache.ToNullString(replyToRepoURL),
+		ReplyToHash:     cache.ToNullString(replyToHash),
+		ReplyToBranch:   cache.ToNullString(replyToBranch),
 	}
-}
-
-// parseRefField extracts repo_url, hash, and branch from a header ref field.
-func parseRefField(msg *protocol.Message, field, repoURL, branch string) (string, string, string) {
-	raw := msg.Header.Fields[field]
-	if raw == "" {
-		return "", "", ""
-	}
-	parsed := protocol.ParseRef(protocol.NormalizeRefWithContext(raw, repoURL, branch))
-	if parsed.Value == "" {
-		return "", "", ""
-	}
-	b := parsed.Branch
-	if b == "" {
-		b = branch
-	}
-	return parsed.Repository, parsed.Value, b
 }
 
 // upgradeVirtualItem converts a virtual item to a real one when fetched.
@@ -154,10 +136,8 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 	switch {
 	case scope == "timeline":
 		result = getTimeline(workdir, workspaceURL, opts)
-	case scope == "repository:my":
-		result = getMyPosts(workdir, workspaceURL, opts)
-	case scope == "repository:workspace":
-		result = getWorkspaceRepository(workdir, workspaceURL, opts)
+	case scope == "repository:my", scope == "repository:workspace":
+		result = getWorkspacePosts(workdir, workspaceURL, opts)
 	case strings.HasPrefix(scope, "repository:"):
 		rest := strings.TrimPrefix(scope, "repository:")
 		repoURL := rest
@@ -372,8 +352,8 @@ func CountListPosts(listID string) int {
 	return count
 }
 
-// getMyPosts retrieves posts from the current workspace repository.
-func getMyPosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
+// getWorkspacePosts retrieves posts from the workspace repository.
+func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := GetSocialItems(SocialQuery{
@@ -420,31 +400,6 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 		if item.RepoURL == workspaceURL {
 			post.Display.IsWorkspacePost = true
 		}
-		posts = append(posts, post)
-	}
-
-	return Success(posts)
-}
-
-// getWorkspaceRepository retrieves all posts from the workspace repository.
-func getWorkspaceRepository(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	unpushed, _ := git.GetAllUnpushedCommits(workdir)
-
-	items, err := GetSocialItems(SocialQuery{
-		RepoURL:          workspaceURL,
-		Limit:            opts.Limit,
-		Cursor:           opts.Cursor,
-		ForFollowerCheck: workspaceURL,
-	})
-	if err != nil {
-		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
-	}
-
-	posts := make([]Post, 0, len(items))
-	for _, item := range items {
-		post := SocialItemToPost(item)
-		_, post.Display.IsUnpushed = unpushed[item.Hash]
-		post.Display.IsWorkspacePost = true
 		posts = append(posts, post)
 	}
 

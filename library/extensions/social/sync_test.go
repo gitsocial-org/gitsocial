@@ -35,29 +35,6 @@ func insertTestCommit(t *testing.T, hash, message string) {
 	}
 }
 
-func TestExtractPostType(t *testing.T) {
-	tests := []struct {
-		name string
-		msg  *protocol.Message
-		want PostType
-	}{
-		{"post", &protocol.Message{Header: protocol.Header{Fields: map[string]string{"type": "post"}}}, PostTypePost},
-		{"comment", &protocol.Message{Header: protocol.Header{Fields: map[string]string{"type": "comment"}}}, PostTypeComment},
-		{"repost", &protocol.Message{Header: protocol.Header{Fields: map[string]string{"type": "repost"}}}, PostTypeRepost},
-		{"quote", &protocol.Message{Header: protocol.Header{Fields: map[string]string{"type": "quote"}}}, PostTypeQuote},
-		{"default", &protocol.Message{Header: protocol.Header{Fields: map[string]string{}}}, PostTypePost},
-		{"unknown", &protocol.Message{Header: protocol.Header{Fields: map[string]string{"type": "unknown"}}}, PostTypePost},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractPostType(tt.msg)
-			if got != tt.want {
-				t.Errorf("extractPostType() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestProcessSocialCommit_nilMessage(t *testing.T) {
 	setupTestDB(t)
 	gc := git.Commit{Hash: "abc123456789"}

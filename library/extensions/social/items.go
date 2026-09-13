@@ -190,6 +190,29 @@ func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch strin
 	}
 }
 
+// socialItemUpsert writes a social item, keeping any ref field the row already has.
+const socialItemUpsert = `
+	INSERT INTO social_items
+	(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
+		type = excluded.type,
+		original_repo_url = COALESCE(NULLIF(original_repo_url, ''), excluded.original_repo_url),
+		original_hash = COALESCE(NULLIF(original_hash, ''), excluded.original_hash),
+		original_branch = COALESCE(NULLIF(original_branch, ''), excluded.original_branch),
+		reply_to_repo_url = COALESCE(NULLIF(reply_to_repo_url, ''), excluded.reply_to_repo_url),
+		reply_to_hash = COALESCE(NULLIF(reply_to_hash, ''), excluded.reply_to_hash),
+		reply_to_branch = COALESCE(NULLIF(reply_to_branch, ''), excluded.reply_to_branch)`
+
+// socialItemArgs orders an item's columns for socialItemUpsert.
+func socialItemArgs(item SocialItem) []interface{} {
+	return []interface{}{
+		item.RepoURL, item.Hash, item.Branch, item.Type,
+		item.OriginalRepoURL, item.OriginalHash, item.OriginalBranch,
+		item.ReplyToRepoURL, item.ReplyToHash, item.ReplyToBranch,
+	}
+}
+
 // InsertSocialItems batch-inserts non-virtual social items in one transaction,
 // then recounts each target the batch names once.
 func InsertSocialItems(items []SocialItem) error {
@@ -202,29 +225,13 @@ func InsertSocialItems(items []SocialItem) error {
 			return err
 		}
 		defer func() { _ = tx.Rollback() }()
-		stmt, err := tx.Prepare(`
-			INSERT INTO social_items
-			(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
-				type = excluded.type,
-				original_repo_url = COALESCE(NULLIF(original_repo_url, ''), excluded.original_repo_url),
-				original_hash = COALESCE(NULLIF(original_hash, ''), excluded.original_hash),
-				original_branch = COALESCE(NULLIF(original_branch, ''), excluded.original_branch),
-				reply_to_repo_url = COALESCE(NULLIF(reply_to_repo_url, ''), excluded.reply_to_repo_url),
-				reply_to_hash = COALESCE(NULLIF(reply_to_hash, ''), excluded.reply_to_hash),
-				reply_to_branch = COALESCE(NULLIF(reply_to_branch, ''), excluded.reply_to_branch)`)
+		stmt, err := tx.Prepare(socialItemUpsert)
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
 		for _, item := range items {
-			_, err := stmt.Exec(
-				item.RepoURL, item.Hash, item.Branch, item.Type,
-				item.OriginalRepoURL, item.OriginalHash, item.OriginalBranch,
-				item.ReplyToRepoURL, item.ReplyToHash, item.ReplyToBranch,
-			)
-			if err != nil {
+			if _, err := stmt.Exec(socialItemArgs(item)...); err != nil {
 				return err
 			}
 		}
@@ -261,24 +268,12 @@ func InsertSocialItem(item SocialItem) error {
 			}); err != nil {
 				return err
 			}
-			// Insert into social_items
+			// A virtual item never overwrites a fetched row and never counts.
 			_, err := db.Exec(`
 				INSERT INTO social_items
 				(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT(repo_url, hash, branch) DO NOTHING`,
-				item.RepoURL,
-				item.Hash,
-				item.Branch,
-				item.Type,
-				item.OriginalRepoURL,
-				item.OriginalHash,
-				item.OriginalBranch,
-				item.ReplyToRepoURL,
-				item.ReplyToHash,
-				item.ReplyToBranch,
-			)
-			// Virtual items don't update interaction counts
+				ON CONFLICT(repo_url, hash, branch) DO NOTHING`, socialItemArgs(item)...)
 			return err
 		}
 
@@ -294,30 +289,7 @@ func InsertSocialItem(item SocialItem) error {
 			}
 		}
 
-		// Insert or update social_items
-		_, err := db.Exec(`
-			INSERT INTO social_items
-			(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
-				type = excluded.type,
-				original_repo_url = COALESCE(NULLIF(original_repo_url, ''), excluded.original_repo_url),
-				original_hash = COALESCE(NULLIF(original_hash, ''), excluded.original_hash),
-				original_branch = COALESCE(NULLIF(original_branch, ''), excluded.original_branch),
-				reply_to_repo_url = COALESCE(NULLIF(reply_to_repo_url, ''), excluded.reply_to_repo_url),
-				reply_to_hash = COALESCE(NULLIF(reply_to_hash, ''), excluded.reply_to_hash),
-				reply_to_branch = COALESCE(NULLIF(reply_to_branch, ''), excluded.reply_to_branch)`,
-			item.RepoURL,
-			item.Hash,
-			item.Branch,
-			item.Type,
-			item.OriginalRepoURL,
-			item.OriginalHash,
-			item.OriginalBranch,
-			item.ReplyToRepoURL,
-			item.ReplyToHash,
-			item.ReplyToBranch,
-		)
+		_, err := db.Exec(socialItemUpsert, socialItemArgs(item)...)
 		if err != nil {
 			return err
 		}
@@ -1031,22 +1003,16 @@ func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]Social
 	})
 }
 
-type InteractionCounts struct {
-	Comments int
-	Reposts  int
-	Quotes   int
-}
-
 // RefreshInteractionCounts retrieves current interaction counts for a post.
-func RefreshInteractionCounts(repoURL, hash, branch string) (InteractionCounts, error) {
-	return cache.QueryLocked(func(db *sql.DB) (InteractionCounts, error) {
-		var counts InteractionCounts
+func RefreshInteractionCounts(repoURL, hash, branch string) (Interactions, error) {
+	return cache.QueryLocked(func(db *sql.DB) (Interactions, error) {
+		var counts Interactions
 		err := db.QueryRow(`
 			SELECT COALESCE(comments, 0), COALESCE(reposts, 0), COALESCE(quotes, 0)
 			FROM social_interactions
 			WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch).Scan(&counts.Comments, &counts.Reposts, &counts.Quotes)
 		if err == sql.ErrNoRows {
-			return InteractionCounts{}, nil
+			return Interactions{}, nil
 		}
 		return counts, err
 	})

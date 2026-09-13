@@ -2,7 +2,6 @@
 package social
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -107,22 +106,7 @@ func Hooks() []fetch.PostFetchHook {
 // processSocialCommit handles social-specific commit processing.
 func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
 	if msg != nil && msg.Header.Ext == "social" {
-		itemType := string(extractPostType(msg))
-		originalRepoURL, originalHash, originalBranch := parseSocialRefField(msg.Header.Fields["original"], repoURL, branch)
-		replyToRepoURL, replyToHash, replyToBranch := parseSocialRefField(msg.Header.Fields["reply-to"], repoURL, branch)
-
-		_ = InsertSocialItem(SocialItem{
-			RepoURL:         repoURL,
-			Hash:            gc.Hash,
-			Branch:          branch,
-			Type:            itemType,
-			OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
-			OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
-			OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
-			ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
-			ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
-			ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
-		})
+		_ = InsertSocialItem(buildSocialItem(gc, msg, repoURL, branch))
 
 		for _, ref := range msg.References {
 			if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
@@ -151,21 +135,6 @@ func parseSocialRefField(fieldValue, repoURL, branch string) (refRepoURL, refHas
 		refBranch = branch
 	}
 	return parsed.Repository, parsed.Value, refBranch
-}
-
-// extractPostType determines the post type from a protocol message header.
-func extractPostType(msg *protocol.Message) PostType {
-	if t, ok := msg.Header.Fields["type"]; ok {
-		switch t {
-		case "comment":
-			return PostTypeComment
-		case "repost":
-			return PostTypeRepost
-		case "quote":
-			return PostTypeQuote
-		}
-	}
-	return PostTypePost
 }
 
 // syncListToCache persists a list and its repositories to the cache database.
