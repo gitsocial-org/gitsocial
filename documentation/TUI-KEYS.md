@@ -954,3 +954,5 @@ Retract, delete, merge, close, and remove actions show a `[y/n]` confirmation pr
 - `n` / `N` / `esc` - Cancel
 
 All confirmations use the shared `ConfirmDialog` component.
+
+`p` reaches every default push remote. Its confirm names each one; a remote picker comes first only when several s3 remotes exist and none is configured.

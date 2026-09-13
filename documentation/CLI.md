@@ -51,7 +51,7 @@ The first fetch in a workspace asks whether to track the default branch only or 
 
 ### gitsocial push
 
-Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, and open PR heads to the remote. A push to an s3 remote with `site.publish` then rebuilds the site. Flags and remote resolution are in [S3.md](S3.md#push).
+Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, and open PR heads to every resolved remote. A push to an s3 remote with `site.publish` then rebuilds the site. Flags and remote resolution are in [S3.md](S3.md#push).
 
 ```
 gitsocial push [remote...]

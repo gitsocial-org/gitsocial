@@ -185,5 +185,6 @@ func writeConfirmationDialogs(b *strings.Builder) {
 	b.WriteString("Retract, delete, merge, close, and remove actions show a `[y/n]` confirmation prompt:\n")
 	b.WriteString("- `y` / `Y` - Confirm action\n")
 	b.WriteString("- `n` / `N` / `esc` - Cancel\n\n")
-	b.WriteString("All confirmations use the shared `ConfirmDialog` component.\n")
+	b.WriteString("All confirmations use the shared `ConfirmDialog` component.\n\n")
+	b.WriteString("`p` reaches every default push remote. Its confirm names each one; a remote picker comes first only when several s3 remotes exist and none is configured.\n")
 }
