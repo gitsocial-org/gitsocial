@@ -40,6 +40,26 @@ const followedReposCondition = `
 		JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
 `
 
+// notifiableItems selects the interactions that raise a notification: another
+// repository and another author, on a workspace post or on a thread the user
+// is in. Aliases `s` for social_items and `c` for core_commits, and needs the
+// user_threads CTE. Parameters: workspaceURL, userEmail, workspaceURL, workdir.
+const notifiableItems = `
+	s.type IN ('comment', 'repost', 'quote')
+	  AND s.repo_url != ?
+	  AND COALESCE(c.origin_author_email, c.author_email) != ?
+	  AND NOT c.is_edit_commit AND NOT c.is_retracted
+	  AND (
+	    s.original_repo_url = ?
+	    OR (EXISTS (
+	      SELECT 1 FROM user_threads ut
+	      WHERE ut.original_repo_url = s.original_repo_url
+	        AND ut.original_hash = s.original_hash
+	        AND ut.original_branch = s.original_branch
+	    ) AND ` + followedReposCondition + `)
+	  )
+`
+
 // GetNotifications retrieves notifications for interactions on workspace posts and threads the user participates in.
 func GetNotifications(workdir string, filter NotificationFilter) ([]Notification, error) {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
@@ -68,20 +88,7 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 			LEFT JOIN social_interactions i ON s.repo_url = i.repo_url AND s.hash = i.hash AND s.branch = i.branch
 			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
-			WHERE s.type IN ('comment', 'repost', 'quote')
-			  AND s.repo_url != ?
-			  AND COALESCE(c.origin_author_email, c.author_email) != ?
-			  AND NOT c.is_edit_commit AND NOT c.is_retracted
-			  AND (
-			    s.original_repo_url = ?
-			    OR (EXISTS (
-			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = s.original_repo_url
-			        AND ut.original_hash = s.original_hash
-			        AND ut.original_branch = s.original_branch
-			    ) AND ` + followedReposCondition + `)
-			  )
-		`
+			WHERE ` + notifiableItems
 		args := []interface{}{userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir}
 
 		if filter.UnreadOnly {
@@ -255,19 +262,7 @@ func GetUnreadCount(workdir string) (int, error) {
 			SELECT COUNT(*) FROM social_items s
 			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
-			WHERE s.type IN ('comment', 'repost', 'quote')
-			  AND s.repo_url != ?
-			  AND COALESCE(c.origin_author_email, c.author_email) != ?
-			  AND NOT c.is_edit_commit AND NOT c.is_retracted
-			  AND (
-			    s.original_repo_url = ?
-			    OR (EXISTS (
-			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = s.original_repo_url
-			        AND ut.original_hash = s.original_hash
-			        AND ut.original_branch = s.original_branch
-			    ) AND `+followedReposCondition+`)
-			  )
+			WHERE `+notifiableItems+`
 			  AND r.repo_url IS NULL
 		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir).Scan(&itemCount); err != nil {
 			return 0, fmt.Errorf("count unread items: %w", err)
@@ -300,19 +295,7 @@ func MarkAllAsRead(workdir string) error {
 			SELECT s.repo_url, s.hash, s.branch, ? FROM social_items s
 			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
-			WHERE s.type IN ('comment', 'repost', 'quote')
-			  AND s.repo_url != ?
-			  AND COALESCE(c.origin_author_email, c.author_email) != ?
-			  AND NOT c.is_edit_commit AND NOT c.is_retracted
-			  AND (
-			    s.original_repo_url = ?
-			    OR (EXISTS (
-			      SELECT 1 FROM user_threads ut
-			      WHERE ut.original_repo_url = s.original_repo_url
-			        AND ut.original_hash = s.original_hash
-			        AND ut.original_branch = s.original_branch
-			    ) AND `+followedReposCondition+`)
-			  )
+			WHERE `+notifiableItems+`
 			  AND r.repo_url IS NULL
 			ON CONFLICT(repo_url, hash, branch) DO NOTHING
 		`, userEmail, workspaceURL, workdir, now, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
@@ -346,19 +329,7 @@ func MarkAllAsUnread(workdir string) error {
 			WHERE (repo_url, hash, branch) IN (
 				SELECT s.repo_url, s.hash, s.branch FROM social_items s
 				JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
-				WHERE s.type IN ('comment', 'repost', 'quote')
-				  AND s.repo_url != ?
-				  AND COALESCE(c.origin_author_email, c.author_email) != ?
-				  AND NOT c.is_edit_commit AND NOT c.is_retracted
-				  AND (
-				    s.original_repo_url = ?
-				    OR (EXISTS (
-				      SELECT 1 FROM user_threads ut
-				      WHERE ut.original_repo_url = s.original_repo_url
-				        AND ut.original_hash = s.original_hash
-				        AND ut.original_branch = s.original_branch
-				    ) AND `+followedReposCondition+`)
-				  )
+				WHERE `+notifiableItems+`
 			)
 		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
 			return fmt.Errorf("unmark items as read: %w", err)
