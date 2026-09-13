@@ -577,7 +577,7 @@ func TestGetSocialItems_limitOffset(t *testing.T) {
 		InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: hash, Branch: itemsTestBranch, Type: "post"})
 	}
 
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Limit: 2, Offset: 1})
+	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Limit: 2})
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -904,22 +904,6 @@ func TestGetSocialItems_byBranch(t *testing.T) {
 	}
 }
 
-func TestGetSocialItems_byRepoURLs(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, "https://github.com/multi/a", "mlt_a1234567")
-	InsertSocialItem(SocialItem{RepoURL: "https://github.com/multi/a", Hash: "mlt_a1234567", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, "https://github.com/multi/b", "mlt_b1234567")
-	InsertSocialItem(SocialItem{RepoURL: "https://github.com/multi/b", Hash: "mlt_b1234567", Branch: itemsTestBranch, Type: "post"})
-
-	items, err := GetSocialItems(SocialQuery{RepoURLs: []string{"https://github.com/multi/a", "https://github.com/multi/b"}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 2 {
-		t.Errorf("expected 2, got %d", len(items))
-	}
-}
-
 func TestGetSocialItems_byOriginal(t *testing.T) {
 	setupTestDB(t)
 	insertItemsTestCommit(t, itemsTestRepoURL, "orig1234567a")
@@ -942,210 +926,6 @@ func TestGetSocialItems_byOriginal(t *testing.T) {
 	}
 	if len(items) != 1 {
 		t.Errorf("expected 1 comment, got %d", len(items))
-	}
-}
-
-func TestGetSocialItems_byListID(t *testing.T) {
-	setupTestDB(t)
-	// Insert a list repo mapping
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"test-list-q", "Test", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"test-list-q", itemsTestRepoURL, itemsTestBranch)
-		return nil
-	})
-	insertItemsTestCommit(t, itemsTestRepoURL, "lstq1234567a")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "lstq1234567a", Branch: itemsTestBranch, Type: "post"})
-
-	items, err := GetSocialItems(SocialQuery{ListID: "test-list-q"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1 item in list, got %d", len(items))
-	}
-}
-
-func TestGetSocialItems_byRepos(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "rps_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "rps_12345678", Branch: itemsTestBranch, Type: "post"})
-
-	items, err := GetSocialItems(SocialQuery{Repos: []RepoRef{{URL: itemsTestRepoURL, Branch: itemsTestBranch}}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_basic(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "gai_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gai_12345678", Branch: itemsTestBranch, Type: "post"})
-
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL})
-	if err != nil {
-		t.Fatalf("GetAllItems() error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1 item, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_withListIDs(t *testing.T) {
-	setupTestDB(t)
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"all-items-list", "Test", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"all-items-list", itemsTestRepoURL, itemsTestBranch)
-		return nil
-	})
-	insertItemsTestCommit(t, itemsTestRepoURL, "ail_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "ail_12345678", Branch: itemsTestBranch, Type: "post"})
-
-	items, err := GetAllItems(SocialQuery{ListIDs: []string{"all-items-list"}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) < 1 {
-		t.Errorf("expected at least 1 item, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_branchFilter(t *testing.T) {
-	setupTestDB(t)
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash: "gab_12345678", RepoURL: itemsTestRepoURL, Branch: "dev",
-		AuthorName: "Test", AuthorEmail: "t@t.com", Message: "test",
-		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gab_12345678", Branch: "dev", Type: "post"})
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, Branch: "dev"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_repoURLsFilter(t *testing.T) {
-	setupTestDB(t)
-	for _, url := range []string{"https://github.com/gaurl/a", "https://github.com/gaurl/b"} {
-		hash := "gaurl_" + url[len(url)-1:]
-		if err := cache.InsertCommits([]cache.Commit{{
-			Hash: hash, RepoURL: url, Branch: itemsTestBranch,
-			AuthorName: "T", AuthorEmail: "t@t.com", Message: "t",
-			Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
-		}}); err != nil {
-			t.Fatal(err)
-		}
-		InsertSocialItem(SocialItem{RepoURL: url, Hash: hash, Branch: itemsTestBranch, Type: "post"})
-	}
-	items, err := GetAllItems(SocialQuery{RepoURLs: []string{"https://github.com/gaurl/a", "https://github.com/gaurl/b"}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 2 {
-		t.Errorf("expected 2, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_listIDFilter(t *testing.T) {
-	setupTestDB(t)
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"ga-list-id", "Test", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"ga-list-id", itemsTestRepoURL, itemsTestBranch)
-		return nil
-	})
-	insertItemsTestCommit(t, itemsTestRepoURL, "gali1234567a")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gali1234567a", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetAllItems(SocialQuery{ListID: "ga-list-id"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_sinceUntilFilter(t *testing.T) {
-	setupTestDB(t)
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash: "gasu12345678", RepoURL: itemsTestRepoURL, Branch: itemsTestBranch,
-		AuthorName: "T", AuthorEmail: "t@t.com", Message: "t",
-		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gasu12345678", Branch: itemsTestBranch, Type: "post"})
-	since := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	until := time.Date(2025, 6, 30, 0, 0, 0, 0, time.UTC)
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, Since: &since, Until: &until})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_offsetFilter(t *testing.T) {
-	setupTestDB(t)
-	for i := 0; i < 5; i++ {
-		hash := "gaof" + string(rune('a'+i)) + "_123456"
-		if err := cache.InsertCommits([]cache.Commit{{
-			Hash: hash, RepoURL: itemsTestRepoURL, Branch: itemsTestBranch,
-			AuthorName: "T", AuthorEmail: "t@t.com", Message: "t",
-			Timestamp: time.Date(2025, 10, 21, 12, i, 0, 0, time.UTC),
-		}}); err != nil {
-			t.Fatal(err)
-		}
-		InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: hash, Branch: itemsTestBranch, Type: "post"})
-	}
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, Limit: 2, Offset: 1})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 2 {
-		t.Errorf("expected 2 with limit=2 offset=1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_listIDsAndWorkspace(t *testing.T) {
-	setupTestDB(t)
-	wsURL := "https://github.com/ws/allitems"
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"gailw-list", "Test", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"gailw-list", itemsTestRepoURL, itemsTestBranch)
-		return nil
-	})
-	insertItemsTestCommit(t, itemsTestRepoURL, "gailw_list_1")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gailw_list_1", Branch: itemsTestBranch, Type: "post"})
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash: "gailw_ws___1", RepoURL: wsURL, Branch: "gitmsg/social",
-		AuthorName: "T", AuthorEmail: "t@t.com", Message: "t",
-		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "gailw_ws___1", Branch: "gitmsg/social", Type: "post"})
-	items, err := GetAllItems(SocialQuery{ListIDs: []string{"gailw-list"}, WorkspaceURL: wsURL})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) < 2 {
-		t.Errorf("expected at least 2 (list + workspace), got %d", len(items))
 	}
 }
 
@@ -1240,48 +1020,6 @@ func TestUpdateAncestorInteractions_deepChain(t *testing.T) {
 	counts, _ := RefreshInteractionCounts(itemsTestRepoURL, "anc_c1__1234", itemsTestBranch)
 	if counts.Comments < 1 {
 		t.Errorf("c1 Comments = %d, expected >= 1 from ancestor walk", counts.Comments)
-	}
-}
-
-func TestGetSocialItems_listIDsAndWorkspaceURL(t *testing.T) {
-	setupTestDB(t)
-	wsURL := "https://github.com/ws/items"
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"gsi-lw-list", "Test", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"gsi-lw-list", itemsTestRepoURL, itemsTestBranch)
-		return nil
-	})
-	insertItemsTestCommit(t, itemsTestRepoURL, "gsilw_list_1")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "gsilw_list_1", Branch: itemsTestBranch, Type: "post"})
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash: "gsilw_ws___1", RepoURL: wsURL, Branch: itemsTestBranch,
-		AuthorName: "T", AuthorEmail: "t@t.com", Message: "t",
-		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "gsilw_ws___1", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetSocialItems(SocialQuery{ListIDs: []string{"gsi-lw-list"}, WorkspaceURL: wsURL})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) < 2 {
-		t.Errorf("expected at least 2, got %d", len(items))
-	}
-}
-
-func TestGetSocialItems_reposWithoutBranch(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "rpnb12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "rpnb12345678", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetSocialItems(SocialQuery{Repos: []RepoRef{{URL: itemsTestRepoURL}}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
 	}
 }
 
@@ -1611,24 +1349,6 @@ func TestGetListPosts_followerMark(t *testing.T) {
 	}
 }
 
-func TestGetAllItems_forFollowerCheck(t *testing.T) {
-	setupTestDB(t)
-	wsURL := "https://github.com/ws/allfc"
-	insertItemsTestCommit(t, itemsTestRepoURL, "afc_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "afc_12345678", Branch: itemsTestBranch, Type: "post"})
-	_ = InsertFollower(itemsTestRepoURL, wsURL, "list1", "", time.Now())
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, ForFollowerCheck: wsURL})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-	if !items[0].FollowsWorkspace {
-		t.Error("FollowsWorkspace should be true")
-	}
-}
-
 func TestInsertSocialItem_repostAncestorInteraction(t *testing.T) {
 	setupTestDB(t)
 	// root -> c1 -> repost (should count as repost on c1 ancestor)
@@ -1706,66 +1426,6 @@ func TestGetTimeline_withLimit(t *testing.T) {
 	}
 }
 
-func TestGetSocialItems_withReposFilter(t *testing.T) {
-	setupTestDB(t)
-	repoA := "https://github.com/repos/filter-a"
-	repoB := "https://github.com/repos/filter-b"
-	insertItemsTestCommit(t, repoA, "rfa_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repoA, Hash: "rfa_12345678", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, repoB, "rfb_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repoB, Hash: "rfb_12345678", Branch: "dev", Type: "post"})
-
-	// Filter with branch
-	items, err := GetSocialItems(SocialQuery{
-		Repos: []RepoRef{{URL: repoA, Branch: itemsTestBranch}},
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-
-	// Filter without branch
-	items2, err := GetSocialItems(SocialQuery{
-		Repos: []RepoRef{{URL: repoB}},
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items2) != 1 {
-		t.Errorf("expected 1 without branch filter, got %d", len(items2))
-	}
-}
-
-func TestGetSocialItems_withListIDsAndWorkspace(t *testing.T) {
-	setupTestDB(t)
-	wsURL := "https://github.com/lidws/workspace"
-	listRepo := "https://github.com/lidws/listed"
-	insertItemsTestCommit(t, wsURL, "liw_12345678")
-	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "liw_12345678", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, listRepo, "lir_12345678")
-	InsertSocialItem(SocialItem{RepoURL: listRepo, Hash: "lir_12345678", Branch: itemsTestBranch, Type: "post"})
-	// Insert list with repo
-	_ = cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"lid-list", "LID", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"lid-list", listRepo, itemsTestBranch)
-		return nil
-	})
-	items, err := GetSocialItems(SocialQuery{
-		ListIDs:      []string{"lid-list"},
-		WorkspaceURL: wsURL,
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) < 2 {
-		t.Errorf("expected at least 2 (workspace + list), got %d", len(items))
-	}
-}
-
 func TestGetSocialItems_withOriginalFilter(t *testing.T) {
 	setupTestDB(t)
 	origRepo := "https://github.com/orig/filter"
@@ -1797,97 +1457,6 @@ func TestGetSocialItems_withOriginalFilter(t *testing.T) {
 	}
 	if len(items2) != 1 {
 		t.Errorf("expected 1 without branch, got %d", len(items2))
-	}
-}
-
-func TestGetSocialItems_withOffset(t *testing.T) {
-	setupTestDB(t)
-	for i := 0; i < 3; i++ {
-		h := fmt.Sprintf("ofs_%08d", i)
-		insertItemsTestCommit(t, itemsTestRepoURL, h)
-		InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: h, Branch: itemsTestBranch, Type: "post"})
-	}
-	items, err := GetSocialItems(SocialQuery{RepoURL: itemsTestRepoURL, Offset: 1, Limit: 2})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) > 2 {
-		t.Errorf("expected at most 2 with limit+offset, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_withBranchFilter(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "brf_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "brf_12345678", Branch: "feature", Type: "post"})
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, Branch: "feature"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	for _, item := range items {
-		if item.Branch != "feature" {
-			t.Errorf("expected branch 'feature', got %q", item.Branch)
-		}
-	}
-}
-
-func TestGetAllItems_withRepoURLs(t *testing.T) {
-	setupTestDB(t)
-	repo1 := "https://github.com/urls/repo1"
-	repo2 := "https://github.com/urls/repo2"
-	insertItemsTestCommit(t, repo1, "ur1_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repo1, Hash: "ur1_12345678", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, repo2, "ur2_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repo2, Hash: "ur2_12345678", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetAllItems(SocialQuery{RepoURLs: []string{repo1, repo2}})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 2 {
-		t.Errorf("expected 2, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_withListIDsAndWorkspace(t *testing.T) {
-	setupTestDB(t)
-	wsURL := "https://github.com/allws/workspace"
-	listRepo := "https://github.com/allws/listed"
-	insertItemsTestCommit(t, wsURL, "alw_12345678")
-	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "alw_12345678", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, listRepo, "alr_12345678")
-	InsertSocialItem(SocialItem{RepoURL: listRepo, Hash: "alr_12345678", Branch: itemsTestBranch, Type: "post"})
-	_ = cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"all-list", "All", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"all-list", listRepo, itemsTestBranch)
-		return nil
-	})
-	items, err := GetAllItems(SocialQuery{
-		ListIDs:      []string{"all-list"},
-		WorkspaceURL: wsURL,
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) < 2 {
-		t.Errorf("expected at least 2, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_withOffset(t *testing.T) {
-	setupTestDB(t)
-	for i := 0; i < 3; i++ {
-		h := fmt.Sprintf("aof_%08d", i)
-		insertItemsTestCommit(t, itemsTestRepoURL, h)
-		InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: h, Branch: itemsTestBranch, Type: "post"})
-	}
-	items, err := GetAllItems(SocialQuery{RepoURL: itemsTestRepoURL, Offset: 1, Limit: 1})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) > 1 {
-		t.Errorf("expected at most 1 with offset+limit, got %d", len(items))
 	}
 }
 
@@ -1930,44 +1499,3 @@ func TestInsertSocialItem_upgradeFromVirtual(t *testing.T) {
 	}
 }
 
-func TestGetSocialItems_withListIDOnly(t *testing.T) {
-	setupTestDB(t)
-	repo := "https://github.com/listonly/repo"
-	insertItemsTestCommit(t, repo, "lio_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repo, Hash: "lio_12345678", Branch: itemsTestBranch, Type: "post"})
-	_ = cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"lio-list", "LIO", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"lio-list", repo, itemsTestBranch)
-		return nil
-	})
-	items, err := GetSocialItems(SocialQuery{ListID: "lio-list"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}
-
-func TestGetAllItems_withListIDOnly(t *testing.T) {
-	setupTestDB(t)
-	repo := "https://github.com/alio/repo"
-	insertItemsTestCommit(t, repo, "ali_12345678")
-	InsertSocialItem(SocialItem{RepoURL: repo, Hash: "ali_12345678", Branch: itemsTestBranch, Type: "post"})
-	_ = cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
-			"ali-list", "ALI", "local", "0.1.0", "/tmp")
-		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
-			"ali-list", repo, itemsTestBranch)
-		return nil
-	})
-	items, err := GetAllItems(SocialQuery{ListID: "ali-list"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
-	}
-}

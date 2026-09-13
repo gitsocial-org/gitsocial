@@ -371,7 +371,7 @@ func CountListPosts(listID string) int {
 func getMyPosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
-	items, err := GetAllItems(SocialQuery{
+	items, err := GetSocialItems(SocialQuery{
 		RepoURL:          workspaceURL,
 		Limit:            opts.Limit,
 		Cursor:           opts.Cursor,
@@ -396,7 +396,7 @@ func getMyPosts(workdir string, workspaceURL string, opts *GetPostsOptions) Resu
 
 // getRepositoryPosts retrieves posts from a specific external repository.
 func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
-	items, err := GetAllItems(SocialQuery{
+	items, err := GetSocialItems(SocialQuery{
 		RepoURL:          repoURL,
 		Branch:           branch,
 		Limit:            opts.Limit,
@@ -425,7 +425,7 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 func getWorkspaceRepository(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
-	items, err := GetAllItems(SocialQuery{
+	items, err := GetSocialItems(SocialQuery{
 		RepoURL:          workspaceURL,
 		Limit:            opts.Limit,
 		Cursor:           opts.Cursor,

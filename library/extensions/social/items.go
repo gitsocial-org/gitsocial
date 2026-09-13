@@ -469,144 +469,80 @@ func GetSocialItemByRef(refStr string, workspaceURL string) (*SocialItem, error)
 	return GetSocialItem(ref.RepoURL, ref.Hash, ref.Branch, workspaceURL)
 }
 
-type RepoRef struct {
-	URL    string
-	Branch string
-}
-
 type SocialQuery struct {
 	Types            []string
 	RepoURL          string
-	RepoURLs         []string  // Multiple repo URLs (for external list posts)
-	Repos            []RepoRef // URL+branch pairs for filtering
 	Branch           string
-	ListID           string
-	ListIDs          []string
-	WorkspaceURL     string
 	OriginalRepoURL  string
 	OriginalHash     string
 	OriginalBranch   string
 	Since            *time.Time
 	Until            *time.Time
 	Limit            int
-	Offset           int
-	Cursor           string // RFC3339 timestamp — items older than this (keyset pagination)
-	ForFollowerCheck string // Workspace URL to check if repos follow (for gold color)
+	Cursor           string // RFC3339 timestamp, items older than this (keyset pagination)
+	ForFollowerCheck string // Workspace URL the FollowsYou mark is read against
+}
+
+// socialWhere builds the WHERE clauses and args every social item query shares.
+func socialWhere(q SocialQuery) ([]string, []interface{}) {
+	var where []string
+	var args []interface{}
+
+	if len(q.Types) > 0 {
+		where = append(where, "v.type IN ("+placeholders(len(q.Types))+")")
+		for _, t := range q.Types {
+			args = append(args, t)
+		}
+	}
+
+	if q.RepoURL != "" {
+		where = append(where, "v.repo_url = ?", "v.branch NOT LIKE 'refs/gitmsg/%'")
+		args = append(args, q.RepoURL)
+	}
+
+	if q.Branch != "" {
+		where = append(where, "v.branch = ?")
+		args = append(args, q.Branch)
+	}
+
+	if q.OriginalRepoURL != "" && q.OriginalHash != "" {
+		if q.OriginalBranch != "" {
+			where = append(where, "v.original_repo_url = ? AND v.original_hash = ? AND v.original_branch = ?")
+			args = append(args, q.OriginalRepoURL, q.OriginalHash, q.OriginalBranch)
+		} else {
+			where = append(where, "v.original_repo_url = ? AND v.original_hash = ?")
+			args = append(args, q.OriginalRepoURL, q.OriginalHash)
+		}
+	}
+
+	if q.Since != nil {
+		where = append(where, "v.timestamp >= ?")
+		args = append(args, q.Since.Format(time.RFC3339))
+	}
+
+	if q.Until != nil {
+		where = append(where, "v.timestamp <= ?")
+		args = append(args, q.Until.Format(time.RFC3339))
+	}
+
+	if q.Cursor != "" {
+		where = append(where, "v.timestamp < ?")
+		args = append(args, q.Cursor)
+	}
+
+	where = append(where, "NOT v.is_edit_commit", "NOT v.is_retracted", "(v.stale_since IS NULL OR v.is_virtual = 1)")
+	return where, args
 }
 
 // GetSocialItems queries social items with filtering and pagination.
 func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		var args []interface{}
-		args = append(args, q.ForFollowerCheck)
-		var where []string
-
-		if len(q.Types) > 0 {
-			ph := strings.Repeat("?,", len(q.Types))
-			ph = ph[:len(ph)-1]
-			where = append(where, "v.type IN ("+ph+")")
-			for _, t := range q.Types {
-				args = append(args, t)
-			}
-		}
-
-		if q.RepoURL != "" {
-			where = append(where, "v.repo_url = ?")
-			args = append(args, q.RepoURL)
-		}
-
-		if len(q.RepoURLs) > 0 {
-			ph := strings.Repeat("?,", len(q.RepoURLs))
-			ph = ph[:len(ph)-1]
-			where = append(where, "v.repo_url IN ("+ph+")")
-			for _, url := range q.RepoURLs {
-				args = append(args, url)
-			}
-		}
-
-		if len(q.Repos) > 0 {
-			var repoClauses []string
-			for _, r := range q.Repos {
-				if r.Branch != "" {
-					repoClauses = append(repoClauses, "(v.repo_url = ? AND v.branch = ?)")
-					args = append(args, r.URL, r.Branch)
-				} else {
-					repoClauses = append(repoClauses, "v.repo_url = ?")
-					args = append(args, r.URL)
-				}
-			}
-			where = append(where, "("+strings.Join(repoClauses, " OR ")+")")
-		}
-
-		if q.Branch != "" {
-			where = append(where, "v.branch = ?")
-			args = append(args, q.Branch)
-		}
-
-		if q.ListID != "" {
-			where = append(where, "(v.repo_url, v.branch) IN (SELECT repo_url, branch FROM core_list_repositories WHERE list_id = ?)")
-			args = append(args, q.ListID)
-		}
-
-		if len(q.ListIDs) > 0 || q.WorkspaceURL != "" {
-			var orClauses []string
-			if len(q.ListIDs) > 0 {
-				ph := strings.Repeat("?,", len(q.ListIDs))
-				ph = ph[:len(ph)-1]
-				orClauses = append(orClauses, "(v.repo_url, v.branch) IN (SELECT repo_url, branch FROM core_list_repositories WHERE list_id IN ("+ph+"))")
-				for _, id := range q.ListIDs {
-					args = append(args, id)
-				}
-			}
-			if q.WorkspaceURL != "" {
-				orClauses = append(orClauses, "v.repo_url = ?")
-				args = append(args, q.WorkspaceURL)
-			}
-			where = append(where, "("+strings.Join(orClauses, " OR ")+")")
-		}
-
-		if q.OriginalRepoURL != "" && q.OriginalHash != "" {
-			if q.OriginalBranch != "" {
-				where = append(where, "v.original_repo_url = ? AND v.original_hash = ? AND v.original_branch = ?")
-				args = append(args, q.OriginalRepoURL, q.OriginalHash, q.OriginalBranch)
-			} else {
-				where = append(where, "v.original_repo_url = ? AND v.original_hash = ?")
-				args = append(args, q.OriginalRepoURL, q.OriginalHash)
-			}
-		}
-
-		if q.Since != nil {
-			where = append(where, "v.timestamp >= ?")
-			args = append(args, q.Since.Format(time.RFC3339))
-		}
-
-		if q.Until != nil {
-			where = append(where, "v.timestamp <= ?")
-			args = append(args, q.Until.Format(time.RFC3339))
-		}
-
-		if q.Cursor != "" {
-			where = append(where, "v.timestamp < ?")
-			args = append(args, q.Cursor)
-		}
-
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
-		where = append(where, "(v.stale_since IS NULL OR v.is_virtual = 1)")
-
-		query := baseSelectFromView
-		if len(where) > 0 {
-			query += " WHERE " + strings.Join(where, " AND ")
-		}
-		query += " ORDER BY v.timestamp DESC"
-
+		where, whereArgs := socialWhere(q)
+		args := append([]interface{}{q.ForFollowerCheck}, whereArgs...)
+		query := baseSelectFromView + " WHERE " + strings.Join(where, " AND ") + " ORDER BY v.timestamp DESC"
 		if q.Limit > 0 {
 			query += " LIMIT ?"
 			args = append(args, q.Limit)
-		}
-		if q.Offset > 0 && q.Cursor == "" {
-			query += " OFFSET ?"
-			args = append(args, q.Offset)
 		}
 
 		rows, err := db.Query(query, args...)
@@ -739,139 +675,16 @@ func GetTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) 
 	})
 }
 
-// buildAllItemsWhere builds WHERE clause and args for social item queries.
-func buildAllItemsWhere(q SocialQuery) ([]string, []interface{}) {
-	var args []interface{}
-	var where []string
-
-	if q.RepoURL != "" {
-		where = append(where, "v.repo_url = ?")
-		args = append(args, q.RepoURL)
-		where = append(where, "v.branch NOT LIKE 'refs/gitmsg/%'")
-	}
-
-	if q.Branch != "" {
-		where = append(where, "v.branch = ?")
-		args = append(args, q.Branch)
-	}
-
-	if len(q.RepoURLs) > 0 {
-		ph := strings.Repeat("?,", len(q.RepoURLs))
-		ph = ph[:len(ph)-1]
-		where = append(where, "v.repo_url IN ("+ph+")")
-		for _, url := range q.RepoURLs {
-			args = append(args, url)
-		}
-	}
-
-	if q.ListID != "" {
-		where = append(where, "(v.repo_url, v.branch) IN (SELECT repo_url, branch FROM core_list_repositories WHERE list_id = ?)")
-		args = append(args, q.ListID)
-	}
-
-	if len(q.ListIDs) > 0 || q.WorkspaceURL != "" {
-		var orClauses []string
-		if len(q.ListIDs) > 0 {
-			ph := strings.Repeat("?,", len(q.ListIDs))
-			ph = ph[:len(ph)-1]
-			orClauses = append(orClauses, "(v.repo_url, v.branch) IN (SELECT repo_url, branch FROM core_list_repositories WHERE list_id IN ("+ph+"))")
-			for _, id := range q.ListIDs {
-				args = append(args, id)
-			}
-		}
-		if q.WorkspaceURL != "" {
-			orClauses = append(orClauses, "(v.repo_url = ? AND v.branch NOT LIKE 'refs/gitmsg/%')")
-			args = append(args, q.WorkspaceURL)
-		}
-		where = append(where, "("+strings.Join(orClauses, " OR ")+")")
-	}
-
-	if q.Since != nil {
-		where = append(where, "v.timestamp >= ?")
-		args = append(args, q.Since.Format(time.RFC3339))
-	}
-
-	if q.Until != nil {
-		where = append(where, "v.timestamp <= ?")
-		args = append(args, q.Until.Format(time.RFC3339))
-	}
-
-	if q.Cursor != "" {
-		where = append(where, "v.timestamp < ?")
-		args = append(args, q.Cursor)
-	}
-
-	if len(q.Types) > 0 {
-		ph := strings.Repeat("?,", len(q.Types))
-		ph = ph[:len(ph)-1]
-		where = append(where, "v.type IN ("+ph+")")
-		for _, t := range q.Types {
-			args = append(args, t)
-		}
-	}
-
-	where = append(where, "NOT v.is_edit_commit")
-	where = append(where, "NOT v.is_retracted")
-	where = append(where, "(v.stale_since IS NULL OR v.is_virtual = 1)")
-
-	return where, args
-}
-
-// GetAllItemsCount returns the total count of items matching the query (ignoring Limit/Cursor/Offset).
+// GetAllItemsCount returns the total count of items matching the query (ignoring Limit and Cursor).
 func GetAllItemsCount(q SocialQuery) (int, error) {
 	q.Limit = 0
 	q.Cursor = ""
-	q.Offset = 0
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		where, args := buildAllItemsWhere(q)
-		query := "SELECT COUNT(*) FROM social_items_resolved v"
-		if len(where) > 0 {
-			query += " WHERE " + strings.Join(where, " AND ")
-		}
+		where, args := socialWhere(q)
+		query := "SELECT COUNT(*) FROM social_items_resolved v WHERE " + strings.Join(where, " AND ")
 		var count int
 		err := db.QueryRow(query, args...).Scan(&count)
 		return count, err
-	})
-}
-
-// GetAllItems retrieves all social items matching the query parameters.
-func GetAllItems(q SocialQuery) ([]SocialItem, error) {
-	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		where, whereArgs := buildAllItemsWhere(q)
-		var args []interface{}
-		args = append(args, q.ForFollowerCheck)
-		args = append(args, whereArgs...)
-
-		query := baseSelectFromView
-		if len(where) > 0 {
-			query += " WHERE " + strings.Join(where, " AND ")
-		}
-		query += " ORDER BY v.timestamp DESC"
-
-		if q.Limit > 0 {
-			query += " LIMIT ?"
-			args = append(args, q.Limit)
-		}
-		if q.Offset > 0 && q.Cursor == "" {
-			query += " OFFSET ?"
-			args = append(args, q.Offset)
-		}
-
-		rows, err := db.Query(query, args...)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		var items []SocialItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, *item)
-		}
-		return items, rows.Err()
 	})
 }
 

@@ -283,6 +283,38 @@ func TestGetPostsIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("GetPosts_workspaceScopesSkipStateRefs", func(t *testing.T) {
+		workdir := initWorkspace(t)
+		post := CreatePost(workdir, "Workspace post", nil)
+		if !post.Success {
+			t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+		}
+		workspaceURL := gitmsg.ResolveRepoURL(workdir)
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: "d44400000001", RepoURL: workspaceURL, Branch: "refs/gitmsg/social/config",
+			AuthorName: "Test User", AuthorEmail: "test@test.com", Message: "config", Timestamp: time.Now(),
+		}}); err != nil {
+			t.Fatalf("InsertCommits() error = %v", err)
+		}
+		if err := InsertSocialItem(SocialItem{
+			RepoURL: workspaceURL, Hash: "d44400000001", Branch: "refs/gitmsg/social/config", Type: "post",
+		}); err != nil {
+			t.Fatalf("InsertSocialItem() error = %v", err)
+		}
+
+		for _, scope := range []string{"repository:workspace", "repository:my"} {
+			result := GetPosts(workdir, scope, &GetPostsOptions{Limit: 50})
+			if !result.Success {
+				t.Fatalf("GetPosts(%s) failed: %s", scope, result.Error.Message)
+			}
+			for _, p := range result.Data {
+				if p.Display.CommitHash == "d44400000001" {
+					t.Errorf("GetPosts(%s) returned a refs/gitmsg state-ref commit", scope)
+				}
+			}
+		}
+	})
+
 	t.Run("GetPosts_singlePost", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
@@ -751,7 +783,7 @@ func TestSyncWorkspace(t *testing.T) {
 
 	// Verify items are queryable
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	items, err := GetAllItems(SocialQuery{RepoURL: workspaceURL, Limit: 100})
+	items, err := GetSocialItems(SocialQuery{RepoURL: workspaceURL, Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
