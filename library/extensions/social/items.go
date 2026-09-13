@@ -627,63 +627,74 @@ func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
 	})
 }
 
-// GetTimeline retrieves posts from subscribed lists, workspace, and registered forks combined.
-func GetTimeline(listIDs []string, workspaceURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
-	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		var unions []string
-		var args []interface{}
-		gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
-		editFilter := " AND NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)"
+// placeholders returns n comma-separated SQL placeholders.
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+// timelineWheres returns one WHERE clause per timeline source, with its args:
+// the subscribed lists, the workspace, and the registered forks.
+func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cursor string) ([]string, [][]interface{}) {
+	gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
+	editFilter := " AND NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)"
+	if cursor != "" {
+		editFilter += " AND v.timestamp < ?"
+	}
+	var wheres []string
+	var args [][]interface{}
+	appendSource := func(where string, sourceArgs []interface{}) {
 		if cursor != "" {
-			editFilter += " AND v.timestamp < ?"
+			sourceArgs = append(sourceArgs, cursor)
 		}
+		wheres = append(wheres, where)
+		args = append(args, sourceArgs)
+	}
 
-		if len(listIDs) > 0 {
-			ph := strings.Repeat("?,", len(listIDs))
-			ph = ph[:len(ph)-1]
-			unions = append(unions, baseSelectFromView+" WHERE v.repo_url IN (SELECT repo_url FROM core_list_repositories WHERE list_id IN ("+ph+"))"+gitmsgFilter+editFilter)
-			args = append(args, workspaceURL)
-			for _, id := range listIDs {
-				args = append(args, id)
-			}
-			if cursor != "" {
-				args = append(args, cursor)
-			}
+	if len(listIDs) > 0 {
+		listArgs := make([]interface{}, 0, len(listIDs)+1)
+		for _, id := range listIDs {
+			listArgs = append(listArgs, id)
 		}
+		appendSource(" WHERE v.repo_url IN (SELECT repo_url FROM core_list_repositories WHERE list_id IN ("+
+			placeholders(len(listIDs))+"))"+gitmsgFilter+editFilter, listArgs)
+	}
 
-		if workspaceURL != "" {
-			unions = append(unions, baseSelectFromView+" WHERE v.repo_url = ?"+gitmsgFilter+editFilter)
-			args = append(args, workspaceURL)
-			args = append(args, workspaceURL)
-			if cursor != "" {
-				args = append(args, cursor)
-			}
+	if workspaceURL != "" {
+		appendSource(" WHERE v.repo_url = ?"+gitmsgFilter+editFilter, []interface{}{workspaceURL})
+	}
+
+	if len(forkURLs) > 0 {
+		// A fork fetches the workspace's gitmsg/* branches verbatim, so only a fork commit whose hash is not in the workspace is new.
+		dedup := " AND NOT EXISTS (SELECT 1 FROM core_commits c2 WHERE c2.hash = v.hash AND c2.repo_url = ?)"
+		forkArgs := make([]interface{}, 0, len(forkURLs)+2)
+		for _, u := range forkURLs {
+			forkArgs = append(forkArgs, u)
 		}
+		forkArgs = append(forkArgs, workspaceURL)
+		appendSource(" WHERE v.repo_url IN ("+placeholders(len(forkURLs))+")"+gitmsgFilter+dedup+editFilter, forkArgs)
+	}
 
-		if len(forkURLs) > 0 {
-			ph := strings.Repeat("?,", len(forkURLs))
-			ph = ph[:len(ph)-1]
-			// Forks fetch our gitmsg/* branches verbatim, so most fork commits
-			// are duplicates of workspace commits under a different repo_url.
-			// Only surface fork commits whose hash isn't already in the workspace.
-			dedup := " AND NOT EXISTS (SELECT 1 FROM core_commits c2 WHERE c2.hash = v.hash AND c2.repo_url = ?)"
-			unions = append(unions, baseSelectFromView+" WHERE v.repo_url IN ("+ph+")"+gitmsgFilter+dedup+editFilter)
-			args = append(args, workspaceURL)
-			for _, u := range forkURLs {
-				args = append(args, u)
-			}
-			args = append(args, workspaceURL)
-			if cursor != "" {
-				args = append(args, cursor)
-			}
-		}
+	return wheres, args
+}
 
-		if len(unions) == 0 {
+// GetTimeline retrieves posts from subscribed lists, workspace, and registered
+// forks combined. followerURL is the workspace the FollowsYou mark is read
+// against, which a list scope sets while leaving workspaceURL empty.
+func GetTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
+	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
+		wheres, whereArgs := timelineWheres(listIDs, workspaceURL, forkURLs, cursor)
+		if len(wheres) == 0 {
 			return nil, nil
 		}
+		unions := make([]string, 0, len(wheres))
+		var args []interface{}
+		for i, where := range wheres {
+			unions = append(unions, baseSelectFromView+where)
+			args = append(args, followerURL)
+			args = append(args, whereArgs[i]...)
+		}
 
-		query := strings.Join(unions, " UNION ")
-		query += " ORDER BY timestamp DESC"
+		query := strings.Join(unions, " UNION ") + " ORDER BY timestamp DESC"
 		if limit > 0 {
 			query += " LIMIT ?"
 			args = append(args, limit)
@@ -710,38 +721,15 @@ func GetTimeline(listIDs []string, workspaceURL string, forkURLs []string, limit
 // GetTimelineCount returns the total number of timeline items (without pagination).
 func GetTimelineCount(listIDs []string, workspaceURL string, forkURLs []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var unions []string
-		var args []interface{}
-		gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
-		editFilter := " AND NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)"
-
-		if len(listIDs) > 0 {
-			ph := strings.Repeat("?,", len(listIDs))
-			ph = ph[:len(ph)-1]
-			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v WHERE v.repo_url IN (SELECT repo_url FROM core_list_repositories WHERE list_id IN ("+ph+"))"+gitmsgFilter+editFilter)
-			for _, id := range listIDs {
-				args = append(args, id)
-			}
-		}
-
-		if workspaceURL != "" {
-			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v WHERE v.repo_url = ?"+gitmsgFilter+editFilter)
-			args = append(args, workspaceURL)
-		}
-
-		if len(forkURLs) > 0 {
-			ph := strings.Repeat("?,", len(forkURLs))
-			ph = ph[:len(ph)-1]
-			dedup := " AND NOT EXISTS (SELECT 1 FROM core_commits c2 WHERE c2.hash = v.hash AND c2.repo_url = ?)"
-			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v WHERE v.repo_url IN ("+ph+")"+gitmsgFilter+dedup+editFilter)
-			for _, u := range forkURLs {
-				args = append(args, u)
-			}
-			args = append(args, workspaceURL)
-		}
-
-		if len(unions) == 0 {
+		wheres, whereArgs := timelineWheres(listIDs, workspaceURL, forkURLs, "")
+		if len(wheres) == 0 {
 			return 0, nil
+		}
+		unions := make([]string, 0, len(wheres))
+		var args []interface{}
+		for i, where := range wheres {
+			unions = append(unions, "SELECT v.repo_url, v.hash, v.branch FROM social_items_resolved v"+where)
+			args = append(args, whereArgs[i]...)
 		}
 
 		query := "SELECT COUNT(*) FROM (" + strings.Join(unions, " UNION ") + ")"

@@ -627,7 +627,7 @@ func TestGetTimeline(t *testing.T) {
 	insertItemsTestCommit(t, wsURL, "tl_112345678")
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tl_112345678", Branch: itemsTestBranch, Type: "post"})
 
-	items, err := GetTimeline(nil, wsURL, nil, 10, "")
+	items, err := GetTimeline(nil, wsURL, wsURL, nil, 10, "")
 	if err != nil {
 		t.Fatalf("GetTimeline() error = %v", err)
 	}
@@ -638,7 +638,7 @@ func TestGetTimeline(t *testing.T) {
 
 func TestGetTimeline_empty(t *testing.T) {
 	setupTestDB(t)
-	items, err := GetTimeline(nil, "", nil, 10, "")
+	items, err := GetTimeline(nil, "", "", nil, 10, "")
 	if err != nil {
 		t.Fatalf("GetTimeline(empty) error = %v", err)
 	}
@@ -1332,7 +1332,7 @@ func TestGetTimeline_withListIDs(t *testing.T) {
 	})
 	insertItemsTestCommit(t, itemsTestRepoURL, "tlli12345678")
 	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "tlli12345678", Branch: itemsTestBranch, Type: "post"})
-	items, err := GetTimeline([]string{"tl-list-ids"}, "", nil, 10, "")
+	items, err := GetTimeline([]string{"tl-list-ids"}, "", "", nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1361,7 +1361,7 @@ func TestGetTimeline_withListIDsAndWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: "tlbth_ws___1", Branch: "main", Type: "post"})
-	items, err := GetTimeline([]string{"tl-both"}, wsURL, nil, 10, "")
+	items, err := GetTimeline([]string{"tl-both"}, wsURL, wsURL, nil, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1404,7 +1404,7 @@ func TestGetTimeline_withForks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := GetTimeline(nil, wsURL, []string{forkURL}, 10, "")
+	items, err := GetTimeline(nil, wsURL, wsURL, []string{forkURL}, 10, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1581,6 +1581,36 @@ func TestGetSocialItems_forFollowerCheck(t *testing.T) {
 	}
 }
 
+// TestGetListPosts_followerMark pins invariant 4: a list scope marks a follower.
+func TestGetListPosts_followerMark(t *testing.T) {
+	setupTestDB(t)
+	wsURL := "https://github.com/ws/listfollow"
+	repoURL := "https://github.com/list/follower"
+	cache.ExecLocked(func(db *sql.DB) error {
+		db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
+			"follow-list", "Follow", "local", "0.1.0", "/tmp")
+		db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
+			"follow-list", repoURL, itemsTestBranch)
+		return nil
+	})
+	insertItemsTestCommit(t, repoURL, "c11100000001")
+	InsertSocialItem(SocialItem{RepoURL: repoURL, Hash: "c11100000001", Branch: itemsTestBranch, Type: "post"})
+	if err := InsertFollower(repoURL, wsURL, "follow-list", "", time.Now()); err != nil {
+		t.Fatalf("InsertFollower() error = %v", err)
+	}
+
+	result := getListPosts("follow-list", wsURL, &GetPostsOptions{})
+	if !result.Success {
+		t.Fatalf("getListPosts() failed: %s", result.Error.Message)
+	}
+	if len(result.Data) != 1 {
+		t.Fatalf("posts = %d, want 1", len(result.Data))
+	}
+	if !result.Data[0].Display.FollowsYou {
+		t.Error("FollowsYou = false for a list post from a follower, want true")
+	}
+}
+
 func TestGetAllItems_forFollowerCheck(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/allfc"
@@ -1650,7 +1680,7 @@ func TestInsertSocialItem_quoteAncestorInteraction(t *testing.T) {
 func TestGetTimeline_noUnionsReturnsNil(t *testing.T) {
 	setupTestDB(t)
 	// No list IDs and no workspace URL → empty unions → returns nil
-	items, err := GetTimeline(nil, "", nil, 0, "")
+	items, err := GetTimeline(nil, "", "", nil, 0, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -1667,7 +1697,7 @@ func TestGetTimeline_withLimit(t *testing.T) {
 		insertItemsTestCommit(t, wsURL, h)
 		InsertSocialItem(SocialItem{RepoURL: wsURL, Hash: h, Branch: itemsTestBranch, Type: "post"})
 	}
-	items, err := GetTimeline(nil, wsURL, nil, 2, "")
+	items, err := GetTimeline(nil, wsURL, wsURL, nil, 2, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}

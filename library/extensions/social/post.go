@@ -316,7 +316,7 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 
 	listIDs, _ := cache.GetListIDs(gitRoot)
 	forkURLs := gitmsg.GetForks(workdir)
-	items, err := GetTimeline(listIDs, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
+	items, err := GetTimeline(listIDs, workspaceURL, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
 	if err != nil {
 		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get timeline", err)
 	}
@@ -447,15 +447,15 @@ func getWorkspaceRepository(workdir string, workspaceURL string, opts *GetPostsO
 }
 
 // getListPosts retrieves posts from repositories in a specific list.
-func getListPosts(listID string, _ string, opts *GetPostsOptions) Result[[]Post] {
+func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
 	limit := 0
 	cursor := ""
 	if opts != nil {
 		limit = opts.Limit
 		cursor = opts.Cursor
 	}
-	// Don't include workspace posts - only show posts from repos in the list
-	items, err := GetTimeline([]string{listID}, "", nil, limit, cursor)
+	// The empty workspace leaves workspace posts out of a list scope; the follower mark still reads against it.
+	items, err := GetTimeline([]string{listID}, "", workspaceURL, nil, limit, cursor)
 	if err != nil {
 		return FailureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
 	}
