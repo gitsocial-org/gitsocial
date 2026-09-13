@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -756,6 +757,117 @@ func TestRefreshInteractionCounts_withInteractions(t *testing.T) {
 	}
 	if counts.Reposts != 1 {
 		t.Errorf("Reposts = %d, want 1", counts.Reposts)
+	}
+}
+
+// commentsFor reads a post's comment count from its ref.
+func commentsFor(t *testing.T, postID string) int {
+	t.Helper()
+	parsed := protocol.ParseRef(postID)
+	counts, err := RefreshInteractionCounts(parsed.Repository, parsed.Value, parsed.Branch)
+	if err != nil {
+		t.Fatalf("RefreshInteractionCounts(%s) error = %v", postID, err)
+	}
+	return counts.Comments
+}
+
+// fetchSocialCommit ingests one commit the way the fetch path does.
+func fetchSocialCommit(t *testing.T, repoURL, branch, hash, message string) {
+	t.Helper()
+	now := time.Now()
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: repoURL, Branch: branch,
+		AuthorName: "Remote", AuthorEmail: "remote@test.com", Message: message, Timestamp: now,
+	}}); err != nil {
+		t.Fatalf("InsertCommits(%s) error = %v", hash, err)
+	}
+	gc := git.Commit{Hash: hash, Message: message, Author: "Remote", Email: "remote@test.com", Timestamp: now}
+	processSocialCommit(gc, protocol.ParseMessage(message), repoURL, branch)
+}
+
+// TestInteractionCounts_writePath pins invariant 2 on posts written locally.
+func TestInteractionCounts_writePath(t *testing.T) {
+	workdir := initWorkspace(t)
+	post := CreatePost(workdir, "Root post", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+	}
+	comment := CreateComment(workdir, post.Data.ID, "First", nil)
+	if !comment.Success {
+		t.Fatalf("CreateComment() failed: %s", comment.Error.Message)
+	}
+	if got := commentsFor(t, post.Data.ID); got != 1 {
+		t.Errorf("root comments after one comment = %d, want 1", got)
+	}
+	nested := CreateComment(workdir, comment.Data.ID, "Nested", nil)
+	if !nested.Success {
+		t.Fatalf("CreateComment(nested) failed: %s", nested.Error.Message)
+	}
+	if got := commentsFor(t, comment.Data.ID); got != 1 {
+		t.Errorf("comment comments after one reply = %d, want 1", got)
+	}
+	if got := commentsFor(t, post.Data.ID); got != 2 {
+		t.Errorf("root comments after a nested reply = %d, want 2", got)
+	}
+	if r := RetractPost(workdir, nested.Data.ID); !r.Success {
+		t.Fatalf("RetractPost(nested) failed: %s", r.Error.Message)
+	}
+	if got := commentsFor(t, comment.Data.ID); got != 0 {
+		t.Errorf("comment comments after the reply is retracted = %d, want 0", got)
+	}
+	if got := commentsFor(t, post.Data.ID); got != 1 {
+		t.Errorf("root comments after the reply is retracted = %d, want 1", got)
+	}
+	if r := RetractPost(workdir, comment.Data.ID); !r.Success {
+		t.Fatalf("RetractPost(comment) failed: %s", r.Error.Message)
+	}
+	if got := commentsFor(t, post.Data.ID); got != 0 {
+		t.Errorf("root comments after the comment is retracted = %d, want 0", got)
+	}
+}
+
+// TestInteractionCounts_fetchedRetraction pins invariant 2 on the fetch path.
+func TestInteractionCounts_fetchedRetraction(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/counts/fetched"
+	branch := "gitmsg/social"
+	fetchSocialCommit(t, repo, branch, "a11100000001", "Root post")
+	fetchSocialCommit(t, repo, branch, "a11100000002",
+		"Nice\n\n"+`GitMsg: ext="social"; type="comment"; original="#commit:a11100000001@gitmsg/social"; v="0.1.0"`)
+	counts, err := RefreshInteractionCounts(repo, "a11100000001", branch)
+	if err != nil {
+		t.Fatalf("RefreshInteractionCounts() error = %v", err)
+	}
+	if counts.Comments != 1 {
+		t.Fatalf("root comments after a fetched comment = %d, want 1", counts.Comments)
+	}
+	fetchSocialCommit(t, repo, branch, "a11100000003",
+		"\n\n"+`GitMsg: ext="social"; type="comment"; edits="#commit:a11100000002@gitmsg/social"; retracted="true"; original="#commit:a11100000001@gitmsg/social"; v="0.1.0"`)
+	counts, err = RefreshInteractionCounts(repo, "a11100000001", branch)
+	if err != nil {
+		t.Fatalf("RefreshInteractionCounts() error = %v", err)
+	}
+	if counts.Comments != 0 {
+		t.Errorf("root comments after a fetched retraction = %d, want 0", counts.Comments)
+	}
+}
+
+// TestInteractionCounts_forkMirrorCountsOnce pins one count per source hash.
+func TestInteractionCounts_forkMirrorCountsOnce(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/counts/origin"
+	fork := "https://github.com/counts/mirror"
+	branch := "gitmsg/social"
+	comment := "Nice\n\n" + `GitMsg: ext="social"; type="comment"; original="` + repo + `#commit:b22200000001@gitmsg/social"; v="0.1.0"`
+	fetchSocialCommit(t, repo, branch, "b22200000001", "Root post")
+	fetchSocialCommit(t, repo, branch, "b22200000002", comment)
+	fetchSocialCommit(t, fork, branch, "b22200000002", comment)
+	counts, err := RefreshInteractionCounts(repo, "b22200000001", branch)
+	if err != nil {
+		t.Fatalf("RefreshInteractionCounts() error = %v", err)
+	}
+	if counts.Comments != 1 {
+		t.Errorf("root comments with a fork mirror of the comment = %d, want 1", counts.Comments)
 	}
 }
 

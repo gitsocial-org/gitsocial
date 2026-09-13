@@ -8,6 +8,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -189,9 +190,8 @@ func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch strin
 	}
 }
 
-// InsertSocialItems batch-inserts multiple non-virtual social items in a single transaction.
-// Used by the workspace sync for reduced lock contention. Skips interaction count
-// updates since the workspace sync processes the full history (counts are rebuilt on fetch).
+// InsertSocialItems batch-inserts non-virtual social items in one transaction,
+// then recounts each target the batch names once.
 func InsertSocialItems(items []SocialItem) error {
 	if len(items) == 0 {
 		return nil
@@ -228,7 +228,21 @@ func InsertSocialItems(items []SocialItem) error {
 				return err
 			}
 		}
-		return tx.Commit()
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		var targets []itemKey
+		seen := make(map[itemKey]bool)
+		for _, item := range items {
+			for _, t := range interactionTargets(db, item) {
+				if !seen[t] {
+					seen[t] = true
+					targets = append(targets, t)
+				}
+			}
+		}
+		recountInteractions(db, targets)
+		return nil
 	})
 }
 
@@ -308,124 +322,127 @@ func InsertSocialItem(item SocialItem) error {
 			return err
 		}
 
-		// Edit commits belong to their canonical, so they must not bump counts.
-		isEdit := false
-		if item.Hash != "" && item.RepoURL != "" && item.Branch != "" {
-			var count int
-			if err := db.QueryRow(`SELECT COUNT(*) FROM core_commits_version WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
-				item.RepoURL, item.Hash, item.Branch).Scan(&count); err == nil {
-				isEdit = count > 0
-			}
-		}
-		// Gate counter increments on source hash, not on the composite PK: fork
-		// mirrors of a workspace commit have a distinct repo_url but the same
-		// hash, and only one of them should bump the target counter.
-		if !isEdit && item.Hash != "" {
-			res, err := db.Exec(`INSERT OR IGNORE INTO social_counted_sources (hash) VALUES (?)`, item.Hash)
-			if err == nil {
-				if n, _ := res.RowsAffected(); n == 1 {
-					updateInteractionCounts(db, item)
-				}
-			}
-		}
+		recountInteractions(db, interactionTargets(db, item))
 		return nil
 	})
 }
 
-// updateInteractionCounts increments counts for original and reply_to posts.
-func updateInteractionCounts(db *sql.DB, item SocialItem) {
-	// Increment original (root post)
-	if item.OriginalRepoURL.Valid && item.OriginalHash.Valid && item.OriginalBranch.Valid {
-		switch item.Type {
-		case "comment":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, comments) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET comments = comments + 1`,
-				item.OriginalRepoURL.String, item.OriginalHash.String, item.OriginalBranch.String)
-		case "repost":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, reposts) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET reposts = reposts + 1`,
-				item.OriginalRepoURL.String, item.OriginalHash.String, item.OriginalBranch.String)
-		case "quote":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, quotes) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET quotes = quotes + 1`,
-				item.OriginalRepoURL.String, item.OriginalHash.String, item.OriginalBranch.String)
+// itemKey is the composite key of a cached item.
+type itemKey struct{ repoURL, hash, branch string }
+
+// maxThreadDepth bounds the reply-to walk so a cyclic chain cannot loop.
+const maxThreadDepth = 50
+
+// recountInteractionsQuery counts a target's live comments, reposts and quotes.
+// Comments are the items whose original is the target or whose reply-to chain
+// reaches it; reposts and quotes are the items whose original is the target.
+const recountInteractionsQuery = `
+	WITH RECURSIVE descendants(repo_url, hash, branch) AS (
+		SELECT ?, ?, ?
+		UNION
+		SELECT s.repo_url, s.hash, s.branch FROM social_items s
+		JOIN descendants d ON s.reply_to_repo_url = d.repo_url AND s.reply_to_hash = d.hash AND s.reply_to_branch = d.branch
+	)
+	SELECT COUNT(DISTINCT CASE WHEN s.type = 'comment' THEN s.hash END),
+	       COUNT(DISTINCT CASE WHEN s.type = 'repost' AND s.original_hash = ? THEN s.hash END),
+	       COUNT(DISTINCT CASE WHEN s.type = 'quote' AND s.original_hash = ? THEN s.hash END)
+	FROM social_items s
+	JOIN core_commits c ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
+	WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND s.hash != ?
+	  AND ((s.original_repo_url = ? AND s.original_hash = ? AND s.original_branch = ?)
+	       OR (s.repo_url, s.hash, s.branch) IN (SELECT repo_url, hash, branch FROM descendants))
+`
+
+// recountInteractions sets each target's three counts from the rows that are
+// live now. The one writer of social_interactions: a count never drifts from
+// the items behind it, so an inserted, edited or retracted item needs no delta.
+func recountInteractions(db *sql.DB, targets []itemKey) {
+	for _, t := range targets {
+		var comments, reposts, quotes int
+		if err := db.QueryRow(recountInteractionsQuery,
+			t.repoURL, t.hash, t.branch, t.hash, t.hash, t.hash, t.repoURL, t.hash, t.branch,
+		).Scan(&comments, &reposts, &quotes); err != nil {
+			log.Warn("recount interactions failed", "hash", t.hash, "error", err)
+			continue
+		}
+		if _, err := db.Exec(`
+			INSERT INTO social_interactions (repo_url, hash, branch, comments, reposts, quotes)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
+				comments = excluded.comments, reposts = excluded.reposts, quotes = excluded.quotes`,
+			t.repoURL, t.hash, t.branch, comments, reposts, quotes); err != nil {
+			log.Warn("write interaction counts failed", "hash", t.hash, "error", err)
 		}
 	}
-
-	// Increment reply_to (direct parent) if different from original
-	if item.ReplyToRepoURL.Valid && item.ReplyToHash.Valid && item.ReplyToBranch.Valid {
-		isDifferent := !item.OriginalRepoURL.Valid || !item.OriginalHash.Valid || !item.OriginalBranch.Valid ||
-			item.ReplyToRepoURL.String != item.OriginalRepoURL.String ||
-			item.ReplyToHash.String != item.OriginalHash.String ||
-			item.ReplyToBranch.String != item.OriginalBranch.String
-		if isDifferent {
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, comments) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET comments = comments + 1`,
-				item.ReplyToRepoURL.String, item.ReplyToHash.String, item.ReplyToBranch.String)
-		}
-	}
-
-	// Handle intermediate ancestors
-	updateAncestorInteractions(db, item)
 }
 
-// updateAncestorInteractions walks up the parent chain from reply_to to original
-// and increments interaction counts for each intermediate ancestor.
-func updateAncestorInteractions(db *sql.DB, item SocialItem) {
-	if !item.ReplyToRepoURL.Valid || !item.ReplyToHash.Valid || !item.ReplyToBranch.Valid ||
-		!item.OriginalRepoURL.Valid || !item.OriginalHash.Valid || !item.OriginalBranch.Valid {
-		return
+// interactionTargets returns every item whose counts an item changes: its
+// original, its reply-to chain, and the same for the canonical an edit replaces.
+func interactionTargets(db *sql.DB, item SocialItem) []itemKey {
+	if item.Hash == "" {
+		return nil
 	}
-	currentRepoURL := item.ReplyToRepoURL.String
-	currentHash := item.ReplyToHash.String
-	currentBranch := item.ReplyToBranch.String
-	originalRepoURL := item.OriginalRepoURL.String
-	originalHash := item.OriginalHash.String
-	originalBranch := item.OriginalBranch.String
-
-	if currentRepoURL == originalRepoURL && currentHash == originalHash && currentBranch == originalBranch {
-		return
-	}
-
-	// Walk up from reply_to's parent to original (max 50 levels to prevent cycles)
-	const maxDepth = 50
-	for depth := 0; depth < maxDepth; depth++ {
-		var parentRepoURL, parentHash, parentBranch sql.NullString
-		err := db.QueryRow(`SELECT reply_to_repo_url, reply_to_hash, reply_to_branch FROM social_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			currentRepoURL, currentHash, currentBranch).Scan(&parentRepoURL, &parentHash, &parentBranch)
-		if err != nil || !parentRepoURL.Valid || !parentHash.Valid || !parentBranch.Valid {
-			break
-		}
-		if parentRepoURL.String == originalRepoURL && parentHash.String == originalHash && parentBranch.String == originalBranch {
-			break
-		}
-		currentRepoURL = parentRepoURL.String
-		currentHash = parentHash.String
-		currentBranch = parentBranch.String
-
-		// Increment this ancestor's count
-		switch item.Type {
-		case "comment":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, comments) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET comments = comments + 1`,
-				currentRepoURL, currentHash, currentBranch)
-		case "repost":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, reposts) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET reposts = reposts + 1`,
-				currentRepoURL, currentHash, currentBranch)
-		case "quote":
-			_, _ = db.Exec(`
-				INSERT INTO social_interactions (repo_url, hash, branch, quotes) VALUES (?, ?, ?, 1)
-				ON CONFLICT(repo_url, hash, branch) DO UPDATE SET quotes = quotes + 1`,
-				currentRepoURL, currentHash, currentBranch)
+	seen := make(map[itemKey]bool)
+	var targets []itemKey
+	add := func(keys []itemKey) {
+		for _, k := range keys {
+			if k.hash == "" || seen[k] {
+				continue
+			}
+			seen[k] = true
+			targets = append(targets, k)
 		}
 	}
+	add(threadTargets(db, nullKey(item.OriginalRepoURL, item.OriginalHash, item.OriginalBranch),
+		nullKey(item.ReplyToRepoURL, item.ReplyToHash, item.ReplyToBranch)))
+	if canonical, ok := canonicalOf(db, itemKey{item.RepoURL, item.Hash, item.Branch}); ok {
+		original, replyTo := itemRefs(db, canonical)
+		add(threadTargets(db, original, replyTo))
+	}
+	return targets
+}
+
+// threadTargets returns the original plus each ancestor up to it.
+func threadTargets(db *sql.DB, original, replyTo itemKey) []itemKey {
+	targets := []itemKey{original}
+	current := replyTo
+	for depth := 0; depth < maxThreadDepth && current.hash != "" && current != original; depth++ {
+		targets = append(targets, current)
+		_, current = itemRefs(db, current)
+	}
+	return targets
+}
+
+// itemRefs reads an item's original and reply-to keys.
+func itemRefs(db *sql.DB, k itemKey) (original, replyTo itemKey) {
+	var oRepo, oHash, oBranch, rRepo, rHash, rBranch sql.NullString
+	if err := db.QueryRow(`
+		SELECT original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch
+		FROM social_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		k.repoURL, k.hash, k.branch,
+	).Scan(&oRepo, &oHash, &oBranch, &rRepo, &rHash, &rBranch); err != nil {
+		return itemKey{}, itemKey{}
+	}
+	return nullKey(oRepo, oHash, oBranch), nullKey(rRepo, rHash, rBranch)
+}
+
+// canonicalOf returns the canonical an edit or retraction replaces.
+func canonicalOf(db *sql.DB, k itemKey) (itemKey, bool) {
+	var canonical itemKey
+	err := db.QueryRow(`
+		SELECT canonical_repo_url, canonical_hash, canonical_branch FROM core_commits_version
+		WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
+		k.repoURL, k.hash, k.branch,
+	).Scan(&canonical.repoURL, &canonical.hash, &canonical.branch)
+	return canonical, err == nil
+}
+
+// nullKey builds an item key from three nullable columns.
+func nullKey(repoURL, hash, branch sql.NullString) itemKey {
+	if !repoURL.Valid || !hash.Valid || !branch.Valid {
+		return itemKey{}
+	}
+	return itemKey{repoURL.String, hash.String, branch.String}
 }
 
 // GetSocialItem retrieves a single social item by its composite key.
