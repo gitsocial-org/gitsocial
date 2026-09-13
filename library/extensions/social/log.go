@@ -142,47 +142,29 @@ func commitToLogEntry(commit git.Commit, refMap map[string]string) LogEntry {
 
 // detectLogEntryType determines the type of activity from a commit.
 func detectLogEntryType(commit git.Commit, msg *protocol.Message, refMap map[string]string) LogEntryType {
+	// The ref shapes are the ones git.ListRefs returns, with refs/gitmsg/ trimmed.
 	if ref, ok := refMap[commit.Hash]; ok {
-		if strings.HasPrefix(ref, "social/list/") {
+		if strings.HasPrefix(ref, "social/lists/") {
 			if strings.Contains(commit.Message, "deleted") || strings.Contains(commit.Message, "remove") {
 				return LogTypeListDelete
 			}
 			return LogTypeListCreate
 		}
-		if strings.HasPrefix(ref, "config") {
+		if strings.HasPrefix(ref, "social/config") {
 			return LogTypeConfig
 		}
 		return LogTypeMetadata
 	}
 
-	if msg != nil {
-		if interactionType, ok := msg.Header.Fields["interaction"]; ok {
-			switch interactionType {
-			case "comment":
-				return LogTypeComment
-			case "repost":
-				return LogTypeRepost
-			case "quote":
-				return LogTypeQuote
-			}
-		}
-
-		if len(msg.References) > 0 {
-			for _, ref := range msg.References {
-				if refType, ok := ref.Fields["type"]; ok {
-					switch refType {
-					case "comment":
-						return LogTypeComment
-					case "repost":
-						return LogTypeRepost
-					case "quote":
-						return LogTypeQuote
-					}
-				}
-			}
-		}
+	// An entry names the item by its own header type, not by what it references.
+	switch GetPostType(msg) {
+	case PostTypeComment:
+		return LogTypeComment
+	case PostTypeRepost:
+		return LogTypeRepost
+	case PostTypeQuote:
+		return LogTypeQuote
 	}
-
 	return LogTypePost
 }
 

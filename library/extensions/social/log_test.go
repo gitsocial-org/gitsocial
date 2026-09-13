@@ -2,6 +2,7 @@
 package social
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -89,82 +90,44 @@ func TestMatchesLogFilters_combined(t *testing.T) {
 	}
 }
 
-func TestDetectLogEntryType_listRef(t *testing.T) {
-	refMap := map[string]string{"abc123": "social/list/my-list"}
-	commit := git.Commit{Hash: "abc123", Message: "created list"}
-	got := detectLogEntryType(commit, nil, refMap)
-	if got != LogTypeListCreate {
-		t.Errorf("detectLogEntryType() = %q, want %q", got, LogTypeListCreate)
+// TestGetLogs_entryTypes walks the write path and asserts each entry's own type.
+func TestGetLogs_entryTypes(t *testing.T) {
+	workdir := initWorkspace(t)
+	post := CreatePost(workdir, "Hello world", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
 	}
-}
+	if r := CreateComment(workdir, post.Data.ID, "Great idea!", nil); !r.Success {
+		t.Fatalf("CreateComment() failed: %s", r.Error.Message)
+	}
+	if r := CreateRepost(workdir, post.Data.ID, nil); !r.Success {
+		t.Fatalf("CreateRepost() failed: %s", r.Error.Message)
+	}
+	if r := CreateQuote(workdir, post.Data.ID, "Worth reading:", nil); !r.Success {
+		t.Fatalf("CreateQuote() failed: %s", r.Error.Message)
+	}
+	if r := CreateList(workdir, "following", "Following"); !r.Success {
+		t.Fatalf("CreateList() failed: %s", r.Error.Message)
+	}
 
-func TestDetectLogEntryType_listDeleteRef(t *testing.T) {
-	refMap := map[string]string{"abc123": "social/list/my-list"}
-	commit := git.Commit{Hash: "abc123", Message: "deleted list"}
-	got := detectLogEntryType(commit, nil, refMap)
-	if got != LogTypeListDelete {
-		t.Errorf("detectLogEntryType() = %q, want %q", got, LogTypeListDelete)
+	result := GetLogs(workdir, "timeline", &GetLogsOptions{Limit: 50})
+	if !result.Success {
+		t.Fatalf("GetLogs() failed: %s", result.Error.Message)
 	}
-}
-
-func TestDetectLogEntryType_configRef(t *testing.T) {
-	refMap := map[string]string{"abc123": "config"}
-	commit := git.Commit{Hash: "abc123"}
-	got := detectLogEntryType(commit, nil, refMap)
-	if got != LogTypeConfig {
-		t.Errorf("detectLogEntryType() = %q, want %q", got, LogTypeConfig)
+	seen := make(map[LogEntryType]LogEntry)
+	for _, entry := range result.Data {
+		seen[entry.Type] = entry
 	}
-}
-
-func TestDetectLogEntryType_metadataRef(t *testing.T) {
-	refMap := map[string]string{"abc123": "social/something"}
-	commit := git.Commit{Hash: "abc123"}
-	got := detectLogEntryType(commit, nil, refMap)
-	if got != LogTypeMetadata {
-		t.Errorf("detectLogEntryType() = %q, want %q", got, LogTypeMetadata)
+	for _, want := range []LogEntryType{LogTypePost, LogTypeComment, LogTypeRepost, LogTypeQuote, LogTypeListCreate} {
+		if _, ok := seen[want]; !ok {
+			t.Errorf("no %q entry in the log; got %v", want, seen)
+		}
 	}
-}
-
-func TestDetectLogEntryType_interactionField(t *testing.T) {
-	tests := []struct {
-		interaction string
-		want        LogEntryType
-	}{
-		{"comment", LogTypeComment},
-		{"repost", LogTypeRepost},
-		{"quote", LogTypeQuote},
+	if details := seen[LogTypeComment].Details; !strings.HasPrefix(details, "Re: ") {
+		t.Errorf("comment details = %q, want a Re: prefix", details)
 	}
-	for _, tt := range tests {
-		t.Run(tt.interaction, func(t *testing.T) {
-			msg := &protocol.Message{Header: protocol.Header{Fields: map[string]string{"interaction": tt.interaction}}}
-			got := detectLogEntryType(git.Commit{Hash: "xyz"}, msg, nil)
-			if got != tt.want {
-				t.Errorf("detectLogEntryType() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDetectLogEntryType_referenceType(t *testing.T) {
-	tests := []struct {
-		refType string
-		want    LogEntryType
-	}{
-		{"comment", LogTypeComment},
-		{"repost", LogTypeRepost},
-		{"quote", LogTypeQuote},
-	}
-	for _, tt := range tests {
-		t.Run(tt.refType, func(t *testing.T) {
-			msg := &protocol.Message{
-				Header:     protocol.Header{Fields: map[string]string{}},
-				References: []protocol.Ref{{Fields: map[string]string{"type": tt.refType}}},
-			}
-			got := detectLogEntryType(git.Commit{Hash: "xyz"}, msg, nil)
-			if got != tt.want {
-				t.Errorf("detectLogEntryType() = %q, want %q", got, tt.want)
-			}
-		})
+	if details := seen[LogTypeListCreate].Details; details != "Created list" {
+		t.Errorf("list details = %q, want %q", details, "Created list")
 	}
 }
 
