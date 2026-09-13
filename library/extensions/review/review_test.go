@@ -532,6 +532,36 @@ func TestMergeOperations(t *testing.T) {
 		}
 	})
 
+	t.Run("MergePR_requireReview", func(t *testing.T) {
+		dir := initTestRepo(t)
+		if err := SaveReviewConfig(dir, ReviewConfig{RequireReview: true}); err != nil {
+			t.Fatalf("SaveReviewConfig() failed: %v", err)
+		}
+		git.ExecGit(dir, []string{"checkout", "-b", "feature"})
+		git.CreateCommit(dir, git.CommitOptions{Message: "Feature commit", AllowEmpty: true})
+		git.ExecGit(dir, []string{"checkout", "main"})
+
+		created := CreatePR(dir, "Needs a review", "", CreatePROptions{Base: "main", Head: "feature"})
+		if !created.Success {
+			t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+		}
+		res := MergePR(dir, created.Data.ID, MergeStrategyFF)
+		if res.Success || res.Error.Code != "REVIEW_REQUIRED" {
+			t.Fatalf("MergePR() without a verdict = %+v, want REVIEW_REQUIRED", res)
+		}
+
+		approved := CreateFeedback(dir, "LGTM", CreateFeedbackOptions{
+			PullRequest: created.Data.ID,
+			ReviewState: ReviewStateApproved,
+		})
+		if !approved.Success {
+			t.Fatalf("CreateFeedback() failed: %s", approved.Error.Message)
+		}
+		if res := MergePR(dir, created.Data.ID, MergeStrategyFF); !res.Success {
+			t.Fatalf("MergePR() after approval failed: %s", res.Error.Message)
+		}
+	})
+
 	t.Run("MergePR_invalidState", func(t *testing.T) {
 		dir := initTestRepo(t)
 		created := CreatePR(dir, "PR", "", CreatePROptions{Base: "main"})

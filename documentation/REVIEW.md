@@ -164,6 +164,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
 ## Reference
 
 - Versions and review aggregation: [GITREVIEW.md §1.5](../specs/GITREVIEW.md#15-editing-and-retracting) and [§1.8](../specs/GITREVIEW.md#18-review-aggregation).
+- `review config set require-review true` makes approval a merge condition; `pr merge` then fails with `REVIEW_REQUIRED` until every reviewer's latest verdict is `approved`.
 - `pr list` shows this repository's pull requests and those from [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations live at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
 - Branch tips come from the remote: `refs/remotes/origin/<branch>` for this repository, `git ls-remote` for a fork with no tracking ref. A branch gone from its remote fails to resolve, which is how `head-deleted` and `base-deleted` are raised.

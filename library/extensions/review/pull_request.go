@@ -352,6 +352,15 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		return result.Err[PullRequest]("INVALID_TARGET", "cannot merge: pull request targets a different repository")
 	}
 
+	// GITREVIEW.md 1.8 and 2: require-review makes an approving verdict a merge condition.
+	if GetReviewConfig(workdir).RequireReview {
+		summary := GetReviewSummary(existing.RepoURL, existing.Hash, existing.Branch, pr.Reviewers)
+		if !summary.IsApproved {
+			return result.Err[PullRequest]("REVIEW_REQUIRED",
+				"cannot merge: require-review is on and the pull request is not approved")
+		}
+	}
+
 	// Enforce merge ordering: all depends-on targets must be merged first
 	for _, depRef := range pr.DependsOn {
 		depResult := GetPR(depRef)
