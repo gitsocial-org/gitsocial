@@ -41,6 +41,18 @@
       "borderRadius": "10px"
     }
   ],
+  ".card-head": [
+    {
+      "shape": "h1.subject > span.chip.open.state",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
+    }
+  ],
   ".meta": [
     {
       "shape": "",
@@ -53,7 +65,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash > span.chip.open.state",
+      "shape": "span.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -181,7 +193,7 @@
     {
       "shape": "",
       "padding": "0px",
-      "margin": "0px 0px 4.8px",
+      "margin": "4.8px 0px 3.2px",
       "fontSize": "36px",
       "color": "rgb(201, 209, 217)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -240,6 +252,30 @@
       "color": "srgb(0.54 0.56 0.61)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".detail > .card-head": [
+    {
+      "shape": "h1.subject > span.chip.open.state",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".detail > .card-head > h1.subject": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "4.8px 0px 3.2px",
+      "fontSize": "36px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
       "borderRadius": "0px"
     }
   ]

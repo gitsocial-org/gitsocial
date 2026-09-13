@@ -51,6 +51,26 @@ function checkFeedbackCard(theme, cards, feedback) {
     [...borders].join("|"));
 }
 
+// DETAIL_HEAD_SIZE is --fs-h1 at the 16px root, the size the page layer's own h1 carries.
+const DETAIL_HEAD_SIZE = "36px";
+
+// DETAIL_HEAD_SHAPE is the head's one chip slot: the h1 subject, then chips.
+const DETAIL_HEAD_SHAPE = /^h1\.subject( > span\.chip[a-z0-9.-]*)*$/;
+
+// checkDetailHead asserts a detail head is a card head with one chip slot and an
+// h1 subject at the page layer's own heading size. head is the detail route's
+// ".detail > .card-head" record, subject its h1's.
+function checkDetailHead(theme, head, subject) {
+  if (!head || !subject) {
+    ok("detail head " + theme + ": both records captured", false, "head=" + !!head + " subject=" + !!subject);
+    return;
+  }
+  const shapes = head.map((r) => r.shape);
+  ok("detail head " + theme + ": the h1 subject leads, the chips follow", shapes.every((s) => DETAIL_HEAD_SHAPE.test(s)), shapes.join(" | "));
+  const sizes = new Set(subject.map((r) => r.fontSize));
+  ok("detail head " + theme + ": the subject takes the page's h1 size", sizes.size === 1 && sizes.has(DETAIL_HEAD_SIZE), [...sizes].join("|"));
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -85,7 +105,7 @@ function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, feedbackCards = {};
+  const listCards = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {};
   for (const route of ROUTES) {
     let hash = route.hash;
     if (!hash) {
@@ -96,7 +116,11 @@ function main() {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
       if (route.name === "issues") listCards[theme] = got[".card"];
-      if (route.name === "pr-detail") feedbackCards[theme] = got[".card.feedback"];
+      if (route.name === "pr-detail") {
+        feedbackCards[theme] = got[".card.feedback"];
+        detailHeads[theme] = got[".detail > .card-head"];
+        detailSubjects[theme] = got[".detail > .card-head > h1.subject"];
+      }
       const file = path.join(DIR, route.name + "." + theme + ".json");
       if (update) { fs.writeFileSync(file, JSON.stringify(got, null, 2) + "\n"); continue; }
       if (!fs.existsSync(file)) { ok(route.name + " " + theme + ": baseline exists", false, "missing " + path.basename(file) + "; capture with GS_STYLES_UPDATE=1"); continue; }
@@ -113,7 +137,10 @@ function main() {
       ok(route.name + " " + theme + ": styles and structure match the baseline", diffs.length === 0, diffs.slice(0, 6).join("; "));
     }
   }
-  if (!update) for (const theme of Object.keys(THEMES)) checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
+  if (!update) for (const theme of Object.keys(THEMES)) {
+    checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
+    checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
+  }
   if (update) console.log("baselines written to " + DIR);
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
