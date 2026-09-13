@@ -90,7 +90,7 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 		result = append(result, drNotifs...)
 	}
 
-	result = append(result, getBranchStateNotifications(workspaceURL, userEmail, forks)...)
+	result = append(result, getBranchStateNotifications(workdir, workspaceURL, userEmail, forks)...)
 
 	if filter.Limit > 0 && len(result) > filter.Limit {
 		result = result[:filter.Limit]
@@ -127,7 +127,7 @@ func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error)
 	if err != nil {
 		drCount = 0
 	}
-	bsCount := len(getBranchStateNotifications(workspaceURL, userEmail, forks))
+	bsCount := len(getBranchStateNotifications(workdir, workspaceURL, userEmail, forks))
 	return forkCount + fbCount + rrCount + scCount + drCount + bsCount, nil
 }
 

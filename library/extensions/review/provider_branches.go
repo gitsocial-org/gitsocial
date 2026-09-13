@@ -10,6 +10,7 @@ package review
 import (
 	"strings"
 
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
@@ -19,11 +20,11 @@ import (
 // base branches have drifted from the live remote, or no longer exist on
 // the remote. The observation table is keyed by (repo_url, branch) so
 // workspace and fork PRs use the same lookup.
-func getBranchStateNotifications(workspaceURL, userEmail string, forkURLs []string) []notifications.Notification {
+func getBranchStateNotifications(workdir, workspaceURL, userEmail string, forkURLs []string) []notifications.Notification {
 	if workspaceURL == "" {
 		return nil
 	}
-	branch := "gitmsg/review"
+	branch := gitmsg.GetExtBranch(workdir, "review")
 	prRes := GetPullRequestsWithForks(workspaceURL, branch, forkURLs, []string{"open"}, "", 0)
 	if !prRes.Success {
 		return nil
