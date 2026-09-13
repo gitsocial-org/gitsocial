@@ -8,9 +8,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
-// TestRetireLegacySocialTables pins invariants 7 and 8: the legacy tables go
-// after one open, the read markers survive in the core table, and the counts
-// the migration rebuilds match the live rows.
+// TestRetireLegacySocialTables pins invariants 7 and 8, the drop and the rebuilt counts.
 func TestRetireLegacySocialTables(t *testing.T) {
 	dir := t.TempDir()
 	cache.Reset()
@@ -36,8 +34,7 @@ func TestRetireLegacySocialTables(t *testing.T) {
 	fetchSocialCommit(t, repo, branch, "e55500000005",
 		"\n\n"+`GitMsg: ext="social"; type="comment"; edits="`+repo+`#commit:e55500000004@gitmsg/social"; retracted="true"; original="`+repo+`#commit:e55500000001@gitmsg/social"; v="0.1.0"`)
 
-	// Put the cache back in its pre-migration shape: the two legacy tables, a
-	// read marker only in the legacy table, and a count that drifted.
+	// Put the cache back in its pre-migration shape, with a marker and a drifted count.
 	if err := cache.ExecLocked(func(db *sql.DB) error {
 		if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS social_notification_reads (
 			repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, read_at TEXT,

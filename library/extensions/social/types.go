@@ -37,9 +37,7 @@ type Display struct {
 	FollowsYou         bool
 	IsNotificationRead bool
 	IsVerified         bool
-	// IsEditorVerified is set by annotateVerified when the latest edit commit is
-	// signed by a key verified-bound to the editor's email (distinct-editor case).
-	// For same-author edits the edit verification is folded into IsVerified (AND).
+	// IsEditorVerified marks a latest edit signed by a distinct editor's verified key.
 	IsEditorVerified bool
 	Badge            string
 	UserEmail        string // Current user's email for own-post detection in rendering
@@ -61,9 +59,7 @@ type Post struct {
 	EditOf          string
 	EditorName      string
 	EditorEmail     string
-	// Latest edit commit's ref (always set when edited). Used by annotateVerified
-	// to run the edit-commit verification pass against editorEmail (distinct) or
-	// authorEmail (same author).
+	// Latest edit commit's ref, which annotateVerified verifies against the editor or the author.
 	EditRepoURL      string
 	EditHash         string
 	EditBranch       string
@@ -77,12 +73,10 @@ type Post struct {
 	IsStale          bool
 	IsWorkspacePost  bool
 	Display          Display
-	// OriginalExtension and OriginalType are populated for comments from the GitMsg-Ref header.
-	// Used for cross-extension navigation (e.g., social comment on PM issue).
+	// OriginalExtension and OriginalType come from the GitMsg-Ref, for cross-extension navigation.
 	OriginalExtension string
 	OriginalType      string
-	// HeaderExt, HeaderType, HeaderState are the item's own ext/type/state from the GitMsg header.
-	// Used for routing to correct detail views (e.g., "pm"/"issue" for PM issues).
+	// HeaderExt, HeaderType and HeaderState are the item's own header fields, which route its detail view.
 	HeaderExt   string
 	HeaderType  string
 	HeaderState string

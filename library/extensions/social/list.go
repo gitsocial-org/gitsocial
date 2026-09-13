@@ -93,8 +93,7 @@ func DeleteList(workdir, listID string) Result[struct{}] {
 	return Success(struct{}{})
 }
 
-// AddRepositoryToList adds a repository to an existing list. Returns the saved repo ref.
-// When allBranches is true, stores branch as "*" to follow all branches.
+// AddRepositoryToList adds a repository to a list and returns the saved ref; allBranches stores "*".
 func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bool) Result[string] {
 	data, _ := gitmsg.ReadList(workdir, socialExtension, listID)
 	if data == nil {

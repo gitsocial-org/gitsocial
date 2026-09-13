@@ -11,8 +11,7 @@ import (
 // socialFieldOrder declares the spec-defined field ordering for social headers (GITSOCIAL.md 1.2).
 var socialFieldOrder = []string{"reply-to", "original", "labels"}
 
-// joinSocialLabels produces a deterministic comma-separated label string,
-// trimming whitespace, dropping empties, and deduplicating.
+// joinSocialLabels joins labels into a sorted, deduplicated, comma-separated string.
 func joinSocialLabels(labels []string) string {
 	cleaned := make([]string, 0, len(labels))
 	seen := make(map[string]bool, len(labels))

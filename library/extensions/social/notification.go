@@ -14,9 +14,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// userThreadsCTE pre-computes threads the user participates in, scoped to repos
-// the workspace follows. Queries base tables directly for performance.
-// Parameters: userEmail, workspaceURL, workdir
+// userThreadsCTE pre-computes the threads the user is in; parameters: userEmail, workspaceURL, workdir.
 const userThreadsCTE = `
 	user_threads AS (
 		SELECT DISTINCT s.original_repo_url, s.original_hash, s.original_branch
@@ -32,19 +30,14 @@ const userThreadsCTE = `
 	)
 `
 
-// followedReposCondition filters thread-participation notifications to repos the workspace follows.
-// Parameter: workdir. Uses alias `s` for social_items — caller queries must
-// alias the table as `s`.
+// followedReposCondition keeps thread notifications to followed repositories; parameter: workdir.
 const followedReposCondition = `
 	s.original_repo_url IN (
 		SELECT lr.repo_url FROM core_list_repositories lr
 		JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
 `
 
-// notifiableItems selects the interactions that raise a notification: another
-// repository and another author, on a workspace post or on a thread the user
-// is in. Aliases `s` for social_items and `c` for core_commits, and needs the
-// user_threads CTE. Parameters: workspaceURL, userEmail, workspaceURL, workdir.
+// notifiableItems selects a notifiable interaction; parameters: workspaceURL, userEmail, workspaceURL, workdir.
 const notifiableItems = `
 	s.type IN ('comment', 'repost', 'quote')
 	  AND s.repo_url != ?
@@ -70,9 +63,7 @@ func GetNotifications(workdir string, filter NotificationFilter) ([]Notification
 	userEmail := git.GetUserEmail(workdir)
 
 	items, err := cache.QueryLocked(func(db *sql.DB) ([]notificationRow, error) {
-		// Drive from social_items (small, indexed by type) instead of
-		// social_items_resolved (which scans core_commits — 6+ s on a
-		// 1M-commit cache).
+		// Drive from social_items, indexed by type; the view scans core_commits.
 		query := `
 			WITH ` + userThreadsCTE + `
 			SELECT s.repo_url, s.hash, s.branch, s.type,
@@ -255,7 +246,7 @@ func GetUnreadCount(workdir string) (int, error) {
 
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var itemCount, followCount int
-		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
+		// Drive from social_items, not the view, as GetNotifications does.
 		if err := db.QueryRow(`
 			WITH `+userThreadsCTE+`
 			SELECT COUNT(*) FROM social_items s
@@ -287,7 +278,7 @@ func MarkAllAsRead(workdir string) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
+		// Drive from social_items, not the view, as GetNotifications does.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
@@ -321,7 +312,7 @@ func MarkAllAsUnread(workdir string) error {
 	}
 	userEmail := git.GetUserEmail(workdir)
 	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not social_items_resolved — see note in GetNotifications.
+		// Drive from social_items, not the view, as GetNotifications does.
 		if _, err := db.Exec(`
 			WITH `+userThreadsCTE+`
 			DELETE FROM core_notification_reads

@@ -22,8 +22,7 @@ func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, defaultBranch st
 	SyncListsToCache(workdir)
 }
 
-// ProcessWorkspaceBatch processes pre-fetched commits for social extension items.
-// Used by the unified workspace sync to avoid redundant git log calls.
+// ProcessWorkspaceBatch ingests pre-fetched workspace commits as social items.
 func ProcessWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) {
 	var socialItems []SocialItem
 	var virtualItems []SocialItem
@@ -268,9 +267,7 @@ func getTimeline(workdir string, workspaceURL string, opts *GetPostsOptions) Res
 		}
 	}
 
-	// Get all locally-unpushed commits so cross-extension items and
-	// feature-branch commits shown on the timeline get the badge.
-	// Skip on fast initial load.
+	// Every unpushed commit, so a cross-extension or feature-branch item gets the badge.
 	var unpushed map[string]struct{}
 	if !opts.SkipUnpushed {
 		unpushed, _ = git.GetAllUnpushedCommits(workdir)
@@ -423,9 +420,7 @@ func getSinglePost(postID string, workspaceURL string) Result[[]Post] {
 	return Success([]Post{post})
 }
 
-// getThreadPosts retrieves a post and all its replies as a thread.
-// isInFamily reports whether url is the workspace itself or one of its
-// registered forks — the set whose threads share an aggregated view.
+// isInFamily reports whether url is the workspace or one of its registered forks.
 func isInFamily(url, workspaceURL string, forks []string) bool {
 	if url == workspaceURL {
 		return true
@@ -438,6 +433,7 @@ func isInFamily(url, workspaceURL string, forks []string) bool {
 	return false
 }
 
+// getThreadPosts retrieves a post, its ancestors and all its replies as a thread.
 func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] {
 	canonicalPostID := cache.ResolveRefToCanonical(postID)
 	parsed := protocol.ParseRef(canonicalPostID)
@@ -450,13 +446,10 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		branch = "main"
 	}
 
-	// Get all locally-unpushed commits so cross-extension items in
-	// the thread (PR comments, issue comments) get the badge.
+	// Every unpushed commit, so a cross-extension item in the thread gets the badge.
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
-	// Apply fork-union when the root is in the workspace family (workspace +
-	// registered forks). Same-hash threads on those repos belong to one
-	// conversation; un-related followed repos don't get the union.
+	// A thread on the workspace or one of its forks is one conversation; a followed repo's is not.
 	forks := gitmsg.GetForks(workdir)
 	var forkURLs []string
 	if isInFamily(parsed.Repository, workspaceURL, forks) {
@@ -484,9 +477,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		posts = append(posts, p)
 	}
 
-	// If root post not found in thread results, fetch it directly
-	// GetSocialItem uses social_items_resolved view (LEFT JOINs social_items)
-	// so it works even for posts without social_items records
+	// The view LEFT JOINs social_items, so a root with no social item still reads.
 	if rootPost.ID == "" {
 		item, err := GetSocialItem(parsed.Repository, parsed.Value, branch, workspaceURL)
 		if err == nil && item != nil {
@@ -518,17 +509,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	return Success(result)
 }
 
-// annotateVerified resolves verification per post and stamps Display.IsVerified
-// and Display.IsEditorVerified in place. Two batched passes keep the per-card
-// renderer free of cache lookups so re-renders never block on the cache write
-// lock during background workspace sync.
-//
-// Pass 1 verifies the canonical commit against the author email. Pass 2 verifies
-// the latest edit commit (when present) against either the editor's email
-// (distinct-editor case) or the author's email (same-author edit). Combine rule:
-//   - no edit → IsVerified = canonical verified.
-//   - same-author edit → IsVerified = canonical AND edit verified; no editor badge.
-//   - distinct editor → IsVerified = canonical; IsEditorVerified = edit verified.
+// annotateVerified stamps Display.IsVerified and IsEditorVerified in two batched passes.
 func annotateVerified(posts []Post) {
 	canonVerified := batchVerify(posts, func(p *Post) (string, string, string) {
 		if p.Repository == "" || p.Author.Email == "" || p.Display.CommitHash == "" {
@@ -560,10 +541,7 @@ func annotateVerified(posts []Post) {
 	}
 }
 
-// batchVerify groups posts by (repo, normalized email) — using key(post) to
-// extract (repoURL, hash, email) per post — then runs one IsVerifiedCommitBatch
-// per group. Returns a per-index bool slice. Posts where key returns any empty
-// string are skipped (left false).
+// batchVerify runs one IsVerifiedCommitBatch per repository and email group that key names.
 func batchVerify(posts []Post, key func(*Post) (repo, hash, email string)) []bool {
 	groups := make(map[string]map[string][]int)
 	hashes := make([]string, len(posts))

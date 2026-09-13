@@ -92,8 +92,7 @@ func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processSocialCommit}
 }
 
-// BackfillSpec describes how the post-fetch backfill detects social commits
-// whose social_items row is missing.
+// BackfillSpec tells the post-fetch backfill which table holds social items.
 func BackfillSpec() fetch.ExtBackfillSpec {
 	return fetch.ExtBackfillSpec{Extension: "social", ItemsTable: "social_items"}
 }
@@ -120,8 +119,7 @@ func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch s
 	}
 }
 
-// parseSocialRefField parses a social ref header field (original / reply-to)
-// with repo/branch context, applying the same defaulting rules as ingest.
+// parseSocialRefField parses an original or reply-to field with its repo and branch context.
 func parseSocialRefField(fieldValue, repoURL, branch string) (refRepoURL, refHash, refBranch string) {
 	if fieldValue == "" {
 		return "", "", ""

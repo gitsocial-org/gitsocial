@@ -117,10 +117,7 @@ func commitToLogEntry(commit git.Commit, refMap map[string]string) LogEntry {
 	entryType := detectLogEntryType(commit, msg, refMap)
 	details := formatLogDetails(commit, msg, entryType)
 
-	// `gitsocial log` is an ACTIVITY log, not a raw commit log (which is what
-	// the Raw views render), so an entry names who wrote the item: the origin
-	// author over the importing committer, and the origin time over the import
-	// time — the same resolution the cache's effective_* columns perform.
+	// An activity entry names who wrote the item: the origin author and time over the importer's.
 	var header *protocol.Header
 	if msg != nil {
 		header = &msg.Header

@@ -31,12 +31,7 @@ func resolveItem(workdir, itemID string) *SocialItem {
 			postType = string(GetPostType(msg))
 		}
 		wsRepoURL := gitmsg.ResolveRepoURL(workdir)
-		// The identity and time this item is ATTRIBUTED to, not the ones git
-		// recorded: an imported post is committed by whoever ran the import and
-		// carries its real author in origin-* fields. The cache-backed path above
-		// resolves this through social_items_resolved; this fallback runs when the
-		// item is not cached yet, and every GitMsg-Ref built from the item it
-		// returns (buildRefFromItem) would otherwise name the importer.
+		// The item is attributed to its origin author and time, not to the importer git recorded.
 		var header *protocol.Header
 		if msg != nil {
 			header = &msg.Header
@@ -136,12 +131,11 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 		return Failure[Post]("NOT_FOUND", "Target post not found: "+targetPostID)
 	}
 
-	// Validation: reposts MUST reference original posts only (no repost chains per GITSOCIAL 1.3)
+	// GITSOCIAL.md 1.3: a repost or quote references an original post, never another repost.
 	if interactionType == PostTypeRepost && targetItem.Type == "repost" {
 		return Failure[Post]("INVALID_TARGET", "Cannot repost a repost; reposts must reference original posts")
 	}
 
-	// Validation: quotes MUST reference original posts only (no quote chains)
 	if interactionType == PostTypeQuote && targetItem.Type == "repost" {
 		return Failure[Post]("INVALID_TARGET", "Cannot quote a repost; quotes must reference original posts")
 	}
@@ -149,7 +143,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
-	// For refs: use item's branch if remote or cross-extension, workspace branch if local same-extension
+	// A ref keeps the item's own branch when it is remote or on another branch.
 	getRefBranch := func(item *SocialItem) string {
 		if item.RepoURL != "" && item.RepoURL != repoURL {
 			return item.Branch
@@ -168,8 +162,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 	isNested := interactionType == PostTypeComment && targetItem.Type == "comment"
 
 	if isNested {
-		// Nested comment: must find the root post (original) for this thread
-		// Per GITSOCIAL 1.3: original field MUST reference the thread's first post
+		// GITSOCIAL.md 1.3: original names the thread's first post, not the parent comment.
 		if !targetItem.OriginalRepoURL.Valid || !targetItem.OriginalHash.Valid {
 			return Failure[Post]("INVALID_TARGET", "Cannot comment on a comment without a valid root post reference")
 		}
@@ -182,7 +175,6 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 		if originalItem == nil {
 			return Failure[Post]("NOT_FOUND", "Root post not found for comment thread")
 		}
-		// Validate the original is not a comment (prevent circular threading)
 		if originalItem.Type == "comment" {
 			return Failure[Post]("INVALID_TARGET", "Comment thread root cannot be another comment")
 		}
@@ -203,7 +195,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 		fields["labels"] = labelStr
 	}
 
-	// Strip workdir from refs for git commit, but preserve URLs for remote repositories
+	// The written message carries a local ref bare and a remote ref with its URL.
 	gitFields := make(map[string]string)
 	for k, v := range fields {
 		if k == "original" || k == "reply-to" {
@@ -302,8 +294,7 @@ func buildRefFromItem(item *SocialItem) protocol.Ref {
 	}
 }
 
-// generateRepostContentFromItem writes the repost subject of GITSOCIAL.md 1.2:
-// the local form for a workspace post, the "@ owner/repo" form for a remote one.
+// generateRepostContentFromItem writes the repost subject of GITSOCIAL.md 1.2, local or remote form.
 func generateRepostContentFromItem(item *SocialItem, workspaceURL string) string {
 	author := item.AuthorName
 	if author == "" {
@@ -322,9 +313,7 @@ func generateRepostContentFromItem(item *SocialItem, workspaceURL string) string
 	return "# " + author + " @ " + protocol.GetFullDisplayName(item.RepoURL) + ": " + firstLine
 }
 
-// addThreadFields carries an item's original and reply-to onto the edit or
-// retraction that replaces it, so the new commit names its thread on its own
-// (GITSOCIAL.md, the Edit Comment example).
+// addThreadFields carries an item's original and reply-to onto the edit or retraction that replaces it.
 func addThreadFields(fields map[string]string, item *SocialItem, workspaceURL string) {
 	if ref := localItemRef(item.OriginalRepoURL, item.OriginalHash, item.OriginalBranch, workspaceURL); ref != "" {
 		fields["original"] = ref
@@ -343,9 +332,7 @@ func localItemRef(repoURL, hash, branch sql.NullString, workspaceURL string) str
 	return protocol.LocalizeRef(ref, workspaceURL)
 }
 
-// EditPostOptions configures post edits. When Labels is nil the canonical's
-// existing labels are preserved (no `labels` header is written). When Labels
-// is non-nil (even empty) it replaces the canonical's labels.
+// EditPostOptions configures post edits; a nil Labels keeps the canonical's labels.
 type EditPostOptions struct {
 	Labels *[]string
 }
@@ -371,7 +358,6 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 		return Failure[Post]("INVALID_TARGET", "Cannot edit posts owned by another repository")
 	}
 
-	// Resolve to canonical ID via core_commits_version
 	targetRepoURL := targetItem.RepoURL
 	if targetRepoURL == "" {
 		targetRepoURL = repoURL
@@ -458,7 +444,6 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 		return Failure[bool]("INVALID_TARGET", "Cannot retract posts owned by another repository")
 	}
 
-	// Resolve to canonical ID via core_commits_version
 	targetRepoURL := targetItem.RepoURL
 	if targetRepoURL == "" {
 		targetRepoURL = repoURL

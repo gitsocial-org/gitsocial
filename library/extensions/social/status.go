@@ -15,8 +15,7 @@ func FormatRelativeTime(t time.Time) string {
 	return relativeTime(t, false)
 }
 
-// relativeTime renders an elapsed time. The short form is column-aligned for
-// the CLI log line ("5m ago"); the long form reads as a sentence.
+// relativeTime renders an elapsed time, short for the CLI log line and long as a sentence.
 func relativeTime(t time.Time, short bool) string {
 	d := time.Since(t)
 	unit := func(n int, abbrev, name string) string {

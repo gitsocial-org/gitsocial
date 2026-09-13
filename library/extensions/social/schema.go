@@ -13,10 +13,7 @@ func init() {
 	cache.RegisterMigration(retireLegacySocialTables)
 }
 
-// retireLegacySocialTables copies the legacy read markers into the core table
-// once, recounts every interaction target from live rows, and drops the two
-// tables the incremental counter needed. It runs once: after the drop the
-// guard finds neither table and the migration is a no-op.
+// retireLegacySocialTables copies the legacy read markers, recounts every target, and drops both tables.
 func retireLegacySocialTables(db *sql.DB) {
 	if !socialTableExists(db, "social_notification_reads") && !socialTableExists(db, "social_counted_sources") {
 		return
@@ -76,9 +73,7 @@ CREATE TABLE IF NOT EXISTS social_interactions (
     PRIMARY KEY (repo_url, hash, branch)
 );
 
--- Extension: Social resolved view (unified read interface).
--- Projects core_commits' generated effective_* columns under the legacy
--- output names (resolved_message, author_name, etc.) so consumers don't change.
+-- Extension: Social resolved view, projecting core_commits' effective_* columns under the display names.
 DROP VIEW IF EXISTS social_items_resolved;
 CREATE VIEW social_items_resolved AS
 SELECT
@@ -125,9 +120,7 @@ CREATE TABLE IF NOT EXISTS social_followers (
     commit_hash TEXT,
     PRIMARY KEY (repo_url, workspace_url)
 );
--- Composite index covers the timeline LEFT JOIN
--- "ON v.repo_url = sf.repo_url AND sf.workspace_url = ?", which would
--- otherwise iterate per-row; the compound key lets it be a single seek.
+-- The compound key turns the timeline's follower join into one seek per row.
 CREATE INDEX IF NOT EXISTS idx_social_followers_workspace_repo ON social_followers(workspace_url, repo_url);
 
 -- Extension: Social repo lists (cached lists from external repositories)

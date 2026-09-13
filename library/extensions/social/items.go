@@ -31,9 +31,7 @@ type SocialItem struct {
 	AuthorEmail string
 	EditorName  string
 	EditorEmail string
-	// Latest edit commit's ref (always set when edited; same-author or distinct editor).
-	// Used to verify the edit commit's signature against editorEmail (distinct) or
-	// authorEmail (same author) — see annotateVerified.
+	// Latest edit commit's ref, which annotateVerified verifies against the editor or the author.
 	EditRepoURL      string
 	EditHash         string
 	EditBranch       string
@@ -61,11 +59,7 @@ type SocialItem struct {
 	HeaderState string
 }
 
-// baseSelectFromView is the standard SELECT for querying social_items_resolved.
-// All social queries use this as the base, with additional WHERE/ORDER/LIMIT
-// clauses. Social doesn't fit cache.ResolvedSelect (interaction counts, stale
-// tracking, editor identity, followers join), so it composes the shared
-// snippets directly.
+// baseSelectFromView is the SELECT every social_items_resolved query builds on.
 var baseSelectFromView = `
 	SELECT ` + cache.ResolvedCommonColumns + `,
 	       v.type,
@@ -83,8 +77,7 @@ var baseSelectFromView = `
 	LEFT JOIN social_followers sf ON v.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
-// baseDirectSelect joins core_commits directly instead of social_items_resolved.
-// Binds workspace_url first, then the WHERE params; column order matches scanResolvedRow.
+// baseDirectSelect joins core_commits directly, binding workspace_url before the WHERE params.
 var baseDirectSelect = `
 	SELECT c.repo_url, c.hash, c.branch,
 	       COALESCE(c.origin_author_name, c.author_name),
@@ -155,19 +148,16 @@ func CreateVirtualSocialItem(ref protocol.Ref, parentRepoURL, parentBranch strin
 		return nil
 	}
 
-	// Parse the ref first to get its branch (if any)
 	parsed := protocol.ParseRef(ref.Ref)
 	if parsed.Type != protocol.RefTypeCommit {
 		return nil
 	}
 
-	// Use parsed branch if available, otherwise use parent branch
 	branch := parsed.Branch
 	if branch == "" {
 		branch = parentBranch
 	}
 
-	// Resolve repo URL
 	repoURL := parsed.Repository
 	if repoURL == "" {
 		repoURL = parentRepoURL
@@ -214,8 +204,7 @@ func socialItemArgs(item SocialItem) []interface{} {
 	}
 }
 
-// InsertSocialItems batch-inserts non-virtual social items in one transaction,
-// then recounts each target the batch names once.
+// InsertSocialItems batch-inserts non-virtual items, then recounts each target once.
 func InsertSocialItems(items []SocialItem) error {
 	if len(items) == 0 {
 		return nil
@@ -306,9 +295,7 @@ type itemKey struct{ repoURL, hash, branch string }
 // maxThreadDepth bounds the reply-to walk so a cyclic chain cannot loop.
 const maxThreadDepth = 50
 
-// recountInteractionsQuery counts a target's live comments, reposts and quotes.
-// Comments are the items whose original is the target or whose reply-to chain
-// reaches it; reposts and quotes are the items whose original is the target.
+// recountInteractionsQuery counts the live comments in a target's thread and the reposts and quotes of it.
 const recountInteractionsQuery = `
 	WITH RECURSIVE descendants(repo_url, hash, branch) AS (
 		SELECT ?, ?, ?
@@ -326,9 +313,7 @@ const recountInteractionsQuery = `
 	       OR (s.repo_url, s.hash, s.branch) IN (SELECT repo_url, hash, branch FROM descendants))
 `
 
-// recountInteractions sets each target's three counts from the rows that are
-// live now. The one writer of social_interactions: a count never drifts from
-// the items behind it, so an inserted, edited or retracted item needs no delta.
+// recountInteractions is the one writer of social_interactions: a count follows the live items.
 func recountInteractions(db *sql.DB, targets []itemKey) {
 	for _, t := range targets {
 		var comments, reposts, quotes int
@@ -349,9 +334,7 @@ func recountInteractions(db *sql.DB, targets []itemKey) {
 	}
 }
 
-// recountAllInteractionsQuery rebuilds every target's counts in one pass: each
-// live interaction against its original, and each live comment against every
-// ancestor its reply-to chain reaches.
+// recountAllInteractionsQuery rebuilds every target's counts in one pass over the live items.
 const recountAllInteractionsQuery = `
 	WITH RECURSIVE live AS (
 		SELECT s.repo_url, s.hash, s.branch, s.type,
@@ -395,8 +378,7 @@ func recountAllInteractions(db *sql.DB) {
 	}
 }
 
-// interactionTargets returns every item whose counts an item changes: its
-// original, its reply-to chain, and the same for the canonical an edit replaces.
+// interactionTargets returns the items an item changes: its original, its reply-to chain, the canonical's.
 func interactionTargets(db *sql.DB, item SocialItem) []itemKey {
 	if item.Hash == "" {
 		return nil
@@ -587,8 +569,7 @@ func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
-// timelineWheres returns one WHERE clause per timeline source, with its args:
-// the subscribed lists, the workspace, and the registered forks.
+// timelineWheres returns one WHERE clause per timeline source, with its args.
 func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cursor string) ([]string, [][]interface{}) {
 	gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
 	editFilter := " AND NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)"
@@ -632,9 +613,7 @@ func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cu
 	return wheres, args
 }
 
-// GetTimeline retrieves posts from subscribed lists, workspace, and registered
-// forks combined. followerURL is the workspace the FollowsYou mark is read
-// against, which a list scope sets while leaving workspaceURL empty.
+// GetTimeline reads the lists, the workspace and the forks; followerURL carries the FollowsYou mark.
 func GetTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []string, limit int, cursor string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		wheres, whereArgs := timelineWheres(listIDs, workspaceURL, forkURLs, cursor)
@@ -718,19 +697,12 @@ func uniqueURLs(root string, extras []string) []string {
 	return out
 }
 
-// GetThread retrieves all replies in a comment thread from a root post.
-// forkURLs broadens the original_* match to also include comments that
-// target the same (hash, branch) but are authored on a registered fork —
-// fork comments resolve original_repo_url to the fork URL, so without this
-// the workspace's thread misses them entirely.
+// GetThread retrieves a root post's replies, widened to the comments forkURLs authored.
 func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, forkURLs []string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		matchURLs := uniqueURLs(rootRepoURL, forkURLs)
-		matchPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(matchURLs)), ",")
-		// Collect descendants (reply_to chain) and quotes/reposts (original_*=root)
-		// into a single matches CTE so the outer query can drive by PK lookup.
-		// Why: a previous OR between (c.PK IN descendants) and (s.original_*=?)
-		// forced a full scan of core_commits — 6+ seconds on a 1M-commit cache.
+		matchPlaceholders := placeholders(len(matchURLs))
+		// One matches CTE, not an OR: the OR made the outer query scan core_commits.
 		query := `
 			WITH RECURSIVE descendants AS (
 				SELECT ? as repo_url, ? as hash, ? as branch
@@ -773,22 +745,19 @@ func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 	})
 }
 
-// ResolvedVersion contains the resolved version of a post along with edit metadata
+// ResolvedVersion carries a resolved post and whether it was edited.
 type ResolvedVersion struct {
 	Item     *SocialItem
 	IsEdited bool
 }
 
 // ResolveCurrentVersion finds the latest version of a post.
-// Returns the resolved item (canonical with latest content) and whether the post has been edited.
 func ResolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (ResolvedVersion, error) {
-	// Resolve to canonical if this is an edit hash
 	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(repoURL, hash, branch)
 	if err != nil {
 		return ResolvedVersion{}, err
 	}
 
-	// Get the canonical item — core_commits.effective_message exposes the latest content
 	item, err := GetSocialItem(canonicalRepoURL, canonicalHash, canonicalBranch, workspaceURL)
 	if err != nil {
 		return ResolvedVersion{}, err
@@ -797,9 +766,7 @@ func ResolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (R
 	return ResolvedVersion{Item: item, IsEdited: item.IsEdited}, nil
 }
 
-// GetEditHistory returns all versions of a post (original + edits) ordered by timestamp desc.
-// The first item is the latest version, the last is the original.
-// Delegates to gitmsg.GetHistory since versioning is a core GitMsg feature.
+// GetEditHistory returns every version of a post, latest first.
 func GetEditHistory(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	canonicalID := protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch)
 	versions, err := gitmsg.GetHistory(canonicalID, workspaceURL)
@@ -847,8 +814,7 @@ func GetEditHistoryPosts(repoURL, hash, branch string, workspaceURL string) ([]P
 	return posts, nil
 }
 
-// extractOriginalExtType extracts the extension and type from the first GitMsg-Ref in a message.
-// Used for cross-extension navigation (e.g., social comment on PM issue).
+// extractOriginalExtType reads the first GitMsg-Ref's ext and type, for cross-extension navigation.
 func extractOriginalExtType(rawMessage string) (ext, typ string) {
 	msg := protocol.ParseMessage(rawMessage)
 	if msg == nil || len(msg.References) == 0 {
@@ -867,10 +833,7 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 	return msg.Header.Ext, msg.Header.Fields["type"], msg.Header.Fields["state"]
 }
 
-// scanResolvedRow scans a single row from baseSelectFromView queries.
-// Column order matches baseSelectFromView constant.
-// scanResolvedRow scans a baseSelectFromView/baseDirectSelect row (single- or
-// multi-row query).
+// scanResolvedRow scans one baseSelectFromView or baseDirectSelect row.
 func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
@@ -930,7 +893,6 @@ func SocialItemToPost(item SocialItem) Post {
 		postType = PostTypePost
 	}
 
-	// Create refs from composite keys (including branch)
 	originalPostID := ""
 	if item.OriginalRepoURL.Valid && item.OriginalHash.Valid {
 		origBranch := ""
@@ -1005,8 +967,7 @@ func SocialItemToPost(item SocialItem) Post {
 // GetParentChain retrieves ancestor posts in a reply chain.
 func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
-		// CTE walks reply_to chain upward, then joins core_commits directly
-		// (bypasses views to avoid materializing 1M+ rows).
+		// The CTE walks the reply-to chain up, then joins core_commits rather than the view.
 		query := `
 			WITH RECURSIVE ancestors AS (
 				SELECT ? as repo_url, ? as hash, ? as branch, 0 as depth
