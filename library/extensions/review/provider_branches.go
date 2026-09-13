@@ -8,8 +8,6 @@
 package review
 
 import (
-	"strings"
-
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -83,19 +81,9 @@ func refRepoAndBranch(parsed protocol.ParsedRef, workspaceURL string) (string, s
 	return repo, parsed.Value
 }
 
-// prStakeholder returns true when userEmail authored the PR or appears in
-// the comma-separated reviewers list. Mirrors the per-PR filter previously
-// embedded in the SQL.
+// prStakeholder returns true when userEmail authored the PR or is one of its reviewers.
 func prStakeholder(pr PullRequest, userEmail string) bool {
-	if pr.Author.Email == userEmail {
-		return true
-	}
-	for _, r := range pr.Reviewers {
-		if strings.TrimSpace(r) == userEmail {
-			return true
-		}
-	}
-	return false
+	return pr.Author.Email == userEmail || hasEmail(pr.Reviewers, userEmail)
 }
 
 // branchStateNotif assembles a notifications.Notification for a single

@@ -65,7 +65,7 @@ func newReviewStatusCmd() *cobra.Command {
 			count, _ := review.CountPullRequests(repoURL, nil)
 			openCount, _ := review.CountPullRequests(repoURL, []string{"open"})
 
-			forks := review.GetForks(cfg.WorkDir)
+			forks := gitmsg.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {
 				PrintJSON(map[string]interface{}{
 					"branch":        branch,
@@ -288,7 +288,7 @@ func newReviewPRListCmd() *cobra.Command {
 			}
 			var result review.Result[[]review.PullRequest]
 			if repoURL == "" {
-				forks := review.GetForks(cfg.WorkDir)
+				forks := gitmsg.GetForks(cfg.WorkDir)
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 				workspaceBranch := gitmsg.GetExtBranch(cfg.WorkDir, "review")
 				result = review.GetPullRequestsWithForks(workspaceURL, workspaceBranch, forks, states, "", limit)
@@ -1067,7 +1067,7 @@ func newReviewForkAddCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.AddFork(cfg.WorkDir, args[0]); err != nil {
+			if err := gitmsg.AddFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
 				os.Exit(ExitError)
 			}
@@ -1090,7 +1090,7 @@ func newReviewForkRemoveCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			if err := review.RemoveFork(cfg.WorkDir, args[0]); err != nil {
+			if err := gitmsg.RemoveFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
 				os.Exit(ExitError)
 			}
@@ -1113,7 +1113,7 @@ func newReviewForkListCmd() *cobra.Command {
 				os.Exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
-			forks := review.GetForks(cfg.WorkDir)
+			forks := gitmsg.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {
 				PrintJSON(forks)
 			} else {

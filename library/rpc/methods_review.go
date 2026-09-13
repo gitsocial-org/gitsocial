@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 )
@@ -65,7 +66,7 @@ func reviewGetPullRequests(s *Server) HandlerFunc {
 			limit = 1000
 		}
 		if p.IncludeForks {
-			forks := review.GetForks(s.session.Workdir)
+			forks := gitmsg.GetForks(s.session.Workdir)
 			return fromResult(review.GetPullRequestsWithForks(repoURL, p.Branch, forks, p.States, "", limit))
 		}
 		return fromResult(review.GetPullRequests(repoURL, p.Branch, p.States, "", limit))
@@ -492,7 +493,7 @@ func reviewGetPRComments(s *Server) HandlerFunc {
 
 func reviewGetForks(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
-		return review.GetForks(s.session.Workdir), nil
+		return gitmsg.GetForks(s.session.Workdir), nil
 	}
 }
 
@@ -507,7 +508,7 @@ func reviewAddFork(s *Server) HandlerFunc {
 		if p.URL == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "url is required"}
 		}
-		if err := review.AddFork(s.session.Workdir, p.URL); err != nil {
+		if err := gitmsg.AddFork(s.session.Workdir, p.URL); err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("add fork: %s", err))
 		}
 		return true, nil
@@ -525,7 +526,7 @@ func reviewRemoveFork(s *Server) HandlerFunc {
 		if p.URL == "" {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "url is required"}
 		}
-		if err := review.RemoveFork(s.session.Workdir, p.URL); err != nil {
+		if err := gitmsg.RemoveFork(s.session.Workdir, p.URL); err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("remove fork: %s", err))
 		}
 		return true, nil

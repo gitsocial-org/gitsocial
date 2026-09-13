@@ -223,8 +223,8 @@ func TestExtractSubjectLine(t *testing.T) {
 		{"", ""},
 	}
 	for _, tt := range tests {
-		if got := extractSubjectLine(tt.input); got != tt.want {
-			t.Errorf("extractSubjectLine(%q) = %q, want %q", tt.input, got, tt.want)
+		if got := subjectOf(tt.input); got != tt.want {
+			t.Errorf("subjectOf(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

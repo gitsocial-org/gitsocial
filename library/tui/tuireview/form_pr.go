@@ -109,7 +109,7 @@ func loadPRFormData(workdir string) tea.Cmd {
 func loadForkBranches(workdir string) tea.Cmd {
 	return func() tea.Msg {
 		forkBranches := make(map[string][]string)
-		for _, forkURL := range review.GetForks(workdir) {
+		for _, forkURL := range gitmsg.GetForks(workdir) {
 			if fb, err := git.ListRemoteBranches(workdir, forkURL); err == nil && len(fb) > 0 {
 				forkBranches[forkURL] = fb
 				continue

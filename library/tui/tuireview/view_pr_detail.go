@@ -1568,7 +1568,7 @@ func (v *PRDetailView) isLocalPR() bool {
 	if repo == "" || repo == v.workspaceURL {
 		return true
 	}
-	for _, f := range review.GetForks(v.workdir) {
+	for _, f := range gitmsg.GetForks(v.workdir) {
 		if f == repo {
 			return true
 		}

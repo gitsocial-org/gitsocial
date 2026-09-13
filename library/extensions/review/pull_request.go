@@ -3,7 +3,6 @@ package review
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -694,13 +693,12 @@ func SaveReviewConfig(workdir string, config ReviewConfig) error {
 	if config.Version == "" {
 		config.Version = "0.1.0"
 	}
-	data, err := json.Marshal(config)
-	if err != nil {
-		return err
+	raw := map[string]interface{}{"version": config.Version}
+	if config.Branch != "" {
+		raw["branch"] = config.Branch
 	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+	if config.RequireReview {
+		raw["require-review"] = true
 	}
 	return gitmsg.WriteExtConfig(workdir, "review", raw)
 }
@@ -725,26 +723,6 @@ func GetReviewConfig(workdir string) ReviewConfig {
 		config.Branch = "gitmsg/review"
 	}
 	return config
-}
-
-// GetForks returns the list of registered fork URLs (delegates to core).
-func GetForks(workdir string) []string {
-	return gitmsg.GetForks(workdir)
-}
-
-// AddFork registers a fork URL (delegates to core).
-func AddFork(workdir, forkURL string) error {
-	return gitmsg.AddFork(workdir, forkURL)
-}
-
-// AddForks registers multiple fork URLs (delegates to core).
-func AddForks(workdir string, forkURLs []string) (int, error) {
-	return gitmsg.AddForks(workdir, forkURLs)
-}
-
-// RemoveFork removes a fork URL (delegates to core).
-func RemoveFork(workdir, forkURL string) error {
-	return gitmsg.RemoveFork(workdir, forkURL)
 }
 
 // fetchHeadIntoTemp populates refs/heads/<tempBranch> in workdir with the
@@ -807,11 +785,7 @@ func buildPRContent(subject, body string, opts CreatePROptions, editsRef string)
 }
 
 func buildPRContentWithState(subject, body string, opts CreatePROptions, editsRef string, state PRState, refs []protocol.Ref) string {
-	content := subject
-	if body != "" {
-		content += "\n\n" + body
-	}
-
+	content := joinSubjectBody(subject, body)
 	fields := map[string]string{
 		"type":  string(ItemTypePullRequest),
 		"state": string(state),

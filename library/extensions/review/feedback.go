@@ -305,7 +305,7 @@ func buildFeedbackContent(content string, opts CreateFeedbackOptions, editsRef s
 					Email:    item.AuthorEmail,
 					Time:     item.Timestamp.Format("2006-01-02T15:04:05Z"),
 					Fields:   map[string]string{"type": string(ItemTypePullRequest)},
-					Metadata: extractSubjectLine(item.Content),
+					Metadata: subjectOf(item.Content),
 				})
 			}
 		}
@@ -320,10 +320,8 @@ func buildFeedbackContent(content string, opts CreateFeedbackOptions, editsRef s
 	return protocol.FormatMessage(content, header, refs)
 }
 
-func extractSubjectLine(content string) string {
-	content = strings.TrimSpace(content)
-	if idx := strings.Index(content, "\n"); idx > 0 {
-		return strings.TrimSpace(content[:idx])
-	}
-	return content
+// subjectOf returns a message's first line.
+func subjectOf(content string) string {
+	subject, _ := protocol.SplitSubjectBody(content)
+	return subject
 }

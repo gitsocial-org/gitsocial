@@ -757,7 +757,7 @@ func TestReviewConfig(t *testing.T) {
 	t.Run("GetForks_empty", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		forks := GetForks(dir)
+		forks := gitmsg.GetForks(dir)
 		if len(forks) != 0 {
 			t.Errorf("len(Forks) = %d, want 0", len(forks))
 		}
@@ -809,9 +809,9 @@ func TestReviewConfig(t *testing.T) {
 	t.Run("GetForks", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		AddFork(dir, "https://github.com/fork1/repo")
-		AddFork(dir, "https://github.com/fork2/repo")
-		forks := GetForks(dir)
+		gitmsg.AddFork(dir, "https://github.com/fork1/repo")
+		gitmsg.AddFork(dir, "https://github.com/fork2/repo")
+		forks := gitmsg.GetForks(dir)
 		if len(forks) != 2 {
 			t.Errorf("len(Forks) = %d, want 2", len(forks))
 		}
@@ -821,10 +821,10 @@ func TestReviewConfig(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
 		SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0"})
-		if err := AddFork(dir, "https://github.com/fork/repo"); err != nil {
+		if err := gitmsg.AddFork(dir, "https://github.com/fork/repo"); err != nil {
 			t.Fatalf("AddFork() error = %v", err)
 		}
-		forks := GetForks(dir)
+		forks := gitmsg.GetForks(dir)
 		if len(forks) != 1 {
 			t.Errorf("len(Forks) = %d, want 1", len(forks))
 		}
@@ -834,9 +834,9 @@ func TestReviewConfig(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
 		SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0"})
-		AddFork(dir, "https://github.com/fork/repo")
-		AddFork(dir, "https://github.com/fork/repo")
-		forks := GetForks(dir)
+		gitmsg.AddFork(dir, "https://github.com/fork/repo")
+		gitmsg.AddFork(dir, "https://github.com/fork/repo")
+		forks := gitmsg.GetForks(dir)
 		if len(forks) != 1 {
 			t.Errorf("len(Forks) = %d after duplicate add, want 1", len(forks))
 		}
@@ -846,12 +846,12 @@ func TestReviewConfig(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
 		SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0"})
-		AddFork(dir, "https://github.com/fork1/repo")
-		AddFork(dir, "https://github.com/fork2/repo")
-		if err := RemoveFork(dir, "https://github.com/fork1/repo"); err != nil {
+		gitmsg.AddFork(dir, "https://github.com/fork1/repo")
+		gitmsg.AddFork(dir, "https://github.com/fork2/repo")
+		if err := gitmsg.RemoveFork(dir, "https://github.com/fork1/repo"); err != nil {
 			t.Fatalf("RemoveFork() error = %v", err)
 		}
-		forks := GetForks(dir)
+		forks := gitmsg.GetForks(dir)
 		if len(forks) != 1 {
 			t.Errorf("len(Forks) = %d, want 1", len(forks))
 		}

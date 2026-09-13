@@ -53,7 +53,7 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 		return nil, nil
 	}
 	userEmail := git.GetUserEmail(workdir)
-	forks := GetForks(workdir)
+	forks := gitmsg.GetForks(workdir)
 
 	var result []notifications.Notification
 
@@ -97,7 +97,7 @@ func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error)
 		return 0, nil
 	}
 	userEmail := git.GetUserEmail(workdir)
-	forks := GetForks(workdir)
+	forks := gitmsg.GetForks(workdir)
 
 	forkCount, err := countUnreadForkPRs(workspaceURL, userEmail, forks)
 	if err != nil {
@@ -582,10 +582,15 @@ func countUnreadDraftReady(workdir, workspaceURL, userEmail string, forkURLs []s
 	return len(notifs), nil
 }
 
-// containsEmail checks if email appears as an exact match in a comma-separated list.
+// containsEmail reports whether email is an exact entry in a comma-separated list.
 func containsEmail(list, email string) bool {
-	for _, e := range strings.Split(list, ",") {
-		if strings.TrimSpace(e) == email {
+	return hasEmail(strings.Split(list, ","), email)
+}
+
+// hasEmail reports whether email is an exact entry, ignoring surrounding space.
+func hasEmail(addresses []string, email string) bool {
+	for _, a := range addresses {
+		if strings.TrimSpace(a) == email {
 			return true
 		}
 	}

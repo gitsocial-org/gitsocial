@@ -402,7 +402,7 @@ func (v *PRsView) loadPRs() tea.Cmd {
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		v.workspaceURL = repoURL
 		branch := gitmsg.GetExtBranch(workdir, "review")
-		forks := review.GetForks(workdir)
+		forks := gitmsg.GetForks(workdir)
 
 		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, "", limit+1)
 		if !res.Success {
@@ -442,7 +442,7 @@ func (v *PRsView) loadMorePRs() tea.Cmd {
 	return func() tea.Msg {
 		repoURL := gitmsg.ResolveRepoURL(workdir)
 		branch := gitmsg.GetExtBranch(workdir, "review")
-		forks := review.GetForks(workdir)
+		forks := gitmsg.GetForks(workdir)
 
 		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
 		if !res.Success {

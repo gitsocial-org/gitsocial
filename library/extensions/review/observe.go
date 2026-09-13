@@ -114,8 +114,8 @@ type PRObservation struct {
 func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation {
 	headParsed := protocol.ParseRef(pr.Head)
 	baseParsed := protocol.ParseRef(pr.Base)
-	headRepo, headBranch := resolveRepoBranch(headParsed, workspaceURL)
-	baseRepo, baseBranch := resolveRepoBranch(baseParsed, workspaceURL)
+	headRepo, headBranch := refRepoAndBranch(headParsed, workspaceURL)
+	baseRepo, baseBranch := refRepoAndBranch(baseParsed, workspaceURL)
 	headObs, _ := GetBranchObservation(headRepo, headBranch)
 	baseObs, _ := GetBranchObservation(baseRepo, baseBranch)
 	if headObs == nil && baseObs == nil {
@@ -131,17 +131,6 @@ func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation 
 		out.BaseExists = baseObs.Exists
 	}
 	return out
-}
-
-func resolveRepoBranch(parsed protocol.ParsedRef, workspaceURL string) (string, string) {
-	if parsed.Type != protocol.RefTypeBranch {
-		return "", ""
-	}
-	repo := parsed.Repository
-	if repo == "" {
-		repo = workspaceURL
-	}
-	return repo, parsed.Value
 }
 
 // observeBranch resolves the live tip of (repoURL, branch) via the strict

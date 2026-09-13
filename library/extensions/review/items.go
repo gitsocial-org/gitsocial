@@ -642,11 +642,7 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 
 // ReviewItemToFeedback converts a ReviewItem to a Feedback.
 func ReviewItemToFeedback(item ReviewItem) Feedback {
-	subject, body := protocol.SplitSubjectBody(item.Content)
-	content := subject
-	if body != "" {
-		content = subject + "\n\n" + body
-	}
+	content := joinSubjectBody(protocol.SplitSubjectBody(item.Content))
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 	var oldLine, newLine, oldLineEnd, newLineEnd int
 	if item.OldLine.Valid {

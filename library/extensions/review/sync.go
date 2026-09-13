@@ -2,6 +2,8 @@
 package review
 
 import (
+	"strconv"
+
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -96,25 +98,17 @@ func MessageToReviewItem(msg *protocol.Message, repoURL, hash, branch string) Re
 		Suggestion:       boolToInt(msg.Header.Fields["suggestion"] == "true"),
 	}
 
-	if s := msg.Header.Fields["old-line"]; s != "" {
-		if v := parseInt(s); v > 0 {
-			item.OldLine = cache.ToNullInt64(v)
-		}
+	if v, err := strconv.Atoi(msg.Header.Fields["old-line"]); err == nil && v > 0 {
+		item.OldLine = cache.ToNullInt64(v)
 	}
-	if s := msg.Header.Fields["new-line"]; s != "" {
-		if v := parseInt(s); v > 0 {
-			item.NewLine = cache.ToNullInt64(v)
-		}
+	if v, err := strconv.Atoi(msg.Header.Fields["new-line"]); err == nil && v > 0 {
+		item.NewLine = cache.ToNullInt64(v)
 	}
-	if s := msg.Header.Fields["old-line-end"]; s != "" {
-		if v := parseInt(s); v > 0 {
-			item.OldLineEnd = cache.ToNullInt64(v)
-		}
+	if v, err := strconv.Atoi(msg.Header.Fields["old-line-end"]); err == nil && v > 0 {
+		item.OldLineEnd = cache.ToNullInt64(v)
 	}
-	if s := msg.Header.Fields["new-line-end"]; s != "" {
-		if v := parseInt(s); v > 0 {
-			item.NewLineEnd = cache.ToNullInt64(v)
-		}
+	if v, err := strconv.Atoi(msg.Header.Fields["new-line-end"]); err == nil && v > 0 {
+		item.NewLineEnd = cache.ToNullInt64(v)
 	}
 
 	if prRef := msg.Header.Fields["pull-request"]; prRef != "" {
@@ -146,16 +140,4 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
-}
-
-func parseInt(s string) int {
-	var n int
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			n = n*10 + int(c-'0')
-		} else {
-			return 0
-		}
-	}
-	return n
 }

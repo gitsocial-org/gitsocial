@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -118,7 +119,7 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 			v.IsRetracted = msg.Header.Fields["retracted"] == "true"
 		}
 		body := protocol.ExtractCleanContent(r.Message)
-		if idx := indexOfNewline(body); idx >= 0 {
+		if idx := strings.IndexByte(body, '\n'); idx >= 0 {
 			v.Subject = body[:idx]
 			v.Body = body[idx+1:]
 		} else {
@@ -274,16 +275,6 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 		})
 	}
 	return result.Ok(reviews)
-}
-
-// indexOfNewline returns the index of the first newline in s, or -1 if none.
-func indexOfNewline(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			return i
-		}
-	}
-	return -1
 }
 
 // extractHashFromID extracts the hash portion from a PR ID ref.

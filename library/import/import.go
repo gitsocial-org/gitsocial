@@ -633,7 +633,7 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 					fmt.Printf("  review  fork: %s\n", forkURL)
 				}
 			}
-			added, err := review.AddForks(opts.WorkDir, plan.Forks)
+			added, err := gitmsg.AddForks(opts.WorkDir, plan.Forks)
 			if err != nil {
 				stats.Errors = append(stats.Errors, ImportError{Type: "fork", Message: err.Error()})
 			} else {

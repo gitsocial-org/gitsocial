@@ -516,21 +516,26 @@ func TestBoolToInt(t *testing.T) {
 	}
 }
 
-func TestParseIntValues(t *testing.T) {
+// TestMessageToReviewItem_lineFields keeps a malformed line number out of the row.
+func TestMessageToReviewItem_lineFields(t *testing.T) {
 	tests := []struct {
-		input string
-		want  int
+		value string
+		want  int64
+		valid bool
 	}{
-		{"42", 42},
-		{"0", 0},
-		{"123", 123},
-		{"abc", 0},
-		{"12x3", 0},
-		{"", 0},
+		{"42", 42, true},
+		{"0", 0, false},
+		{"-3", 0, false},
+		{"abc", 0, false},
+		{"12x3", 0, false},
+		{"", 0, false},
 	}
 	for _, tt := range tests {
-		if got := parseInt(tt.input); got != tt.want {
-			t.Errorf("parseInt(%q) = %d, want %d", tt.input, got, tt.want)
+		content := "Inline\n\n" + `GitMsg: ext="review"; type="feedback"; new-line="` + tt.value + `"; v="0.1.0"`
+		msg := protocol.ParseMessage(content)
+		item := MessageToReviewItem(msg, reviewTestRepoURL, "ln1234567890", reviewTestBranch)
+		if item.NewLine.Valid != tt.valid || item.NewLine.Int64 != tt.want {
+			t.Errorf("new-line=%q gave %+v, want valid=%v value=%d", tt.value, item.NewLine, tt.valid, tt.want)
 		}
 	}
 }
