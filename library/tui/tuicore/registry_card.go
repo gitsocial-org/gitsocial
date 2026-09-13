@@ -93,6 +93,11 @@ func init() {
 		ItemType{Extension: "core", Type: "edit"},
 		editIsDimmed,
 	)
+	// The notifications package registers this source for every client, the TUI included.
+	RegisterCardRenderer(
+		ItemType{Extension: "gitmsg-divergence", Type: "branch-diverged"},
+		divergedBranchToCard,
+	)
 }
 
 // mentionNotificationToCard renders a core mention notification to a Card.
@@ -157,6 +162,26 @@ func editIsDimmed(data any) bool {
 		return false
 	}
 	return n.IsRead
+}
+
+// divergedBranchToCard renders a diverged gitmsg branch notification to a Card.
+func divergedBranchToCard(data any, _ ItemResolver) Card {
+	n, ok := data.(notifications.Notification)
+	if !ok {
+		return Card{Header: CardHeader{Title: "Invalid notification"}}
+	}
+	var subtitleParts []HeaderPart
+	if n.RepoURL != "" {
+		subtitleParts = append(subtitleParts, HeaderPart{Text: protocol.GetFullDisplayName(n.RepoURL)})
+	}
+	return Card{
+		Header: CardHeader{
+			Icon:     "!",
+			Title:    n.Branch,
+			Subtitle: subtitleParts,
+			Badge:    "diverged from origin",
+		},
+	}
 }
 
 // defaultItemToCard provides basic rendering for unknown types

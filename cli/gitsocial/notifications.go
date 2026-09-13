@@ -297,6 +297,11 @@ func formatNotification(n notifications.Notification) string {
 			canonicalID := en.CanonicalRepoURL + "#commit:" + en.CanonicalHash
 			lines = append(lines, fmt.Sprintf("  %s", canonicalID))
 		}
+	case "branch-diverged":
+		if dn, ok := n.Item.(notifications.DivergenceNotification); ok {
+			// Same words as the TUI card, so both clients report the branch alike.
+			lines = append(lines, fmt.Sprintf("  %s diverged from origin", dn.Branch))
+		}
 	case "fork-pr":
 		if rn, ok := n.Item.(review.ReviewNotification); ok {
 			if rn.PRSubject != "" {
