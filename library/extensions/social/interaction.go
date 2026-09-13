@@ -9,7 +9,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -229,37 +228,35 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 
 	message := protocol.FormatMessage(content, header, gitRefs)
 
-	hash, err := git.CreateCommitOnBranch(workdir, branch, message)
+	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
 		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
-	commit, err := git.GetCommit(workdir, hash)
-	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to get commit", err)
-	}
-	authorName := ""
-	authorEmail := ""
-	if commit != nil {
-		authorName = commit.Author
-		authorEmail = commit.Email
-	}
-
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
-	_, isUnpushed := unpushed[hash[:12]]
-
 	originalID := fields["original"]
 	replyToID := fields["reply-to"]
 	now := time.Now()
+	originalRepoURL, originalHash, originalBranch := parseSocialRefField(originalID, "", branch)
+	replyToRepoURL, replyToHash, replyToBranch := parseSocialRefField(replyToID, "", branch)
 
-	post := Post{
-		ID:         protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
-		Repository: repoURL,
-		Branch:     branch,
-		Author: Author{
-			Name:  authorName,
-			Email: authorEmail,
-		},
+	recordSocialCommit(SocialItem{
+		RepoURL:         repoURL,
+		Hash:            hash,
+		Branch:          branch,
+		Type:            string(interactionType),
+		OriginalRepoURL: cache.ToNullString(originalRepoURL),
+		OriginalHash:    cache.ToNullString(originalHash),
+		OriginalBranch:  cache.ToNullString(originalBranch),
+		ReplyToRepoURL:  cache.ToNullString(replyToRepoURL),
+		ReplyToHash:     cache.ToNullString(replyToHash),
+		ReplyToBranch:   cache.ToNullString(replyToBranch),
+	}, message, author, now)
+
+	return Success(Post{
+		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
+		Repository:      repoURL,
+		Branch:          branch,
+		Author:          author,
 		Timestamp:       now,
 		Content:         content,
 		Type:            interactionType,
@@ -273,62 +270,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 			IsWorkspacePost: true,
 			IsUnpushed:      isUnpushed,
 		},
-	}
-
-	// Insert into commits and social_items
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash:        hash,
-		RepoURL:     repoURL,
-		Branch:      branch,
-		AuthorName:  authorName,
-		AuthorEmail: authorEmail,
-		Message:     message,
-		Timestamp:   now,
-	}}); err != nil {
-		log.Warn("insert commit failed", "hash", hash, "error", err)
-	}
-
-	// Parse refs to get repo_url, hash, and branch components
-	originalRepoURL, originalHash, originalBranch := "", "", ""
-	if originalID != "" {
-		parsed := protocol.ParseRef(originalID)
-		if parsed.Value != "" {
-			originalRepoURL = parsed.Repository
-			originalHash = parsed.Value
-			originalBranch = parsed.Branch
-			if originalBranch == "" {
-				originalBranch = branch // default to current branch
-			}
-		}
-	}
-	replyToRepoURL, replyToHash, replyToBranch := "", "", ""
-	if replyToID != "" {
-		parsed := protocol.ParseRef(replyToID)
-		if parsed.Value != "" {
-			replyToRepoURL = parsed.Repository
-			replyToHash = parsed.Value
-			replyToBranch = parsed.Branch
-			if replyToBranch == "" {
-				replyToBranch = branch // default to current branch
-			}
-		}
-	}
-	if err := InsertSocialItem(SocialItem{
-		RepoURL:         repoURL,
-		Hash:            hash,
-		Branch:          branch,
-		Type:            string(interactionType),
-		OriginalRepoURL: sql.NullString{String: originalRepoURL, Valid: originalRepoURL != ""},
-		OriginalHash:    sql.NullString{String: originalHash, Valid: originalHash != ""},
-		OriginalBranch:  sql.NullString{String: originalBranch, Valid: originalBranch != ""},
-		ReplyToRepoURL:  sql.NullString{String: replyToRepoURL, Valid: replyToRepoURL != ""},
-		ReplyToHash:     sql.NullString{String: replyToHash, Valid: replyToHash != ""},
-		ReplyToBranch:   sql.NullString{String: replyToBranch, Valid: replyToBranch != ""},
-	}); err != nil {
-		log.Warn("insert social item failed", "hash", hash, "error", err)
-	}
-
-	return Success(post)
+	})
 }
 
 // buildRefFromItem constructs a protocol reference from a social item.
@@ -438,34 +380,30 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 
 	message := protocol.FormatMessage(newContent, header, nil)
 
-	hash, err := git.CreateCommitOnBranch(workdir, branch, message)
+	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
 		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
-	commit, err := git.GetCommit(workdir, hash)
-	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to get commit", err)
-	}
-	authorName := ""
-	authorEmail := ""
-	if commit != nil {
-		authorName = commit.Author
-		authorEmail = commit.Email
-	}
-
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
-	_, isUnpushed := unpushed[hash[:12]]
-
 	now := time.Now()
-	post := Post{
-		ID:         protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
-		Repository: repoURL,
-		Branch:     branch,
-		Author: Author{
-			Name:  authorName,
-			Email: authorEmail,
-		},
+	recordSocialCommit(SocialItem{
+		RepoURL:         repoURL,
+		Hash:            hash,
+		Branch:          branch,
+		Type:            targetItem.Type,
+		OriginalRepoURL: targetItem.OriginalRepoURL,
+		OriginalHash:    targetItem.OriginalHash,
+		OriginalBranch:  targetItem.OriginalBranch,
+		ReplyToRepoURL:  targetItem.ReplyToRepoURL,
+		ReplyToHash:     targetItem.ReplyToHash,
+		ReplyToBranch:   targetItem.ReplyToBranch,
+	}, message, author, now)
+
+	return Success(Post{
+		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
+		Repository:      repoURL,
+		Branch:          branch,
+		Author:          author,
 		Timestamp:       now,
 		Content:         newContent,
 		Type:            PostType(targetItem.Type),
@@ -478,36 +416,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 			IsWorkspacePost: true,
 			IsUnpushed:      isUnpushed,
 		},
-	}
-
-	// Insert into commits and social_items
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash:        hash,
-		RepoURL:     repoURL,
-		Branch:      branch,
-		AuthorName:  authorName,
-		AuthorEmail: authorEmail,
-		Message:     message,
-		Timestamp:   now,
-	}}); err != nil {
-		log.Warn("insert commit failed", "hash", hash, "error", err)
-	}
-	if err := InsertSocialItem(SocialItem{
-		RepoURL:         repoURL,
-		Hash:            hash,
-		Branch:          branch,
-		Type:            targetItem.Type,
-		OriginalRepoURL: targetItem.OriginalRepoURL,
-		OriginalHash:    targetItem.OriginalHash,
-		OriginalBranch:  targetItem.OriginalBranch,
-		ReplyToRepoURL:  targetItem.ReplyToRepoURL,
-		ReplyToHash:     targetItem.ReplyToHash,
-		ReplyToBranch:   targetItem.ReplyToBranch,
-	}); err != nil {
-		log.Warn("insert social item failed", "hash", hash, "error", err)
-	}
-
-	return Success(post)
+	})
 }
 
 // RetractPost marks a post as retracted (soft delete).
@@ -553,40 +462,15 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 		FieldOrder: socialFieldOrder,
 	}
 
-	// Empty content for retraction
+	// A retraction carries no content.
 	message := protocol.FormatMessage("", header, nil)
 
-	hash, err := git.CreateCommitOnBranch(workdir, branch, message)
+	hash, author, _, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
 		return FailureWithDetails[bool]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
-	commit, err := git.GetCommit(workdir, hash)
-	if err != nil {
-		return FailureWithDetails[bool]("COMMIT_ERROR", "Failed to get commit", err)
-	}
-	authorName := ""
-	authorEmail := ""
-	if commit != nil {
-		authorName = commit.Author
-		authorEmail = commit.Email
-	}
-
-	now := time.Now()
-
-	// Insert into commits and social_items
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash:        hash,
-		RepoURL:     repoURL,
-		Branch:      branch,
-		AuthorName:  authorName,
-		AuthorEmail: authorEmail,
-		Message:     message,
-		Timestamp:   now,
-	}}); err != nil {
-		log.Warn("insert commit failed", "hash", hash, "error", err)
-	}
-	if err := InsertSocialItem(SocialItem{
+	recordSocialCommit(SocialItem{
 		RepoURL:         repoURL,
 		Hash:            hash,
 		Branch:          branch,
@@ -597,9 +481,7 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 		ReplyToRepoURL:  targetItem.ReplyToRepoURL,
 		ReplyToHash:     targetItem.ReplyToHash,
 		ReplyToBranch:   targetItem.ReplyToBranch,
-	}); err != nil {
-		log.Warn("insert social item failed", "hash", hash, "error", err)
-	}
+	}, message, author, time.Now())
 
 	return Success(true)
 }

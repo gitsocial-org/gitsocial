@@ -3,6 +3,7 @@ package social
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -230,34 +231,24 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 		message = protocol.FormatMessage(content, header, nil)
 	}
 
-	hash, err := git.CreateCommitOnBranch(workdir, branch, message)
+	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
 		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
 	}
 
-	commit, err := git.GetCommit(workdir, hash)
-	if err != nil {
-		return FailureWithDetails[Post]("COMMIT_ERROR", "Failed to get commit", err)
-	}
-	authorName := ""
-	authorEmail := ""
-	if commit != nil {
-		authorName = commit.Author
-		authorEmail = commit.Email
-	}
-
-	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
-	_, isUnpushed := unpushed[hash[:12]]
-
 	now := time.Now()
-	post := Post{
-		ID:         protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
-		Repository: repoURL,
-		Branch:     branch,
-		Author: Author{
-			Name:  authorName,
-			Email: authorEmail,
-		},
+	recordSocialCommit(SocialItem{
+		RepoURL: repoURL,
+		Hash:    hash,
+		Branch:  branch,
+		Type:    "post",
+	}, message, author, now)
+
+	return Success(Post{
+		ID:              protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch),
+		Repository:      repoURL,
+		Branch:          branch,
+		Author:          author,
 		Timestamp:       now,
 		Content:         content,
 		Type:            PostTypePost,
@@ -269,30 +260,44 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 			IsWorkspacePost: true,
 			IsUnpushed:      isUnpushed,
 		},
-	}
+	})
+}
 
-	// Insert into commits and social_items
+// commitSocialMessage commits a message on the social branch and reads back its author and push state.
+func commitSocialMessage(workdir, branch, message string) (string, Author, bool, error) {
+	hash, err := git.CreateCommitOnBranch(workdir, branch, message)
+	if err != nil {
+		return "", Author{}, false, fmt.Errorf("create commit on %s: %w", branch, err)
+	}
+	commit, err := git.GetCommit(workdir, hash)
+	if err != nil {
+		return "", Author{}, false, fmt.Errorf("read commit %s: %w", hash, err)
+	}
+	var author Author
+	if commit != nil {
+		author = Author{Name: commit.Author, Email: commit.Email}
+	}
+	unpushed, _ := git.GetUnpushedCommits(workdir, branch)
+	_, isUnpushed := unpushed[hash[:12]]
+	return hash, author, isUnpushed, nil
+}
+
+// recordSocialCommit caches a written commit and its social item.
+func recordSocialCommit(item SocialItem, message string, author Author, timestamp time.Time) {
 	if err := cache.InsertCommits([]cache.Commit{{
-		Hash:        hash,
-		RepoURL:     repoURL,
-		Branch:      branch,
-		AuthorName:  authorName,
-		AuthorEmail: authorEmail,
+		Hash:        item.Hash,
+		RepoURL:     item.RepoURL,
+		Branch:      item.Branch,
+		AuthorName:  author.Name,
+		AuthorEmail: author.Email,
 		Message:     message,
-		Timestamp:   now,
+		Timestamp:   timestamp,
 	}}); err != nil {
-		log.Warn("insert commits after post creation failed", "hash", hash, "error", err)
+		log.Warn("insert commit failed", "hash", item.Hash, "error", err)
 	}
-	if err := InsertSocialItem(SocialItem{
-		RepoURL: repoURL,
-		Hash:    hash,
-		Branch:  branch,
-		Type:    "post",
-	}); err != nil {
-		log.Warn("insert social item after post creation failed", "hash", hash, "error", err)
+	if err := InsertSocialItem(item); err != nil {
+		log.Warn("insert social item failed", "hash", item.Hash, "error", err)
 	}
-
-	return Success(post)
 }
 
 // getTimeline retrieves posts from all subscribed lists and workspace.
