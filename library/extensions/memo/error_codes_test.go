@@ -4,12 +4,12 @@ package memo
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 // blockedTierPath returns a regular file path, which no tier repo can be created under.
@@ -20,20 +20,6 @@ func blockedTierPath(t *testing.T) string {
 		t.Fatalf("write %s: %v", path, err)
 	}
 	return path
-}
-
-// skipWithoutFilesRefBackend skips the test unless the repository stores refs in files, the backend a ref lock blocks.
-func skipWithoutFilesRefBackend(t *testing.T, dir string) {
-	t.Helper()
-	if out, err := git.ExecGit(dir, []string{"rev-parse", "--show-ref-format"}); err == nil {
-		if format := strings.TrimSpace(out.Stdout); format != "files" {
-			t.Skipf("ref format is %q, and a ref lock blocks writes on the files backend", format)
-		}
-		return
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".git", "reftable")); err == nil {
-		t.Skip("ref format is reftable, and a ref lock blocks writes on the files backend")
-	}
 }
 
 // homelessEnv clears every tier path override and $HOME, so tier directory resolution fails.
@@ -161,7 +147,7 @@ func TestAddInherit_lockedRef(t *testing.T) {
 	setupTestDB(t)
 	freshHome(t)
 	dir := initTestRepo(t)
-	skipWithoutFilesRefBackend(t, dir)
+	testutil.SkipWithoutFilesRefBackend(t, dir)
 
 	url := protocol.NormalizeURL("https://example.com/locked-policies.git")
 	lockInheritRef(t, dir, url)
@@ -180,7 +166,7 @@ func TestRemoveInherit_lockedRef(t *testing.T) {
 	setupTestDB(t)
 	freshHome(t)
 	dir := initTestRepo(t)
-	skipWithoutFilesRefBackend(t, dir)
+	testutil.SkipWithoutFilesRefBackend(t, dir)
 
 	url := protocol.NormalizeURL("https://example.com/stuck-policies.git")
 	if added := AddInherit(dir, url); !added.Success {

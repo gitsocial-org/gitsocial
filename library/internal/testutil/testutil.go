@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -33,6 +34,20 @@ func OpenTempCache(t *testing.T, restoreDir string) {
 			_ = cache.Open(restoreDir)
 		}
 	})
+}
+
+// SkipWithoutFilesRefBackend skips the test unless the repository stores refs in files, the backend a ref lock blocks.
+func SkipWithoutFilesRefBackend(t *testing.T, dir string) {
+	t.Helper()
+	if out, err := git.ExecGit(dir, []string{"rev-parse", "--show-ref-format"}); err == nil {
+		if format := strings.TrimSpace(out.Stdout); format != "files" {
+			t.Skipf("ref format is %q, and a ref lock blocks writes on the files backend", format)
+		}
+		return
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "reftable")); err == nil {
+		t.Skip("ref format is reftable, and a ref lock blocks writes on the files backend")
+	}
 }
 
 // NewRepoTemplate creates a git repo in a fresh temp directory with a test
