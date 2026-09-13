@@ -2,6 +2,7 @@
 package client
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -25,14 +26,60 @@ func setupWork(t *testing.T, originURL string) string {
 	return work
 }
 
-// TestResolveRemote_explicitWins: an explicit remote beats the heuristic.
-func TestResolveRemote_explicitWins(t *testing.T) {
+// TestResolveRemotes: named remotes win, else the configured defaults, else the heuristic.
+func TestResolveRemotes(t *testing.T) {
 	work := setupWork(t, t.TempDir())
-	if got := ResolveRemote(work, "backup"); got != "backup" {
-		t.Errorf("ResolveRemote explicit = %q, want backup", got)
+	if _, err := git.ExecGit(work, []string{"remote", "add", "backup", "s3://s3.example.com/b/p"}); err != nil {
+		t.Fatalf("add backup: %v", err)
 	}
-	if got := ResolveRemote(work, ""); got != "origin" {
-		t.Errorf("ResolveRemote empty = %q, want origin (heuristic)", got)
+	got, reason := ResolveRemotes(work, []string{"backup"})
+	if len(got) != 1 || got[0] != "backup" || reason != git.PushConfigured {
+		t.Errorf("ResolveRemotes named = %v (%q), want [backup] configured", got, reason)
+	}
+	if got, reason := ResolveRemotes(work, nil); len(got) != 1 || got[0] != "backup" || reason != git.PushS3 {
+		t.Errorf("ResolveRemotes unconfigured = %v (%q), want [backup] s3", got, reason)
+	}
+	if err := git.SetConfiguredPushRemotes(work, []string{"backup", "origin"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes: %v", err)
+	}
+	got, reason = ResolveRemotes(work, nil)
+	if len(got) != 2 || got[0] != "backup" || got[1] != "origin" || reason != git.PushConfigured {
+		t.Errorf("ResolveRemotes configured = %v (%q), want [backup origin] configured", got, reason)
+	}
+	if err := git.SetConfiguredPushRemotes(work, []string{"ghost"}); err != nil {
+		t.Fatalf("SetConfiguredPushRemotes ghost: %v", err)
+	}
+	if got, reason := ResolveRemotes(work, nil); len(got) != 1 || got[0] != "backup" || reason != git.PushStale {
+		t.Errorf("ResolveRemotes stale = %v (%q), want [backup] stale", got, reason)
+	}
+}
+
+// TestPublishAll_continuesPastFailure: a failed remote stops neither the next one nor the error.
+func TestPublishAll_continuesPastFailure(t *testing.T) {
+	good := t.TempDir()
+	if err := git.EnsureBareRepo(good); err != nil {
+		t.Fatalf("init remote: %v", err)
+	}
+	work := setupWork(t, good)
+	if _, err := git.ExecGit(work, []string{"remote", "add", "broken", t.TempDir()}); err != nil {
+		t.Fatalf("add broken: %v", err)
+	}
+	if _, err := git.CreateCommitOnBranch(work, "gitmsg/social", "a post"); err != nil {
+		t.Fatalf("commit on branch: %v", err)
+	}
+
+	results, err := PublishAll(work, []string{"broken", "origin"}, Options{}, nil, nil, nil)
+	if err == nil {
+		t.Fatal("PublishAll with a broken remote should return an error")
+	}
+	if !strings.Contains(err.Error(), "broken") {
+		t.Errorf("error = %v, want it to name the broken remote", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1 (the remote that worked)", len(results))
+	}
+	if results[0].Push == nil || results[0].Push.Remote != "origin" {
+		t.Errorf("result = %+v, want origin's push result", results[0].Push)
 	}
 }
 
@@ -49,7 +96,7 @@ func TestPublish_nonS3RemoteSkipsSite(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	res, err := Publish(work, Options{}, nil, nil)
+	res, err := Publish(work, "origin", Options{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -74,7 +121,7 @@ func TestPublish_noSiteOptOut(t *testing.T) {
 	work := setupWork(t, remote)
 	git.ExecGit(work, []string{"push", "origin", "main"})
 
-	res, err := Publish(work, Options{NoSite: true}, nil, nil)
+	res, err := Publish(work, "origin", Options{NoSite: true}, nil, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -100,7 +147,7 @@ func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	if _, err := Publish(work, Options{SiteOnly: true}, nil, nil); err == nil {
+	if _, err := Publish(work, "origin", Options{SiteOnly: true}, nil, nil); err == nil {
 		t.Error("site-only publish to a non-s3 remote should error")
 	}
 	out, _ := git.ExecGit(remote, []string{"branch", "--list", "gitmsg/social"})
@@ -113,7 +160,7 @@ func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
 // not configured — explicit request, loud failure.
 func TestPublish_siteOnlyMissingRemoteErrors(t *testing.T) {
 	work := setupWork(t, t.TempDir())
-	if _, err := Publish(work, Options{SiteOnly: true, Remote: "nosuch"}, nil, nil); err == nil {
+	if _, err := Publish(work, "nosuch", Options{SiteOnly: true}, nil, nil); err == nil {
 		t.Error("site-only publish to a missing remote should error")
 	}
 }
@@ -127,7 +174,7 @@ func TestPublish_siteOnlyDryRun(t *testing.T) {
 	}
 	work := setupWork(t, remote)
 
-	res, err := Publish(work, Options{SiteOnly: true, DryRun: true}, nil, nil)
+	res, err := Publish(work, "origin", Options{SiteOnly: true, DryRun: true}, nil, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -145,7 +192,7 @@ func TestPublish_dryRunSkipsSite(t *testing.T) {
 	work := setupWork(t, remote)
 	git.ExecGit(work, []string{"push", "origin", "main"})
 
-	res, err := Publish(work, Options{DryRun: true}, nil, nil)
+	res, err := Publish(work, "origin", Options{DryRun: true}, nil, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -168,7 +215,7 @@ func TestPublish_emptyBoot(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	res, err := Publish(work, Options{}, nil, nil)
+	res, err := Publish(work, "origin", Options{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -176,7 +223,7 @@ func TestPublish_emptyBoot(t *testing.T) {
 		t.Error("first publish to a fresh bare remote should set EmptyBoot")
 	}
 
-	res2, err := Publish(work, Options{}, nil, nil)
+	res2, err := Publish(work, "origin", Options{}, nil, nil)
 	if err != nil {
 		t.Fatalf("second Publish: %v", err)
 	}

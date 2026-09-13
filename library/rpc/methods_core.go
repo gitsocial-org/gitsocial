@@ -348,17 +348,25 @@ func corePush(s *Server) HandlerFunc {
 			return nil, rpcErr
 		}
 		opts := client.Options{
-			Remote:      p.Remote,
 			NoCode:      p.NoCode,
 			NoSite:      p.NoSite,
 			AllBranches: p.AllBranches,
 		}
-		result, err := client.Publish(s.session.Workdir, opts, nil, nil)
+		remotes, _ := client.ResolveRemotes(s.session.Workdir, namedRemotes(p.Remote))
+		result, err := client.Publish(s.session.Workdir, remotes[0], opts, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}
 		return result, nil
 	}
+}
+
+// namedRemotes wraps the optional remote param as the argument list a resolve takes.
+func namedRemotes(remote string) []string {
+	if remote == "" {
+		return nil
+	}
+	return []string{remote}
 }
 
 func coreFetch(s *Server) HandlerFunc {

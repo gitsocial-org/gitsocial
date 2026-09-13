@@ -781,7 +781,6 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 			onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
 		}
 		opts := client.Options{
-			Remote:      t.name,
 			NoCode:      f.noCode,
 			NoSite:      f.noSite,
 			AllBranches: !f.defaultBranchOnly,
@@ -789,7 +788,7 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 		if !cfg.JSONOutput {
 			fmt.Printf("Pushing to %s (%s) ...\n", t.name, t.url)
 		}
-		result, err := client.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
+		result, err := client.Publish(cfg.WorkDir, t.name, opts, onBranch, siteProgress)
 		if err != nil {
 			failed = true
 			fmt.Fprintf(os.Stderr, "error: push to %s: %v\n", t.name, err)
@@ -824,7 +823,7 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 // state is the one the run actually left behind.
 func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress) (bool, error) {
 	for pass := 0; pass < mirrorSitePassCap; pass++ {
-		result, err := client.Publish(cfg.WorkDir, client.Options{Remote: remote, SiteOnly: true}, nil, progress)
+		result, err := client.Publish(cfg.WorkDir, remote, client.Options{SiteOnly: true}, nil, progress)
 		if err != nil {
 			return false, err
 		}

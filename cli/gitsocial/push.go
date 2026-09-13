@@ -57,77 +57,61 @@ Examples:
 
 			cfg := GetConfig(cmd)
 
-			// Resolve the target remotes: explicit positionals win, else the
-			// (multi-valued) configured defaults / heuristic.
-			remotes := args
-			resolution := git.PushConfigured
-			if len(remotes) == 0 {
-				remotes, resolution = git.ResolvePushRemotes(cfg.WorkDir)
-			}
+			remotes, resolution := client.ResolveRemotes(cfg.WorkDir, args)
 			printRemoteHint(cfg.WorkDir, remotes, resolution)
 
 			if dryRun && !cfg.JSONOutput {
 				fmt.Println("Dry run - no changes will be pushed")
 			}
 
-			// Live per-branch and site-upload progress to stderr (same policy as
-			// the git-spawned helper); suppressed under --json so machine output
-			// stays clean.
+			// Progress goes to stderr, and --json keeps machine output clean.
 			var siteProgress objstore.Progress
-			var onBranch gitmsg.PushBranchProgress
+			var onBranch func(remote, branch string, done, total int)
 			siteDone := func() {}
 			if !cfg.JSONOutput {
 				siteProgress, siteDone = objstore.StderrProgress()
-				onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
+				onBranch = func(remote, branch string, done, total int) {
+					siteProgress(remote+" "+branch, done, total)
+				}
+			}
+			var onRemote func(remote string)
+			if !cfg.JSONOutput && !dryRun {
+				onRemote = func(remote string) {
+					fmt.Printf("Pushing to %s ...\n", remote)
+					if gitmsg.RemoteIsEmpty(cfg.WorkDir, remote) {
+						fmt.Printf("Sending to empty remote %q ...\n", remote)
+					}
+				}
 			}
 
-			// Push each remote in turn: report per remote, continue past a failure,
-			// and exit non-zero if any failed. Sequential keeps progress readable.
-			results := make([]*client.Result, 0, len(remotes))
-			failed := false
-			for _, remote := range remotes {
-				opts := client.Options{
-					Remote:      remote,
-					DryRun:      dryRun,
-					NoCode:      noCode,
-					NoSite:      noSite,
-					SiteOnly:    siteOnly,
-					AllBranches: allBranches,
-					Full:        full,
-				}
-				if !cfg.JSONOutput && !dryRun {
-					resolved := client.ResolveRemote(cfg.WorkDir, remote)
-					fmt.Printf("Pushing to %s ...\n", resolved)
-					if gitmsg.RemoteIsEmpty(cfg.WorkDir, resolved) {
-						fmt.Printf("Sending to empty remote %q ...\n", resolved)
-					}
-				}
-				result, err := client.Publish(cfg.WorkDir, opts, onBranch, siteProgress)
-				if err != nil {
-					failed = true
-					if !cfg.JSONOutput {
-						PrintError(cmd, fmt.Sprintf("push to %s: %v", client.ResolveRemote(cfg.WorkDir, remote), err))
-					}
-					continue
-				}
-				results = append(results, result)
-				if !cfg.JSONOutput {
-					printPushResult(result, dryRun)
-				}
+			opts := client.Options{
+				DryRun:      dryRun,
+				NoCode:      noCode,
+				NoSite:      noSite,
+				SiteOnly:    siteOnly,
+				AllBranches: allBranches,
+				Full:        full,
 			}
+			results, err := client.PublishAll(cfg.WorkDir, remotes, opts, onRemote, onBranch, siteProgress)
 			siteDone()
 
 			if cfg.JSONOutput {
-				// Single remote keeps the object shape for existing consumers; a
-				// multi-remote push returns the array of per-remote results.
+				// One remote keeps the object shape, several return the array.
 				if len(remotes) == 1 && len(results) == 1 {
 					PrintJSON(results[0])
 				} else {
 					PrintJSON(results)
 				}
+			} else {
+				for i := range results {
+					printPushResult(&results[i], dryRun)
+				}
 			}
 
-			if failed {
+			if err != nil {
+				if !cfg.JSONOutput {
+					PrintError(cmd, err.Error())
+				}
 				os.Exit(ExitError)
 			}
 		},

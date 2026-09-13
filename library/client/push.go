@@ -18,13 +18,12 @@ import (
 // Options configures a publish. Zero value = default behavior (reason-based
 // data push + site for s3 remotes).
 type Options struct {
-	Remote      string // explicit target; "" resolves via git.PushRemote
-	DryRun      bool   // preview only, touch nothing
-	NoCode      bool   // skip code branches (default branch + open-PR heads)
-	NoSite      bool   // skip the site step (overrides config)
-	SiteOnly    bool   // publish only the site, no data push (explicit refresh; fails loudly)
-	AllBranches bool   // publish every local branch (refs/heads/*), not just reasoned
-	Full        bool   // detach a thin fork relationship: upload everything the bucket lacks
+	DryRun      bool // preview only, touch nothing
+	NoCode      bool // skip code branches (default branch + open-PR heads)
+	NoSite      bool // skip the site step (overrides config)
+	SiteOnly    bool // publish only the site, no data push (explicit refresh; fails loudly)
+	AllBranches bool // publish every local branch (refs/heads/*), not just reasoned
+	Full        bool // detach a thin fork relationship: upload everything the bucket lacks
 }
 
 // SiteOutcome is the site-publication result of a publish. Published is true
@@ -51,13 +50,12 @@ type Result struct {
 	EmptyBoot bool               `json:"emptyBoot"`
 }
 
-// ResolveRemote returns the remote a publish targets given the explicit choice
-// (empty resolves via the config/heuristic order in git.PushRemote).
-func ResolveRemote(workdir, remote string) string {
-	if remote != "" {
-		return remote
+// ResolveRemotes returns the remotes a publish targets: the named ones, else the defaults.
+func ResolveRemotes(workdir string, args []string) ([]string, git.PushResolution) {
+	if len(args) > 0 {
+		return args, git.PushConfigured
 	}
-	return git.PushRemote(workdir)
+	return git.ResolvePushRemotes(workdir)
 }
 
 // ResolveSiteOverride reads a remote's per-remote site deployment overrides from
@@ -83,13 +81,10 @@ func ResolveSiteOverride(workdir, remote string) objstore.SiteOverride {
 	}
 }
 
-// Preview returns the offline push preview for the resolved remote, including
-// --all-branches extras when requested. Used by dry-run and the TUI prompt.
-func Preview(workdir string, opts Options) (*gitmsg.PushPreview, string, error) {
-	remote := ResolveRemote(workdir, opts.Remote)
+// Preview returns the offline push preview for one remote.
+func Preview(workdir, remote string, opts Options) (*gitmsg.PushPreview, error) {
 	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
-	preview, err := gitmsg.GetPushPreview(workdir, codeBranches, remote, opts.AllBranches)
-	return preview, remote, err
+	return gitmsg.GetPushPreview(workdir, codeBranches, remote, opts.AllBranches)
 }
 
 // resolveCodeBranches returns the reason-based code branches to publish against
@@ -108,8 +103,7 @@ func resolveCodeBranches(workdir string, noCode bool, remote string) map[string]
 // site step share one operation from the caller's view, but their failure modes
 // differ: a data-push error is returned as err (nothing published); a site error
 // after a good data push lands in Result.Site.Err (the push still succeeded).
-func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
-	remote := ResolveRemote(workdir, opts.Remote)
+func Publish(workdir, remote string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
 	if opts.SiteOnly {
 		return publishSiteOnly(workdir, remote, opts, siteProgress)
 	}
@@ -151,6 +145,31 @@ func Publish(workdir string, opts Options, onBranch gitmsg.PushBranchProgress, s
 
 	res.Site = publishSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
 	return res, nil
+}
+
+// PublishAll publishes to every remote in order, continuing past a failure into one error.
+func PublishAll(workdir string, remotes []string, opts Options, onRemote func(remote string), onBranch func(remote, branch string, done, total int), siteProgress objstore.Progress) ([]Result, error) {
+	results := make([]Result, 0, len(remotes))
+	var failures []string
+	for _, remote := range remotes {
+		if onRemote != nil {
+			onRemote(remote)
+		}
+		var branchProgress gitmsg.PushBranchProgress
+		if onBranch != nil {
+			branchProgress = func(branch string, done, total int) { onBranch(remote, branch, done, total) }
+		}
+		result, err := Publish(workdir, remote, opts, branchProgress, siteProgress)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", remote, err))
+			continue
+		}
+		results = append(results, *result)
+	}
+	if len(failures) > 0 {
+		return results, fmt.Errorf("push failed for %s", strings.Join(failures, "; "))
+	}
+	return results, nil
 }
 
 // clearThinRelationship removes the thin flag from a remote, so every later push

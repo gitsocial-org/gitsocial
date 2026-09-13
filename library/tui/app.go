@@ -1243,7 +1243,12 @@ func (m *Model) showPushRemotePicker(s3 []string) tea.Cmd {
 // an empty preview (tags are uncountable offline); the confirm is always
 // offered so a tags-only push still happens.
 func (m *Model) showPushConfirm(remote string) tea.Cmd {
-	preview, resolved, err := client.Preview(m.workdir, client.Options{Remote: remote})
+	resolved := remote
+	if resolved == "" {
+		remotes, _ := client.ResolveRemotes(m.workdir, nil)
+		resolved = remotes[0]
+	}
+	preview, err := client.Preview(m.workdir, resolved, client.Options{})
 	if err != nil {
 		return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 	}
@@ -1289,7 +1294,7 @@ func (m *Model) startPush(remote string) tea.Cmd {
 			default:
 			}
 		}
-		result, err := client.Publish(workdir, client.Options{Remote: remote}, onBranch, siteProgress)
+		result, err := client.Publish(workdir, remote, client.Options{}, onBranch, siteProgress)
 		if err != nil {
 			ch <- tuisocial.PushCompletedMsg{Err: err}
 		} else {
