@@ -64,61 +64,14 @@ var baseSelectFromView = cache.ResolvedSelect("review_items_resolved", `v.type, 
        v.review_state, v.suggestion,
        v.labels`)
 
-// InsertReviewItem inserts or updates a review item in the cache database.
-// Wrapped in a single transaction with the review_reviewers rebuild so search
-// can never observe a stale linking-table state.
+// InsertReviewItem inserts or updates one review item in the cache database.
 func InsertReviewItem(item ReviewItem) error {
-	return cache.ExecLocked(func(db *sql.DB) error {
-		tx, err := db.Begin()
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-		if _, err := tx.Exec(`
-			INSERT INTO review_items
-			(repo_url, hash, branch, type, state, draft, base, base_tip, head, head_tip, depends_on, closes, reviewers,
-			 pull_request_repo_url, pull_request_hash, pull_request_branch,
-			 commit_ref, file, old_line, new_line, old_line_end, new_line_end, review_state, suggestion)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
-				type = excluded.type,
-				state = excluded.state,
-				draft = excluded.draft,
-				base = excluded.base,
-				base_tip = excluded.base_tip,
-				head = excluded.head,
-				head_tip = excluded.head_tip,
-				depends_on = excluded.depends_on,
-				closes = excluded.closes,
-				reviewers = excluded.reviewers,
-				pull_request_repo_url = excluded.pull_request_repo_url,
-				pull_request_hash = excluded.pull_request_hash,
-				pull_request_branch = excluded.pull_request_branch,
-				commit_ref = excluded.commit_ref,
-				file = excluded.file,
-				old_line = excluded.old_line,
-				new_line = excluded.new_line,
-				old_line_end = excluded.old_line_end,
-				new_line_end = excluded.new_line_end,
-				review_state = excluded.review_state,
-				suggestion = excluded.suggestion`,
-			item.RepoURL, item.Hash, item.Branch,
-			item.Type, item.State, item.Draft, item.Base, item.BaseTip, item.Head, item.HeadTip, item.DependsOn, item.Closes, item.Reviewers,
-			item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch,
-			item.CommitRef, item.File, item.OldLine, item.NewLine, item.OldLineEnd, item.NewLineEnd,
-			item.ReviewStateField, item.Suggestion,
-		); err != nil {
-			return err
-		}
-		if err := cache.RebuildCSVLinkingTable(tx, "review_reviewers", "email",
-			item.RepoURL, item.Hash, item.Branch, nullStr(item.Reviewers)); err != nil {
-			return err
-		}
-		return tx.Commit()
-	})
+	return InsertReviewItems([]ReviewItem{item})
 }
 
-// InsertReviewItems batch-inserts multiple review items in a single transaction.
+// InsertReviewItems inserts or updates review items in a single transaction.
+// The review_reviewers rebuild shares that transaction, so search never
+// observes a stale linking-table state.
 func InsertReviewItems(items []ReviewItem) error {
 	if len(items) == 0 {
 		return nil
