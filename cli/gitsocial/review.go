@@ -61,8 +61,9 @@ func newReviewStatusCmd() *cobra.Command {
 				branch = "(not configured)"
 			}
 
-			count, _ := review.CountPullRequests(nil)
-			openCount, _ := review.CountPullRequests([]string{"open"})
+			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
+			count, _ := review.CountPullRequests(repoURL, nil)
+			openCount, _ := review.CountPullRequests(repoURL, []string{"open"})
 
 			forks := review.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {

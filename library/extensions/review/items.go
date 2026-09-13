@@ -310,12 +310,17 @@ func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
 	})
 }
 
-// CountPullRequests returns the number of pull requests matching the given states.
-func CountPullRequests(states []string) (int, error) {
+// CountPullRequests returns the number of pull requests in one repository matching the given states.
+// The repository filter is what GetPullRequests lists, so a total matches its list.
+func CountPullRequests(repoURL string, states []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		query := `SELECT COUNT(*) FROM review_items_resolved v
 			WHERE v.type = 'pull-request' AND NOT v.is_edit_commit AND NOT v.is_retracted`
 		var args []interface{}
+		if repoURL != "" {
+			query += " AND v.repo_url = ?"
+			args = append(args, repoURL)
+		}
 		if len(states) > 0 {
 			ph := strings.Repeat("?,", len(states))
 			query += " AND v.state IN (" + ph[:len(ph)-1] + ")"
@@ -353,7 +358,7 @@ func GetPullRequests(repoURL, branch string, states []string, cursor string, lim
 // CountPRsWithForks counts PRs from workspace and forks (matches GetPullRequestsWithForks logic).
 func CountPRsWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string) int {
 	if len(forkURLs) == 0 {
-		count, _ := CountPullRequests(states)
+		count, _ := CountPullRequests(workspaceURL, states)
 		return count
 	}
 	// With forks, we need to query+filter like GetPullRequestsWithForks does

@@ -229,6 +229,41 @@ func TestForkPRClose_relativeHead(t *testing.T) {
 	}
 }
 
+// TestCountPullRequests_matchesList counts only the repository the list shows.
+func TestCountPullRequests_matchesList(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, _ := forkPRFixture(t)
+
+	pushBranch(t, alice, "feature")
+	if _, err := git.ExecGit(alice, []string{"checkout", "main"}); err != nil {
+		t.Fatalf("alice checkout main: %v", err)
+	}
+	if res := CreatePR(alice, "Upstream work", "", CreatePROptions{Base: "#branch:main", Head: "feature"}); !res.Success {
+		t.Fatalf("CreatePR upstream: %s", res.Error.Message)
+	}
+	for _, subject := range []string{"Fork one", "Fork two"} {
+		if res := CreatePR(bob, subject, "", CreatePROptions{Base: "#branch:main", Head: "feature"}); !res.Success {
+			t.Fatalf("CreatePR %s: %s", subject, res.Error.Message)
+		}
+	}
+
+	branch := gitmsg.GetExtBranch(alice, "review")
+	listed := GetPullRequests(upstreamURL, branch, []string{"open"}, "", 0)
+	if !listed.Success {
+		t.Fatalf("GetPullRequests: %s", listed.Error.Message)
+	}
+	count, err := CountPullRequests(upstreamURL, []string{"open"})
+	if err != nil {
+		t.Fatalf("CountPullRequests: %v", err)
+	}
+	if count != len(listed.Data) {
+		t.Errorf("count = %d, want %d, the length of the list it totals", count, len(listed.Data))
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1, the workspace's own pull request", count)
+	}
+}
+
 // TestSyncPRBranch_forkHeadRefused keeps `pr sync` off a branch the workspace does not own.
 func TestSyncPRBranch_forkHeadRefused(t *testing.T) {
 	setupTestDB(t)
