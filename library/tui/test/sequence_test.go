@@ -2,8 +2,10 @@
 package test
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -244,5 +246,24 @@ func TestSequence(t *testing.T) {
 		assertContains(t, out, "Push to origin")
 		assertContains(t, out, "tags checked at push")
 		h.SendKey("n") // dismiss
+	})
+	// PushConfirmNamesEveryConfiguredRemote: a configured pair, both named, no picker.
+	t.Run("PushConfirmNamesEveryConfiguredRemote", func(t *testing.T) {
+		workdir := CloneFixture(t, f.Workdir)
+		if _, err := git.ExecGit(workdir, []string{"remote", "add", "r2", "s3://r2.example.com/bucket/repo"}); err != nil {
+			t.Fatalf("add r2: %v", err)
+		}
+		if err := git.SetConfiguredPushRemotes(workdir, []string{"r2", "origin"}); err != nil {
+			t.Fatalf("SetConfiguredPushRemotes: %v", err)
+		}
+		pair := New(t, workdir, f.CacheDir)
+		pair.NavigateTo(tuicore.LocConfig("social"))
+		pair.SendKey("p")
+		out := rendered(pair)
+		assertContains(t, out, "Push to r2 (r2.example.com), origin (github.com)")
+		if strings.Contains(stripANSI(out), "Push to which remote?") {
+			t.Errorf("a configured pair must not show the picker:\n%s", out)
+		}
+		pair.SendKey("n") // dismiss
 	})
 }

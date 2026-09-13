@@ -13,7 +13,7 @@ func TestBuildPushConfirmPrompt_NamesRemoteAndHost(t *testing.T) {
 		Branches: []gitmsg.BranchPushCount{{Branch: "gitmsg/social", Commits: 3}},
 		Refs:     2,
 	}
-	got := buildPushConfirmPrompt(p, "r2", "s3://acct.r2.cloudflarestorage.com/bucket")
+	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("r2", "s3://acct.r2.cloudflarestorage.com/bucket")})
 	if !strings.Contains(got, "Push to r2 (acct.r2.cloudflarestorage.com)") {
 		t.Errorf("prompt missing remote/host: %q", got)
 	}
@@ -26,7 +26,7 @@ func TestBuildPushConfirmPrompt_NamesRemoteAndHost(t *testing.T) {
 }
 
 func TestBuildPushConfirmPrompt_EmptyPreviewStillOffers(t *testing.T) {
-	got := buildPushConfirmPrompt(&gitmsg.PushPreview{}, "origin", "https://github.com/user/repo")
+	got := buildPushConfirmPrompt(&gitmsg.PushPreview{}, []string{pushTargetLabel("origin", "https://github.com/user/repo")})
 	if strings.Contains(got, "Nothing to push") {
 		t.Errorf("empty preview must still offer a push, got %q", got)
 	}
@@ -40,7 +40,7 @@ func TestBuildPushConfirmPrompt_EmptyPreviewStillOffers(t *testing.T) {
 
 func TestBuildPushConfirmPrompt_CodeBranchesNamed(t *testing.T) {
 	p := &gitmsg.PushPreview{Code: []gitmsg.BranchPushCount{{Branch: "feature/x", Commits: 2}}}
-	got := buildPushConfirmPrompt(p, "origin", "")
+	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("origin", "")})
 	if !strings.Contains(got, "code: feature/x (2)") {
 		t.Errorf("prompt missing code branch: %q", got)
 	}
@@ -51,7 +51,7 @@ func TestBuildPushConfirmPrompt_CodeBranchesNamed(t *testing.T) {
 }
 
 func TestBuildRemotePickerChoices_NumbersThenDefaultAndPersist(t *testing.T) {
-	choices := buildRemotePickerChoices([]string{"backup", "r2"})
+	choices := buildRemotePickerChoices([]string{"backup", "r2"}, false)
 	keys := make([]string, len(choices))
 	for i, c := range choices {
 		keys[i] = c.Key
@@ -81,5 +81,26 @@ func TestPushRemoteHost(t *testing.T) {
 		if got := pushRemoteHost(in); got != want {
 			t.Errorf("pushRemoteHost(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestBuildPushConfirmPrompt_NamesEveryRemote(t *testing.T) {
+	p := &gitmsg.PushPreview{Branches: []gitmsg.BranchPushCount{{Branch: "gitmsg/social", Commits: 1}}}
+	got := buildPushConfirmPrompt(p, []string{
+		pushTargetLabel("r2", "s3://acct.r2.cloudflarestorage.com/bucket"),
+		pushTargetLabel("backup", "s3://s3.example.com/bucket"),
+	})
+	if !strings.Contains(got, "Push to r2 (acct.r2.cloudflarestorage.com), backup (s3.example.com)") {
+		t.Errorf("prompt should name both remotes in order: %q", got)
+	}
+}
+
+func TestBuildRemotePickerChoices_PersistRoundDropsExtras(t *testing.T) {
+	choices := buildRemotePickerChoices([]string{"backup", "r2"}, true)
+	if len(choices) != 2 {
+		t.Fatalf("persist choices = %+v, want the two remotes alone", choices)
+	}
+	if choices[0].Key != "1" || choices[1].Key != "2" {
+		t.Errorf("persist choice keys = %q %q, want 1 2", choices[0].Key, choices[1].Key)
 	}
 }

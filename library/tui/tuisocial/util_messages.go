@@ -2,6 +2,7 @@
 package tuisocial
 
 import (
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
@@ -121,20 +122,10 @@ type FetchCompletedMsg struct {
 	Auto bool
 }
 
-// PushCompletedMsg is sent when push completes. Remote/Tags name the resolved
-// target and the tag count (uncountable in the preview, known after the push).
-// Site* carry the browser-site outcome: Published when it ran, Skipped naming
-// why it didn't, SiteErr for a site failure that did NOT fail the data push
-// (surfaced as a warning tone in the completion toast).
+// PushCompletedMsg carries one result per remote in push order, and Err names the failures.
 type PushCompletedMsg struct {
-	Commits       int
-	Refs          int
-	Tags          int
-	Remote        string
-	SitePublished bool
-	SiteSkipped   string
-	SiteErr       error
-	Err           error
+	Results []client.Result
+	Err     error
 }
 
 // RepositoryFetchedMsg is sent when unfollowed repo posts are fetched

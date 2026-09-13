@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -395,35 +396,51 @@ func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, te
 	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnpushedCount(), msgCmd)
 }
 
-// formatPushCompletion builds the completion toast: remote name, counts (incl.
-// tags when > 0), and the site outcome (published / skipped / failed). A site
-// failure downgrades the tone to warning (the data push still succeeded), per
-// the spec — it is never an error.
+// formatPushCompletion builds the completion toast, one line per remote.
 func formatPushCompletion(msg PushCompletedMsg) (string, tuicore.MessageType) {
-	var head string
-	if msg.Commits == 0 && msg.Refs == 0 && msg.Tags == 0 {
-		head = "Nothing to push"
-	} else {
-		parts := []string{fmt.Sprintf("%d commits", msg.Commits), fmt.Sprintf("%d refs", msg.Refs)}
-		if msg.Tags > 0 {
-			parts = append(parts, fmt.Sprintf("%d tags", msg.Tags))
+	tone := tuicore.MessageTypeSuccess
+	lines := make([]string, 0, len(msg.Results))
+	for _, res := range msg.Results {
+		line, siteFailed := formatPushRemoteResult(res)
+		if siteFailed {
+			tone = tuicore.MessageTypeWarning
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return "Nothing to push", tone
+	}
+	return strings.Join(lines, "; "), tone
+}
+
+// formatPushRemoteResult renders one remote's outcome and reports whether its site failed.
+func formatPushRemoteResult(res client.Result) (string, bool) {
+	p := res.Push
+	commits, refs, tags := 0, 0, 0
+	remote := ""
+	if p != nil {
+		commits, refs, tags, remote = p.Commits+p.CodeCommits, p.Refs, p.Tags, p.Remote
+	}
+	head := "Nothing to push"
+	if commits > 0 || refs > 0 || tags > 0 {
+		parts := []string{fmt.Sprintf("%d commits", commits), fmt.Sprintf("%d refs", refs)}
+		if tags > 0 {
+			parts = append(parts, fmt.Sprintf("%d tags", tags))
 		}
 		head = "Pushed " + strings.Join(parts, ", ")
 	}
-	if msg.Remote != "" {
-		head += " to " + msg.Remote
+	if remote != "" {
+		head += " to " + remote
 	}
-	tone := tuicore.MessageTypeSuccess
 	switch {
-	case msg.SiteErr != nil:
-		head += " · site failed: " + msg.SiteErr.Error()
-		tone = tuicore.MessageTypeWarning
-	case msg.SitePublished:
-		head += " · site published"
-	case msg.SiteSkipped != "":
-		head += " · site skipped"
+	case res.Site.Err != nil:
+		return head + " · site failed: " + res.Site.Err.Error(), true
+	case res.Site.Published:
+		return head + " · site published", false
+	case res.Site.Skipped != "":
+		return head + " · site skipped", false
 	}
-	return head, tone
+	return head, false
 }
 
 func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
