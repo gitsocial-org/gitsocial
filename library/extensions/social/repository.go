@@ -221,10 +221,13 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 		related = append(related, *r)
 	}
 
-	sort.Slice(related, func(i, j int) bool {
+	sort.SliceStable(related, func(i, j int) bool {
 		scoreI := len(related[i].Relationships.SharedLists)*2 + len(related[i].Relationships.SharedAuthors)
 		scoreJ := len(related[j].Relationships.SharedLists)*2 + len(related[j].Relationships.SharedAuthors)
-		return scoreI > scoreJ
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
+		}
+		return related[i].Name < related[j].Name
 	})
 
 	return Success(related)
