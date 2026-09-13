@@ -203,7 +203,7 @@ PR=$(gg --json review pr create "Expand notes with more lines" --base '#branch:m
 ident "Bob Reviewer" "bob@example.com"
 gg review feedback comment "This wording is clearer, nice." --pr "$PR" --commit "$HEADTIP" --file notes.txt --new-line 2 >/dev/null
 ident "Carol Critic" "carol@example.com"
-gg review feedback comment "Consider a more descriptive line here." --pr "$PR" --commit "$HEADTIP" --file notes.txt --new-line 4 --suggest >/dev/null
+gg review feedback comment $'Consider a more descriptive line here.\n\n```suggestion\nline four (added, documented)\n```' --pr "$PR" --commit "$HEADTIP" --file notes.txt --new-line 4 --suggest >/dev/null
 ident "Bob Reviewer" "bob@example.com"
 gg review feedback comment "These two new lines could be a bulleted list." --pr "$PR" --commit "$HEADTIP" --file notes.txt --new-line 4 --new-line-end 5 >/dev/null
 gg review feedback approve "$PR" -m "Looks good overall, thanks!" >/dev/null
