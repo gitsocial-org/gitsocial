@@ -1,7 +1,10 @@
-// error_codes_test.go - Error codes the PR merge, stack and version paths return at the Result boundary
+// error_codes_test.go - Error codes the PR merge, stack, version and suggestion paths return at the Result boundary
 package review
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -359,5 +362,31 @@ func TestComparePRVersions_tipsOutsideWorkdir(t *testing.T) {
 	res := ComparePRVersions(elsewhere, t.TempDir(), created.Data.ID, 0, len(versions.Data)-1)
 	if res.Success || res.Error.Code != "TIPS_UNAVAILABLE" {
 		t.Errorf("ComparePRVersions() from a repository without the tips = %+v, want TIPS_UNAVAILABLE", res)
+	}
+}
+
+// TestApplySuggestion_writeFailed asserts WRITE_ERROR when the target file is read-only.
+func TestApplySuggestion_writeFailed(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root ignores the file mode that blocks the write")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(path, []byte("line1\nline2\nline3\n"), 0o400); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+
+	res := ApplySuggestion(dir, Feedback{
+		Suggestion: true,
+		File:       "main.go",
+		NewLine:    2,
+		Content:    "```suggestion\nreplacement\n```",
+	})
+	if res.Success || res.Error.Code != "WRITE_ERROR" {
+		t.Errorf("ApplySuggestion() over a read-only file = %+v, want WRITE_ERROR", res)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), "line2") {
+		t.Errorf("the file changed after the refused write: %q err=%v", data, err)
 	}
 }
