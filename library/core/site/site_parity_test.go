@@ -150,9 +150,7 @@ func TestParityFeedbackCardVariant(t *testing.T) {
 	}
 }
 
-// TestParityReleaseHead asserts a release head takes the tag as its subject and
-// the version as one chip, against the fixture the app's half (unit_parity.js)
-// asserts, so no version string renders twice on either renderer's head.
+// TestParityReleaseHead asserts the release head's subject and version chip against the fixture unit_parity.js also asserts.
 func TestParityReleaseHead(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.ReleaseHeads) == 0 {

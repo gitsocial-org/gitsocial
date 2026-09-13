@@ -1437,8 +1437,7 @@ func pageTitleOf(t *testing.T, page string) string {
 
 // TestSitePages_CrawlHygiene: tombstones and empty lists keep their pages but
 // leave the sitemap, descriptions are markdown-stripped, titles are unique.
-// TestSitePages_releaseHeadCarriesTagAndVersionChip: a release row and item page
-// head with the tag and carry the version on one chip, never twice.
+// TestSitePages_releaseHeadCarriesTagAndVersionChip asserts a release row and item page head with the tag and one version chip.
 func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
