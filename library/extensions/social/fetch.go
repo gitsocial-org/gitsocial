@@ -100,7 +100,7 @@ func BackfillSpec() fetch.ExtBackfillSpec {
 
 // Hooks returns the post-fetch hooks for the social extension.
 func Hooks() []fetch.PostFetchHook {
-	return []fetch.PostFetchHook{fetchSocialListRefs, checkIfRepoFollowsWorkspace, cacheExternalRepoLists}
+	return []fetch.PostFetchHook{checkIfRepoFollowsWorkspace, cacheExternalRepoLists}
 }
 
 // processSocialCommit handles social-specific commit processing.
@@ -162,9 +162,6 @@ func syncListToCache(list List, workdir string) {
 		log.Warn("insert list to cache failed", "list", list.ID, "error", err)
 	}
 }
-
-// fetchSocialListRefs is a no-op: storage.FetchRepository now fetches all refs/gitmsg/* refs.
-func fetchSocialListRefs(_, _, _, _ string) {}
 
 // checkIfRepoFollowsWorkspace detects if a remote repo has the workspace in its lists.
 func checkIfRepoFollowsWorkspace(storageDir, repoURL, _, workspaceURL string) {

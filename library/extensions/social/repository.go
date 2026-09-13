@@ -229,4 +229,3 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 
 	return Success(related)
 }
-

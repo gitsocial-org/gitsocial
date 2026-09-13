@@ -4,7 +4,6 @@ package social
 import (
 	"time"
 
-	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
@@ -17,13 +16,6 @@ func Failure[T any](code, message string) Result[T] { return result.Err[T](code,
 func FailureWithDetails[T any](code, message string, details interface{}) Result[T] {
 	return result.ErrWithDetails[T](code, message, details)
 }
-
-type PostSource string
-
-const (
-	PostSourceExplicit PostSource = "explicit"
-	PostSourceImplicit PostSource = "implicit"
-)
 
 type Author struct {
 	Name  string
@@ -39,11 +31,8 @@ type Interactions struct {
 type Display struct {
 	RepositoryName     string
 	CommitHash         string
-	CommitURL          string
 	TotalReposts       int
-	IsEmpty            bool
 	IsUnpushed         bool
-	IsOrigin           bool
 	IsWorkspacePost    bool
 	FollowsYou         bool
 	IsNotificationRead bool
@@ -66,7 +55,6 @@ type Post struct {
 	Timestamp       time.Time
 	Content         string
 	Type            PostType
-	Source          PostSource
 	CleanContent    string
 	OriginalPostID  string
 	ParentCommentID string
@@ -101,10 +89,6 @@ type Post struct {
 	// Labels carries scoped tags parsed from the GitMsg `labels` header field.
 	Labels []string
 	Origin *protocol.Origin
-	Raw    struct {
-		Commit git.Commit
-		GitMsg *protocol.Message
-	}
 }
 
 type List struct {
@@ -112,35 +96,26 @@ type List struct {
 	Name              string
 	Version           string
 	Repositories      []string
-	Source            string
 	IsUnpushed        bool
 	IsFollowedLocally bool
 }
 
 type RepositoryType string
 
-const (
-	RepositoryTypeWorkspace RepositoryType = "workspace"
-	RepositoryTypeOther     RepositoryType = "other"
-)
+const RepositoryTypeOther RepositoryType = "other"
 
 type Repository struct {
-	ID              string
-	URL             string
-	Name            string
-	Path            string
-	Branch          string
-	DefaultBranch   string
-	Type            RepositoryType
-	SocialEnabled   bool
-	FollowedAt      *time.Time
-	LastFetchTime   *time.Time
-	LastSyncTime    *time.Time
-	FetchedRanges   []FetchedRange
-	RemoteName      string
-	Lists           []string
-	HasOriginRemote bool
-	OriginURL       string
+	ID            string
+	URL           string
+	Name          string
+	Path          string
+	Branch        string
+	DefaultBranch string
+	Type          RepositoryType
+	LastFetchTime *time.Time
+	FetchedRanges []FetchedRange
+	RemoteName    string
+	Lists         []string
 }
 
 type FetchedRange struct {
@@ -151,16 +126,14 @@ type FetchedRange struct {
 type LogEntryType string
 
 const (
-	LogTypePost               LogEntryType = "post"
-	LogTypeComment            LogEntryType = "comment"
-	LogTypeRepost             LogEntryType = "repost"
-	LogTypeQuote              LogEntryType = "quote"
-	LogTypeListCreate         LogEntryType = "list-create"
-	LogTypeListDelete         LogEntryType = "list-delete"
-	LogTypeRepositoryFollow   LogEntryType = "repository-follow"
-	LogTypeRepositoryUnfollow LogEntryType = "repository-unfollow"
-	LogTypeConfig             LogEntryType = "config"
-	LogTypeMetadata           LogEntryType = "metadata"
+	LogTypePost       LogEntryType = "post"
+	LogTypeComment    LogEntryType = "comment"
+	LogTypeRepost     LogEntryType = "repost"
+	LogTypeQuote      LogEntryType = "quote"
+	LogTypeListCreate LogEntryType = "list-create"
+	LogTypeListDelete LogEntryType = "list-delete"
+	LogTypeConfig     LogEntryType = "config"
+	LogTypeMetadata   LogEntryType = "metadata"
 )
 
 type LogEntry struct {

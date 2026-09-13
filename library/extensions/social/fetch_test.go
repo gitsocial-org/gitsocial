@@ -23,20 +23,14 @@ func TestSocialProcessors_returnsSlice(t *testing.T) {
 
 func TestSocialHooks_returnsSlice(t *testing.T) {
 	hooks := Hooks()
-	if len(hooks) != 3 {
-		t.Errorf("Hooks() returned %d, want 3", len(hooks))
+	if len(hooks) != 2 {
+		t.Errorf("Hooks() returned %d, want 2", len(hooks))
 	}
 	for i, h := range hooks {
 		if h == nil {
 			t.Errorf("Hooks()[%d] should not be nil", i)
 		}
 	}
-}
-
-func TestFetchSocialListRefs_noop(t *testing.T) {
-	// fetchSocialListRefs is a no-op; just verify it doesn't panic
-	fetchSocialListRefs("", "", "", "")
-	fetchSocialListRefs("/tmp", "https://github.com/a/b", "main", "https://github.com/c/d")
 }
 
 func TestCheckIfRepoFollowsWorkspace_emptyWorkspace(t *testing.T) {

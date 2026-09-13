@@ -3207,9 +3207,9 @@ func TestResolveItem_fromWorkspaceCommit(t *testing.T) {
 
 // (TestGetPosts_threadWithNestedComments is in TestGetPostsIntegration group)
 
-// --- processWorkspaceCommits ---
+// --- ProcessWorkspaceBatch ---
 
-func TestProcessWorkspaceCommits_withComments(t *testing.T) {
+func TestProcessWorkspaceBatch_withComments(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/pwc"
 	branch := "gitmsg/social"
@@ -3228,7 +3228,7 @@ func TestProcessWorkspaceCommits_withComments(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: content, Timestamp: time.Now(),
 	}})
-	processWorkspaceCommits(commits, repoURL, branch)
+	ProcessWorkspaceBatch(commits, repoURL, branch)
 	item, err := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
 		err := db.QueryRow(`SELECT type, original_hash, reply_to_hash FROM social_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
@@ -3250,7 +3250,7 @@ func TestProcessWorkspaceCommits_withComments(t *testing.T) {
 	}
 }
 
-func TestProcessWorkspaceCommits_nonSocial(t *testing.T) {
+func TestProcessWorkspaceBatch_nonSocial(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/pwc2"
 	commits := []git.Commit{{
@@ -3262,11 +3262,11 @@ func TestProcessWorkspaceCommits_nonSocial(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: "plain commit", Timestamp: time.Now(),
 	}})
-	processWorkspaceCommits(commits, repoURL, "main")
+	ProcessWorkspaceBatch(commits, repoURL, "main")
 	// Non-social commits try to upgrade virtual items (noop if none)
 }
 
-func TestProcessWorkspaceCommits_withVirtualRef(t *testing.T) {
+func TestProcessWorkspaceBatch_withVirtualRef(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/pwcvirt"
 	branch := "gitmsg/social"
@@ -3292,7 +3292,7 @@ func TestProcessWorkspaceCommits_withVirtualRef(t *testing.T) {
 		AuthorName: "Test", AuthorEmail: "test@t.com",
 		Message: content, Timestamp: time.Now(),
 	}})
-	processWorkspaceCommits(commits, repoURL, branch)
+	ProcessWorkspaceBatch(commits, repoURL, branch)
 	count, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var c int
 		err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE hash = ? AND is_virtual = 1`, "aabb00112233").Scan(&c)
@@ -3555,9 +3555,9 @@ func TestUpgradeVirtualItem_withVirtualCommit(t *testing.T) {
 
 // (TestGetPosts_timelineWithListPosts is in TestGetPostsIntegration group)
 
-// --- processWorkspaceCommits with non-social commits ---
+// --- ProcessWorkspaceBatch with non-social commits ---
 
-func TestProcessWorkspaceCommits_nonSocialCommit(t *testing.T) {
+func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/nonsocial"
 	branch := "main"
@@ -3579,7 +3579,7 @@ func TestProcessWorkspaceCommits_nonSocialCommit(t *testing.T) {
 		Message:   "just a regular commit with no gitmsg header",
 		Timestamp: time.Now(),
 	}}
-	processWorkspaceCommits(commits, repoURL, branch)
+	ProcessWorkspaceBatch(commits, repoURL, branch)
 	// Verify virtual flag cleared
 	isVirtual, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var v int
@@ -3591,9 +3591,9 @@ func TestProcessWorkspaceCommits_nonSocialCommit(t *testing.T) {
 	}
 }
 
-// --- Branch default coverage in processWorkspaceCommits ---
+// --- Branch default coverage in ProcessWorkspaceBatch ---
 
-func TestProcessWorkspaceCommits_originalNoBranch(t *testing.T) {
+func TestProcessWorkspaceBatch_originalNoBranch(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/orig-no-branch"
 	branch := "gitmsg/social"
@@ -3612,7 +3612,7 @@ func TestProcessWorkspaceCommits_originalNoBranch(t *testing.T) {
 		Hash: "onb_112233445", Author: "Test", Email: "t@t.com",
 		Message: content, Timestamp: time.Now(),
 	}}
-	processWorkspaceCommits(commits, repoURL, branch)
+	ProcessWorkspaceBatch(commits, repoURL, branch)
 	// Verify the social item was created with branch defaulted to current branch
 	item, _ := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
@@ -3625,7 +3625,7 @@ func TestProcessWorkspaceCommits_originalNoBranch(t *testing.T) {
 	}
 }
 
-func TestProcessWorkspaceCommits_replyToNoBranch(t *testing.T) {
+func TestProcessWorkspaceBatch_replyToNoBranch(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/reply-no-branch"
 	branch := "gitmsg/social"
@@ -3644,7 +3644,7 @@ func TestProcessWorkspaceCommits_replyToNoBranch(t *testing.T) {
 		Hash: "rnb_112233445", Author: "Test", Email: "t@t.com",
 		Message: content, Timestamp: time.Now(),
 	}}
-	processWorkspaceCommits(commits, repoURL, branch)
+	ProcessWorkspaceBatch(commits, repoURL, branch)
 	item, _ := cache.QueryLocked(func(db *sql.DB) (SocialItem, error) {
 		var s SocialItem
 		err := db.QueryRow(`SELECT reply_to_branch FROM social_items WHERE repo_url = ? AND hash = ?`,

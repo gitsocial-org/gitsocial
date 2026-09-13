@@ -15,21 +15,21 @@ func TestRelativeTimeShort_justNow(t *testing.T) {
 }
 
 func TestRelativeTimeShort_minutes(t *testing.T) {
-	got := relativeTime(time.Now().Add(-5 * time.Minute), true)
+	got := relativeTime(time.Now().Add(-5*time.Minute), true)
 	if got != "5m ago" {
 		t.Errorf("relativeTime(-5m) = %q, want %q", got, "5m ago")
 	}
 }
 
 func TestRelativeTimeShort_hours(t *testing.T) {
-	got := relativeTime(time.Now().Add(-3 * time.Hour), true)
+	got := relativeTime(time.Now().Add(-3*time.Hour), true)
 	if got != "3h ago" {
 		t.Errorf("relativeTime(-3h) = %q, want %q", got, "3h ago")
 	}
 }
 
 func TestRelativeTimeShort_days(t *testing.T) {
-	got := relativeTime(time.Now().Add(-3 * 24 * time.Hour), true)
+	got := relativeTime(time.Now().Add(-3*24*time.Hour), true)
 	if got != "3d ago" {
 		t.Errorf("relativeTime(-3d) = %q, want %q", got, "3d ago")
 	}

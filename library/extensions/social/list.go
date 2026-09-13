@@ -159,6 +159,5 @@ func listDataToList(data gitmsg.ListData) List {
 		Name:         data.Name,
 		Version:      data.Version,
 		Repositories: data.Repositories,
-		Source:       "",
 	}
 }

@@ -909,17 +909,11 @@ func SocialItemToPost(item SocialItem) Post {
 	}
 
 	content := strings.ReplaceAll(item.Content, "\r", "")
-	repo := item.RepoURL
-	if repo == "" {
-		repo = "myrepository"
-	}
-
-	// Compute the full ref ID
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 
 	return Post{
 		ID:         id,
-		Repository: repo,
+		Repository: item.RepoURL,
 		Branch:     item.Branch,
 		Author: Author{
 			Name:  item.AuthorName,
@@ -928,7 +922,6 @@ func SocialItemToPost(item SocialItem) Post {
 		Timestamp:         item.Timestamp,
 		Content:           content,
 		Type:              postType,
-		Source:            PostSourceExplicit,
 		CleanContent:      content,
 		OriginalPostID:    originalPostID,
 		ParentCommentID:   parentCommentID,

@@ -65,28 +65,6 @@ func SyncListsToCache(workdir string) {
 	}
 }
 
-// processWorkspaceCommits parses and inserts workspace commits as social items.
-func processWorkspaceCommits(commits []git.Commit, repoURL, branch string) {
-	for _, gc := range commits {
-		msg := protocol.ParseMessage(gc.Message)
-		if msg != nil && msg.Header.Ext == "social" {
-			item := buildSocialItem(gc, msg, repoURL, branch)
-			if err := InsertSocialItem(item); err != nil {
-				log.Warn("insert social item failed", "hash", gc.Hash, "error", err)
-			}
-			for _, ref := range msg.References {
-				if vi := CreateVirtualSocialItem(ref, repoURL, branch); vi != nil {
-					if err := InsertSocialItem(*vi); err != nil {
-						log.Debug("insert virtual item failed", "ref", ref, "error", err)
-					}
-				}
-			}
-		} else {
-			upgradeVirtualItem(gc, repoURL)
-		}
-	}
-}
-
 // buildSocialItem constructs a SocialItem from a parsed commit and message.
 func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) SocialItem {
 	originalRepoURL, originalHash, originalBranch := parseSocialRefField(msg.Header.Fields["original"], repoURL, branch)
@@ -232,7 +210,6 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 		Timestamp:       now,
 		Content:         content,
 		Type:            PostTypePost,
-		Source:          PostSourceExplicit,
 		CleanContent:    content,
 		IsWorkspacePost: true,
 		Display: Display{

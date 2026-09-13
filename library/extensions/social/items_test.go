@@ -174,8 +174,8 @@ func TestSocialItemToPost_emptyType(t *testing.T) {
 func TestSocialItemToPost_emptyRepoURL(t *testing.T) {
 	item := SocialItem{Hash: "abc123", Branch: "main", Type: "post"}
 	post := SocialItemToPost(item)
-	if post.Repository != "myrepository" {
-		t.Errorf("empty repoURL should default to myrepository, got %q", post.Repository)
+	if post.Repository != "" {
+		t.Errorf("Repository = %q, want empty for an item with no repo URL", post.Repository)
 	}
 }
 
@@ -1498,4 +1498,3 @@ func TestInsertSocialItem_upgradeFromVirtual(t *testing.T) {
 		t.Error("expected virtual flag cleared after upgrade")
 	}
 }
-
