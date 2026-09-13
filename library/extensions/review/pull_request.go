@@ -493,9 +493,11 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		}
 	}
 
-	// Auto-retarget dependent PRs: if another open PR depends on this one
-	// and its base matches the merged PR's head, retarget it to this PR's base
-	retargetDependents(workdir, res.Data)
+	// A dependent left naming the merged head is reported, not hidden: the merge stands.
+	for _, failure := range retargetDependents(workdir, res.Data) {
+		log.Warn("retarget dependent pull request failed",
+			"code", failure.Code, "error", failure.Message)
+	}
 
 	return res
 }
@@ -768,22 +770,27 @@ func fetchHeadIntoTemp(workdir, sourceURL, branch, tempBranch string) error {
 	return err
 }
 
-// retargetDependents finds open PRs that depend on the merged PR and retargets
-// their base from the merged PR's head to the merged PR's base.
-func retargetDependents(workdir string, merged PullRequest) {
-	dependents := GetDependents(merged.Repository, merged.Branch, extractRefHash(merged.ID))
-	for _, dep := range dependents {
-		if dep.State != PRStateOpen {
-			continue
-		}
-		// Only retarget if dependent's base matches the merged PR's head
-		if dep.Base != merged.Head {
+// retargetDependents retargets open PRs whose base is the merged PR's head onto its base.
+// Returns one error per dependent whose edit failed; the merge itself has landed.
+func retargetDependents(workdir string, merged PullRequest) []*result.Error {
+	var failures []*result.Error
+	for _, dep := range GetDependents(merged.Repository, merged.Branch, extractRefHash(merged.ID)) {
+		if dep.State != PRStateOpen || dep.Base != merged.Head {
 			continue
 		}
 		newBase := merged.Base
-		UpdatePR(workdir, dep.ID, UpdatePROptions{Base: &newBase})
+		res := UpdatePR(workdir, dep.ID, UpdatePROptions{Base: &newBase})
+		if !res.Success {
+			failures = append(failures, &result.Error{
+				Code:    res.Error.Code,
+				Message: fmt.Sprintf("retarget %q onto %s: %s", dep.Subject, newBase, res.Error.Message),
+				Details: dep.ID,
+			})
+			continue
+		}
 		log.Debug("auto-retarget dependent PR", "pr", dep.Subject, "new_base", newBase)
 	}
+	return failures
 }
 
 // extractRefHash extracts the hash from a ref string like "#commit:abc123@branch".

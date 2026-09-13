@@ -198,6 +198,57 @@ func TestRebaseStack(t *testing.T) {
 	}
 }
 
+// TestRetargetDependents_reportsFailure reports a dependent whose retarget edit failed.
+func TestRetargetDependents_reportsFailure(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	git.ExecGit(dir, []string{"checkout", "feature"})
+	commitFile(t, dir, "feature.txt", "one\n", "feature one")
+	publish(t, dir, "feature")
+	git.ExecGit(dir, []string{"checkout", "-b", "feature2"})
+	commitFile(t, dir, "feature2.txt", "two\n", "feature two")
+	publish(t, dir, "feature2")
+	git.ExecGit(dir, []string{"checkout", "main"})
+
+	prA := CreatePR(dir, "Feature A", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !prA.Success {
+		t.Fatalf("CreatePR(A) failed: %s", prA.Error.Message)
+	}
+	prB := CreatePR(dir, "Feature B", "", CreatePROptions{
+		Base: "feature", Head: "feature2", DependsOn: []string{prA.Data.ID},
+	})
+	if !prB.Success {
+		t.Fatalf("CreatePR(B) failed: %s", prB.Error.Message)
+	}
+
+	// A crashed writer leaves the review branch's ref locked.
+	lock := filepath.Join(dir, ".git", "refs", "heads", "gitmsg", "review.lock")
+	if err := os.MkdirAll(filepath.Dir(lock), 0700); err != nil {
+		t.Fatalf("make the ref directory: %v", err)
+	}
+	if err := os.WriteFile(lock, nil, 0600); err != nil {
+		t.Fatalf("write the ref lock: %v", err)
+	}
+	defer os.Remove(lock)
+
+	failures := retargetDependents(dir, prA.Data)
+	if len(failures) != 1 {
+		t.Fatalf("retargetDependents returned %d failures, want 1", len(failures))
+	}
+	if !strings.Contains(failures[0].Message, "Feature B") {
+		t.Errorf("the failure should name the dependent, got %q", failures[0].Message)
+	}
+	if failures[0].Code == "" {
+		t.Error("the failure should carry the error code")
+	}
+
+	// The dependent still names the merged head, which is what the warning says.
+	if pr := GetPR(prB.Data.ID); !pr.Success || pr.Data.Base != prA.Data.Head {
+		t.Errorf("dependent base = %q, want the unchanged %q", pr.Data.Base, prA.Data.Head)
+	}
+}
+
 func TestRebaseStack_noDependents(t *testing.T) {
 	setupTestDB(t)
 	dir, _, _ := initDivergedPRRepo(t)
