@@ -20,18 +20,10 @@ func init() {
 	notifications.RegisterProvider("review", &reviewNotificationProvider{})
 }
 
-// notificationSelectFromView is baseSelectFromView + LEFT JOIN for read state, with nr.repo_url appended.
-const notificationSelectFromView = `
-	SELECT v.repo_url, v.hash, v.branch,
-	       v.author_name, v.author_email, v.resolved_message, v.timestamp,
-	       v.type, v.state, v.base, v.head, v.closes, v.reviewers,
-	       v.pull_request_repo_url, v.pull_request_hash, v.pull_request_branch,
-	       v.commit_ref, v.file, v.old_line, v.new_line, v.old_line_end, v.new_line_end,
-	       v.review_state, v.suggestion,
-	       v.edits, v.is_virtual, v.is_retracted, v.has_edits,
-	       v.comments,
-	       nr.repo_url
-	FROM review_items_resolved v
+// notificationSelectFromView is baseSelectFromView with the read marker as a trailing column.
+var notificationSelectFromView = cache.ResolvedSelect("review_items_resolved",
+	reviewExtColumns+`,
+       nr.repo_url`) + `
 	LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
 `
 
@@ -294,29 +286,11 @@ func countUnreadForkPRs(workspaceURL, userEmail string, forkURLs []string) (int,
 
 // countUnreadFeedback counts unread feedback notifications.
 func countUnreadFeedback(workspaceURL, userEmail string) (int, error) {
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM review_items_resolved v
-			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
-			WHERE v.type = 'feedback'
-			  AND (
-			    v.pull_request_repo_url = ?
-			    OR EXISTS (
-			      SELECT 1 FROM review_items_resolved pr
-			      WHERE pr.repo_url = v.pull_request_repo_url
-			        AND pr.hash = v.pull_request_hash
-			        AND pr.branch = v.pull_request_branch
-			        AND pr.type = 'pull-request'
-			        AND pr.author_email = ?
-			    )
-			  )
-			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
-			  AND nr.repo_url IS NULL
-		`, workspaceURL, userEmail, userEmail).Scan(&count)
-		return count, err
-	})
+	notifs, err := getFeedbackNotifications(workspaceURL, userEmail, true)
+	if err != nil {
+		return 0, err
+	}
+	return len(notifs), nil
 }
 
 // getReviewRequestedNotifications returns notifications for PRs where the user is a requested reviewer.
@@ -491,27 +465,11 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 
 // countUnreadPRStateChanges counts unread pr-merged/pr-closed notifications.
 func countUnreadPRStateChanges(userEmail string) (int, error) {
-	if userEmail == "" {
-		return 0, nil
+	notifs, err := getPRStateChangeNotifications(userEmail, true)
+	if err != nil {
+		return 0, err
 	}
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*)
-			FROM core_commits_version cv
-			JOIN core_commits ec ON cv.edit_repo_url = ec.repo_url AND cv.edit_hash = ec.hash AND cv.edit_branch = ec.branch
-			JOIN review_items ri ON cv.edit_repo_url = ri.repo_url AND cv.edit_hash = ri.hash AND cv.edit_branch = ri.branch
-			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash AND cv.canonical_branch = pr.branch
-			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
-			WHERE ri.state IN ('merged', 'closed')
-			  AND pr.type = 'pull-request'
-			  AND pr.author_email = ?
-			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?
-			  AND NOT pr.is_retracted
-			  AND nr.repo_url IS NULL
-		`, userEmail, userEmail).Scan(&count)
-		return count, err
-	})
+	return len(notifs), nil
 }
 
 // getDraftReadyNotifications returns one notification per draft-to-ready edit on a fork pull request.
@@ -642,35 +600,12 @@ func escapeLike(s string) string {
 	return s
 }
 
-// scanResolvedRowWithRead scans a review_items_resolved row that has a LEFT JOIN with core_notification_reads.
-func scanResolvedRowWithRead(rows *sql.Rows) (*ReviewItem, bool, error) {
-	var item ReviewItem
-	var ts, message sql.NullString
-	var isVirtual, isRetracted, hasEdits int
+// scanResolvedRowWithRead scans a notificationSelectFromView row and its read marker.
+func scanResolvedRowWithRead(s cache.RowScanner) (*ReviewItem, bool, error) {
 	var readRepoURL sql.NullString
-	err := rows.Scan(
-		&item.RepoURL, &item.Hash, &item.Branch,
-		&item.AuthorName, &item.AuthorEmail, &message, &ts,
-		&item.Type, &item.State, &item.Base, &item.Head, &item.Closes, &item.Reviewers,
-		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
-		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
-		&item.ReviewStateField, &item.Suggestion,
-		&item.EditOf, &isVirtual, &isRetracted, &hasEdits,
-		&item.Comments,
-		&readRepoURL,
-	)
+	item, err := scanReviewRow(s, &readRepoURL)
 	if err != nil {
 		return nil, false, err
 	}
-	if message.Valid {
-		item.Content = protocol.ExtractCleanContent(message.String)
-	}
-	if ts.Valid {
-		item.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
-	}
-	item.IsVirtual = isVirtual == 1
-	item.IsRetracted = isRetracted == 1
-	item.IsEdited = hasEdits == 1
-	isRead := readRepoURL.Valid
-	return &item, isRead, nil
+	return item, readRepoURL.Valid, nil
 }

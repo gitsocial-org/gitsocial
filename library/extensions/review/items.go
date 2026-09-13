@@ -58,11 +58,13 @@ type ReviewItem struct {
 	Adopts string
 }
 
-var baseSelectFromView = cache.ResolvedSelect("review_items_resolved", `v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
+const reviewExtColumns = `v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
        v.pull_request_repo_url, v.pull_request_hash, v.pull_request_branch,
        v.commit_ref, v.file, v.old_line, v.new_line, v.old_line_end, v.new_line_end,
        v.review_state, v.suggestion,
-       v.labels`)
+       v.labels`
+
+var baseSelectFromView = cache.ResolvedSelect("review_items_resolved", reviewExtColumns)
 
 // InsertReviewItem inserts or updates one review item in the cache database.
 func InsertReviewItem(item ReviewItem) error {
@@ -547,17 +549,27 @@ func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChan
 }
 
 // scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
-// Review re-parses the raw messages itself: it needs References and adopts= in
-// addition to the standard content/origin interpretation.
 func scanResolvedRow(s cache.RowScanner) (*ReviewItem, error) {
+	return scanReviewRow(s, nil)
+}
+
+// scanReviewRow scans a resolved review row. readDest, when set, takes the
+// notification read marker notificationSelectFromView appends. Review re-parses
+// the raw messages itself: it needs References and adopts= in addition to the
+// standard content and origin interpretation.
+func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, error) {
 	var item ReviewItem
-	meta, err := cache.ScanResolved(s,
+	dest := []any{
 		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
 		&item.PullRequestRepoURL, &item.PullRequestHash, &item.PullRequestBranch,
 		&item.CommitRef, &item.File, &item.OldLine, &item.NewLine, &item.OldLineEnd, &item.NewLineEnd,
 		&item.ReviewStateField, &item.Suggestion,
 		&item.Labels,
-	)
+	}
+	if readDest != nil {
+		dest = append(dest, readDest)
+	}
+	meta, err := cache.ScanResolved(s, dest...)
 	if err != nil {
 		return nil, err
 	}
