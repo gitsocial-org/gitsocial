@@ -1,11 +1,56 @@
-// thread.go - Thread building and comment tree sorting
+// thread.go - Comment reading, thread building and comment tree sorting
 package social
 
 import (
+	"database/sql"
 	"sort"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
+
+// commentsQuery joins social_items directly, so idx_social_original drives the plan. An empty branch matches any.
+func commentsQuery(branch string) string {
+	original := "s.original_repo_url = ? AND s.original_hash = ?"
+	if branch != "" {
+		original += " AND s.original_branch = ?"
+	}
+	return baseDirectSelect + `
+		WHERE s.type = 'comment' AND ` + original + `
+		  AND c.is_edit_commit = 0
+		  AND c.is_retracted = 0
+		  AND (c.stale_since IS NULL OR c.is_virtual = 1)
+		ORDER BY COALESCE(c.origin_time, c.timestamp) DESC`
+}
+
+// GetComments reads the live comments on an item, sorted into the reply tree under rootRef.
+func GetComments(repoURL, hash, branch, rootRef string) ([]Post, error) {
+	items, err := cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
+		// The empty workspace URL leaves the FollowsYou mark unset, as each comment reader already does.
+		args := []interface{}{"", repoURL, hash}
+		if branch != "" {
+			args = append(args, branch)
+		}
+		rows, err := db.Query(commentsQuery(branch), args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		return scanResolvedRows(rows)
+	})
+	if err != nil {
+		return nil, err
+	}
+	posts := make([]Post, len(items))
+	for i, item := range items {
+		posts[i] = SocialItemToPost(item)
+	}
+	if len(posts) > 0 {
+		posts = SortThreadTree(rootRef, posts)
+	}
+	return posts, nil
+}
 
 // normalizedKey creates a unique key from a post ID for map lookups.
 func normalizedKey(id string) string {

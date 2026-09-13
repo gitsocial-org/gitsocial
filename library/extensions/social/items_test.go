@@ -904,31 +904,6 @@ func TestGetSocialItems_byBranch(t *testing.T) {
 	}
 }
 
-func TestGetSocialItems_byOriginal(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "orig1234567a")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "orig1234567a", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, itemsTestRepoURL, "cmto1234567a")
-	InsertSocialItem(SocialItem{
-		RepoURL: itemsTestRepoURL, Hash: "cmto1234567a", Branch: itemsTestBranch, Type: "comment",
-		OriginalRepoURL: cache.ToNullString(itemsTestRepoURL),
-		OriginalHash:    cache.ToNullString("orig1234567a"),
-		OriginalBranch:  cache.ToNullString(itemsTestBranch),
-	})
-
-	items, err := GetSocialItems(SocialQuery{
-		OriginalRepoURL: itemsTestRepoURL,
-		OriginalHash:    "orig1234567a",
-		OriginalBranch:  itemsTestBranch,
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1 comment, got %d", len(items))
-	}
-}
-
 func TestInsertSocialItem_repostInteraction(t *testing.T) {
 	setupTestDB(t)
 	insertItemsTestCommit(t, itemsTestRepoURL, "rpi_root1234")
@@ -1161,26 +1136,6 @@ func TestGetTimeline_withForks(t *testing.T) {
 	}
 	if !sawForkUniq {
 		t.Error("fork-only commit should appear on timeline")
-	}
-}
-
-func TestGetSocialItems_originalWithoutBranch(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "onb_root1234")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "onb_root1234", Branch: itemsTestBranch, Type: "post"})
-	insertItemsTestCommit(t, itemsTestRepoURL, "onb_cmnt1234")
-	InsertSocialItem(SocialItem{
-		RepoURL: itemsTestRepoURL, Hash: "onb_cmnt1234", Branch: itemsTestBranch, Type: "comment",
-		OriginalRepoURL: cache.ToNullString(itemsTestRepoURL),
-		OriginalHash:    cache.ToNullString("onb_root1234"),
-	})
-	// Query by original without branch
-	items, err := GetSocialItems(SocialQuery{OriginalRepoURL: itemsTestRepoURL, OriginalHash: "onb_root1234"})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1, got %d", len(items))
 	}
 }
 
@@ -1423,40 +1378,6 @@ func TestGetTimeline_withLimit(t *testing.T) {
 	}
 	if len(items) > 2 {
 		t.Errorf("expected at most 2 with limit, got %d", len(items))
-	}
-}
-
-func TestGetSocialItems_withOriginalFilter(t *testing.T) {
-	setupTestDB(t)
-	origRepo := "https://github.com/orig/filter"
-	origHash := "of_012345678"
-	insertItemsTestCommit(t, origRepo, origHash)
-	InsertSocialItem(SocialItem{RepoURL: origRepo, Hash: origHash, Branch: itemsTestBranch, Type: "post"})
-	// Insert a comment on this post
-	insertItemsTestCommit(t, itemsTestRepoURL, "ofc_12345678")
-	InsertSocialItem(SocialItem{
-		RepoURL: itemsTestRepoURL, Hash: "ofc_12345678", Branch: itemsTestBranch, Type: "comment",
-		OriginalRepoURL: cache.ToNullString(origRepo), OriginalHash: cache.ToNullString(origHash), OriginalBranch: cache.ToNullString(itemsTestBranch),
-	})
-	// Query by original with branch
-	items, err := GetSocialItems(SocialQuery{
-		OriginalRepoURL: origRepo, OriginalHash: origHash, OriginalBranch: itemsTestBranch,
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Errorf("expected 1 comment, got %d", len(items))
-	}
-	// Query by original without branch
-	items2, err := GetSocialItems(SocialQuery{
-		OriginalRepoURL: origRepo, OriginalHash: origHash,
-	})
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if len(items2) != 1 {
-		t.Errorf("expected 1 without branch, got %d", len(items2))
 	}
 }
 

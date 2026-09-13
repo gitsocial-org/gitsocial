@@ -198,7 +198,7 @@ Outside the tree:
 | `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
-| `extensions/social`<br>Posts, lists, timeline | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `CreateComment`, `Fetch` |
+| `extensions/social`<br>Posts, lists, timeline | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `CreateComment`, `GetComments`, `Fetch` |
 | `extensions/pm`<br>Issues, milestones, sprints | `Issue`, `Milestone`, `Sprint`, `PMNotification` | `GetIssues`, `CreateIssue`, `GetMilestones`, `GetSprints`, `MessageToPMItem`, `FetchRepository`, `Processors` |
 | `extensions/release`<br>Releases | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
 | `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `GetPullRequests`, `GetPullRequestsWithForks`, `ResolvePRDiff`, `GetStack`, `RebaseStack`, `Processors` |
@@ -255,7 +255,7 @@ LEFT JOIN {ext}_items e ON c.repo_url = e.repo_url AND c.hash = e.hash AND c.bra
 
 The denormalized columns `resolved_message`, `has_edits` and `is_retracted` are written only by `applyEditToCanonical` in `core/cache/versions.go`.
 
-Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise the planner scans `core_commits`. `social.GetThread` and `social.GetNotifications` are the examples.
+Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise the planner scans `core_commits`. `social.GetComments`, `social.GetThread` and `social.GetNotifications` are the examples.
 
 ### Refs and keys
 

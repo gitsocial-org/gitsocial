@@ -30,25 +30,9 @@ func GetItemComments(itemRef string, workspaceURL string) Result[[]social.Post] 
 		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+itemRef)
 	}
 
-	items, err := social.GetSocialItems(social.SocialQuery{
-		Types:           []string{"comment"},
-		OriginalRepoURL: item.RepoURL,
-		OriginalHash:    item.Hash,
-		OriginalBranch:  item.Branch,
-	})
+	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, itemRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}
-
-	posts := make([]social.Post, len(items))
-	for i, item := range items {
-		posts[i] = social.SocialItemToPost(item)
-	}
-
-	// Sort into thread tree for proper nesting
-	if len(posts) > 0 {
-		posts = social.SortThreadTree(itemRef, posts)
-	}
-
 	return result.Ok(posts)
 }

@@ -1,11 +1,138 @@
-// thread_test.go - Tests for thread building and comment tree sorting
+// thread_test.go - Tests for comment reading, thread building and comment tree sorting
 package social
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
+
+// queryPlan returns the EXPLAIN QUERY PLAN lines SQLite reports for a query.
+func queryPlan(t *testing.T, query string, args ...interface{}) []string {
+	t.Helper()
+	lines, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		rows, err := db.Query("EXPLAIN QUERY PLAN "+query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var id, parent, notused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+				return nil, err
+			}
+			out = append(out, detail)
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN error = %v", err)
+	}
+	return lines
+}
+
+// TestGetComments_plan pins invariant 3: the comment reader seeks idx_social_original.
+func TestGetComments_plan(t *testing.T) {
+	setupTestDB(t)
+	cases := []struct {
+		name   string
+		branch string
+		args   []interface{}
+	}{
+		{"with branch", itemsTestBranch, []interface{}{"", itemsTestRepoURL, "plan00000001", itemsTestBranch}},
+		{"without branch", "", []interface{}{"", itemsTestRepoURL, "plan00000001"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := strings.Join(queryPlan(t, commentsQuery(tc.branch), tc.args...), "\n")
+			if !strings.Contains(plan, "idx_social_original") {
+				t.Errorf("plan does not use idx_social_original:\n%s", plan)
+			}
+			if strings.Contains(plan, "SCAN core_commits") {
+				t.Errorf("plan scans core_commits:\n%s", plan)
+			}
+		})
+	}
+}
+
+// TestGetComments_writePath reads a thread written through CreatePost, CreateComment and RetractPost.
+func TestGetComments_writePath(t *testing.T) {
+	workdir := initWorkspace(t)
+	post := CreatePost(workdir, "Root post", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+	}
+	comment := CreateComment(workdir, post.Data.ID, "First", nil)
+	if !comment.Success {
+		t.Fatalf("CreateComment() failed: %s", comment.Error.Message)
+	}
+	nested := CreateComment(workdir, comment.Data.ID, "Nested", nil)
+	if !nested.Success {
+		t.Fatalf("CreateComment(nested) failed: %s", nested.Error.Message)
+	}
+
+	posts, err := GetComments(post.Data.Repository, post.Data.Display.CommitHash, post.Data.Branch, post.Data.ID)
+	if err != nil {
+		t.Fatalf("GetComments() error = %v", err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("GetComments() = %d posts, want 2", len(posts))
+	}
+	if posts[0].Content != "First" || posts[0].Depth != 1 {
+		t.Errorf("first post = %q at depth %d, want \"First\" at depth 1", posts[0].Content, posts[0].Depth)
+	}
+	if posts[1].Content != "Nested" || posts[1].Depth != 2 {
+		t.Errorf("second post = %q at depth %d, want \"Nested\" at depth 2", posts[1].Content, posts[1].Depth)
+	}
+
+	if r := RetractPost(workdir, nested.Data.ID); !r.Success {
+		t.Fatalf("RetractPost(nested) failed: %s", r.Error.Message)
+	}
+	posts, err = GetComments(post.Data.Repository, post.Data.Display.CommitHash, post.Data.Branch, post.Data.ID)
+	if err != nil {
+		t.Fatalf("GetComments() after retraction error = %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("GetComments() after retraction = %d posts, want 1", len(posts))
+	}
+	if posts[0].Content != "First" {
+		t.Errorf("remaining post = %q, want \"First\"", posts[0].Content)
+	}
+}
+
+// TestGetComments_withoutBranch reads a comment in another repository whose original names no branch.
+func TestGetComments_withoutBranch(t *testing.T) {
+	setupTestDB(t)
+	origRepo := "https://github.com/orig/filter"
+	origHash := "onb_root1234"
+	insertItemsTestCommit(t, origRepo, origHash)
+	InsertSocialItem(SocialItem{RepoURL: origRepo, Hash: origHash, Branch: itemsTestBranch, Type: "post"})
+	insertItemsTestCommit(t, itemsTestRepoURL, "onb_cmnt1234")
+	InsertSocialItem(SocialItem{
+		RepoURL: itemsTestRepoURL, Hash: "onb_cmnt1234", Branch: itemsTestBranch, Type: "comment",
+		OriginalRepoURL: cache.ToNullString(origRepo),
+		OriginalHash:    cache.ToNullString(origHash),
+	})
+
+	rootRef := origRepo + "#commit:" + origHash
+	posts, err := GetComments(origRepo, origHash, "", rootRef)
+	if err != nil {
+		t.Fatalf("GetComments() error = %v", err)
+	}
+	if len(posts) != 1 {
+		t.Fatalf("GetComments() = %d posts, want 1", len(posts))
+	}
+	if posts, err = GetComments(origRepo, origHash, itemsTestBranch, rootRef); err != nil {
+		t.Fatalf("GetComments(branch) error = %v", err)
+	} else if len(posts) != 0 {
+		t.Errorf("GetComments(branch) = %d posts, want 0", len(posts))
+	}
+}
 
 func TestSortThreadTree_empty(t *testing.T) {
 	result := SortThreadTree("root-id", nil)

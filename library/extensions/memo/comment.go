@@ -12,21 +12,9 @@ func GetMemoComments(memoRef, workspaceURL string) Result[[]social.Post] {
 	if err != nil {
 		return result.Err[[]social.Post]("NOT_FOUND", "memo not found: "+memoRef)
 	}
-	items, err := social.GetSocialItems(social.SocialQuery{
-		Types:           []string{"comment"},
-		OriginalRepoURL: item.RepoURL,
-		OriginalHash:    item.Hash,
-		OriginalBranch:  item.Branch,
-	})
+	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, memoRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
-	}
-	posts := make([]social.Post, len(items))
-	for i, it := range items {
-		posts[i] = social.SocialItemToPost(it)
-	}
-	if len(posts) > 0 {
-		posts = social.SortThreadTree(memoRef, posts)
 	}
 	return result.Ok(posts)
 }

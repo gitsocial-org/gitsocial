@@ -13,24 +13,9 @@ func GetReleaseComments(releaseRef string, workspaceURL string) Result[[]social.
 		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+releaseRef)
 	}
 
-	items, err := social.GetSocialItems(social.SocialQuery{
-		Types:           []string{"comment"},
-		OriginalRepoURL: item.RepoURL,
-		OriginalHash:    item.Hash,
-		OriginalBranch:  item.Branch,
-	})
+	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, releaseRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}
-
-	posts := make([]social.Post, len(items))
-	for i, item := range items {
-		posts[i] = social.SocialItemToPost(item)
-	}
-
-	if len(posts) > 0 {
-		posts = social.SortThreadTree(releaseRef, posts)
-	}
-
 	return result.Ok(posts)
 }

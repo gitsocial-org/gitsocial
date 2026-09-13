@@ -19,14 +19,14 @@ func TestGetReleaseComments_socialQueryError(t *testing.T) {
 	InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: hash, Branch: branch})
 
 	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec("DROP VIEW IF EXISTS social_items_resolved")
+		db.Exec("DROP TABLE IF EXISTS social_items")
 		return nil
 	})
 
 	refStr := repoURL + "#commit:" + hash + "@" + branch
 	res := GetReleaseComments(refStr, repoURL)
 	if res.Success {
-		t.Error("should fail when social view is dropped")
+		t.Error("should fail when the social item table is dropped")
 	}
 	if res.Error.Code != "QUERY_FAILED" {
 		t.Errorf("Error.Code = %q, want QUERY_FAILED", res.Error.Code)

@@ -482,9 +482,6 @@ type SocialQuery struct {
 	Types            []string
 	RepoURL          string
 	Branch           string
-	OriginalRepoURL  string
-	OriginalHash     string
-	OriginalBranch   string
 	Since            *time.Time
 	Until            *time.Time
 	Limit            int
@@ -512,16 +509,6 @@ func socialWhere(q SocialQuery) ([]string, []interface{}) {
 	if q.Branch != "" {
 		where = append(where, "v.branch = ?")
 		args = append(args, q.Branch)
-	}
-
-	if q.OriginalRepoURL != "" && q.OriginalHash != "" {
-		if q.OriginalBranch != "" {
-			where = append(where, "v.original_repo_url = ? AND v.original_hash = ? AND v.original_branch = ?")
-			args = append(args, q.OriginalRepoURL, q.OriginalHash, q.OriginalBranch)
-		} else {
-			where = append(where, "v.original_repo_url = ? AND v.original_hash = ?")
-			args = append(args, q.OriginalRepoURL, q.OriginalHash)
-		}
 	}
 
 	if q.Since != nil {
@@ -560,15 +547,7 @@ func GetSocialItems(q SocialQuery) ([]SocialItem, error) {
 		}
 		defer rows.Close()
 
-		var items []SocialItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, *item)
-		}
-		return items, rows.Err()
+		return scanResolvedRows(rows)
 	})
 }
 
@@ -648,15 +627,7 @@ func GetTimeline(listIDs []string, workspaceURL, followerURL string, forkURLs []
 		}
 		defer rows.Close()
 
-		var items []SocialItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, *item)
-		}
-		return items, rows.Err()
+		return scanResolvedRows(rows)
 	})
 }
 
@@ -741,15 +712,7 @@ func GetThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 		}
 		defer rows.Close()
 
-		var items []SocialItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, *item)
-		}
-		return items, rows.Err()
+		return scanResolvedRows(rows)
 	})
 }
 
@@ -839,6 +802,19 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 		return "", "", ""
 	}
 	return msg.Header.Ext, msg.Header.Fields["type"], msg.Header.Fields["state"]
+}
+
+// scanResolvedRows scans every row an item query returns.
+func scanResolvedRows(rows *sql.Rows) ([]SocialItem, error) {
+	var items []SocialItem
+	for rows.Next() {
+		item, err := scanResolvedRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+	return items, rows.Err()
 }
 
 // scanResolvedRow scans one baseSelectFromView or baseDirectSelect row.
@@ -997,15 +973,7 @@ func GetParentChain(repoURL, hash, branch string, workspaceURL string) ([]Social
 		}
 		defer rows.Close()
 
-		var items []SocialItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, *item)
-		}
-		return items, rows.Err()
+		return scanResolvedRows(rows)
 	})
 }
 

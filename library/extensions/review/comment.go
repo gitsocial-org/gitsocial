@@ -34,21 +34,11 @@ func GetFeedbackCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Pos
 	return getCommentsByKey(repoURL, hash, rootRef)
 }
 
+// getCommentsByKey reads a review item's comments on any branch.
 func getCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
-	items, err := social.GetSocialItems(social.SocialQuery{
-		Types:           []string{"comment"},
-		OriginalRepoURL: repoURL,
-		OriginalHash:    hash,
-	})
+	posts, err := social.GetComments(repoURL, hash, "", rootRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
-	}
-	posts := make([]social.Post, len(items))
-	for i, item := range items {
-		posts[i] = social.SocialItemToPost(item)
-	}
-	if len(posts) > 0 {
-		posts = social.SortThreadTree(rootRef, posts)
 	}
 	return result.Ok(posts)
 }
