@@ -17,8 +17,8 @@ const (
 	ItemTypeFeedback    ItemType = "feedback"
 )
 
-// Spec-defined field ordering per GITREVIEW.md
-var prFieldOrder = []string{"state", "draft", "base", "base-tip", "head", "head-tip", "depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels"}
+// Spec-defined field ordering per GITREVIEW.md 1.2; accepts is placed by the core header writer.
+var prFieldOrder = []string{"state", "draft", "base", "base-tip", "head", "head-tip", "depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels", "adopts"}
 var feedbackFieldOrder = []string{"pull-request", "commit", "file", "new-line", "new-line-end", "old-line", "old-line-end", "review-state", "suggestion"}
 
 type PRState string

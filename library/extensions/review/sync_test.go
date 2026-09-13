@@ -4,6 +4,7 @@ package review
 import (
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -400,6 +401,104 @@ func TestProcessReviewCommit_feedbackWithNoBranchInPRRef(t *testing.T) {
 	if !item.PullRequestBranch.Valid || item.PullRequestBranch.String != reviewTestBranch {
 		t.Errorf("PullRequestBranch = %v, want %s (should default to commit branch)", item.PullRequestBranch, reviewTestBranch)
 	}
+}
+
+// specPRFieldOrder is GITREVIEW.md 1.2's field order behind the core header prelude.
+var specPRFieldOrder = []string{
+	"ext", "type", "edits", "accepts", "retracted",
+	"state", "draft", "base", "base-tip", "head", "head-tip",
+	"depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels", "adopts", "v",
+}
+
+// assertPRFieldOrder reports header fields that appear out of the spec's order, or are unknown.
+func assertPRFieldOrder(t *testing.T, message string, want ...string) {
+	t.Helper()
+	line := ""
+	for _, l := range strings.Split(message, "\n") {
+		if strings.HasPrefix(l, "GitMsg: ") {
+			line = strings.TrimPrefix(l, "GitMsg: ")
+			break
+		}
+	}
+	if line == "" {
+		t.Fatalf("no GitMsg header in message:\n%s", message)
+	}
+	seen := map[string]bool{}
+	pos := 0
+	for _, field := range strings.Split(line, "; ") {
+		key, _, ok := strings.Cut(field, "=")
+		if !ok {
+			t.Fatalf("malformed header field %q in: %s", field, line)
+		}
+		seen[key] = true
+		next := pos
+		for next < len(specPRFieldOrder) && specPRFieldOrder[next] != key {
+			next++
+		}
+		if next == len(specPRFieldOrder) {
+			t.Fatalf("header field %q is out of spec order or unknown in: %s", key, line)
+		}
+		pos = next
+	}
+	for _, key := range want {
+		if !seen[key] {
+			t.Errorf("header should carry %q: %s", key, line)
+		}
+	}
+}
+
+// headerOf returns the raw commit message of a review commit named by a ref.
+func headerOf(t *testing.T, workdir, ref string) string {
+	t.Helper()
+	commit, err := git.GetCommit(workdir, protocol.ParseRef(ref).Value)
+	if err != nil || commit == nil {
+		t.Fatalf("GetCommit %s: %v", ref, err)
+	}
+	return commit.Message
+}
+
+func TestPRHeaderOrder_adoptedCopy(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, _ := forkPRFixture(t)
+
+	created := CreatePR(bob, "Fix the bug", "the body", CreatePROptions{
+		Base:      upstreamURL + "#branch:main",
+		Head:      "feature",
+		Reviewers: []string{"alice@test.com"},
+		Labels:    []string{"kind/bug"},
+	})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	assertPRFieldOrder(t, headerOf(t, bob, created.Data.ID), "state", "base", "head", "reviewers")
+
+	closed := ClosePR(alice, created.Data.ID)
+	if !closed.Success {
+		t.Fatalf("ClosePR: %s", closed.Error.Message)
+	}
+	assertPRFieldOrder(t, headerOf(t, alice, closed.Data.ID), "adopts")
+}
+
+func TestPRHeaderOrder_acceptedMirrorEdit(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreatePR(dir, "Add a feature", "", CreatePROptions{Base: "#branch:main", Head: "#branch:feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	proposal := "https://github.com/fork/repo#commit:abc123456789@gitmsg/review"
+	edited := UpdatePR(dir, created.Data.ID, UpdatePROptions{
+		Attribution: &protocol.Ref{Ext: "review", Author: "Bob", Email: "bob@test.com", Ref: proposal, V: "0.1.0"},
+	})
+	if !edited.Success {
+		t.Fatalf("UpdatePR: %s", edited.Error.Message)
+	}
+	head, err := git.ReadRef(dir, reviewTestBranch)
+	if err != nil {
+		t.Fatalf("ReadRef %s: %v", reviewTestBranch, err)
+	}
+	assertPRFieldOrder(t, headerOf(t, dir, "#commit:"+head), "accepts", "edits")
 }
 
 func TestBoolToInt(t *testing.T) {

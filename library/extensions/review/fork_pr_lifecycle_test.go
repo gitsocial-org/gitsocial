@@ -13,33 +13,42 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
-	setupTestDB(t)
+// pushBranch creates a branch with one commit, pushes it to origin and refreshes tracking refs.
+func pushBranch(t *testing.T, workdir, name string) {
+	t.Helper()
+	if _, err := git.ExecGit(workdir, []string{"checkout", "-b", name}); err != nil {
+		t.Fatalf("checkout %s: %v", name, err)
+	}
+	if _, err := git.CreateCommit(workdir, git.CommitOptions{Message: name + " work", AllowEmpty: true}); err != nil {
+		t.Fatalf("commit on %s: %v", name, err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"push", "origin", name}); err != nil {
+		t.Fatalf("push %s: %v", name, err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"fetch", "origin"}); err != nil {
+		t.Fatalf("fetch after pushing %s: %v", name, err)
+	}
+}
 
-	upstreamOrigin := initBareOrigin(t)
-	forkOrigin := initBareOrigin(t)
-	alice := cloneAs(t, upstreamOrigin, "alice", "alice@test.com")
-	bob := cloneAs(t, forkOrigin, "bob", "bob@test.com")
-
-	upstreamURL := gitmsg.ResolveRepoURL(alice)
-	forkURL := gitmsg.ResolveRepoURL(bob)
+// forkPRFixture builds an upstream clone and a fork clone whose `feature` branch is pushed.
+func forkPRFixture(t *testing.T) (upstream, fork, upstreamURL, forkURL string) {
+	t.Helper()
+	upstream = cloneAs(t, initBareOrigin(t), "alice", "alice@test.com")
+	fork = cloneAs(t, initBareOrigin(t), "bob", "bob@test.com")
+	upstreamURL = gitmsg.ResolveRepoURL(upstream)
+	forkURL = gitmsg.ResolveRepoURL(fork)
 	if upstreamURL == forkURL {
 		t.Fatalf("upstream and fork must have distinct repo_urls: %q", upstreamURL)
 	}
+	pushBranch(t, fork, "feature")
+	return upstream, fork, upstreamURL, forkURL
+}
 
-	// Bob pushes a feature branch and opens a PR targeting the upstream.
-	if _, err := git.ExecGit(bob, []string{"checkout", "-b", "feature"}); err != nil {
-		t.Fatalf("bob checkout: %v", err)
-	}
-	if _, err := git.CreateCommit(bob, git.CommitOptions{Message: "bob feature", AllowEmpty: true}); err != nil {
-		t.Fatalf("bob commit: %v", err)
-	}
-	if _, err := git.ExecGit(bob, []string{"push", "origin", "feature"}); err != nil {
-		t.Fatalf("bob push: %v", err)
-	}
-	if _, err := git.ExecGit(bob, []string{"fetch", "origin"}); err != nil {
-		t.Fatalf("bob fetch: %v", err)
-	}
+func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
+	setupTestDB(t)
+
+	alice, bob, upstreamURL, forkURL := forkPRFixture(t)
+
 	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{
 		Base: upstreamURL + "#branch:main",
 		Head: "feature",
@@ -118,25 +127,8 @@ func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
 func TestForkPRReadiness_authorOnly(t *testing.T) {
 	setupTestDB(t)
 
-	upstreamOrigin := initBareOrigin(t)
-	forkOrigin := initBareOrigin(t)
-	alice := cloneAs(t, upstreamOrigin, "alice", "alice@test.com")
-	bob := cloneAs(t, forkOrigin, "bob", "bob@test.com")
+	alice, bob, upstreamURL, _ := forkPRFixture(t)
 
-	upstreamURL := gitmsg.ResolveRepoURL(alice)
-
-	if _, err := git.ExecGit(bob, []string{"checkout", "-b", "feature"}); err != nil {
-		t.Fatalf("bob checkout: %v", err)
-	}
-	if _, err := git.CreateCommit(bob, git.CommitOptions{Message: "bob feature", AllowEmpty: true}); err != nil {
-		t.Fatalf("bob commit: %v", err)
-	}
-	if _, err := git.ExecGit(bob, []string{"push", "origin", "feature"}); err != nil {
-		t.Fatalf("bob push: %v", err)
-	}
-	if _, err := git.ExecGit(bob, []string{"fetch", "origin"}); err != nil {
-		t.Fatalf("bob fetch: %v", err)
-	}
 	created := CreatePR(bob, "WIP fix", "", CreatePROptions{
 		Base:  upstreamURL + "#branch:main",
 		Head:  "feature",
