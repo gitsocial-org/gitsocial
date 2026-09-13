@@ -16,6 +16,7 @@ For general comments on a pull request, see Section 1.6.
 ### 1.2. Pull Request Fields
 
 Fields (in header order):
+- `accepts`: Reference to the cross-repository proposal this edit accepts (OPTIONAL, core field, GITMSG.md Section 1.5)
 - `state`: MUST be `open`, `merged`, or `closed`
 - `draft`: MAY be `true` to indicate the pull request is not ready for review (OPTIONAL)
 - `base`: Target branch reference (`<repo-url>#branch:<name>` or `#branch:<name>`)
@@ -28,8 +29,9 @@ Fields (in header order):
 - `merge-head`: Head branch commit hash at merge time, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
 - `reviewers`: MAY contain comma-separated reviewer email addresses
 - `labels`: MAY contain comma-separated scoped values (e.g. `labels="kind/bug,priority/high"`) (OPTIONAL, core field)
+- `adopts`: Reference to the fork pull request this upstream copy adopts, per Section 1.5 (OPTIONAL)
 
-Field order: `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `depends-on`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`.
+Field order: `accepts`, `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `depends-on`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`, `adopts`.
 
 The `head` and `base` fields support full repository URLs, enabling cross-forge contributions (e.g., GitLab to GitHub).
 
@@ -130,7 +132,7 @@ Configuration MAY include: `require-review` (boolean, default `false`).
   "display": "GitReview",
   "description": "Code contribution and review extension for GitMsg",
   "types": ["pull-request", "feedback"],
-  "fields": ["base", "base-tip", "closes", "commit", "depends-on", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
+  "fields": ["adopts", "base", "base-tip", "closes", "commit", "depends-on", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
 }
 ```
 
@@ -155,6 +157,8 @@ Configuration MAY include: `require-review` (boolean, default `false`).
 | `merge-base` | 12-character hash; required when `state="merged"`, prohibited otherwise |
 | `merge-head` | 12-character hash; required when `state="merged"`, prohibited otherwise |
 | `suggestion` | `true` |
+| `adopts` | pull request reference; permitted on a `pull-request` copy |
+| `accepts` | proposal reference, core field per GITMSG.md Section 1.5 |
 
 ## Appendix: Examples
 
