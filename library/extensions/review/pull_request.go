@@ -270,6 +270,26 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	return result.Ok(ReviewItemToPullRequest(*item))
 }
 
+// headSource returns the repository and branch a pull request's head lives on.
+// A relative head names the item's own repository, not the reader's workspace.
+func headSource(existing *ReviewItem, pr PullRequest) (repoURL, branch string) {
+	parsed := protocol.ParseRef(pr.Head)
+	repoURL = parsed.Repository
+	if repoURL == "" {
+		repoURL = existing.RepoURL
+	}
+	return repoURL, parsed.Value
+}
+
+// qualifiedHead renders a pull request's head as a ref naming the repository it lives on.
+func qualifiedHead(existing *ReviewItem, pr PullRequest) string {
+	sourceURL, branch := headSource(existing, pr)
+	if branch == "" {
+		return pr.Head
+	}
+	return protocol.CreateRef(protocol.RefTypeBranch, branch, sourceURL, "")
+}
+
 // homeForkPR copies a fork-authored pull request onto the workspace review branch and returns its ref.
 func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullRequest) (string, error) {
 	if existing.RepoURL == repoURL {
@@ -278,7 +298,8 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 	branch := gitmsg.GetExtBranch(workdir, "review")
 	copyOpts := CreatePROptions{
 		Base: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
-		Head: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Head), repoURL),
+		// The copy outlives the fork, so its head names the fork by URL.
+		Head: protocol.LocalizeRef(qualifiedHead(existing, pr), repoURL),
 		// Carry the source PR's recorded tips so the homed copy pins its diff to
 		// the same commits. Without them the copy has empty tips and cross-repo
 		// diff resolution falls back to each workspace's live branch heads, which
@@ -360,12 +381,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 
 	// Snapshot merge-base and head hash before the merge (lost after FF merge)
 	baseName := protocol.ParseRef(pr.Base).Value
-	headParsed := protocol.ParseRef(pr.Head)
-	headBranch := headParsed.Value
-	headSourceURL := headParsed.Repository
-	if headSourceURL == "" {
-		headSourceURL = repoURL
-	}
+	headSourceURL, headBranch := headSource(existing, pr)
 
 	// merge-base / merge-head are REQUIRED by GITREVIEW.md §1.5 on
 	// state="merged" edits — they're the only durable record of the merged
@@ -613,9 +629,14 @@ func SyncPRBranch(workdir, prRef, strategy string) Result[PullRequest] {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot sync: pull request is %s", pr.State))
 	}
 	baseName := protocol.ParseRef(pr.Base).Value
-	headName := protocol.ParseRef(pr.Head).Value
+	headSourceURL, headName := headSource(existing, pr)
 	if baseName == "" || headName == "" {
 		return result.Err[PullRequest]("INVALID_REFS", "base or head branch not set")
+	}
+	// Syncing moves a branch, so it is refused on a head this workspace does not own.
+	if headSourceURL != repoURL {
+		return result.Err[PullRequest]("INVALID_TARGET",
+			fmt.Sprintf("cannot sync: head branch %q lives in %s", headName, headSourceURL))
 	}
 	switch strategy {
 	case "merge":

@@ -6,6 +6,7 @@
 package review
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -30,11 +31,16 @@ func pushBranch(t *testing.T, workdir, name string) {
 	}
 }
 
-// forkPRFixture builds an upstream clone and a fork clone whose `feature` branch is pushed.
+// forkPRFixture builds an upstream clone and a fork clone, sharing history, whose `feature` branch is pushed.
 func forkPRFixture(t *testing.T) (upstream, fork, upstreamURL, forkURL string) {
 	t.Helper()
-	upstream = cloneAs(t, initBareOrigin(t), "alice", "alice@test.com")
-	fork = cloneAs(t, initBareOrigin(t), "bob", "bob@test.com")
+	upstreamOrigin := initBareOrigin(t)
+	forkOrigin := t.TempDir()
+	if _, err := git.ExecGit(forkOrigin, []string{"clone", "--bare", upstreamOrigin, "."}); err != nil {
+		t.Fatalf("clone the fork origin: %v", err)
+	}
+	upstream = cloneAs(t, upstreamOrigin, "alice", "alice@test.com")
+	fork = cloneAs(t, forkOrigin, "bob", "bob@test.com")
 	upstreamURL = gitmsg.ResolveRepoURL(upstream)
 	forkURL = gitmsg.ResolveRepoURL(fork)
 	if upstreamURL == forkURL {
@@ -146,5 +152,142 @@ func TestForkPRReadiness_authorOnly(t *testing.T) {
 	}
 	if res := RetractPR(alice, created.Data.ID); res.Success || res.Error.Code != "NOT_AUTHOR" {
 		t.Errorf("RetractPR on fork PR: want NOT_AUTHOR, got success=%v code=%q", res.Success, res.Error.Code)
+	}
+}
+
+// TestForkPRMerge_relativeHead merges a fork PR written in the relative form the
+// fork-discovery flow shows: the head names the fork, not the upstream.
+func TestForkPRMerge_relativeHead(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, forkURL := forkPRFixture(t)
+
+	// The upstream has a branch of the same name, which must not be merged.
+	pushBranch(t, alice, "feature")
+	if _, err := git.ExecGit(alice, []string{"checkout", "main"}); err != nil {
+		t.Fatalf("alice checkout main: %v", err)
+	}
+	decoyTip, err := git.ReadRef(alice, "feature")
+	if err != nil {
+		t.Fatalf("read the upstream feature tip: %v", err)
+	}
+	forkTip, err := git.ReadRef(bob, "feature")
+	if err != nil {
+		t.Fatalf("read the fork feature tip: %v", err)
+	}
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{
+		Base: "#branch:main",
+		Head: "feature",
+	})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	if created.Data.Head != "#branch:feature" {
+		t.Fatalf("the fork PR should keep a relative head, got %q", created.Data.Head)
+	}
+
+	merged := MergePR(alice, created.Data.ID, MergeStrategyFF)
+	if !merged.Success {
+		t.Fatalf("MergePR: %s", merged.Error.Message)
+	}
+	if merged.Data.Repository != upstreamURL {
+		t.Errorf("merge record repository = %q, want %q", merged.Data.Repository, upstreamURL)
+	}
+	if got := protocol.ParseRef(merged.Data.Head).Repository; got != forkURL {
+		t.Errorf("homed copy head = %q, want a head naming %s", merged.Data.Head, forkURL)
+	}
+	mainTip, err := git.ReadRef(alice, "main")
+	if err != nil {
+		t.Fatalf("read the upstream main tip: %v", err)
+	}
+	if mainTip != forkTip {
+		t.Errorf("upstream main = %s, want the fork's feature tip %s", mainTip, forkTip)
+	}
+	if mainTip == decoyTip {
+		t.Error("upstream main took the upstream's own feature branch")
+	}
+}
+
+// TestForkPRClose_relativeHead closes a fork PR whose head is relative.
+func TestForkPRClose_relativeHead(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, forkURL := forkPRFixture(t)
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{Base: "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	closed := ClosePR(alice, created.Data.ID)
+	if !closed.Success {
+		t.Fatalf("ClosePR: %s", closed.Error.Message)
+	}
+	if closed.Data.State != PRStateClosed || closed.Data.Repository != upstreamURL {
+		t.Errorf("closed record = state %q repo %q, want closed on %s", closed.Data.State, closed.Data.Repository, upstreamURL)
+	}
+	if got := protocol.ParseRef(closed.Data.Head).Repository; got != forkURL {
+		t.Errorf("homed copy head = %q, want a head naming %s", closed.Data.Head, forkURL)
+	}
+}
+
+// TestSyncPRBranch_forkHeadRefused keeps `pr sync` off a branch the workspace does not own.
+func TestSyncPRBranch_forkHeadRefused(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, _, _ := forkPRFixture(t)
+
+	pushBranch(t, alice, "feature")
+	if _, err := git.ExecGit(alice, []string{"checkout", "main"}); err != nil {
+		t.Fatalf("alice checkout main: %v", err)
+	}
+	before, err := git.ReadRef(alice, "feature")
+	if err != nil {
+		t.Fatalf("read the upstream feature tip: %v", err)
+	}
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{Base: "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+
+	res := SyncPRBranch(alice, created.Data.ID, "rebase")
+	if res.Success || res.Error.Code != "INVALID_TARGET" {
+		t.Fatalf("SyncPRBranch on a fork head: want INVALID_TARGET, got success=%v code=%q", res.Success, res.Error.Code)
+	}
+	after, err := git.ReadRef(alice, "feature")
+	if err != nil {
+		t.Fatalf("read the upstream feature tip after sync: %v", err)
+	}
+	if after != before {
+		t.Errorf("the upstream feature branch moved: %s to %s", before, after)
+	}
+}
+
+// TestRebaseStack_forkDependentRefused reports the dependent a refused sync names.
+func TestRebaseStack_forkDependentRefused(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, _ := forkPRFixture(t)
+
+	pushBranch(t, alice, "middleware")
+	if _, err := git.ExecGit(alice, []string{"checkout", "main"}); err != nil {
+		t.Fatalf("alice checkout main: %v", err)
+	}
+	root := CreatePR(alice, "Add middleware", "", CreatePROptions{Base: "#branch:main", Head: "middleware"})
+	if !root.Success {
+		t.Fatalf("CreatePR root: %s", root.Error.Message)
+	}
+	dependent := CreatePR(bob, "Add routes", "", CreatePROptions{
+		Base:      upstreamURL + "#branch:middleware",
+		Head:      "feature",
+		DependsOn: []string{root.Data.ID},
+	})
+	if !dependent.Success {
+		t.Fatalf("CreatePR dependent: %s", dependent.Error.Message)
+	}
+
+	res := RebaseStack(alice, root.Data.ID)
+	if res.Success || res.Error.Code != "REBASE_FAILED" {
+		t.Fatalf("RebaseStack over a fork dependent: want REBASE_FAILED, got success=%v code=%q", res.Success, res.Error.Code)
+	}
+	if !strings.Contains(res.Error.Message, "Add routes") {
+		t.Errorf("the error should name the dependent, got %q", res.Error.Message)
 	}
 }
