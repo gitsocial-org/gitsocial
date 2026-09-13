@@ -3,6 +3,7 @@ package social
 
 import (
 	"database/sql"
+	"slices"
 	"strings"
 	"time"
 
@@ -662,14 +663,11 @@ func GetAllItemsCount(q SocialQuery) (int, error) {
 
 // uniqueURLs returns root plus each non-empty extra URL exactly once.
 func uniqueURLs(root string, extras []string) []string {
-	seen := map[string]bool{root: true}
 	out := []string{root}
 	for _, u := range extras {
-		if u == "" || seen[u] {
-			continue
+		if u != "" && !slices.Contains(out, u) {
+			out = append(out, u)
 		}
-		seen[u] = true
-		out = append(out, u)
 	}
 	return out
 }

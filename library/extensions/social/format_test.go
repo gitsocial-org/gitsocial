@@ -7,39 +7,39 @@ import (
 	"time"
 )
 
-func TestFormatDate_justNow(t *testing.T) {
-	got := formatDate(time.Now())
+func TestRelativeTimeShort_justNow(t *testing.T) {
+	got := relativeTime(time.Now(), true)
 	if got != "just now" {
-		t.Errorf("formatDate(now) = %q, want %q", got, "just now")
+		t.Errorf("relativeTime(now) = %q, want %q", got, "just now")
 	}
 }
 
-func TestFormatDate_minutes(t *testing.T) {
-	got := formatDate(time.Now().Add(-5 * time.Minute))
+func TestRelativeTimeShort_minutes(t *testing.T) {
+	got := relativeTime(time.Now().Add(-5 * time.Minute), true)
 	if got != "5m ago" {
-		t.Errorf("formatDate(-5m) = %q, want %q", got, "5m ago")
+		t.Errorf("relativeTime(-5m) = %q, want %q", got, "5m ago")
 	}
 }
 
-func TestFormatDate_hours(t *testing.T) {
-	got := formatDate(time.Now().Add(-3 * time.Hour))
+func TestRelativeTimeShort_hours(t *testing.T) {
+	got := relativeTime(time.Now().Add(-3 * time.Hour), true)
 	if got != "3h ago" {
-		t.Errorf("formatDate(-3h) = %q, want %q", got, "3h ago")
+		t.Errorf("relativeTime(-3h) = %q, want %q", got, "3h ago")
 	}
 }
 
-func TestFormatDate_days(t *testing.T) {
-	got := formatDate(time.Now().Add(-3 * 24 * time.Hour))
+func TestRelativeTimeShort_days(t *testing.T) {
+	got := relativeTime(time.Now().Add(-3 * 24 * time.Hour), true)
 	if got != "3d ago" {
-		t.Errorf("formatDate(-3d) = %q, want %q", got, "3d ago")
+		t.Errorf("relativeTime(-3d) = %q, want %q", got, "3d ago")
 	}
 }
 
-func TestFormatDate_oldDate(t *testing.T) {
+func TestRelativeTimeShort_oldDate(t *testing.T) {
 	ts := time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC)
-	got := formatDate(ts)
+	got := relativeTime(ts, true)
 	if got != "Jan 15, 2020" {
-		t.Errorf("formatDate(old) = %q, want %q", got, "Jan 15, 2020")
+		t.Errorf("relativeTime(old) = %q, want %q", got, "Jan 15, 2020")
 	}
 }
 

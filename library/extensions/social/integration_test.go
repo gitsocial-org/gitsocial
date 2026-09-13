@@ -284,7 +284,8 @@ func TestGetPostsIntegration(t *testing.T) {
 	})
 
 	t.Run("GetPosts_workspaceScopesSkipStateRefs", func(t *testing.T) {
-		workdir := initWorkspace(t)
+		t.Parallel()
+		workdir := cloneFixture(t)
 		post := CreatePost(workdir, "Workspace post", nil)
 		if !post.Success {
 			t.Fatalf("CreatePost() failed: %s", post.Error.Message)
@@ -2072,26 +2073,6 @@ func TestStatus_notInitialized(t *testing.T) {
 }
 
 // (TestGetRepositories, TestGetRepositories_byList are in TestStatusAndRepositories group)
-
-func TestAppendUnique(t *testing.T) {
-	slice := []string{"a", "b"}
-	result := appendUnique(slice, "c")
-	if len(result) != 3 {
-		t.Errorf("len = %d, want 3", len(result))
-	}
-	// Adding duplicate should not change length
-	result = appendUnique(result, "b")
-	if len(result) != 3 {
-		t.Errorf("len = %d, want 3 (no duplicate)", len(result))
-	}
-}
-
-func TestAppendUnique_empty(t *testing.T) {
-	result := appendUnique(nil, "a")
-	if len(result) != 1 {
-		t.Errorf("len = %d, want 1", len(result))
-	}
-}
 
 // --- Log integration ---
 

@@ -13,30 +13,6 @@ import (
 
 var mdImageRe = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?`)
 
-// formatDate formats a timestamp as a human-readable relative time string.
-func formatDate(t time.Time) string {
-	now := time.Now()
-	diff := now.Sub(t)
-
-	mins := int(diff.Minutes())
-	hours := int(diff.Hours())
-	days := int(diff.Hours() / 24)
-
-	if mins < 1 {
-		return "just now"
-	}
-	if mins < 60 {
-		return fmt.Sprintf("%dm ago", mins)
-	}
-	if hours < 24 {
-		return fmt.Sprintf("%dh ago", hours)
-	}
-	if days < 7 {
-		return fmt.Sprintf("%dd ago", days)
-	}
-	return t.Format("Jan 2, 2006")
-}
-
 // FormatPost formats a post for text display with author, content, and stats.
 func FormatPost(post Post) string {
 	var lines []string
@@ -50,7 +26,7 @@ func FormatPost(post Post) string {
 			}
 		}
 	}
-	header := fmt.Sprintf("%s · %s", displayName, formatDate(displayTime))
+	header := fmt.Sprintf("%s · %s", displayName, relativeTime(displayTime, true))
 	if post.IsEdited {
 		header += " (edited)"
 	}
@@ -205,7 +181,7 @@ func FormatLogEntry(entry LogEntry) string {
 	if len(hash) > 7 {
 		hash = hash[:7]
 	}
-	date := formatDate(entry.Timestamp)
+	date := relativeTime(entry.Timestamp, true)
 	return fmt.Sprintf("%s %s %-18s %s: %s", hash, date, entry.Type, entry.Author.Name, entry.Details)
 }
 

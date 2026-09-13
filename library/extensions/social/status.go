@@ -12,28 +12,33 @@ import (
 
 // FormatRelativeTime formats a time as a human-readable relative string.
 func FormatRelativeTime(t time.Time) string {
+	return relativeTime(t, false)
+}
+
+// relativeTime renders an elapsed time. The short form is column-aligned for
+// the CLI log line ("5m ago"); the long form reads as a sentence.
+func relativeTime(t time.Time, short bool) string {
 	d := time.Since(t)
+	unit := func(n int, abbrev, name string) string {
+		if short {
+			return fmt.Sprintf("%d%s ago", n, abbrev)
+		}
+		if n == 1 {
+			return "1 " + name + " ago"
+		}
+		return fmt.Sprintf("%d %ss ago", n, name)
+	}
 	switch {
 	case d < time.Minute:
 		return "just now"
 	case d < time.Hour:
-		m := int(d.Minutes())
-		if m == 1 {
-			return "1 minute ago"
-		}
-		return fmt.Sprintf("%d minutes ago", m)
+		return unit(int(d.Minutes()), "m", "minute")
 	case d < 24*time.Hour:
-		h := int(d.Hours())
-		if h == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", h)
+		return unit(int(d.Hours()), "h", "hour")
+	case short && d >= 7*24*time.Hour:
+		return t.Format("Jan 2, 2006")
 	default:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
+		return unit(int(d.Hours()/24), "d", "day")
 	}
 }
 

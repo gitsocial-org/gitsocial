@@ -2,6 +2,7 @@
 package social
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -150,7 +151,9 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 	targetAuthors := make(map[string]bool)
 	repoToAuthors := make(map[string][]string)
 	for _, item := range items {
-		repoToAuthors[item.RepoURL] = appendUnique(repoToAuthors[item.RepoURL], item.AuthorEmail)
+		if !slices.Contains(repoToAuthors[item.RepoURL], item.AuthorEmail) {
+			repoToAuthors[item.RepoURL] = append(repoToAuthors[item.RepoURL], item.AuthorEmail)
+		}
 		if item.RepoURL == targetURL {
 			targetAuthors[item.AuthorEmail] = true
 		}
@@ -227,12 +230,3 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 	return Success(related)
 }
 
-// appendUnique appends an item to a slice only if not already present.
-func appendUnique(slice []string, item string) []string {
-	for _, s := range slice {
-		if s == item {
-			return slice
-		}
-	}
-	return append(slice, item)
-}

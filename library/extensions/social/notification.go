@@ -4,6 +4,7 @@ package social
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -239,11 +240,9 @@ func getFollowNotifications(workspaceURL string, unreadOnly bool) ([]Notificatio
 
 // sortNotificationsByTime sorts notifications by timestamp descending.
 func sortNotificationsByTime(notifications []Notification) {
-	for i := 1; i < len(notifications); i++ {
-		for j := i; j > 0 && notifications[j].Timestamp.After(notifications[j-1].Timestamp); j-- {
-			notifications[j], notifications[j-1] = notifications[j-1], notifications[j]
-		}
-	}
+	sort.SliceStable(notifications, func(i, j int) bool {
+		return notifications[i].Timestamp.After(notifications[j].Timestamp)
+	})
 }
 
 // GetUnreadCount returns the count of unread notifications.
