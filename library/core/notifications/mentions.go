@@ -1,4 +1,4 @@
-// mentions.go - Mention extraction from commit messages and CommitProcessor
+// mentions.go - Mention extraction from commit messages and the mention processor
 package notifications
 
 import (
@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
@@ -33,8 +32,8 @@ func ExtractMentions(content string) []string {
 	return emails
 }
 
-// MentionProcessor returns a CommitProcessor that extracts mentions and inserts into core_mentions.
-func MentionProcessor() fetch.CommitProcessor {
+// MentionProcessor returns a commit processor that inserts mentions into core_mentions, unnamed to keep notifications below fetch.
+func MentionProcessor() func(commit git.Commit, msg *protocol.Message, repoURL, branch string) {
 	return func(commit git.Commit, msg *protocol.Message, repoURL, branch string) {
 		var content string
 		if msg != nil {

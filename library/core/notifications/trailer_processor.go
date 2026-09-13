@@ -1,4 +1,4 @@
-// trailer_processor.go - CommitProcessor that extracts git trailer references
+// trailer_processor.go - Commit processor that extracts git trailer references
 package notifications
 
 import (
@@ -6,17 +6,15 @@ import (
 	"log/slog"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// TrailerProcessor returns a CommitProcessor that extracts git trailer references
-// from regular commits (without GitMsg headers) and inserts them into core_trailer_refs.
-func TrailerProcessor() fetch.CommitProcessor {
+// TrailerProcessor returns a commit processor that inserts trailer refs into core_trailer_refs, unnamed to keep notifications below fetch.
+func TrailerProcessor() func(commit git.Commit, msg *protocol.Message, repoURL, branch string) {
 	return func(commit git.Commit, msg *protocol.Message, repoURL, branch string) {
 		if msg != nil {
-			return // skip GitMsg commits — they use structured refs
+			return // GitMsg commits carry structured refs instead
 		}
 		trailers := protocol.ExtractTrailers(commit.Message)
 		if len(trailers) == 0 {
@@ -24,9 +22,7 @@ func TrailerProcessor() fetch.CommitProcessor {
 		}
 		if err := cache.ExecLocked(func(db *sql.DB) error {
 			for _, t := range trailers {
-				// Only commit refs can join core_commits. URLs and opaque tracker
-				// ids parse as unknown refs whose whole text lands in Value, so the
-				// empty-hash check alone would let them through as dead rows.
+				// Only commit refs join core_commits, so other ref types would land as dead rows.
 				if protocol.ParseRef(t.Value).Type != protocol.RefTypeCommit {
 					continue
 				}
