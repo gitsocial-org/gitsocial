@@ -343,21 +343,31 @@ func corePush(s *Server) HandlerFunc {
 			AllBranches bool     `json:"allBranches"`
 			NoSite      bool     `json:"noSite"`
 			NoCode      bool     `json:"noCode"`
+			SiteOnly    bool     `json:"siteOnly"`
+			Full        bool     `json:"full"`
+			DryRun      bool     `json:"dryRun"`
 		}](raw)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		opts := client.Options{
+			DryRun:      p.DryRun,
 			NoCode:      p.NoCode,
 			NoSite:      p.NoSite,
+			SiteOnly:    p.SiteOnly,
 			AllBranches: p.AllBranches,
+			Full:        p.Full,
 		}
 		remotes, _ := client.ResolveRemotes(s.session.Workdir, namedRemotes(p.Remote))
-		result, err := client.Publish(s.session.Workdir, remotes[0], opts, nil, nil)
+		results, err := client.PublishAll(s.session.Workdir, remotes, opts, nil, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}
-		return result, nil
+		// One remote keeps the object shape, several return the array, as push --json does.
+		if len(remotes) == 1 && len(results) == 1 {
+			return results[0], nil
+		}
+		return results, nil
 	}
 }
 

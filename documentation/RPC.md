@@ -874,16 +874,20 @@ The server sends `fetch.progress` and `fetch.complete` notifications for this `f
 
 #### core.push
 
-Pushes local changes to the remote.
+Pushes local changes to every default push remote, the list `gitsocial push` resolves.
 
 Params:
-- `remote` (string): Remote to push to (default: the resolved push remote)
+- `remote` (string): One remote to push to (default: every resolved push remote)
 - `allBranches` (boolean): Publish every local branch
 - `noCode` (boolean): Skip code branches
 - `noSite` (boolean): Skip the static site
+- `siteOnly` (boolean): Rebuild the site, send no refs
+- `full` (boolean): Send every object and detach a thin fork bucket
+- `dryRun` (boolean): Report the plan, send nothing
 - `extensions` (string[]): Accepted and ignored; every initialized extension is pushed
 
-Result:
+Result for one remote, the object below; for several, an array of them in push order.
+
 ```json
 {
   "push": {"...": "per-branch push counts"},
