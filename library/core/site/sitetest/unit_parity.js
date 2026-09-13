@@ -69,6 +69,14 @@ for (const c of FIX.releaseHeads) {
   eq(GS.releaseVersionChip(c.header.version || "", subject), c.expectVersionChip, c.name + ": version chip");
 }
 
+console.log("=== parity invariant: detail head subject + chips ===");
+const chipList = (chips) => chips.map((c) => (c.class || "") + "|" + c.label).join(",");
+for (const c of FIX.detailHeads) {
+  const subject = GS.headSubject(c.header, c.ext, c.firstLine);
+  eq(subject, c.expectSubject, c.name + ": subject");
+  eq(chipList(GS.headChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": head chips");
+}
+
 require("../assets/gs-render.js");
 const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");

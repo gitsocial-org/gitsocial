@@ -136,10 +136,16 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // A post is the root of its own page, feed entry and OG card, and its first
   // line names it on every other surface, so it keeps that line as its heading.
   // The body-only rule is for replies and for a repost's absent content.
-  ok("post page keeps its first line as the heading", !!thread && /<h1>Shipping the S3 static site reader this week\.<\/h1>/.test(thread), thread && thread.slice(thread.indexOf("<nav>"), thread.indexOf("<nav>") + 300));
+  ok("post page keeps its first line as the heading", !!thread && /<h1 class="subject">Shipping the S3 static site reader this week\.<\/h1>/.test(thread), thread && thread.slice(thread.indexOf("<nav>"), thread.indexOf("<nav>") + 300));
   const edited = pages.find((p) => p.includes("Improve onboarding and setup docs"));
   ok("edited issue renders the resolved version", !!edited);
   ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && / edited /.test(edited.replace(/·/g, " ")));
+  // Both renderers head a detail with one card head: the h1 subject, then the
+  // head's one chip slot. The state pill lands there, never in the meta line.
+  // A body-only root (a quote) promotes no first line, so it heads with none.
+  ok("an item page carries at most one h1, always the card head's", pages.every((p) => (p.match(/<h1/g) || []).length <= 1 && (!/<h1/.test(p) || /<div class="card-head"><h1 class="subject">/.test(p))), "a page heads with something other than one card-head h1");
+  ok("a state pill rides the detail head, not the meta line", !!edited && /<div class="card-head"><h1 class="subject">[^<]*<\/h1> <span class="chip state closed">closed<\/span><\/div>/.test(edited), edited && edited.slice(edited.indexOf('<div class="card-head">'), edited.indexOf('<div class="card-head">') + 200));
+  ok("the detail meta line is the app's detail-meta row", !!edited && /<div class="detail-meta"><span class="meta">issue · /.test(edited));
   const pr = pages.find((p) => p.includes("Expand notes with more lines"));
   ok("PR page exists", !!pr);
   ok("PR page inlines line-anchored feedback", !!pr && pr.includes("This wording is clearer, nice.") && pr.includes("notes.txt:2"));

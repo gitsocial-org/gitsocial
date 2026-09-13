@@ -1,4 +1,4 @@
-// site_parity_test.go - writer/reader parity invariants: subject/header, the feedback card and the release head.
+// site_parity_test.go - writer/reader parity invariants: subject/header, the feedback card, the release head and the detail head.
 // The Go writer's subjectOf / extractHeaderLine (site_items.go) and the JS
 // reader's cleanContent / parseGitmsg (site/gs-core.js) must derive the same
 // subject and GitMsg header line from a commit message. This test pins the Go
@@ -54,12 +54,30 @@ type parityReleaseHeadCase struct {
 	ExpectVersionChip string            `json:"expectVersionChip"`
 }
 
+// parityChip pins one head chip's class and label.
+type parityChip struct {
+	Class string `json:"class"`
+	Label string `json:"label"`
+}
+
+// parityDetailHeadCase pins the subject and chips one item type's detail head yields.
+type parityDetailHeadCase struct {
+	Name          string            `json:"name"`
+	Ext           string            `json:"ext"`
+	Header        map[string]string `json:"header"`
+	Retracted     bool              `json:"retracted"`
+	FirstLine     string            `json:"firstLine"`
+	ExpectSubject string            `json:"expectSubject"`
+	ExpectChips   []parityChip      `json:"expectChips"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	MessageCases   []parityMessageCase     `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase   `json:"rawObjectCases"`
 	FeedbackCards  []parityFeedbackCase    `json:"feedbackCards"`
 	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
+	DetailHeads    []parityDetailHeadCase  `json:"detailHeads"`
 	ListHeadings   map[string]string       `json:"listHeadings"`
 }
 
@@ -178,6 +196,59 @@ func TestParityReleaseHead(t *testing.T) {
 				t.Errorf("subject %q already names version %q, so the chip %q repeats it", subject, c.Header["version"], got)
 			}
 		})
+	}
+}
+
+// parityChipList formats a head's chips as "class|label" bits, the form both halves compare.
+func parityChipList(chips []sitePageChip) []string {
+	out := make([]string, 0, len(chips))
+	for _, c := range chips {
+		out = append(out, c.Class+"|"+c.Label)
+	}
+	return out
+}
+
+// TestParityDetailHead asserts every detail type's head subject and chips against the fixture unit_parity.js also asserts.
+func TestParityDetailHead(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.DetailHeads) == 0 {
+		t.Fatal("no detail head cases in parity fixtures")
+	}
+	for _, c := range f.DetailHeads {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: c.Ext, Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+			it := &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Retracted}
+			subject := siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), c.FirstLine)
+			if subject != c.ExpectSubject {
+				t.Errorf("subject = %q, want %q", subject, c.ExpectSubject)
+			}
+			want := make([]string, 0, len(c.ExpectChips))
+			for _, chip := range c.ExpectChips {
+				want = append(want, chip.Class+"|"+chip.Label)
+			}
+			got := parityChipList(siteHeadChips(it, subject))
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("chips = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestParityDetailHeadMarkup asserts the rendered detail head is one card head: an h1 subject, then the chip slot.
+func TestParityDetailHeadMarkup(t *testing.T) {
+	fields := map[string]string{"type": "pull-request", "state": "merged"}
+	msg := &sitePageMsg{Ext: "review", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Expand notes with more lines", Header: &protocol.Header{Ext: "review", Fields: fields}}
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, "Expand notes with more lines")
+	page, err := renderSitePage("item", d)
+	if err != nil {
+		t.Fatalf("render item page: %v", err)
+	}
+	want := `<div class="card-head"><h1 class="subject">Expand notes with more lines</h1> <span class="chip state merged">merged</span></div>`
+	if !strings.Contains(string(page), want) {
+		t.Errorf("detail head markup missing:\nwant %s\ngot %.900s", want, page)
+	}
+	if strings.Count(string(page), "<h1") != 1 {
+		t.Errorf("an item page carries exactly one h1, got %d", strings.Count(string(page), "<h1"))
 	}
 }
 

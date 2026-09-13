@@ -1462,7 +1462,7 @@ func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 		t.Errorf("the version renders twice on the releases list:\n%s", list)
 	}
 	page := getKey(t, client, "i/"+rel[1][:12]+".html")
-	if !strings.Contains(page, "<h1>nightly</h1>") || !strings.Contains(page, `<span class="chip">v1.3.0</span>`) {
+	if !strings.Contains(page, `<div class="card-head"><h1 class="subject">nightly</h1> <span class="chip">v1.3.0</span></div>`) {
 		t.Errorf("a release page must head with its tag and one version chip:\n%s", page)
 	}
 	if strings.Contains(page, "tag nightly") {

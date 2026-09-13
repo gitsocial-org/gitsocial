@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, headSubject, releaseVersionChip, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, headSubject, releaseVersionChip, headChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -433,13 +433,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // stateChip renders a state pill; each state needs a solid background class for its white text.
   function stateChip(state) {
-    const map = {
-      open: "open", closed: "closed", merged: "merged",
-      canceled: "canceled", cancelled: "canceled", completed: "completed",
-      active: "active", planned: "planned",
-    };
-    const cls = map[state] || "unknown";
-    return el("span", { class: "chip state " + cls }, [state || "?"]);
+    return el("span", { class: "chip state " + chipStateClass(state) }, [state || "?"]);
+  }
+
+  // chipEl renders one head chip from the shared {class, label} descriptor.
+  function chipEl(chip) {
+    return el("span", { class: chip.class ? "chip " + chip.class : "chip" }, [chip.label]);
   }
 
   // originChip returns an "↗ platform" badge for imported content, else null.
@@ -797,12 +796,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return "v" + (i + 1);
   }
 
-  // versionMetaRow renders a version's meta row with that version's own state pill.
+  // versionMetaRow renders a version's meta row; the state pill rides the detail head, not this row.
   function versionMetaRow(v, branch) {
     const when = v.effectiveTime || (v.commit && v.commit.authorTime);
     const row = el("span", { class: "meta" }, [authorEl(v.author || "unknown", effectiveAuthorEmail(v.commit, v.header)), " · ", timeEl(when), " · "]);
     row.append(el("a", { class: "hash", href: commitRef(v.commit.hash, branch) }, [v.commit.short]));
-    if (v.header && v.header.state) row.append(stateChip(v.header.state));
     if (v.edited) row.append(el("span", { class: "chip" }, ["edited"]));
     if (v.editorName) row.append(el("span", { class: "chip" }, ["edited by " + v.editorName]));
     return row;
@@ -952,8 +950,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]),
       shareControl(ctx, item.commit.short, kind.branch),
     ]));
-    const subjectEl = bodyOnly ? null : el("div", { class: "subject" }, []);
-    if (subjectEl) wrap.append(subjectEl);
+    const subjectEl = bodyOnly ? null : el("h1", { class: "subject" }, []);
+    const headEl = subjectEl ? el("div", { class: "card-head" }, [subjectEl]) : null;
+    if (headEl) wrap.append(headEl);
     const metaSlot = el("div", { class: "detail-meta" }, []);
     wrap.append(metaSlot);
     const bodyPane = el("div", {}, []);
@@ -964,7 +963,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     function paint() {
       const v = versions[sel.idx];
       const [subject, body] = subjectBody(v.content);
-      if (subjectEl) subjectEl.textContent = headSubject(v.header, ext, subject);
+      if (headEl) {
+        subjectEl.textContent = headSubject(v.header, ext, subject);
+        headEl.replaceChildren(subjectEl, ...headChips(v.header, ext, subjectEl.textContent).map(chipEl));
+      }
       const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage);
       metaSlot.replaceChildren(versionMetaRow(v, kind.branch), cb.modes);
       bodyPane.replaceChildren(cb.pane);

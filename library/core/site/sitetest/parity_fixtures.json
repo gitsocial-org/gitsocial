@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -187,6 +187,97 @@
       "firstLine": "<br/>",
       "expectSubject": "(release)",
       "expectVersionChip": ""
+    }
+  ],
+  "detailHeads": [
+    {
+      "name": "issue-open",
+      "ext": "pm",
+      "header": { "type": "issue" },
+      "firstLine": "Fix the parser",
+      "expectSubject": "Fix the parser",
+      "expectChips": [{ "class": "state open", "label": "open" }]
+    },
+    {
+      "name": "issue-closed",
+      "ext": "pm",
+      "header": { "type": "issue", "state": "closed" },
+      "firstLine": "Fix the parser",
+      "expectSubject": "Fix the parser",
+      "expectChips": [{ "class": "state closed", "label": "closed" }]
+    },
+    {
+      "name": "milestone-completed",
+      "ext": "pm",
+      "header": { "type": "milestone", "state": "completed" },
+      "firstLine": "v1.0 Launch",
+      "expectSubject": "v1.0 Launch",
+      "expectChips": [{ "class": "state completed", "label": "completed" }]
+    },
+    {
+      "name": "sprint-canceled-falls-back-by-prefix",
+      "ext": "pm",
+      "header": { "type": "sprint", "state": "cancelled" },
+      "firstLine": "Sprint 1: Foundations",
+      "expectSubject": "Sprint 1: Foundations",
+      "expectChips": [{ "class": "state canceled", "label": "cancelled" }]
+    },
+    {
+      "name": "pull-request-merged",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "merged" },
+      "firstLine": "Expand notes with more lines",
+      "expectSubject": "Expand notes with more lines",
+      "expectChips": [{ "class": "state merged", "label": "merged" }]
+    },
+    {
+      "name": "pull-request-draft-drops-the-state",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "open", "draft": "true" },
+      "firstLine": "Expand notes with more lines",
+      "expectSubject": "Expand notes with more lines",
+      "expectChips": [{ "class": "", "label": "draft" }]
+    },
+    {
+      "name": "release-prerelease-and-version",
+      "ext": "release",
+      "header": { "type": "release", "tag": "nightly", "version": "1.3.0", "prerelease": "true" },
+      "firstLine": "Nightly build",
+      "expectSubject": "nightly",
+      "expectChips": [{ "class": "pre state", "label": "prerelease" }, { "class": "", "label": "v1.3.0" }]
+    },
+    {
+      "name": "release-tag-names-the-version",
+      "ext": "release",
+      "header": { "type": "release", "tag": "v2.0.0", "version": "2.0.0" },
+      "firstLine": "Ship the rewrite",
+      "expectSubject": "v2.0.0",
+      "expectChips": []
+    },
+    {
+      "name": "memo-heads-bare",
+      "ext": "memo",
+      "header": { "type": "memo" },
+      "firstLine": "Cache invalidation policy",
+      "expectSubject": "Cache invalidation policy",
+      "expectChips": []
+    },
+    {
+      "name": "post-heads-bare",
+      "ext": "social",
+      "header": {},
+      "firstLine": "Anyone tried the new thread view yet?",
+      "expectSubject": "Anyone tried the new thread view yet?",
+      "expectChips": []
+    },
+    {
+      "name": "retracted-release-heads-with-one-tombstone-chip",
+      "ext": "release",
+      "header": { "type": "release", "tag": "v3.0.0", "version": "3.0.0", "retracted": "true" },
+      "retracted": true,
+      "firstLine": "Ship it",
+      "expectSubject": "v3.0.0",
+      "expectChips": [{ "class": "chip-retracted", "label": "retracted" }]
     }
   ],
   "listHeadings": {

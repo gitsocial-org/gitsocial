@@ -163,13 +163,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "metaline"}}<p class="meta">{{range .Chips}}{{template "chip" .}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "metaline"}}<p class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
 <span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
-{{if .Heading}}<h1>{{.Heading}}</h1>
-{{end}}{{template "metaline" .}}
+{{if .Heading}}{{template "detailhead" .}}
+{{end}}<div class="detail-meta"><span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}{{template "paras" .Paras}}{{end}}{{with .Artifacts}}<section>
 {{template "metaline" .}}
@@ -273,7 +273,6 @@ type sitePageChip struct{ Class, Label string }
 // sitePageSection is one thread section on an item page: a reply, a tombstone
 // line, or the release artifacts block.
 type sitePageSection struct {
-	Chips []sitePageChip
 	Meta  []string
 	Paras [][]string
 	Pre   string
@@ -305,7 +304,7 @@ type siteItemPageData struct {
 	// Subject titles the document; Heading is empty on a body-only type, whose first line is prose.
 	Subject   string
 	Heading   string
-	Chips     []sitePageChip // head chips: the state or prerelease pill, then a release's version
+	Chips     []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
 	Meta      []string
 	Paras     [][]string
 	Tomb      string
@@ -634,6 +633,18 @@ func siteReleaseVersionChips(it *sitePageItem, head string) []sitePageChip {
 	return []sitePageChip{{Label: label}}
 }
 
+// siteHeadChips lists a head's chip slot: the item's state pill, then a release's version. Mirrors headChips in gs-core.js.
+func siteHeadChips(it *sitePageItem, head string) []sitePageChip {
+	var chips []sitePageChip
+	if chip := sitePageItemChip(it); chip != nil {
+		chips = append(chips, *chip)
+	}
+	if it.Retracted {
+		return chips
+	}
+	return append(chips, siteReleaseVersionChips(it, head)...)
+}
+
 // sitePageAuthorBit formats a message's author meta bit ("name <email>").
 func sitePageAuthorBit(m *sitePageMsg) string {
 	name, email := pageDisplayAuthor(m)
@@ -862,13 +873,9 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		Subject:   sitePageItemSubject(it),
 		Meta:      siteItemPageMeta(it),
 	}
-	if chip := sitePageItemChip(it); chip != nil {
-		d.Chips = append(d.Chips, *chip)
-	}
 	robots := ""
 	if !bodyOnly {
 		d.Heading = siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), subject)
-		d.Chips = append(d.Chips, siteReleaseVersionChips(it, d.Heading)...)
 	}
 	if it.Retracted {
 		// A tombstone is the page's own words, so it heads every type.
@@ -880,6 +887,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	} else {
 		d.Paras = sitePageParas(body)
 	}
+	d.Chips = siteHeadChips(it, d.Heading)
 	d.Chrome = sitePageChrome{
 		Title:       title + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,

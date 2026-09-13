@@ -686,7 +686,7 @@ async function main() {
   if (!issue) { console.log("\n" + pass + " passed, " + (fail + 1) + " failed"); process.exit(1); }
   const short = issue.commit.short;
   const itemPage = await get(base + "i/" + short + ".html");
-  ok("item page served + readable without JS", itemPage.status === 200 && /<h1>/.test(itemPage.text));
+  ok("item page served + readable without JS", itemPage.status === 200 && /<h1 class="subject">/.test(itemPage.text));
   ok("item page carries gs-route (item) + data-base(../) + upgrade script", new RegExp('name="gs-route" content="commit:' + short + '@gitmsg/pm"').test(itemPage.text) && /data-base="\.\.\/"/.test(itemPage.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(itemPage.text));
 
   console.log("\n--- A page entry boots the app onto its route ---");
@@ -919,7 +919,7 @@ async function main() {
   // 404s and run() never fires, so nothing sets __gsBooting and the page's own
   // inline failsafe takes the boot class back off — the crawlable content stays.
   const bad = await get(base + "i/" + short + ".html");
-  ok("item page reads standalone (subject + body present)", bad.status === 200 && /<h1>/.test(bad.text) && /class="meta"/.test(bad.text));
+  ok("item page reads standalone (subject + body present)", bad.status === 200 && /<h1 class="subject">/.test(bad.text) && /class="meta"/.test(bad.text));
   const missing = await get(base + "does-not-exist-gs-upgrade.js");
   ok("a 404'd asset is a real 404 (upgrade never boots, page stays)", missing.status === 404);
 

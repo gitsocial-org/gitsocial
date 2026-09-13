@@ -195,6 +195,8 @@
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.4rem; }
   .card-head .subject { flex: 1 1 0; min-width: 0; }
   .card-head .type-glyph { margin-right: 0; }
+  /* A detail head is a card head at page scale. */
+  .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: 0.3rem; }
   .card .body.dim { color: var(--muted); }
   /* A card body holding RENDERED markdown lays itself out: its blocks carry

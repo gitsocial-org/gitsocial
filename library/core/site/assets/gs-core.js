@@ -2350,6 +2350,34 @@
     return "v" + version;
   }
 
+  // CHIP_STATE_CLASSES are the workflow states with a solid-fill chip class of their own.
+  const CHIP_STATE_CLASSES = { open: 1, closed: 1, merged: 1, completed: 1, active: 1, planned: 1 };
+
+  // chipStateClass maps a workflow state to its solid-fill chip class. Mirrors sitePageChipStateClass in site_pages_html.go.
+  function chipStateClass(state) {
+    if (/^cancel/.test(state || "")) return "canceled";
+    return CHIP_STATE_CLASSES[state] ? state : "unknown";
+  }
+
+  // HEAD_STATE_TYPES are the item types whose head carries a state pill.
+  const HEAD_STATE_TYPES = { issue: 1, milestone: 1, sprint: 1, "pull-request": 1 };
+
+  // headChips lists a head's chip slot: the item's state pill, then a release's version. Mirrors siteHeadChips in site_pages_html.go.
+  function headChips(header, ext, head, retracted) {
+    const h = header || {};
+    if (retracted || h.retracted === "true") return [{ class: "chip-retracted", label: "retracted" }];
+    const type = h.type || EXT_DEFAULT_TYPE[ext] || ext;
+    if (type === "release") {
+      const chips = h.prerelease === "true" ? [{ class: "pre state", label: "prerelease" }] : [];
+      const version = releaseVersionChip(h.version, head);
+      return version ? chips.concat([{ class: "", label: version }]) : chips;
+    }
+    if (!HEAD_STATE_TYPES[type]) return [];
+    if (type === "pull-request" && h.draft === "true") return [{ class: "", label: "draft" }];
+    const state = h.state || "open";
+    return [{ class: "state " + chipStateClass(state), label: state }];
+  }
+
   // stateCounts tallies items by header state and returns the total with a per-state map.
   function stateCounts(items) {
     const byState = {};
@@ -4000,7 +4028,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, headChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary,
