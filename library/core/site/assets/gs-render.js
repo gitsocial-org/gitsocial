@@ -3248,7 +3248,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const meta = [l.count + (l.count === 1 ? " member" : " members")];
       if (l.meta && l.meta.version) meta.push("v" + l.meta.version);
       const node = card({ parts: [
-        el("div", {}, [el("a", { class: "subject", href: "#list:" + l.id }, [name]), " ", el("span", { class: "chip" }, [l.ext])]),
+        cardHead(null, "#list:" + l.id, name, null, el("span", { class: "chip" }, [l.ext])),
         el("div", { class: "meta" }, [meta.join(" · ")]),
       ] });
       wrap.append(listCardNav(node, l.id));

@@ -1,7 +1,7 @@
 {
   ".card": [
     {
-      "shape": "div > div.meta",
+      "shape": "div.card-head > div.meta",
       "padding": "12px 14.4px",
       "margin": "0px 0px 11.2px",
       "fontSize": "24px",
@@ -9,6 +9,18 @@
       "backgroundColor": "srgb(0.03 0.04 0.13)",
       "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
       "borderRadius": "10px"
+    }
+  ],
+  ".card-head": [
+    {
+      "shape": "span.chip > a.subject",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
     }
   ],
   ".meta": [

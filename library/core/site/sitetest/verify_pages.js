@@ -115,6 +115,9 @@ async function item5() {
   ok("lists overview shows member count", /2 members/.test(vt), vt);
   const listLink = findTag(viewNode, "a").find((a) => (a.getAttribute("href") || "").includes("#list:social/curated"));
   ok("list card links to #list:social/curated", !!listLink);
+  const listHead = findClass(viewNode, "card-head")[0];
+  ok("list row wraps its chip and subject in a card head", !!listHead && findClass(listHead, "chip").length === 1 && findClass(listHead, "subject").length === 1,
+    listHead ? (listHead._children || []).map((c) => c.tagName).join(" > ") : "no card-head");
   // detail
   await render(TD, "#list:social/curated");
   const dt = textOf(viewNode);
