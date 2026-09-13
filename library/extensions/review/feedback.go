@@ -164,23 +164,26 @@ func GetReviewSummary(prRepoURL, prHash, prBranch string, reviewers []string) Re
 	return ComputeReviewSummary(res.Data, reviewers)
 }
 
-// ComputeReviewSummary builds a ReviewSummary from an already-fetched feedback slice.
-func ComputeReviewSummary(feedback []Feedback, reviewers []string) ReviewSummary {
-	latestByAuthor := map[string]ReviewState{}
-	latestTimeByAuthor := map[string]int64{}
+// latestVerdicts keeps each author's newest feedback that carries a review state (GITREVIEW.md 1.8).
+func latestVerdicts(feedback []Feedback) map[string]Feedback {
+	latest := map[string]Feedback{}
 	for _, r := range feedback {
 		if r.ReviewState == "" {
 			continue
 		}
-		ts := r.Timestamp.Unix()
-		if prev, ok := latestTimeByAuthor[r.Author.Email]; !ok || ts > prev {
-			latestByAuthor[r.Author.Email] = r.ReviewState
-			latestTimeByAuthor[r.Author.Email] = ts
+		if prev, ok := latest[r.Author.Email]; !ok || r.Timestamp.After(prev.Timestamp) {
+			latest[r.Author.Email] = r
 		}
 	}
+	return latest
+}
+
+// ComputeReviewSummary builds a ReviewSummary from an already-fetched feedback slice.
+func ComputeReviewSummary(feedback []Feedback, reviewers []string) ReviewSummary {
+	latestByAuthor := latestVerdicts(feedback)
 	summary := ReviewSummary{}
-	for _, state := range latestByAuthor {
-		switch state {
+	for _, r := range latestByAuthor {
+		switch r.ReviewState {
 		case ReviewStateApproved:
 			summary.Approved++
 		case ReviewStateChangesRequested:
@@ -211,13 +214,7 @@ func GetBatchReviewSummaries(keys []PRKey) map[string]ReviewSummary {
 	if len(keys) == 0 {
 		return result
 	}
-	type feedbackRow struct {
-		prHash      string
-		authorEmail string
-		reviewState string
-		timestamp   int64
-	}
-	rows, err := cache.QueryLocked(func(db *sql.DB) ([]feedbackRow, error) {
+	byPR, err := cache.QueryLocked(func(db *sql.DB) (map[string][]Feedback, error) {
 		ph := strings.Repeat("?,", len(keys))
 		ph = ph[:len(ph)-1]
 		var args []interface{}
@@ -235,66 +232,26 @@ func GetBatchReviewSummaries(keys []PRKey) map[string]ReviewSummary {
 			return nil, err
 		}
 		defer dbRows.Close()
-		var results []feedbackRow
+		grouped := map[string][]Feedback{}
 		for dbRows.Next() {
-			var r feedbackRow
+			var prHash, authorEmail, reviewState string
 			var ts sql.NullString
-			if err := dbRows.Scan(&r.prHash, &r.authorEmail, &r.reviewState, &ts); err != nil {
+			if err := dbRows.Scan(&prHash, &authorEmail, &reviewState, &ts); err != nil {
 				return nil, err
 			}
+			f := Feedback{Author: Author{Email: authorEmail}, ReviewState: ReviewState(reviewState)}
 			if ts.Valid {
-				if t, err := time.Parse(time.RFC3339, ts.String); err == nil {
-					r.timestamp = t.Unix()
-				}
+				f.Timestamp, _ = time.Parse(time.RFC3339, ts.String)
 			}
-			results = append(results, r)
+			grouped[prHash] = append(grouped[prHash], f)
 		}
-		return results, dbRows.Err()
+		return grouped, dbRows.Err()
 	})
 	if err != nil {
 		return result
 	}
-	// Build reviewer map for quick lookup
-	reviewersByHash := make(map[string][]string, len(keys))
 	for _, k := range keys {
-		reviewersByHash[k.Hash] = k.Reviewers
-	}
-	// Group feedback by PR hash, then by author email keeping latest state
-	type authorState struct {
-		state ReviewState
-		ts    int64
-	}
-	byPR := map[string]map[string]authorState{}
-	for _, r := range rows {
-		authors, ok := byPR[r.prHash]
-		if !ok {
-			authors = map[string]authorState{}
-			byPR[r.prHash] = authors
-		}
-		if prev, ok := authors[r.authorEmail]; !ok || r.timestamp > prev.ts {
-			authors[r.authorEmail] = authorState{state: ReviewState(r.reviewState), ts: r.timestamp}
-		}
-	}
-	// Compute summaries
-	for _, k := range keys {
-		summary := ReviewSummary{}
-		authors := byPR[k.Hash]
-		for _, as := range authors {
-			switch as.state {
-			case ReviewStateApproved:
-				summary.Approved++
-			case ReviewStateChangesRequested:
-				summary.ChangesRequested++
-			}
-		}
-		for _, email := range k.Reviewers {
-			if _, reviewed := authors[email]; !reviewed {
-				summary.Pending++
-			}
-		}
-		summary.IsBlocked = summary.ChangesRequested > 0
-		summary.IsApproved = summary.Approved > 0 && summary.ChangesRequested == 0 && summary.Pending == 0
-		result[k.Hash] = summary
+		result[k.Hash] = ComputeReviewSummary(byPR[k.Hash], k.Reviewers)
 	}
 	return result
 }

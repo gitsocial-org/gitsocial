@@ -236,35 +236,12 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 	currentVersion := len(versions) - 1
 	latestHeadTip := versions[currentVersion].HeadTip
 
-	// Deduplicate: keep each reviewer's latest stateful feedback
-	type reviewerInfo struct {
-		name  string
-		email string
-		state ReviewState
-		ts    time.Time
-	}
-	latestByAuthor := map[string]reviewerInfo{}
-	for _, f := range feedbackRes.Data {
-		if f.ReviewState == "" {
-			continue
-		}
-		prev, exists := latestByAuthor[f.Author.Email]
-		if !exists || f.Timestamp.After(prev.ts) {
-			latestByAuthor[f.Author.Email] = reviewerInfo{
-				name:  f.Author.Name,
-				email: f.Author.Email,
-				state: f.ReviewState,
-				ts:    f.Timestamp,
-			}
-		}
-	}
-
 	var reviews []VersionAwareReview
-	for _, info := range latestByAuthor {
+	for _, info := range latestVerdicts(feedbackRes.Data) {
 		// Find which version was current when feedback was given
 		reviewedVersion := 0
 		for i, v := range versions {
-			if !v.Timestamp.After(info.ts) {
+			if !v.Timestamp.After(info.Timestamp) {
 				reviewedVersion = i
 			}
 		}
@@ -283,10 +260,10 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 		}
 		stale := codeChanged && reviewedVersion < currentVersion
 		reviews = append(reviews, VersionAwareReview{
-			ReviewerName:    info.name,
-			ReviewerEmail:   info.email,
-			State:           info.state,
-			ReviewedAt:      info.ts,
+			ReviewerName:    info.Author.Name,
+			ReviewerEmail:   info.Author.Email,
+			State:           info.ReviewState,
+			ReviewedAt:      info.Timestamp,
 			ReviewedVersion: reviewedVersion,
 			ReviewedLabel:   rv.Label,
 			CurrentVersion:  currentVersion,
