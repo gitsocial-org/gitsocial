@@ -55,5 +55,7 @@ gitsocial social followers [--json]
 - Branch resolution follows [GITMSG.md §3.4](../specs/GITMSG.md#34-branch-resolution).
 - Lists live at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)), so adds from concurrent clones do not collide.
 - The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)), and orders by effective timestamp, newest first; imported content sorts by its origin time.
+- A card's comment, repost and quote counts follow the items that are live now, so retracting a comment lowers them.
+- `gitsocial social log` lists an item by its own type: a comment on a post is a comment, not a post.
 - Mentions, replies, comments and reposts of workspace posts raise [notifications](NOTIFICATIONS.md#types).
 - In the TUI, `S` opens the timeline ([TUI-KEYS.md](TUI-KEYS.md#social-extension)).
