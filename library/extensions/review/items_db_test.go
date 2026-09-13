@@ -588,7 +588,7 @@ func TestGetReviewItems_scanError(t *testing.T) {
 			'v' AS edits, 'w' AS is_virtual, 'x' AS is_retracted, 'y' AS has_edits`)
 		return nil
 	})
-	// Query expects 'comments' column which is missing — scan should fail
+	// The query names a comments column the table lacks, so the scan fails.
 	_, err := GetReviewItems(ReviewQuery{Limit: 10})
 	if err == nil {
 		t.Error("should fail when view has wrong columns")

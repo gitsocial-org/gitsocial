@@ -1,15 +1,4 @@
-// observe.go - Branch observation: live remote tip vs stored PR tips.
-//
-// After `gitsocial fetch`, RefreshOpenPRBranches walks every branch any
-// open PR's head or base points at — workspace branches and registered-fork
-// branches alike — and records the live remote tip in
-// review_branch_observations. Observations are keyed by (repo_url, branch),
-// not by PR, so a single push to `feature` updates one row and is reflected
-// for every PR that targets that branch. The PR's stored head-tip /
-// base-tip is part of the protocol record and only changes when someone
-// runs `pr update`; observations live alongside as a transient "what the
-// remote looks like right now" snapshot, used to surface notifications and
-// stale-tip warnings without polluting the edit chain.
+// observe.go - Branch observation: the live remote tip of every open pull request's branches
 package review
 
 import (
@@ -25,9 +14,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// BranchObservation is a snapshot of one (repo_url, branch) pair: the
-// current remote tip (12-char) and whether the branch still exists on the
-// remote.
+// BranchObservation is a snapshot of one (repo_url, branch) pair.
 type BranchObservation struct {
 	RepoURL    string
 	Branch     string
@@ -36,11 +23,7 @@ type BranchObservation struct {
 	ObservedAt time.Time
 }
 
-// RefreshOpenPRBranches resolves the live remote tip of every (repo_url,
-// branch) pair referenced by an open PR's head or base, across the
-// workspace and any registered fork, and upserts the result into
-// review_branch_observations. Idempotent and safe to call repeatedly —
-// one row per (repo_url, branch) regardless of how many PRs reference it.
+// RefreshOpenPRBranches records the live remote tip of every branch an open pull request names.
 func RefreshOpenPRBranches(workdir string) error {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
@@ -77,10 +60,7 @@ func RefreshOpenPRBranches(workdir string) error {
 	return upsertBranchObservations(rows)
 }
 
-// ObserveLivePR resolves both sides of a single PR through ResolveBranchTip
-// and returns a per-PR view of the observation. Used by `pr show` and the
-// TUI detail view to render an up-to-the-second divergence indicator
-// without waiting for the next fetch-driven refresh.
+// ObserveLivePR resolves both sides of one pull request against the remote, now.
 func ObserveLivePR(workdir string, pr PullRequest) *PRObservation {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	baseParsed := protocol.ParseRef(pr.Base)
@@ -98,9 +78,7 @@ func ObserveLivePR(workdir string, pr PullRequest) *PRObservation {
 	return obs
 }
 
-// PRObservation is the per-PR projection of branch observations. The cache
-// is keyed by branch; this struct is the answer to "for this PR, what do
-// the head and base look like right now?" Used only by display paths.
+// PRObservation is what one pull request's head and base look like on their remotes.
 type PRObservation struct {
 	HeadTip    string
 	HeadExists bool
@@ -108,9 +86,7 @@ type PRObservation struct {
 	BaseExists bool
 }
 
-// PRObservationFromCache reads stored observations for a PR's head and base
-// branches. Returns nil when neither side has an observation row — caller
-// (display layer) can fall back to ObserveLivePR.
+// PRObservationFromCache reads the stored observations for a pull request, nil when it has none.
 func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation {
 	headParsed := protocol.ParseRef(pr.Head)
 	baseParsed := protocol.ParseRef(pr.Base)
@@ -133,8 +109,7 @@ func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation 
 	return out
 }
 
-// observeBranch resolves the live tip of (repoURL, branch) via the strict
-// remote resolver and packages the result for upsert.
+// observeBranch resolves the live tip of (repoURL, branch) for upsert.
 func observeBranch(workdir, repoURL, branch string, now time.Time) BranchObservation {
 	tip, err := ResolveBranchTip(workdir, repoURL, branch)
 	obs := BranchObservation{
@@ -152,10 +127,7 @@ func observeBranch(workdir, repoURL, branch string, now time.Time) BranchObserva
 	return obs
 }
 
-// resolveTipShortObs returns a 12-char tip and a bool indicating the branch
-// exists on the remote. Used by ObserveLivePR to preserve the strict
-// remote-only semantics expected by the display layer (deletion is
-// surfaced, not masked by a local fallback).
+// resolveTipShortObs returns a 12-character remote tip and whether the branch exists.
 func resolveTipShortObs(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, bool) {
 	tip, err := resolveTipForObservation(workdir, workspaceURL, parsed)
 	if err != nil || tip == "" {
@@ -167,8 +139,7 @@ func resolveTipShortObs(workdir, workspaceURL string, parsed protocol.ParsedRef)
 	return tip, true
 }
 
-// upsertBranchObservations writes the observation rows to the cache. A
-// single transaction keeps callers from racing partial state.
+// upsertBranchObservations writes the observation rows in one transaction.
 func upsertBranchObservations(rows []BranchObservation) error {
 	if len(rows) == 0 {
 		return nil
@@ -206,8 +177,7 @@ func upsertBranchObservations(rows []BranchObservation) error {
 	})
 }
 
-// GetBranchObservation reads the latest observation for a (repo_url, branch)
-// pair. Returns (nil, sql.ErrNoRows) when no observation has been recorded.
+// GetBranchObservation reads one observation, returning sql.ErrNoRows when none was recorded.
 func GetBranchObservation(repoURL, branch string) (*BranchObservation, error) {
 	if repoURL == "" || branch == "" {
 		return nil, sql.ErrNoRows
@@ -232,18 +202,12 @@ func GetBranchObservation(repoURL, branch string) (*BranchObservation, error) {
 	})
 }
 
-// nullableTip returns sql.NullString.Valid=false for empty tip strings so
-// the stored value is NULL (matches "branch missing" semantics).
+// nullableTip stores an empty tip as NULL, which is how a missing branch reads.
 func nullableTip(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: strings.TrimSpace(s) != ""}
 }
 
-// LocalKnownBranches returns branches we've seen referenced for a given repo
-// URL — either as the live remote tip in review_branch_observations or as a
-// base/head ref on any open PR. Used as the offline fallback for the PR
-// form's branch dropdown when ls-remote against the fork URL fails. The
-// review_items pass keeps the dropdown populated even before the first
-// successful fetch hook refreshes observations.
+// LocalKnownBranches lists a repository's branches seen in observations or on an open pull request.
 func LocalKnownBranches(repoURL string) []string {
 	if repoURL == "" {
 		return nil
@@ -292,14 +256,7 @@ func LocalKnownBranches(repoURL string) []string {
 	return branches
 }
 
-// IsHeadUnpushed reports whether the PR's recorded head_tip is missing from
-// the head ref's remote — typically because the author hasn't pushed the
-// referenced code branch. False when the observation is in sync, missing,
-// or signals a deleted branch (which has its own dedicated marker). For
-// workspace-local heads the answer is confirmed via GetUnpushedCommits; for
-// cross-fork heads any observation/recorded mismatch is treated as unpushed
-// since the workspace can't cheaply prove ancestry against the fork's
-// remote without a network round-trip.
+// IsHeadUnpushed reports whether the pull request's head tip is missing from its remote.
 func IsHeadUnpushed(workdir string, pr PullRequest) bool {
 	if pr.State != PRStateOpen || pr.HeadTip == "" {
 		return false
@@ -331,12 +288,7 @@ func IsHeadUnpushed(workdir string, pr PullRequest) bool {
 	return true
 }
 
-// UnpushedHeadBranches returns workspace-local branch names referenced by
-// open workspace PRs that still have commits remote lacks ("" resolves via
-// git.PushRemote) — including a head branch that has never been pushed at all,
-// so a reviewer can fetch the PR's code. The map value is the number of such
-// commits on each branch, used by the push confirmation prompt to offer
-// pushing referenced code together with gitmsg/review.
+// UnpushedHeadBranches counts the unpushed commits on each workspace head an open pull request names.
 func UnpushedHeadBranches(workdir, remote string) (map[string]int, error) {
 	wsURL := gitmsg.ResolveRepoURL(workdir)
 	if wsURL == "" {

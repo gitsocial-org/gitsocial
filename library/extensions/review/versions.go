@@ -17,23 +17,21 @@ import (
 )
 
 type PRVersion struct {
-	Number      int       `json:"number"`
-	Label       string    `json:"label"`
-	CommitHash  string    `json:"commit_hash"`
-	RepoURL     string    `json:"repo_url"`
-	Branch      string    `json:"branch"`
-	AuthorName  string    `json:"author_name"`
-	AuthorEmail string    `json:"author_email"`
-	Timestamp   time.Time `json:"timestamp"`
-	Subject     string    `json:"subject,omitempty"`
-	Body        string    `json:"body,omitempty"`
-	BaseTip     string    `json:"base_tip,omitempty"`
-	HeadTip     string    `json:"head_tip,omitempty"`
-	State       PRState   `json:"state"`
-	IsRetracted bool      `json:"is_retracted,omitempty"`
-	// Fields carries the version's full parsed header so the TUI can reconstruct
-	// the PR as it was at this version for the shared hero card.
-	Fields map[string]string `json:"-"`
+	Number      int               `json:"number"`
+	Label       string            `json:"label"`
+	CommitHash  string            `json:"commit_hash"`
+	RepoURL     string            `json:"repo_url"`
+	Branch      string            `json:"branch"`
+	AuthorName  string            `json:"author_name"`
+	AuthorEmail string            `json:"author_email"`
+	Timestamp   time.Time         `json:"timestamp"`
+	Subject     string            `json:"subject,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	BaseTip     string            `json:"base_tip,omitempty"`
+	HeadTip     string            `json:"head_tip,omitempty"`
+	State       PRState           `json:"state"`
+	IsRetracted bool              `json:"is_retracted,omitempty"`
+	Fields      map[string]string `json:"-"` // the version's parsed header, which rebuilds the pull request as it was
 }
 
 // GetPRVersions retrieves all versions of a PR ordered by timestamp ascending (oldest first).
@@ -165,14 +163,11 @@ func ComparePRVersions(workdir, cacheDir, prRef string, fromVersion, toVersion i
 	if to.BaseTip == "" || to.HeadTip == "" {
 		return result.Err[string]("MISSING_TIPS", fmt.Sprintf("version %d has no base-tip/head-tip", toVersion))
 	}
-	// Identical tips mean the edit between these versions changed only metadata
-	// or the description, not code — no range-diff to show.
+	// Identical tips mean the edit changed no code, so there is no range-diff.
 	if from.BaseTip == to.BaseTip && from.HeadTip == to.HeadTip {
 		return result.Ok("")
 	}
-	// The tips are raw commit hashes. For a fork PR the head commits live in the
-	// fork, not the workspace, so fetch both sides into a fork repo (the same
-	// resolution the files-changed diff uses) when they aren't all local.
+	// A fork pull request's head commits live in the fork, so both sides resolve there.
 	rd := workdir
 	if !tipsPresent(workdir, from, to) {
 		if pr := GetPR(prRef); pr.Success {
@@ -253,8 +248,7 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 			if equal, err := git.PatchesEqual(workdir, rv.BaseTip, rv.HeadTip, versions[currentVersion].BaseTip, latestHeadTip); err == nil {
 				codeChanged = !equal
 			} else {
-				// Degraded staleness: without the patch comparison (commits not
-				// local, etc.) a pure rebase reads as a code change.
+				// Without the patch comparison a rebase reads as a code change, the safe direction.
 				log.Debug("PatchesEqual failed; treating head move as code change",
 					"reviewedHead", rv.HeadTip, "latestHead", latestHeadTip, "error", err)
 			}

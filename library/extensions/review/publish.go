@@ -9,12 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// CodeBranchesToPush returns the workspace code branches `gitsocial push`
-// publishes alongside gitmsg data: heads of open PRs with unpushed commits,
-// plus the default branch when it's ahead of remote ("" resolves via
-// git.PushRemote). The default branch is the published face of the repository,
-// so it travels with pushes even when no PR references it. Returns nil when
-// the workspace has no remote.
+// CodeBranchesToPush lists the code branches a push publishes: open pull request heads and the default branch.
 func CodeBranchesToPush(workdir, remote string) (map[string]int, error) {
 	if git.GetOriginURL(workdir) == "" {
 		return nil, nil
@@ -36,9 +31,7 @@ func CodeBranchesToPush(workdir, remote string) (map[string]int, error) {
 	return branches, err
 }
 
-// defaultBranch resolves the repository's default branch: origin's HEAD when
-// known, else main/master if one exists locally. Deliberately not HEAD — the
-// checked-out branch may be unannounced feature work.
+// defaultBranch resolves origin's HEAD, else a local main or master. Not HEAD, which may be feature work.
 func defaultBranch(workdir string) string {
 	if out, err := git.ExecGit(workdir, []string{"symbolic-ref", "--short", "refs/remotes/origin/HEAD"}); err == nil {
 		return strings.TrimPrefix(strings.TrimSpace(out.Stdout), "origin/")
@@ -51,10 +44,7 @@ func defaultBranch(workdir string) string {
 	return ""
 }
 
-// PushMergedBase pushes a merged PR's base branch to the push remote so the
-// remote code catches up with the merged state published on gitmsg/review.
-// No-op when the workspace has no remote. Merge callers treat a failure as a
-// warning: the merge itself already succeeded locally.
+// PushMergedBase pushes a merged pull request's base branch, so the remote code catches up.
 func PushMergedBase(workdir string, pr PullRequest) error {
 	if git.GetOriginURL(workdir) == "" {
 		return nil

@@ -25,9 +25,7 @@ type DiffContext struct {
 
 var fetchedRefs sync.Map // "forkDir\x00remote\x00branch" → true
 
-// ResolveDiffContext resolves PR base/head refs for git operations.
-// For local-only PRs, returns the workspace. For remote refs, fetches
-// both sides into a fork bare repo and returns that path.
+// ResolveDiffContext returns the workspace for a local pull request, or the fork bare repo it fetched both sides into.
 func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext {
 	baseParsed := protocol.ParseRef(baseRef)
 	headParsed := protocol.ParseRef(headRef)
@@ -46,9 +44,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	if baseLocal && headLocal {
 		return DiffContext{Workdir: workdir, Base: resolveLocalRef(workdir, baseBranch), Head: resolveLocalRef(workdir, headBranch)}
 	}
-	// At least one side is remote — use a fork bare repo keyed by the base repo
-	// (workspace URL when base is local, otherwise the base's repository URL).
-	// This isolates each repo's fork data for easy cleanup.
+	// One side is remote, so a fork bare repo keyed by the base repository holds both.
 	forkKey := wsURL
 	if !baseLocal {
 		forkKey = baseParsed.Repository
@@ -57,8 +53,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	if err != nil {
 		return DiffContext{Workdir: workdir, Base: baseBranch, Head: headBranch}
 	}
-	// Populating and reading the fork repo, as a unit: a fork repo whose borrowed
-	// objects went missing is rebuilt and run through this a second time.
+	// Populate and read as a unit, so a repo whose borrowed objects went missing can be retried.
 	resolve := func(dir string) (DiffContext, bool) {
 		errs := make([]error, 2)
 		var wg sync.WaitGroup
@@ -68,8 +63,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 			if baseLocal {
 				errs[0] = lendWorkspaceBranch(dir, workdir, baseBranch)
 				if !headLocal {
-					// Best effort: an unreachable upstream just leaves the base
-					// resolving against the borrowed workspace branch.
+					// An unreachable upstream leaves the base on the borrowed workspace branch.
 					errs[0] = errors.Join(errs[0], fetchFromUpstream(dir, wsURL, baseBranch))
 				}
 			} else {
@@ -123,8 +117,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	if !broken {
 		return ctx
 	}
-	// The borrowed workspace ODB moved or was gc'd, or the fork repo's own objects
-	// were pruned. The borrower is a disposable cache, so rebuild it and retry once.
+	// The borrower is a disposable cache, so a missing object rebuilds it and retries once.
 	repaired, repairErr := storage.RepairForkRepository(cacheDir, forkKey)
 	if repairErr != nil {
 		log.Debug("fork repo repair failed", "dir", forkDir, "error", repairErr)
@@ -135,10 +128,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	return ctx
 }
 
-// refResolves reports whether a ref names an object the repo can read. git
-// resolves a ref from its ref file alone, so an object a donor gc'd out from
-// under a borrowed alternate only surfaces on the object read — reported
-// separately so the caller can rebuild instead of blaming the branch.
+// refResolves reports whether a ref names an object the repo can read, and which half failed.
 func refResolves(dir, ref string) (ok bool, objectMissing bool) {
 	sha, err := git.ReadRef(dir, ref)
 	if err != nil || sha == "" {
@@ -150,8 +140,7 @@ func refResolves(dir, ref string) (ok bool, objectMissing bool) {
 	return true, false
 }
 
-// forgetFetchedRefs drops the memoized fetches for a fork repo, so a rebuilt repo
-// is populated again instead of being considered already fetched.
+// forgetFetchedRefs drops a fork repo's memoized fetches, so a rebuilt repo is populated again.
 func forgetFetchedRefs(forkDir string) {
 	prefix := forkDir + "\x00"
 	fetchedRefs.Range(func(key, _ any) bool {
@@ -162,9 +151,7 @@ func forgetFetchedRefs(forkDir string) {
 	})
 }
 
-// resolveLocalRef verifies a branch name resolves as a git ref.
-// Falls back to remote tracking branch (e.g. origin/feature) when
-// the local branch doesn't exist, which is common after git clone.
+// resolveLocalRef resolves a branch name locally, falling back to its tracking ref.
 func resolveLocalRef(workdir, branch string) string {
 	if _, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", branch}); err == nil {
 		return branch
@@ -203,10 +190,7 @@ func fetchFromUpstream(forkDir, repoURL, branch string) error {
 	return nil
 }
 
-// lendWorkspaceBranch makes a workspace branch resolvable in the fork repo. A
-// full-clone workspace lends its whole object database through an alternate and
-// only the branch tip is written as a ref, so no objects are copied; a blobless
-// workspace cannot lend objects, so its branch is fetched as before.
+// lendWorkspaceBranch makes a workspace branch resolvable in the fork repo.
 func lendWorkspaceBranch(forkDir, workdir, branch string) error {
 	if storage.IsPartialClone(workdir) {
 		return fetchFromWorkspace(forkDir, workdir, branch)
@@ -225,8 +209,7 @@ func lendWorkspaceBranch(forkDir, workdir, branch string) error {
 	return nil
 }
 
-// workspaceTip resolves a branch to a full sha in the workspace, falling back to
-// the origin tracking ref when the branch was never checked out locally.
+// workspaceTip resolves a workspace branch to a full sha, or its tracking ref.
 func workspaceTip(workdir, branch string) string {
 	for _, ref := range []string{"refs/heads/" + branch, "refs/remotes/origin/" + branch} {
 		result, err := git.ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", ref})
@@ -237,9 +220,7 @@ func workspaceTip(workdir, branch string) string {
 	return ""
 }
 
-// fetchFromWorkspace fetches a branch from the local workspace into refs/workspace/.
-// Falls back to remote tracking ref (refs/remotes/origin/<branch>) when the local
-// branch doesn't exist, which is common when the branch was never checked out.
+// fetchFromWorkspace fetches a workspace branch into refs/workspace/, or its tracking ref.
 func fetchFromWorkspace(forkDir, workdir, branch string) error {
 	key := forkDir + "\x00" + workdir + "\x00" + branch
 	if _, ok := fetchedRefs.Load(key); ok {
@@ -250,7 +231,6 @@ func fetchFromWorkspace(forkDir, workdir, branch string) error {
 		fetchedRefs.Store(key, true)
 		return nil
 	}
-	// Fallback: try remote tracking ref
 	refspec = fmt.Sprintf("+refs/remotes/origin/%s:refs/workspace/%s", branch, branch)
 	if _, err := git.ExecGit(forkDir, []string{"fetch", workdir, refspec, "--no-tags"}); err != nil {
 		return fmt.Errorf("fetch %s from workspace: %w", branch, err)
@@ -259,11 +239,7 @@ func fetchFromWorkspace(forkDir, workdir, branch string) error {
 	return nil
 }
 
-// ResolvePRDiff resolves the full diff range for a pull request.
-// Handles single-commit mode, fork fetching, merged PR state, SHA pinning,
-// and merge-base. Cross-fork PRs pin only the head (base resolves through
-// upstream fetch + merge-base); workspace PRs pin both sides when the
-// stored tips are reachable. The single applyPinPolicy helper covers both.
+// ResolvePRDiff resolves the diff range for a pull request, in the repository that holds it.
 func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) DiffContext {
 	baseRef, headRef := qualifyPRRefs(workdir, pr)
 	ctx := ResolveDiffContext(workdir, cacheDir, baseRef, headRef)
@@ -289,20 +265,12 @@ func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) Dif
 	return ctx
 }
 
-// applyPinPolicy pins diff refs to the PR's stored tips when reachable. Both
-// tips are pinned together whenever they resolve in the same directory, so the
-// diff is exactly base-tip..head-tip (collapsed to their merge-base by the
-// caller) and stays identical across workspaces (base repo and fork) rather
-// than re-diffing against each workspace's live branch heads. Cross-fork PRs
-// resolve their tips in the fork bare repo; workspace PRs may also resolve in
-// the workspace checkout. If the base tip is missing but the head tip resolves,
-// pin the head only and let the base fall back to the fetched branch.
+// applyPinPolicy pins the diff to the pull request's stored tips, so it reads the same everywhere.
 func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR bool) {
 	if pr.HeadTip == "" {
 		return
 	}
-	// Fork PRs live only in the fork bare repo; workspace PRs may also resolve
-	// in the workspace checkout.
+	// A fork pull request resolves only in the fork bare repo.
 	dirs := []string{ctx.Workdir}
 	if !isForkPR {
 		dirs = append(dirs, workdir)
@@ -364,8 +332,7 @@ func resolveMergedDiff(ctx *DiffContext, workdir string, pr *PullRequest) {
 	log.Debug("could not resolve merged diff refs in any directory", "mergeBase", mBase, "mergeHead", mHead)
 }
 
-// qualifyPRRefs resolves relative refs in a PR to absolute refs when the PR
-// originates from a different repository than the workspace.
+// qualifyPRRefs qualifies a pull request's relative refs with the repository that holds it.
 func qualifyPRRefs(workdir string, pr *PullRequest) (baseRef, headRef string) {
 	baseRef, headRef = pr.Base, pr.Head
 	if pr.Repository == "" {

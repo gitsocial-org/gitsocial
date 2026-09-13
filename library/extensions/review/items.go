@@ -53,9 +53,7 @@ type ReviewItem struct {
 	Comments int
 	// Parsed from commit message GitMsg-Ref sections
 	References []protocol.Ref
-	// Adopts is the fork-PR ref this copy homes (adopts= header on the canonical),
-	// identifying fork-PR homing copies for list collapse and original-author.
-	Adopts string
+	Adopts     string // the fork pull request ref this copy homes, read from the canonical's adopts header
 }
 
 const reviewExtColumns = `v.type, v.state, v.draft, v.base, v.base_tip, v.head, v.head_tip, v.depends_on, v.closes, v.reviewers,
@@ -71,9 +69,7 @@ func InsertReviewItem(item ReviewItem) error {
 	return InsertReviewItems([]ReviewItem{item})
 }
 
-// InsertReviewItems inserts or updates review items in a single transaction.
-// The review_reviewers rebuild shares that transaction, so search never
-// observes a stale linking-table state.
+// InsertReviewItems inserts or updates review items and rebuilds review_reviewers in one transaction, so search reads no half-linked state.
 func InsertReviewItems(items []ReviewItem) error {
 	if len(items) == 0 {
 		return nil
@@ -146,8 +142,7 @@ func GetReviewItem(repoURL, hash, branch string) (*ReviewItem, error) {
 	})
 }
 
-// GetReviewItemByRef looks up a review item by its ref string.
-// A ref carrying no branch is resolved by hash, never by guessing the review branch.
+// GetReviewItemByRef looks up a review item by its ref string; a ref without a branch resolves by hash, not by a review-branch default.
 func GetReviewItemByRef(refStr string, defaultRepoURL string) (*ReviewItem, error) {
 	parsed := protocol.ParseRef(refStr)
 	if parsed.Value == "" {
@@ -218,7 +213,7 @@ type ReviewQuery struct {
 	PRHash    string
 	PRBranch  string
 	Limit     int
-	Cursor    string // RFC3339 timestamp — items older than this (keyset pagination)
+	Cursor    string // RFC3339 timestamp; items older than this, for keyset paging
 }
 
 // GetReviewItems queries review items with filtering and pagination.
@@ -302,8 +297,7 @@ func GetReviewItems(q ReviewQuery) ([]ReviewItem, error) {
 	})
 }
 
-// CountPullRequests returns the number of pull requests in one repository matching the given states.
-// The repository filter is what GetPullRequests lists, so a total matches its list.
+// CountPullRequests returns the number of pull requests in one repository matching the states, the set GetPullRequests lists.
 func CountPullRequests(repoURL string, states []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		query := `SELECT COUNT(*) FROM review_items_resolved v
@@ -361,8 +355,7 @@ func CountPRsWithForks(workspaceURL, workspaceBranch string, forkURLs, states []
 	return len(res.Data)
 }
 
-// GetPullRequestsWithForks retrieves PRs from the workspace and registered forks.
-// Fork PRs are post-filtered to only include those targeting the workspace.
+// GetPullRequestsWithForks lists the workspace's pull requests and the registered forks' ones that target the workspace.
 func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string, cursor string, limit int) Result[[]PullRequest] {
 	if len(forkURLs) == 0 {
 		return GetPullRequests(workspaceURL, workspaceBranch, states, cursor, limit)
@@ -416,9 +409,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 	if err != nil {
 		return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 	}
-	// A fork PR homed onto our review branch (merged or closed by us) carries an
-	// adopts= header naming the fork original; that copy holds the authoritative
-	// terminal state, so collapse the original into it rather than list both.
+	// A homed copy carries the terminal state, so its fork original collapses into it.
 	adopted := make(map[string]bool)
 	for _, item := range items {
 		if item.RepoURL != workspaceURL || item.Adopts == "" {
@@ -428,8 +419,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 			adopted[parsed.Repository+"#"+parsed.Value] = true
 		}
 	}
-	// Post-filter and deduplicate by hash: workspace items take priority
-	// (duplicates can happen when forks are created via git clone --mirror)
+	// Deduplicate by hash: a mirror clone carries the same commit under two URLs.
 	seen := make(map[string]bool, len(items))
 	prs := make([]PullRequest, 0, len(items))
 	for _, item := range items {
@@ -448,9 +438,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 	return result.Ok(prs)
 }
 
-// forkPRTargetsWorkspace checks if a fork PR's base ref targets the workspace.
-// A local ref (#branch:main) means it targets the upstream workspace.
-// An explicit repo ref is checked against the workspace URL.
+// forkPRTargetsWorkspace reports whether a fork pull request's base names the workspace.
 func forkPRTargetsWorkspace(item ReviewItem, workspaceURL string) bool {
 	base := nullStr(item.Base)
 	if base == "" {
@@ -535,10 +523,7 @@ func scanResolvedRow(s cache.RowScanner) (*ReviewItem, error) {
 	return scanReviewRow(s, nil)
 }
 
-// scanReviewRow scans a resolved review row. readDest, when set, takes the
-// notification read marker notificationSelectFromView appends. Review re-parses
-// the raw messages itself: it needs References and adopts= in addition to the
-// standard content and origin interpretation.
+// scanReviewRow scans a resolved review row; readDest takes the read marker when the query has one.
 func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, error) {
 	var item ReviewItem
 	dest := []any{
@@ -668,6 +653,7 @@ func ReviewItemToFeedback(item ReviewItem) Feedback {
 	}
 }
 
+// joinSubjectBody joins a subject and an optional body with a blank line.
 func joinSubjectBody(subject, body string) string {
 	if body != "" {
 		return subject + "\n\n" + body
@@ -675,6 +661,7 @@ func joinSubjectBody(subject, body string) string {
 	return subject
 }
 
+// nullStr returns a nullable string's value, or empty when it is NULL.
 func nullStr(ns sql.NullString) string {
 	if ns.Valid {
 		return ns.String
@@ -682,6 +669,7 @@ func nullStr(ns sql.NullString) string {
 	return ""
 }
 
+// parseCSV splits a comma-separated column into its values, nil when empty.
 func parseCSV(s string) []string {
 	if s == "" {
 		return nil

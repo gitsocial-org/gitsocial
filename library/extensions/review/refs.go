@@ -35,11 +35,7 @@ func ResolveBranchTip(workdir, repoURL, branch string) (string, error) {
 	return "", fmt.Errorf("branch %q not found on remote %s", branch, repoURL)
 }
 
-// resolveTipForWrite returns the tip preferring remote (via
-// ResolveBranchTip), falling back to refs/heads/<branch> when repoURL
-// names the workspace and the remote couldn't be consulted at all. Used by
-// UpdatePRTips to track the world-visible state on registered repos.
-// Observation paths intentionally do NOT use this.
+// resolveTipForWrite returns the remote tip, falling back to a local workspace branch.
 func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
@@ -56,10 +52,7 @@ func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef)
 	return git.ReadRef(workdir, parsed.Value)
 }
 
-// resolveTipForAuthor returns the tip preferring local refs/heads/<branch>
-// when repoURL names the workspace, otherwise delegating to ResolveBranchTip.
-// CreatePR uses this so an unpushed local tip is captured as the author's
-// proposed state instead of silently downgrading to refs/remotes/origin/*.
+// resolveTipForAuthor prefers a local workspace branch, so an unpushed tip is the proposed state.
 func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
@@ -76,10 +69,7 @@ func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef
 	return ResolveBranchTip(workdir, repoURL, parsed.Value)
 }
 
-// resolveTipForObservation returns the strict remote tip for a parsed PR
-// ref, normalizing the empty-Repository shorthand to the workspace URL.
-// Wraps ResolveBranchTip without a local fallback so deletions surface as
-// errors (which observation translates into HeadExists/BaseExists = false).
+// resolveTipForObservation returns the remote tip with no local fallback, so a deletion surfaces.
 func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
@@ -91,8 +81,7 @@ func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.Pars
 	return ResolveBranchTip(workdir, repoURL, parsed.Value)
 }
 
-// findRemoteForURL returns the git remote name (e.g. "origin") whose URL
-// matches normalizedURL after normalization, or "" if none matches.
+// findRemoteForURL returns the remote whose URL matches normalizedURL, or the empty string.
 func findRemoteForURL(workdir, normalizedURL string) string {
 	if normalizedURL == "" {
 		return ""
@@ -109,10 +98,7 @@ func findRemoteForURL(workdir, normalizedURL string) string {
 	return ""
 }
 
-// isWorkspaceURL reports whether normalizedURL refers to the workdir's own
-// origin (or is empty, the protocol-level "this repo" shorthand). Uses the
-// memoized workspace URL resolver so hot paths (ObserveLivePR, observation
-// refresh) don't shell out to `git remote -v` per call.
+// isWorkspaceURL reports whether normalizedURL, or the empty shorthand, names the workdir's origin.
 func isWorkspaceURL(workdir, normalizedURL string) bool {
 	if normalizedURL == "" {
 		return true

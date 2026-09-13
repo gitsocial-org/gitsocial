@@ -1,7 +1,4 @@
-// multiclone_test.go - End-to-end collaboration test: two workdirs share an
-// origin bare repo, the test simulates the scenarios from PR-GAPS.md
-// (head-advance, branch-deletion). This is the regression guard the rest of
-// the workdir-PR fix set is in service of.
+// multiclone_test.go - Two workdirs sharing one origin: head advance and branch deletion
 package review
 
 import (
@@ -46,7 +43,7 @@ func TestMultiCloneCollab(t *testing.T) {
 		t.Fatalf("CreatePR: %s", created.Error.Message)
 	}
 	if created.Data.HeadTip == "" {
-		t.Fatal("PR HeadTip is empty — symmetric tip resolution should have populated it")
+		t.Fatal("the pull request head tip is empty; tip resolution should have filled it")
 	}
 	if !strings.HasPrefix(v1Tip, created.Data.HeadTip) && !strings.HasPrefix(created.Data.HeadTip, v1Tip) {
 		t.Errorf("PR HeadTip %q does not match origin/feature tip %q", created.Data.HeadTip, v1Tip)
@@ -67,7 +64,7 @@ func TestMultiCloneCollab(t *testing.T) {
 		t.Fatalf("bob push: %v", err)
 	}
 	if v1Tip == v2Tip {
-		t.Fatal("v2 tip equals v1 tip — bob's push didn't advance feature")
+		t.Fatal("the v2 tip equals the v1 tip; bob's push did not advance feature")
 	}
 
 	// Alice fetches and observes the divergence.
@@ -127,7 +124,7 @@ func TestMultiCloneCollab(t *testing.T) {
 	// alice's local refs/heads/feature is also gone after she didn't keep a
 	// local branch (she only worked on main).
 	if _, err := git.ExecGit(alice, []string{"branch", "-D", "feature"}); err != nil {
-		// May not exist locally — ignore.
+		// The branch may not exist locally.
 		_ = err
 	}
 	merge := MergePR(alice, upd.Data.ID, MergeStrategyFF)
@@ -200,8 +197,5 @@ func hasNotifType(ns []notifications.Notification, typeName string) bool {
 	return false
 }
 
-// notifTypes is provided by observe_test.go in the same package.
-//
-// Local helpers above compose with `setupTestDB` from sync_test.go and
-// `parseRef` / `protocol.*` for ref handling.
+// notifTypes comes from observe_test.go in this package.
 var _ = protocol.ParseRef

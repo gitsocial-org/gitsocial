@@ -30,16 +30,10 @@ type CreatePROptions struct {
 	MergeHead string
 	Draft     bool
 	Origin    *protocol.Origin
-	// AllowUnpublishedHead skips the "head branch resolvable" check. Set this
-	// only when the caller has a reason to record a tip-less PR (e.g., tests
-	// that don't exercise branch resolution). Production callers should leave
-	// this false so unpushed branches are caught early.
+	// AllowUnpublishedHead records a pull request whose head has no resolvable tip.
 	AllowUnpublishedHead bool
-	// Accepts names the cross-repo proposal a mirror edit accepts; Adopts names the
-	// fork PR a homed copy adopts. Each emits its matching header field
-	// (GITMSG.md §1.5 / GITREVIEW.md §1.5).
-	Accepts string
-	Adopts  string
+	Accepts              string // the cross-repo proposal a mirror edit accepts, GITMSG.md 1.5
+	Adopts               string // the fork pull request a homed copy adopts, GITREVIEW.md 1.5
 }
 
 // CreatePR creates a new pull request on the review branch.
@@ -71,7 +65,7 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 
 	if opts.Head != "" && opts.HeadTip == "" && !opts.AllowUnpublishedHead {
 		return result.Err[PullRequest]("HEAD_NOT_FOUND",
-			fmt.Sprintf("head branch %q not found on origin or locally — push it first?", opts.Head))
+			fmt.Sprintf("head branch %q not found on origin or locally. Push it first?", opts.Head))
 	}
 
 	content := buildPRContent(subject, body, opts, "")
@@ -111,24 +105,22 @@ func notFoundMessage(kind, ref string, err error) string {
 }
 
 type UpdatePROptions struct {
-	State     *PRState
-	Draft     *bool
-	Base      *string
-	BaseTip   *string
-	Head      *string
-	HeadTip   *string
-	DependsOn *[]string
-	Closes    *[]string
-	Reviewers *[]string
-	Labels    *[]string
-	Subject   *string
-	Body      *string
-	MergeBase *string
-	MergeHead *string
-	Origin    *protocol.Origin
-	// Attribution, when set, is appended as a provenance GitMsg-Ref (e.g. an acceptance
-	// recording "accepted from <fork> by <author>"). Not set by normal edits.
-	Attribution *protocol.Ref
+	State       *PRState
+	Draft       *bool
+	Base        *string
+	BaseTip     *string
+	Head        *string
+	HeadTip     *string
+	DependsOn   *[]string
+	Closes      *[]string
+	Reviewers   *[]string
+	Labels      *[]string
+	Subject     *string
+	Body        *string
+	MergeBase   *string
+	MergeHead   *string
+	Origin      *protocol.Origin
+	Attribution *protocol.Ref // a provenance reference, set by an acceptance and by nothing else
 }
 
 // UpdatePR edits an existing pull request using core versioning.
@@ -152,9 +144,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 		Reviewers: pr.Reviewers,
 		Labels:    pr.Labels,
 		Draft:     pr.IsDraft,
-		// Preserve merge-base / merge-head when editing an already-merged
-		// PR (e.g., subject tweak). The opts overrides below take effect
-		// only when the caller explicitly passes them.
+		// An edit of a merged pull request keeps its merge record unless opts replaces it.
 		MergeBase: pr.MergeBase,
 		MergeHead: pr.MergeHead,
 	}
@@ -210,9 +200,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 		body = *opts.Body
 	}
 
-	// GITREVIEW.md §1.5: state="merged" edits MUST carry merge-base and
-	// merge-head. Reject the transition at the API boundary so direct
-	// UpdatePR callers can't bypass MergePR's pre-flight checks.
+	// GITREVIEW.md 1.5: a state="merged" edit MUST carry merge-base and merge-head.
 	if state == PRStateMerged {
 		if createOpts.MergeBase == "" {
 			return result.Err[PullRequest]("MERGE_INCOMPLETE",
@@ -263,8 +251,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	return result.Ok(ReviewItemToPullRequest(*item))
 }
 
-// headSource returns the repository and branch a pull request's head lives on.
-// A relative head names the item's own repository, not the reader's workspace.
+// headSource returns the repository and branch a pull request's head lives on; a relative head names the item's own repository.
 func headSource(existing *ReviewItem, pr PullRequest) (repoURL, branch string) {
 	parsed := protocol.ParseRef(pr.Head)
 	repoURL = parsed.Repository
@@ -293,11 +280,7 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 		Base: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
 		// The copy outlives the fork, so its head names the fork by URL.
 		Head: protocol.LocalizeRef(qualifiedHead(existing, pr), repoURL),
-		// Carry the source PR's recorded tips so the homed copy pins its diff to
-		// the same commits. Without them the copy has empty tips and cross-repo
-		// diff resolution falls back to each workspace's live branch heads, which
-		// can diverge (e.g. a stale local head branch) and yield inconsistent or
-		// empty "files changed".
+		// The copy carries the source tips, so its diff pins to the same commits.
 		BaseTip:   pr.BaseTip,
 		HeadTip:   pr.HeadTip,
 		DependsOn: pr.DependsOn,
@@ -373,8 +356,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		}
 	}
 
-	// Adopt a fork PR onto our own review branch so the merge record is
-	// self-contained and same-repo (see homeForkPR).
+	// The merge record is same-repo, so a fork pull request is adopted first.
 	homedRef, err := homeForkPR(workdir, repoURL, prRef, existing, pr)
 	if err != nil {
 		return result.Err[PullRequest]("COMMIT_FAILED", err.Error())
@@ -385,10 +367,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	baseName := protocol.ParseRef(pr.Base).Value
 	headSourceURL, headBranch := headSource(existing, pr)
 
-	// merge-base / merge-head are REQUIRED by GITREVIEW.md §1.5 on
-	// state="merged" edits — they're the only durable record of the merged
-	// commit range once the head branch is deleted. Refuse early if either
-	// PR ref is malformed; the merge can't produce a complete record.
+	// GITREVIEW.md 1.5 requires merge-base and merge-head, which a malformed ref cannot produce.
 	if baseName == "" {
 		return result.Err[PullRequest]("MERGE_INCOMPLETE",
 			"cannot merge: base ref missing or not a branch ref")
@@ -398,11 +377,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 			"cannot merge: head ref missing or not a branch ref")
 	}
 
-	// Fetch the PR's head into a temporary local branch for merging,
-	// regardless of whether it lives in the workspace or a fork. This makes
-	// the merge use whatever the live remote tip is — same source of truth
-	// as ResolveBranchTip — and lets the merge primitives operate against
-	// uniform refs/heads/<temp> on both paths.
+	// The head lands in a temporary branch, so the merge reads one ref shape on both paths.
 	const tempHeadBranch = "_gitmsg-merge-tmp"
 	if err := fetchHeadIntoTemp(workdir, headSourceURL, headBranch, tempHeadBranch); err != nil {
 		return result.Err[PullRequest]("HEAD_NOT_FOUND",
@@ -415,9 +390,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 			fmt.Sprintf("base branch %q not found locally", baseName))
 	}
 
-	// Compute merge-base / merge-head BEFORE running the merge, so a failure
-	// here aborts cleanly without leaving a half-merged state. Both fields
-	// must be present in the merged-state edit per spec §1.5.
+	// Both fields are computed before the merge, so a failure here leaves nothing half merged.
 	mergeBaseFull, err := git.GetMergeBase(workdir, baseName, headName)
 	if err != nil || mergeBaseFull == "" {
 		errMsg := "no common ancestor"
@@ -481,8 +454,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		return res
 	}
 
-	// Auto-close PM issues referenced in closes; the caller's workspace sync
-	// is what keeps the pm rows this reads current.
+	// The caller's workspace sync keeps the pm rows this reads current.
 	if len(res.Data.Closes) > 0 {
 		for _, closeRef := range res.Data.Closes {
 			closeResult := pm.CloseIssue(workdir, closeRef)
@@ -504,10 +476,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	return res
 }
 
-// ClosePR sets a pull request's state to closed. Closing is a base-owner landing
-// decision: a fork PR targeting this workspace is adopted onto our own review
-// branch first (so the closed record is a self-contained same-repo edit), the
-// same way MergePR records a merge.
+// ClosePR sets a pull request's state to closed, adopting a fork pull request first.
 func ClosePR(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
@@ -518,8 +487,7 @@ func ClosePR(workdir, prRef string) Result[PullRequest] {
 	if pr.State != PRStateOpen {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot close: pull request is %s", pr.State))
 	}
-	// Lifecycle authority belongs to the base owner: refuse to close a PR whose
-	// base explicitly targets a different repository.
+	// Lifecycle authority belongs to the base owner.
 	if baseRepo := protocol.ParseRef(pr.Base).Repository; baseRepo != "" && baseRepo != repoURL {
 		return result.Err[PullRequest]("INVALID_TARGET", "cannot close: pull request targets a different repository")
 	}
@@ -573,11 +541,7 @@ func ConvertToDraft(workdir, prRef string) Result[PullRequest] {
 	return UpdatePR(workdir, prRef, UpdatePROptions{Draft: &draft})
 }
 
-// UpdatePRTips resolves current base/head branch tips and creates an edit with
-// updated tips. Returns the existing PR unchanged when nothing has moved
-// (avoids edit-storm noise on the gitmsg/review branch). Returns an error if
-// either branch can no longer be resolved — silent no-op edits used to be
-// emitted for deleted branches, masking the problem.
+// UpdatePRTips records the current branch tips as a new version, or the pull request unchanged.
 func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
@@ -725,19 +689,11 @@ func GetReviewConfig(workdir string) ReviewConfig {
 	return config
 }
 
-// fetchHeadIntoTemp populates refs/heads/<tempBranch> in workdir with the
-// tip of <branch> on <sourceURL>. For the workspace's own URL, the source
-// is the origin tracking ref (refs/remotes/<remote>/<branch>) when one of
-// the workdir's git remotes points at sourceURL — falls back to the local
-// refs/heads/<branch>. For any other URL, runs `git fetch <sourceURL>
-// +refs/heads/<branch>:refs/heads/<tempBranch>`. Either way, the merge
-// primitives downstream see a consistent refs/heads/<tempBranch>.
+// fetchHeadIntoTemp points refs/heads/<tempBranch> at branch's tip on sourceURL.
 func fetchHeadIntoTemp(workdir, sourceURL, branch, tempBranch string) error {
 	normalized := protocol.NormalizeURL(sourceURL)
 	if remoteName := findRemoteForURL(workdir, normalized); remoteName != "" {
-		// Local repo already has the data — copy the remote tracking ref
-		// into the temp branch (preferred) or the local branch if no
-		// tracking ref exists.
+		// The data is already local, so the tracking ref is copied, or the local branch.
 		if tip, err := git.ReadRef(workdir, "refs/remotes/"+remoteName+"/"+branch); err == nil && tip != "" {
 			return git.WriteRef(workdir, "refs/heads/"+tempBranch, tip)
 		}
@@ -751,8 +707,7 @@ func fetchHeadIntoTemp(workdir, sourceURL, branch, tempBranch string) error {
 	return err
 }
 
-// retargetDependents retargets open PRs whose base is the merged PR's head onto its base.
-// Returns one error per dependent whose edit failed; the merge itself has landed.
+// retargetDependents retargets open dependents onto the merged pull request's base and returns one error per failed edit.
 func retargetDependents(workdir string, merged PullRequest) []*result.Error {
 	var failures []*result.Error
 	for _, dep := range GetDependents(merged.Repository, merged.Branch, extractRefHash(merged.ID)) {
@@ -780,10 +735,12 @@ func extractRefHash(ref string) string {
 	return parsed.Value
 }
 
+// buildPRContent builds an open pull request's commit message.
 func buildPRContent(subject, body string, opts CreatePROptions, editsRef string) string {
 	return buildPRContentWithState(subject, body, opts, editsRef, PRStateOpen, nil)
 }
 
+// buildPRContentWithState builds a pull request's commit message with the given state and references.
 func buildPRContentWithState(subject, body string, opts CreatePROptions, editsRef string, state PRState, refs []protocol.Ref) string {
 	content := joinSubjectBody(subject, body)
 	fields := map[string]string{
@@ -843,6 +800,7 @@ func buildPRContentWithState(subject, body string, opts CreatePROptions, editsRe
 	return protocol.FormatMessage(content, header, refs)
 }
 
+// buildRetractContent builds the commit message that retracts a pull request.
 func buildRetractContent(editsRef string) string {
 	header := protocol.Header{
 		Ext: "review",
@@ -855,6 +813,7 @@ func buildRetractContent(editsRef string) string {
 	return protocol.FormatMessage("", header, nil)
 }
 
+// cacheReviewFromCommit inserts the review item a freshly written commit carries.
 func cacheReviewFromCommit(workdir, repoURL, hash, branch string) error {
 	commit, err := git.GetCommit(workdir, hash)
 	if err != nil {

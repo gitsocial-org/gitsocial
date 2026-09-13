@@ -17,8 +17,7 @@ func SyncWorkspaceBatch(commits []git.Commit, workdir, repoURL, _ string) {
 	ProcessWorkspaceBatch(commits, repoURL, gitmsg.GetExtBranch(workdir, "review"))
 }
 
-// ProcessWorkspaceBatch processes pre-fetched commits for review extension items.
-// Used by the unified workspace sync to avoid redundant git log calls.
+// ProcessWorkspaceBatch processes pre-fetched commits into review items.
 func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 	var reviewItems []ReviewItem
 	for _, gc := range commits {
@@ -45,8 +44,7 @@ func syncEditFields(items []ReviewItem) {
 	cache.SyncEditExtensionFields(edits)
 }
 
-// buildReviewItem builds a ReviewItem from a commit and message without inserting.
-// Returns nil if the commit is not a review item.
+// buildReviewItem builds a ReviewItem from a commit, nil when the commit is not one.
 func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) *ReviewItem {
 	if msg == nil || msg.Header.Ext != "review" {
 		return nil
@@ -62,9 +60,7 @@ func buildReviewItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 	return &item
 }
 
-// MessageToReviewItem builds a ReviewItem from a parsed review message and its
-// coordinates (pure: reads header fields only, no cache access). Callers that
-// ingest guard on type/ext and run version processing before calling this.
+// MessageToReviewItem builds a ReviewItem from a parsed review message and its coordinates.
 func MessageToReviewItem(msg *protocol.Message, repoURL, hash, branch string) ReviewItem {
 	base := msg.Header.Fields["base"]
 	head := msg.Header.Fields["head"]
@@ -123,18 +119,17 @@ func MessageToReviewItem(msg *protocol.Message, repoURL, hash, branch string) Re
 	return item
 }
 
-// processReviewCommit handles a single commit for review extension processing.
-// Matches fetch.CommitProcessor signature for use as a core fetch callback.
+// processReviewCommit ingests one commit, matching the fetch.CommitProcessor signature.
 func processReviewCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
 	if item := buildReviewItem(gc, msg, repoURL, branch); item != nil {
 		if err := InsertReviewItem(*item); err != nil {
 			log.Debug("insert review item failed", "hash", gc.Hash, "error", err)
 		}
-		// Propagate mutable fields from edit to canonical (extension row now exists)
 		cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: gc.Hash, Branch: branch}})
 	}
 }
 
+// boolToInt maps a bool to the 0 or 1 the cache stores.
 func boolToInt(b bool) int {
 	if b {
 		return 1

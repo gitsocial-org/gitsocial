@@ -24,7 +24,7 @@ func TestRefreshOpenPRBranches_DetectsAdvance(t *testing.T) {
 	}
 
 	// Plant origin/feature at the same tip as the local branch (matching
-	// the post-push state — observation should report no advance yet).
+	// the post-push state, so observation should report no advance yet).
 	if err := git.WriteRef(dir, "refs/remotes/origin/feature", v1Tip); err != nil {
 		t.Fatalf("WriteRef origin/feature v1: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRefreshOpenPRBranches_DetectsAdvance(t *testing.T) {
 		t.Errorf("Exists = false; expected true")
 	}
 	if obs.Tip == created.Data.HeadTip {
-		t.Errorf("observation Tip %q matches stored — expected divergence", obs.Tip)
+		t.Errorf("observation tip %q matches the stored tip, want divergence", obs.Tip)
 	}
 }
 

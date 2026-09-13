@@ -7,6 +7,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
+// init registers the review schema and its migrations.
 func init() {
 	cache.RegisterSchema("review", schema)
 	cache.RegisterMigration(func(db *sql.DB) {
@@ -15,18 +16,10 @@ func init() {
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN depends_on TEXT`)
 	})
-	// Branch observations table: transient cache of the live remote tip for
-	// each branch that any open PR's head or base points at. Populated by
-	// RefreshOpenPRBranches after fetch; consumed by notifications and the
-	// PR detail view to flag PRs whose stored tips have drifted from
-	// the remote. Keyed by (repo_url, branch) so workspace and fork branches
-	// share the same cache.
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(branchObservationsSchema)
 	})
-	// Migrate from the original per-PR observation schema to the
-	// per-(repo_url, branch) schema. Drop the old table — observations are
-	// transient and the next fetch repopulates the new table from scratch.
+	// The per-pull-request observation table is dropped: the next fetch rebuilds the new one.
 	cache.RegisterMigration(func(db *sql.DB) {
 		var pkCols string
 		_ = db.QueryRow(`
@@ -87,8 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_review_state ON review_items(state);
 CREATE INDEX IF NOT EXISTS idx_review_pr ON review_items(pull_request_repo_url, pull_request_hash, pull_request_branch);
 CREATE INDEX IF NOT EXISTS idx_review_file ON review_items(file);
 
--- Extension: Review reviewers normalized for indexed search. Maintained
--- alongside review_items.reviewers (the comma-separated source-of-truth).
+-- Extension: Review reviewers, normalized for search beside review_items.reviewers.
 CREATE TABLE IF NOT EXISTS review_reviewers (
     repo_url TEXT NOT NULL,
     hash TEXT NOT NULL,
@@ -99,9 +91,7 @@ CREATE TABLE IF NOT EXISTS review_reviewers (
 );
 CREATE INDEX IF NOT EXISTS idx_review_reviewers_email ON review_reviewers(email);
 
--- Extension: Review resolved view (unified read interface)
--- Mutable fields (state, draft, reviewers, etc.) are maintained on the canonical's
--- raw row by applyEditToCanonical at edit time, so no ROW_NUMBER subquery is needed.
+-- Extension: Review resolved view. applyEditToCanonical keeps the canonical's mutable columns current.
 DROP VIEW IF EXISTS review_items_resolved;
 CREATE VIEW review_items_resolved AS
 SELECT

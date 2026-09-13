@@ -51,7 +51,7 @@ func TestResolveBranchTip_StrictRemote(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 	repoURL := "https://github.com/test/repo"
-	// Local-only branch with no refs/remotes/origin/<branch> entry — strict
+	// A local-only branch with no tracking ref, which strict
 	// remote resolution must error so observation paths can detect deletion
 	// without local-fallback masking.
 	if _, err := git.CreateCommitOnBranch(dir, "local-only-branch", "local-only"); err != nil {
@@ -105,7 +105,7 @@ func TestUpdatePRTips_NoOpWhenUnchanged(t *testing.T) {
 		t.Fatalf("UpdatePRTips: %s", first.Error.Message)
 	}
 	// First call may emit an edit (canonical had empty tips); second call
-	// against the same branch state must be a no-op — same canonical, no
+	// against the same branch state must be a no-op: the same canonical, no
 	// new edit on gitmsg/review.
 	tipBefore, err := git.ReadRef(dir, "gitmsg/review")
 	if err != nil {
@@ -149,11 +149,7 @@ func TestUpdatePRTips_ErrorsOnDeletedHead(t *testing.T) {
 
 func TestMergePR_AllowsDirtyTree(t *testing.T) {
 	t.Parallel()
-	// MergePR uses plumbing (merge-tree + commit-tree + update-ref) for
-	// every strategy and never invokes `git merge`, so the user's working
-	// tree is never touched. Untracked or modified files are preserved
-	// across the merge — the dirty-tree guard from the earlier
-	// `git merge`-based path is intentionally gone.
+	// Every merge strategy runs over plumbing, so a dirty working tree is untouched.
 	dir := initTestRepo(t)
 	if _, err := git.ExecGit(dir, []string{"checkout", "-b", "feature-dirty"}); err != nil {
 		t.Fatalf("checkout: %v", err)

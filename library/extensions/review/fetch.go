@@ -19,21 +19,17 @@ func Processors() []fetch.CommitProcessor {
 	return []fetch.CommitProcessor{processReviewCommit}
 }
 
-// BackfillSpec describes how the post-fetch backfill detects review commits
-// whose review_items row is missing.
+// BackfillSpec describes how the post-fetch backfill finds review commits whose review_items row is missing.
 func BackfillSpec() fetch.ExtBackfillSpec {
 	return fetch.ExtBackfillSpec{Extension: "review", ItemsTable: "review_items"}
 }
 
 // PostFetchHooks returns post-fetch hooks for the review extension.
-// RefreshOpenPRBranches walks PRs across the workspace and registered
-// forks together; the hook fires once per fetched repo but the refresh
-// itself dedupes by (repo_url, branch), so concurrent fork fetches
-// converge on the same observation rows without redundant work.
 func PostFetchHooks() []fetch.PostFetchHook {
 	return []fetch.PostFetchHook{refreshBranchObservationsHook}
 }
 
+// refreshBranchObservationsHook records the live tips of every open pull request's branches after a fetch.
 func refreshBranchObservationsHook(workdir, _, _, _ string) {
 	if err := RefreshOpenPRBranches(workdir); err != nil {
 		log.Debug("refresh branch observations", "error", err)

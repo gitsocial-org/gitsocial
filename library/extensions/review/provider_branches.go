@@ -1,10 +1,4 @@
-// provider_branches.go - Notifications driven by review_branch_observations:
-// "head/base advanced" and "head/base deleted" for open PRs in the
-// workspace and any registered fork.
-//
-// These are computed from current state (observed remote tip vs stored PR
-// tip), so they self-clear once the PR is updated or closed — no read
-// tracking needed. Audience is the PR author and any reviewers.
+// provider_branches.go - The head and base notifications driven by review_branch_observations
 package review
 
 import (
@@ -13,11 +7,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// getBranchStateNotifications surfaces head-advanced / head-deleted /
-// base-advanced / base-deleted notifications for open PRs whose head or
-// base branches have drifted from the live remote, or no longer exist on
-// the remote. The observation table is keyed by (repo_url, branch) so
-// workspace and fork PRs use the same lookup.
+// getBranchStateNotifications reports every open pull request whose branch moved or vanished.
 func getBranchStateNotifications(workdir, workspaceURL, userEmail string, forkURLs []string) []notifications.Notification {
 	if workspaceURL == "" {
 		return nil
@@ -38,9 +28,7 @@ func getBranchStateNotifications(workdir, workspaceURL, userEmail string, forkUR
 	return result
 }
 
-// branchStateForPR computes the (zero or more) branch-state notifications
-// for a single PR by comparing each side's stored tip to the cached
-// observation. Order: deletion before advance; head before base.
+// branchStateForPR compares one pull request's stored tips to their observations.
 func branchStateForPR(workspaceURL string, pr PullRequest) []notifications.Notification {
 	headRepo, headBranch := refRepoAndBranch(protocol.ParseRef(pr.Head), workspaceURL)
 	baseRepo, baseBranch := refRepoAndBranch(protocol.ParseRef(pr.Base), workspaceURL)
@@ -67,9 +55,7 @@ func branchStateForPR(workspaceURL string, pr PullRequest) []notifications.Notif
 	return result
 }
 
-// refRepoAndBranch projects a parsed PR ref into the (repo_url, branch)
-// pair used as the observation table key, applying the workspace-shorthand
-// fallback when the ref's Repository field is empty.
+// refRepoAndBranch projects a parsed ref into the observation table's key.
 func refRepoAndBranch(parsed protocol.ParsedRef, workspaceURL string) (string, string) {
 	if parsed.Type != protocol.RefTypeBranch {
 		return "", ""
@@ -86,8 +72,7 @@ func prStakeholder(pr PullRequest, userEmail string) bool {
 	return pr.Author.Email == userEmail || hasEmail(pr.Reviewers, userEmail)
 }
 
-// branchStateNotif assembles a notifications.Notification for a single
-// branch-state event.
+// branchStateNotif assembles one branch state notification.
 func branchStateNotif(prRef string, pr PullRequest, notifType, branchRef,
 	storedTip, observedTip string, includeContent bool) notifications.Notification {
 	prHash := protocol.ParseRef(pr.ID).Value

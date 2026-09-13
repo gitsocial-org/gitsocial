@@ -288,10 +288,7 @@ func TestReviewItemToPullRequest_nonReviewRef(t *testing.T) {
 	}
 }
 
-// TestReviewItemToPullRequest_acceptSnapshotRefNotOriginalAuthor guards the adopts=
-// fix: an accept mirror's snapshot ref is review + pull-request, but the canonical
-// has no adopts=, so it MUST NOT be read as a fork-PR homing pointer (which would
-// mislabel OriginalAuthor as the proposer).
+// TestReviewItemToPullRequest_acceptSnapshotRefNotOriginalAuthor keeps a proposer out of OriginalAuthor.
 func TestReviewItemToPullRequest_acceptSnapshotRefNotOriginalAuthor(t *testing.T) {
 	item := ReviewItem{
 		RepoURL: "https://github.com/bob/repo",

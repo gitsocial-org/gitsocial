@@ -1,8 +1,4 @@
-// fork_pr_lifecycle_test.go - Two-repo (distinct repo_url) fork-PR lifecycle.
-// A base owner closing a fork PR adopts it onto their own review branch (a
-// self-contained, same-repo record) and collapses the fork original in the PR
-// list, while the fork's own canonical is left untouched — it reconciles later
-// via the role/acceptance machinery, not by the base owner writing to it.
+// fork_pr_lifecycle_test.go - The fork pull request lifecycle over two repositories
 package review
 
 import (
@@ -89,8 +85,7 @@ func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
 		t.Errorf("closed record should be adopted onto upstream: got %q want %q", closed.Data.Repository, upstreamURL)
 	}
 
-	// After close: still one PR — the adopted copy (closed), with the fork
-	// original collapsed into it.
+	// After close there is still one pull request: the adopted copy, with the original collapsed in.
 	after := GetPullRequestsWithForks(upstreamURL, branch, []string{forkURL}, nil, "", 0)
 	if !after.Success {
 		t.Fatalf("GetPullRequestsWithForks (after): %s", after.Error.Message)
@@ -128,8 +123,7 @@ func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
 	}
 }
 
-// TestForkPRReadiness_authorOnly asserts that draft/mark-ready/retract on a fork
-// PR are rejected for a base owner — readiness and withdrawal are the author's.
+// TestForkPRReadiness_authorOnly refuses a base owner draft, ready or retract on a fork pull request.
 func TestForkPRReadiness_authorOnly(t *testing.T) {
 	setupTestDB(t)
 
@@ -155,8 +149,7 @@ func TestForkPRReadiness_authorOnly(t *testing.T) {
 	}
 }
 
-// TestForkPRMerge_relativeHead merges a fork PR written in the relative form the
-// fork-discovery flow shows: the head names the fork, not the upstream.
+// TestForkPRMerge_relativeHead merges a fork PR written in the relative form of the fork-discovery flow, its head naming the fork.
 func TestForkPRMerge_relativeHead(t *testing.T) {
 	setupTestDB(t)
 	alice, bob, upstreamURL, forkURL := forkPRFixture(t)

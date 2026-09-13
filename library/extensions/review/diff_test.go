@@ -262,7 +262,7 @@ func TestResolveDiffContext_bloblessWorkspaceIsNotADonor(t *testing.T) {
 	}
 }
 
-// pruneObjects empties a repo's object database, leaving refs and config intact —
+// pruneObjects empties a repo's object database, leaving refs and config intact:
 // the state a borrower is left in when its donor gcs the objects it borrowed.
 func pruneObjects(t *testing.T, dir string) {
 	t.Helper()

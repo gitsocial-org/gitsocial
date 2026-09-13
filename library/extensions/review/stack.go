@@ -17,8 +17,7 @@ type StackEntry struct {
 	Position    int
 }
 
-// GetStack reconstructs the full stack from any member PR by walking depends-on
-// chains in both directions. Returns entries ordered bottom-up (root first).
+// GetStack reconstructs a stack from any member, root first.
 func GetStack(prRef string) Result[[]StackEntry] {
 	startResult := GetPR(prRef)
 	if !startResult.Success {
@@ -73,8 +72,7 @@ func GetStack(prRef string) Result[[]StackEntry] {
 	return result.Ok(entries)
 }
 
-// FindPRByHead finds open PRs whose head branch matches the given branch ref.
-// Used for auto-detecting stack relationships when creating a new PR.
+// FindPRByHead finds the open pull requests whose head is the given branch ref.
 func FindPRByHead(headRef string) []PullRequest {
 	if headRef == "" {
 		return nil
@@ -110,9 +108,7 @@ func FindPRByHead(headRef string) []PullRequest {
 	return prs
 }
 
-// RebaseStack rebases all PRs above the given PR in the stack.
-// For each dependent, rebases its head branch onto its base branch and updates tips.
-// Returns the list of updated PRs or an error if a rebase fails.
+// RebaseStack rebases every pull request above the given one, stopping at the first failure.
 func RebaseStack(workdir, prRef string) Result[[]PullRequest] {
 	startResult := GetPR(prRef)
 	if !startResult.Success {
@@ -183,8 +179,7 @@ func SyncStackTips(workdir, prRef string) Result[[]PullRequest] {
 	return result.Ok(updated)
 }
 
-// qualifyRefWithRepo ensures a ref has a repository component by filling from defaultRepo if missing.
-// Used to resolve workspace-local depends-on refs against the containing PR's repository.
+// qualifyRefWithRepo fills a ref's missing repository from defaultRepo.
 func qualifyRefWithRepo(ref, defaultRepo string) string {
 	if defaultRepo == "" {
 		return ref
@@ -196,7 +191,7 @@ func qualifyRefWithRepo(ref, defaultRepo string) string {
 	return protocol.CreateRef(parsed.Type, parsed.Value, defaultRepo, parsed.Branch)
 }
 
-// GetDependents finds all PRs that depend on the given PR (by hash match in depends_on field).
+// GetDependents finds the pull requests whose depends-on names the given hash.
 func GetDependents(repoURL, branch, hash string) []PullRequest {
 	if hash == "" {
 		return nil
@@ -227,7 +222,7 @@ func GetDependents(repoURL, branch, hash string) []PullRequest {
 	prs := make([]PullRequest, 0, len(items))
 	for _, item := range items {
 		pr := ReviewItemToPullRequest(item)
-		// Verify the hash actually appears in depends-on (LIKE match may be too broad)
+		// The LIKE match is broad, so each candidate is checked against the parsed refs.
 		for _, dep := range pr.DependsOn {
 			if strings.Contains(dep, hash) {
 				prs = append(prs, pr)

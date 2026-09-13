@@ -256,6 +256,7 @@ func GetBatchReviewSummaries(keys []PRKey) map[string]ReviewSummary {
 	return result
 }
 
+// buildFeedbackContent builds a feedback commit's message from its options.
 func buildFeedbackContent(content string, opts CreateFeedbackOptions, editsRef string) string {
 	fields := map[string]string{
 		"type":         string(ItemTypeFeedback),

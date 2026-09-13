@@ -16,6 +16,7 @@ import (
 
 type reviewNotificationProvider struct{}
 
+// init registers the review notification provider.
 func init() {
 	notifications.RegisterProvider("review", &reviewNotificationProvider{})
 }
