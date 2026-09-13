@@ -394,6 +394,72 @@ func TestProviderNotifications(t *testing.T) {
 	})
 }
 
+// countPRReady returns the pr-ready notifications the upstream sees.
+func countPRReady(t *testing.T, upstream string) int {
+	t.Helper()
+	p := &reviewNotificationProvider{}
+	notifs, err := p.GetNotifications(upstream, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications: %v", err)
+	}
+	count := 0
+	for _, n := range notifs {
+		if n.Type == "pr-ready" {
+			count++
+		}
+	}
+	return count
+}
+
+// TestDraftReady_oncePerTransition drives a fork draft PR through the write path.
+func TestDraftReady_oncePerTransition(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, _, forkURL := forkPRFixture(t)
+	if err := gitmsg.AddFork(alice, forkURL); err != nil {
+		t.Fatalf("AddFork: %v", err)
+	}
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{
+		Base:  "#branch:main",
+		Head:  "feature",
+		Draft: true,
+	})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	if got := countPRReady(t, alice); got != 0 {
+		t.Fatalf("a draft pull request should not be ready, got %d pr-ready", got)
+	}
+
+	if res := MarkReady(bob, created.Data.ID); !res.Success {
+		t.Fatalf("MarkReady: %s", res.Error.Message)
+	}
+	if got := countPRReady(t, alice); got != 1 {
+		t.Fatalf("after MarkReady: got %d pr-ready, want 1", got)
+	}
+
+	subject := "Fix the bug, again"
+	nextSecond()
+	if res := UpdatePR(bob, created.Data.ID, UpdatePROptions{Subject: &subject}); !res.Success {
+		t.Fatalf("UpdatePR subject: %s", res.Error.Message)
+	}
+	if got := countPRReady(t, alice); got != 1 {
+		t.Fatalf("after a subject edit: got %d pr-ready, want 1", got)
+	}
+
+	nextSecond()
+	if res := ConvertToDraft(bob, created.Data.ID); !res.Success {
+		t.Fatalf("ConvertToDraft: %s", res.Error.Message)
+	}
+	nextSecond()
+	if res := MarkReady(bob, created.Data.ID); !res.Success {
+		t.Fatalf("second MarkReady: %s", res.Error.Message)
+	}
+	if got := countPRReady(t, alice); got != 2 {
+		t.Fatalf("after a second transition: got %d pr-ready, want 2", got)
+	}
+}
+
 func TestGetUnreadCount_emptyWorkspace(t *testing.T) {
 	setupTestDB(t)
 	dir := t.TempDir()

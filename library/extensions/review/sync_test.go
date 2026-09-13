@@ -63,6 +63,12 @@ func syncWorkspace(workdir string) error {
 const reviewTestBranch = "gitmsg/review"
 const reviewTestRepoURL = "https://github.com/test/repo"
 
+// nextSecond waits for the wall clock to tick, so consecutive edits sort by timestamp.
+// GITMSG.md 1.5 breaks a same-second tie on the hash, which no test can predict.
+func nextSecond() {
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second + 10*time.Millisecond)))
+}
+
 func initTestRepo(t *testing.T) string {
 	t.Helper()
 	return testutil.CopyRepo(t, repoTemplate)

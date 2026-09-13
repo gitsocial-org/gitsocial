@@ -72,16 +72,18 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 	}
 
 	rows, err := cache.QueryLocked(func(db *sql.DB) ([]rawVersion, error) {
+		// ord keeps the canonical first and the hash breaks a same-second tie, so
+		// version numbers and the draft-to-ready walk are stable.
 		query := `
-			SELECT repo_url, hash, branch, author_name, author_email, message, timestamp, edits
+			SELECT 0 AS ord, repo_url, hash, branch, author_name, author_email, message, timestamp, edits
 			FROM core_commits
 			WHERE repo_url = ? AND hash = ? AND branch = ?
 			UNION ALL
-			SELECT c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
+			SELECT 1 AS ord, c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
 			FROM core_commits c
 			JOIN core_commits_version v ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
 			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
-			ORDER BY timestamp ASC`
+			ORDER BY ord ASC, timestamp ASC, hash ASC`
 		dbRows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
 		if err != nil {
 			return nil, err
@@ -90,7 +92,8 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 		var results []rawVersion
 		for dbRows.Next() {
 			var r rawVersion
-			if err := dbRows.Scan(&r.RepoURL, &r.Hash, &r.Branch, &r.AuthorName, &r.AuthorEmail, &r.Message, &r.Timestamp, &r.Edits); err != nil {
+			var ord int
+			if err := dbRows.Scan(&ord, &r.RepoURL, &r.Hash, &r.Branch, &r.AuthorName, &r.AuthorEmail, &r.Message, &r.Timestamp, &r.Edits); err != nil {
 				return nil, err
 			}
 			results = append(results, r)

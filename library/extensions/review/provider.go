@@ -3,6 +3,7 @@ package review
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -84,7 +85,7 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 		result = append(result, scNotifs...)
 	}
 
-	drNotifs, err := getDraftReadyNotifications(workspaceURL, userEmail, forks, filter.UnreadOnly)
+	drNotifs, err := getDraftReadyNotifications(workdir, workspaceURL, userEmail, forks, filter.UnreadOnly)
 	if err == nil {
 		result = append(result, drNotifs...)
 	}
@@ -122,7 +123,7 @@ func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error)
 	if err != nil {
 		scCount = 0
 	}
-	drCount, err := countUnreadDraftReady(workspaceURL, userEmail, forks)
+	drCount, err := countUnreadDraftReady(workdir, workspaceURL, userEmail, forks)
 	if err != nil {
 		drCount = 0
 	}
@@ -513,120 +514,110 @@ func countUnreadPRStateChanges(userEmail string) (int, error) {
 	})
 }
 
-// getDraftReadyNotifications returns notifications for fork PRs that transitioned from draft to ready.
-func getDraftReadyNotifications(workspaceURL, userEmail string, forkURLs []string, unreadOnly bool) ([]notifications.Notification, error) {
+// getDraftReadyNotifications returns one notification per draft-to-ready edit on a fork pull request.
+func getDraftReadyNotifications(workdir, workspaceURL, userEmail string, forkURLs []string, unreadOnly bool) ([]notifications.Notification, error) {
 	if len(forkURLs) == 0 {
 		return nil, nil
 	}
-	return cache.QueryLocked(func(db *sql.DB) ([]notifications.Notification, error) {
-		ph := strings.Repeat("?,", len(forkURLs))
-		ph = ph[:len(ph)-1]
-		// Detect draft→ready transition: the edit sets draft=0, and the original
-		// canonical commit's message contains "Draft: true" in the header.
-		// We check the raw commit message instead of review_items because
-		// applyEditToCanonical copies the latest draft value to the canonical row.
-		query := `
-			SELECT ec.repo_url, ec.hash, ec.branch,
-			       COALESCE(ec.origin_author_name, ec.author_name),
-			       COALESCE(ec.origin_author_email, ec.author_email),
-			       COALESCE(ec.origin_time, ec.timestamp),
-			       pr.resolved_message,
-			       pr.repo_url, pr.hash, pr.branch, pr.base,
-			       CASE WHEN nr.repo_url IS NOT NULL THEN 1 ELSE 0 END
-			FROM core_commits_version cv
-			JOIN core_commits ec ON cv.edit_repo_url = ec.repo_url AND cv.edit_hash = ec.hash AND cv.edit_branch = ec.branch
-			JOIN review_items ri_edit ON cv.edit_repo_url = ri_edit.repo_url AND cv.edit_hash = ri_edit.hash AND cv.edit_branch = ri_edit.branch
-			JOIN core_commits c_canon ON cv.canonical_repo_url = c_canon.repo_url AND cv.canonical_hash = c_canon.hash AND cv.canonical_branch = c_canon.branch
-			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash AND cv.canonical_branch = pr.branch
-			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
-			WHERE c_canon.message LIKE '%' || char(10) || 'Draft: true' || '%'
-			  AND ri_edit.draft = 0
-			  AND pr.type = 'pull-request'
-			  AND pr.repo_url IN (` + ph + `)
-			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?
-			  AND NOT pr.is_retracted`
-		args := make([]interface{}, 0, len(forkURLs)+2)
-		for _, u := range forkURLs {
-			args = append(args, u)
+	branch := gitmsg.GetExtBranch(workdir, "review")
+	prRes := GetPullRequestsWithForks(workspaceURL, branch, forkURLs, nil, "", 0)
+	if !prRes.Success {
+		return nil, errors.New(prRes.Error.Message)
+	}
+	var result []notifications.Notification
+	for _, pr := range prRes.Data {
+		if pr.Repository == workspaceURL {
+			continue
 		}
-		args = append(args, userEmail)
-		if unreadOnly {
-			query += " AND nr.repo_url IS NULL"
+		vRes := GetPRVersions(pr.ID, workspaceURL)
+		if !vRes.Success {
+			continue
 		}
-		query += " ORDER BY ec.timestamp DESC"
-		rows, err := db.Query(query, args...)
-		if err != nil {
-			return nil, err
+		for _, edit := range draftReadyEdits(vRes.Data) {
+			notif, ok := draftReadyNotif(pr, edit, userEmail, unreadOnly)
+			if ok {
+				result = append(result, notif)
+			}
 		}
-		defer rows.Close()
-		var result []notifications.Notification
-		for rows.Next() {
-			var ecRepoURL, ecHash, ecBranch, actorName, actorEmail string
-			var ts sql.NullString
-			var prMessage sql.NullString
-			var prRepoURL, prHash, prBranch string
-			var base sql.NullString
-			var isRead int
-			if err := rows.Scan(
-				&ecRepoURL, &ecHash, &ecBranch,
-				&actorName, &actorEmail, &ts,
-				&prMessage,
-				&prRepoURL, &prHash, &prBranch, &base,
-				&isRead,
-			); err != nil {
-				return nil, err
-			}
-			item := ReviewItem{RepoURL: prRepoURL, Base: base}
-			if !forkPRTargetsWorkspace(item, workspaceURL) {
-				continue
-			}
-			var timestamp time.Time
-			if ts.Valid {
-				timestamp, _ = time.Parse(time.RFC3339, ts.String)
-			}
-			subject := ""
-			if prMessage.Valid {
-				content := protocol.ExtractCleanContent(prMessage.String)
-				subject, _ = protocol.SplitSubjectBody(content)
-			}
-			rn := ReviewNotification{
-				ID:         protocol.CreateRef(protocol.RefTypeCommit, ecHash, ecRepoURL, ecBranch),
-				Type:       "pr-ready",
-				RepoURL:    ecRepoURL,
-				Hash:       ecHash,
-				Branch:     ecBranch,
-				PRSubject:  subject,
-				PRRepoURL:  prRepoURL,
-				PRHash:     prHash,
-				PRBranch:   prBranch,
-				ActorName:  actorName,
-				ActorEmail: actorEmail,
-				Timestamp:  timestamp,
-				IsRead:     isRead == 1,
-			}
-			result = append(result, notifications.Notification{
-				RepoURL:   ecRepoURL,
-				Hash:      ecHash,
-				Branch:    ecBranch,
-				Type:      "pr-ready",
-				Source:    "review",
-				Item:      rn,
-				Actor:     notifications.Actor{Name: actorName, Email: actorEmail},
-				ActorRepo: ecRepoURL,
-				Timestamp: timestamp,
-				IsRead:    isRead == 1,
-			})
+	}
+	return result, nil
+}
+
+// draftReadyEdits returns the versions that clear draft where the version before them set it.
+func draftReadyEdits(versions []PRVersion) []PRVersion {
+	var out []PRVersion
+	for i := 1; i < len(versions); i++ {
+		if versions[i-1].Fields["draft"] == "true" && versions[i].Fields["draft"] != "true" && !versions[i].IsRetracted {
+			out = append(out, versions[i])
 		}
-		return result, rows.Err()
+	}
+	return out
+}
+
+// draftReadyNotif builds the pr-ready notification for one transition edit, keyed by the edit hash.
+func draftReadyNotif(pr PullRequest, edit PRVersion, userEmail string, unreadOnly bool) (notifications.Notification, bool) {
+	actorName, actorEmail := edit.AuthorName, edit.AuthorEmail
+	if name := edit.Fields["origin-author-name"]; name != "" {
+		actorName = name
+	}
+	if email := edit.Fields["origin-author-email"]; email != "" {
+		actorEmail = email
+	}
+	if actorEmail == userEmail {
+		return notifications.Notification{}, false
+	}
+	timestamp := edit.Timestamp
+	if originTime, err := time.Parse(time.RFC3339, edit.Fields["origin-time"]); err == nil {
+		timestamp = originTime
+	}
+	isRead := isNotificationRead(edit.RepoURL, edit.CommitHash, edit.Branch)
+	if unreadOnly && isRead {
+		return notifications.Notification{}, false
+	}
+	prParsed := protocol.ParseRef(pr.ID)
+	rn := ReviewNotification{
+		ID:         protocol.CreateRef(protocol.RefTypeCommit, edit.CommitHash, edit.RepoURL, edit.Branch),
+		Type:       "pr-ready",
+		RepoURL:    edit.RepoURL,
+		Hash:       edit.CommitHash,
+		Branch:     edit.Branch,
+		PRSubject:  pr.Subject,
+		PRRepoURL:  pr.Repository,
+		PRHash:     prParsed.Value,
+		PRBranch:   pr.Branch,
+		ActorName:  actorName,
+		ActorEmail: actorEmail,
+		Timestamp:  timestamp,
+		IsRead:     isRead,
+	}
+	return notifications.Notification{
+		RepoURL:   edit.RepoURL,
+		Hash:      edit.CommitHash,
+		Branch:    edit.Branch,
+		Type:      "pr-ready",
+		Source:    "review",
+		Item:      rn,
+		Actor:     notifications.Actor{Name: actorName, Email: actorEmail},
+		ActorRepo: edit.RepoURL,
+		Timestamp: timestamp,
+		IsRead:    isRead,
+	}, true
+}
+
+// isNotificationRead reports whether a commit key carries a read marker.
+func isNotificationRead(repoURL, hash, branch string) bool {
+	read, err := cache.QueryLocked(func(db *sql.DB) (bool, error) {
+		var count int
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_reads
+			WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch).Scan(&count)
+		return count > 0, err
 	})
+	return err == nil && read
 }
 
 // countUnreadDraftReady counts unread draft-ready notifications.
-func countUnreadDraftReady(workspaceURL, userEmail string, forkURLs []string) (int, error) {
-	if len(forkURLs) == 0 {
-		return 0, nil
-	}
-	notifs, err := getDraftReadyNotifications(workspaceURL, userEmail, forkURLs, true)
+func countUnreadDraftReady(workdir, workspaceURL, userEmail string, forkURLs []string) (int, error) {
+	notifs, err := getDraftReadyNotifications(workdir, workspaceURL, userEmail, forkURLs, true)
 	if err != nil {
 		return 0, err
 	}
