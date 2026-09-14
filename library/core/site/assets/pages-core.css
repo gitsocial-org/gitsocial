@@ -74,10 +74,14 @@
        control tier (≤4px highlight marks, swatches, bar caps, the 50% circle):
        they are marks on content, not control surfaces. */
     --r-pill: 999px; --r-panel: 10px; --r-ctl: 6px;
+    /* Spacing scale. Every padding, margin, gap and offset in either sheet is a
+       step of it, or zero, or a mark under 4px (the radius rule's exception).
+       Six steps, nearest step wins; a value off the scale is a spec entry. */
+    --sp-1: 0.2rem; --sp-2: 0.4rem; --sp-3: 0.6rem; --sp-4: 0.9rem; --sp-5: 1.2rem; --sp-6: 2.5rem;
     /* Surface padding pairs shared by comparable components: panel bodies,
        rows inside panels, bordered controls. One-off layout paddings (dense
        tree rows, the big load-more pill) stay local, as do margins/gaps. */
-    --pad-panel: 0.75rem 0.9rem; --pad-row: 0.4rem 0.75rem; --pad-ctl: 0.2rem 0.6rem;
+    --pad-panel: var(--sp-3) var(--sp-4); --pad-row: var(--sp-2) var(--sp-3); --pad-ctl: var(--sp-1) var(--sp-3);
     /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
        span exactly the sidebar's width and sit at its horizontal position
        without hardcoding — and so the pre-rendered pages' #gs-page shell below
@@ -157,8 +161,8 @@
      components — the sticky, viewport-tall .nav column, the viewport-pinned
      footer, the collapse and drawer states — none of which a static page has. */
   .nav-header {
-    display: flex; align-items: center; gap: 0.4rem;
-    padding-bottom: 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding-bottom: var(--sp-3); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--line);
   }
   .repo-title {
     flex: 1 1 auto; min-width: 0;
@@ -172,21 +176,21 @@
   #nav .nav-section, .nav-list .nav-section, .nav-footer {
     font-family: var(--mono); font-size: var(--fs-dense); text-transform: uppercase;
     letter-spacing: 0.06em; color: var(--muted); opacity: 0.7;
-    padding: 0.4rem 0.5rem 0.1rem;
+    padding: var(--sp-2) var(--sp-3) 0.1rem;
   }
-  #nav .nav-group a, .nav-list .nav-group a { margin-left: 1.5rem; }
+  #nav .nav-group a, .nav-list .nav-group a { margin-left: var(--sp-5); }
   #nav a, #nav .nav-disabled, .nav-list a {
-    display: flex; align-items: center; padding: 0.26rem 0.5rem; border-radius: var(--r-ctl);
+    display: flex; align-items: center; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-ctl);
     font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
   }
   #nav a:hover, .nav-list a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
   #nav a.active, .nav-list a.active { color: var(--text); font-weight: 600; background: var(--link-t2); }
   .nav-icon {
     flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
-    width: 1rem; margin-right: 0.5rem; color: inherit;
+    width: 1rem; margin-right: var(--sp-3); color: inherit;
     font-family: var(--mono); font-size: var(--fs-ui); line-height: 1;
   }
-  .foot-brand { display: inline-flex; align-items: center; gap: 0.7rem; color: var(--muted); }
+  .foot-brand { display: inline-flex; align-items: center; gap: var(--sp-3); color: var(--muted); }
   .foot-brand:hover { text-decoration: none; color: var(--text); }
   .logo-small { width: 18px; height: 18px; color: inherit; display: block; }
   .nav-footer .logo-small { width: 14px; height: 14px; }
@@ -202,12 +206,12 @@
      front page — as the same heading, the same cards, and the same centered
      chevron control (a button in the app, an anchor on the page). */
   .home-activity-head {
-    font-size: var(--fs-h2); margin: 1.5rem 0 0.5rem;
-    border-bottom: 1px solid var(--line); padding-bottom: 0.25rem;
+    font-size: var(--fs-h2); margin: var(--sp-5) 0 var(--sp-3);
+    border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1);
   }
   .show-more {
     display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
-    width: 100%; margin-top: 0.5rem; padding: 0.35rem;
+    width: 100%; margin-top: var(--sp-3); padding: var(--sp-2);
     background: transparent; border: none; cursor: pointer;
     font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
   }
@@ -224,7 +228,7 @@
      the first heading. Out of flow, the nav cannot size a row. */
   #gs-page {
     position: relative; max-width: var(--shell-max); margin: 0 auto;
-    padding: var(--shell-pad) var(--shell-pad) 2rem calc(var(--shell-pad) + var(--nav-w) + var(--nav-gap));
+    padding: var(--shell-pad) var(--shell-pad) var(--sp-6) calc(var(--shell-pad) + var(--nav-w) + var(--nav-gap));
     /* width:100% is load-bearing under pages-full's body flex frame: as a flex
        item with auto cross-axis margins, #gs-page would otherwise shrink-to-fit
        with a min-content floor — the widest code line — overflowing a phone
@@ -247,7 +251,7 @@
      short static column does not — under it the credit would strand far below
      the last link. The id weight is what beats that rule once full lands. */
   #gs-page .nav-footer {
-    position: static; width: auto; margin-top: 1.2rem; padding: 0.5rem 0.5rem 0;
+    position: static; width: auto; margin-top: var(--sp-5); padding: var(--sp-3) var(--sp-3) 0;
     border-top: 1px solid var(--line); background: none; font-size: 0.5rem;
   }
   /* The page's boot state. NOTHING is hidden until a script adds .gs-boot to
@@ -259,7 +263,7 @@
      2.5rem of air) so the boot and the app speak the same visual language. */
   html.gs-boot #gs-page { display: none; }
   html.gs-boot body::before {
-    content: "Loading…"; display: block; padding: 2.5rem 0;
+    content: "Loading…"; display: block; padding: var(--sp-6) 0;
     text-align: center; color: var(--muted);
   }
   /* Page-structural rules: the bare-element voice of the generated documents.
@@ -267,20 +271,20 @@
      .markdown, .show-more, …) deliberately is NOT restated here — it comes
      from pages-full.css, so the pages render the app's own treatment by
      construction. */
-  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: 0.3rem 0 0.2rem; }
-  :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: 0.2rem 0 0.4rem; }
-  :where(#gs-page) p { margin: 1rem 0; }
+  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: var(--sp-2) 0 var(--sp-1); }
+  :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
+  :where(#gs-page) p { margin: var(--sp-4) 0; }
   :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
   :where(#gs-page) footer { font-size: var(--fs-dense); }
-  :where(#gs-page) footer a { margin-right: 0.9rem; }
-  :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: 0.9rem; }
+  :where(#gs-page) footer a { margin-right: var(--sp-4); }
+  :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: var(--sp-5); padding-top: var(--sp-4); }
   :where(#gs-page) pre {
-    font-size: var(--fs-dense); line-height: 1; overflow-x: auto; margin: 1em 0;
-    background: var(--panel); padding: 0.7rem; border: 1px solid var(--line);
+    font-size: var(--fs-dense); line-height: 1; overflow-x: auto; margin: var(--sp-3) 0;
+    background: var(--panel); padding: var(--sp-3); border: 1px solid var(--line);
   }
-  :where(#gs-page) footer { margin-top: 2.2rem; border-top: 1px solid var(--line); padding-top: 0.8rem; }
-  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: 1rem 0; font-family: var(--mono); font-size: var(--fs-ui); }
-  :where(#gs-page) ul.files li { border-top: 1px solid var(--line); padding: 0.4rem 0; }
+  :where(#gs-page) footer { margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4); }
+  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: var(--sp-4) 0; font-family: var(--mono); font-size: var(--fs-ui); }
+  :where(#gs-page) ul.files li { border-top: 1px solid var(--line); padding: var(--sp-2) 0; }
   /* Containment guards, duplicated from pages-full: that sheet loads async on
      the pre-rendered pages, so during its load window wide README content must
      already scroll inside its own box instead of widening the page past a phone
@@ -290,28 +294,28 @@
   :where(#gs-page) img { max-width: 100%; height: auto; }
   /* A reply is a card, not a section, so without this it has no separation at
      all during the async sheet's load window. Full's version wins once it lands. */
-  :where(#gs-page) .card.comment, :where(#gs-page) .card.feedback { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0.5rem 0.7rem; margin: 0.6rem 0; }
+  :where(#gs-page) .card.comment, :where(#gs-page) .card.feedback { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-3); margin: var(--sp-3) 0; }
   /* The pages' meta lines are static text joined with literal separators, not
      the app's flex rows: block flow, flush left, with only a card's meta
      keeping the app's glyph-column indent. The id weight is deliberate — it
-     must beat pages-full.css's .meta (inline-flex + 1.75rem indent). */
+     must beat pages-full.css's .meta (inline-flex + the glyph-column indent). */
   #gs-page .meta { font-size: var(--fs-ui); color: var(--muted); display: block; margin-left: 0; }
-  #gs-page .card .meta { margin-top: 0.25rem; margin-left: 1.75rem; }
+  #gs-page .card .meta { margin-top: var(--sp-1); margin-left: calc(var(--sp-5) + var(--sp-3)); }
   #gs-page .tomb { color: var(--muted); font-style: italic; }
   /* The pages' "See more" is an anchor where the app's is a button; keep the
      anchor from underlining under the base a:hover rule. */
   #gs-page .show-more, #gs-page .show-more:hover { text-decoration: none; }
   @media (max-width: 720px) {
-    #gs-page { padding: 0.75rem; }
+    #gs-page { padding: var(--sp-3); }
     /* No drawer without JS (the app's hamburger is a scripted control), so the
        sidebar leads the page as a wrapped row of the same nav items, section
        labels reading inline as the group headings they are. Nothing is hidden:
        every served byte stays visible to a crawler and a no-JS reader. */
-    #gs-page > .page-nav { position: static; width: auto; margin-bottom: 0.6rem; }
-    #gs-page .nav-list, #gs-page .nav-list .nav-group { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; }
+    #gs-page > .page-nav { position: static; width: auto; margin-bottom: var(--sp-3); }
+    #gs-page .nav-list, #gs-page .nav-list .nav-group { flex-direction: row; flex-wrap: wrap; gap: var(--sp-2); }
     #gs-page .nav-list .nav-group { width: 100%; }
     #gs-page .nav-list .nav-group a { margin-left: 0; }
     /* The credit follows that row as a quiet footnote rather than a ruled band
        across the page (on desktop it closes a column; here it closes nothing). */
-    #gs-page .nav-footer { margin-top: 0.4rem; padding: 0.2rem 0; border-top: none; }
+    #gs-page .nav-footer { margin-top: var(--sp-2); padding: var(--sp-1) 0; border-top: none; }
   }
