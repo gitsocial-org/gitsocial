@@ -253,9 +253,10 @@ func TestIsHex(t *testing.T) {
 	}
 }
 
-// TestParseRange covers single-range parsing against RFC 7233 semantics, with
-// the deliberate narrowing locals3 documents: anything it does not serve as a
-// 206 comes back ok=false and is answered whole.
+// TestParseRange covers single-range parsing against RFC 7233 semantics: a
+// satisfiable range is served as a 206, a range starting past the object is
+// refused with a 416, and a malformed or unsupported header is ignored and the
+// object served whole as a 200.
 func TestParseRange(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -263,47 +264,85 @@ func TestParseRange(t *testing.T) {
 		size   int
 		start  int
 		end    int
-		ok     bool
+		status int
 	}{
-		{"closed range", "bytes=0-4", 10, 0, 5, true},
-		{"interior range", "bytes=3-6", 10, 3, 7, true},
-		{"single byte", "bytes=2-2", 10, 2, 3, true},
-		{"final byte", "bytes=9-9", 10, 9, 10, true},
-		{"open ended", "bytes=5-", 10, 5, 10, true},
-		{"open ended from zero", "bytes=0-", 10, 0, 10, true},
-		{"whole object", "bytes=0-9", 10, 0, 10, true},
-		{"end past size is clamped", "bytes=8-99", 10, 8, 10, true},
-		{"surrounding space tolerated", " bytes=1-2 ", 10, 1, 3, true},
-		// Not satisfiable or not supported: the caller serves the whole body.
-		// Client.GetRange slices a 200 locally, so a whole body is a safe answer
-		// for all of these, though a real bucket answers 416 for a start past
-		// the end (see the QA report).
-		{"start at size", "bytes=10-", 10, 0, 0, false},
-		{"start past size", "bytes=99-", 10, 0, 0, false},
-		{"start after end", "bytes=5-3", 10, 0, 0, false},
-		{"empty object", "bytes=0-", 0, 0, 0, false},
-		{"suffix range", "bytes=-5", 10, 0, 0, false},
-		{"multi range", "bytes=0-1,4-5", 10, 0, 0, false},
-		{"non-bytes unit", "items=0-1", 10, 0, 0, false},
-		{"missing header", "", 10, 0, 0, false},
-		{"no dash", "bytes=5", 10, 0, 0, false},
-		{"non-numeric start", "bytes=a-4", 10, 0, 0, false},
-		{"non-numeric end", "bytes=0-z", 10, 0, 0, false},
-		{"overflowing start", "bytes=99999999999999999999-", 10, 0, 0, false},
-		{"negative start", "bytes=-1-5", 10, 0, 0, false},
+		{"closed range", "bytes=0-4", 10, 0, 5, 206},
+		{"interior range", "bytes=3-6", 10, 3, 7, 206},
+		{"single byte", "bytes=2-2", 10, 2, 3, 206},
+		{"final byte", "bytes=9-9", 10, 9, 10, 206},
+		{"open ended", "bytes=5-", 10, 5, 10, 206},
+		{"open ended from zero", "bytes=0-", 10, 0, 10, 206},
+		{"whole object", "bytes=0-9", 10, 0, 10, 206},
+		{"end past size is clamped", "bytes=8-99", 10, 8, 10, 206},
+		{"surrounding space tolerated", " bytes=1-2 ", 10, 1, 3, 206},
+		{"suffix range", "bytes=-5", 10, 5, 10, 206},
+		{"suffix of one byte", "bytes=-1", 10, 9, 10, 206},
+		{"suffix past size is clamped", "bytes=-99", 10, 0, 10, 206},
+		// Unsatisfiable: the range starts at or past the object's last byte.
+		{"start at size", "bytes=10-", 10, 0, 0, 416},
+		{"start past size", "bytes=99-", 10, 0, 0, 416},
+		{"empty object", "bytes=0-", 0, 0, 0, 416},
+		{"empty suffix", "bytes=-0", 10, 0, 0, 416},
+		{"suffix of an empty object", "bytes=-5", 0, 0, 0, 416},
+		// Malformed or unsupported: the header is ignored and the body served whole.
+		{"start after end", "bytes=5-3", 10, 0, 0, 200},
+		{"multi range", "bytes=0-1,4-5", 10, 0, 0, 200},
+		{"non-bytes unit", "items=0-1", 10, 0, 0, 200},
+		{"missing header", "", 10, 0, 0, 200},
+		{"no dash", "bytes=5", 10, 0, 0, 200},
+		{"non-numeric start", "bytes=a-4", 10, 0, 0, 200},
+		{"non-numeric end", "bytes=0-z", 10, 0, 0, 200},
+		{"overflowing start", "bytes=99999999999999999999-", 10, 0, 0, 200},
+		{"negative start", "bytes=-1-5", 10, 0, 0, 200},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			start, end, ok := parseRange(c.header, c.size)
-			if ok != c.ok {
-				t.Fatalf("parseRange(%q, %d) ok = %v, want %v", c.header, c.size, ok, c.ok)
+			start, end, status := parseRange(c.header, c.size)
+			if status != c.status {
+				t.Fatalf("parseRange(%q, %d) status = %d, want %d", c.header, c.size, status, c.status)
 			}
-			// The bounds only carry meaning when ok; the caller ignores them
-			// otherwise and serves the whole body.
-			if ok && (start != c.start || end != c.end) {
+			// The bounds only carry meaning for a 206; the caller ignores them
+			// otherwise and serves the whole body or a 416.
+			if status == 206 && (start != c.start || end != c.end) {
 				t.Errorf("parseRange(%q, %d) = [%d, %d), want [%d, %d)", c.header, c.size, start, end, c.start, c.end)
 			}
 		})
+	}
+}
+
+// TestNormalizeETag checks the spellings an If-Match compare has to see
+// through: the quotes a client may drop and the weak marker a compressing CDN
+// adds.
+func TestNormalizeETag(t *testing.T) {
+	const want = "5d41402abc4b2a76b9719d911017c592"
+	for _, in := range []string{`"5d41402abc4b2a76b9719d911017c592"`, "5d41402abc4b2a76b9719d911017c592", `W/"5d41402abc4b2a76b9719d911017c592"`, ` "5d41402abc4b2a76b9719d911017c592" `} {
+		if got := normalizeETag(in); got != want {
+			t.Errorf("normalizeETag(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestListLimit checks the page size a listing honors: max-keys when it is
+// usable, the S3 maximum otherwise.
+func TestListLimit(t *testing.T) {
+	cases := map[string]int{"": 1000, "2": 2, "1000": 1000, "1001": 1000, "0": 1000, "-3": 1000, "many": 1000}
+	for raw, want := range cases {
+		if got := listLimit(raw); got != want {
+			t.Errorf("listLimit(%q) = %d, want %d", raw, got, want)
+		}
+	}
+}
+
+// TestContinuationTokenRoundTrip checks a token carries the key a listing
+// resumes after, and that an undecodable one starts from the beginning.
+func TestContinuationTokenRoundTrip(t *testing.T) {
+	for _, key := range []string{"refs/heads/main", "refs/heads/foo&bar", ""} {
+		if got := continuationKey(continuationToken(key)); got != key {
+			t.Errorf("continuationKey(continuationToken(%q)) = %q", key, got)
+		}
+	}
+	if got := continuationKey("not base64!!"); got != "" {
+		t.Errorf("continuationKey of a malformed token = %q, want empty", got)
 	}
 }
 

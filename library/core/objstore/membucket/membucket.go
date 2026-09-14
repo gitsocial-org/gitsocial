@@ -12,6 +12,7 @@ package membucket
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -197,6 +198,46 @@ func failStatus(status int) int {
 // ETag returns the quoted md5 hex of bytes, matching S3 ETag shape.
 func ETag(b []byte) string { return fmt.Sprintf("%q", fmt.Sprintf("%x", md5.Sum(b))) }
 
+// maxKeysLimit is the page size a listing serves, and the ceiling S3 caps max-keys at.
+const maxKeysLimit = 1000
+
+// normalizeETag strips an ETag's weak marker and quotes, so a compare ignores spelling.
+func normalizeETag(value string) string {
+	return strings.Trim(strings.TrimPrefix(strings.TrimSpace(value), "W/"), `"`)
+}
+
+// ifMatches reports whether an If-Match value matches the stored object: "*" matches any existing object, an ETag matches its own.
+func ifMatches(match, etag string, exists bool) bool {
+	if !exists {
+		return false
+	}
+	if strings.TrimSpace(match) == "*" {
+		return true
+	}
+	return normalizeETag(match) == normalizeETag(etag)
+}
+
+// listLimit returns the page size a listing honors: the max-keys parameter, capped at the S3 maximum.
+func listLimit(raw string) int {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > maxKeysLimit {
+		return maxKeysLimit
+	}
+	return n
+}
+
+// continuationToken encodes the last key of a page into the token that resumes after it.
+func continuationToken(key string) string { return base64.StdEncoding.EncodeToString([]byte(key)) }
+
+// continuationKey decodes a continuation token into the key a listing resumes after; an undecodable token lists from the start.
+func continuationKey(token string) string {
+	decoded, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return ""
+	}
+	return string(decoded)
+}
+
 // KeyOf strips the leading "/<bucket>/" so stored keys are bucket-relative.
 func KeyOf(path string) string {
 	p := strings.TrimPrefix(path, "/")
@@ -275,7 +316,7 @@ func (m *Bucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if match := r.Header.Get("If-Match"); match != "" {
 			m.ifMatchTries++
-			if m.rejectIfMatch || !exists || ETag(existing.body) != match {
+			if m.rejectIfMatch || !ifMatches(match, ETag(existing.body), exists) {
 				w.WriteHeader(412)
 				return
 			}
@@ -292,27 +333,34 @@ func (m *Bucket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// list answers a ListObjectsV2 request over the in-memory keys under prefix.
+// list answers a ListObjectsV2 request over the in-memory keys under prefix, one max-keys page per request.
 func (m *Bucket) list(w http.ResponseWriter, r *http.Request) {
-	prefix := r.URL.Query().Get("prefix")
+	query := r.URL.Query()
+	prefix := query.Get("prefix")
+	after := continuationKey(query.Get("continuation-token"))
 	var keys []string
 	for k := range m.objs {
-		if strings.HasPrefix(k, prefix) {
+		if strings.HasPrefix(k, prefix) && k > after {
 			keys = append(keys, k)
 		}
 	}
 	sort.Strings(keys)
-	truncated := "false"
-	if m.truncateLists {
-		truncated = "true"
+	limit := listLimit(query.Get("max-keys"))
+	truncated := len(keys) > limit
+	if truncated {
+		keys = keys[:limit]
 	}
-	fmt.Fprintf(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>%s</IsTruncated>`, truncated)
+	fmt.Fprintf(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>%t</IsTruncated>`, truncated || m.truncateLists)
 	for _, k := range keys {
 		// Escape the key, as a real bucket and locals3 both do: "&" is legal in a
 		// git ref name and writing it raw makes the whole document unparseable.
 		fmt.Fprint(w, "<Contents><Key>")
 		_ = xml.EscapeText(w, []byte(k))
 		fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", ETag(m.objs[k].body))
+	}
+	// The injected truncation models a provider that offers no token, so it gets none.
+	if truncated && !m.truncateLists {
+		fmt.Fprintf(w, "<NextContinuationToken>%s</NextContinuationToken>", continuationToken(keys[len(keys)-1]))
 	}
 	fmt.Fprint(w, `</ListBucketResult>`)
 }

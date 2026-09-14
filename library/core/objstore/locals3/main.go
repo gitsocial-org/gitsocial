@@ -7,6 +7,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -43,6 +44,102 @@ func withinRoot(path string) bool {
 
 // encSuffix names the sidecar file recording an object's Content-Encoding; no git ref or object key ends in it.
 const encSuffix = ".gsenc"
+
+// objName names the file holding the bytes of a key that is also a directory prefix of other keys; no git ref or object key ends in it.
+const objName = ".gsobj"
+
+// maxKeysLimit is the page size a listing serves, and the ceiling S3 caps max-keys at.
+const maxKeysLimit = 1000
+
+// objectPath returns the file holding a key's bytes: the key's own path, or the object file inside it when the key is also a directory prefix.
+func objectPath(key string) string {
+	path := diskPath(key)
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return filepath.Join(path, objName)
+	}
+	return path
+}
+
+// makeWritable prepares the directories an object path needs; S3 keys are flat, so an ancestor holding an object becomes a directory with that object inside it.
+func makeWritable(path string) error {
+	for p := filepath.Dir(path); p != root && withinRoot(p); p = filepath.Dir(p) {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			break
+		}
+		if err := fileToDir(p); err != nil {
+			return fmt.Errorf("store %s under its own key: %w", p, err)
+		}
+		break
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+	}
+	return nil
+}
+
+// fileToDir turns an object file into a directory holding that object, carrying its Content-Encoding sidecar along.
+func fileToDir(path string) error {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	enc, encErr := os.ReadFile(path + encSuffix)
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	if err := os.WriteFile(filepath.Join(path, objName), body, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", filepath.Join(path, objName), err)
+	}
+	if encErr != nil {
+		return nil
+	}
+	os.Remove(path + encSuffix)
+	return os.WriteFile(filepath.Join(path, objName)+encSuffix, enc, 0o644)
+}
+
+// normalizeETag strips an ETag's weak marker and quotes, so a compare ignores spelling.
+func normalizeETag(value string) string {
+	return strings.Trim(strings.TrimPrefix(strings.TrimSpace(value), "W/"), `"`)
+}
+
+// ifMatches reports whether an If-Match value matches the stored object: "*" matches any existing object, an ETag matches its own.
+func ifMatches(match, etag string, exists bool) bool {
+	if !exists {
+		return false
+	}
+	if strings.TrimSpace(match) == "*" {
+		return true
+	}
+	return normalizeETag(match) == normalizeETag(etag)
+}
+
+// listLimit returns the page size a listing honors: the max-keys parameter, capped at the S3 maximum.
+func listLimit(raw string) int {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > maxKeysLimit {
+		return maxKeysLimit
+	}
+	return n
+}
+
+// continuationToken encodes the last key of a page into the token that resumes after it.
+func continuationToken(key string) string { return base64.StdEncoding.EncodeToString([]byte(key)) }
+
+// continuationKey decodes a continuation token into the key a listing resumes after; an undecodable token lists from the start.
+func continuationKey(token string) string {
+	decoded, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return ""
+	}
+	return string(decoded)
+}
 
 // readEnc returns the stored Content-Encoding for a disk path ("" when none).
 func readEnc(path string) string {
@@ -131,31 +228,55 @@ func isDigits(s string) bool {
 	return true
 }
 
-// parseRange parses a single byte-range header into a half-open range; ok is false for an absent, multi-range or unsatisfiable one, which is served whole.
-func parseRange(header string, size int) (start, end int, ok bool) {
+// parseRange parses a single byte-range header into a half-open range and the status it is answered with: 206 for a satisfiable range, 416 for one past the object, 200 for an absent, multi-range or malformed header, which is served whole.
+func parseRange(header string, size int) (start, end, status int) {
 	spec, found := strings.CutPrefix(strings.TrimSpace(header), "bytes=")
 	if !found || strings.Contains(spec, ",") {
-		return 0, 0, false
+		return 0, 0, 200
 	}
 	from, to, found := strings.Cut(spec, "-")
-	if !found || from == "" {
-		return 0, 0, false // suffix ranges ("-500") are not used by the reader
+	if !found {
+		return 0, 0, 200
+	}
+	if from == "" {
+		return suffixRange(to, size)
 	}
 	start, err := strconv.Atoi(from)
-	if err != nil || start >= size {
-		return 0, 0, false
+	if err != nil {
+		return 0, 0, 200
 	}
 	end = size
 	if to != "" {
-		last, err := strconv.Atoi(to)
-		if err != nil {
-			return 0, 0, false
+		last, convErr := strconv.Atoi(to)
+		if convErr != nil {
+			return 0, 0, 200
 		}
 		if end = last + 1; end > size {
 			end = size
 		}
 	}
-	return start, end, end > start
+	if start >= size {
+		return 0, 0, 416
+	}
+	if end <= start {
+		return 0, 0, 200
+	}
+	return start, end, 206
+}
+
+// suffixRange resolves a suffix range ("bytes=-500") to the object's last n bytes, clamped to its size.
+func suffixRange(spec string, size int) (start, end, status int) {
+	n, err := strconv.Atoi(spec)
+	if err != nil {
+		return 0, 0, 200
+	}
+	if n <= 0 || size == 0 {
+		return 0, 0, 416
+	}
+	if n > size {
+		n = size
+	}
+	return size - n, size, 206
 }
 
 // isHex reports whether s is non-empty and all hex digits.
@@ -190,7 +311,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		if r.URL.Query().Get("list-type") == "2" {
 			bucket := strings.SplitN(key, "/", 2)[0]
-			prefix := r.URL.Query().Get("prefix")
+			query := r.URL.Query()
+			prefix := query.Get("prefix")
+			after := continuationKey(query.Get("continuation-token"))
 			base := filepath.Join(root, bucket)
 			var keys []string
 			// A walk error surfaces per entry and a missing base lists empty, as an empty bucket does.
@@ -203,20 +326,26 @@ func handle(w http.ResponseWriter, r *http.Request) {
 					return nil
 				}
 				rel = filepath.ToSlash(rel)
-				if strings.HasSuffix(rel, encSuffix) {
+				if strings.HasSuffix(rel, encSuffix) || rel == objName {
 					return nil
 				}
-				if strings.HasPrefix(rel, prefix) {
+				rel = strings.TrimSuffix(rel, "/"+objName)
+				if strings.HasPrefix(rel, prefix) && rel > after {
 					keys = append(keys, rel)
 				}
 				return nil
 			})
 			sort.Strings(keys)
-			fmt.Fprint(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>false</IsTruncated>`)
+			limit := listLimit(query.Get("max-keys"))
+			truncated := len(keys) > limit
+			if truncated {
+				keys = keys[:limit]
+			}
+			fmt.Fprintf(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>%t</IsTruncated>`, truncated)
 			for _, k := range keys {
 				// Emit the content md5 as the ETag: a caller that fingerprints a listing needs it to track an object's value, not its key's presence.
 				etag := ""
-				if body, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(k))); err == nil {
+				if body, err := os.ReadFile(objectPath(bucket + "/" + k)); err == nil {
 					etag = etagOf(body)
 				}
 				// Escape the key, since "&" is legal in a ref name and would make the whole document unparseable.
@@ -224,10 +353,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				_ = xml.EscapeText(w, []byte(k))
 				fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", etag)
 			}
+			if truncated {
+				fmt.Fprintf(w, "<NextContinuationToken>%s</NextContinuationToken>", continuationToken(keys[len(keys)-1]))
+			}
 			fmt.Fprint(w, `</ListBucketResult>`)
 			return
 		}
-		path := diskPath(key)
+		path := objectPath(key)
 		body, err := os.ReadFile(path)
 		if err != nil {
 			w.WriteHeader(404)
@@ -246,16 +378,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// The browser reads a packed object as one byte range, so a bucket must answer 206 with Content-Range.
-		if start, end, ok := parseRange(r.Header.Get("Range"), len(body)); ok {
+		switch start, end, status := parseRange(r.Header.Get("Range"), len(body)); status {
+		case 416:
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", len(body)))
+			w.WriteHeader(416)
+		case 206:
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end-1, len(body)))
 			w.Header().Set("Content-Length", fmt.Sprintf("%d", end-start))
 			w.WriteHeader(206)
 			_, _ = w.Write(body[start:end])
-			return
+		default:
+			_, _ = w.Write(body)
 		}
-		_, _ = w.Write(body)
 	case http.MethodHead:
-		path := diskPath(key)
+		path := objectPath(key)
 		body, err := os.ReadFile(path)
 		if err != nil {
 			w.WriteHeader(404)
@@ -272,18 +408,18 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	case http.MethodPut:
 		body, _ := io.ReadAll(r.Body)
-		path := diskPath(key)
+		path := objectPath(key)
 		existing, err := os.ReadFile(path)
 		exists := err == nil
 		if r.Header.Get("If-None-Match") == "*" && exists {
 			w.WriteHeader(412)
 			return
 		}
-		if match := r.Header.Get("If-Match"); match != "" && (!exists || etagOf(existing) != match) {
+		if match := r.Header.Get("If-Match"); match != "" && !ifMatches(match, etagOf(existing), exists) {
 			w.WriteHeader(412)
 			return
 		}
-		if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+		if mkErr := makeWritable(path); mkErr != nil {
 			w.WriteHeader(500)
 			return
 		}
@@ -299,7 +435,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", etagOf(body))
 		w.WriteHeader(200)
 	case http.MethodDelete:
-		path := diskPath(key)
+		path := objectPath(key)
 		os.Remove(path)
 		os.Remove(path + encSuffix)
 		w.WriteHeader(204)

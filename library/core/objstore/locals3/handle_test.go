@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -369,17 +370,66 @@ func TestRangeGetServesPartialContent(t *testing.T) {
 	}
 }
 
-// TestRangeGetFallsBackToWholeBody checks the ranges locals3 does not serve as
-// 206 come back as a whole-body 200. Client.GetRange and the browser's
-// fetchRange both slice a 200 locally, so this is a safe answer; note that a
-// real bucket answers 416 for a start at or past the object's size, and
-// supports the suffix form, so those two rows are divergences (see the QA
-// report), not behavior to rely on.
+// TestRangeGetServesSuffixRange checks the suffix form ("bytes=-N") serves the
+// object's last N bytes, clamped to the object when N is larger.
+func TestRangeGetServesSuffixRange(t *testing.T) {
+	newBucketRoot(t)
+	const body = "0123456789"
+	putObject(t, "showcase/objects/pack/pack-abc123.pack", body)
+	cases := []struct {
+		header string
+		want   string
+		rang   string
+	}{
+		{"bytes=-3", "789", "bytes 7-9/10"},
+		{"bytes=-1", "9", "bytes 9-9/10"},
+		{"bytes=-10", body, "bytes 0-9/10"},
+		{"bytes=-99", body, "bytes 0-9/10"},
+	}
+	for _, c := range cases {
+		res := request(t, http.MethodGet, "/showcase/objects/pack/pack-abc123.pack", nil, map[string]string{"Range": c.header})
+		if res.Code != 206 {
+			t.Errorf("GET %s = %d, want 206", c.header, res.Code)
+			continue
+		}
+		if res.Body.String() != c.want {
+			t.Errorf("GET %s body = %q, want %q", c.header, res.Body.String(), c.want)
+		}
+		if got := res.Header().Get("Content-Range"); got != c.rang {
+			t.Errorf("GET %s Content-Range = %q, want %q", c.header, got, c.rang)
+		}
+	}
+}
+
+// TestRangeGetPastObjectIs416 checks a range starting at or past the object's
+// size is refused the way a real bucket refuses it: 416, no body, and a
+// Content-Range naming the size the caller should have asked within.
+func TestRangeGetPastObjectIs416(t *testing.T) {
+	newBucketRoot(t)
+	const body = "0123456789"
+	putObject(t, "showcase/objects/pack/pack-abc123.pack", body)
+	for _, header := range []string{"bytes=10-", "bytes=99-", "bytes=10-20", "bytes=-0"} {
+		res := request(t, http.MethodGet, "/showcase/objects/pack/pack-abc123.pack", nil, map[string]string{"Range": header})
+		if res.Code != 416 {
+			t.Errorf("GET %s = %d, want 416", header, res.Code)
+			continue
+		}
+		if res.Body.Len() != 0 {
+			t.Errorf("GET %s carried a body: %q", header, res.Body.String())
+		}
+		if got := res.Header().Get("Content-Range"); got != "bytes */10" {
+			t.Errorf("GET %s Content-Range = %q, want %q", header, got, "bytes */10")
+		}
+	}
+}
+
+// TestRangeGetFallsBackToWholeBody checks a malformed or unsupported Range
+// header is ignored and the object served whole, as RFC 7233 requires.
 func TestRangeGetFallsBackToWholeBody(t *testing.T) {
 	newBucketRoot(t)
 	const body = "0123456789"
 	putObject(t, "showcase/objects/pack/pack-abc123.pack", body)
-	for _, header := range []string{"bytes=10-", "bytes=99-", "bytes=5-3", "bytes=-5", "bytes=0-1,4-5", "items=0-1", "bytes=x-1", "bytes=5"} {
+	for _, header := range []string{"bytes=5-3", "bytes=0-1,4-5", "items=0-1", "bytes=x-1", "bytes=5"} {
 		res := request(t, http.MethodGet, "/showcase/objects/pack/pack-abc123.pack", nil, map[string]string{"Range": header})
 		if res.Code != 200 {
 			t.Errorf("GET %s = %d, want 200 (whole body)", header, res.Code)
@@ -422,6 +472,7 @@ type listBucketResult struct {
 		Key  string `xml:"Key"`
 		ETag string `xml:"ETag"`
 	} `xml:"Contents"`
+	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
 // listBucket issues a ListObjectsV2 request and decodes the response.
@@ -448,8 +499,8 @@ func listedKeys(result listBucketResult) []string {
 }
 
 // TestListObjectsV2 checks the listing contract: bucket-relative keys in sorted
-// order, scoped to one bucket, filtered by prefix, never truncated, with the
-// encoding sidecars hidden.
+// order, scoped to one bucket, filtered by prefix, untruncated under one page,
+// with the encoding sidecars hidden.
 func TestListObjectsV2(t *testing.T) {
 	newBucketRoot(t)
 	putObject(t, "showcase/refs/heads/main", "a")
@@ -462,7 +513,7 @@ func TestListObjectsV2(t *testing.T) {
 
 	all := listBucket(t, "/showcase?list-type=2")
 	if all.IsTruncated {
-		t.Error("IsTruncated = true, want false (locals3 never paginates)")
+		t.Error("IsTruncated = true, want false for a listing under one page")
 	}
 	keys := listedKeys(all)
 	want := []string{".gitsocial/site/items/pm/head.json", "HEAD", "refs/heads/feature", "refs/heads/main"}
@@ -519,6 +570,156 @@ func TestListObjectsV2EscapesKeys(t *testing.T) {
 	}
 	if len(parsed.Contents) != 1 || parsed.Contents[0].Key != "refs/heads/foo&bar" {
 		t.Errorf("parsed keys = %+v, want the original unescaped key back", parsed.Contents)
+	}
+}
+
+// TestListObjectsV2Paginates checks the pagination every listing consumer
+// loops over: a listing longer than max-keys truncates and carries a
+// continuation token, and resuming from that token returns the remaining keys
+// once each, in order.
+func TestListObjectsV2Paginates(t *testing.T) {
+	newBucketRoot(t)
+	var want []string
+	for i := 0; i < 5; i++ {
+		key := fmt.Sprintf("refs/gitmsg/core/forks/%08x", i)
+		putObject(t, "showcase/"+key, "x")
+		want = append(want, key)
+	}
+	var got []string
+	token, pages := "", 0
+	for {
+		target := "/showcase?list-type=2&max-keys=2"
+		if token != "" {
+			target += "&continuation-token=" + url.QueryEscape(token)
+		}
+		page := listBucket(t, target)
+		pages++
+		got = append(got, listedKeys(page)...)
+		if !page.IsTruncated {
+			break
+		}
+		if page.NextContinuationToken == "" {
+			t.Fatal("a truncated page carries no continuation token, so the rest cannot be read")
+		}
+		if pages > len(want) {
+			t.Fatal("the listing never reported a last page")
+		}
+		token = page.NextContinuationToken
+	}
+	if pages != 3 {
+		t.Errorf("read %d pages of 2 over %d keys, want 3", pages, len(want))
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("paged keys = %v, want %v", got, want)
+	}
+}
+
+// TestPutIfMatchStarAndQuoting checks the If-Match spellings a real bucket
+// accepts: "*" matches any existing object, and an ETag compare ignores
+// missing quotes and the weak marker a compressing CDN adds.
+func TestPutIfMatchStarAndQuoting(t *testing.T) {
+	newBucketRoot(t)
+	const key = "/showcase/refs/heads/main"
+	if absent := request(t, http.MethodPut, key, []byte("first"), map[string]string{"If-Match": "*"}); absent.Code != 412 {
+		t.Fatalf("If-Match * on an absent key = %d, want 412", absent.Code)
+	}
+	putObject(t, "showcase/refs/heads/main", "first")
+	cases := []struct {
+		name  string
+		match string
+		body  string
+		code  int
+	}{
+		{"star over an existing key", "*", "second", 200},
+		{"unquoted ETag", strings.Trim(etagOf([]byte("second")), `"`), "third", 200},
+		{"weak ETag", "W/" + etagOf([]byte("third")), "fourth", 200},
+		{"stale ETag", etagOf([]byte("first")), "clobber", 412},
+	}
+	for _, c := range cases {
+		res := request(t, http.MethodPut, key, []byte(c.body), map[string]string{"If-Match": c.match})
+		if res.Code != c.code {
+			t.Errorf("%s: PUT = %d, want %d", c.name, res.Code, c.code)
+		}
+	}
+	if get := request(t, http.MethodGet, key, nil, nil); get.Body.String() != "fourth" {
+		t.Errorf("stored body = %q, want %q", get.Body.String(), "fourth")
+	}
+}
+
+// TestPutOverwritesExistingKey checks an unconditional rewrite lands and
+// answers with the new content's ETag.
+func TestPutOverwritesExistingKey(t *testing.T) {
+	newBucketRoot(t)
+	const key = "/showcase/refs/heads/main"
+	putObject(t, "showcase/refs/heads/main", "old")
+	res := request(t, http.MethodPut, key, []byte("new"), nil)
+	if res.Code != 200 {
+		t.Fatalf("rewrite = %d, want 200", res.Code)
+	}
+	if got, want := res.Header().Get("ETag"), etagOf([]byte("new")); got != want {
+		t.Errorf("rewrite ETag = %s, want %s", got, want)
+	}
+	if get := request(t, http.MethodGet, key, nil, nil); get.Body.String() != "new" {
+		t.Errorf("stored body = %q, want %q", get.Body.String(), "new")
+	}
+}
+
+// TestPutUnderAnExistingKey checks the flat S3 keyspace: a key that prefixes
+// another key keeps its bytes, its encoding and its listing entry, whichever
+// order the two are written in. A generation chain beside the plain ref key of
+// the same name is that shape.
+func TestPutUnderAnExistingKey(t *testing.T) {
+	newBucketRoot(t)
+	if res := request(t, http.MethodPut, "/showcase/refs/heads/main", []byte("plain"), map[string]string{"Content-Encoding": "br"}); res.Code != 200 {
+		t.Fatalf("PUT of the plain key = %d, want 200", res.Code)
+	}
+	putObject(t, "showcase/refs/heads/main/.gen/0000000001", "chain")
+	putObject(t, "showcase/refs/heads/next/.gen/0000000001", "chain")
+	putObject(t, "showcase/refs/heads/next", "plain")
+
+	for key, want := range map[string]string{
+		"/showcase/refs/heads/main":                 "plain",
+		"/showcase/refs/heads/main/.gen/0000000001": "chain",
+		"/showcase/refs/heads/next":                 "plain",
+		"/showcase/refs/heads/next/.gen/0000000001": "chain",
+	} {
+		get := request(t, http.MethodGet, key, nil, nil)
+		if get.Code != 200 || get.Body.String() != want {
+			t.Errorf("GET %s = %d %q, want 200 %q", key, get.Code, get.Body.String(), want)
+		}
+	}
+	if got := request(t, http.MethodGet, "/showcase/refs/heads/main", nil, nil).Header().Get("Content-Encoding"); got != "br" {
+		t.Errorf("Content-Encoding of a key that became a prefix = %q, want %q", got, "br")
+	}
+	keys := listedKeys(listBucket(t, "/showcase?list-type=2&prefix=refs/heads/"))
+	want := []string{"refs/heads/main", "refs/heads/main/.gen/0000000001", "refs/heads/next", "refs/heads/next/.gen/0000000001"}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Errorf("listed keys = %v, want %v", keys, want)
+	}
+	etags := map[string]string{}
+	for _, c := range listBucket(t, "/showcase?list-type=2&prefix=refs/heads/").Contents {
+		etags[c.Key] = c.ETag
+	}
+	if etags["refs/heads/main"] != etagOf([]byte("plain")) || etags["refs/heads/main/.gen/0000000001"] != etagOf([]byte("chain")) {
+		t.Errorf("listed ETags = %v, want each key's own content md5", etags)
+	}
+}
+
+// TestDeleteKeyThatPrefixesAnother checks deleting a key that prefixes another
+// leaves the other alone.
+func TestDeleteKeyThatPrefixesAnother(t *testing.T) {
+	newBucketRoot(t)
+	putObject(t, "showcase/refs/heads/main", "plain")
+	putObject(t, "showcase/refs/heads/main/.gen/0000000001", "chain")
+	if res := request(t, http.MethodDelete, "/showcase/refs/heads/main", nil, nil); res.Code != 204 {
+		t.Fatalf("DELETE = %d, want 204", res.Code)
+	}
+	if get := request(t, http.MethodGet, "/showcase/refs/heads/main", nil, nil); get.Code != 404 {
+		t.Errorf("GET after DELETE = %d, want 404", get.Code)
+	}
+	get := request(t, http.MethodGet, "/showcase/refs/heads/main/.gen/0000000001", nil, nil)
+	if get.Code != 200 || get.Body.String() != "chain" {
+		t.Errorf("GET of the chain key = %d %q, want 200 %q", get.Code, get.Body.String(), "chain")
 	}
 }
 
