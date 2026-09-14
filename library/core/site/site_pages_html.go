@@ -187,7 +187,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 
 <h1>{{.Heading}}</h1>
 <p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
-{{if .Entries}}{{template "entries" .Entries}}{{else}}<p class="meta">nothing here yet</p>
+{{if .Entries}}{{template "entries" .Entries}}{{else}}<p class="empty">{{.Empty}}</p>
 {{end}}<footer>{{if .NewerHref}}<a href="{{.NewerHref}}">← newer</a> {{end}}{{if .OlderHref}}<a href="{{.OlderHref}}">older →</a> {{end}}<a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "file"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
@@ -354,6 +354,7 @@ type sitePageListEntry struct {
 type siteListPageData struct {
 	Chrome    sitePageChrome
 	Heading   string
+	Empty     string // the sentence a list with no rows shows (sitePageEmptyText)
 	MetaBits  []string
 	Entries   []sitePageListEntry
 	NewerHref string
@@ -431,6 +432,14 @@ var sitePageLists = []sitePageList{
 	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱", Section: "Social"},
 	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases", NavLabel: "Releases", Glyph: "⏏"},
 	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos", NavLabel: "Memos", Glyph: "☞"},
+}
+
+// sitePageEmptyText words a list's empty state, the sentence the app's own list renders.
+func sitePageEmptyText(list sitePageList) string {
+	if list.Ext == "social" {
+		return "No activity in this repository yet."
+	}
+	return "No " + list.Label + " in this repository."
 }
 
 // renderSitePage executes one page template into bytes.

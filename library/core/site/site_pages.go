@@ -923,9 +923,10 @@ func writeSiteTypeLists(client *objstore.Client, prefix string, roots map[string
 }
 
 // siteChainedListPage assembles the heading, rows and newer/older chain every list page shares; n = 0 is the head, n >= 1 a sealed page with 1 the oldest.
-func siteChainedListPage(label string, entries []sitePageListEntry, metaBits []string, n, sealed int) siteListPageData {
+func siteChainedListPage(list sitePageList, entries []sitePageListEntry, metaBits []string, n, sealed int) siteListPageData {
 	d := siteListPageData{
-		Heading:  label,
+		Heading:  list.NavLabel,
+		Empty:    sitePageEmptyText(list),
 		MetaBits: metaBits,
 		Entries:  entries,
 	}
@@ -963,7 +964,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		metaBits = append(metaBits, fmt.Sprintf("%d open", openCount))
 	}
 	metaBits = append(metaBits, "newest first")
-	d := siteChainedListPage(list.NavLabel, entries, metaBits, 0, sealed)
+	d := siteChainedListPage(list, entries, metaBits, 0, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         list.NavLabel + " · " + site.Title,
 		AccentCSS:     site.AccentCSS,
@@ -990,7 +991,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		entries = append(entries, buildSiteListEntry(it, "../", sitePageDefaultTypes[list.Ext]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
-	d := siteChainedListPage(list.NavLabel, entries, metaBits, n, sealed)
+	d := siteChainedListPage(list, entries, metaBits, n, sealed)
 	d.Chrome = sitePageChrome{
 		Title:         fmt.Sprintf("%s · page %d · %s", list.NavLabel, n, site.Title),
 		AccentCSS:     site.AccentCSS,

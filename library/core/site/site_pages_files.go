@@ -602,7 +602,7 @@ func buildSiteFilesIndexPage(site sitePageSite, state *siteFilesState, branch st
 	if branch != "" {
 		metaBits = append(metaBits, branch)
 	}
-	d := siteChainedListPage(siteFilesList.NavLabel, entries, append(metaBits, "by path"), 0, 0)
+	d := siteChainedListPage(siteFilesList, entries, append(metaBits, "by path"), 0, 0)
 	d.Chrome = sitePageChrome{
 		Title:       siteFilesList.NavLabel + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,

@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. metaRow pins the meta row skeleton: the bit classes in order, and the author label and its email title both renderers derive.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. metaRow pins the meta row skeleton: the bit classes in order, and the author label and its email title both renderers derive. listEmpty pins each list route\u0027s empty sentence, which both renderers show.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -287,6 +287,16 @@
       { "name": "an email alone labels the row", "author": "", "email": "ada@example.com", "expectLabel": "ada@example.com", "expectTitle": "" },
       { "name": "neither name nor email reads unknown", "author": "", "email": "", "expectLabel": "unknown", "expectTitle": "" }
     ]
+  },
+  "listEmpty": {
+    "issues": "No issues in this repository.",
+    "milestones": "No milestones in this repository.",
+    "sprints": "No sprints in this repository.",
+    "prs": "No pull requests in this repository.",
+    "timeline": "No activity in this repository yet.",
+    "releases": "No releases in this repository.",
+    "memos": "No memos in this repository.",
+    "commits": "No commits in this repository."
   },
   "listHeadings": {
     "issues": "Issues",

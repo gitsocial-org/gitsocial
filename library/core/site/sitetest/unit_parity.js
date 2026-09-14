@@ -83,6 +83,9 @@ for (const c of FIX.metaRow.authors) {
 }
 
 require("../assets/gs-render.js");
+const empties = Object.entries(GS.LIST_EMPTY).sort().map((e) => e.join("=")).join(",");
+const fixtureEmpties = Object.entries(FIX.listEmpty).sort().map((e) => e.join("=")).join(",");
+eq(empties, fixtureEmpties, "LIST_EMPTY matches the page layer's empty sentences");
 const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
 eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");

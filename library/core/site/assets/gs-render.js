@@ -2506,7 +2506,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const g = groupPM(pmItems);
     const hier = buildIssueHierarchy(g.issues);
     const row = (it) => issueCard(it, (hier.childrenOf.get(it.commit.short) || []).length, countsFor(counts, it.commit.short));
-    return filteredListView(g.issues, row, "issues", ISSUE_STATES, "No issues in this repository.");
+    return filteredListView(g.issues, row, "issues", ISSUE_STATES, LIST_EMPTY.issues);
   }
 
   // versionKey extracts a milestone's leading dotted version as numbers, or null.
@@ -2553,14 +2553,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function milestonesBody(pmItems) {
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.milestones, g.byMilestone, compareVersionDesc);
-    if (!groups.length) return [el("div", { class: "empty" }, ["No milestones in this repository."])];
+    if (!groups.length) return [el("div", { class: "empty" }, [LIST_EMPTY.milestones])];
     return groups.map((x) => pmGroupCard(x.item, x.members, "milestone"));
   }
   // sprintsBody renders one deduped card per sprint, newest first.
   function sprintsBody(pmItems) {
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.sprints, g.bySprint);
-    if (!groups.length) return [el("div", { class: "empty" }, ["No sprints in this repository."])];
+    if (!groups.length) return [el("div", { class: "empty" }, [LIST_EMPTY.sprints])];
     return groups.map((x) => pmGroupCard(x.item, x.members, "sprint"));
   }
 
@@ -3447,6 +3447,18 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // LIST_HEADINGS is each list route's heading, the nav label verbatim.
   const LIST_HEADINGS = { issues: "Issues", milestones: "Milestones", sprints: "Sprints", prs: "Pull Requests", timeline: "Timeline", releases: "Releases", memos: "Memos", commits: "Commits" };
 
+  // LIST_EMPTY is each list route's empty sentence, the one the page layer renders too.
+  const LIST_EMPTY = {
+    issues: "No issues in this repository.",
+    milestones: "No milestones in this repository.",
+    sprints: "No sprints in this repository.",
+    prs: "No pull requests in this repository.",
+    timeline: "No activity in this repository yet.",
+    releases: "No releases in this repository.",
+    memos: "No memos in this repository.",
+    commits: "No commits in this repository.",
+  };
+
   // listHeading renders a list route's h1.
   function listHeading(tab) {
     return el("h1", {}, [LIST_HEADINGS[tab]]);
@@ -3604,7 +3616,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       : [r.total + " commits", r.branch, "newest first"];
     wrap.append(el("div", { class: "meta" }, [bits.filter(Boolean).join(" · ")]));
     if (!r.rows.length) {
-      wrap.append(el("div", { class: "empty" }, [r.missing ? "No such commits page." : "No commits on the default branch."]));
+      wrap.append(el("div", { class: "empty" }, [r.missing ? "No such commits page." : LIST_EMPTY.commits]));
       return [listHeading("commits"), wrap];
     }
     for (const c of r.rows) wrap.append(commitCard(c, r.branch, { id: "c-" + c.short, time: utcDate(c.authorTime), refSha: c.short }));
@@ -4063,6 +4075,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

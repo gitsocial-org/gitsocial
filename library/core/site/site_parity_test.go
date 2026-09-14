@@ -94,6 +94,7 @@ type parityFixtures struct {
 	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
 	DetailHeads    []parityDetailHeadCase  `json:"detailHeads"`
 	MetaRow        parityMetaRow           `json:"metaRow"`
+	ListEmpty      map[string]string       `json:"listEmpty"`
 	ListHeadings   map[string]string       `json:"listHeadings"`
 }
 
@@ -179,6 +180,29 @@ func TestParityMetaRow(t *testing.T) {
 	}
 	if row.Meta[2].Href != "../i/"+msg.Short+".html" {
 		t.Errorf("list row hash href = %q, want the item's own page", row.Meta[2].Href)
+	}
+}
+
+// TestParityListEmpty pins every list page's empty sentence to the fixture the
+// app's LIST_EMPTY is checked against (unit_parity.js), and renders one.
+func TestParityListEmpty(t *testing.T) {
+	f := loadParityFixtures(t)
+	lists := append(append([]sitePageList(nil), sitePageLists...), siteCommitsList)
+	for _, list := range lists {
+		tab := strings.TrimPrefix(list.Route, "/")
+		if want, ok := f.ListEmpty[tab]; !ok || want != sitePageEmptyText(list) {
+			t.Errorf("%s: empty %q, fixture %q", tab, sitePageEmptyText(list), want)
+		}
+	}
+	d := siteChainedListPage(sitePageLists[0], nil, nil, 0, 0)
+	d.Chrome = sitePageChrome{Title: "t", Base: "../"}
+	page, err := renderSitePage("list", d)
+	if err != nil {
+		t.Fatalf("render list page: %v", err)
+	}
+	want := `<p class="empty">No issues in this repository.</p>`
+	if !strings.Contains(string(page), want) {
+		t.Errorf("an empty list page carries %s", want)
 	}
 }
 

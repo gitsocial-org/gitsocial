@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -170,13 +170,13 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         let counts = null;
         let lastRedraw = null;
         setView([listHeading("timeline"), ...autoScrollListView(first,
-          (items, box) => { lastRedraw = () => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), "No activity in this repository yet.")); lastRedraw(); },
+          (items, box) => { lastRedraw = () => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), LIST_EMPTY.timeline)); lastRedraw(); },
           () => loadTimelineWindow(ctx, true))]);
         loadInteractionCounts(ctx).then((c) => { counts = c; if (lastRedraw) lastRedraw(); }).catch(() => {});
       } else if (r.type === "index" && r.tab === "memos") {
         const first = await loadExtItemsWindow(ctx, "memo", false);
         setView([listHeading("memos"), ...pagedListView(first,
-          (items, box) => box.replaceChildren(...renderList(items, memoCard, "No memos in this repository.")),
+          (items, box) => box.replaceChildren(...renderList(items, memoCard, LIST_EMPTY.memos)),
           () => loadExtItemsWindow(ctx, "memo", true))]);
       } else if (r.type === "index" && r.tab === "issues") {
         // Full pm set (metadata-only, cheap and refreshed on every push) so the
@@ -189,7 +189,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         setView([listHeading("sprints"), ...sprintsBody(await loadExtItemsAll(ctx, "pm"))]);
       } else if (r.type === "index" && r.tab === "prs") {
         const [all, counts] = await Promise.all([loadExtItemsAll(ctx, "review"), loadInteractionCounts(ctx)]);
-        setView([listHeading("prs"), ...filteredListView(all.filter((i) => (i.header.type || "") === "pull-request"), (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, "No pull requests in this repository.")]);
+        setView([listHeading("prs"), ...filteredListView(all.filter((i) => (i.header.type || "") === "pull-request"), (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs)]);
       } else if (r.type === "index" && r.tab === "releases") {
         const relsOf = (items) => items.filter((i) => (i.header.type || "") === "release");
         const first = await loadExtItemsWindow(ctx, "release", false);
@@ -202,7 +202,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           if (n) count.textContent = n + (n === 1 ? " release" : " releases");
         }).catch(() => {});
         setView([listHeading("releases"), count, ...pagedListView(first,
-          (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, "No releases in this repository.")),
+          (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, LIST_EMPTY.releases)),
           () => loadExtItemsWindow(ctx, "release", true))]);
       } else if (r.type === "commit") {
         setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch) : await commitDetail(ctx, r.hash, r.branch));
