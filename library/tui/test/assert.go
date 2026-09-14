@@ -65,16 +65,6 @@ func assertNotEmpty(t *testing.T, output string) {
 	}
 }
 
-// assertLineCount checks that the output doesn't exceed maxLines.
-func assertLineCount(t *testing.T, output string, maxLines int) {
-	t.Helper()
-	stripped := stripANSI(output)
-	lines := strings.Split(stripped, "\n")
-	if len(lines) > maxLines {
-		t.Errorf("got %d lines, max %d", len(lines), maxLines)
-	}
-}
-
 // lineWidth returns the printable cell width of one line, trailing padding excluded.
 func lineWidth(line string) int {
 	return tuicore.AnsiWidth(strings.TrimRight(stripANSI(line), " "))
