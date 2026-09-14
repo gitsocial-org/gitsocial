@@ -2,10 +2,13 @@
 # import-graph.sh - per-package size, churn, fan-in, fan-out and layer violations for the module.
 # Usage: scripts/import-graph.sh [--check | --update]   no argument prints the full report
 # --check fails on an upward import edge missing from scripts/import-baseline.txt or a package over 15000 non-test lines.
+# --check also fails on a core package importing one at or above its tier in the stack sentence of documentation/ARCHITECTURE.md.
+# A core sub-package sits in its parent's tier, and an edge between a sub-package and its parent is exempt.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/import-baseline.txt"
+doc="documentation/ARCHITECTURE.md"
 ceiling=15000
 DAYS=${DAYS:-90}
 
@@ -14,7 +17,7 @@ case "${1:-}" in
 --check) mode=check ;;
 --update) mode=update ;;
 -h | --help)
-	sed -n '2,4p' "$0" | sed 's/^# //'
+	sed -n '2,6p' "$0" | sed 's/^# //'
 	exit 0
 	;;
 "") ;;
@@ -54,10 +57,54 @@ pkg_lines() {
 	awk 'FNR == 1 { t = (FILENAME ~ /_test\.go$/) } /[^[:space:]]/ { if (t) tl++; else nl++ } END { print nl + 0, tl + 0 }' "$1"/*.go 2>/dev/null || echo "0 0"
 }
 
+# tiers prints "package tier" for every package the core stack sentence in the architecture doc names
+tiers() {
+	sed -n 's/^Inside `core` the packages form a stack, and each imports only what is below it: //p' "$doc" |
+		head -1 | sed 's/\. .*$//' |
+		awk -F';' '{ for (i = 1; i <= NF; i++) { n = split($i, names, ","); for (j = 1; j <= n; j++) { p = names[j]; gsub(/[^a-z\/]/, "", p); if (p != "") print p, i } } }'
+}
+
+# check_tiers fails when the stack sentence is missing, names a core package that does not exist, or misses one that does
+check_tiers() {
+	local named have unknown unnamed
+	if [ -z "$TIERS" ]; then
+		echo "import-graph: no core stack sentence in $doc (Code Rules, Layers)"
+		return 1
+	fi
+	named=$(printf '%s\n' "$TIERS" | awk '{print $1}' | sort -u)
+	have=$(printf '%s\n' "$pkgs" | grep '^library/core/[^/]*$' | sed 's#library/core/##' | sort -u)
+	unknown=$(comm -23 <(printf '%s\n' "$named") <(printf '%s\n' "$have") | tr '\n' ' ')
+	unnamed=$(comm -13 <(printf '%s\n' "$named") <(printf '%s\n' "$have") | tr '\n' ' ')
+	if [ -n "${unknown// /}" ]; then
+		echo "import-graph: the core stack sentence in $doc names a package that does not exist: ${unknown% }"
+		return 1
+	fi
+	if [ -n "${unnamed// /}" ]; then
+		echo "import-graph: the core stack sentence in $doc misses a core package: ${unnamed% }"
+		return 1
+	fi
+	return 0
+}
+
+# siblings prints the "importer importee" edges between core packages, named relative to core
+siblings() {
+	printf '%s\n' "$edges" | grep '^library/core/' | grep ' library/core/' | sed 's#library/core/##g' | sort -u
+}
+
+# coreorder prints "importer importee importertier importeetier" for every sibling edge that runs against the stack
+coreorder() {
+	siblings | awk '
+		FNR == NR { tier[$1] = $2; next }
+		{ a = $1; b = $2; sub(/\/.*/, "", a); sub(/\/.*/, "", b)
+		  if (a == b || tier[a] == "" || tier[b] == "") next
+		  if (tier[a] + 0 <= tier[b] + 0) print $1, $2, tier[a], tier[b] }' <(printf '%s\n' "$TIERS") -
+}
+
 MOD=$(go list -m)
 edges=$(go list -f '{{$p:=.ImportPath}}{{range .Imports}}{{$p}} {{.}}{{"\n"}}{{end}}' ./... | grep " $MOD/" | sed "s#$MOD/##g")
 pkgs=$(go list -f '{{.ImportPath}}' ./... | sed "s#$MOD/##")
 up=$(printf '%s\n' "$edges" | upward)
+TIERS=$(tiers)
 
 # oversized prints "package lines" for every package over the line ceiling
 oversized() {
@@ -91,6 +138,16 @@ if [ "$mode" = check ]; then
 		echo "import-graph: package over $ceiling non-test lines"
 		printf '%s\n' "$big" | sed 's/^/  /'
 		fail=1
+	fi
+	if ! check_tiers; then
+		fail=1
+	else
+		bad=$(coreorder)
+		if [ -n "$bad" ]; then
+			echo "import-graph: core package imports one at or above its tier ($doc, Code Rules, Layers)"
+			printf '%s\n' "$bad" | awk '{ printf "  %s -> %s (tier %s imports tier %s)\n", $1, $2, $3, $4 }'
+			fail=1
+		fi
 	fi
 	exit $fail
 fi
@@ -128,8 +185,17 @@ comm -13 <(printf '%s\n' "$edges" | sort -u) <(printf '%s\n' "$testedges") | upw
 echo
 echo "## Sibling edges inside core (dependency order within the layer)"
 echo
-printf '%s\n' "$edges" | grep '^library/core/' | grep ' library/core/' | sed 's#library/core/##g' | sort -u |
-	awk '{ if ($1 != prev) { if (prev) print ""; printf "- %s ->", $1; prev = $1 } printf " %s", $2 } END { print "" }'
+if tiererr=$(check_tiers); then
+	bad=$(coreorder)
+	[ -z "$bad" ] || printf '! marks an edge against the core stack sentence in %s.\n\n' "$doc"
+else
+	bad=
+	printf '%s\n\n' "$tiererr"
+fi
+siblings | awk '
+	FNR == NR { against[$1 " " $2] = 1; next }
+	{ if ($1 != prev) { if (prev) print ""; printf "- %s ->", $1; prev = $1 }
+	  printf " %s%s", $2, (($1 " " $2) in against ? "!" : "") } END { print "" }' <(printf '%s\n' "$bad") -
 
 echo
 echo "## Edges"

@@ -42,7 +42,7 @@ The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequen
 
 `scripts/prose-check.sh` is stage 0. It counts [STYLE.md](STYLE.md) violations and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts lowered counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 
-`scripts/import-graph.sh --check` is stage 1. It fails on an upward import edge missing from `scripts/import-baseline.txt`, and on a package over 15,000 non-test lines; `--update` accepts the current edges. With no argument it prints the per-package size, fan-in, fan-out and churn report.
+`scripts/import-graph.sh --check` is stage 1. It fails on an upward import edge missing from `scripts/import-baseline.txt`, and on a package over 15,000 non-test lines; `--update` accepts the current edges. It also fails when a `core` package imports one at or above its tier in the stack sentence under [Layers](#layers), which it reads from this file. With no argument it prints the per-package size, fan-in, fan-out and churn report, marking any edge against that order with `!`.
 
 `funlen` and `gocognit` in `.golangci.yml` hold today's largest function and highest complexity, and a threshold only moves down.
 
@@ -99,7 +99,7 @@ Each layer imports only the layers below it. `core` imports nothing above itself
 - Extensions import each other: `pm`, `review`, `release` and `memo` import `social` for comments, and `review` imports `pm` for the issues a pull request closes.
 - Each extension's `nav.go` imports `tui/tuinav` to register its navigation items. Nothing else in `extensions` imports `tui`.
 
-Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`, `notifications`; `fetch`; `objstore`, `search`; `site`. `scripts/import-graph.sh` prints the current edges.
+Inside `core` the packages form a stack, and each imports only what is below it: `log`; `protocol`, `text`, `result`; `cache`, `git`; `storage`, `gitmsg`, `identity`; `settings`, `notifications`; `fetch`; `objstore`, `search`; `site`. `scripts/import-graph.sh --check` reads this sentence and fails on an edge against it. A sub-package sits in its parent's tier, and an edge between a sub-package and its parent is exempt. With no argument the script prints the current edges.
 
 ### Do
 
