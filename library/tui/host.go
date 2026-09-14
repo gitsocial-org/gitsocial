@@ -436,6 +436,10 @@ func (h *Host) renderFrame(title, content string) string {
 	var lines []string
 	var topLine string
 	if title != "" {
+		// The title sits in the top border, so it cannot be wider than the frame.
+		if titleMax := innerWidth - 3; tuicore.AnsiWidth(title) > titleMax {
+			title = tuicore.TruncateToWidth(title, titleMax)
+		}
 		titleRendered := titleStyle.Render(title)
 		titleLen := tuicore.AnsiWidth(title)
 		rightPadLen := innerWidth - titleLen - 3
