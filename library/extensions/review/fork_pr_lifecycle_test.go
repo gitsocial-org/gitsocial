@@ -7,6 +7,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -44,6 +45,41 @@ func forkPRFixture(t *testing.T) (upstream, fork, upstreamURL, forkURL string) {
 	}
 	pushBranch(t, fork, "feature")
 	return upstream, fork, upstreamURL, forkURL
+}
+
+// TestForkPR_baseByAnotherSpelling lists and notifies a fork pull request whose base spells the upstream differently.
+func TestForkPR_baseByAnotherSpelling(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, forkURL := forkPRFixture(t)
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{
+		Base: upstreamURL + ".git/#branch:main",
+		Head: "feature",
+	})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+
+	branch := gitmsg.GetExtBranch(alice, "review")
+	listed := GetPullRequestsWithForks(upstreamURL, branch, []string{forkURL}, nil, "", 0)
+	if !listed.Success {
+		t.Fatalf("GetPullRequestsWithForks: %s", listed.Error.Message)
+	}
+	if len(listed.Data) != 1 || listed.Data[0].Repository != forkURL {
+		t.Fatalf("want 1 pull request on the fork, got %+v", listed.Data)
+	}
+
+	if err := gitmsg.AddFork(alice, forkURL); err != nil {
+		t.Fatalf("AddFork: %v", err)
+	}
+	provider := &reviewNotificationProvider{}
+	notifs, err := provider.GetNotifications(alice, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications: %v", err)
+	}
+	if !hasNotifType(notifs, "fork-pr") {
+		t.Errorf("fork-pr notification missing; got %v", notifTypes(notifs))
+	}
 }
 
 func TestForkPRClose_adoptsAndCollapses(t *testing.T) {
