@@ -57,9 +57,10 @@ func issueLinksRoute(byIID map[string]string) http.HandlerFunc {
 	}
 }
 
-// pmRoutes serves the milestone, issue, user, link and GraphQL endpoints FetchPM walks.
+// pmRoutes serves the milestone, issue, note, user, link and GraphQL endpoints FetchPM walks.
 func pmRoutes(t *testing.T, issues http.HandlerFunc, graphql http.HandlerFunc, links map[string]string) http.HandlerFunc {
 	return routed(t,
+		glRoute{"/notes", jsonRoute(`[]`)},
 		glRoute{"/links", issueLinksRoute(links)},
 		glRoute{"/milestones", jsonRoute(pmMilestonesJSON)},
 		glRoute{"/issues", issues},
@@ -228,6 +229,7 @@ func TestFetchPM_IgnoresUnreadableLinks(t *testing.T) {
 		http.Error(w, `{"message":"404 Not Found"}`, http.StatusNotFound)
 	}
 	server := newGLServer(t, routed(t,
+		glRoute{"/notes", jsonRoute(`[]`)},
 		glRoute{"/links", links},
 		glRoute{"/milestones", jsonRoute(pmMilestonesJSON)},
 		glRoute{"/issues", jsonRoute(pmIssuesJSON)},

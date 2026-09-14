@@ -36,9 +36,10 @@ const reviewMRsJSON = `[
 	 "author":{"username":"gitlab-bot"},"created_at":"2024-06-12T12:00:00Z"}
 ]`
 
-// reviewRoutes serves the merge request, project and user endpoints FetchReview walks.
+// reviewRoutes serves the merge request, note, project and user endpoints FetchReview walks.
 func reviewRoutes(t *testing.T, mrs http.HandlerFunc) http.HandlerFunc {
 	return routed(t,
+		glRoute{"/notes", jsonRoute(`[]`)},
 		glRoute{"/merge_requests", mrs},
 		glRoute{"/projects/8", jsonRoute(`{"web_url":"https://gitlab.example.com/forker/widgets"}`)},
 		glRoute{"/users", usersRoute()},
@@ -134,6 +135,7 @@ func TestFetchReview_SkipsForkWhenProjectLookupFails(t *testing.T) {
 		"diff_refs":{"base_sha":"base111"},
 		"author":{"username":"alice"},"created_at":"2024-06-10T12:00:00Z"}]`
 	server := newGLServer(t, routed(t,
+		glRoute{"/notes", jsonRoute(`[]`)},
 		glRoute{"/merge_requests", jsonRoute(forkMR)},
 		glRoute{"/projects/8", statusRoute(http.StatusNotFound, `{"message":"404 Project Not Found"}`)},
 		glRoute{"/users", usersRoute()},

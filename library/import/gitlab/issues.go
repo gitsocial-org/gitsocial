@@ -44,7 +44,7 @@ type glIssueMilestone struct {
 	Title string `json:"title"`
 }
 
-// FetchPM fetches milestones and issues from GitLab.
+// FetchPM fetches milestones, issues and issue notes from GitLab.
 func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error) {
 	milestones, err := a.fetchMilestones(opts)
 	if err != nil {
@@ -54,7 +54,12 @@ func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error
 	if err != nil {
 		return nil, fmt.Errorf("fetch issues: %w", err)
 	}
-	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Filtered: filtered}, nil
+	iids := make([]int, 0, len(issues))
+	for _, issue := range issues {
+		iids = append(iids, issue.Number)
+	}
+	comments := a.fetchItemNotes("issues", "issue-comment", iids, opts)
+	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Comments: comments, Filtered: filtered}, nil
 }
 
 func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.ImportMilestone, error) {

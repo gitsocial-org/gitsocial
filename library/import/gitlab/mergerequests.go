@@ -36,7 +36,7 @@ type glMergeRequest struct {
 	CreatedAt       string      `json:"created_at"`
 }
 
-// FetchReview fetches merge requests from GitLab, detecting forks.
+// FetchReview fetches merge requests and their notes from GitLab, detecting forks.
 func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPlan, error) {
 	unlimited := opts.Limit == 0
 	limit := opts.Limit
@@ -146,7 +146,12 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	for u := range forkSet {
 		forks = append(forks, u)
 	}
-	return &importpkg.ReviewPlan{Forks: forks, PRs: prs, Filtered: filtered}, nil
+	iids := make([]int, 0, len(prs))
+	for _, pr := range prs {
+		iids = append(iids, pr.Number)
+	}
+	comments := a.fetchItemNotes("merge_requests", "pr-comment", iids, opts)
+	return &importpkg.ReviewPlan{Forks: forks, PRs: prs, Comments: comments, Filtered: filtered}, nil
 }
 
 func normalizeMRState(state string) string {
