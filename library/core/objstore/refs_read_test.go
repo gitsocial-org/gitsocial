@@ -87,6 +87,33 @@ func TestReadRemoteRefs_PoolMatchesSerial(t *testing.T) {
 	}
 }
 
+// TestReadRemoteRefs_ChainOutranksPlainKey: a ref the bucket carries as both a
+// plain key and a generation chain resolves to the chain's tip, the shape a
+// bucket switched from etag mode to generation mode holds.
+func TestReadRemoteRefs_ChainOutranksPlainKey(t *testing.T) {
+	client, _ := testClient(t)
+	const refName = "refs/heads/main"
+	plain := fmt.Sprintf("%040x", 1)
+	tip := fmt.Sprintf("%040x", 2)
+	if err := client.Put(refName, []byte(plain+"\n")); err != nil {
+		t.Fatalf("seed plain ref: %v", err)
+	}
+	if err := client.Put(genKey("", refName, 2), []byte(tip+"\n")); err != nil {
+		t.Fatalf("seed chain: %v", err)
+	}
+
+	refs, err := ReadRemoteRefs(client, "")
+	if err != nil {
+		t.Fatalf("ReadRemoteRefs: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("read %d refs, want the one name: %v", len(refs), refs)
+	}
+	if refs[refName] != tip {
+		t.Errorf("ref %s = %q, want the chain tip %q", refName, refs[refName], tip)
+	}
+}
+
 // TestReadRemoteRefs_ProgressAndPool: progress fires once per ref and the final
 // count equals the ref total (the atomic counter stays correct under the pool).
 func TestReadRemoteRefs_ProgressAndPool(t *testing.T) {
