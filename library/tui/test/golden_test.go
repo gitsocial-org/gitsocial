@@ -67,6 +67,28 @@ const (
 	goldenLines = 40
 )
 
+// The narrow size LayoutProperties checks beside 120x40 and 200x60.
+const narrowCols = 80
+
+// Routes wider than 80 columns today; each is reported, not failed, until its cause is fixed.
+var narrowOverflowKnown = map[string]bool{
+	"/settings":         true,
+	"/config/site":      true,
+	"/config/identity":  true,
+	"/social/explore":   true,
+	"/social/followers": true,
+	"/pm/board":         true,
+	"/pm/config":        true,
+	"/pm/issue":         true,
+	"/pm/milestone":     true,
+	"/pm/sprint":        true,
+	"/release/list":     true,
+	"/release/detail":   true,
+	"/search/help":      true,
+	"/cache":            true,
+	"/memo/personal":    true,
+}
+
 func TestGolden(t *testing.T) {
 	f := getFixture(t)
 	h := New(t, f.Workdir, f.CacheDir)
@@ -139,7 +161,14 @@ func TestGolden(t *testing.T) {
 						h.Navigate(meta.Path)
 						out := h.Rendered()
 						assertNotEmpty(t, out)
-						assertLineCount(t, out, size.height)
+						if size.width == narrowCols && narrowOverflowKnown[meta.Path] {
+							for _, msg := range frameOverflow(out, size.width) {
+								t.Log(msg)
+							}
+							assertLineCount(t, out, size.height)
+							return
+						}
+						assertFrameFits(t, out, size.width, size.height)
 					})
 				}
 			})
