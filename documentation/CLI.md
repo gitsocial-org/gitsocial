@@ -164,11 +164,27 @@ gitsocial search --type issue --labels bug --assignee dev@example.com
 gitsocial search --type pr --group-by state --count-only
 ```
 
-- `--type` takes post, comment, repost, quote, pr, issue, milestone, sprint, release or memo. The inline forms `author:`, `repo:`, `type:`, `hash:`, `after:` and `before:` work in the query; the flag wins.
+- `--type` takes post, comment, repost, quote, pr, issue, milestone, sprint, release or memo. An inline prefix in the query sets the same filters; the flag wins.
 - `--scope` takes `timeline`, the default, `list:<name>` or `repository:<url>`. `--sort` takes `score`, the default, or `date`.
 - `--group-by` takes state, author, type, extension, repo, label, assignee, reviewer, milestone or base. `--top` caps the items per group and `--count-only` prints the counts alone.
 - `--assignee`, `--milestone` and `--sprint` imply `--type issue`; `--reviewer`, `--draft` and `--base` imply `--type pr`; `--prerelease` and `--tag` imply `--type release`.
 - `--tier` applies to `--type memo` and takes session, personal, project, inherited or external.
+
+Inline prefixes, in the order the parser reads them:
+
+| Prefix | Filters by |
+|---|---|
+| `author:<email>` | author name or email |
+| `repo:<url>` | repository URL |
+| `repository:<url>` | repository URL, the long form of `repo:` |
+| `type:<type>` | item type, the values `--type` takes |
+| `hash:<prefix>` | commit hash prefix |
+| `commit:<prefix>` | commit hash prefix, the long form of `hash:` |
+| `list:<name>` | list name or ID |
+| `after:<YYYY-MM-DD>` | items after the date |
+| `before:<YYYY-MM-DD>` | items before the date |
+
+A token with any other prefix is text, not a filter: `state:open` searches for "state:open".
 
 ### gitsocial show
 

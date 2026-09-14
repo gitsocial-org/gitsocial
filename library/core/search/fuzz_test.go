@@ -2,7 +2,6 @@
 package search
 
 import (
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -123,30 +122,6 @@ func checkFTSWellFormed(t *testing.T, text string) {
 	}
 	if !strings.HasPrefix(fts, `"`) || !strings.HasSuffix(fts, "*") {
 		t.Fatalf("ftsQuery(%q) = %q, want quoted prefix terms", text, fts)
-	}
-}
-
-// TestSearchQueryPrefixes_documentedSetAccepted checks the prefixes the parser reads.
-func TestSearchQueryPrefixes_documentedSetAccepted(t *testing.T) {
-	// CLI.md documents six inline prefixes; the parser also reads repository, commit and list.
-	documented := []string{"author", "repo", "type", "hash", "after", "before"}
-	accepted := []string{"author", "repo", "repository", "type", "hash", "commit", "list", "after", "before"}
-	fieldOf := map[string]string{"repository": "repo", "commit": "hash"}
-	for _, key := range accepted {
-		field := key
-		if canonical, ok := fieldOf[key]; ok {
-			field = canonical
-		}
-		// One value serves every prefix: it reads as a date and as plain text.
-		got := filterValue(field, parseSearchQuery(key+":2025-01-02"))
-		if got != "2025-01-02" {
-			t.Errorf("parseSearchQuery(%q) %s = %q, want 2025-01-02", key+":2025-01-02", field, got)
-		}
-	}
-	for _, key := range documented {
-		if !slices.Contains(accepted, key) {
-			t.Errorf("prefix %q is documented in CLI.md but the parser drops it", key)
-		}
 	}
 }
 

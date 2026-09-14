@@ -152,17 +152,26 @@ func TestParseSearchQuery_unknownKeyStaysInText(t *testing.T) {
 	}
 }
 
-// TestParseSearchQuery_knownPrefixesFillTheirFields checks every prefix the parser lists fills one field.
+// TestParseSearchQuery_knownPrefixesFillTheirFields checks every prefix the parser lists fills its own field.
 func TestParseSearchQuery_knownPrefixesFillTheirFields(t *testing.T) {
+	fieldOf := map[string]string{"repository": "repo", "commit": "hash"}
 	for _, prefix := range filterPrefixes {
 		t.Run(prefix, func(t *testing.T) {
+			// One value serves every prefix: it reads as a date and as plain text.
 			query := prefix + ":2026-01-02"
 			got := parseSearchQuery(query)
 			if got.Terms != "" {
 				t.Errorf("parseSearchQuery(%q).Terms = %q, want empty", query, got.Terms)
 			}
+			field := prefix
+			if canonical, ok := fieldOf[prefix]; ok {
+				field = canonical
+			}
+			if value := filterValue(field, got); value != "2026-01-02" {
+				t.Errorf("parseSearchQuery(%q) %s = %q, want 2026-01-02", query, field, value)
+			}
 			if filled := filledFields(got); len(filled) != 1 {
-				t.Errorf("parseSearchQuery(%q) filled %v, want one field", query, filled)
+				t.Errorf("parseSearchQuery(%q) filled %v, want %s alone", query, filled, field)
 			}
 		})
 	}
