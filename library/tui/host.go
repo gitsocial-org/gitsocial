@@ -455,6 +455,7 @@ func (h *Host) renderFrame(title, content string) string {
 	contentLines := strings.Split(content, "\n")
 	leftPad := strings.Repeat(" ", tuicore.ContentPaddingLeft)
 	contentHeight := innerHeight - tuicore.ContentPaddingTop
+	paddedWidth := innerWidth - tuicore.ContentPaddingLeft - tuicore.ContentPaddingRight
 	for i := 0; i < contentHeight && i < len(contentLines); i++ {
 		line := contentLines[i]
 		lineWidth := tuicore.AnsiWidth(line)
@@ -462,8 +463,13 @@ func (h *Host) renderFrame(title, content string) string {
 		// ViewWrapper — detect them and skip the content padding so the
 		// bar extends border to border with no margins.
 		if lineWidth >= innerWidth {
-			lines = append(lines, borderV+line+borderV)
+			lines = append(lines, borderV+tuicore.TruncateToWidth(line, innerWidth)+borderV)
 			continue
+		}
+		// No content line passes the border, whatever width the view drew it at.
+		if lineWidth > paddedWidth {
+			line = tuicore.TruncateToWidth(line, paddedWidth)
+			lineWidth = tuicore.AnsiWidth(line)
 		}
 		rightPad := innerWidth - lineWidth - tuicore.ContentPaddingLeft - tuicore.ContentPaddingRight
 		if rightPad < 0 {
