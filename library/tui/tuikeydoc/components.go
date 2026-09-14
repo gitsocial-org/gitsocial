@@ -9,9 +9,10 @@ var CardListKeys = []KeyDoc{
 	{Key: "G / end", Label: "Jump to bottom"},
 	{Key: "ctrl+d / pgdown", Label: "Half-page down"},
 	{Key: "ctrl+u / pgup", Label: "Half-page up"},
-	{Key: "enter", Label: "Open selected"},
+	{Key: "enter", Label: "Open selected item or link"},
 	{Key: ";", Label: "Next link"},
 	{Key: ",", Label: "Previous link"},
+	{Key: "esc", Label: "Unfocus link"},
 }
 
 // SectionListKeys defines the shared navigation keys for SectionList-based views.
@@ -25,7 +26,12 @@ var SectionListKeys = []KeyDoc{
 	{Key: "enter", Label: "Activate selected item or link"},
 	{Key: ";", Label: "Next link"},
 	{Key: ",", Label: "Previous link"},
+	{Key: "esc", Label: "Unfocus link, then clear the highlight"},
 	{Key: "/", Label: "Start inline search"},
+	{Key: "n", Label: "Next search match"},
+	{Key: "N", Label: "Previous search match"},
+	{Key: "enter", Label: "Leave the search input, in search"},
+	{Key: "esc", Label: "Close search, in search"},
 }
 
 // VersionPickerKeys defines the shared navigation keys for VersionPicker-based views.

@@ -12,9 +12,10 @@
 | `G / end` | Jump to bottom |
 | `ctrl+d / pgdown` | Half-page down |
 | `ctrl+u / pgup` | Half-page up |
-| `enter` | Open selected |
+| `enter` | Open selected item or link |
 | `;` | Next link |
 | `,` | Previous link |
+| `esc` | Unfocus link |
 
 ### SectionList (used by: Memo Detail, Issue Detail, Milestone Detail, Sprint Detail, Release Detail, SBOM, PR Detail)
 
@@ -29,7 +30,12 @@
 | `enter` | Activate selected item or link |
 | `;` | Next link |
 | `,` | Previous link |
+| `esc` | Unfocus link, then clear the highlight |
 | `/` | Start inline search |
+| `n` | Next search match |
+| `N` | Previous search match |
+| `enter` | Leave the search input, in search |
+| `esc` | Close search, in search |
 
 ### VersionPicker (used by: History, Memo History, Issue History, Milestone History, Sprint History, Release History, PR History)
 
