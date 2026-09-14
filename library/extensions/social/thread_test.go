@@ -11,8 +11,8 @@ import (
 )
 
 // queryPlan returns the EXPLAIN QUERY PLAN lines SQLite reports for a query.
-func queryPlan(t *testing.T, query string, args ...interface{}) []string {
-	t.Helper()
+func queryPlan(tb testing.TB, query string, args ...interface{}) []string {
+	tb.Helper()
 	lines, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query("EXPLAIN QUERY PLAN "+query, args...)
 		if err != nil {
@@ -31,7 +31,7 @@ func queryPlan(t *testing.T, query string, args ...interface{}) []string {
 		return out, rows.Err()
 	})
 	if err != nil {
-		t.Fatalf("EXPLAIN QUERY PLAN error = %v", err)
+		tb.Fatalf("EXPLAIN QUERY PLAN error = %v", err)
 	}
 	return lines
 }

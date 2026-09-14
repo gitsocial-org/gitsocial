@@ -37,13 +37,13 @@ log "1/4 scripts/import-graph.sh --check"
 "$root/scripts/import-graph.sh" --check || die "import-graph"
 info "imports at or below baseline"
 
-log "2/4 go vet ./..."
-go vet ./... || die "go vet"
+log "2/4 go vet -tags bench ./..."
+go vet -tags bench ./... || die "go vet"
 info "vet clean"
 
-log "3/4 golangci-lint run ./..."
+log "3/4 golangci-lint run --build-tags bench ./..."
 if command -v golangci-lint >/dev/null 2>&1; then
-	golangci-lint run ./... || die "golangci-lint"
+	golangci-lint run --build-tags bench ./... || die "golangci-lint"
 	info "lint clean"
 elif $SKIP_LINT; then
 	info "(skip) golangci-lint not on PATH, --skip-lint given"

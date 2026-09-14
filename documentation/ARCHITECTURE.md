@@ -56,6 +56,7 @@ scripts/test.sh -run TestSmoke ./library/tui/test/          # go test -json with
 scripts/coverage.sh                         # statement-weighted coverage with -coverpkg=./..., into .test-artifacts/coverage/
 scripts/import-graph.sh                     # the per-package size, fan-in, fan-out and churn report
 go test -tags sitetest -timeout 30m ./library/core/site/   # the browser site battery; needs node
+go test -tags bench -run '^$' -bench . ./library/extensions/social/   # the 100k-row thread benchmark
 ```
 
 Coverage is a floor: the S3 helper tests run the helper as a child process, and the browser suites run under node, so neither is credited.
