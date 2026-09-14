@@ -2,8 +2,8 @@
   ".card": [
     {
       "shape": "div.card-head > span.meta",
-      "padding": "12px 14.4px",
-      "margin": "0px 0px 11.2px",
+      "padding": "9.6px 14.4px",
+      "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(201, 209, 217)",
       "backgroundColor": "srgb(0.03 0.04 0.13)",
@@ -27,7 +27,7 @@
     {
       "shape": "span.reltime > a.hash",
       "padding": "0px",
-      "margin": "0px 0px 0px 28px",
+      "margin": "0px 0px 0px 28.8px",
       "fontSize": "12.8px",
       "color": "srgb(0.54 0.56 0.61)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -37,7 +37,7 @@
     {
       "shape": "span.reltime",
       "padding": "0px",
-      "margin": "0px 0px 0px 28px",
+      "margin": "0px 0px 0px 28.8px",
       "fontSize": "12.8px",
       "color": "srgb(0.54 0.56 0.61)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -48,7 +48,7 @@
   ".chip": [
     {
       "shape": "",
-      "padding": "0.8px 8px",
+      "padding": "0.8px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "srgb(0.54 0.56 0.61)",
@@ -61,7 +61,7 @@
     {
       "shape": "",
       "padding": "0px",
-      "margin": "0px 0px 4.8px",
+      "margin": "0px 0px 6.4px",
       "fontSize": "24px",
       "color": "rgb(0, 221, 221)",
       "backgroundColor": "rgba(0, 0, 0, 0)",

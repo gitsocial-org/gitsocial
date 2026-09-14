@@ -2,8 +2,8 @@
   ".card": [
     {
       "shape": "div.card-head > div.board-card-labels",
-      "padding": "8px 9.6px",
-      "margin": "0px 0px 8px",
+      "padding": "9.6px",
+      "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
@@ -12,8 +12,8 @@
     },
     {
       "shape": "div.card-head",
-      "padding": "8px 9.6px",
-      "margin": "0px 0px 8px",
+      "padding": "9.6px",
+      "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
@@ -24,8 +24,8 @@
   ".card.board-card": [
     {
       "shape": "div.card-head > div.board-card-labels",
-      "padding": "8px 9.6px",
-      "margin": "0px 0px 8px",
+      "padding": "9.6px",
+      "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
@@ -34,8 +34,8 @@
     },
     {
       "shape": "div.card-head",
-      "padding": "8px 9.6px",
-      "margin": "0px 0px 8px",
+      "padding": "9.6px",
+      "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
       "backgroundColor": "srgb(0.95 0.91 0.81)",
@@ -58,7 +58,7 @@
   ".chip": [
     {
       "shape": "",
-      "padding": "0.8px 8px",
+      "padding": "0.8px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "srgb(0.38 0.37 0.34)",
@@ -104,7 +104,7 @@
   ".filter-chip": [
     {
       "shape": "",
-      "padding": "2.4px 11.2px",
+      "padding": "2.4px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
@@ -114,7 +114,7 @@
     },
     {
       "shape": "",
-      "padding": "2.4px 11.2px",
+      "padding": "2.4px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "srgb(0.38 0.37 0.34)",
