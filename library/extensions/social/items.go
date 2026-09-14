@@ -676,29 +676,33 @@ func uniqueURLs(root string, extras []string) []string {
 	return out
 }
 
+// threadQuery walks the reply chain down from one root, matching matchCount original repo URLs.
+func threadQuery(matchCount int) string {
+	// One matches CTE, not an OR: the OR made the outer query scan core_commits.
+	return `
+		WITH RECURSIVE descendants AS (
+			SELECT ? as repo_url, ? as hash, ? as branch
+			UNION
+			SELECT si.repo_url, si.hash, si.branch FROM social_items si
+			INNER JOIN descendants d ON si.reply_to_repo_url = d.repo_url AND si.reply_to_hash = d.hash AND si.reply_to_branch = d.branch
+		), matches AS (
+			SELECT repo_url, hash, branch FROM descendants
+			UNION
+			SELECT repo_url, hash, branch FROM social_items
+			WHERE original_hash = ? AND original_branch = ?
+			  AND original_repo_url IN (` + placeholders(matchCount) + `)
+		)` + baseDirectSelect + `
+		WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM matches)
+		   AND c.is_edit_commit = 0
+		   AND c.is_retracted = 0
+		ORDER BY COALESCE(c.origin_time, c.timestamp)`
+}
+
 // getThread retrieves a root post's replies, widened to the comments forkURLs authored.
 func getThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, forkURLs []string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		matchURLs := uniqueURLs(rootRepoURL, forkURLs)
-		matchPlaceholders := placeholders(len(matchURLs))
-		// One matches CTE, not an OR: the OR made the outer query scan core_commits.
-		query := `
-			WITH RECURSIVE descendants AS (
-				SELECT ? as repo_url, ? as hash, ? as branch
-				UNION
-				SELECT si.repo_url, si.hash, si.branch FROM social_items si
-				INNER JOIN descendants d ON si.reply_to_repo_url = d.repo_url AND si.reply_to_hash = d.hash AND si.reply_to_branch = d.branch
-			), matches AS (
-				SELECT repo_url, hash, branch FROM descendants
-				UNION
-				SELECT repo_url, hash, branch FROM social_items
-				WHERE original_hash = ? AND original_branch = ?
-				  AND original_repo_url IN (` + matchPlaceholders + `)
-			)` + baseDirectSelect + `
-			WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM matches)
-			   AND c.is_edit_commit = 0
-			   AND c.is_retracted = 0
-			ORDER BY COALESCE(c.origin_time, c.timestamp)`
+		query := threadQuery(len(matchURLs))
 
 		args := make([]interface{}, 0, 5+len(matchURLs)+1)
 		args = append(args, rootRepoURL, rootHash, rootBranch, rootHash, rootBranch)

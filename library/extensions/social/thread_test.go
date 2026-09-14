@@ -60,6 +60,40 @@ func TestGetComments_plan(t *testing.T) {
 	}
 }
 
+// threadPlanIndexes are the seeks the thread reader relies on: the reply walk, the originals, the commit rows.
+var threadPlanIndexes = []string{"idx_social_reply_to", "idx_social_original", "sqlite_autoindex_core_commits_1"}
+
+// TestGetThread_plan pins the thread reader's seeks and its freedom from a core_commits scan.
+func TestGetThread_plan(t *testing.T) {
+	setupTestDB(t)
+	cases := []struct {
+		name     string
+		forkURLs []string
+	}{
+		{"root only", nil},
+		{"widened to forks", []string{"https://github.com/fork/one", "https://github.com/fork/two"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			matchURLs := uniqueURLs(itemsTestRepoURL, tc.forkURLs)
+			args := []interface{}{itemsTestRepoURL, "plan00000001", itemsTestBranch, "plan00000001", itemsTestBranch}
+			for _, u := range matchURLs {
+				args = append(args, u)
+			}
+			args = append(args, "")
+			plan := strings.Join(queryPlan(t, threadQuery(len(matchURLs)), args...), "\n")
+			for _, index := range threadPlanIndexes {
+				if !strings.Contains(plan, index) {
+					t.Errorf("plan does not use %s:\n%s", index, plan)
+				}
+			}
+			if strings.Contains(plan, "SCAN core_commits") {
+				t.Errorf("plan scans core_commits:\n%s", plan)
+			}
+		})
+	}
+}
+
 // TestGetComments_writePath reads a thread written through CreatePost, CreateComment and RetractPost.
 func TestGetComments_writePath(t *testing.T) {
 	workdir := initWorkspace(t)
