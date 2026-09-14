@@ -42,6 +42,8 @@ gitsocial social timeline [-l following] [-r workspace] [-n 50]
 gitsocial social fetch                      # every repository in every list; `gitsocial fetch` does this and more
 ```
 
+`list add` fetches the URL as you write it, and `list remove` takes any spelling of it: two URLs naming one repository match by canonical form. A repository is in a list once, on one branch or on all of them.
+
 ## Followers
 
 A repository follows the workspace when one of its lists contains the workspace URL. Followers are detected during fetch.

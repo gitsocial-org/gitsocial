@@ -53,6 +53,8 @@ gitsocial fork add <fork-url>       # also `gitsocial review fork add|list|remov
 gitsocial fetch
 ```
 
+`fork add` fetches the URL as you write it, and `fork remove` takes any spelling of it: two URLs naming one fork match by canonical form.
+
 Pull requests from a registered fork appear in `pr list` and raise a `fork-pr` notification. On merge or close, a fork pull request is copied to this repository with the author's identity preserved, so the record survives the fork's deletion.
 
 ## Flows

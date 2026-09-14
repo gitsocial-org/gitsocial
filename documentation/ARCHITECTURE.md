@@ -263,6 +263,8 @@ Use the view when the WHERE clause is on `core_commits` columns. Join `core_comm
 
 References are `[repo_url]#<type>:<value>`: `https://github.com/user/repo#commit:abc123def456` or, workspace-relative, `#commit:abc123def456`. Types: `commit`, `branch`, `tag`, `file`, `list`.
 
+A repository has two names: the identity, `protocol.NormalizeURL` of any spelling, which keys every cache row, ref path and comparison, and the address, the spelling the user gave, which is stored in the list member or fork ref and handed to git.
+
 A virtual commit is one referenced by a `GitMsg-Ref` trailer but not yet fetched; it is stored with `is_virtual = 1` and full metadata, and flips to `0` when fetched.
 
 State refs under `refs/gitmsg/`:
