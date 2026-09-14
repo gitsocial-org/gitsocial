@@ -501,8 +501,8 @@ func TestSitePages_ThreadCapTruncation(t *testing.T) {
 		t.Fatal("unexpected pending")
 	}
 	page := getKey(t, client, "i/"+root[:12]+".html")
-	if !strings.Contains(page, "2 more replies") {
-		t.Error("reply cap: expected a '2 more replies' marker")
+	if !strings.Contains(page, `<p class="notice">2 more replies not shown.</p>`) {
+		t.Error("reply cap: expected a '2 more replies not shown.' notice")
 	}
 	if !strings.Contains(page, "reply 2") || strings.Contains(page, "reply 3") {
 		t.Error("reply cap: only the first three replies inline")
@@ -807,7 +807,7 @@ func TestSitePages_FrontHome(t *testing.T) {
 	if !strings.Contains(front, "README") || !strings.Contains(front, "readme paragraph text") {
 		t.Error("front page must carry the README section")
 	}
-	if strings.Contains(front, "truncated") {
+	if strings.Contains(front, `class="notice"`) {
 		t.Error("a small README must not be marked truncated")
 	}
 	if !strings.Contains(front, `<span class="chip">main</span>`) {
@@ -1078,7 +1078,7 @@ func TestSitePages_AtomFeed(t *testing.T) {
 	}
 	// An over-cap body truncates with a marker paragraph.
 	long := feedEntryByTitle(t, f, "Long post").Content.Value
-	if !strings.HasPrefix(long, "<p>xxxx") || !strings.HasSuffix(long, "<p>… truncated</p>") {
+	if !strings.HasPrefix(long, "<p>xxxx") || !strings.HasSuffix(long, "<p>Truncated. The full item is in the repository.</p>") {
 		t.Errorf("long body must truncate with a marker, got %d bytes ending %q", len(long), long[max(0, len(long)-40):])
 	}
 	if len(long) > siteFeedBodyMax+100 {

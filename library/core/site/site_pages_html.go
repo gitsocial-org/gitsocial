@@ -181,7 +181,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
 {{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
-{{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
+{{end}}{{if .Omitted}}<p class="notice">{{.Omitted}} more replies not shown.</p>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
@@ -194,7 +194,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}<h1>{{.Heading}}</h1>
 {{end}}<p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
 {{if .HTML}}{{.HTML}}{{else}}<pre>{{.Pre}}</pre>
-{{end}}{{if .Truncated}}<p class="meta">… truncated — full file in the repository</p>
+{{end}}{{if .Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}<footer><a href="{{.Chrome.Base}}f/index.html">← files</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
@@ -205,7 +205,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}</ul>
 {{if .MoreHref}}<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
 {{end}}{{end}}{{if .Readme}}<section><p class="meta">README</p>
-{{.Readme.HTML}}{{if .Readme.Truncated}}<p class="meta">… truncated — full README in the repository</p>
+{{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}</section>
 {{end}}{{end}}{{if .Activity}}<div class="home-activity"><h2 class="home-activity-head">Recent activity</h2>
 {{template "entries" .Activity}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
@@ -1360,7 +1360,7 @@ func siteFeedContentHTML(it *sitePageItem) string {
 		b.WriteString("</p>")
 	}
 	if truncated {
-		b.WriteString("<p>… truncated</p>")
+		b.WriteString("<p>Truncated. The full item is in the repository.</p>")
 	}
 	return b.String()
 }

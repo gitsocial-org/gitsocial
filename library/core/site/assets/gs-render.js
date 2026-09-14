@@ -1599,7 +1599,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const extra = all.length - shown.length;
       if (extra > 0) container.append(el("div", { class: "tree-row tree-more mono" }, [
         indent(depth), el("span", { class: "tree-chevron-spacer" }, []),
-        el("span", {}, [extra + " more not shown"]),
+        el("span", {}, [extra + " more not shown."]),
       ]));
     }
 
