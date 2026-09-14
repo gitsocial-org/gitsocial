@@ -290,8 +290,9 @@ func TestFetchSocial_Filters(t *testing.T) {
 				t.Error("discussion 1 was planned despite being mapped")
 			}
 		}
-		if len(plan.Comments) != 0 {
-			t.Errorf("comments = %+v, want none (their discussion was mapped)", plan.Comments)
+		// A mapped discussion still plans its comments, so new ones arrive without --update.
+		if len(plan.Comments) != 2 {
+			t.Errorf("comments = %+v, want the mapped discussion's comment and reply", plan.Comments)
 		}
 		// Mapped items are skipped, not counted as filtered by category or Since.
 		if plan.Filtered != 0 {

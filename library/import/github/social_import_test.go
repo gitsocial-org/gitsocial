@@ -175,6 +175,65 @@ func TestImportDiscussions_ReimportWritesNothing(t *testing.T) {
 	}
 }
 
+func TestImportDiscussions_ReimportAddsNewComments(t *testing.T) {
+	const oneCommentJSON = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":31,"title":"Open thread","body":"Start.",
+		 "author":{"login":"alice","name":"Alice GraphQL"},
+		 "category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_1","databaseId":801,"body":"First comment","author":{"login":"bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+	const twoCommentsJSON = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":31,"title":"Open thread","body":"Start.",
+		 "author":{"login":"alice","name":"Alice GraphQL"},
+		 "category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_1","databaseId":801,"body":"First comment","author":{"login":"bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}},
+			{"id":"DC_2","databaseId":802,"body":"Second comment","author":{"login":"alice"},
+			 "createdAt":"2024-06-16T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	workdir := newImportWorkspace(t)
+	cacheDir := t.TempDir()
+	page := oneCommentJSON
+	socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: page}
+	})
+
+	runSocialImport(t, workdir, cacheDir, false)
+	before := socialCommitCount(t, workdir)
+
+	page = twoCommentsJSON
+	stats := runSocialImport(t, workdir, cacheDir, false)
+	if stats.Posts != 0 {
+		t.Errorf("Posts = %d, want 0: the discussion is already imported", stats.Posts)
+	}
+	if stats.Comments != 1 {
+		t.Fatalf("Comments = %d, want 1 (the new comment), stats %+v", stats.Comments, stats)
+	}
+	if got := socialCommitCount(t, workdir); got != before+1 {
+		t.Errorf("gitmsg/social commits = %d, want %d", got, before+1)
+	}
+
+	mapping, err := importpkg.ReadMapping(cacheDir, "https://github.com/acme/widgets", "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	byContent := commentsByContent(t, workdir, mapping.GetHash(importpkg.MappingKey("github", "post", "31")))
+	if len(byContent) != 2 {
+		t.Errorf("thread comments = %+v, want both", byContent)
+	}
+}
+
 func TestImportDiscussions_CommentsInOneSecondStaySeparate(t *testing.T) {
 	const sameSecondJSON = `{"data":{"repository":{"discussions":{
 		"nodes":[{"number":12,"title":"Busy second","body":"Start.",

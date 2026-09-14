@@ -132,11 +132,8 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 		}
 		cursor = resp.Data.Repository.Discussions.PageInfo.EndCursor
 	}
-	// Paginate comments and replies past their 100-item caps (skip already-imported)
+	// Paginate comments and replies past their 100-item caps
 	for i := range allDiscussions {
-		if opts.SkipExternalIDs[fmt.Sprintf("post:%d", allDiscussions[i].Number)] {
-			continue
-		}
 		a.paginateDiscussionComments(&allDiscussions[i])
 	}
 	var logins []string
@@ -157,7 +154,9 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 	var comments []importpkg.ImportComment
 	var filtered int
 	for _, d := range allDiscussions {
+		// An imported discussion is not planned again, but its comments still walk the comment path.
 		if opts.SkipExternalIDs[fmt.Sprintf("post:%d", d.Number)] {
+			comments = append(comments, a.planDiscussionComments(d, opts)...)
 			continue
 		}
 		if allowed != nil && !allowed[d.Category.Slug] {
