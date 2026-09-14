@@ -47,16 +47,20 @@ func newSearchCmd() *cobra.Command {
 		Short: "Search across all extensions",
 		Long: `Search posts, issues, pull requests, releases and memos.
 
-A filter is a flag or an inline term, and the flag wins when both are
-given.
+A filter is a flag or an inline prefix, and the flag wins.
 
 Inline filters:
-  author:<email>     filter by author email
-  repo:<url>         filter by repository URL
-  type:<type>        filter by item type
-  hash:<prefix>      filter by commit hash prefix
-  after:YYYY-MM-DD   items after the date
-  before:YYYY-MM-DD  items before the date
+  author:<email>      author name or email
+  repo:<url>          repository URL
+  repository:<url>    repository URL, the long form of repo:
+  type:<type>         item type
+  hash:<prefix>       commit hash prefix
+  commit:<prefix>     commit hash prefix, the long form of hash:
+  list:<name>         list name or ID
+  after:YYYY-MM-DD    items after the date
+  before:YYYY-MM-DD   items before the date
+
+Any other prefix is text: state:open searches for state:open.
 
 Types: post, comment, repost, quote, pr, issue, milestone, sprint,
 release, memo.
