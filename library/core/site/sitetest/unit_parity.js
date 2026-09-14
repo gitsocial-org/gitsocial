@@ -77,6 +77,11 @@ for (const c of FIX.detailHeads) {
   eq(chipList(GS.headChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": head chips");
 }
 
+console.log("=== parity invariant: meta row author label ===");
+for (const c of FIX.metaRow.authors) {
+  eq(GS.authorLabel(c.author, c.email), c.expectLabel, c.name + ": label");
+}
+
 require("../assets/gs-render.js");
 const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("=")).join(",");
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");

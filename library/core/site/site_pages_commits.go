@@ -135,14 +135,15 @@ func writeSiteCommitPages(client *objstore.Client, prefix string, entries []site
 func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntry {
 	short := e.SHA[:12]
 	glyph, glyphClass := sitePageGlyph("commit", "commit", "")
+	href := base + "index.html#commit:" + short + "@" + branch
 	return sitePageListEntry{
 		ID:         "c-" + short,
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
 		GlyphTitle: "commit",
-		Href:       base + "index.html#commit:" + short + "@" + branch,
+		Href:       href,
 		Title:      e.Subject,
-		Meta:       []string{e.Author, sitePageDate(e.TS), short},
+		Meta:       []sitePageBit{{Class: "author", Text: sitePageAuthorLabel(e.Author, "")}, sitePageTimeBit(e.TS), sitePageHashBit(short, href)},
 	}
 }
 

@@ -67,7 +67,7 @@
   ],
   ".meta": [
     {
-      "shape": "span.author > span.reltime > a.hash > span.chip",
+      "shape": "span.author > span.reltime > a.hash > span.edited",
       "padding": "0px",
       "margin": "0px 0px 0px 28.8px",
       "fontSize": "12.8px",

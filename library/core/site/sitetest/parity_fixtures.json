@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. metaRow pins the meta row skeleton: the bit classes in order, and the author label and its email title both renderers derive.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -280,6 +280,14 @@
       "expectChips": [{ "class": "chip-retracted", "label": "retracted" }]
     }
   ],
+  "metaRow": {
+    "bits": ["author", "reltime", "hash"],
+    "authors": [
+      { "name": "a display name over its email", "author": "Ada Lovelace", "email": "ada@example.com", "expectLabel": "Ada Lovelace", "expectTitle": "ada@example.com" },
+      { "name": "an email alone labels the row", "author": "", "email": "ada@example.com", "expectLabel": "ada@example.com", "expectTitle": "" },
+      { "name": "neither name nor email reads unknown", "author": "", "email": "", "expectLabel": "unknown", "expectTitle": "" }
+    ]
+  },
   "listHeadings": {
     "issues": "Issues",
     "milestones": "Milestones",

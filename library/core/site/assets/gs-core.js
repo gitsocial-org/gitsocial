@@ -765,6 +765,11 @@
     return (commit && (commit.authorName || commit.authorEmail)) || "unknown";
   }
 
+  // authorLabel picks a meta row's author label: the display name, else the email, else "unknown".
+  function authorLabel(name, email) {
+    return name || email || "unknown";
+  }
+
   // effectiveAuthorEmail returns the identity email an item is attributed to, origin email over git email.
   function effectiveAuthorEmail(commit, header) {
     header = header || {};
@@ -819,13 +824,14 @@
       const edit = editsFor.get(c.short);
       const canonHeader = c.gitmsg || {};
       const header = Object.assign({}, canonHeader);
-      let content = c.content, rawMessage = c.rawMessage, edited = false, retracted = false, editorName = "";
+      let content = c.content, rawMessage = c.rawMessage, edited = false, retracted = false, editorName = "", editedTime = 0;
       if (edit) {
         edited = true;
         consumed.add(c.short);
         Object.assign(header, edit.gitmsg);
         // Origin provenance is fixed at import (GITMSG 1.9): keep the canonical's origin fields.
         for (const k of ORIGIN_KEYS) { if (canonHeader[k] !== undefined) header[k] = canonHeader[k]; else delete header[k]; }
+        editedTime = effectiveTime(edit, edit.gitmsg || {});
         if (edit.gitmsg.retracted === "true") retracted = true;
         if (edit.content) content = edit.content;
         // The raw view shows the commit whose content is displayed, the edit when one overrides the canonical.
@@ -838,7 +844,7 @@
       if (retracted) continue;
       const author = effectiveAuthor(c, canonHeader);
       const versions = buildVersions(c, canonHeader, allEditsFor.get(c.short) || [], author);
-      items.push({ commit: c, header, content, rawMessage, edited, editorName, author, effectiveTime: effectiveTime(c, canonHeader), versions });
+      items.push({ commit: c, header, content, rawMessage, edited, editorName, editedTime, author, effectiveTime: effectiveTime(c, canonHeader), versions });
     }
     for (const [target, edit] of editsFor) {
       if (byShort.has(target) || consumed.has(target)) continue;
@@ -848,7 +854,7 @@
       // Orphan edits: the collected edits become the version chain, the first standing in for the missing canonical.
       const orphans = allEditsFor.get(target) || [edit];
       const versions = buildVersions(orphans[0], orphans[0].gitmsg || {}, orphans.slice(1), author);
-      items.push({ commit: edit, header: h, content: edit.content, rawMessage: edit.rawMessage, edited: true, editorName: "", author, effectiveTime: effectiveTime(edit, h), versions });
+      items.push({ commit: edit, header: h, content: edit.content, rawMessage: edit.rawMessage, edited: true, editorName: "", editedTime: effectiveTime(edit, h), author, effectiveTime: effectiveTime(edit, h), versions });
     }
     items.sort((a, b) => b.effectiveTime - a.effectiveTime);
     return items;
@@ -4016,7 +4022,7 @@
     deriveBase, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
-    buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail,
+    buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,

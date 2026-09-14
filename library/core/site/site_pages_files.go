@@ -582,12 +582,12 @@ func buildSiteFilesIndexPage(site sitePageSite, state *siteFilesState, branch st
 	entries := make([]sitePageListEntry, 0, len(paths))
 	for _, p := range paths {
 		r := state.Files[p]
-		meta := []string{}
+		meta := []sitePageBit{}
 		if r.Title != p {
-			meta = append(meta, p)
+			meta = append(meta, sitePageTextBit(p))
 		}
 		if r.Lastmod != "" {
-			meta = append(meta, r.Lastmod)
+			meta = append(meta, sitePageTextBit(r.Lastmod))
 		}
 		entries = append(entries, sitePageListEntry{
 			Glyph:      siteFilesList.Glyph,

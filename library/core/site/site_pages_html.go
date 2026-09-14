@@ -163,13 +163,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "metaline"}}<p class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "metaline"}}<p class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
-<span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
+<span class="meta">{{template "bits" .Meta}}</span></div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}{{template "detailhead" .}}
-{{end}}<div class="detail-meta"><span class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
+{{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}{{template "paras" .Paras}}{{end}}{{with .Artifacts}}<section>
 {{template "metaline" .}}
@@ -178,7 +178,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
 {{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<section><p class="meta">… truncated — {{.Omitted}} more replies in the thread</p></section>
@@ -270,6 +270,14 @@ type sitePageChrome struct {
 // sitePageChip is one state/type chip.
 type sitePageChip struct{ Class, Label string }
 
+// sitePageBit is one meta-row bit: plain text, or a classed span carrying a title, or a link.
+type sitePageBit struct {
+	Class string // "" renders the text bare, as the page layer's own further bits do
+	Text  string
+	Title string // title attribute on a classed span
+	Href  string // set on the hash bit, which renders as a link
+}
+
 // sitePageSection is one thread section on an item page: a reply, a tombstone
 // line, or the release artifacts block.
 type sitePageSection struct {
@@ -287,7 +295,7 @@ type sitePageReply struct {
 	GlyphClass string
 	GlyphTitle string
 	Depth      int
-	Meta       []string
+	Meta       []sitePageBit
 	Paras      [][]string
 	Tomb       string
 }
@@ -305,7 +313,7 @@ type siteItemPageData struct {
 	Subject   string
 	Heading   string
 	Chips     []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
-	Meta      []string
+	Meta      []sitePageBit
 	Paras     [][]string
 	Tomb      string
 	Artifacts *sitePageSection // a release's artifact block, the only section with a Pre slot
@@ -339,7 +347,7 @@ type sitePageListEntry struct {
 	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
 	Href       string
 	Title      string
-	Meta       []string
+	Meta       []sitePageBit
 }
 
 // siteListPageData feeds the "list" template.
@@ -645,16 +653,71 @@ func siteHeadChips(it *sitePageItem, head string) []sitePageChip {
 	return append(chips, siteReleaseVersionChips(it, head)...)
 }
 
-// sitePageAuthorBit formats a message's author meta bit ("name <email>").
-func sitePageAuthorBit(m *sitePageMsg) string {
-	name, email := pageDisplayAuthor(m)
-	if email != "" {
-		if name == "" {
-			return "<" + email + ">"
-		}
-		return name + " <" + email + ">"
+// sitePageAuthorLabel picks a meta row's author label: the display name, else the email, else "unknown". Mirrors authorLabel in gs-core.js.
+func sitePageAuthorLabel(name, email string) string {
+	if name != "" {
+		return name
 	}
-	return name
+	if email != "" {
+		return email
+	}
+	return "unknown"
+}
+
+// sitePageAuthorBit builds a message's author bit, the email in its title when it is not the label.
+func sitePageAuthorBit(m *sitePageMsg) sitePageBit {
+	name, email := pageDisplayAuthor(m)
+	label := sitePageAuthorLabel(name, email)
+	bit := sitePageBit{Class: "author", Text: label}
+	if email != "" && email != label {
+		bit.Title = email
+	}
+	return bit
+}
+
+// sitePagePreciseTime formats a unix timestamp as the meta row's title stamp, in UTC since a static page cannot age.
+func sitePagePreciseTime(ts int64) string {
+	if ts <= 0 {
+		return ""
+	}
+	return time.Unix(ts, 0).UTC().Format("2006-01-02 15:04") + " UTC"
+}
+
+// sitePageTimeBit builds a time bit: the date, with the precise time in its title.
+func sitePageTimeBit(ts int64) sitePageBit {
+	return sitePageBit{Class: "reltime", Text: sitePageDate(ts), Title: sitePagePreciseTime(ts)}
+}
+
+// sitePageHashBit builds a short-ref bit linking to the commit's own page or route.
+func sitePageHashBit(short, href string) sitePageBit {
+	return sitePageBit{Class: "hash", Text: short, Href: href}
+}
+
+// sitePageTextBit builds one of the page layer's own further bits, which carry no element.
+func sitePageTextBit(text string) sitePageBit {
+	return sitePageBit{Text: text}
+}
+
+// sitePageEditorName returns the editor's display name when the latest version was written by someone other than the author, else "".
+func sitePageEditorName(it *sitePageItem) string {
+	if !it.Edited || it.Resolved == it.Msg {
+		return ""
+	}
+	editName, editEmail := pageDisplayAuthor(it.Resolved)
+	_, authorEmail := pageDisplayAuthor(it.Msg)
+	if strings.EqualFold(strings.TrimSpace(editEmail), strings.TrimSpace(authorEmail)) {
+		return ""
+	}
+	return sitePageAuthorLabel(editName, editEmail)
+}
+
+// sitePageEditedBit builds the edited marker: the edit's precise time in its title, and the editor when it is not the author.
+func sitePageEditedBit(it *sitePageItem) sitePageBit {
+	text := "edited"
+	if editor := sitePageEditorName(it); editor != "" {
+		text = "edited by " + editor
+	}
+	return sitePageBit{Class: "edited", Text: text, Title: sitePagePreciseTime(pageEffectiveTime(it.Resolved))}
 }
 
 // sitePageBaseHead formats a PR's "head → base" branch pair from its header refs.
@@ -676,32 +739,36 @@ func sitePageBaseHead(it *sitePageItem) string {
 	return head + " → " + base
 }
 
-// siteItemPageMeta builds an item page's meta-line bits: type, extras, author, date, markers and short ref.
-func siteItemPageMeta(it *sitePageItem) []string {
+// siteItemPageMeta builds an item page's meta-line bits: the author, time and hash skeleton, the edited marker, then the page layer's own further bits.
+func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	t := pageItemType(it)
-	bits := []string{sitePageTypeLabel(t)}
+	bits := []sitePageBit{
+		sitePageAuthorBit(it.Msg),
+		sitePageTimeBit(pageEffectiveTime(it.Msg)),
+		sitePageHashBit(it.Msg.Short, it.Msg.Short+".html"),
+	}
+	if it.Edited && !it.Retracted {
+		bits = append(bits, sitePageEditedBit(it))
+	}
+	bits = append(bits, sitePageTextBit(sitePageTypeLabel(t)))
 	switch t {
 	case "pull-request":
 		if bh := sitePageBaseHead(it); bh != "" {
-			bits = append(bits, bh)
+			bits = append(bits, sitePageTextBit(bh))
 		}
 	case "milestone":
 		if due := pageItemField(it, "due"); due != "" {
-			bits = append(bits, "due "+due)
+			bits = append(bits, sitePageTextBit("due "+due))
 		}
 	case "sprint":
 		if start, end := pageItemField(it, "start"), pageItemField(it, "end"); start != "" || end != "" {
-			bits = append(bits, start+" → "+end)
+			bits = append(bits, sitePageTextBit(start+" → "+end))
 		}
 	}
-	bits = append(bits, sitePageAuthorBit(it.Msg), sitePageDate(pageEffectiveTime(it.Msg)))
 	if t == "release" && pageItemField(it, "signed-by") != "" {
-		bits = append(bits, "signed")
+		bits = append(bits, sitePageTextBit("signed"))
 	}
-	if it.Edited && !it.Retracted {
-		bits = append(bits, "edited")
-	}
-	return append(bits, "#commit:"+it.Msg.Short)
+	return bits
 }
 
 // sitePageFeedbackVerdict returns a feedback's review verdict, "" for a plain comment. Mirrors feedbackVerdict in gs-core.js.
@@ -745,7 +812,10 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
 		GlyphTitle: t,
-		Meta:       []string{sitePageAuthorBit(r.Msg), sitePageDate(pageEffectiveTime(r.Msg))},
+		Meta:       []sitePageBit{sitePageAuthorBit(r.Msg), sitePageTimeBit(pageEffectiveTime(r.Msg))},
+	}
+	if r.Edited {
+		s.Meta = append(s.Meta, sitePageEditedBit(r))
 	}
 	if t == "feedback" {
 		s.Variant = "feedback"
@@ -757,13 +827,10 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 			s.Chips = append(s.Chips, sitePageChip{Label: anchor})
 		}
 		if pageItemField(r, "suggestion") == "true" {
-			s.Meta = append(s.Meta, "suggestion")
+			s.Meta = append(s.Meta, sitePageTextBit("suggestion"))
 		}
 	} else if r.InReplyTo != "" {
-		s.Meta = append(s.Meta, "reply to "+r.InReplyTo)
-	}
-	if r.Edited {
-		s.Meta = append(s.Meta, "edited")
+		s.Meta = append(s.Meta, sitePageTextBit("reply to "+r.InReplyTo))
 	}
 	s.Paras = sitePageParas(pageItemBody(r))
 	return s
@@ -946,16 +1013,18 @@ func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageList
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 	subject = siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
-	name, _ := pageDisplayAuthor(it.Msg)
-	var meta []string
-	if t != defaultType {
-		meta = append(meta, sitePageTypeLabel(t))
+	meta := []sitePageBit{
+		sitePageAuthorBit(it.Msg),
+		sitePageTimeBit(pageEffectiveTime(it.Msg)),
+		sitePageHashBit(it.Msg.Short, base+"i/"+it.Msg.Short+".html"),
 	}
-	meta = append(meta, name, sitePageDate(pageEffectiveTime(it.Msg)))
+	if t != defaultType {
+		meta = append(meta, sitePageTextBit(sitePageTypeLabel(t)))
+	}
 	if n := len(it.Replies); n == 1 {
-		meta = append(meta, "1 comment")
+		meta = append(meta, sitePageTextBit("1 comment"))
 	} else if n > 0 || t == "issue" || t == "pull-request" {
-		meta = append(meta, fmt.Sprintf("%d comments", n))
+		meta = append(meta, sitePageTextBit(fmt.Sprintf("%d comments", n)))
 	}
 	classType := sitePageGlyphClassType(it)
 	state := pageItemField(it, "state")
@@ -988,10 +1057,11 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			short = short[:12]
 		}
 		glyph, glyphClass := sitePageGlyph("commit", "commit", "")
+		href := sitePageAppURL(site, "commit:"+short+"@"+e.Branch)
 		row := sitePageListEntry{
-			Href:       sitePageAppURL(site, "commit:"+short+"@"+e.Branch),
+			Href:       href,
 			Title:      e.Subject,
-			Meta:       []string{e.Author, sitePageDate(e.TS), short},
+			Meta:       []sitePageBit{{Class: "author", Text: sitePageAuthorLabel(e.Author, "")}, sitePageTimeBit(e.TS), sitePageHashBit(short, href)},
 			Glyph:      glyph,
 			GlyphClass: glyphClass,
 			GlyphTitle: "commit",
@@ -1009,15 +1079,15 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 			itemType := pageItemType(it)
 			subject = siteHeadSubject(itemType, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
-			name, _ := pageDisplayAuthor(it.Msg)
 			classType := sitePageGlyphClassType(it)
 			state := pageItemField(it, "state")
 			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
+			href := "./i/" + it.Msg.Short + ".html"
 			row := sitePageListEntry{
-				Href:       "./i/" + it.Msg.Short + ".html",
+				Href:       href,
 				Title:      subject,
 				TailChips:  siteReleaseVersionChips(it, subject),
-				Meta:       []string{name, sitePageDate(pageEffectiveTime(it.Msg))},
+				Meta:       []sitePageBit{sitePageAuthorBit(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg)), sitePageHashBit(it.Msg.Short, href)},
 				Glyph:      glyph,
 				GlyphClass: glyphClass,
 				GlyphTitle: sitePageGlyphTitle(classType, state),

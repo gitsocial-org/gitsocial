@@ -54,7 +54,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const cards = front.text.match(/<div class="card">/g) || [];
   ok("the section is capped at ten cards", cards.length === 10, "cards=" + cards.length);
   ok("activity rows link item pages, not app routes", (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length >= 1, "links=" + (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length);
-  ok("activity rows carry glyph, subject, author and date, and no type chip", /<span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject" href="\.\/i\/[0-9a-f]{12}\.html">/.test(front.text) && /Ada Lovelace · \d{4}-\d{2}-\d{2}/.test(front.text));
+  ok("activity rows carry glyph, subject, author and date, and no type chip", /<span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject" href="\.\/i\/[0-9a-f]{12}\.html">/.test(front.text) && /<span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span>/.test(front.text));
   ok("no activity row repeats its glyph as a chip", !/<span class="type-glyph[^>]*>[^<]*<\/span> <span class="chip">/.test(front.text));
   // A reply gets no page of its own, so it must not appear here. Pinned to a
   // string with a POSITIVE control: REPLY_TEXT is asserted PRESENT on the parent
@@ -65,7 +65,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // and the short sha in the meta. No row carries a chip repeating what the
   // glyph's own title already says — the item rows above dropped theirs too.
   ok("activity interleaves code commits (app-linked, commit glyph, no chip)", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="[^"]*index\.html#commit:[0-9a-f]+@/.test(front.text));
-  ok("code activity rows carry the short sha in their meta", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject"[^>]*>[^<]*<\/a><\/div>\s*<span class="meta">[^<]* · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span>/.test(front.text));
+  ok("code activity rows carry the short sha in their meta", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject"[^>]*>[^<]*<\/a><\/div>\s*<span class="meta"><span class="author"[^>]*>[^<]*<\/span> · <span class="reltime" title="[^"]*">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>/.test(front.text));
   // The section closes with a crawlable link on to the social posts archive (the
   // served page for the app's /timeline route), carrying the app's own
   // chevron-and-label show-more affordance — the app's own control, chevron SVG
@@ -139,13 +139,14 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("post page keeps its first line as the heading", !!thread && /<h1 class="subject">Shipping the S3 static site reader this week\.<\/h1>/.test(thread), thread && thread.slice(thread.indexOf("<nav>"), thread.indexOf("<nav>") + 300));
   const edited = pages.find((p) => p.includes("Improve onboarding and setup docs"));
   ok("edited issue renders the resolved version", !!edited);
-  ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && / edited /.test(edited.replace(/·/g, " ")));
+  ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && /<span class="edited" title="[^"]+">edited<\/span>/.test(edited));
   // Both renderers head a detail with one card head: the h1 subject, then the
   // head's one chip slot. The state pill lands there, never in the meta line.
   // A body-only root (a quote) promotes no first line, so it heads with none.
   ok("an item page carries at most one h1, always the card head's", pages.every((p) => (p.match(/<h1/g) || []).length <= 1 && (!/<h1/.test(p) || /<div class="card-head"><h1 class="subject">/.test(p))), "a page heads with something other than one card-head h1");
   ok("a state pill rides the detail head, not the meta line", !!edited && /<div class="card-head"><h1 class="subject">[^<]*<\/h1> <span class="chip state closed">closed<\/span><\/div>/.test(edited), edited && edited.slice(edited.indexOf('<div class="card-head">'), edited.indexOf('<div class="card-head">') + 200));
-  ok("the detail meta line is the app's detail-meta row", !!edited && /<div class="detail-meta"><span class="meta">issue · /.test(edited));
+  ok("the detail meta line leads with the author, time and hash skeleton", !!edited && /<div class="detail-meta"><span class="meta"><span class="author"[^>]*>[^<]*<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[0-9a-f]{12}\.html">[0-9a-f]{12}<\/a>/.test(edited), edited && edited.slice(edited.indexOf('<div class="detail-meta">'), edited.indexOf('<div class="detail-meta">') + 260));
+  ok("the page layer's own further bits follow the hash", !!edited && /<a class="hash"[^>]*>[0-9a-f]{12}<\/a>(?: · <span class="edited"[^>]*>[^<]*<\/span>)? · issue<\/span>/.test(edited));
   const pr = pages.find((p) => p.includes("Expand notes with more lines"));
   ok("PR page exists", !!pr);
   ok("PR page inlines line-anchored feedback", !!pr && pr.includes("This wording is clearer, nice.") && pr.includes("notes.txt:2"));
@@ -189,7 +190,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
   ok("commits page reads without JS (heading + card rows)", /<h1>Commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
-  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta">Ada Lovelace · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
+  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta"><span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.

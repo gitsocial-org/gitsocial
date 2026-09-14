@@ -7,6 +7,7 @@
 package site
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -116,8 +117,12 @@ func TestSiteCommits_SealedLayoutAndRows(t *testing.T) {
 	if !strings.Contains(head, `<a class="subject" href="../index.html#commit:`+newest+`@main">commit 229</a>`) {
 		t.Error("row subject must link into the app's commit view on the default branch")
 	}
-	if !strings.Contains(head, `<span class="meta">Test User · 1970-01-01 · `+newest+`</span>`) {
-		t.Errorf("row meta must be author · date · sha; head=%s", head[strings.Index(head, "<ol"):min(len(head), strings.Index(head, "<ol")+400)])
+	wantMeta := regexp.MustCompile(`<span class="meta"><span class="author">Test User</span> · ` +
+		`<span class="reltime" title="1970-01-01 \d\d:\d\d UTC">1970-01-01</span> · ` +
+		`<a class="hash" href="\.\./index\.html#commit:` + newest + `@main">` + newest + `</a></span>`)
+	if !wantMeta.MatchString(head) {
+		i := strings.Index(head, `<span class="meta">`)
+		t.Errorf("row meta must be the author, time and hash skeleton; got %s", head[i:min(len(head), i+300)])
 	}
 
 	page1 := getKey(t, client, "commits/1.html")

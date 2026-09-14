@@ -8,6 +8,7 @@ const chrome = require("./chrome.js");
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const BASE = ORIGIN + "/thread-demo/";
 const DIR = path.join(__dirname, "styles");
+const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, "parity_fixtures.json"), "utf8"));
 const WIDTH = 1280, HEIGHT = 900, BUDGET = 9000;
 const THEMES = { dark: [], light: ["--blink-settings=preferredColorScheme=1"] };
 
@@ -71,6 +72,21 @@ function checkDetailHead(theme, head, subject) {
   ok("detail head " + theme + ": the subject takes the page's h1 size", sizes.size === 1 && sizes.has(DETAIL_HEAD_SIZE), [...sizes].join("|"));
 }
 
+// META_SHAPE is the meta row skeleton the parity fixture names: the author, the
+// time, then the hash link, with the edited marker as the one trailing bit.
+const META_SHAPE = new RegExp("^" + FIX.metaRow.bits.map((c, i) => (i === 2 ? "a." : "span.") + c).join(" > ") + "( > span\\.edited)?$");
+
+// checkMetaRow asserts every author-led meta row carries that skeleton. metas is
+// a list route's ".meta" record; rows built from other parts are left alone.
+function checkMetaRow(theme, metas) {
+  if (!metas) {
+    ok("meta row " + theme + ": records captured", false, "no .meta record");
+    return;
+  }
+  const led = metas.map((r) => r.shape).filter((s) => s.startsWith("span.author"));
+  ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -105,7 +121,7 @@ function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {};
+  const listCards = {}, listMetas = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {};
   for (const route of ROUTES) {
     let hash = route.hash;
     if (!hash) {
@@ -115,7 +131,7 @@ function main() {
     for (const [theme, flags] of Object.entries(THEMES)) {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
-      if (route.name === "issues") listCards[theme] = got[".card"];
+      if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; }
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];
         detailHeads[theme] = got[".detail > .card-head"];
@@ -139,6 +155,7 @@ function main() {
   }
   if (!update) for (const theme of Object.keys(THEMES)) {
     checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
+    checkMetaRow(theme, listMetas[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
   }
   if (update) console.log("baselines written to " + DIR);

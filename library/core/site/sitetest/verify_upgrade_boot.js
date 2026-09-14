@@ -797,7 +797,7 @@ async function main() {
     ok("no row carries a chip repeating the glyph", rows.every((r) => r.type === "") && painted.every((p) => p.type === ""),
       "page=" + JSON.stringify(rows.map((r) => r.type)) + " app=" + JSON.stringify(painted.map((p) => p.type)));
     ok("code rows carry the commit's short sha in the meta",
-      codeRows.every((r) => new RegExp(" · [0-9a-f]{12}</span>").test(section.slice(section.indexOf(r.href)))),
+      codeRows.every((r) => new RegExp(" · <a class=\"hash\" href=\"[^\"]*\">[0-9a-f]{12}</a></span>").test(section.slice(section.indexOf(r.href)))),
       "hrefs=" + JSON.stringify(codeRows.map((r) => r.href)));
     ok("item rows link to their crawlable item page", itemRows.every((r) => /^\.\/i\/[0-9a-f]{12}\.html$/.test(r.href)), "hrefs=" + JSON.stringify(itemRows.map((r) => r.href)));
     // A code commit has no page of its own, so its row deep-links into the app on
@@ -823,14 +823,15 @@ async function main() {
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>Commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(page.text));
     // The row leads with the commit glyph, the same one the app's code card paints.
-    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([^<]*)<\/span><\/div>/g)]
-      .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4]) }));
+    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([\s\S]*?)<\/span><\/div>/g)]
+      .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4].replace(/<[^>]*>/g, "")) }));
     ok("commits page lists rows", rows.length > 0, "rows=" + rows.length);
     // Every row is a citable place: an id a URL can name, and a subject linking
     // into the app's commit view (the rich surface a commit already has).
     ok("every row carries its c-<sha12> anchor id", rows.every((r) => r.id === "c-" + r.meta.split(" · ").pop()), JSON.stringify(rows.map((r) => r.id)));
     ok("every row's subject links the app's commit view on the default branch", rows.every((r) => /^\.\.\/index\.html#commit:[0-9a-f]{12}@/.test(r.href)), JSON.stringify(rows.map((r) => r.href)));
     ok("every row's meta is author · date · sha", rows.every((r) => /^.+ · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}$/.test(r.meta)), JSON.stringify(rows.map((r) => r.meta)));
+    ok("every row's meta is the author, time and hash skeleton", /<span class="meta"><span class="author"[^>]*>[^<]*<\/span> · <span class="reltime" title="[^"]*">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>/.test(page.text), page.text.slice(page.text.indexOf('<span class="meta">'), page.text.indexOf('<span class="meta">') + 220));
     // The nav is what makes the list reachable from every other crawlable page —
     // and on the commits list itself the nav marks it current, in the app's own
     // active treatment (the link stays a link, as the app's active item does).

@@ -71,6 +71,21 @@ type parityDetailHeadCase struct {
 	ExpectChips   []parityChip      `json:"expectChips"`
 }
 
+// parityAuthorCase pins the label and title an author bit yields.
+type parityAuthorCase struct {
+	Name        string `json:"name"`
+	Author      string `json:"author"`
+	Email       string `json:"email"`
+	ExpectLabel string `json:"expectLabel"`
+	ExpectTitle string `json:"expectTitle"`
+}
+
+// parityMetaRow pins the meta row skeleton: its bit classes in order, and its author cases.
+type parityMetaRow struct {
+	Bits    []string           `json:"bits"`
+	Authors []parityAuthorCase `json:"authors"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	MessageCases   []parityMessageCase     `json:"messageCases"`
@@ -78,6 +93,7 @@ type parityFixtures struct {
 	FeedbackCards  []parityFeedbackCase    `json:"feedbackCards"`
 	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
 	DetailHeads    []parityDetailHeadCase  `json:"detailHeads"`
+	MetaRow        parityMetaRow           `json:"metaRow"`
 	ListHeadings   map[string]string       `json:"listHeadings"`
 }
 
@@ -124,6 +140,45 @@ func TestParityListHeadings(t *testing.T) {
 		if want, ok := f.ListHeadings[tab]; !ok || want != list.NavLabel {
 			t.Errorf("%s: heading %q, fixture %q", tab, list.NavLabel, want)
 		}
+	}
+}
+
+// parityBitClasses lists a meta row's leading bit classes, the form both halves compare.
+func parityBitClasses(bits []sitePageBit, n int) []string {
+	out := make([]string, 0, n)
+	for _, b := range bits[:min(n, len(bits))] {
+		out = append(out, b.Class)
+	}
+	return out
+}
+
+// TestParityMetaRow asserts the page layer's meta rows lead with the skeleton
+// unit_parity.js and verify_styles.js pin on the app's own side.
+func TestParityMetaRow(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.MetaRow.Bits) == 0 || len(f.MetaRow.Authors) == 0 {
+		t.Fatal("no meta row case in parity fixtures")
+	}
+	for _, c := range f.MetaRow.Authors {
+		t.Run(c.Name, func(t *testing.T) {
+			bit := sitePageAuthorBit(&sitePageMsg{Author: c.Author, Email: c.Email})
+			if bit.Class != "author" || bit.Text != c.ExpectLabel || bit.Title != c.ExpectTitle {
+				t.Errorf("author bit = %+v, want class author, text %q, title %q", bit, c.ExpectLabel, c.ExpectTitle)
+			}
+		})
+	}
+	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Message: "An issue", Header: &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}}
+	it := &sitePageItem{Msg: msg, Resolved: msg}
+	want := strings.Join(f.MetaRow.Bits, ",")
+	if got := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.Bits)), ","); got != want {
+		t.Errorf("item page meta bits = %q, want %q", got, want)
+	}
+	row := buildSiteListEntry(it, "../", "issue")
+	if got := strings.Join(parityBitClasses(row.Meta, len(f.MetaRow.Bits)), ","); got != want {
+		t.Errorf("list row meta bits = %q, want %q", got, want)
+	}
+	if row.Meta[2].Href != "../i/"+msg.Short+".html" {
+		t.Errorf("list row hash href = %q, want the item's own page", row.Meta[2].Href)
 	}
 }
 
