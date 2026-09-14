@@ -152,6 +152,8 @@ A generated page inlines `pages-core.css` into its head, comments stripped, and 
 
 Two rules follow. `pages-core.css` carries no `url()`, since pages sit at several directory depths where a relative URL resolves against the page. A change to it bumps `sitePagesVersion`, since every page's head carries a copy.
 
+Type sizes, colours and spacing come from the tokens `pages-core.css` declares. Outside them a spacing literal is a mark under 4px, or an `em` that scales with its own text. `site_pages_tokens_test.go` holds that rule over both sheets.
+
 A configured accent is site data, not part of the sheet. It is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
 
 A grammar is chosen by file extension, then basename (`Dockerfile`, `Makefile`, `CMakeLists.txt`), then a fence's info string, with `markup` as the fallback. Code renders plain first and highlights when the grammar arrives.

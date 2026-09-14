@@ -6,6 +6,7 @@ package site
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -57,6 +58,67 @@ func TestSitePagesVarsDeclaredInCore(t *testing.T) {
 			if !declared[m[1]] {
 				t.Errorf("%s consumes %s, which pages-core.css does not declare", sheet, m[1])
 			}
+		}
+	}
+}
+
+// sitePagesTestSpacingRe matches a spacing declaration and captures its value.
+var sitePagesTestSpacingRe = regexp.MustCompile(`(?:^|[^\w-])((?:scroll-)?(?:padding|margin)(?:-(?:top|left|right|bottom))?|gap|row-gap|column-gap|top|left|right|bottom|inset)\s*:\s*([^;}]+)`)
+
+// sitePagesTestSpacingTermRe matches one term of a spacing value: a var(), a length, a bare number, or a keyword.
+var sitePagesTestSpacingTermRe = regexp.MustCompile(`var\(\s*--[\w-]+\s*\)|-?\d*\.?\d+[a-z%]*|[a-z][\w-]*`)
+
+// sitePagesTestLengthRe matches a rem or px length; an em scales with its own text and is off the scale.
+var sitePagesTestLengthRe = regexp.MustCompile(`^(-?\d*\.?\d+)(rem|px)$`)
+
+// sitePagesTestSpacingTokens are the tokens a spacing value may resolve through: the steps, the pairs and the layout metrics.
+var sitePagesTestSpacingTokens = map[string]bool{
+	"--sp-1": true, "--sp-2": true, "--sp-3": true, "--sp-4": true, "--sp-5": true, "--sp-6": true,
+	"--pad-panel": true, "--pad-row": true, "--pad-ctl": true,
+	"--shell-pad": true, "--nav-gap": true, "--nav-w": true, "--shell-max": true,
+}
+
+// sitePagesTestSpacingMark is the mark ceiling in pixels; a length under it is ink, not a step.
+const sitePagesTestSpacingMark = 4.0
+
+// sitePagesTestSpacingTermOK reports whether one spacing term is a token, zero, a keyword, or a mark under 4px.
+func sitePagesTestSpacingTermOK(term string) bool {
+	if strings.HasPrefix(term, "var(") {
+		name := strings.Trim(strings.TrimSuffix(strings.TrimPrefix(term, "var("), ")"), " ")
+		return sitePagesTestSpacingTokens[name]
+	}
+	m := sitePagesTestLengthRe.FindStringSubmatch(term)
+	if m == nil {
+		return true
+	}
+	px, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return false
+	}
+	if m[2] == "rem" {
+		px *= 16
+	}
+	if px < 0 {
+		px = -px
+	}
+	return px == 0 || px < sitePagesTestSpacingMark
+}
+
+// TestSitePagesSpacingOnTheScale asserts every spacing value in both sheets is a step, a pair or metric, zero, or a mark under 4px.
+func TestSitePagesSpacingOnTheScale(t *testing.T) {
+	for _, name := range []string{"pages-core.css", "pages-full.css"} {
+		css := sitePagesTestReadCSS(t, name)
+		found := 0
+		for _, d := range sitePagesTestSpacingRe.FindAllStringSubmatch(css, -1) {
+			found++
+			for _, term := range sitePagesTestSpacingTermRe.FindAllString(d[2], -1) {
+				if !sitePagesTestSpacingTermOK(term) {
+					t.Errorf("%s: %s: %s is off the spacing scale", name, strings.TrimSpace(d[1]+": "+d[2]), term)
+				}
+			}
+		}
+		if found < 40 {
+			t.Errorf("%s: found %d spacing declarations, too few to be reading the sheet", name, found)
 		}
 	}
 }

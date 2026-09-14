@@ -659,7 +659,7 @@ async function main() {
     const headCSS = styleStart >= 0 ? front.text.slice(styleStart + "<style data-gs-core>".length, front.text.indexOf("</style>", styleStart)) : "";
     ok("the served page inlines the shell's own core sheet (comments stripped)", styleStart >= 0 && headCSS === stripComments(coreCSS.text).trim(), "headCSS len=" + headCSS.length);
     ok("and links the full sheet the app loads", /pages-full\.css/.test(front.text));
-    ok("the core declares the tokens the full sheet consumes", /--shell-max:/.test(headCSS) && /--fs-body:/.test(headCSS) && /--pl-link:/.test(headCSS));
+    ok("the core declares the tokens the full sheet consumes", /--shell-max:/.test(headCSS) && /--fs-body:/.test(headCSS) && /--pl-link:/.test(headCSS) && /--sp-1:/.test(headCSS) && /--sp-6:/.test(headCSS));
     // Inlined at every page depth, the core may reference no URL: a relative
     // url() would resolve against the page's directory, not the site root.
     ok("the core carries no url()", !/url\(/i.test(stripComments(coreCSS.text)));
