@@ -992,7 +992,7 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			}
 		}
 		for _, comment := range plan.Comments {
-			if mapping.IsMapped(MappingKey(platform, "comment", comment.ExternalID)) {
+			if commentAlreadyMapped(mapping, platform, comment) {
 				stats.Skipped++
 			} else if mapping.GetHash(MappingKey(platform, "post", comment.PostID)) == "" {
 				stats.Skipped++
@@ -1088,10 +1088,27 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 	return stats
 }
 
+// mappedCommentHash returns a comment's mapped hash, under its external ID or the post-and-second ID earlier imports used.
+func mappedCommentHash(mapping *MappingFile, platform, postID, externalID string, createdAt time.Time) string {
+	if hash := mapping.GetHash(MappingKey(platform, "comment", externalID)); hash != "" {
+		return hash
+	}
+	if postID == "" || createdAt.IsZero() {
+		return ""
+	}
+	legacyID := postID + "-" + createdAt.Format("20060102T150405")
+	return mapping.GetHash(MappingKey(platform, "comment", legacyID))
+}
+
+// commentAlreadyMapped reports whether a comment is already imported.
+func commentAlreadyMapped(mapping *MappingFile, platform string, c ImportComment) bool {
+	return mappedCommentHash(mapping, platform, c.PostID, c.ExternalID, c.CreatedAt) != ""
+}
+
 // splitByMappedParent separates comments ready to commit from replies still waiting for their parent comment.
 func splitByMappedParent(comments []ImportComment, platform string, mapping *MappingFile) (ready, waiting []ImportComment) {
 	for _, c := range comments {
-		if c.ParentID == "" || mapping.GetHash(MappingKey(platform, "comment", c.ParentID)) != "" {
+		if c.ParentID == "" || mappedCommentHash(mapping, platform, c.PostID, c.ParentID, c.ParentCreatedAt) != "" {
 			ready = append(ready, c)
 			continue
 		}
@@ -1132,7 +1149,7 @@ func commitDiscussionComments(opts Options, comments []ImportComment, mapping *M
 	var entries []commentEntry
 	var messages []string
 	for _, comment := range comments {
-		if mapping.IsMapped(MappingKey(platform, "comment", comment.ExternalID)) {
+		if commentAlreadyMapped(mapping, platform, comment) {
 			stats.Skipped++
 			continue
 		}
@@ -1143,7 +1160,7 @@ func commitDiscussionComments(opts Options, comments []ImportComment, mapping *M
 		}
 		parentHash := ""
 		if comment.ParentID != "" {
-			parentHash = mapping.GetHash(MappingKey(platform, "comment", comment.ParentID))
+			parentHash = mappedCommentHash(mapping, platform, comment.PostID, comment.ParentID, comment.ParentCreatedAt)
 		}
 		if opts.Verbose {
 			fmt.Printf("  social  comment: %s\n", truncate(comment.Content, 60))

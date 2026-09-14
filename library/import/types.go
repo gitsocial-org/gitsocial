@@ -198,13 +198,14 @@ type ImportPost struct {
 }
 
 type ImportComment struct {
-	ExternalID  string
-	PostID      string // external post ID this references
-	ParentID    string // external comment ID this replies to, empty on a top-level comment
-	Content     string
-	AuthorName  string
-	AuthorEmail string
-	CreatedAt   time.Time
+	ExternalID      string
+	PostID          string    // external post ID this references
+	ParentID        string    // external comment ID this replies to, empty on a top-level comment
+	ParentCreatedAt time.Time // creation time of ParentID, which older mapping keys are built from
+	Content         string
+	AuthorName      string
+	AuthorEmail     string
+	CreatedAt       time.Time
 }
 
 // Stats holds the result of an import run.

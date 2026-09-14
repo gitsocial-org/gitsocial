@@ -42,14 +42,12 @@ func TestBuildMoreItemCommentsQuery(t *testing.T) {
 	}
 }
 
-func TestItemCommentExternalID(t *testing.T) {
+func TestCommentExternalID(t *testing.T) {
 	ts := time.Date(2024, 3, 5, 9, 30, 0, 0, time.UTC)
-	withID := ghItemComment{DatabaseID: 123456789, CreatedAt: ts}
-	if got := itemCommentExternalID(42, withID); got != "123456789" {
+	if got := commentExternalID(42, 123456789, ts); got != "123456789" {
 		t.Errorf("with databaseId = %q, want 123456789", got)
 	}
-	withoutID := ghItemComment{CreatedAt: ts}
-	if got := itemCommentExternalID(42, withoutID); got != "42-20240305T093000" {
+	if got := commentExternalID(42, 0, ts); got != "42-20240305T093000" {
 		t.Errorf("fallback = %q, want 42-20240305T093000", got)
 	}
 }

@@ -21,12 +21,12 @@ const repliesDiscussionJSON = `{"data":{"repository":{"discussions":{
 		 "category":{"name":"General","slug":"general"},
 		 "createdAt":"2024-06-15T12:00:00Z",
 		 "comments":{"nodes":[
-			{"id":"DC_top","body":"Top comment","author":{"login":"bob"},
+			{"id":"DC_top","databaseId":501,"body":"Top comment","author":{"login":"bob"},
 			 "createdAt":"2024-06-15T13:00:00Z",
 			 "replies":{"nodes":[
-				{"id":"DC_r1","body":"First reply","author":{"login":"alice"},
+				{"id":"DC_r1","databaseId":502,"body":"First reply","author":{"login":"alice"},
 				 "createdAt":"2024-06-15T14:00:00Z"},
-				{"id":"DC_r2","body":"Reply to the reply","author":{"login":"bob"},
+				{"id":"DC_r2","databaseId":503,"body":"Reply to the reply","author":{"login":"bob"},
 				 "createdAt":"2024-06-15T15:00:00Z"}],
 			  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
 		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
@@ -45,7 +45,7 @@ func newImportWorkspace(t *testing.T) string {
 }
 
 // runSocialImport imports the discussions the routed gh output carries into workdir.
-func runSocialImport(t *testing.T, workdir, cacheDir string) importpkg.Stats {
+func runSocialImport(t *testing.T, workdir, cacheDir string, update bool) importpkg.Stats {
 	t.Helper()
 	counts := importpkg.ItemCounts{Issues: -1, PRs: -1, Releases: -1, Discussions: 1}
 	stats, err := importpkg.Run(New("acme", "widgets"), importpkg.Options{
@@ -54,6 +54,7 @@ func runSocialImport(t *testing.T, workdir, cacheDir string) importpkg.Stats {
 		CacheDir:   cacheDir,
 		Extensions: []string{"social"},
 		Counts:     &counts,
+		Update:     update,
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -85,7 +86,7 @@ func TestImportDiscussions_RepliesNestUnderTheirComment(t *testing.T) {
 		return ghResponse{stdout: repliesDiscussionJSON}
 	})
 
-	stats := runSocialImport(t, workdir, cacheDir)
+	stats := runSocialImport(t, workdir, cacheDir, false)
 	if stats.Posts != 1 {
 		t.Fatalf("Posts = %d, want 1", stats.Posts)
 	}
@@ -162,15 +163,168 @@ func TestImportDiscussions_ReimportWritesNothing(t *testing.T) {
 		return ghResponse{stdout: repliesDiscussionJSON}
 	})
 
-	runSocialImport(t, workdir, cacheDir)
+	runSocialImport(t, workdir, cacheDir, false)
 	before := socialCommitCount(t, workdir)
 
-	stats := runSocialImport(t, workdir, cacheDir)
+	stats := runSocialImport(t, workdir, cacheDir, false)
 	if stats.Total() != 0 {
 		t.Errorf("second run imported %d items, want 0 (%+v)", stats.Total(), stats)
 	}
 	if got := socialCommitCount(t, workdir); got != before {
 		t.Errorf("gitmsg/social commits = %d, want %d (unchanged)", got, before)
+	}
+}
+
+func TestImportDiscussions_CommentsInOneSecondStaySeparate(t *testing.T) {
+	const sameSecondJSON = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":12,"title":"Busy second","body":"Start.",
+		 "author":{"login":"alice","name":"Alice GraphQL"},
+		 "category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_a","databaseId":601,"body":"First","author":{"login":"bob","name":"Bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}},
+			{"id":"DC_b","databaseId":602,"body":"Second","author":{"login":"bob","name":"Bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	workdir := newImportWorkspace(t)
+	cacheDir := t.TempDir()
+	socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: sameSecondJSON}
+	})
+
+	stats := runSocialImport(t, workdir, cacheDir, false)
+	if stats.Comments != 2 {
+		t.Fatalf("Comments = %d, want 2 (both comments of that second)", stats.Comments)
+	}
+	mapping, err := importpkg.ReadMapping(cacheDir, "https://github.com/acme/widgets", "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	for _, databaseID := range []string{"601", "602"} {
+		if !mapping.IsMapped(importpkg.MappingKey("github", "comment", databaseID)) {
+			t.Errorf("mapping is missing comment %s: %+v", databaseID, mapping.Items)
+		}
+	}
+	byContent := commentsByContent(t, workdir, mapping.GetHash(importpkg.MappingKey("github", "post", "12")))
+	if len(byContent) != 2 {
+		t.Errorf("thread comments = %+v, want both", byContent)
+	}
+}
+
+func TestImportDiscussions_LegacyMappingKeysStillDedupe(t *testing.T) {
+	workdir := newImportWorkspace(t)
+	cacheDir := t.TempDir()
+	repoURL := "https://github.com/acme/widgets"
+	socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: repliesDiscussionJSON}
+	})
+
+	runSocialImport(t, workdir, cacheDir, false)
+	before := socialCommitCount(t, workdir)
+	rekeyCommentsToLegacyIDs(t, cacheDir, repoURL, map[string]string{
+		"501": "11-20240615T130000",
+		"502": "11-20240615T140000",
+		"503": "11-20240615T150000",
+	})
+
+	for _, update := range []bool{false, true} {
+		stats := runSocialImport(t, workdir, cacheDir, update)
+		if stats.Total() != 0 {
+			t.Errorf("run with update=%v imported %d items, want 0 (%+v)", update, stats.Total(), stats)
+		}
+		if got := socialCommitCount(t, workdir); got != before {
+			t.Errorf("run with update=%v left %d commits, want %d", update, got, before)
+		}
+	}
+}
+
+func TestImportDiscussions_ReplyFindsALegacyMappedParent(t *testing.T) {
+	// The first page is what an import before this branch saw: the comment, no replies.
+	const commentOnlyJSON = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":21,"title":"Old thread","body":"Start.",
+		 "author":{"login":"alice","name":"Alice GraphQL","email":"alice@example.com"},
+		 "category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_p","databaseId":701,"body":"Parent comment","author":{"login":"bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+	const withReplyJSON = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":21,"title":"Old thread","body":"Start.",
+		 "author":{"login":"alice","name":"Alice GraphQL","email":"alice@example.com"},
+		 "category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_p","databaseId":701,"body":"Parent comment","author":{"login":"bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[
+				{"id":"DC_c","databaseId":702,"body":"Late reply","author":{"login":"alice"},
+				 "createdAt":"2024-06-15T14:00:00Z"}],
+			  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	workdir := newImportWorkspace(t)
+	cacheDir := t.TempDir()
+	repoURL := "https://github.com/acme/widgets"
+	page := commentOnlyJSON
+	socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: page}
+	})
+
+	runSocialImport(t, workdir, cacheDir, false)
+	rekeyCommentsToLegacyIDs(t, cacheDir, repoURL, map[string]string{"701": "21-20240615T130000"})
+
+	// New comments on an imported discussion arrive through --update, which plans the mapped parent again.
+	page = withReplyJSON
+	stats := runSocialImport(t, workdir, cacheDir, true)
+	if stats.Comments != 1 || stats.Posts != 0 {
+		t.Fatalf("second run = %+v, want only the reply", stats)
+	}
+
+	mapping, err := importpkg.ReadMapping(cacheDir, repoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	parentHash := mapping.GetHash(importpkg.MappingKey("github", "comment", "21-20240615T130000"))
+	if parentHash == "" {
+		t.Fatalf("the legacy parent entry is gone: %+v", mapping.Items)
+	}
+	byContent := commentsByContent(t, workdir, mapping.GetHash(importpkg.MappingKey("github", "post", "21")))
+	reply, ok := byContent["Late reply"]
+	if !ok {
+		t.Fatalf("thread comments = %+v, want the reply", byContent)
+	}
+	if protocol.ParseRef(reply.ParentCommentID).Value != parentHash {
+		t.Errorf("reply ParentCommentID = %q, want the legacy-mapped parent %s", reply.ParentCommentID, parentHash)
+	}
+}
+
+// rekeyCommentsToLegacyIDs rewrites mapped comment IDs to the shape an import before databaseId wrote.
+func rekeyCommentsToLegacyIDs(t *testing.T, cacheDir, repoURL string, legacy map[string]string) {
+	t.Helper()
+	mapping, err := importpkg.ReadMapping(cacheDir, repoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	for externalID, legacyID := range legacy {
+		key := importpkg.MappingKey("github", "comment", externalID)
+		item, ok := mapping.Items[key]
+		if !ok {
+			t.Fatalf("mapping is missing comment %s: %+v", externalID, mapping.Items)
+		}
+		delete(mapping.Items, key)
+		mapping.Items[importpkg.MappingKey("github", "comment", legacyID)] = item
+	}
+	if err := importpkg.WriteMapping(cacheDir, repoURL, "", mapping); err != nil {
+		t.Fatalf("WriteMapping() error = %v", err)
 	}
 }
 

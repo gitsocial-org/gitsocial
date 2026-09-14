@@ -121,13 +121,13 @@ func (a *Adapter) fetchMoreItemComments(field string, number int, cursor string)
 	return resp.Data.Repository.Item.Comments, nil
 }
 
-// itemCommentExternalID returns a stable external ID for a comment, falling
+// commentExternalID returns a stable external ID for a comment, falling
 // back to number+timestamp when the API omits databaseId.
-func itemCommentExternalID(number int, c ghItemComment) string {
-	if c.DatabaseID != 0 {
-		return fmt.Sprintf("%d", c.DatabaseID)
+func commentExternalID(number int, databaseID int64, createdAt time.Time) string {
+	if databaseID != 0 {
+		return fmt.Sprintf("%d", databaseID)
 	}
-	return fmt.Sprintf("%d-%s", number, c.CreatedAt.Format("20060102T150405"))
+	return fmt.Sprintf("%d-%s", number, createdAt.Format("20060102T150405"))
 }
 
 // fetchItemComments fetches conversation comments for the given item numbers
@@ -148,7 +148,7 @@ func (a *Adapter) fetchItemComments(field, keyType string, numbers []int, opts i
 	var out []importpkg.ImportComment
 	for _, n := range numbers {
 		for _, c := range byNumber[n] {
-			extID := itemCommentExternalID(n, c)
+			extID := commentExternalID(n, c.DatabaseID, c.CreatedAt)
 			if opts.SkipExternalIDs[keyType+":"+extID] {
 				continue
 			}
