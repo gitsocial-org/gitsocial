@@ -302,6 +302,22 @@ func commitOnBranch(t *testing.T, workdir, branch, filename string) string {
 	return tip
 }
 
+// TestReviewRoundTrip_createPRWithoutBaseOrHead: only subject is validated, and
+// the pull request that results cannot be merged.
+func TestReviewRoundTrip_createPRWithoutBaseOrHead(t *testing.T) {
+	server := roundTripServer(t, "review")
+
+	var created prShape
+	decodeResult(t, call(t, server, "review.createPR", `{"subject":"No base or head"}`), "review.createPR", &created)
+	if created.Base != "" || created.Head != "" {
+		t.Fatalf("review.createPR returned base %q and head %q, want both empty", created.Base, created.Head)
+	}
+
+	assertAppError(t, call(t, server, "review.mergePR", fmt.Sprintf(`{"ref":%q}`, created.ID)),
+		"review.mergePR", CodeAppInternal, "MERGE_INCOMPLETE")
+	assertAppError(t, call(t, server, "review.createPR", `{}`), "review.createPR", CodeInvalidParams, "")
+}
+
 // TestReviewRoundTrip_forkAddAndRemove pins the boolean results the fork verbs return.
 func TestReviewRoundTrip_forkAddAndRemove(t *testing.T) {
 	server := roundTripServer(t, "review")

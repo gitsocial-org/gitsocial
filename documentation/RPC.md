@@ -523,8 +523,8 @@ Result: `PullRequest`
 Params:
 - `subject` (string, required): PR title
 - `body` (string): PR description
-- `base` (string, required): Base branch ref
-- `head` (string, required): Head branch ref
+- `base` (string): Base branch ref. A pull request created without one cannot be merged
+- `head` (string): Head branch ref. A pull request created without one cannot be merged
 - `closes` (string[]): Issue refs to close on merge
 - `reviewers` (string[]): Reviewer emails
 
