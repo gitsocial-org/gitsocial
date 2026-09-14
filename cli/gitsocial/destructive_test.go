@@ -126,10 +126,8 @@ func TestCLI_destructiveVerbs_refuseWrongTargetThenAct(t *testing.T) {
 	refuses(t, dir, cacheDir, "social", "list", "delete", "no-such-list")
 	mustRunCLI(t, dir, cacheDir, "social", "list", "delete", listID)
 
-	// fork remove: an unregistered URL exits 0 and leaves the registered fork alone.
-	if stdout, stderr, code := runCLI(t, dir, cacheDir, "fork", "remove", "https://github.com/other/never-added"); code != ExitSuccess {
-		t.Errorf("fork remove on an unregistered url: exit %d, want %d\n%s%s", code, ExitSuccess, stdout, stderr)
-	}
+	// fork remove
+	refuses(t, dir, cacheDir, "fork", "remove", "https://github.com/other/never-added")
 	var forksBefore []struct{ URL string }
 	decodeCLIJSON(t, mustRunCLI(t, dir, cacheDir, "--json", "fork", "list"), &forksBefore)
 	if len(forksBefore) != 1 || forksBefore[0].URL != forkURL {

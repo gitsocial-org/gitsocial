@@ -342,6 +342,8 @@ func TestReviewRoundTrip_forkAddAndRemove(t *testing.T) {
 	}
 
 	assertAppError(t, call(t, server, "review.addFork", `{}`), "review.addFork", CodeInvalidParams, "")
+	assertAppError(t, call(t, server, "review.removeFork", fmt.Sprintf(`{"url":%q}`, forkURL)),
+		"review.removeFork", CodeNotFound, "NOT_FOUND")
 }
 
 // releaseShape is the subset of RPC.md's Release type these tests read.

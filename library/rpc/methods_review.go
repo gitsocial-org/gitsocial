@@ -3,6 +3,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -527,6 +528,9 @@ func reviewRemoveFork(s *Server) HandlerFunc {
 			return nil, &RPCError{Code: CodeInvalidParams, Message: "url is required"}
 		}
 		if err := gitmsg.RemoveFork(s.session.Workdir, p.URL); err != nil {
+			if errors.Is(err, gitmsg.ErrForkNotRegistered) {
+				return nil, appError(CodeNotFound, "NOT_FOUND", fmt.Sprintf("remove fork: %s", err))
+			}
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("remove fork: %s", err))
 		}
 		return true, nil

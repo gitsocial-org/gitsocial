@@ -12,6 +12,7 @@ package gitmsg
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,6 +22,9 @@ import (
 )
 
 const forksRefPrefix = "refs/gitmsg/core/forks/"
+
+// ErrForkNotRegistered reports a URL with no ref under refs/gitmsg/core/forks/.
+var ErrForkNotRegistered = errors.New("fork not registered")
 
 var legacyForksMigrated sync.Map // workdir → bool
 
@@ -94,17 +98,16 @@ func AddForks(workdir string, forkURLs []string) (int, error) {
 	return added, nil
 }
 
-// RemoveFork removes a fork URL by deleting its ref. Idempotent: removing
-// a fork that's not registered is a no-op.
+// RemoveFork removes a fork URL by deleting its ref.
 func RemoveFork(workdir, forkURL string) error {
 	normalized := protocol.NormalizeURL(forkURL)
 	if normalized == "" {
-		return nil
+		return fmt.Errorf("invalid fork URL: %q", forkURL)
 	}
 	migrateLegacyForks(workdir)
 	ref := forkRefPath(normalized)
 	if _, err := git.ReadRef(workdir, ref); err != nil {
-		return nil
+		return fmt.Errorf("%w: %s", ErrForkNotRegistered, forkURL)
 	}
 	return git.DeleteRef(workdir, ref)
 }

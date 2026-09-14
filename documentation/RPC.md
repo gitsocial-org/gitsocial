@@ -717,7 +717,7 @@ Result: `true`
 
 #### review.removeFork
 
-Removes a fork URL from the core config.
+Removes a fork URL from the core config. A URL that is not registered returns `NOT_FOUND`.
 
 Params:
 - `url` (string, required): Fork repository URL
