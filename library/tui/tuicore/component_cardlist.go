@@ -204,134 +204,114 @@ func (l *CardList) SelectByID(id string) bool {
 	return false
 }
 
+// selectedLinks returns the links of the selected card.
+func (l *CardList) selectedLinks() []CardLink {
+	if l.selected < 0 || l.selected >= len(l.items) {
+		return nil
+	}
+	return l.items[l.selected].ToCard(l.itemResolver).AllLinks()
+}
+
 // FocusedLinkLocation returns the Location of the currently focused link, if any.
 func (l *CardList) FocusedLinkLocation() *Location {
-	if l.focusedLink < 0 || l.selected < 0 || l.selected >= len(l.items) {
-		return nil
-	}
-	card := l.items[l.selected].ToCard(l.itemResolver)
-	links := card.AllLinks()
-	if l.focusedLink >= len(links) {
-		return nil
-	}
-	loc := links[l.focusedLink].Location
-	return &loc
+	return focusedLinkLocation(l.selectedLinks(), l.focusedLink)
 }
 
-// Update handles keyboard and mouse input. Returns (consumed, activate, link):
-// consumed = input was handled by the list
-// activate = selected item should be opened (enter or click same item)
-// link = a link was activated (click or enter on focused link)
+// cycleLink moves the focused link by step and reports whether the key was consumed.
+func (l *CardList) cycleLink(step int) bool {
+	next, ok := cycleLinkIndex(l.focusedLink, len(l.selectedLinks()), step)
+	if !ok {
+		return false
+	}
+	l.focusedLink = next
+	l.viewDirty = true
+	return true
+}
+
+// selectIndex moves the cursor to idx, drops the focused link and rescrolls.
+func (l *CardList) selectIndex(idx int) {
+	l.selected = idx
+	l.focusedLink = -1
+	l.adjustScroll()
+	l.viewDirty = true
+}
+
+// Update resolves a key or mouse message to a list action and applies it.
 func (l *CardList) Update(msg tea.Msg) (consumed, activate bool, link *Location) {
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		return l.updateKey(msg)
-	case tea.MouseMsg:
-		return l.updateMouse(msg)
-	}
-	return false, false, nil
-}
-
-// updateKey handles keyboard navigation and activation.
-func (l *CardList) updateKey(msg tea.KeyPressMsg) (consumed, activate bool, link *Location) {
-	switch msg.String() {
-	case "esc":
+	switch resolveListAction(msg) {
+	case listActionUnfocus:
 		if l.focusedLink >= 0 {
 			l.focusedLink = -1
 			l.viewDirty = true
 			return true, false, nil
 		}
-	case "up", "k":
+	case listActionMoveUp:
 		if l.selected > 0 {
-			l.selected--
-			l.focusedLink = -1
-			l.adjustScroll()
-			l.viewDirty = true
+			l.selectIndex(l.selected - 1)
 			return true, false, nil
 		}
-	case "down", "j":
+	case listActionMoveDown:
 		if l.selected < len(l.items)-1 {
-			l.selected++
-			l.focusedLink = -1
-			l.adjustScroll()
-			l.viewDirty = true
+			l.selectIndex(l.selected + 1)
 			return true, false, nil
 		}
-	case "enter":
+	case listActionActivate:
 		if loc := l.FocusedLinkLocation(); loc != nil {
 			return true, false, loc
 		}
 		if l.selected >= 0 && l.selected < len(l.items) {
 			return true, true, nil
 		}
-	case ";":
-		if l.selected >= 0 && l.selected < len(l.items) {
-			card := l.items[l.selected].ToCard(l.itemResolver)
-			links := card.AllLinks()
-			if len(links) == 0 {
-				return false, false, nil
-			}
-			l.focusedLink++
-			if l.focusedLink >= len(links) {
-				l.focusedLink = -1
-			}
-			l.viewDirty = true
-			return true, false, nil
-		}
-	case ",":
-		if l.selected >= 0 && l.selected < len(l.items) {
-			card := l.items[l.selected].ToCard(l.itemResolver)
-			links := card.AllLinks()
-			if len(links) == 0 {
-				return false, false, nil
-			}
-			l.focusedLink--
-			if l.focusedLink < -1 {
-				l.focusedLink = len(links) - 1
-			}
-			l.viewDirty = true
-			return true, false, nil
-		}
-	case "pgup", "ctrl+u":
+	case listActionNextLink:
+		return l.cycleLink(1), false, nil
+	case listActionPrevLink:
+		return l.cycleLink(-1), false, nil
+	case listActionPageUp:
 		if l.selected > 0 {
-			target := l.selected - l.visibleItemCount()/2
-			if target < 0 {
-				target = 0
-			}
-			l.selected = target
-			l.focusedLink = -1
-			l.adjustScroll()
-			l.viewDirty = true
+			l.selectIndex(max(l.selected-l.visibleItemCount()/2, 0))
 			return true, false, nil
 		}
-	case "pgdown", "ctrl+d":
+	case listActionPageDown:
 		if l.selected < len(l.items)-1 {
-			target := l.selected + l.visibleItemCount()/2
-			if target >= len(l.items) {
-				target = len(l.items) - 1
-			}
-			l.selected = target
-			l.focusedLink = -1
-			l.adjustScroll()
-			l.viewDirty = true
+			l.selectIndex(min(l.selected+l.visibleItemCount()/2, len(l.items)-1))
 			return true, false, nil
 		}
-	case "home", "g":
+	case listActionTop:
 		if l.selected != 0 {
-			l.selected = 0
-			l.focusedLink = -1
-			l.scrollOffset = 0
+			l.selected, l.focusedLink, l.scrollOffset = 0, -1, 0
 			l.viewDirty = true
 			return true, false, nil
 		}
-	case "end", "G":
+	case listActionBottom:
 		if l.selected != len(l.items)-1 {
-			l.selected = len(l.items) - 1
-			l.focusedLink = -1
-			l.adjustScroll()
-			l.viewDirty = true
+			l.selectIndex(len(l.items) - 1)
 			return true, false, nil
 		}
+	case listActionWheel:
+		if len(l.items) == 0 {
+			return false, false, nil
+		}
+		if wheelScrollsUp(msg) {
+			if l.selected > 0 {
+				l.selectIndex(l.selected - 1)
+			}
+		} else if l.selected < len(l.items)-1 {
+			l.selectIndex(l.selected + 1)
+		}
+		return true, false, nil
+	case listActionClick:
+		loc, idx := listClickTarget(msg, l.linkZones, len(l.items), l.zonePrefix)
+		if loc != nil {
+			return true, false, loc
+		}
+		if idx < 0 {
+			return false, false, nil
+		}
+		if idx == l.selected {
+			return true, true, nil
+		}
+		l.selectIndex(idx)
+		return true, false, nil
 	}
 	return false, false, nil
 }
@@ -368,10 +348,7 @@ func (l *CardList) visibleItemCount() int {
 		lines += l.itemHeight(i)
 		count++
 	}
-	if count < 1 {
-		count = 1
-	}
-	return count
+	return max(count, 1)
 }
 
 // adjustScroll adjusts scroll to keep selected item visible.
@@ -390,51 +367,6 @@ func (l *CardList) adjustScroll() {
 	if linePos+selectedHeight > l.scrollOffset+l.height {
 		l.scrollOffset = linePos + selectedHeight - l.height
 	}
-}
-
-// updateMouse handles mouse events.
-func (l *CardList) updateMouse(msg tea.MouseMsg) (handled, clicked bool, link *Location) {
-	if len(l.items) == 0 {
-		return false, false, nil
-	}
-	switch msg.(type) {
-	case tea.MouseWheelMsg:
-		m := msg.Mouse()
-		if m.Button == tea.MouseWheelUp {
-			if l.selected > 0 {
-				l.selected--
-				l.focusedLink = -1
-				l.adjustScroll()
-				l.viewDirty = true
-			}
-		} else {
-			if l.selected < len(l.items)-1 {
-				l.selected++
-				l.focusedLink = -1
-				l.adjustScroll()
-				l.viewDirty = true
-			}
-		}
-		return true, false, nil
-	case tea.MouseClickMsg:
-		// Check link zones first (more specific)
-		if loc := LinkZoneClicked(msg, l.linkZones); loc != nil {
-			return true, false, loc
-		}
-		idx := ZoneClicked(msg, len(l.items), l.zonePrefix)
-		if idx < 0 {
-			return false, false, nil
-		}
-		if idx == l.selected {
-			return true, true, nil
-		}
-		l.selected = idx
-		l.focusedLink = -1
-		l.adjustScroll()
-		l.viewDirty = true
-		return true, false, nil
-	}
-	return false, false, nil
 }
 
 // NearBottom returns true when the selected item is within one screen of the end.

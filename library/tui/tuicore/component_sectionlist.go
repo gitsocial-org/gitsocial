@@ -113,21 +113,18 @@ func (sl *SectionList) SectionAndIndex() (section, index int) {
 	return 0, 0
 }
 
-// FocusedLinkLocation returns the Location of the focused link, if any.
-func (sl *SectionList) FocusedLinkLocation() *Location {
-	if sl.focusedLink < 0 {
-		return nil
-	}
+// selectedLinks returns the links of the selected item.
+func (sl *SectionList) selectedLinks() []CardLink {
 	item := sl.getItem(sl.selected)
 	if item == nil || item.Links == nil {
 		return nil
 	}
-	links := item.Links()
-	if sl.focusedLink >= len(links) {
-		return nil
-	}
-	loc := links[sl.focusedLink].Location
-	return &loc
+	return item.Links()
+}
+
+// FocusedLinkLocation returns the Location of the focused link, if any.
+func (sl *SectionList) FocusedLinkLocation() *Location {
+	return focusedLinkLocation(sl.selectedLinks(), sl.focusedLink)
 }
 
 // IsSearchActive returns true when search mode is active (input or navigation).
@@ -160,56 +157,60 @@ func (sl *SectionList) effectiveHighlight() string {
 	return sl.highlightQuery
 }
 
-// Update handles keyboard and mouse input. Returns (consumed, cmd).
-func (sl *SectionList) Update(msg tea.Msg) (bool, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyPressMsg:
-		return sl.updateKey(msg)
-	case tea.MouseMsg:
-		return sl.updateMouse(msg)
+// updateSearchInput handles a key while the search input has focus.
+func (sl *SectionList) updateSearchInput(msg tea.KeyPressMsg) (bool, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		sl.exitSearch()
+		return true, nil
+	case "enter":
+		sl.searchInputMode = false
+		sl.searchInput.Blur()
+		if sl.searchQuery == "" {
+			sl.searchActive = false
+		}
+		return true, nil
+	}
+	var cmd tea.Cmd
+	sl.searchInput, cmd = sl.searchInput.Update(msg)
+	sl.updateLiveSearch()
+	return true, cmd
+}
+
+// updateSearchKey handles a key while search is active but the input is blurred.
+func (sl *SectionList) updateSearchKey(action listAction) (bool, tea.Cmd) {
+	switch action {
+	case listActionNextMatch:
+		sl.nextMatch()
+		return true, nil
+	case listActionPrevMatch:
+		sl.prevMatch()
+		return true, nil
+	case listActionSearch:
+		sl.searchInputMode = true
+		return true, sl.searchInput.Focus()
+	case listActionUnfocus:
+		sl.exitSearch()
+		return true, nil
 	}
 	return false, nil
 }
 
-// updateKey handles keyboard input.
-func (sl *SectionList) updateKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
+// Update handles keyboard and mouse input. Returns (consumed, cmd).
+func (sl *SectionList) Update(msg tea.Msg) (bool, tea.Cmd) {
+	key, isKey := msg.(tea.KeyPressMsg)
 	if sl.searchInputMode {
-		switch msg.String() {
-		case "esc":
-			sl.exitSearch()
-			return true, nil
-		case "enter":
-			sl.searchInputMode = false
-			sl.searchInput.Blur()
-			if sl.searchQuery == "" {
-				sl.searchActive = false
-			}
-			return true, nil
+		if !isKey {
+			return false, nil
 		}
-		var cmd tea.Cmd
-		sl.searchInput, cmd = sl.searchInput.Update(msg)
-		sl.updateLiveSearch()
-		return true, cmd
+		return sl.updateSearchInput(key)
 	}
-	if sl.searchActive {
-		switch msg.String() {
-		case "n":
-			sl.nextMatch()
-			return true, nil
-		case "N":
-			sl.prevMatch()
-			return true, nil
-		case "/":
-			sl.searchInputMode = true
-			return true, sl.searchInput.Focus()
-		case "esc":
-			sl.exitSearch()
-			return true, nil
-		}
-		return false, nil
+	action := resolveListAction(msg)
+	if sl.searchActive && isKey {
+		return sl.updateSearchKey(action)
 	}
-	switch msg.String() {
-	case "esc":
+	switch action {
+	case listActionUnfocus:
 		if sl.focusedLink >= 0 {
 			sl.focusedLink = -1
 			return true, nil
@@ -218,81 +219,59 @@ func (sl *SectionList) updateKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 			sl.highlightQuery = ""
 			return true, nil
 		}
-	case "down", "j":
+	case listActionMoveDown:
 		sl.moveDown()
 		return true, nil
-	case "up", "k":
+	case listActionMoveUp:
 		sl.moveUp()
 		return true, nil
-	case "home", "g":
+	case listActionTop:
 		sl.selected = 0
 		sl.scrollOffset = 0
 		sl.focusedLink = -1
 		return true, nil
-	case "end", "G":
+	case listActionBottom:
 		if sl.totalItems > 0 {
 			sl.selected = sl.totalItems - 1
 			sl.focusedLink = -1
 		}
 		return true, nil
-	case "pgup", "ctrl+u":
+	case listActionPageUp:
 		sl.pageUp()
 		return true, nil
-	case "pgdown", "ctrl+d":
+	case listActionPageDown:
 		sl.pageDown()
 		return true, nil
-	case ";":
-		return sl.cycleLinkForward(), nil
-	case ",":
-		return sl.cycleLinkBackward(), nil
-	case "enter":
-		if sl.focusedLink >= 0 {
-			if loc := sl.FocusedLinkLocation(); loc != nil {
-				navLoc := *loc
-				return true, func() tea.Msg {
-					return NavigateMsg{Location: navLoc, Action: NavPush}
-				}
-			}
+	case listActionNextLink:
+		return sl.cycleLink(1), nil
+	case listActionPrevLink:
+		return sl.cycleLink(-1), nil
+	case listActionActivate:
+		if loc := sl.FocusedLinkLocation(); loc != nil {
+			return true, navigateTo(*loc)
 		}
 		item := sl.getItem(sl.selected)
 		if item != nil && item.OnActivate != nil {
 			return true, item.OnActivate()
 		}
 		return false, nil
-	case "/":
+	case listActionSearch:
 		sl.searchActive = true
 		sl.searchInputMode = true
 		sl.searchInput.SetValue("")
 		return true, sl.searchInput.Focus()
-	}
-	return false, nil
-}
-
-// updateMouse handles mouse events.
-func (sl *SectionList) updateMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
-	if sl.searchInputMode {
-		return false, nil
-	}
-	switch msg.(type) {
-	case tea.MouseWheelMsg:
-		m := msg.Mouse()
-		if m.Button == tea.MouseWheelUp {
-			sl.scrollOffset -= 3
-			if sl.scrollOffset < 0 {
-				sl.scrollOffset = 0
-			}
+	case listActionWheel:
+		if wheelScrollsUp(msg) {
+			sl.scrollOffset = max(sl.scrollOffset-3, 0)
 		} else {
 			sl.scrollOffset += 3
 		}
 		return true, nil
-	case tea.MouseClickMsg:
-		if loc := LinkZoneClicked(msg, sl.linkZones); loc != nil {
-			navLoc := *loc
-			return true, func() tea.Msg {
-				return NavigateMsg{Location: navLoc, Action: NavPush}
-			}
+	case listActionClick:
+		loc, idx := listClickTarget(msg, sl.linkZones, sl.totalItems, sl.zonePrefix)
+		if loc != nil {
+			return true, navigateTo(*loc)
 		}
-		idx := ZoneClicked(msg, sl.totalItems, sl.zonePrefix)
 		if idx < 0 {
 			return false, nil
 		}
@@ -376,21 +355,9 @@ func (sl *SectionList) View() string {
 		}
 	}
 	// Clamp scroll
-	maxScroll := len(allLines) - sl.height
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if sl.scrollOffset > maxScroll {
-		sl.scrollOffset = maxScroll
-	}
-	if sl.scrollOffset < 0 {
-		sl.scrollOffset = 0
-	}
+	sl.scrollOffset = min(max(sl.scrollOffset, 0), max(len(allLines)-sl.height, 0))
 	// Extract visible lines and mark zones
-	endLine := sl.scrollOffset + sl.height
-	if endLine > len(allLines) {
-		endLine = len(allLines)
-	}
+	endLine := min(sl.scrollOffset+sl.height, len(allLines))
 	visibleLines := allLines[sl.scrollOffset:endLine]
 	// Collect link zones from all visible items
 	for i := range sl.itemStartLines {
@@ -460,10 +427,7 @@ func (sl *SectionList) moveUp() {
 
 // pageDown scrolls the viewport half a page down, advancing selection if it falls above.
 func (sl *SectionList) pageDown() {
-	scroll := sl.height / 2
-	if scroll < 1 {
-		scroll = 1
-	}
+	scroll := max(sl.height/2, 1)
 	sl.scrollOffset += scroll
 	// If selected item scrolled above viewport, advance to first visible item
 	if sl.selected < len(sl.itemEndLines) && sl.itemEndLines[sl.selected] <= sl.scrollOffset {
@@ -480,14 +444,8 @@ func (sl *SectionList) pageDown() {
 
 // pageUp scrolls the viewport half a page up, retreating selection if it falls below.
 func (sl *SectionList) pageUp() {
-	scroll := sl.height / 2
-	if scroll < 1 {
-		scroll = 1
-	}
-	sl.scrollOffset -= scroll
-	if sl.scrollOffset < 0 {
-		sl.scrollOffset = 0
-	}
+	scroll := max(sl.height/2, 1)
+	sl.scrollOffset = max(sl.scrollOffset-scroll, 0)
 	// If selected item scrolled below viewport, retreat to last visible item
 	if sl.selected < len(sl.itemStartLines) && sl.itemStartLines[sl.selected] >= sl.scrollOffset+sl.height {
 		for i := sl.selected - 1; i >= 0; i-- {
@@ -501,38 +459,17 @@ func (sl *SectionList) pageUp() {
 	sl.prevSelected = sl.selected
 }
 
-func (sl *SectionList) cycleLinkForward() bool {
-	item := sl.getItem(sl.selected)
-	if item == nil || item.Links == nil {
+// cycleLink moves the focused link by step and reports whether the key was consumed.
+func (sl *SectionList) cycleLink(step int) bool {
+	next, ok := cycleLinkIndex(sl.focusedLink, len(sl.selectedLinks()), step)
+	if !ok {
 		return false
 	}
-	links := item.Links()
-	if len(links) == 0 {
-		return false
-	}
-	sl.focusedLink++
-	if sl.focusedLink >= len(links) {
-		sl.focusedLink = -1
-	}
+	sl.focusedLink = next
 	return true
 }
 
-func (sl *SectionList) cycleLinkBackward() bool {
-	item := sl.getItem(sl.selected)
-	if item == nil || item.Links == nil {
-		return false
-	}
-	links := item.Links()
-	if len(links) == 0 {
-		return false
-	}
-	sl.focusedLink--
-	if sl.focusedLink < -1 {
-		sl.focusedLink = len(links) - 1
-	}
-	return true
-}
-
+// getItem returns the item at a flat index across all sections.
 func (sl *SectionList) getItem(flatIdx int) *SectionItem {
 	cur := 0
 	for si := range sl.sections {
