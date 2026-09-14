@@ -100,17 +100,19 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 		return failure[string]("LIST_NOT_FOUND", "List '"+listID+"' not found")
 	}
 
-	repoURL = protocol.NormalizeURL(repoURL)
+	// The member ref keeps the address, the spelling git is handed; the cache keeps the identity.
+	address := strings.TrimSpace(repoURL)
+	identity := protocol.NormalizeURL(address)
 	if allBranches {
 		branch = "*"
 	} else if branch == "" {
-		branch = git.GetRemoteDefaultBranch(workdir, repoURL)
+		branch = git.GetRemoteDefaultBranch(workdir, address)
 	}
-	repoRef := repoURL + "#branch:" + branch
+	repoRef := address + "#branch:" + branch
 
 	for _, repo := range data.Repositories {
-		if repo == repoRef || repo == repoURL {
-			return failure[string]("REPOSITORY_EXISTS", "Repository already in list")
+		if protocol.ParseRepositoryID(repo).Repository == identity {
+			return failure[string]("REPOSITORY_EXISTS", "Repository already in list; use --all-branches to follow every branch")
 		}
 	}
 
@@ -119,8 +121,8 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 	}
 
 	// Sync to cache for immediate visibility
-	if err := cache.AddRepositoryToList(listID, repoURL, branch); err != nil {
-		log.Warn("cache sync for list add failed", "list", listID, "repo", repoURL, "error", err)
+	if err := cache.AddRepositoryToList(listID, identity, branch); err != nil {
+		log.Warn("cache sync for list add failed", "list", listID, "repo", identity, "error", err)
 	}
 
 	return success(repoRef)
@@ -133,9 +135,13 @@ func RemoveRepositoryFromList(workdir, listID, repoURL string) Result[struct{}] 
 		return failure[struct{}]("LIST_NOT_FOUND", "List '"+listID+"' not found")
 	}
 
+	// Any spelling removes the member: both sides compare as identities, and a branch in the argument picks that member.
+	target := protocol.ParseRepositoryID(repoURL)
+	_, wantBranch, _ := strings.Cut(repoURL, "#branch:")
 	var foundRef string
 	for _, repo := range data.Repositories {
-		if repo == repoURL || strings.HasPrefix(repo, repoURL+"#branch:") {
+		member := protocol.ParseRepositoryID(repo)
+		if member.Repository == target.Repository && (wantBranch == "" || member.Branch == wantBranch) {
 			foundRef = repo
 			break
 		}

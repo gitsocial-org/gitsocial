@@ -1,12 +1,11 @@
 // forks.go - Fork registry stored as one ref per fork URL.
 //
 // Each registered fork lives at refs/gitmsg/core/forks/<urlHash>, where
-// urlHash is the first 12 hex chars of SHA-256(normalizedURL). The ref's
-// commit message is the normalized URL. This layout means concurrent
-// `fork add` calls on different clones either land on different refs (no
-// collision) or on the same ref with identical content (idempotent push).
-// Eliminates the silent-data-loss path where a single shared config ref
-// rejected the second push and dropped the user's edit.
+// urlHash is the first 12 hex chars of SHA-256(identity). The ref's commit
+// message is the address, the spelling the user gave, which is what git is
+// handed. This layout means concurrent `fork add` calls on different clones
+// either land on different refs (no collision) or on the same ref with
+// identical content (idempotent push).
 package gitmsg
 
 import (
@@ -28,15 +27,38 @@ var ErrForkNotRegistered = errors.New("fork not registered")
 
 var legacyForksMigrated sync.Map // workdir → bool
 
-// GetForks returns the list of registered fork URLs for the workspace.
+// GetForks returns the identity of every fork registered in the workspace.
 // Migrates legacy forks (stored as a JSON array in core config) into the
 // per-element ref layout on first call per workdir, then reads from the
 // new layout exclusively.
-//
-// Each fork ref's commit subject is the normalized URL (see AddFork), so a
-// single `for-each-ref` extracts every URL in one subprocess — important on
-// hot interactive paths where a workspace may have thousands of forks.
 func GetForks(workdir string) []string {
+	addresses := forkAddressList(workdir)
+	out := make([]string, 0, len(addresses))
+	seen := make(map[string]bool, len(addresses))
+	for _, address := range addresses {
+		if identity := protocol.NormalizeURL(address); identity != "" && !seen[identity] {
+			seen[identity] = true
+			out = append(out, identity)
+		}
+	}
+	return out
+}
+
+// ForkAddresses maps each registered fork's identity to the address it is fetched from.
+func ForkAddresses(workdir string) map[string]string {
+	addresses := forkAddressList(workdir)
+	out := make(map[string]string, len(addresses))
+	for _, address := range addresses {
+		if identity := protocol.NormalizeURL(address); identity != "" && out[identity] == "" {
+			out[identity] = address
+		}
+	}
+	return out
+}
+
+// forkAddressList reads every fork ref's address in one `for-each-ref`, the
+// subprocess budget hot interactive paths allow.
+func forkAddressList(workdir string) []string {
 	migrateLegacyForks(workdir)
 	result, err := git.ExecGit(workdir, []string{
 		"for-each-ref",
@@ -49,28 +71,28 @@ func GetForks(workdir string) []string {
 	lines := strings.Split(result.Stdout, "\n")
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
-		url := strings.TrimSpace(line)
-		if url != "" {
-			out = append(out, url)
+		if address := strings.TrimSpace(line); address != "" {
+			out = append(out, address)
 		}
 	}
 	return out
 }
 
-// AddFork registers a fork URL. Idempotent: re-adding an existing fork
-// is a no-op. Two clones adding the same URL produce identical refs and
-// don't conflict on push.
+// AddFork registers a fork by its address, keyed by identity: re-adding any
+// spelling of a registered fork is a no-op. Two clones adding the same
+// spelling produce identical refs and don't conflict on push.
 func AddFork(workdir, forkURL string) error {
-	normalized := protocol.NormalizeURL(forkURL)
-	if normalized == "" {
+	address := strings.TrimSpace(forkURL)
+	identity := protocol.NormalizeURL(address)
+	if identity == "" {
 		return fmt.Errorf("invalid fork URL: %q", forkURL)
 	}
 	migrateLegacyForks(workdir)
-	ref := forkRefPath(normalized)
+	ref := forkRefPath(identity)
 	if _, err := git.ReadRef(workdir, ref); err == nil {
 		return nil
 	}
-	hash, err := git.CreateCommitTree(workdir, normalized+"\n", "")
+	hash, err := git.CreateCommitTree(workdir, address+"\n", "")
 	if err != nil {
 		return fmt.Errorf("create fork ref commit: %w", err)
 	}
@@ -82,11 +104,11 @@ func AddFork(workdir, forkURL string) error {
 func AddForks(workdir string, forkURLs []string) (int, error) {
 	added := 0
 	for _, u := range forkURLs {
-		normalized := protocol.NormalizeURL(u)
-		if normalized == "" {
+		identity := protocol.NormalizeURL(u)
+		if identity == "" {
 			continue
 		}
-		ref := forkRefPath(normalized)
+		ref := forkRefPath(identity)
 		if _, err := git.ReadRef(workdir, ref); err == nil {
 			continue
 		}
@@ -98,25 +120,50 @@ func AddForks(workdir string, forkURLs []string) (int, error) {
 	return added, nil
 }
 
-// RemoveFork removes a fork URL by deleting its ref.
+// RemoveFork removes a fork by deleting every ref whose address is a spelling of its identity.
 func RemoveFork(workdir, forkURL string) error {
-	normalized := protocol.NormalizeURL(forkURL)
-	if normalized == "" {
+	identity := protocol.NormalizeURL(forkURL)
+	if identity == "" {
 		return fmt.Errorf("invalid fork URL: %q", forkURL)
 	}
 	migrateLegacyForks(workdir)
-	ref := forkRefPath(normalized)
-	if _, err := git.ReadRef(workdir, ref); err != nil {
+	refs := forkRefsFor(workdir, identity)
+	if len(refs) == 0 {
 		return fmt.Errorf("%w: %s", ErrForkNotRegistered, forkURL)
 	}
-	return git.DeleteRef(workdir, ref)
+	for _, ref := range refs {
+		if err := git.DeleteRef(workdir, ref); err != nil {
+			return fmt.Errorf("delete fork ref: %w", err)
+		}
+	}
+	return nil
 }
 
-// forkRefPath returns the per-fork ref name for a normalized URL. Hash
+// forkRefsFor returns every fork ref whose address normalizes to the identity, a ref keyed under an older identity rule included.
+func forkRefsFor(workdir, identity string) []string {
+	result, err := git.ExecGit(workdir, []string{
+		"for-each-ref",
+		"--format=%(refname) %(contents:subject)",
+		forksRefPrefix,
+	})
+	if err != nil {
+		return nil
+	}
+	var refs []string
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		ref, address, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if ref != "" && protocol.NormalizeURL(strings.TrimSpace(address)) == identity {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
+// forkRefPath returns the per-fork ref name for a fork's identity. Hash
 // length (12 hex chars = 48 bits) gives ~16M ref-name space, comfortable
 // for thousands of forks per workspace.
-func forkRefPath(normalizedURL string) string {
-	h := sha256.Sum256([]byte(normalizedURL))
+func forkRefPath(identity string) string {
+	h := sha256.Sum256([]byte(identity))
 	return forksRefPrefix + hex.EncodeToString(h[:6])
 }
 
@@ -148,15 +195,16 @@ func migrateLegacyForks(workdir string) {
 			continue
 		}
 		for _, url := range legacy {
-			normalized := protocol.NormalizeURL(url)
-			if normalized == "" {
+			address := strings.TrimSpace(url)
+			identity := protocol.NormalizeURL(address)
+			if identity == "" {
 				continue
 			}
-			ref := forkRefPath(normalized)
+			ref := forkRefPath(identity)
 			if _, err := git.ReadRef(workdir, ref); err == nil {
 				continue
 			}
-			hash, err := git.CreateCommitTree(workdir, normalized+"\n", "")
+			hash, err := git.CreateCommitTree(workdir, address+"\n", "")
 			if err != nil {
 				continue
 			}

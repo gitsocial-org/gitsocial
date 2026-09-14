@@ -1527,6 +1527,70 @@ func TestListManagement(t *testing.T) {
 		}
 	})
 
+	t.Run("AddRepositoryToList_otherSpelling", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		CreateList(workdir, "spelling-list", "Spelling")
+		AddRepositoryToList(workdir, "spelling-list", "https://github.com/a/b", "main", false)
+
+		result := AddRepositoryToList(workdir, "spelling-list", "git@github.com:a/b.git", "main", false)
+		if result.Success {
+			t.Error("AddRepositoryToList() should refuse another spelling of a member")
+		}
+		if result.Error.Code != "REPOSITORY_EXISTS" {
+			t.Errorf("error code = %q, want REPOSITORY_EXISTS", result.Error.Code)
+		}
+	})
+
+	t.Run("AddRepositoryToList_keepsTheSpelling", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		CreateList(workdir, "address-list", "Address")
+
+		result := AddRepositoryToList(workdir, "address-list", "https://github.com/a/b.git", "main", false)
+		if !result.Success {
+			t.Fatalf("AddRepositoryToList() failed: %s", result.Error.Message)
+		}
+		if result.Data != "https://github.com/a/b.git#branch:main" {
+			t.Errorf("member ref = %q, want the spelling the user gave", result.Data)
+		}
+	})
+
+	t.Run("RemoveRepositoryFromList_bySpelling", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		CreateList(workdir, "rm-spelling-list", "RmSpelling")
+		AddRepositoryToList(workdir, "rm-spelling-list", "https://github.com/a/b.git", "main", false)
+
+		result := RemoveRepositoryFromList(workdir, "rm-spelling-list", "git@github.com:a/b")
+		if !result.Success {
+			t.Fatalf("RemoveRepositoryFromList() by another spelling failed: %s", result.Error.Message)
+		}
+		list := GetList(workdir, "rm-spelling-list")
+		if list.Data == nil || len(list.Data.Repositories) != 0 {
+			t.Errorf("repositories after removal = %+v, want none", list.Data)
+		}
+	})
+
+	t.Run("RemoveRepositoryFromList_byMemberRef", func(t *testing.T) {
+		t.Parallel()
+		workdir := cloneFixture(t)
+		CreateList(workdir, "rm-ref-list", "RmRef")
+		AddRepositoryToList(workdir, "rm-ref-list", "https://github.com/a/b.git", "main", false)
+
+		if result := RemoveRepositoryFromList(workdir, "rm-ref-list", "https://github.com/a/b#branch:dev"); result.Success || result.Error.Code != "REPOSITORY_NOT_FOUND" {
+			t.Errorf("RemoveRepositoryFromList() by a ref naming another branch = %+v, want REPOSITORY_NOT_FOUND", result)
+		}
+		result := RemoveRepositoryFromList(workdir, "rm-ref-list", "https://github.com/a/b.git#branch:main")
+		if !result.Success {
+			t.Fatalf("RemoveRepositoryFromList() by the member ref failed: %s", result.Error.Message)
+		}
+		list := GetList(workdir, "rm-ref-list")
+		if list.Data == nil || len(list.Data.Repositories) != 0 {
+			t.Errorf("repositories after removal = %+v, want none", list.Data)
+		}
+	})
+
 	t.Run("AddRepositoryToList_emptyBranch", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
