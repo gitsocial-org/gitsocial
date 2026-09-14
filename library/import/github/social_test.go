@@ -221,6 +221,38 @@ func TestFetchSocial_AuthorProfileFromTheQuery(t *testing.T) {
 	}
 }
 
+func TestFetchSocial_DecodesUpdatedAt(t *testing.T) {
+	const editedDiscussion = `{"data":{"repository":{"discussions":{
+		"nodes":[
+			{"number":9,"title":"Edited","body":"Body.",
+			 "author":{"login":"alice","name":"Alice GraphQL","email":"alice@example.com"},
+			 "category":{"name":"General","slug":"general"},
+			 "createdAt":"2024-06-15T12:00:00Z","updatedAt":"2024-07-02T08:30:00Z",
+			 "comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	adapter := New("acme", "widgets")
+	rec := socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: editedDiscussion}
+	})
+
+	plan, err := adapter.FetchSocial(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchSocial() error = %v", err)
+	}
+	queries := graphqlQueries(rec)
+	if len(queries) == 0 || !strings.Contains(queries[0], "updatedAt") {
+		t.Errorf("query = %v, want updatedAt selected", queries)
+	}
+	if len(plan.Posts) != 1 {
+		t.Fatalf("posts = %d, want 1", len(plan.Posts))
+	}
+	// An unchanged discussion is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.Posts[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("post UpdatedAt = %v, want the platform timestamp", plan.Posts[0].UpdatedAt)
+	}
+}
+
 func TestFetchSocial_Filters(t *testing.T) {
 	t.Run("category slug", func(t *testing.T) {
 		adapter := New("acme", "widgets")

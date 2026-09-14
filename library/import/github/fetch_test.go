@@ -146,6 +146,42 @@ func TestFetchPM(t *testing.T) {
 	}
 }
 
+func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
+	const editedIssueJSON = `[{"number":4,"title":"Edited","body":"","state":"OPEN",
+		"author":{"login":"alice"},"createdAt":"2024-06-15T12:00:00Z",
+		"updatedAt":"2024-07-02T08:30:00Z"}]`
+	adapter := New("acme", "widgets")
+	var fields string
+	fakeGHRoutes(t, func(args []string) ghResponse {
+		if p, ok := ghUserProfile(args); ok {
+			return p
+		}
+		switch {
+		case ghArg(args, "/milestones"):
+			return ghResponse{stdout: "[]"}
+		case len(args) > 1 && args[0] == "issue" && args[1] == "list":
+			fields = strings.Join(args, " ")
+			return ghResponse{stdout: editedIssueJSON}
+		}
+		return ghResponse{stdout: `{"data":{"repository":{}}}`}
+	})
+
+	plan, err := adapter.FetchPM(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchPM() error = %v", err)
+	}
+	if !strings.Contains(fields, "updatedAt") {
+		t.Errorf("issue list fields = %q, want updatedAt requested", fields)
+	}
+	if len(plan.Issues) != 1 {
+		t.Fatalf("issues = %d, want 1", len(plan.Issues))
+	}
+	// An unchanged issue is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.Issues[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("issue UpdatedAt = %v, want the platform timestamp", plan.Issues[0].UpdatedAt)
+	}
+}
+
 func TestFetchPM_SkipsMappedExternalIDs(t *testing.T) {
 	adapter := New("acme", "widgets")
 	fakeGHRoutes(t, func(args []string) ghResponse {
@@ -206,6 +242,9 @@ func TestFetchReleases(t *testing.T) {
 	fakeGHRoutes(t, func(args []string) ghResponse {
 		if p, ok := ghUserProfile(args); ok {
 			return p
+		}
+		if ghArg(args, "graphql") {
+			return ghResponse{stdout: `{"data":{"repository":{}}}`}
 		}
 		if ghArg(args, "/releases") {
 			return ghResponse{stdout: releasesJSON}
@@ -276,6 +315,35 @@ func TestFetchReleases_SinceFilterAndSkip(t *testing.T) {
 	}
 }
 
+func TestFetchReleases_DecodesUpdatedAt(t *testing.T) {
+	const releasesJSON = `[{"tag_name":"v4.0.0","name":"Edited","body":"","draft":false,
+		"created_at":"2024-06-15T12:00:00Z","author":{"login":"alice"},"assets":[]}]`
+	const updatedAtJSON = `{"data":{"repository":{"r0":{"tagName":"v4.0.0",
+		"updatedAt":"2024-07-02T08:30:00Z"}}}}`
+	adapter := New("acme", "widgets")
+	fakeGHRoutes(t, func(args []string) ghResponse {
+		if p, ok := ghUserProfile(args); ok {
+			return p
+		}
+		if ghArg(args, "graphql") {
+			return ghResponse{stdout: updatedAtJSON}
+		}
+		return ghResponse{stdout: releasesJSON}
+	})
+
+	plan, err := adapter.FetchReleases(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReleases() error = %v", err)
+	}
+	if len(plan.Releases) != 1 {
+		t.Fatalf("releases = %d, want 1", len(plan.Releases))
+	}
+	// The REST payload carries no updated_at, so the tag's time comes from GraphQL.
+	if !plan.Releases[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("release UpdatedAt = %v, want the platform timestamp", plan.Releases[0].UpdatedAt)
+	}
+}
+
 func TestFetchReview(t *testing.T) {
 	const prsJSON = `[
 		{"number":7,"title":"Add widget","body":"","state":"OPEN","isDraft":true,
@@ -334,6 +402,39 @@ func TestFetchReview(t *testing.T) {
 	}
 	if len(plan.Forks) != 1 || plan.Forks[0] != "https://github.com/carol/widgets" {
 		t.Errorf("Forks = %v", plan.Forks)
+	}
+}
+
+func TestFetchReview_DecodesUpdatedAt(t *testing.T) {
+	const editedPRJSON = `[{"number":20,"title":"Edited","body":"","state":"OPEN",
+		"author":{"login":"alice"},"baseRefName":"main","headRefName":"edit",
+		"createdAt":"2024-06-10T12:00:00Z","updatedAt":"2024-07-02T08:30:00Z"}]`
+	adapter := New("acme", "widgets")
+	var fields string
+	fakeGHRoutes(t, func(args []string) ghResponse {
+		if p, ok := ghUserProfile(args); ok {
+			return p
+		}
+		if len(args) > 1 && args[0] == "pr" && args[1] == "list" {
+			fields = strings.Join(args, " ")
+			return ghResponse{stdout: editedPRJSON}
+		}
+		return ghResponse{stdout: `{"data":{"repository":{}}}`}
+	})
+
+	plan, err := adapter.FetchReview(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReview() error = %v", err)
+	}
+	if !strings.Contains(fields, "updatedAt") {
+		t.Errorf("pr list fields = %q, want updatedAt requested", fields)
+	}
+	if len(plan.PRs) != 1 {
+		t.Fatalf("PRs = %d, want 1", len(plan.PRs))
+	}
+	// An unchanged pull request is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.PRs[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("PR UpdatedAt = %v, want the platform timestamp", plan.PRs[0].UpdatedAt)
 	}
 }
 

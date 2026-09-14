@@ -36,6 +36,7 @@ type ghPR struct {
 	HeadRefOid          string            `json:"headRefOid"`
 	ReviewRequests      []ghReviewRequest `json:"reviewRequests"`
 	CreatedAt           time.Time         `json:"createdAt"`
+	UpdatedAt           time.Time         `json:"updatedAt"`
 	MergedBy            *ghAuthor         `json:"mergedBy"`
 	MergedAt            time.Time         `json:"mergedAt"`
 	ClosedAt            time.Time         `json:"closedAt"`
@@ -63,7 +64,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	args := []string{
 		"pr", "list",
 		"--repo", a.repoSlug(),
-		"--json", "number,title,body,state,isDraft,author,labels,baseRefName,headRefName,headRepository,headRepositoryOwner,mergeCommit,headRefOid,reviewRequests,createdAt,mergedBy,mergedAt,closedAt",
+		"--json", "number,title,body,state,isDraft,author,labels,baseRefName,headRefName,headRepository,headRepositoryOwner,mergeCommit,headRefOid,reviewRequests,createdAt,updatedAt,mergedBy,mergedAt,closedAt",
 		"--limit", fmt.Sprintf("%d", limit),
 		"--state", state,
 	}
@@ -127,6 +128,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			AuthorName:  author.name,
 			AuthorEmail: author.email,
 			CreatedAt:   pr.CreatedAt,
+			UpdatedAt:   pr.UpdatedAt,
 			MergedAt:    pr.MergedAt,
 			ClosedAt:    pr.ClosedAt,
 		}

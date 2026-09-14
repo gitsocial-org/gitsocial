@@ -35,6 +35,7 @@ type ghIssue struct {
 		Title string `json:"title"`
 	} `json:"milestone"`
 	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 	ClosedAt  time.Time `json:"closedAt"`
 }
 
@@ -117,7 +118,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	args := []string{
 		"issue", "list",
 		"--repo", a.repoSlug(),
-		"--json", "number,title,body,state,author,labels,assignees,milestone,createdAt,closedAt",
+		"--json", "number,title,body,state,author,labels,assignees,milestone,createdAt,updatedAt,closedAt",
 		"--limit", fmt.Sprintf("%d", limit),
 		"--state", state,
 	}
@@ -170,6 +171,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 			AuthorName:  author.name,
 			AuthorEmail: author.email,
 			CreatedAt:   issue.CreatedAt,
+			UpdatedAt:   issue.UpdatedAt,
 			ClosedAt:    issue.ClosedAt,
 		}
 		im.RelatedIDs = extractIssueRefs(issue.Body, issue.Number)

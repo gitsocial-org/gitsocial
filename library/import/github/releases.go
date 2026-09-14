@@ -6,8 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 	importpkg "github.com/gitsocial-org/gitsocial/library/import"
 )
+
+// releaseUpdatedAtBatchSize is how many tags share one GraphQL query (aliased fields).
+const releaseUpdatedAtBatchSize = 50
 
 type ghRelease struct {
 	TagName    string    `json:"tag_name"`
@@ -96,7 +100,49 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 			CreatedAt:   r.CreatedAt,
 		})
 	}
+	tags := make([]string, 0, len(releases))
+	for _, r := range releases {
+		tags = append(tags, r.Tag)
+	}
+	updatedAt := a.batchReleaseUpdatedAt(tags)
+	for i := range releases {
+		releases[i].UpdatedAt = updatedAt[releases[i].Tag]
+	}
 	return &importpkg.ReleasePlan{Releases: releases, Filtered: filtered}, nil
+}
+
+// batchReleaseUpdatedAt fetches each tag's updatedAt over GraphQL, the field the REST release payload omits.
+func (a *Adapter) batchReleaseUpdatedAt(tags []string) map[string]time.Time {
+	result := map[string]time.Time{}
+	for i := 0; i < len(tags); i += releaseUpdatedAtBatchSize {
+		end := i + releaseUpdatedAtBatchSize
+		if end > len(tags) {
+			end = len(tags)
+		}
+		var fields string
+		for j, tag := range tags[i:end] {
+			fields += fmt.Sprintf("  r%d: release(tagName: %q) { tagName updatedAt }\n", i+j, tag)
+		}
+		query := fmt.Sprintf("{ repository(owner: %q, name: %q) {\n%s} }", a.owner, a.repo, fields)
+		var resp struct {
+			Data struct {
+				Repository map[string]*struct {
+					TagName   string    `json:"tagName"`
+					UpdatedAt time.Time `json:"updatedAt"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+		if err := ghJSON(&resp, "api", "graphql", "-f", "query="+query); err != nil {
+			log.Debug("graphql batch release updated-at query failed", "error", err)
+			continue
+		}
+		for _, node := range resp.Data.Repository {
+			if node != nil && node.TagName != "" {
+				result[node.TagName] = node.UpdatedAt
+			}
+		}
+	}
+	return result
 }
 
 func buildArtifactURL(owner, repo, tag string) string {

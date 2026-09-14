@@ -327,6 +327,28 @@ func TestExecuteItemComments_DryRun(t *testing.T) {
 	}
 }
 
+func TestSkipByUpdatedAt(t *testing.T) {
+	updatedAt := time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)
+	mapping := &MappingFile{Source: "github", Items: map[string]MappedItem{
+		"github:issue:1": {Hash: "aaa111222333", Branch: "gitmsg/pm", Type: "issue"},
+		"github:issue:2": {Hash: "bbb444555666", Branch: "gitmsg/pm", Type: "issue"},
+	}}
+	mapping.SetUpdatedAt("github:issue:1", updatedAt)
+	if !skipByUpdatedAt(mapping, "github:issue:1", updatedAt) {
+		t.Error("an item whose platform time matches the mapping was not skipped")
+	}
+	if skipByUpdatedAt(mapping, "github:issue:1", updatedAt.Add(time.Hour)) {
+		t.Error("an edited item was skipped")
+	}
+	// An adapter that decodes no platform time leaves every mapped item to the field comparison.
+	if skipByUpdatedAt(mapping, "github:issue:1", time.Time{}) {
+		t.Error("an item with no platform time was skipped")
+	}
+	if skipByUpdatedAt(mapping, "github:issue:2", updatedAt) {
+		t.Error("an item with no stored time was skipped")
+	}
+}
+
 func TestJoinTitleBody(t *testing.T) {
 	if got := joinTitleBody("Title", "Body"); got != "Title\n\nBody" {
 		t.Errorf("joinTitleBody = %q", got)

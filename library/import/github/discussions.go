@@ -17,6 +17,7 @@ type ghDiscussion struct {
 	Category  ghCategory              `json:"category"`
 	Comments  ghDiscussionCommentPage `json:"comments"`
 	CreatedAt time.Time               `json:"createdAt"`
+	UpdatedAt time.Time               `json:"updatedAt"`
 }
 
 type ghCategory struct {
@@ -66,6 +67,7 @@ func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
         author { login ... on User { name email } }
         category { name slug }
         createdAt
+        updatedAt
         comments(first: 100) {
           nodes { %s }
           pageInfo { hasNextPage endCursor }
@@ -180,6 +182,7 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 			AuthorName:  dAuthor.name,
 			AuthorEmail: dAuthor.email,
 			CreatedAt:   d.CreatedAt,
+			UpdatedAt:   d.UpdatedAt,
 		})
 		comments = append(comments, a.planDiscussionComments(d, opts)...)
 	}
