@@ -68,8 +68,10 @@ type EnsureOptions struct {
 	Force        bool
 }
 
-// EnsureRepository creates a bare clone if it doesn't exist.
-func EnsureRepository(baseDir, repoURL, branch string, opts *EnsureOptions) (string, error) {
+// EnsureRepository creates a bare clone if it doesn't exist: the directory is named from
+// repoURL, the identity, and git fetches from address, the spelling the user gave.
+// An empty address serves on create alone and leaves an existing remote as it was set.
+func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOptions) (string, error) {
 	if opts == nil {
 		opts = &EnsureOptions{}
 	}
@@ -78,7 +80,15 @@ func EnsureRepository(baseDir, repoURL, branch string, opts *EnsureOptions) (str
 	migrateLegacyStorageDir(baseDir, repoURL, storageDir)
 
 	if _, err := os.Stat(storageDir); err == nil && !opts.Force {
+		if address != "" {
+			if err := git.EnsureRemote(storageDir, "upstream", address); err != nil {
+				slog.Debug("set upstream url", "dir", storageDir, "address", address, "error", err)
+			}
+		}
 		return storageDir, nil
+	}
+	if address == "" {
+		address = repoURL
 	}
 
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
@@ -91,7 +101,7 @@ func EnsureRepository(baseDir, repoURL, branch string, opts *EnsureOptions) (str
 		return "", fmt.Errorf("failed to init bare repo: %w", err)
 	}
 
-	_, err = git.ExecGit(storageDir, []string{"remote", "add", "upstream", repoURL})
+	_, err = git.ExecGit(storageDir, []string{"remote", "add", "upstream", address})
 	if err != nil {
 		os.RemoveAll(storageDir)
 		return "", fmt.Errorf("failed to add remote: %w", err)

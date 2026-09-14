@@ -294,7 +294,7 @@ func TestFetchHelpers(t *testing.T) {
 		forkDir := t.TempDir()
 		git.ExecGit(forkDir, []string{"init", "--bare"})
 
-		fetchFromUpstream(forkDir, bareDir, "main")
+		fetchFromUpstream(forkDir, bareDir, bareDir, "main")
 	})
 
 	t.Run("FetchFromUpstream_multipleRemotes", func(t *testing.T) {
@@ -308,8 +308,8 @@ func TestFetchHelpers(t *testing.T) {
 		git.ExecGit(forkDir, []string{"init", "--bare"})
 
 		// Fetch from two different URLs into same bare repo
-		fetchFromUpstream(forkDir, bareDir, "main")
-		fetchFromUpstream(forkDir, bareDir, "main") // idempotent
+		fetchFromUpstream(forkDir, bareDir, bareDir, "main")
+		fetchFromUpstream(forkDir, bareDir, bareDir, "main") // idempotent
 	})
 
 	t.Run("FetchFromWorkspace", func(t *testing.T) {

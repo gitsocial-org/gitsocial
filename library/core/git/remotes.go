@@ -320,3 +320,21 @@ func GetOriginURL(workdir string) string {
 	// Fallback to first remote if origin not found
 	return remotes[0].URL
 }
+
+// EnsureRemote points the named remote at url: it adds a missing remote, re-points one whose URL differs and leaves a matching one alone.
+func EnsureRemote(workdir, name, url string) error {
+	current, err := ExecGit(workdir, []string{"remote", "get-url", name})
+	if err != nil {
+		if _, err := ExecGit(workdir, []string{"remote", "add", name, url}); err != nil {
+			return fmt.Errorf("add remote %s: %w", name, err)
+		}
+		return nil
+	}
+	if strings.TrimSpace(current.Stdout) == url {
+		return nil
+	}
+	if _, err := ExecGit(workdir, []string{"remote", "set-url", name, url}); err != nil {
+		return fmt.Errorf("set remote %s url: %w", name, err)
+	}
+	return nil
+}

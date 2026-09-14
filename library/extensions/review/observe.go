@@ -4,6 +4,8 @@ package review
 import (
 	"database/sql"
 	"errors"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -30,7 +32,8 @@ func refreshOpenPRBranches(workdir string) error {
 		return nil
 	}
 	branch := gitmsg.GetExtBranch(workdir, "review")
-	forkURLs := gitmsg.GetForks(workdir)
+	addresses := gitmsg.ForkAddresses(workdir)
+	forkURLs := slices.Sorted(maps.Keys(addresses))
 	res := GetPullRequestsWithForks(workspaceURL, branch, forkURLs, []string{"open"}, "", 0)
 	if !res.Success {
 		return errors.New(res.Error.Message)
@@ -51,7 +54,7 @@ func refreshOpenPRBranches(workdir string) error {
 			return
 		}
 		seen[key] = struct{}{}
-		rows = append(rows, observeBranch(workdir, repoURL, parsed.Value, now))
+		rows = append(rows, observeBranch(workdir, repoURL, parsed.Value, now, addresses))
 	}
 	for _, pr := range res.Data {
 		collect(protocol.ParseRef(pr.Head))
@@ -69,11 +72,12 @@ func ObserveLivePR(workdir string, pr PullRequest) *PRObservation {
 		return nil
 	}
 	obs := &PRObservation{HeadExists: true, BaseExists: true}
+	addresses := gitmsg.ForkAddresses(workdir)
 	if headParsed.Type == protocol.RefTypeBranch && headParsed.Value != "" {
-		obs.HeadTip, obs.HeadExists = resolveTipShortObs(workdir, workspaceURL, headParsed)
+		obs.HeadTip, obs.HeadExists = resolveTipShortObs(workdir, workspaceURL, headParsed, addresses)
 	}
 	if baseParsed.Type == protocol.RefTypeBranch && baseParsed.Value != "" {
-		obs.BaseTip, obs.BaseExists = resolveTipShortObs(workdir, workspaceURL, baseParsed)
+		obs.BaseTip, obs.BaseExists = resolveTipShortObs(workdir, workspaceURL, baseParsed, addresses)
 	}
 	return obs
 }
@@ -110,8 +114,8 @@ func PRObservationFromCache(workspaceURL string, pr PullRequest) *PRObservation 
 }
 
 // observeBranch resolves the live tip of (repoURL, branch) for upsert.
-func observeBranch(workdir, repoURL, branch string, now time.Time) branchObservation {
-	tip, err := resolveBranchTip(workdir, repoURL, branch)
+func observeBranch(workdir, repoURL, branch string, now time.Time, addresses map[string]string) branchObservation {
+	tip, err := resolveBranchTip(workdir, repoURL, branch, addresses)
 	obs := branchObservation{
 		RepoURL:    repoURL,
 		Branch:     branch,
@@ -128,8 +132,8 @@ func observeBranch(workdir, repoURL, branch string, now time.Time) branchObserva
 }
 
 // resolveTipShortObs returns a 12-character remote tip and whether the branch exists.
-func resolveTipShortObs(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, bool) {
-	tip, err := resolveTipForObservation(workdir, workspaceURL, parsed)
+func resolveTipShortObs(workdir, workspaceURL string, parsed protocol.ParsedRef, addresses map[string]string) (string, bool) {
+	tip, err := resolveTipForObservation(workdir, workspaceURL, parsed, addresses)
 	if err != nil || tip == "" {
 		return "", false
 	}

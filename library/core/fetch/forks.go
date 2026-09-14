@@ -3,6 +3,8 @@ package fetch
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 
@@ -17,16 +19,17 @@ import (
 // FetchForks fetches all gitmsg branches from registered forks concurrently,
 // processing commits through all registered extension processors.
 func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
-	forks := gitmsg.GetForks(workdir)
-	if len(forks) == 0 {
+	addresses := gitmsg.ForkAddresses(workdir)
+	if len(addresses) == 0 {
 		return Stats{}
 	}
+	forks := slices.Sorted(maps.Keys(addresses))
 	wsURL := gitmsg.ResolveRepoURL(workdir)
 	forkDir, err := storage.EnsureForkRepository(cacheDir, wsURL)
 	if err != nil {
 		return Stats{Repositories: len(forks), Errors: []Error{{Repository: wsURL, Error: err.Error()}}}
 	}
-	stats, missingObject := fetchForksInto(forkDir, forks, processors)
+	stats, missingObject := fetchForksInto(forkDir, forks, addresses, processors)
 	if !missingObject {
 		return stats
 	}
@@ -38,13 +41,13 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
 		log.Debug("fork repo repair failed", "dir", forkDir, "error", repairErr)
 		return stats
 	}
-	stats, _ = fetchForksInto(repaired, forks, processors)
+	stats, _ = fetchForksInto(repaired, forks, addresses, processors)
 	return stats
 }
 
 // fetchForksInto fetches every fork into one bare repo, reporting whether any
 // failure named a missing or bad object.
-func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor) (Stats, bool) {
+func fetchForksInto(forkDir string, forks []string, addresses map[string]string, processors []CommitProcessor) (Stats, bool) {
 	stats := Stats{Repositories: len(forks)}
 	missingObject := false
 	var mu sync.Mutex
@@ -56,7 +59,7 @@ func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor
 		go func(url string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			count, fetchErr := fetchFork(forkDir, url, processors)
+			count, fetchErr := fetchFork(forkDir, url, ForkAddress(addresses, url), processors)
 			mu.Lock()
 			if fetchErr != nil {
 				log.Debug("fork fetch failed", "fork", url, "error", fetchErr)
@@ -72,12 +75,22 @@ func fetchForksInto(forkDir string, forks []string, processors []CommitProcessor
 	return stats, missingObject
 }
 
-// fetchFork adds a remote for a fork URL in the shared bare repo and fetches all gitmsg data.
-func fetchFork(forkDir, forkURL string, processors []CommitProcessor) (int, error) {
+// ForkAddress returns the address registered for a fork identity, or the identity itself.
+func ForkAddress(addresses map[string]string, identity string) string {
+	if address := addresses[identity]; address != "" {
+		return address
+	}
+	return identity
+}
+
+// fetchFork adds a remote for a fork in the shared bare repo and fetches all
+// gitmsg data. The remote name hashes the identity, so it is stable across
+// spellings; the remote URL is the address.
+func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (int, error) {
 	hash := URLHash(forkURL)
 	remoteName := "remote-" + hash
-	if _, err := git.ExecGit(forkDir, []string{"remote", "add", remoteName, forkURL}); err != nil {
-		log.Debug("add fork remote (may already exist)", "remote", remoteName, "error", err)
+	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
+		return 0, fmt.Errorf("fork remote: %w", err)
 	}
 	refspec := fmt.Sprintf("+refs/heads/gitmsg/*:refs/forks/%s/gitmsg/*", hash)
 	// Also mirror the fork's published decline markers so we can learn which of our

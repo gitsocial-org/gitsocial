@@ -52,13 +52,14 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 	}
 
 	// Auto-resolve branch tips if not already set
+	addresses := gitmsg.ForkAddresses(workdir)
 	if opts.BaseTip == "" {
-		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Base)); err == nil && len(tip) >= 12 {
+		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Base), addresses); err == nil && len(tip) >= 12 {
 			opts.BaseTip = tip[:12]
 		}
 	}
 	if opts.HeadTip == "" {
-		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Head)); err == nil && len(tip) >= 12 {
+		if tip, err := resolveTipForAuthor(workdir, repoURL, protocol.ParseRef(opts.Head), addresses); err == nil && len(tip) >= 12 {
 			opts.HeadTip = tip[:12]
 		}
 	}
@@ -553,8 +554,9 @@ func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot update: pull request is %s", pr.State))
 	}
 	opts := UpdatePROptions{}
+	addresses := gitmsg.ForkAddresses(workdir)
 	if baseParsed := protocol.ParseRef(pr.Base); baseParsed.Value != "" {
-		tip, err := resolveTipForWrite(workdir, repoURL, baseParsed)
+		tip, err := resolveTipForWrite(workdir, repoURL, baseParsed, addresses)
 		if err != nil {
 			return result.Err[PullRequest]("BASE_UNRESOLVED",
 				fmt.Sprintf("cannot resolve base %q: %s", pr.Base, err))
@@ -567,7 +569,7 @@ func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 		}
 	}
 	if headParsed := protocol.ParseRef(pr.Head); headParsed.Value != "" {
-		tip, err := resolveTipForWrite(workdir, repoURL, headParsed)
+		tip, err := resolveTipForWrite(workdir, repoURL, headParsed, addresses)
 		if err != nil {
 			return result.Err[PullRequest]("HEAD_UNRESOLVED",
 				fmt.Sprintf("cannot resolve head %q: %s", pr.Head, err))

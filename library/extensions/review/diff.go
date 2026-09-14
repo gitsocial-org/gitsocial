@@ -53,6 +53,8 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 	if err != nil {
 		return DiffContext{Workdir: workdir, Base: baseBranch, Head: headBranch}
 	}
+	// A registered fork is fetched from its address; an unregistered one from its identity.
+	addresses := gitmsg.ForkAddresses(workdir)
 	// Populate and read as a unit, so a repo whose borrowed objects went missing can be retried.
 	resolve := func(dir string) (DiffContext, bool) {
 		errs := make([]error, 2)
@@ -64,10 +66,10 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 				errs[0] = lendWorkspaceBranch(dir, workdir, baseBranch)
 				if !headLocal {
 					// An unreachable upstream leaves the base on the borrowed workspace branch.
-					errs[0] = errors.Join(errs[0], fetchFromUpstream(dir, wsURL, baseBranch))
+					errs[0] = errors.Join(errs[0], fetchFromUpstream(dir, wsURL, fetch.ForkAddress(addresses, wsURL), baseBranch))
 				}
 			} else {
-				errs[0] = fetchFromUpstream(dir, baseParsed.Repository, baseBranch)
+				errs[0] = fetchFromUpstream(dir, baseParsed.Repository, fetch.ForkAddress(addresses, baseParsed.Repository), baseBranch)
 			}
 		}()
 		go func() {
@@ -75,7 +77,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 			if headLocal {
 				errs[1] = lendWorkspaceBranch(dir, workdir, headBranch)
 			} else {
-				errs[1] = fetchFromUpstream(dir, headParsed.Repository, headBranch)
+				errs[1] = fetchFromUpstream(dir, headParsed.Repository, fetch.ForkAddress(addresses, headParsed.Repository), headBranch)
 			}
 		}()
 		wg.Wait()
@@ -171,16 +173,17 @@ func branchValue(parsed protocol.ParsedRef, raw string) string {
 	return raw
 }
 
-// fetchFromUpstream fetches a branch from a remote URL into namespaced refs.
-func fetchFromUpstream(forkDir, repoURL, branch string) error {
+// fetchFromUpstream fetches a branch into namespaced refs, from the address; the
+// remote name hashes the identity, so it is stable across spellings.
+func fetchFromUpstream(forkDir, repoURL, address, branch string) error {
 	key := forkDir + "\x00" + repoURL + "\x00" + branch
 	if _, ok := fetchedRefs.Load(key); ok {
 		return nil
 	}
 	hash := fetch.URLHash(repoURL)
 	remoteName := "remote-" + hash
-	if _, err := git.ExecGit(forkDir, []string{"remote", "add", remoteName, repoURL}); err != nil {
-		log.Debug("add fork remote (may already exist)", "remote", remoteName, "error", err)
+	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
+		return fmt.Errorf("fork remote: %w", err)
 	}
 	refspec := fmt.Sprintf("+refs/heads/%s:refs/fork/%s/%s", branch, hash, branch)
 	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, "--no-tags"}); err != nil {

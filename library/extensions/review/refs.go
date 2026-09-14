@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// resolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error.
-func resolveBranchTip(workdir, repoURL, branch string) (string, error) {
+// resolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error. addresses is gitmsg.ForkAddresses, read once by the caller.
+func resolveBranchTip(workdir, repoURL, branch string, addresses map[string]string) (string, error) {
 	if branch == "" {
 		return "", errors.New("branch required")
 	}
@@ -28,7 +29,9 @@ func resolveBranchTip(workdir, repoURL, branch string) (string, error) {
 		}
 	}
 	if normalizedURL != "" {
-		if tip, err := git.ReadRemoteRef(workdir, normalizedURL, branch); err == nil && tip != "" {
+		// A registered fork is reached at its address, which may be the only URL that serves it.
+		address := fetch.ForkAddress(addresses, normalizedURL)
+		if tip, err := git.ReadRemoteRef(workdir, address, branch); err == nil && tip != "" {
 			return tip, nil
 		}
 	}
@@ -36,7 +39,7 @@ func resolveBranchTip(workdir, repoURL, branch string) (string, error) {
 }
 
 // resolveTipForWrite returns the remote tip, falling back to a local workspace branch.
-func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
+func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef, addresses map[string]string) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
 	}
@@ -44,7 +47,7 @@ func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef)
 	if repoURL == "" {
 		repoURL = workspaceURL
 	}
-	if tip, err := resolveBranchTip(workdir, repoURL, parsed.Value); err == nil {
+	if tip, err := resolveBranchTip(workdir, repoURL, parsed.Value, addresses); err == nil {
 		return tip, nil
 	} else if !isWorkspaceURL(workdir, protocol.NormalizeURL(repoURL)) {
 		return "", err
@@ -53,7 +56,7 @@ func resolveTipForWrite(workdir, workspaceURL string, parsed protocol.ParsedRef)
 }
 
 // resolveTipForAuthor prefers a local workspace branch, so an unpushed tip is the proposed state.
-func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
+func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef, addresses map[string]string) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
 	}
@@ -66,11 +69,11 @@ func resolveTipForAuthor(workdir, workspaceURL string, parsed protocol.ParsedRef
 			return tip, nil
 		}
 	}
-	return resolveBranchTip(workdir, repoURL, parsed.Value)
+	return resolveBranchTip(workdir, repoURL, parsed.Value, addresses)
 }
 
 // resolveTipForObservation returns the remote tip with no local fallback, so a deletion surfaces.
-func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.ParsedRef) (string, error) {
+func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.ParsedRef, addresses map[string]string) (string, error) {
 	if parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
 		return "", fmt.Errorf("not a branch ref")
 	}
@@ -78,7 +81,7 @@ func resolveTipForObservation(workdir, workspaceURL string, parsed protocol.Pars
 	if repoURL == "" {
 		repoURL = workspaceURL
 	}
-	return resolveBranchTip(workdir, repoURL, parsed.Value)
+	return resolveBranchTip(workdir, repoURL, parsed.Value, addresses)
 }
 
 // findRemoteForURL returns the remote whose URL matches normalizedURL, or the empty string.

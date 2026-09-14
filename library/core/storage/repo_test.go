@@ -158,7 +158,7 @@ func TestMigrateLegacyStorageDir(t *testing.T) {
 		t.Fatalf("add remote: %v", err)
 	}
 
-	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -193,7 +193,7 @@ func TestMigrateLegacyStorageDir_collisionNotMoved(t *testing.T) {
 		t.Fatalf("add remote: %v", err)
 	}
 
-	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -213,7 +213,7 @@ func TestEnsureRepository_createsBareRepo(t *testing.T) {
 	baseDir := t.TempDir()
 	repoURL := "https://github.com/test/repo"
 
-	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -241,7 +241,7 @@ func TestEnsureRepository_setsConfigs(t *testing.T) {
 	baseDir := t.TempDir()
 	repoURL := "https://github.com/test/config-repo"
 
-	storageDir, err := EnsureRepository(baseDir, repoURL, "develop", &EnsureOptions{IsPersistent: true})
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "develop", &EnsureOptions{IsPersistent: true})
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -275,7 +275,7 @@ func TestEnsureRepository_notPersistent(t *testing.T) {
 	t.Parallel()
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, "https://github.com/test/np", "main", &EnsureOptions{IsPersistent: false})
+	storageDir, err := EnsureRepository(baseDir, "https://github.com/test/np", "https://github.com/test/np", "main", &EnsureOptions{IsPersistent: false})
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -290,7 +290,7 @@ func TestEnsureRepository_nilOpts(t *testing.T) {
 	t.Parallel()
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, "https://github.com/test/nilopt", "main", nil)
+	storageDir, err := EnsureRepository(baseDir, "https://github.com/test/nilopt", "https://github.com/test/nilopt", "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -307,13 +307,13 @@ func TestEnsureRepository_existingDirSkipsInit(t *testing.T) {
 	baseDir := t.TempDir()
 	repoURL := "https://github.com/test/existing"
 
-	first, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	first, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("first EnsureRepository() error = %v", err)
 	}
 
 	// Second call should return the same dir without re-initializing
-	second, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	second, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("second EnsureRepository() error = %v", err)
 	}
@@ -328,7 +328,7 @@ func TestEnsureRepository_forceReInitializes(t *testing.T) {
 	repoURL := "https://github.com/test/force"
 
 	// Force on a non-existing dir should create it normally
-	storageDir, err := EnsureRepository(baseDir, repoURL, "main", &EnsureOptions{Force: true})
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "main", &EnsureOptions{Force: true})
 	if err != nil {
 		t.Fatalf("EnsureRepository(Force) error = %v", err)
 	}
@@ -338,7 +338,7 @@ func TestEnsureRepository_forceReInitializes(t *testing.T) {
 
 	// Verify Force=true doesn't short-circuit on existing dir
 	// (it attempts re-init, which fails on remote add — this is expected behavior)
-	_, err = EnsureRepository(baseDir, repoURL, "main", &EnsureOptions{Force: true})
+	_, err = EnsureRepository(baseDir, repoURL, repoURL, "main", &EnsureOptions{Force: true})
 	if err == nil {
 		t.Error("expected error when forcing re-init on existing repo (remote already exists)")
 	}
@@ -349,7 +349,7 @@ func TestEnsureRepository_storageDirMatchesGetStorageDir(t *testing.T) {
 	baseDir := t.TempDir()
 	repoURL := "https://github.com/test/path"
 
-	storageDir, err := EnsureRepository(baseDir, repoURL, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, repoURL, repoURL, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -370,7 +370,7 @@ func TestEnsureRepository_gitInitFails(t *testing.T) {
 	os.Chmod(storagePath, 0444)
 	t.Cleanup(func() { os.Chmod(storagePath, 0755) })
 
-	_, err := EnsureRepository(baseDir, repoURL, "main", &EnsureOptions{Force: true})
+	_, err := EnsureRepository(baseDir, repoURL, repoURL, "main", &EnsureOptions{Force: true})
 	if err == nil {
 		t.Error("expected error when git init fails on read-only dir")
 	}
@@ -388,7 +388,7 @@ func TestEnsureRepository_mkdirFails(t *testing.T) {
 	os.MkdirAll(filepath.Dir(storagePath), 0755)
 	os.WriteFile(storagePath, []byte("blocker"), 0644)
 
-	_, err := EnsureRepository(baseDir, repoURL, "main", &EnsureOptions{Force: true})
+	_, err := EnsureRepository(baseDir, repoURL, repoURL, "main", &EnsureOptions{Force: true})
 	if err == nil {
 		t.Error("expected error when MkdirAll fails")
 	}
@@ -408,7 +408,7 @@ func TestFetchRepository_fetchesGitmsgBranches(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -437,7 +437,7 @@ func TestFetchRepository_fetchesDefaultBranch(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -466,7 +466,7 @@ func TestFetchRepository_skipsDefaultBranchFetchForGitmsgPrefix(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "gitmsg/social/posts", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "gitmsg/social/posts", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -487,7 +487,7 @@ func TestFetchRepository_nilOpts(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -508,7 +508,7 @@ func TestFetchRepository_withDepth(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -528,7 +528,7 @@ func TestFetchRepository_withSince(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -549,7 +549,7 @@ func TestFetchRepository_emptyBranch(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -570,7 +570,7 @@ func TestFetchRepository_withSinceAndDefaultBranch(t *testing.T) {
 	bare := pushToBare(t, source)
 	baseDir := t.TempDir()
 
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -616,7 +616,7 @@ func TestFetchRepository_withSinceAndCustomBranches(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
 
 	baseDir := t.TempDir()
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -674,7 +674,7 @@ func TestDiscoverCustomBranches_withCustomBranch(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
 
 	baseDir := t.TempDir()
-	storageDir, err := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
@@ -716,7 +716,7 @@ func TestDiscoverCustomBranches_ignoresGitmsgPrefixBranch(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/social/config:refs/gitmsg/social/config"})
 
 	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
 	FetchRepository(storageDir, "main", nil)
 
 	branches := discoverCustomBranches(storageDir)
@@ -746,7 +746,7 @@ func TestDiscoverCustomBranches_invalidJSON(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
 
 	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
 	FetchRepository(storageDir, "main", nil)
 
 	branches := discoverCustomBranches(storageDir)
@@ -774,7 +774,7 @@ func TestDiscoverCustomBranches_noBranchField(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
 
 	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
 	FetchRepository(storageDir, "main", nil)
 
 	branches := discoverCustomBranches(storageDir)
@@ -802,7 +802,7 @@ func TestDiscoverCustomBranches_emptyBranchField(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
 
 	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
 	FetchRepository(storageDir, "main", nil)
 
 	branches := discoverCustomBranches(storageDir)
@@ -1092,7 +1092,7 @@ func TestDiscoverCustomBranches_skipsNonConfigRefs(t *testing.T) {
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
 
 	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, "main", nil)
+	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
 	FetchRepository(storageDir, "main", nil)
 
 	branches := discoverCustomBranches(storageDir)
@@ -1141,7 +1141,7 @@ func TestEnsureRepository_partialCloneFilterFails(t *testing.T) {
 	defer restore()
 
 	baseDir := t.TempDir()
-	_, err := EnsureRepository(baseDir, "https://github.com/test/pcf-fail", "main", nil)
+	_, err := EnsureRepository(baseDir, "https://github.com/test/pcf-fail", "https://github.com/test/pcf-fail", "main", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1155,7 +1155,7 @@ func TestEnsureRepository_pushUrlFails(t *testing.T) {
 	defer restore()
 
 	baseDir := t.TempDir()
-	_, err := EnsureRepository(baseDir, "https://github.com/test/push-fail", "main", nil)
+	_, err := EnsureRepository(baseDir, "https://github.com/test/push-fail", "https://github.com/test/push-fail", "main", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1169,7 +1169,7 @@ func TestEnsureRepository_branchConfigFails(t *testing.T) {
 	defer restore()
 
 	baseDir := t.TempDir()
-	_, err := EnsureRepository(baseDir, "https://github.com/test/branch-fail", "main", nil)
+	_, err := EnsureRepository(baseDir, "https://github.com/test/branch-fail", "https://github.com/test/branch-fail", "main", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1183,7 +1183,7 @@ func TestEnsureRepository_persistentConfigFails(t *testing.T) {
 	defer restore()
 
 	baseDir := t.TempDir()
-	_, err := EnsureRepository(baseDir, "https://github.com/test/persist-fail", "main", nil)
+	_, err := EnsureRepository(baseDir, "https://github.com/test/persist-fail", "https://github.com/test/persist-fail", "main", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}

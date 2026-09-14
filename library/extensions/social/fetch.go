@@ -2,6 +2,7 @@
 package social
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -52,10 +53,13 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 			if id.Repository == "" {
 				continue
 			}
+			// The member ref's URL part is the address; ParseRepositoryID canonicalized it.
+			address, _, _ := strings.Cut(repoRef, "#branch:")
 			repos = append(repos, fetch.RepoInfo{
-				URL:    id.Repository,
-				Branch: id.Branch,
-				ListID: list.ID,
+				URL:     id.Repository,
+				Address: strings.TrimSpace(address),
+				Branch:  id.Branch,
+				ListID:  list.ID,
 			})
 		}
 	}
@@ -80,7 +84,7 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 
 // CacheExternalRepoLists fetches and caches lists defined by an external repository.
 func CacheExternalRepoLists(cacheDir, repoURL, branch string) {
-	storageDir, err := storage.EnsureRepository(cacheDir, repoURL, branch, nil)
+	storageDir, err := storage.EnsureRepository(cacheDir, repoURL, "", branch, nil)
 	if err != nil {
 		return
 	}

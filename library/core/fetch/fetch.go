@@ -38,9 +38,10 @@ type Options struct {
 
 // RepoInfo identifies a repository to fetch.
 type RepoInfo struct {
-	URL    string
-	Branch string
-	ListID string
+	URL     string
+	Address string // the spelling git is handed; URL is the identity
+	Branch  string
+	ListID  string
 }
 
 // Result is the return type for fetch operations.
@@ -170,7 +171,7 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 			defer func() { <-sem }()
 
 			// Every repo here comes from a list, so it takes the followed path.
-			count, err := fetchRepository(cacheDir, r.URL, r.Branch, true, "", "", workspaceURL, processors, hooks)
+			count, err := fetchRepository(cacheDir, r.URL, r.Address, r.Branch, true, "", "", workspaceURL, processors, hooks)
 
 			mu.Lock()
 			if err != nil {
@@ -215,7 +216,7 @@ func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, processors 
 		branch = "main"
 	}
 
-	count, err := fetchRepository(cacheDir, repoURL, branch, true, "", "", workspaceURL, processors, hooks)
+	count, err := fetchRepository(cacheDir, repoURL, "", branch, true, "", "", workspaceURL, processors, hooks)
 	if err != nil {
 		return result.ErrWithDetails[Stats]("FETCH_ERROR", "Failed to fetch repository", err)
 	}
@@ -232,7 +233,7 @@ func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL
 		branch = "main"
 	}
 
-	count, err := fetchRepository(cacheDir, repoURL, branch, false, since, before, workspaceURL, processors, hooks)
+	count, err := fetchRepository(cacheDir, repoURL, "", branch, false, since, before, workspaceURL, processors, hooks)
 	if err != nil {
 		return result.ErrWithDetails[Stats]("FETCH_ERROR", "Failed to fetch repository", err)
 	}
@@ -244,8 +245,8 @@ func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL
 }
 
 // fetchRepository clones or updates a repository and processes its commits.
-func fetchRepository(cacheDir, repoURL, branch string, isFollowed bool, defaultSince, defaultBefore, workspaceURL string, processors []CommitProcessor, hooks []PostFetchHook) (int, error) {
-	storageDir, err := storage.EnsureRepository(cacheDir, repoURL, branch, &storage.EnsureOptions{
+func fetchRepository(cacheDir, repoURL, address, branch string, isFollowed bool, defaultSince, defaultBefore, workspaceURL string, processors []CommitProcessor, hooks []PostFetchHook) (int, error) {
+	storageDir, err := storage.EnsureRepository(cacheDir, repoURL, address, branch, &storage.EnsureOptions{
 		IsPersistent: isFollowed,
 	})
 	if err != nil {

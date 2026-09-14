@@ -542,7 +542,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		repoDir, _ := initTestRepo(t, 1)
 		bareDir := pushToBare(t, repoDir, false)
 		cacheDir := t.TempDir()
-		_, err := fetchRepository(cacheDir, bareDir, "main", false, "", "", "", nil, nil)
+		_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", false, "", "", "", nil, nil)
 		if err == nil {
 			t.Error("expected error from GetRepositoryFetchMeta")
 		}
@@ -561,7 +561,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		})
 		cacheDir := t.TempDir()
 		// isFollowed=true, no prior commits → full history → processCommits → InsertCommits fails
-		_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+		_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 		if err == nil {
 			t.Error("expected error propagated from processCommits")
 		}
@@ -621,7 +621,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		})
 		cacheDir := t.TempDir()
 		// isFollowed=true → full history path (uses nil fetch options, avoids --shallow-since issues)
-		_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+		_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 		if err != nil {
 			t.Errorf("fetchRepository should succeed despite cache log errors: %v", err)
 		}
@@ -695,7 +695,7 @@ func TestCacheErrorPaths(t *testing.T) {
 		})
 		cacheDir := t.TempDir()
 		// isFollowed=true → full history path (nil fetch options, no --shallow-since issues)
-		_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+		_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 		if err != nil {
 			t.Errorf("fetchRepository should succeed: %v", err)
 		}
@@ -1124,7 +1124,7 @@ func TestFetchRepository_followedNoCommits(t *testing.T) {
 
 	cacheDir := t.TempDir()
 	// isFollowed=true, no commits in cache → takes full history path
-	count, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+	count, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("fetchRepository() error = %v", err)
 	}
@@ -1148,7 +1148,7 @@ func TestFetchRepository_followedIncremental(t *testing.T) {
 
 	cacheDir := t.TempDir()
 	// First fetch: full history (populates cache, meta.HasCommits becomes true)
-	_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+	_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("first fetch error = %v", err)
 	}
@@ -1161,7 +1161,7 @@ func TestFetchRepository_followedIncremental(t *testing.T) {
 	git.ExecGit(repoDir, []string{"push", "origin", "main"})
 
 	// Second fetch: exercises incremental path (meta.HasCommits is true).
-	_, err = fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+	_, err = fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("second fetch error = %v", err)
 	}
@@ -1183,7 +1183,7 @@ func TestFetchRepository_ensureError(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	t.Parallel()
-	_, err := fetchRepository("/dev/null/impossible", "https://invalid.example.com/repo", "main", false, "", "", "", nil, nil)
+	_, err := fetchRepository("/dev/null/impossible", "https://invalid.example.com/repo", "https://invalid.example.com/repo", "main", false, "", "", "", nil, nil)
 	if err == nil {
 		t.Error("expected error for invalid cache dir")
 	}
@@ -1196,7 +1196,7 @@ func TestFetchRepository_followedFullFetchError(t *testing.T) {
 	t.Parallel()
 	cacheDir := t.TempDir()
 	// EnsureRepository succeeds (creates bare repo), but storage.FetchRepository fails (bad upstream)
-	_, err := fetchRepository(cacheDir, "/nonexistent/repo.git", "main", true, "", "", "", nil, nil)
+	_, err := fetchRepository(cacheDir, "/nonexistent/repo.git", "/nonexistent/repo.git", "main", true, "", "", "", nil, nil)
 	if err == nil {
 		t.Error("expected error for nonexistent remote")
 	}
@@ -1209,7 +1209,7 @@ func TestFetchRepository_notFollowedFetchError(t *testing.T) {
 	t.Parallel()
 	cacheDir := t.TempDir()
 	since := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	_, err := fetchRepository(cacheDir, "/nonexistent/repo.git", "main", false, since, "", "", nil, nil)
+	_, err := fetchRepository(cacheDir, "/nonexistent/repo.git", "/nonexistent/repo.git", "main", false, since, "", "", nil, nil)
 	if err == nil {
 		t.Error("expected error for nonexistent remote")
 	}
@@ -1235,7 +1235,7 @@ func TestFetchRepository_withHooksAndProcessors(t *testing.T) {
 
 	cacheDir := t.TempDir()
 	since := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	_, err := fetchRepository(cacheDir, bareDir, "main", false, since, "", "https://workspace.com", []CommitProcessor{proc}, []PostFetchHook{hook})
+	_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", false, since, "", "https://workspace.com", []CommitProcessor{proc}, []PostFetchHook{hook})
 	if err != nil {
 		t.Fatalf("fetchRepository() error = %v", err)
 	}
@@ -1471,14 +1471,14 @@ func TestFetchRepository_followedIncrementalFetchFail(t *testing.T) {
 	bareDir := pushToBare(t, repoDir, true)
 	cacheDir := t.TempDir()
 	// First fetch: full history
-	_, err := fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+	_, err := fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("first fetch error = %v", err)
 	}
 	// Delete remote to make storage.FetchRepository fail on second call
 	os.RemoveAll(bareDir)
 	// Second fetch: incremental path, storage.FetchRepository fails → logged, continues with cached data
-	_, err = fetchRepository(cacheDir, bareDir, "main", true, "", "", "", nil, nil)
+	_, err = fetchRepository(cacheDir, bareDir, bareDir, "main", true, "", "", "", nil, nil)
 	if err != nil {
 		t.Fatalf("second fetch should succeed with cached data: %v", err)
 	}
