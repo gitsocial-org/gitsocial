@@ -16,6 +16,13 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// Column widths: the default, the floor a narrow terminal cuts to, and a collapsed column.
+const (
+	preferredColWidth = 15
+	minColWidth       = 4
+	collapsedColWidth = 4
+)
+
 // BoardView displays issues in a kanban board layout.
 type BoardView struct {
 	workdir        string
@@ -507,13 +514,13 @@ func (v *BoardView) renderBoard(width, height int) string {
 	expandedCount := colCount - collapsedCount
 	// Width = total - separators - collapsed columns width
 	separatorWidth := (colCount - 1) * 3
-	collapsedWidth := collapsedCount * 4
+	collapsedWidth := collapsedCount * collapsedColWidth
 	availableWidth := width - separatorWidth - collapsedWidth
-	colWidth := 15
+	colWidth := preferredColWidth
 	if expandedCount > 0 {
 		colWidth = availableWidth / expandedCount
-		if colWidth < 15 {
-			colWidth = 15
+		if colWidth < minColWidth {
+			colWidth = minColWidth
 		}
 	}
 
@@ -537,11 +544,9 @@ func (v *BoardView) renderBoard(width, height int) string {
 		}
 		thisColWidth := colWidth
 		if isCollapsed {
-			thisColWidth = 4
+			thisColWidth = collapsedColWidth
 		}
-		if len(header) > thisColWidth-2 {
-			header = header[:thisColWidth-3] + "…"
-		}
+		header = tuicore.TruncateToWidth(header, thisColWidth-2)
 		style := lipgloss.NewStyle().Width(thisColWidth).Bold(i == v.selectedCol)
 		if wip != nil && count > *wip {
 			style = style.Foreground(tuicore.StatusError)
@@ -585,7 +590,7 @@ func (v *BoardView) renderWithoutSwimlanes(colWidth, availableHeight int) []stri
 			isCollapsed := v.prefs.IsColumnCollapsed(col.Name)
 			thisColWidth := colWidth
 			if isCollapsed {
-				thisColWidth = 4
+				thisColWidth = collapsedColWidth
 			}
 			if isCollapsed {
 				cells = append(cells, strings.Repeat(" ", thisColWidth))
@@ -658,7 +663,7 @@ func (v *BoardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth in
 				isColCollapsed := v.prefs.IsColumnCollapsed(col.Name)
 				thisColWidth := colWidth
 				if isColCollapsed {
-					thisColWidth = 4
+					thisColWidth = collapsedColWidth
 				}
 				if isColCollapsed {
 					cells = append(cells, strings.Repeat(" ", thisColWidth))
@@ -683,7 +688,7 @@ func (v *BoardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth in
 			isCollapsed := v.prefs.IsColumnCollapsed(col.Name)
 			thisColWidth := colWidth
 			if isCollapsed {
-				thisColWidth = 4
+				thisColWidth = collapsedColWidth
 			}
 			cells = append(cells, strings.Repeat(" ", thisColWidth))
 		}
@@ -700,10 +705,7 @@ func (v *BoardView) renderIssueCell(issue pm.Issue, width int, isSelected bool) 
 	if issue.State == pm.StateClosed {
 		stateIcon = "●"
 	}
-	cell := fmt.Sprintf(" %s %s", stateIcon, issue.Subject)
-	if len(cell) > width-2 {
-		cell = cell[:width-3] + "…"
-	}
+	cell := tuicore.TruncateToWidth(fmt.Sprintf(" %s %s", stateIcon, issue.Subject), width-2)
 	style := lipgloss.NewStyle().Width(width)
 	if isSelected {
 		style = style.Reverse(true)
