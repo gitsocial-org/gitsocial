@@ -22,6 +22,8 @@ func TestNormalizeURL_s3Canonical(t *testing.T) {
 		{"r2 eu jurisdiction stays host form", "s3://" + r2acct + ".eu.r2.cloudflarestorage.com/bkt", "s3://" + r2acct + ".eu.r2.cloudflarestorage.com/bkt"},
 		{"virtual-host r2 eu folds", "s3://bkt." + r2acct + ".eu.r2.cloudflarestorage.com", "s3://" + r2acct + ".eu.r2.cloudflarestorage.com/bkt"},
 		{"bucket-only authority is invalid", "s3://mybucket/dir", ""},
+		{"empty host label is invalid", "s3://.0.digitaloceanspaces.com/bkt", ""},
+		{"trailing dot is invalid", "s3://s3.example.com./bkt", ""},
 		{"empty authority is invalid", "s3://", ""},
 	}
 	for _, c := range cases {

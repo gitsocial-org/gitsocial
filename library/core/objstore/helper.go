@@ -49,28 +49,23 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 	if u.RawQuery != "" {
 		return "", "", "", fmt.Errorf("s3 URLs take no parameters (configure endpoint/path-style via GITSOCIAL_S3_* env): %s", raw)
 	}
-	authority := strings.ToLower(u.Host)
-	// A dot or a port marks a real endpoint host, which a bare bucket name has neither of.
-	if !strings.Contains(authority, ".") && !strings.Contains(authority, ":") {
+	// Percent escapes decode into the parts, so re-assembly would respell the URL.
+	if strings.Contains(raw, "%") {
+		return "", "", "", fmt.Errorf("s3 URLs take no percent escapes: %s", raw)
+	}
+	rest, isCanonical := strings.CutPrefix(protocol.NormalizeURL(raw), "s3://")
+	if !isCanonical {
 		return "", "", "", fmt.Errorf("s3 URLs must name the endpoint host: s3://<endpoint-host>/<bucket>/<prefix> (got %s)", raw)
 	}
-	trail := strings.Trim(u.Path, "/")
-	if first, remainder, _ := strings.Cut(authority, "."); remainder != "" {
-		if _, _, known := protocol.S3HostInfo(remainder); known {
-			endpointHost, bucket = remainder, first // virtual-host spelling
-		}
+	host, trail, _ := strings.Cut(rest, "/")
+	name, remainder, _ := strings.Cut(trail, "/")
+	if name == "" {
+		return "", "", "", fmt.Errorf("missing bucket in URL: %s", raw)
 	}
-	if endpointHost == "" {
-		bucket, trail, _ = strings.Cut(trail, "/")
-		if bucket == "" {
-			return "", "", "", fmt.Errorf("missing bucket in URL: %s", raw)
-		}
-		endpointHost = authority
+	if remainder != "" {
+		remainder += "/"
 	}
-	if trail != "" {
-		trail += "/"
-	}
-	return endpointHost, bucket, trail, nil
+	return host, name, remainder, nil
 }
 
 // hostAddressKind classifies an endpoint authority: ipLiteral for any IP address, loopback for localhost and the loopback range.

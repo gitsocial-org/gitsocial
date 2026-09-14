@@ -174,6 +174,12 @@ func canonicalS3URL(rawURL string) string {
 		return ""
 	}
 	authority := strings.ToLower(u.Host)
+	// An endpoint host has no empty label: a leading, trailing or doubled dot names nothing.
+	for _, label := range strings.Split(u.Hostname(), ".") {
+		if label == "" {
+			return ""
+		}
+	}
 	// Slashes and whitespace go in one pass, so the result is its own fixed point.
 	trail := strings.TrimFunc(u.Path, isS3PathEdge)
 	if bucket, remainder, ok := strings.Cut(authority, "."); ok {

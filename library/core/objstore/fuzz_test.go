@@ -46,25 +46,17 @@ func FuzzParseS3URL(f *testing.F) {
 			}
 			return
 		}
-		// S3.md: an accepted URL names an endpoint host.
+		// S3.md: an accepted URL names an endpoint host and a bucket.
 		if endpointHost == "" {
 			t.Fatalf("ParseS3URL(%q) accepted an empty endpoint host", raw)
 		}
-		// The virtual-host fold reads the empty label of "s3://.0.digitaloceanspaces.com" as the bucket, so it accepts none.
 		if bucket == "" {
-			return
+			t.Fatalf("ParseS3URL(%q) accepted an empty bucket", raw)
 		}
 		joined := joinS3Parts(endpointHost, bucket, prefix)
-		// NormalizeURL trims the surrounding space the parser keeps, so the two disagree on "s3://./0A00000000 ".
-		if raw == strings.TrimSpace(raw) {
-			// NormalizeURL folds an s3 URL to the same canonical URL the parts spell.
-			if normalized := protocol.NormalizeURL(raw); normalized != joined {
-				t.Errorf("NormalizeURL(%q) = %q, want the parsed parts %q", raw, normalized, joined)
-			}
-		}
-		// Percent escapes decode into the parts, so re-assembly respells them: "s3://./%00" joins to a control character.
-		if strings.Contains(raw, "%") {
-			return
+		// NormalizeURL folds an s3 URL to the same canonical URL the parts spell.
+		if normalized := protocol.NormalizeURL(raw); normalized != joined {
+			t.Errorf("NormalizeURL(%q) = %q, want the parsed parts %q", raw, normalized, joined)
 		}
 		againHost, againBucket, againPrefix, againErr := ParseS3URL(joined)
 		if againErr != nil {
@@ -76,4 +68,24 @@ func FuzzParseS3URL(f *testing.F) {
 				joined, againHost, againBucket, againPrefix, raw, endpointHost, bucket, prefix)
 		}
 	})
+}
+
+// TestParseS3URL_corpus holds the fuzz corpus entries to the rule each one meets.
+func TestParseS3URL_corpus(t *testing.T) {
+	tests := []struct {
+		raw     string
+		wantErr string
+	}{
+		{raw: "s3://.0.digitAloCeAnspACes.Com", wantErr: "endpoint host"},
+		{raw: "s3://./%00", wantErr: "percent escapes"},
+		{raw: "s3://./0A00000000 ", wantErr: "endpoint host"},
+	}
+	for _, tt := range tests {
+		host, bucket, _, err := ParseS3URL(tt.raw)
+		if err == nil {
+			t.Errorf("ParseS3URL(%q) = (%q, %q), want the %s rule", tt.raw, host, bucket, tt.wantErr)
+		} else if !strings.Contains(err.Error(), tt.wantErr) {
+			t.Errorf("ParseS3URL(%q) error = %q, want it to name %q", tt.raw, err, tt.wantErr)
+		}
+	}
 }
