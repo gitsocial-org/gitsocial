@@ -223,20 +223,20 @@ func (w *viewWrapper) Render(content, footer string) string {
 		// the borders with no margin.
 		footer = footerStyle.Width(w.state.FrameInnerWidth()).Render(footer)
 	}
-	var b strings.Builder
-	b.WriteString(content)
-
-	contentLines := strings.Count(content, "\n") + 1
 	footerLines := strings.Count(footer, "\n") + 1
-	targetHeight := w.state.InnerHeight()
-
-	for contentLines < targetHeight-footerLines+1 {
-		b.WriteString("\n")
-		contentLines++
+	// A footer bar that wraps takes more than one line, so the content yields the lines it needs.
+	room := w.state.InnerHeight() - footerLines
+	if room < 0 {
+		room = 0
 	}
-
-	b.WriteString(footer)
-	return b.String()
+	lines := strings.Split(content, "\n")
+	if len(lines) > room {
+		lines = lines[:room]
+	}
+	for len(lines) < room {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n") + "\n" + footer
 }
 
 // ContentHeight returns available height for main content (excluding footer).
