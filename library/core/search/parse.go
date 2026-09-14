@@ -3,12 +3,16 @@ package search
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
 
 var filterPattern = regexp.MustCompile(`(\w+):(\S+)`)
 var hashPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
+
+// filterPrefixes lists every inline prefix the parser reads, in the order it reads them.
+var filterPrefixes = []string{"author", "repo", "repository", "type", "hash", "commit", "list", "after", "before"}
 
 type parsedQuery struct {
 	Terms  string
@@ -26,33 +30,50 @@ func parseSearchQuery(query string) parsedQuery {
 	result := parsedQuery{}
 	remaining := query
 
-	matches := filterPattern.FindAllStringSubmatch(query, -1)
-	for _, match := range matches {
-		key, value := match[1], match[2]
-		remaining = strings.Replace(remaining, match[0], "", 1)
-
-		switch key {
-		case "author":
-			result.Author = value
-		case "repo", "repository":
-			result.Repo = value
-		case "type":
-			result.Type = value
-		case "hash", "commit":
-			result.Hash = value
-		case "list":
-			result.List = value
-		case "after":
-			if t, err := time.Parse("2006-01-02", value); err == nil {
-				result.After = &t
-			}
-		case "before":
-			if t, err := time.Parse("2006-01-02", value); err == nil {
-				result.Before = &t
-			}
+	for _, match := range filterPattern.FindAllStringSubmatch(query, -1) {
+		if !applyFilter(&result, match[1], match[2]) {
+			continue
 		}
+		remaining = strings.Replace(remaining, match[0], "", 1)
 	}
 
 	result.Terms = strings.TrimSpace(remaining)
 	return result
+}
+
+// applyFilter fills the field a prefix names, and reports whether filterPrefixes lists the prefix.
+func applyFilter(q *parsedQuery, key, value string) bool {
+	if !slices.Contains(filterPrefixes, key) {
+		return false
+	}
+	switch key {
+	case "author":
+		q.Author = value
+	case "repo", "repository":
+		q.Repo = value
+	case "type":
+		q.Type = value
+	case "hash", "commit":
+		q.Hash = value
+	case "list":
+		q.List = value
+	case "after":
+		if t := parseFilterDate(value); t != nil {
+			q.After = t
+		}
+	case "before":
+		if t := parseFilterDate(value); t != nil {
+			q.Before = t
+		}
+	}
+	return true
+}
+
+// parseFilterDate reads a YYYY-MM-DD filter value, or returns nil.
+func parseFilterDate(value string) *time.Time {
+	t, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil
+	}
+	return &t
 }
