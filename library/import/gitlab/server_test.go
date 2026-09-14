@@ -2,6 +2,7 @@
 package gitlab
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -155,6 +156,30 @@ func pagedRoute(pages ...string) http.HandlerFunc {
 		}
 		if index < len(pages) {
 			w.Header().Set("X-Next-Page", strconv.Itoa(index+1))
+		}
+		_, _ = io.WriteString(w, pages[index-1])
+	}
+}
+
+// keysetRoute serves pages linked by a rel="next" Link header alone, the way keyset pagination pages.
+func keysetRoute(apiPath string, pages ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		index := 1
+		if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+			parsed, err := strconv.Atoi(cursor)
+			if err != nil {
+				http.Error(w, "bad cursor", http.StatusBadRequest)
+				return
+			}
+			index = parsed
+		}
+		if index < 1 || index > len(pages) {
+			http.Error(w, "no such cursor", http.StatusNotFound)
+			return
+		}
+		if index < len(pages) {
+			next := fmt.Sprintf("https://gitlab.example.com/api/v4/%s?pagination=keyset&cursor=%d", apiPath, index+1)
+			w.Header().Set("Link", fmt.Sprintf(`<%s>; rel="next", <%s>; rel="first"`, next, next))
 		}
 		_, _ = io.WriteString(w, pages[index-1])
 	}

@@ -342,6 +342,33 @@ func TestFetchPM_FollowsNextPageHeader(t *testing.T) {
 	}
 }
 
+func TestFetchPM_FollowsTheKeysetLinkHeader(t *testing.T) {
+	pages := keysetRoute("projects/acme%2Fwidgets/issues",
+		"["+issuePageJSON(1, "2024-06-15T12:00:00Z")+"]",
+		"["+issuePageJSON(2, "2024-06-14T12:00:00Z")+"]",
+	)
+	server := newGLServer(t, pmRoutes(t, pages, graphqlUnavailableRoute(), nil))
+	adapter := newTestAdapter(server)
+
+	plan, err := adapter.FetchPM(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchPM() error = %v", err)
+	}
+	if len(plan.Issues) != 2 {
+		t.Fatalf("issues = %d, want 2 across both pages", len(plan.Issues))
+	}
+	lists := server.all("/issues")
+	if len(lists) != 2 {
+		t.Fatalf("issue list requests = %d, want 2", len(lists))
+	}
+	if got := lists[1].query.Get("cursor"); got != "2" {
+		t.Errorf("second request cursor = %q, want 2 from the Link header", got)
+	}
+	if got := lists[1].query.Get("pagination"); got != "keyset" {
+		t.Errorf("second request pagination = %q, want keyset", got)
+	}
+}
+
 func TestFetchPM_LimitStopsPaging(t *testing.T) {
 	pages := pagedRoute(
 		"["+issuePageJSON(1, "2024-06-15T12:00:00Z")+","+issuePageJSON(2, "2024-06-14T12:00:00Z")+"]",

@@ -94,6 +94,35 @@ func TestBuildArtifactURL(t *testing.T) {
 	}
 }
 
+func TestLinkNextPath(t *testing.T) {
+	const base = "https://gitlab.com/api/v4/projects/1/issues"
+	cases := []struct{ header, want string }{
+		{"", ""},
+		{`<` + base + `?page=2>; rel="next"`, "projects/1/issues?page=2"},
+		{`<` + base + `?page=1>; rel="prev", <` + base + `?page=3>; rel="next"`, "projects/1/issues?page=3"},
+		{`<` + base + `?page=1>; rel="first"`, ""},
+		{`<https://gitlab.com/elsewhere>; rel="next"`, ""},
+		{`<` + base + `?page=2>`, ""},
+	}
+	for _, c := range cases {
+		if got := linkNextPath(c.header); got != c.want {
+			t.Errorf("linkNextPath(%q) = %q, want %q", c.header, got, c.want)
+		}
+	}
+}
+
+func TestWithPage(t *testing.T) {
+	cases := []struct{ path, page, want string }{
+		{"projects/acme%2Fwidgets/issues?state=all", "2", "projects/acme%2Fwidgets/issues?page=2&state=all"},
+		{"projects/1/issues?page=2", "3", "projects/1/issues?page=3"},
+	}
+	for _, c := range cases {
+		if got := withPage(c.path, c.page); got != c.want {
+			t.Errorf("withPage(%q, %q) = %q, want %q", c.path, c.page, got, c.want)
+		}
+	}
+}
+
 func TestResolveToken(t *testing.T) {
 	if got := resolveToken("explicit-token"); got != "explicit-token" {
 		t.Errorf("resolveToken(explicit) = %q, want explicit-token", got)

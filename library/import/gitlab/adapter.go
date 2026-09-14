@@ -121,7 +121,7 @@ func (a *Adapter) apiGet(path string, dst interface{}) error {
 	return json.NewDecoder(resp.Body).Decode(dst)
 }
 
-// apiGetPage performs a single page GET and returns the X-Next-Page header value.
+// apiGetPage performs a single page GET and returns the path of the next page, empty at the last one.
 func (a *Adapter) apiGetPage(path string, dst interface{}) (string, error) {
 	apiURL := a.baseURL + "/api/v4/" + path
 	req, err := http.NewRequest("GET", apiURL, nil)
@@ -140,8 +140,45 @@ func (a *Adapter) apiGetPage(path string, dst interface{}) (string, error) {
 		body, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("GET %s: %d %s", path, resp.StatusCode, string(body))
 	}
-	nextPage := resp.Header.Get("X-Next-Page")
-	return nextPage, json.NewDecoder(resp.Body).Decode(dst)
+	return nextPagePath(path, resp.Header), json.NewDecoder(resp.Body).Decode(dst)
+}
+
+// apiV4Prefix is where an absolute GitLab API URL turns into the path apiGetPage takes.
+const apiV4Prefix = "/api/v4/"
+
+// nextPagePath returns the next page's API path, from X-Next-Page or from a Link header.
+func nextPagePath(path string, header http.Header) string {
+	if next := header.Get("X-Next-Page"); next != "" {
+		return withPage(path, next)
+	}
+	return linkNextPath(header.Get("Link"))
+}
+
+// withPage returns the path with its page query parameter set to n.
+func withPage(path, n string) string {
+	parsed, err := url.Parse(path)
+	if err != nil {
+		return path
+	}
+	query := parsed.Query()
+	query.Set("page", n)
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+// linkNextPath returns the API path of a Link header's rel="next" entry, which keyset pagination uses alone.
+func linkNextPath(header string) string {
+	for _, entry := range strings.Split(header, ",") {
+		target, _, found := strings.Cut(entry, ";")
+		if !found || !strings.Contains(entry, `rel="next"`) {
+			continue
+		}
+		target = strings.Trim(strings.TrimSpace(target), "<>")
+		if idx := strings.Index(target, apiV4Prefix); idx != -1 {
+			return target[idx+len(apiV4Prefix):]
+		}
+	}
+	return ""
 }
 
 // apiGetTotal makes a per_page=1 request and reads X-Total header for count.

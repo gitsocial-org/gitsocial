@@ -98,15 +98,14 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	path := fmt.Sprintf("projects/%s/issues?state=%s&per_page=%d&order_by=created_at&sort=desc",
 		a.projectPath(), url.QueryEscape(state), perPage)
 	var raw []glIssue
-	nextPage, err := a.apiGetPage(path, &raw)
+	nextPath, err := a.apiGetPage(path, &raw)
 	if err != nil {
 		return nil, 0, err
 	}
 	all := raw
-	for nextPage != "" && (unlimited || len(all) < limit) {
+	for nextPath != "" && (unlimited || len(all) < limit) {
 		var page []glIssue
-		pagePath := path + "&page=" + nextPage
-		nextPage, err = a.apiGetPage(pagePath, &page)
+		nextPath, err = a.apiGetPage(nextPath, &page)
 		if err != nil {
 			return nil, 0, err
 		}

@@ -48,15 +48,14 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	path := fmt.Sprintf("projects/%s/merge_requests?state=%s&per_page=%d&order_by=created_at&sort=desc",
 		a.projectPath(), url.QueryEscape(state), perPage)
 	var raw []glMergeRequest
-	nextPage, err := a.apiGetPage(path, &raw)
+	nextPath, err := a.apiGetPage(path, &raw)
 	if err != nil {
 		return nil, fmt.Errorf("fetch merge requests: %w", err)
 	}
 	all := raw
-	for nextPage != "" && (unlimited || len(all) < limit) {
+	for nextPath != "" && (unlimited || len(all) < limit) {
 		var page []glMergeRequest
-		pagePath := path + "&page=" + nextPage
-		nextPage, err = a.apiGetPage(pagePath, &page)
+		nextPath, err = a.apiGetPage(nextPath, &page)
 		if err != nil {
 			return nil, fmt.Errorf("fetch merge requests: %w", err)
 		}

@@ -38,14 +38,13 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 	path := fmt.Sprintf("projects/%s/releases?per_page=%d&order_by=released_at&sort=desc",
 		a.projectPath(), perPage)
 	var raw []glRelease
-	nextPage, err := a.apiGetPage(path, &raw)
+	nextPath, err := a.apiGetPage(path, &raw)
 	if err != nil {
 		return nil, fmt.Errorf("fetch releases: %w", err)
 	}
-	for nextPage != "" && (unlimited || len(raw) < limit) {
+	for nextPath != "" && (unlimited || len(raw) < limit) {
 		var page []glRelease
-		pagePath := path + "&page=" + nextPage
-		nextPage, err = a.apiGetPage(pagePath, &page)
+		nextPath, err = a.apiGetPage(nextPath, &page)
 		if err != nil {
 			return nil, fmt.Errorf("fetch releases: %w", err)
 		}
