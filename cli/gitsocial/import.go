@@ -51,7 +51,7 @@ func addImportFlags(cmd *cobra.Command, f *importFlags, hasSocial bool, defaultL
 	cmd.Flags().StringVar(&f.labels, "labels", "auto", "Label mapping: auto, raw, skip")
 	cmd.Flags().BoolVar(&f.skipBots, "skip-bots", true, "Skip items authored by bots")
 	cmd.Flags().StringVar(&f.host, "host", "", "Force host type: github, gitlab, gitea, bitbucket")
-	cmd.Flags().StringVar(&f.apiURL, "api-url", "", "Custom API base URL for self-hosted instances")
+	cmd.Flags().StringVar(&f.apiURL, "api-url", "", "API base URL, else the one the repository URL names")
 	cmd.Flags().StringVar(&f.token, "token", "", "API token, else the platform CLI or the environment")
 	cmd.Flags().BoolVarP(&f.verbose, "verbose", "v", false, "Print each item as it's imported")
 	cmd.Flags().StringVar(&f.state, "state", "all", "Filter by state: open, closed, merged, all")

@@ -254,8 +254,8 @@ gitsocial import pm --state open --limit 100 --dry-run
 ```
 
 - URLs: `https://github.com/org/repo`, `git@github.com:org/repo.git` or `github.com/org/repo`.
-- GitHub imports through the `gh` CLI, GitLab through its REST API. Comments and discussions come from GitHub only. Other hosts are detected but not imported.
-- `--host` forces the host type, `--api-url` points at a self-hosted instance, `--token` overrides the platform CLI's token.
+- GitHub imports through the `gh` CLI, GitLab through its REST API. Discussions come from GitHub only. Other hosts are detected but not imported.
+- `--host` forces the host type, `--api-url` overrides the instance the URL names, `--token` overrides the platform CLI's token.
 - `--update` syncs changes to items already imported. `--labels auto|raw|skip` controls label mapping. `--email-map <file>` maps usernames to emails. `--skip-bots` is on by default.
 - The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` records platform ids against commit hashes; `--map-file` overrides it.
 
