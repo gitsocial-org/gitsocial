@@ -287,6 +287,37 @@ func TestRetractRelease(t *testing.T) {
 	}
 }
 
+// TestRetractRelease_readsRetractedWithoutSync reads the release back with no
+// fetch and no workspace sync, the way an RPC session does.
+func TestRetractRelease_readsRetractedWithoutSync(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreateRelease(dir, "Release v2.0.0", "", CreateReleaseOptions{
+		Tag:     "v2.0.0",
+		Version: "2.0.0",
+	})
+	if !created.Success {
+		t.Fatalf("CreateRelease() failed: %s", created.Error.Message)
+	}
+	if res := RetractRelease(dir, created.Data.ID); !res.Success {
+		t.Fatalf("RetractRelease() failed: %s", res.Error.Message)
+	}
+
+	if single := GetSingleRelease(created.Data.ID); single.Success {
+		t.Errorf("GetSingleRelease() serves the retracted release %s", created.Data.ID)
+	}
+	listed := GetReleases("", "", "", 10)
+	if !listed.Success {
+		t.Fatalf("GetReleases() failed: %s", listed.Error.Message)
+	}
+	for _, rel := range listed.Data {
+		if rel.ID == created.Data.ID {
+			t.Errorf("GetReleases() serves the retracted release %s", created.Data.ID)
+		}
+	}
+}
+
 func TestRetractRelease_commitFailed(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)

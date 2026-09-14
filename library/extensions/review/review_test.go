@@ -63,6 +63,52 @@ func TestGetPR_mirrorHashResolvesByRepository(t *testing.T) {
 	}
 }
 
+// TestReviewRetract_readsRetractedWithoutSync reads a pull request and its
+// feedback back with no fetch and no workspace sync, the way an RPC session does.
+func TestReviewRetract_readsRetractedWithoutSync(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+
+	created := CreatePR(dir, "Retract me", "", CreatePROptions{Base: "main"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	feedback := CreateFeedback(dir, "Looks good to me", CreateFeedbackOptions{
+		PullRequest: created.Data.ID,
+		ReviewState: ReviewStateApproved,
+	})
+	if !feedback.Success {
+		t.Fatalf("CreateFeedback() failed: %s", feedback.Error.Message)
+	}
+	if res := RetractFeedback(dir, feedback.Data.ID); !res.Success {
+		t.Fatalf("RetractFeedback() failed: %s", res.Error.Message)
+	}
+	if res := RetractPR(dir, created.Data.ID); !res.Success {
+		t.Fatalf("RetractPR() failed: %s", res.Error.Message)
+	}
+
+	if single := GetPR(created.Data.ID); single.Success {
+		t.Errorf("GetPR() serves the retracted pull request %s", created.Data.ID)
+	}
+	listed := GetPullRequests(reviewTestRepoURL, reviewTestBranch, nil, "", 10)
+	if !listed.Success {
+		t.Fatalf("GetPullRequests() failed: %s", listed.Error.Message)
+	}
+	for _, pr := range listed.Data {
+		if pr.ID == created.Data.ID {
+			t.Errorf("GetPullRequests() serves the retracted pull request %s", created.Data.ID)
+		}
+	}
+	prRef := protocol.ParseRef(created.Data.ID)
+	reviews := GetFeedbackForPR(prRef.Repository, prRef.Value, prRef.Branch)
+	if !reviews.Success {
+		t.Fatalf("GetFeedbackForPR() failed: %s", reviews.Error.Message)
+	}
+	if len(reviews.Data) != 0 {
+		t.Errorf("GetFeedbackForPR() serves %d retracted feedback items, want none", len(reviews.Data))
+	}
+}
+
 func TestPROperations(t *testing.T) {
 	t.Parallel()
 

@@ -378,14 +378,16 @@ func TestReleaseRoundTrip_createReadBackAndRetract(t *testing.T) {
 		t.Errorf("release.getRelease served subject %q, want %q", fetched.Subject, created.Subject)
 	}
 
-	// RPC.md 4.4 gives retractRelease the result true. The retraction is a marker
-	// on the edit chain, so the release stays resolvable.
+	// RPC.md 4.4 gives retractRelease the result true. The retraction reaches the
+	// cache at once, so the same session stops serving the release.
 	if resp := call(t, server, "release.retractRelease", fmt.Sprintf(`{"ref":%q}`, created.ID)); resp.Error != nil || resp.Result != true {
 		t.Fatalf("release.retractRelease = %v, %+v, want true", resp.Result, resp.Error)
 	}
-	decodeResult(t, call(t, server, "release.getRelease", fmt.Sprintf(`{"ref":%q}`, created.ID)), "release.getRelease", &fetched)
-	if fetched.ID != created.ID {
-		t.Errorf("release.getRelease served %q after a retract, want the release ref", fetched.ID)
+	assertAppError(t, call(t, server, "release.getRelease", fmt.Sprintf(`{"ref":%q}`, created.ID)),
+		"release.getRelease", CodeNotFound, "NOT_FOUND")
+	decodeResult(t, call(t, server, "release.getReleases", `{}`), "release.getReleases", &listed)
+	if len(listed) != 0 {
+		t.Errorf("release.getReleases served %+v after a retract, want none", listed)
 	}
 
 	assertAppError(t, call(t, server, "release.getRelease", `{"ref":"#commit:000000000000"}`), "release.getRelease", CodeNotFound, "NOT_FOUND")

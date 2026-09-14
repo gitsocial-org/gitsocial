@@ -19,10 +19,6 @@ func TestCloseIssue_retracted(t *testing.T) {
 	if res := RetractIssue(workdir, created.Data.ID); !res.Success {
 		t.Fatalf("RetractIssue: %s", res.Error.Message)
 	}
-	// RetractIssue only writes the commit; the workspace sync caches it.
-	if err := syncWorkspace(workdir); err != nil {
-		t.Fatalf("syncWorkspace: %v", err)
-	}
 
 	res := CloseIssue(workdir, created.Data.ID)
 	if res.Success || res.Error.Code != "RETRACTED" {

@@ -195,9 +195,12 @@ func RetractRelease(workdir, releaseRef string) Result[bool] {
 	}
 	content := protocol.FormatMessage("", header, nil)
 
-	_, err = git.CreateCommitOnBranch(workdir, branch, content)
+	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[bool]("COMMIT_FAILED", err.Error())
+	}
+	if err := cacheReleaseFromCommit(workdir, repoURL, hash, branch); err != nil {
+		return result.Err[bool]("CACHE_FAILED", err.Error())
 	}
 	return result.Ok(true)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 
 	_ "github.com/gitsocial-org/gitsocial/library/extensions/social"
@@ -247,6 +248,47 @@ func TestIssueCRUD(t *testing.T) {
 			t.Error("RetractIssue() should fail for non-existent issue")
 		}
 	})
+}
+
+// TestPMRetract_readsRetractedWithoutSync reads an issue and a milestone back
+// with no fetch and no workspace sync, the way an RPC session does.
+func TestPMRetract_readsRetractedWithoutSync(t *testing.T) {
+	workdir := initWorkspace(t)
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	issue := CreateIssue(workdir, "Retract me", "", CreateIssueOptions{})
+	if !issue.Success {
+		t.Fatalf("CreateIssue: %s", issue.Error.Message)
+	}
+	milestone := CreateMilestone(workdir, "v9.0", "", CreateMilestoneOptions{})
+	if !milestone.Success {
+		t.Fatalf("CreateMilestone: %s", milestone.Error.Message)
+	}
+	if res := RetractIssue(workdir, issue.Data.ID); !res.Success {
+		t.Fatalf("RetractIssue: %s", res.Error.Message)
+	}
+	if res := RetractMilestone(workdir, milestone.Data.ID); !res.Success {
+		t.Fatalf("RetractMilestone: %s", res.Error.Message)
+	}
+
+	issues := GetIssues(repoURL, "", nil, "", 10)
+	if !issues.Success {
+		t.Fatalf("GetIssues: %s", issues.Error.Message)
+	}
+	for _, item := range issues.Data {
+		if item.ID == issue.Data.ID {
+			t.Errorf("GetIssues() serves the retracted issue %s", issue.Data.ID)
+		}
+	}
+	milestones := GetMilestones(repoURL, "", nil, "", 10)
+	if !milestones.Success {
+		t.Fatalf("GetMilestones: %s", milestones.Error.Message)
+	}
+	for _, item := range milestones.Data {
+		if item.ID == milestone.Data.ID {
+			t.Errorf("GetMilestones() serves the retracted milestone %s", milestone.Data.ID)
+		}
+	}
 }
 
 // --- Issue with refs ---

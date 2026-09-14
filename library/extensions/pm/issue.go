@@ -285,9 +285,12 @@ func RetractIssue(workdir, issueRef string) Result[bool] {
 	)
 	content := buildRetractContent(canonicalRef)
 
-	_, err = git.CreateCommitOnBranch(workdir, branch, content)
+	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[bool]("COMMIT_FAILED", err.Error())
+	}
+	if err := cacheIssueFromCommit(workdir, repoURL, hash, branch); err != nil {
+		return result.Err[bool]("CACHE_FAILED", err.Error())
 	}
 
 	return result.Ok(true)
