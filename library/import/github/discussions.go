@@ -10,16 +10,13 @@ import (
 )
 
 type ghDiscussion struct {
-	Number   int        `json:"number"`
-	Title    string     `json:"title"`
-	Body     string     `json:"body"`
-	Author   ghAuthor   `json:"author"`
-	Category ghCategory `json:"category"`
-	Comments struct {
-		Nodes    []ghDiscussionComment `json:"nodes"`
-		PageInfo ghPageInfo            `json:"pageInfo"`
-	} `json:"comments"`
-	CreatedAt time.Time `json:"createdAt"`
+	Number    int                     `json:"number"`
+	Title     string                  `json:"title"`
+	Body      string                  `json:"body"`
+	Author    ghAuthor                `json:"author"`
+	Category  ghCategory              `json:"category"`
+	Comments  ghDiscussionCommentPage `json:"comments"`
+	CreatedAt time.Time               `json:"createdAt"`
 }
 
 type ghCategory struct {
@@ -28,15 +25,29 @@ type ghCategory struct {
 }
 
 type ghDiscussionComment struct {
-	Body      string    `json:"body"`
-	Author    ghAuthor  `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string                  `json:"id"`
+	Body      string                  `json:"body"`
+	Author    ghAuthor                `json:"author"`
+	CreatedAt time.Time               `json:"createdAt"`
+	Replies   ghDiscussionCommentPage `json:"replies"`
+}
+
+type ghDiscussionCommentPage struct {
+	Nodes    []ghDiscussionComment `json:"nodes"`
+	PageInfo ghPageInfo            `json:"pageInfo"`
 }
 
 type ghPageInfo struct {
 	HasNextPage bool   `json:"hasNextPage"`
 	EndCursor   string `json:"endCursor"`
 }
+
+// discussionCommentFields is the field set every discussion comment selection shares.
+const discussionCommentFields = `id body author { login ... on User { name } } createdAt`
+
+// discussionCommentSelection selects a comment together with the first page of its replies.
+const discussionCommentSelection = discussionCommentFields +
+	` replies(first: 100) { nodes { ` + discussionCommentFields + ` } pageInfo { hasNextPage endCursor } }`
 
 // buildDiscussionQuery builds a GraphQL query for fetching discussions with cursor pagination.
 func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
@@ -55,18 +66,14 @@ func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
         category { name slug }
         createdAt
         comments(first: 100) {
-          nodes {
-            body
-            author { login ... on User { name } }
-            createdAt
-          }
+          nodes { %s }
           pageInfo { hasNextPage endCursor }
         }
       }
       pageInfo { hasNextPage endCursor }
     }
   }
-}`, owner, repo, first, afterClause)
+}`, owner, repo, first, afterClause, discussionCommentSelection)
 }
 
 func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.SocialPlan, error) {
@@ -124,27 +131,21 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 		}
 		cursor = resp.Data.Repository.Discussions.PageInfo.EndCursor
 	}
-	// Paginate comments for discussions that hit the 100-comment cap (skip already-imported)
-	for i, d := range allDiscussions {
-		if opts.SkipExternalIDs[fmt.Sprintf("post:%d", d.Number)] {
+	// Paginate comments and replies past their 100-item caps (skip already-imported)
+	for i := range allDiscussions {
+		if opts.SkipExternalIDs[fmt.Sprintf("post:%d", allDiscussions[i].Number)] {
 			continue
 		}
-		for d.Comments.PageInfo.HasNextPage {
-			more, err := a.fetchMoreComments(d.Number, d.Comments.PageInfo.EndCursor)
-			if err != nil {
-				log.Debug("comment pagination failed", "discussion", d.Number, "error", err)
-				break
-			}
-			allDiscussions[i].Comments.Nodes = append(allDiscussions[i].Comments.Nodes, more.Nodes...)
-			allDiscussions[i].Comments.PageInfo = more.PageInfo
-			d.Comments.PageInfo = more.PageInfo
-		}
+		a.paginateDiscussionComments(&allDiscussions[i])
 	}
 	var logins []string
 	for _, d := range allDiscussions {
 		logins = append(logins, d.Author.Login)
 		for _, c := range d.Comments.Nodes {
 			logins = append(logins, c.Author.Login)
+			for _, r := range c.Replies.Nodes {
+				logins = append(logins, r.Author.Login)
+			}
 		}
 	}
 	a.prefetchUsers(logins)
@@ -177,72 +178,121 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 			AuthorEmail: dAuthor.email,
 			CreatedAt:   d.CreatedAt,
 		})
-		for _, c := range d.Comments.Nodes {
-			commentExtID := fmt.Sprintf("%d-%s", d.Number, c.CreatedAt.Format("20060102T150405"))
-			if opts.SkipExternalIDs["comment:"+commentExtID] {
-				continue
-			}
-			if opts.SkipBots && isBot(c.Author.Login) {
-				continue
-			}
-			cAuthor := a.resolveUser(c.Author.Login)
-			comments = append(comments, importpkg.ImportComment{
-				ExternalID:  fmt.Sprintf("%d-%s", d.Number, c.CreatedAt.Format("20060102T150405")),
-				PostID:      extID,
-				Content:     c.Body,
-				AuthorName:  cAuthor.name,
-				AuthorEmail: cAuthor.email,
-				CreatedAt:   c.CreatedAt,
-			})
-		}
+		comments = append(comments, a.planDiscussionComments(d, opts)...)
 	}
 	return &importpkg.SocialPlan{Posts: posts, Comments: comments, Filtered: filtered}, nil
 }
 
+// discussionCommentExternalID returns the external ID of one discussion comment.
+func discussionCommentExternalID(number int, c ghDiscussionComment) string {
+	return fmt.Sprintf("%d-%s", number, c.CreatedAt.Format("20060102T150405"))
+}
+
+// planDiscussionComments converts a discussion's comments and their replies, each reply naming its parent.
+func (a *Adapter) planDiscussionComments(d ghDiscussion, opts importpkg.FetchOptions) []importpkg.ImportComment {
+	postID := fmt.Sprintf("%d", d.Number)
+	var out []importpkg.ImportComment
+	add := func(c ghDiscussionComment, extID, parentID string) {
+		if opts.SkipExternalIDs["comment:"+extID] {
+			return
+		}
+		if opts.SkipBots && isBot(c.Author.Login) {
+			return
+		}
+		author := a.resolveUser(c.Author.Login)
+		out = append(out, importpkg.ImportComment{
+			ExternalID:  extID,
+			PostID:      postID,
+			ParentID:    parentID,
+			Content:     c.Body,
+			AuthorName:  author.name,
+			AuthorEmail: author.email,
+			CreatedAt:   c.CreatedAt,
+		})
+	}
+	for _, c := range d.Comments.Nodes {
+		parentID := discussionCommentExternalID(d.Number, c)
+		add(c, parentID, "")
+		for _, r := range c.Replies.Nodes {
+			add(r, discussionCommentExternalID(d.Number, r), parentID)
+		}
+	}
+	return out
+}
+
+// paginateDiscussionComments appends a discussion's remaining comment pages and each comment's remaining reply pages.
+func (a *Adapter) paginateDiscussionComments(d *ghDiscussion) {
+	for d.Comments.PageInfo.HasNextPage {
+		more, err := a.fetchMoreComments(d.Number, d.Comments.PageInfo.EndCursor)
+		if err != nil {
+			log.Debug("comment pagination failed", "discussion", d.Number, "error", err)
+			break
+		}
+		d.Comments.Nodes = append(d.Comments.Nodes, more.Nodes...)
+		d.Comments.PageInfo = more.PageInfo
+	}
+	for i := range d.Comments.Nodes {
+		c := &d.Comments.Nodes[i]
+		for c.Replies.PageInfo.HasNextPage {
+			more, err := a.fetchMoreReplies(c.ID, c.Replies.PageInfo.EndCursor)
+			if err != nil {
+				log.Debug("reply pagination failed", "comment", c.ID, "error", err)
+				break
+			}
+			c.Replies.Nodes = append(c.Replies.Nodes, more.Nodes...)
+			c.Replies.PageInfo = more.PageInfo
+		}
+	}
+}
+
 // fetchMoreComments paginates through remaining comments on a discussion.
-func (a *Adapter) fetchMoreComments(discussionNumber int, cursor string) (struct {
-	Nodes    []ghDiscussionComment
-	PageInfo ghPageInfo
-}, error) {
-	type commentsResult struct {
-		Nodes    []ghDiscussionComment `json:"nodes"`
-		PageInfo ghPageInfo            `json:"pageInfo"`
-	}
-	var empty struct {
-		Nodes    []ghDiscussionComment
-		PageInfo ghPageInfo
-	}
+func (a *Adapter) fetchMoreComments(discussionNumber int, cursor string) (ghDiscussionCommentPage, error) {
 	query := fmt.Sprintf(`{
   repository(owner: %q, name: %q) {
     discussion(number: %d) {
       comments(first: 100, after: %q) {
-        nodes {
-          body
-          author { login ... on User { name } }
-          createdAt
-        }
+        nodes { %s }
         pageInfo { hasNextPage endCursor }
       }
     }
   }
-}`, a.owner, a.repo, discussionNumber, cursor)
+}`, a.owner, a.repo, discussionNumber, cursor, discussionCommentSelection)
 	var resp struct {
 		Data struct {
 			Repository struct {
 				Discussion struct {
-					Comments commentsResult `json:"comments"`
+					Comments ghDiscussionCommentPage `json:"comments"`
 				} `json:"discussion"`
 			} `json:"repository"`
 		} `json:"data"`
 	}
 	if err := ghJSON(&resp, "api", "graphql", "-f", "query="+query); err != nil {
-		return empty, fmt.Errorf("fetch comments page: %w", err)
+		return ghDiscussionCommentPage{}, fmt.Errorf("fetch comments page: %w", err)
 	}
-	return struct {
-		Nodes    []ghDiscussionComment
-		PageInfo ghPageInfo
-	}{
-		Nodes:    resp.Data.Repository.Discussion.Comments.Nodes,
-		PageInfo: resp.Data.Repository.Discussion.Comments.PageInfo,
-	}, nil
+	return resp.Data.Repository.Discussion.Comments, nil
+}
+
+// fetchMoreReplies paginates through remaining replies on a discussion comment.
+func (a *Adapter) fetchMoreReplies(commentID, cursor string) (ghDiscussionCommentPage, error) {
+	query := fmt.Sprintf(`{
+  node(id: %q) {
+    ... on DiscussionComment {
+      replies(first: 100, after: %q) {
+        nodes { %s }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}`, commentID, cursor, discussionCommentFields)
+	var resp struct {
+		Data struct {
+			Node struct {
+				Replies ghDiscussionCommentPage `json:"replies"`
+			} `json:"node"`
+		} `json:"data"`
+	}
+	if err := ghJSON(&resp, "api", "graphql", "-f", "query="+query); err != nil {
+		return ghDiscussionCommentPage{}, fmt.Errorf("fetch replies page: %w", err)
+	}
+	return resp.Data.Node.Replies, nil
 }

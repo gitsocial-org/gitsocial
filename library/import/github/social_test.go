@@ -408,6 +408,58 @@ func TestFetchSocial_PaginatesComments(t *testing.T) {
 	}
 }
 
+func TestFetchSocial_PaginatesReplies(t *testing.T) {
+	const firstPage = `{"data":{"repository":{"discussions":{
+		"nodes":[{"number":6,"title":"Reply thread","body":"Start.",
+		 "author":{"login":"alice"},"category":{"name":"General","slug":"general"},
+		 "createdAt":"2024-06-15T12:00:00Z",
+		 "comments":{"nodes":[
+			{"id":"DC_1","body":"Top","author":{"login":"bob"},
+			 "createdAt":"2024-06-15T13:00:00Z",
+			 "replies":{"nodes":[
+				{"id":"DC_2","body":"First reply","author":{"login":"bob"},
+				 "createdAt":"2024-06-15T13:30:00Z"}],
+			  "pageInfo":{"hasNextPage":true,"endCursor":"RCUR1"}}}],
+		  "pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+	const morePage = `{"data":{"node":{"replies":{
+		"nodes":[{"id":"DC_3","body":"Second reply","author":{"login":"alice"},
+		 "createdAt":"2024-06-15T14:00:00Z"}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	adapter := New("acme", "widgets")
+	rec := socialRoutes(t, func(args []string) ghResponse {
+		if ghArg(args, `node(id: "DC_1")`) {
+			return ghResponse{stdout: morePage}
+		}
+		return ghResponse{stdout: firstPage}
+	})
+
+	plan, err := adapter.FetchSocial(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchSocial() error = %v", err)
+	}
+	if len(plan.Comments) != 3 {
+		t.Fatalf("comments = %+v, want the comment and both reply pages", plan.Comments)
+	}
+	top := plan.Comments[0]
+	if top.ParentID != "" {
+		t.Errorf("top comment ParentID = %q, want none", top.ParentID)
+	}
+	for _, reply := range plan.Comments[1:] {
+		if reply.ParentID != top.ExternalID {
+			t.Errorf("reply %q ParentID = %q, want the top comment %q", reply.Content, reply.ParentID, top.ExternalID)
+		}
+	}
+	queries := graphqlQueries(rec)
+	if len(queries) != 2 {
+		t.Fatalf("graphql calls = %d, want 2", len(queries))
+	}
+	if !strings.Contains(queries[1], `replies(first: 100, after: "RCUR1")`) {
+		t.Errorf("reply query = %q, want the reply end cursor", queries[1])
+	}
+}
+
 func TestFetchSocial_CommentPageFailureKeepsFirstPage(t *testing.T) {
 	const firstPage = `{"data":{"repository":{"discussions":{
 		"nodes":[{"number":5,"title":"Thread","body":"Start.",

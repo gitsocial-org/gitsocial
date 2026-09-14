@@ -167,16 +167,15 @@ func buildPostMessage(content, editsRef string, origin *protocol.Origin) string 
 }
 
 // buildCommentMessage constructs a social comment commit message matching social.createInteraction.
-func buildCommentMessage(content, originalRef string, ref *protocol.Ref, origin *protocol.Origin) string {
+func buildCommentMessage(content, originalRef, replyToRef string, refs []protocol.Ref, origin *protocol.Origin) string {
 	fields := map[string]string{
 		"type":     "comment",
 		"original": originalRef,
 	}
+	if replyToRef != "" {
+		fields["reply-to"] = replyToRef
+	}
 	protocol.ApplyOrigin(fields, origin)
 	header := protocol.Header{Ext: "social", V: "0.1.0", Fields: fields, FieldOrder: socialFieldOrder}
-	var refs []protocol.Ref
-	if ref != nil {
-		refs = append(refs, *ref)
-	}
 	return protocol.FormatMessage(content, header, refs)
 }

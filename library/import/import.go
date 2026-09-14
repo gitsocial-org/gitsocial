@@ -1061,7 +1061,7 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 		}
 		flushMapping(opts, mapping)
 	}
-	// Phase 4: prepare comment messages
+	// Phase 4: commit comments in waves, so a reply is written after the parent comment it names
 	// Build a lookup from post ExternalID to (hash, content) for ref sections
 	postLookup := map[string]refSource{}
 	for i, entry := range postEntries {
@@ -1072,14 +1072,66 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			}
 		}
 	}
-	type commentEntry struct {
-		item    ImportComment
-		message string
+	commentLookup := commentContentByID(plan.Comments)
+	pending := plan.Comments
+	for len(pending) > 0 {
+		ready, waiting := splitByMappedParent(pending, platform, mapping)
+		if len(ready) == 0 {
+			ready, waiting = flattenOrphanReplies(waiting), nil
+		}
+		cs := commitDiscussionComments(opts, ready, mapping, postLookup, commentLookup)
+		stats.Comments += cs.Comments
+		stats.Skipped += cs.Skipped
+		stats.Errors = append(stats.Errors, cs.Errors...)
+		pending = waiting
 	}
-	var commentEntries []commentEntry
-	var commentMessages []string
-	var commentOriginals []struct{ repoURL, hash, branch string }
-	for _, comment := range plan.Comments {
+	return stats
+}
+
+// splitByMappedParent separates comments ready to commit from replies still waiting for their parent comment.
+func splitByMappedParent(comments []ImportComment, platform string, mapping *MappingFile) (ready, waiting []ImportComment) {
+	for _, c := range comments {
+		if c.ParentID == "" || mapping.GetHash(MappingKey(platform, "comment", c.ParentID)) != "" {
+			ready = append(ready, c)
+			continue
+		}
+		waiting = append(waiting, c)
+	}
+	return ready, waiting
+}
+
+// flattenOrphanReplies drops the parent of every reply whose parent comment was never imported.
+func flattenOrphanReplies(comments []ImportComment) []ImportComment {
+	out := make([]ImportComment, len(comments))
+	for i, c := range comments {
+		log.Warn("reply parent was not imported, attaching the reply to its post", "comment", c.ExternalID, "parent", c.ParentID)
+		c.ParentID = ""
+		out[i] = c
+	}
+	return out
+}
+
+// commitDiscussionComments writes one wave of discussion comments, a reply carrying reply-to for its parent comment.
+func commitDiscussionComments(opts Options, comments []ImportComment, mapping *MappingFile, postLookup, commentLookup map[string]refSource) Stats {
+	stats := Stats{}
+	platform := mapping.Source
+	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
+	branch := gitmsg.GetExtBranch(opts.WorkDir, "social")
+	authorName, authorEmail, err := git.GetAuthorIdentity(opts.WorkDir)
+	if err != nil {
+		stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "get author: " + err.Error()})
+		return stats
+	}
+	now := time.Now()
+	type commentEntry struct {
+		item       ImportComment
+		message    string
+		postHash   string
+		parentHash string
+	}
+	var entries []commentEntry
+	var messages []string
+	for _, comment := range comments {
 		if mapping.IsMapped(MappingKey(platform, "comment", comment.ExternalID)) {
 			stats.Skipped++
 			continue
@@ -1089,64 +1141,73 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			stats.Skipped++
 			continue
 		}
+		parentHash := ""
+		if comment.ParentID != "" {
+			parentHash = mapping.GetHash(MappingKey(platform, "comment", comment.ParentID))
+		}
 		if opts.Verbose {
 			fmt.Printf("  social  comment: %s\n", truncate(comment.Content, 60))
 		}
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, postHash, "", branch)
-		// Build GitMsg-Ref section for the original post
-		var ref *protocol.Ref
-		if src, ok := postLookup[comment.PostID]; ok {
-			refAuthor, refEmail, refTime := refIdentity(src, authorName, authorEmail, now)
-			r := protocol.Ref{
-				Ext: "social", Author: refAuthor, Email: refEmail,
-				Time: refTime, Ref: originalRef, V: "0.1.0",
-				Fields:   map[string]string{"type": "post"},
-				Metadata: protocol.QuoteContent(src.content),
+		// GITSOCIAL.md 1.3: a reply names its parent comment, then the thread's first post.
+		replyToRef := ""
+		var refs []protocol.Ref
+		if parentHash != "" {
+			replyToRef = protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", branch)
+			if src, ok := commentLookup[comment.ParentID]; ok {
+				refs = append(refs, buildImportRef("social", "comment", replyToRef, src, authorName, authorEmail, now))
 			}
-			ref = &r
+		}
+		if src, ok := postLookup[comment.PostID]; ok {
+			refs = append(refs, buildImportRef("social", "post", originalRef, src, authorName, authorEmail, now))
 		}
 		commentPath := ""
 		if comment.PostID != "" {
 			commentPath = platformPath(platform, "post", comment.PostID) + "#discussioncomment-" + comment.ExternalID
 		}
 		origin := buildOrigin(comment.AuthorName, comment.AuthorEmail, comment.CreatedAt, platform, opts.RepoURL, commentPath)
-		msg := buildCommentMessage(comment.Content, originalRef, ref, origin)
-		commentEntries = append(commentEntries, commentEntry{item: comment, message: msg})
-		commentMessages = append(commentMessages, msg)
-		commentOriginals = append(commentOriginals, struct{ repoURL, hash, branch string }{repoURL, postHash, branch})
+		msg := buildCommentMessage(comment.Content, originalRef, replyToRef, refs, origin)
+		entries = append(entries, commentEntry{item: comment, message: msg, postHash: postHash, parentHash: parentHash})
+		messages = append(messages, msg)
 	}
-	// Phase 5: batch create comment commits
-	if len(commentMessages) > 0 {
-		commentHashes, err := git.FastImportCommits(opts.WorkDir, branch, commentMessages)
-		if err != nil {
-			stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "fast-import: " + err.Error()})
-			return stats
+	if len(messages) == 0 {
+		return stats
+	}
+	hashes, err := git.FastImportCommits(opts.WorkDir, branch, messages)
+	if err != nil {
+		stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "fast-import: " + err.Error()})
+		return stats
+	}
+	for i, entry := range entries {
+		hash := hashes[i]
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: hash, RepoURL: repoURL, Branch: branch,
+			AuthorName: authorName, AuthorEmail: authorEmail,
+			Message: entry.message, Timestamp: importTime(entry.item.CreatedAt, now),
+		}}); err != nil {
+			stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "cache: " + err.Error()})
+			continue
 		}
-		for i, entry := range commentEntries {
-			hash := commentHashes[i]
-			orig := commentOriginals[i]
-			if err := cache.InsertCommits([]cache.Commit{{
-				Hash: hash, RepoURL: repoURL, Branch: branch,
-				AuthorName: authorName, AuthorEmail: authorEmail,
-				Message: entry.message, Timestamp: importTime(entry.item.CreatedAt, now),
-			}}); err != nil {
-				stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "cache: " + err.Error()})
-				continue
-			}
-			if err := social.InsertSocialItem(social.SocialItem{
-				RepoURL: repoURL, Hash: hash, Branch: branch,
-				Type:            "comment",
-				OriginalRepoURL: sql.NullString{String: orig.repoURL, Valid: orig.repoURL != ""},
-				OriginalHash:    sql.NullString{String: orig.hash, Valid: orig.hash != ""},
-				OriginalBranch:  sql.NullString{String: orig.branch, Valid: orig.branch != ""},
-			}); err != nil {
-				stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "cache: " + err.Error()})
-				continue
-			}
-			key := MappingKey(platform, "comment", entry.item.ExternalID)
-			mapping.Record(key, hash, "gitmsg/social", "comment")
-			stats.Comments++
+		replyToRepoURL, replyToBranch := "", ""
+		if entry.parentHash != "" {
+			replyToRepoURL, replyToBranch = repoURL, branch
 		}
+		if err := social.InsertSocialItem(social.SocialItem{
+			RepoURL: repoURL, Hash: hash, Branch: branch,
+			Type:            "comment",
+			OriginalRepoURL: cache.ToNullString(repoURL),
+			OriginalHash:    cache.ToNullString(entry.postHash),
+			OriginalBranch:  cache.ToNullString(branch),
+			ReplyToRepoURL:  cache.ToNullString(replyToRepoURL),
+			ReplyToHash:     cache.ToNullString(entry.parentHash),
+			ReplyToBranch:   cache.ToNullString(replyToBranch),
+		}); err != nil {
+			stats.Errors = append(stats.Errors, ImportError{Type: "comment", Message: "cache: " + err.Error()})
+			continue
+		}
+		key := MappingKey(platform, "comment", entry.item.ExternalID)
+		mapping.Record(key, hash, "gitmsg/social", "comment")
+		stats.Comments++
 	}
 	return stats
 }
@@ -1189,6 +1250,29 @@ func issueContentByID(issues []ImportIssue) map[string]refSource {
 		}
 	}
 	return m
+}
+
+// commentContentByID maps comment external IDs to their content for ref quoting.
+func commentContentByID(comments []ImportComment) map[string]refSource {
+	m := make(map[string]refSource, len(comments))
+	for _, c := range comments {
+		m[c.ExternalID] = refSource{
+			content: c.Content, authorName: c.AuthorName,
+			authorEmail: c.AuthorEmail, createdAt: c.CreatedAt,
+		}
+	}
+	return m
+}
+
+// buildImportRef builds the GitMsg-Ref snapshot of an imported parent item.
+func buildImportRef(ext, itemType, ref string, src refSource, fallbackName, fallbackEmail string, fallbackTime time.Time) protocol.Ref {
+	refAuthor, refEmail, refTime := refIdentity(src, fallbackName, fallbackEmail, fallbackTime)
+	return protocol.Ref{
+		Ext: ext, Author: refAuthor, Email: refEmail,
+		Time: refTime, Ref: ref, V: "0.1.0",
+		Fields:   map[string]string{"type": itemType},
+		Metadata: protocol.QuoteContent(src.content),
+	}
 }
 
 // prContentByID maps PR external IDs to their full content for ref quoting.
@@ -1279,20 +1363,13 @@ func executeItemComments(opts Options, comments []ImportComment, mapping *Mappin
 		}
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", parentBranch)
 		// Build GitMsg-Ref section for the parent item
-		var ref *protocol.Ref
+		var refs []protocol.Ref
 		if src, ok := parentContent[c.PostID]; ok {
-			refAuthor, refEmail, refTime := refIdentity(src, authorName, authorEmail, now)
-			r := protocol.Ref{
-				Ext: parentExt, Author: refAuthor, Email: refEmail,
-				Time: refTime, Ref: originalRef, V: "0.1.0",
-				Fields:   map[string]string{"type": parentType},
-				Metadata: protocol.QuoteContent(src.content),
-			}
-			ref = &r
+			refs = append(refs, buildImportRef(parentExt, parentType, originalRef, src, authorName, authorEmail, now))
 		}
 		commentPath := platformPath(platform, parentKeyType, c.PostID) + platformCommentFragment(platform, c.ExternalID)
 		origin := buildOrigin(c.AuthorName, c.AuthorEmail, c.CreatedAt, platform, opts.RepoURL, commentPath)
-		msg := buildCommentMessage(c.Content, originalRef, ref, origin)
+		msg := buildCommentMessage(c.Content, originalRef, "", refs, origin)
 		entries = append(entries, commentEntry{item: c, message: msg, parentHash: parentHash})
 		messages = append(messages, msg)
 	}
