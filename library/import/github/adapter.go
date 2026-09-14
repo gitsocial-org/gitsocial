@@ -156,6 +156,21 @@ func (a *Adapter) lookupUser(login string) userProfile {
 	return p
 }
 
+// storeQueryProfile caches the profile a GraphQL author carries whole; a missing name or email leaves the lookup to resolveUser.
+func (a *Adapter) storeQueryProfile(author ghAuthor) {
+	if author.Login == "" || author.Name == "" || author.Email == "" {
+		return
+	}
+	if _, ok := a.cachedProfile(author.Login); ok {
+		return
+	}
+	email := author.Email
+	if override, ok := a.emailOverrides[author.Login]; ok {
+		email = override
+	}
+	a.storeProfile(author.Login, userProfile{name: author.Name, email: email})
+}
+
 // resolveUser looks up a GitHub user's profile, caching the result.
 func (a *Adapter) resolveUser(login string) userProfile {
 	if login == "" {

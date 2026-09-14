@@ -43,7 +43,7 @@ type ghPageInfo struct {
 }
 
 // discussionCommentFields is the field set every discussion comment selection shares.
-const discussionCommentFields = `id body author { login ... on User { name } } createdAt`
+const discussionCommentFields = `id body author { login ... on User { name email } } createdAt`
 
 // discussionCommentSelection selects a comment together with the first page of its replies.
 const discussionCommentSelection = discussionCommentFields +
@@ -62,7 +62,7 @@ func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
         number
         title
         body
-        author { login ... on User { name } }
+        author { login ... on User { name email } }
         category { name slug }
         createdAt
         comments(first: 100) {
@@ -140,10 +140,13 @@ func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.Soci
 	}
 	var logins []string
 	for _, d := range allDiscussions {
+		a.storeQueryProfile(d.Author)
 		logins = append(logins, d.Author.Login)
 		for _, c := range d.Comments.Nodes {
+			a.storeQueryProfile(c.Author)
 			logins = append(logins, c.Author.Login)
 			for _, r := range c.Replies.Nodes {
+				a.storeQueryProfile(r.Author)
 				logins = append(logins, r.Author.Login)
 			}
 		}

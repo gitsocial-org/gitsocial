@@ -14,7 +14,7 @@ import (
 const socialDiscussionsJSON = `{"data":{"repository":{"discussions":{
 	"nodes":[
 		{"number":1,"title":"Welcome","body":"Say hello here.",
-		 "author":{"login":"alice","name":"Alice GraphQL"},
+		 "author":{"login":"alice","name":"Alice GraphQL","email":"alice@example.com"},
 		 "category":{"name":"General","slug":"general"},
 		 "createdAt":"2024-06-15T12:00:00Z",
 		 "comments":{"nodes":[
@@ -121,14 +121,14 @@ func TestFetchSocial(t *testing.T) {
 	if first.Content != "# Welcome\n\nSay hello here." {
 		t.Errorf("post 1 Content = %q, want the title as a heading above the body", first.Content)
 	}
-	if first.AuthorName != "Alice Example" || first.AuthorEmail != "alice@example.com" {
+	if first.AuthorName != "Alice GraphQL" || first.AuthorEmail != "alice@example.com" {
 		t.Errorf("post 1 author = %q / %q", first.AuthorName, first.AuthorEmail)
 	}
 	if !first.CreatedAt.Equal(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)) {
 		t.Errorf("post 1 CreatedAt = %v", first.CreatedAt)
 	}
 
-	// The name in the GraphQL payload is dropped; an unresolvable login falls back to @login.
+	// A payload name without an email still costs a lookup, and an unresolvable login falls back to @login.
 	second := plan.Posts[1]
 	if second.AuthorName != "@carol" || second.AuthorEmail != "carol@users.noreply.github.com" {
 		t.Errorf("post 2 author = %q / %q", second.AuthorName, second.AuthorEmail)
@@ -157,6 +157,67 @@ func TestFetchSocial(t *testing.T) {
 	}
 	if !strings.Contains(queries[0], `discussions(first: 100`) {
 		t.Errorf("query = %q, want a first page of 100", queries[0])
+	}
+}
+
+// userLookups returns the logins the recorded gh calls looked up.
+func userLookups(rec *ghRecorder) []string {
+	var logins []string
+	for _, call := range rec.calls {
+		for _, arg := range call {
+			if strings.HasPrefix(arg, "users/") {
+				logins = append(logins, strings.TrimPrefix(arg, "users/"))
+			}
+		}
+	}
+	return logins
+}
+
+func TestFetchSocial_AuthorProfileFromTheQuery(t *testing.T) {
+	const wholeAndPartial = `{"data":{"repository":{"discussions":{
+		"nodes":[
+			{"number":1,"title":"Whole","body":"Body.",
+			 "author":{"login":"alice","name":"Alice GraphQL","email":"alice@example.com"},
+			 "category":{"name":"General","slug":"general"},
+			 "createdAt":"2024-06-15T12:00:00Z",
+			 "comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}},
+			{"number":2,"title":"No email","body":"Body.",
+			 "author":{"login":"bob","name":"Bob"},
+			 "category":{"name":"General","slug":"general"},
+			 "createdAt":"2024-06-16T12:00:00Z",
+			 "comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}},
+			{"number":3,"title":"Bare","body":"Body.",
+			 "author":{"login":"carol"},
+			 "category":{"name":"General","slug":"general"},
+			 "createdAt":"2024-06-17T12:00:00Z",
+			 "comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}],
+		"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}`
+
+	adapter := New("acme", "widgets")
+	rec := socialRoutes(t, func([]string) ghResponse {
+		return ghResponse{stdout: wholeAndPartial}
+	})
+
+	plan, err := adapter.FetchSocial(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchSocial() error = %v", err)
+	}
+	if len(plan.Posts) != 3 {
+		t.Fatalf("posts = %d, want 3", len(plan.Posts))
+	}
+	whole := plan.Posts[0]
+	if whole.AuthorName != "Alice GraphQL" || whole.AuthorEmail != "alice@example.com" {
+		t.Errorf("whole author = %q / %q, want the profile the query carried", whole.AuthorName, whole.AuthorEmail)
+	}
+	if plan.Posts[1].AuthorName != "Bob Example" {
+		t.Errorf("author without an email = %q, want the users lookup result", plan.Posts[1].AuthorName)
+	}
+	if plan.Posts[2].AuthorName != "@carol" {
+		t.Errorf("bare author = %q, want the users lookup result", plan.Posts[2].AuthorName)
+	}
+	lookups := userLookups(rec)
+	if len(lookups) != 2 || lookups[0] == "alice" || lookups[1] == "alice" {
+		t.Errorf("user lookups = %v, want bob and carol only", lookups)
 	}
 }
 

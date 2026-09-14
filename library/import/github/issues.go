@@ -41,6 +41,7 @@ type ghIssue struct {
 type ghAuthor struct {
 	Login string `json:"login"`
 	Name  string `json:"name"`
+	Email string `json:"email"` // the public profile email, empty when the user shows none
 }
 
 type ghLabel struct {
