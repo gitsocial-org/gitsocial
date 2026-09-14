@@ -58,7 +58,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 		pagePath := path + "&page=" + nextPage
 		nextPage, err = a.apiGetPage(pagePath, &page)
 		if err != nil {
-			break
+			return nil, fmt.Errorf("fetch merge requests: %w", err)
 		}
 		all = append(all, page...)
 		if opts.OnFetchProgress != nil {

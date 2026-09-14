@@ -275,6 +275,19 @@ func TestFetchReview_PropagatesError(t *testing.T) {
 	}
 }
 
+func TestFetchReview_ReturnsAPageFailure(t *testing.T) {
+	server := newGLServer(t, reviewRoutes(t, failingPageRoute("["+mrPageJSON(1, "2024-06-15T12:00:00Z")+"]")))
+	adapter := newTestAdapter(server)
+
+	_, err := adapter.FetchReview(importpkg.FetchOptions{})
+	if err == nil {
+		t.Fatal("FetchReview() error = nil, want the second page failure")
+	}
+	if !strings.Contains(err.Error(), "fetch merge requests") || !strings.Contains(err.Error(), "404") {
+		t.Errorf("error = %v, want the fetch context and the status", err)
+	}
+}
+
 func TestFetchReview_RejectsMalformedBody(t *testing.T) {
 	server := newGLServer(t, reviewRoutes(t, jsonRoute(`{"message":"not an array"}`)))
 	adapter := newTestAdapter(server)

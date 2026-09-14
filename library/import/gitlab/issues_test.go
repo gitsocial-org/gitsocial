@@ -482,6 +482,20 @@ func TestFetchPM_PropagatesIssueError(t *testing.T) {
 	}
 }
 
+func TestFetchPM_ReturnsAPageFailure(t *testing.T) {
+	first := "[" + issuePageJSON(1, "2024-06-15T12:00:00Z") + "]"
+	server := newGLServer(t, pmRoutes(t, failingPageRoute(first), graphqlUnavailableRoute(), nil))
+	adapter := newTestAdapter(server)
+
+	_, err := adapter.FetchPM(importpkg.FetchOptions{})
+	if err == nil {
+		t.Fatal("FetchPM() error = nil, want the second page failure")
+	}
+	if !strings.Contains(err.Error(), "fetch issues") || !strings.Contains(err.Error(), "404") {
+		t.Errorf("error = %v, want the issue context and the status", err)
+	}
+}
+
 func TestFetchPM_RejectsMalformedBody(t *testing.T) {
 	server := newGLServer(t, pmRoutes(t, jsonRoute(`{"message":"not an array"}`), graphqlUnavailableRoute(), nil))
 	adapter := newTestAdapter(server)

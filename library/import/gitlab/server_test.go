@@ -160,6 +160,18 @@ func pagedRoute(pages ...string) http.HandlerFunc {
 	}
 }
 
+// failingPageRoute serves one page announcing a second, then fails every page after it.
+func failingPageRoute(first string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") != "" {
+			http.Error(w, `{"message":"404 Not Found"}`, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("X-Next-Page", "2")
+		_, _ = io.WriteString(w, first)
+	}
+}
+
 // testProfiles are the user lookups the fixtures rely on.
 var testProfiles = map[string]string{
 	"alice": `{"name":"Alice Example","public_email":"alice@example.com"}`,

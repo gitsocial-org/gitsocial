@@ -172,6 +172,19 @@ func TestFetchReleases_PropagatesError(t *testing.T) {
 	}
 }
 
+func TestFetchReleases_ReturnsAPageFailure(t *testing.T) {
+	server := newGLServer(t, releaseRoutes(t, failingPageRoute("["+releasePageJSON("v2.0.0", "2024-06-15T12:00:00Z")+"]")))
+	adapter := newTestAdapter(server)
+
+	_, err := adapter.FetchReleases(importpkg.FetchOptions{})
+	if err == nil {
+		t.Fatal("FetchReleases() error = nil, want the second page failure")
+	}
+	if !strings.Contains(err.Error(), "fetch releases") || !strings.Contains(err.Error(), "404") {
+		t.Errorf("error = %v, want the fetch context and the status", err)
+	}
+}
+
 func TestFetchReleases_RejectsMalformedBody(t *testing.T) {
 	server := newGLServer(t, releaseRoutes(t, jsonRoute(`[{"tag_name":]`)))
 	adapter := newTestAdapter(server)

@@ -47,7 +47,7 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 		pagePath := path + "&page=" + nextPage
 		nextPage, err = a.apiGetPage(pagePath, &page)
 		if err != nil {
-			break
+			return nil, fmt.Errorf("fetch releases: %w", err)
 		}
 		raw = append(raw, page...)
 		if opts.OnFetchProgress != nil {

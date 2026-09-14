@@ -108,7 +108,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 		pagePath := path + "&page=" + nextPage
 		nextPage, err = a.apiGetPage(pagePath, &page)
 		if err != nil {
-			break
+			return nil, 0, err
 		}
 		all = append(all, page...)
 		if opts.OnFetchProgress != nil {
