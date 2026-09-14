@@ -132,6 +132,38 @@ func TestCorePush_dryRunReachesEveryConfiguredRemote(t *testing.T) {
 	}
 }
 
+// TestCorePush_extensionsParamIsIgnored: RPC.md 4.5 says every initialized
+// extension is pushed whatever the extensions param names.
+func TestCorePush_extensionsParamIsIgnored(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	workdir, _ := twoRemoteWorkdir(t)
+	server := pushServer(t, workdir)
+
+	plan := func(params string) string {
+		t.Helper()
+		resp := server.processRequest(Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage(`1`),
+			Method:  "core.push",
+			Params:  json.RawMessage(params),
+		})
+		if resp.Error != nil {
+			t.Fatalf("core.push %s error = %v", params, resp.Error)
+		}
+		encoded, err := json.Marshal(resp.Result)
+		if err != nil {
+			t.Fatalf("marshal result: %v", err)
+		}
+		return string(encoded)
+	}
+
+	bare := plan(`{"dryRun": true}`)
+	named := plan(`{"dryRun": true, "extensions": ["pm"]}`)
+	if bare != named {
+		t.Errorf("extensions changed the plan:\n%s\n%s", bare, named)
+	}
+}
+
 // TestCorePush_siteOnlyOnNonS3Fails: the sequence's own error reaches the caller.
 func TestCorePush_siteOnlyOnNonS3Fails(t *testing.T) {
 	testutil.OpenTempCache(t, "")

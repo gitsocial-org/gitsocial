@@ -19,12 +19,7 @@ func registeredMethods(t *testing.T) map[string]bool {
 	t.Helper()
 	registry := NewRegistry()
 	server := NewServer(registry, strings.NewReader(""), io.Discard)
-	RegisterCoreMethods(server, "test")
-	RegisterSearchMethods(server)
-	RegisterSocialMethods(server)
-	RegisterPMMethods(server)
-	RegisterReviewMethods(server)
-	RegisterReleaseMethods(server)
+	registerAll(server)
 	// Run registers "shutdown" and returns immediately on the empty reader.
 	if err := server.Run(); err != nil {
 		t.Fatalf("server.Run: %v", err)
