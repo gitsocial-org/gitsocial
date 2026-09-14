@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 type HostingService string
@@ -31,8 +32,8 @@ type RepoInfo struct {
 
 var sshPattern = regexp.MustCompile(`^git@([^:]+):([^/]+)/(.+)`)
 
-// NormalizeURL normalizes repository URLs to HTTPS format. s3 URLs normalize
-// to their canonical identity (host form, config params stripped — see s3.go).
+// NormalizeURL returns a repository URL's canonical identity: one repository has one identity.
+// s3 URLs fold through the grammar in s3.go. NormalizeURL(NormalizeURL(x)) == NormalizeURL(x).
 func NormalizeURL(rawURL string) string {
 	if rawURL == "" {
 		return rawURL
@@ -46,26 +47,33 @@ func NormalizeURL(rawURL string) string {
 		normalized = sshPattern.ReplaceAllString(normalized, "https://$1/$2/$3")
 	}
 
-	normalized = strings.TrimSuffix(normalized, ".git")
-
-	if idx := strings.Index(normalized, "://"); idx != -1 {
-		scheme := strings.ToLower(normalized[:idx])
-		switch scheme {
-		case "javascript", "data", "vbscript", "ftp":
-			return ""
-		}
-		schemeFull := scheme + "://"
-		rest := normalized[idx+3:]
-		if slashIdx := strings.Index(rest, "/"); slashIdx != -1 {
-			host := strings.ToLower(rest[:slashIdx])
-			path := rest[slashIdx:]
-			normalized = schemeFull + host + path
-		} else {
-			normalized = schemeFull + strings.ToLower(rest)
-		}
+	idx := strings.Index(normalized, "://")
+	if idx == -1 {
+		return trimRepoSuffixes(normalized)
 	}
+	scheme := strings.ToLower(normalized[:idx])
+	switch scheme {
+	case "javascript", "data", "vbscript", "ftp":
+		return ""
+	}
+	rest := normalized[idx+3:]
+	slashIdx := strings.Index(rest, "/")
+	if slashIdx == -1 {
+		return scheme + "://" + trimRepoSuffixes(strings.ToLower(rest))
+	}
+	return scheme + "://" + strings.ToLower(rest[:slashIdx]) + trimRepoSuffixes(rest[slashIdx:])
+}
 
-	return normalized
+// trimRepoSuffixes drops trailing whitespace, slashes and .git suffixes until none is left.
+func trimRepoSuffixes(path string) string {
+	for {
+		trimmed := strings.TrimRight(strings.TrimRightFunc(path, unicode.IsSpace), "/")
+		trimmed = strings.TrimSuffix(trimmed, ".git")
+		if trimmed == path {
+			return path
+		}
+		path = trimmed
+	}
 }
 
 // ExtractDomain extracts the domain from a repository URL.

@@ -282,11 +282,7 @@ func NormalizeRefWithContext(ref string, currentRepository string, branch string
 		}
 		// If local ref, add repository context
 		if parsed.Repository == "" && currentRepository != "" {
-			normalizedRepo := currentRepository
-			if strings.HasPrefix(normalizedRepo, "http") {
-				normalizedRepo = strings.TrimSuffix(normalizedRepo, ".git")
-			}
-			return CreateRef(RefTypeCommit, parsed.Value, normalizedRepo, effectiveBranch)
+			return CreateRef(RefTypeCommit, parsed.Value, NormalizeURL(currentRepository), effectiveBranch)
 		}
 		// If ref already has repo but missing branch, add branch
 		if parsed.Branch == "" && branch != "" {

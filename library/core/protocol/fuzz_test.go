@@ -196,9 +196,9 @@ func FuzzParseRef(f *testing.F) {
 		if parsed.Type == RefTypeUnknown || parsed.Type == RefTypeFile {
 			return
 		}
-		// NormalizeURL strips one .git suffix per pass, so repo.git.git has no fixed point.
+		// A parsed repository is already its own identity, so re-normalizing changes nothing.
 		if parsed.Repository != NormalizeURL(parsed.Repository) {
-			return
+			t.Errorf("NormalizeURL(%q) = %q, want the fixed point of the parsed repository", parsed.Repository, NormalizeURL(parsed.Repository))
 		}
 		// A re-created ref parses back to the same type, repository, value and branch.
 		again := ParseRef(CreateRef(parsed.Type, parsed.Value, parsed.Repository, parsed.Branch))

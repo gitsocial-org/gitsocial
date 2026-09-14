@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 // awsConsoleHost is the base host of AWS S3 web-console URLs; a pasted console
@@ -173,13 +174,20 @@ func canonicalS3URL(rawURL string) string {
 		return ""
 	}
 	authority := strings.ToLower(u.Host)
-	trail := strings.Trim(u.Path, "/")
+	// Slashes and whitespace go in one pass, so the result is its own fixed point.
+	trail := strings.TrimFunc(u.Path, isS3PathEdge)
 	if bucket, remainder, ok := strings.Cut(authority, "."); ok {
 		if _, _, known := S3HostInfo(remainder); known {
 			return joinS3(remainder, joinS3Path(bucket, trail))
 		}
 	}
 	return joinS3(authority, trail)
+}
+
+// isS3PathEdge reports whether a rune is trimmed from both ends of an s3 path.
+// Whitespace is Unicode-wide, the way NormalizeURL trims the URL itself.
+func isS3PathEdge(r rune) bool {
+	return r == '/' || unicode.IsSpace(r)
 }
 
 // joinS3 renders an s3 URL from an authority and an optional path remainder.

@@ -32,8 +32,28 @@ func TestNormalizeURL(t *testing.T) {
 			want:  "https://github.com/User/Repo",
 		},
 		{
-			name:  "trailing slash preserved in path",
+			name:  "no suffix to strip",
 			input: "https://github.com/user/repo",
+			want:  "https://github.com/user/repo",
+		},
+		{
+			name:  "trailing slash dropped",
+			input: "https://github.com/user/repo/",
+			want:  "https://github.com/user/repo",
+		},
+		{
+			name:  "repeated trailing slashes dropped",
+			input: "https://github.com/user/repo//",
+			want:  "https://github.com/user/repo",
+		},
+		{
+			name:  "repeated .git dropped",
+			input: "https://github.com/user/repo.git.git",
+			want:  "https://github.com/user/repo",
+		},
+		{
+			name:  ".git before a trailing slash dropped",
+			input: "https://github.com/user/repo.git/",
 			want:  "https://github.com/user/repo",
 		},
 		{
@@ -71,6 +91,16 @@ func TestNormalizeURL(t *testing.T) {
 			input: "https://GITHUB.COM",
 			want:  "https://github.com",
 		},
+		{
+			name:  "s3 path edges trimmed",
+			input: "s3://s3.example.com/bucket/repo/ #",
+			want:  "s3://s3.example.com/bucket/repo",
+		},
+		{
+			name:  "s3 path edges trimmed, unicode space",
+			input: "s3://s3.example.com/bucket /",
+			want:  "s3://s3.example.com/bucket",
+		},
 	}
 
 	for _, tt := range tests {
@@ -79,7 +109,33 @@ func TestNormalizeURL(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("NormalizeURL(%q) = %q, want %q", tt.input, got, tt.want)
 			}
+			if again := NormalizeURL(got); again != got {
+				t.Errorf("NormalizeURL(%q) = %q, want the fixed point %q", got, again, got)
+			}
 		})
+	}
+}
+
+// TestNormalizeURL_spellings folds every spelling of one repository to one identity.
+func TestNormalizeURL_spellings(t *testing.T) {
+	want := "https://github.com/user/repo"
+	spellings := []string{
+		"https://github.com/user/repo",
+		"https://github.com/user/repo.git",
+		"https://github.com/user/repo/",
+		"https://github.com/user/repo.git/",
+		"https://GitHub.com/user/repo",
+		"git@github.com:user/repo",
+		"git@github.com:user/repo.git",
+		"  https://github.com/user/repo.git  ",
+	}
+	for _, spelling := range spellings {
+		if got := NormalizeURL(spelling); got != want {
+			t.Errorf("NormalizeURL(%q) = %q, want %q", spelling, got, want)
+		}
+	}
+	if got := NormalizeURL("http://github.com/user/repo"); got == want {
+		t.Errorf("NormalizeURL kept http and https as one identity: %q", got)
 	}
 }
 
