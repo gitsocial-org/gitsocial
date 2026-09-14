@@ -177,6 +177,33 @@ func TestParseSearchQuery_knownPrefixesFillTheirFields(t *testing.T) {
 	}
 }
 
+// TestParseSearchQuery_unicodeSpaceSplitsTokens checks every space character ends a filter value.
+func TestParseSearchQuery_unicodeSpaceSplitsTokens(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantRepo  string
+		wantTerms string
+	}{
+		{name: "vertical tab", input: "repo:x\vy", wantRepo: "x", wantTerms: "y"},
+		{name: "form feed", input: "repo:x\fy", wantRepo: "x", wantTerms: "y"},
+		{name: "no-break space", input: "repo:x y", wantRepo: "x", wantTerms: "y"},
+		{name: "ideographic space", input: "repo:x　y", wantRepo: "x", wantTerms: "y"},
+		{name: "value alone", input: "repo:\vterm", wantRepo: "", wantTerms: "repo: term"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSearchQuery(tt.input)
+			if got.Repo != tt.wantRepo {
+				t.Errorf("parseSearchQuery(%q).Repo = %q, want %q", tt.input, got.Repo, tt.wantRepo)
+			}
+			if got.Terms != tt.wantTerms {
+				t.Errorf("parseSearchQuery(%q).Terms = %q, want %q", tt.input, got.Terms, tt.wantTerms)
+			}
+		})
+	}
+}
+
 // filledFields names the filter fields a parsed query carries.
 func filledFields(q parsedQuery) []string {
 	var names []string

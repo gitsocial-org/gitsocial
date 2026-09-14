@@ -184,7 +184,7 @@ Inline prefixes, in the order the parser reads them:
 | `after:<YYYY-MM-DD>` | items after the date |
 | `before:<YYYY-MM-DD>` | items before the date |
 
-A token with any other prefix is text, not a filter: `state:open` searches for "state:open".
+A token with any other prefix is text, not a filter: `state:open` searches for "state:open". Any space character ends a value.
 
 ### gitsocial show
 

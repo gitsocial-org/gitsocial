@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 )
 
-var filterPattern = regexp.MustCompile(`(\w+):(\S+)`)
 var hashPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
 // filterPrefixes lists every inline prefix the parser reads, in the order it reads them.
@@ -28,16 +28,17 @@ type parsedQuery struct {
 // parseSearchQuery extracts filters and terms from a search query string.
 func parseSearchQuery(query string) parsedQuery {
 	result := parsedQuery{}
-	remaining := query
+	var terms []string
 
-	for _, match := range filterPattern.FindAllStringSubmatch(query, -1) {
-		if !applyFilter(&result, match[1], match[2]) {
+	for _, token := range strings.FieldsFunc(query, unicode.IsSpace) {
+		key, value, found := strings.Cut(token, ":")
+		if found && value != "" && applyFilter(&result, key, value) {
 			continue
 		}
-		remaining = strings.Replace(remaining, match[0], "", 1)
+		terms = append(terms, token)
 	}
 
-	result.Terms = strings.TrimSpace(remaining)
+	result.Terms = strings.Join(terms, " ")
 	return result
 }
 

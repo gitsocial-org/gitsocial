@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 )
 
 // canonicalKeys lists the filter fields in the order a re-joined query spells them.
@@ -82,8 +83,7 @@ func checkFilterValues(t *testing.T, query string, q parsedQuery) {
 		if value == "" {
 			continue
 		}
-		// The pattern takes a run of non-space characters, and its class leaves out the vertical tab of "repo:\v".
-		if strings.ContainsAny(value, " \t\n\f\r") {
+		if strings.ContainsFunc(value, unicode.IsSpace) {
 			t.Fatalf("parseSearchQuery(%q) %s = %q, want no whitespace", query, field, value)
 		}
 		if field == "after" || field == "before" {
@@ -153,6 +153,7 @@ func FuzzParseSearchQuery(f *testing.F) {
 		"",
 		"   ",
 		"\n\t hello \r\n",
+		"repo:x\vy type:post\fdraft",
 		strings.Repeat("a", 8192),
 		strings.Repeat("author:a ", 500),
 		"a:b a:b:c ab:c",
