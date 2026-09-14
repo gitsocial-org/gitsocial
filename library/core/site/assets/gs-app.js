@@ -127,8 +127,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       if (settled) return;
       try { if (typeof console !== "undefined" && console.error) console.error("gitsocial: route " + location.hash + " did not render within " + (WATCHDOG_MS / 1000) + "s (possible stalled load)"); } catch (e) { /* no console */ }
       setView([el("div", { class: "err" }, [
-        "This view is taking unusually long to load and may have stalled. Reload the " +
-        "page; if it persists, the bucket's data or a specific item may be malformed.",
+        "This view has stalled. Reload the page.",
       ])]);
     }, WATCHDOG_MS) : null;
     // routeSettled marks the route resolved and clears the watchdog — called on
@@ -150,10 +149,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       if (ctx.refMode && ctx.refMode !== "etag") {
         if (!(await manifestFor(ctx))) {
           setView([el("div", { class: "err" }, [
-            "This bucket uses \"" + ctx.refMode + "\" ref mode, whose refs the static " +
-            "reader can only resolve through the refs manifest — and this bucket has " +
-            "none yet. Push with a current gitsocial, or run `gitsocial push --site-only`, " +
-            "to publish it.",
+            "This bucket's \"" + ctx.refMode + "\" refs need a refs manifest it has not published. " +
+            "Run gitsocial push --site-only to publish one.",
           ])]);
           return;
         }
@@ -251,10 +248,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         // page rather than an empty/"not found" view (a missing object is 404 and
         // stays quiet).
         setView([el("div", { class: "err" }, [
-          "This bucket's public access appears to be disabled (the server returned " +
-          "403 Forbidden). A gitsocial static site is served from the bucket's public " +
-          "web endpoint with anonymous reads enabled — check the bucket's public-access " +
-          "or website configuration.",
+          "This bucket returned 403 Forbidden, so its public access is disabled. " +
+          "Enable anonymous reads on the bucket or its website endpoint.",
         ])]);
         return;
       }

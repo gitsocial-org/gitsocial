@@ -4,7 +4,7 @@
   var SELECTORS = [
     ".card", ".card.comment", ".card.board-card", ".card-head", ".card-chips",
     ".meta", ".chip", ".chip.state", ".subject", ".thread", ".thread-head",
-    ".card.feedback", ".type-glyph", ".empty", ".view-count", ".filter-chip",
+    ".card.feedback", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
     ".detail > .card-head", ".detail > .card-head > h1.subject",
   ];
   var PROPS = ["padding", "margin", "fontSize", "color", "backgroundColor", "borderLeftColor", "borderRadius"];

@@ -29,6 +29,7 @@ const ROUTES = [
   { name: "lists", hash: "#/lists" },
   { name: "board", hash: "#/board" },
   { name: "pr-detail", subject: "Expand notes with more lines" },
+  { name: "branch-missing", hash: "#branch:no-such-branch" },
 ];
 
 // VERDICT_BORDER pins the C.2 state colours a feedback card's left border
@@ -87,6 +88,24 @@ function checkMetaRow(theme, metas) {
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 
+// ERR_STYLE pins the C.2 tokens the error notice carries: --danger text on a
+// --danger-t1 fill, --pad-panel padding at the 16px root, --r-panel corners.
+const ERR_STYLE = { color: "rgb(207, 34, 46)", padding: "9.6px 14.4px", borderRadius: "10px" };
+
+// checkErr asserts the error notice renders from those tokens. err is the
+// missing-branch route's ".err" record.
+function checkErr(theme, err) {
+  if (!err) {
+    ok("err notice " + theme + ": record captured", false, "no .err record");
+    return;
+  }
+  const off = Object.keys(ERR_STYLE).filter((k) => err.some((r) => r[k] !== ERR_STYLE[k]));
+  ok("err notice " + theme + ": danger text, panel padding and radius from the tokens", off.length === 0,
+    off.map((k) => k + "=" + err.map((r) => r[k]).join("|")).join(" "));
+  ok("err notice " + theme + ": the danger tint fills it", err.every((r) => r.backgroundColor !== "rgba(0, 0, 0, 0)"),
+    err.map((r) => r.backgroundColor).join("|"));
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -121,7 +140,7 @@ function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, listMetas = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {};
+  const listCards = {}, listMetas = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
   for (const route of ROUTES) {
     let hash = route.hash;
     if (!hash) {
@@ -132,6 +151,7 @@ function main() {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
       if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; }
+      if (route.name === "branch-missing") errNotices[theme] = got[".err"];
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];
         detailHeads[theme] = got[".detail > .card-head"];
@@ -156,6 +176,7 @@ function main() {
   if (!update) for (const theme of Object.keys(THEMES)) {
     checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
     checkMetaRow(theme, listMetas[theme]);
+    checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
   }
   if (update) console.log("baselines written to " + DIR);

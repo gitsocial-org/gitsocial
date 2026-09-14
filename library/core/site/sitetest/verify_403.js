@@ -29,7 +29,7 @@ async function main() {
   global.location.hash = "#/timeline";
   await GS.route(ctx403);
   const t403 = textOf(viewNode);
-  ok("403 bucket surfaces the access-disabled error page", /public access appears to be disabled/i.test(t403), t403.slice(0, 120));
+  ok("403 bucket surfaces the access-disabled error page", /public access is disabled/i.test(t403), t403.slice(0, 120));
   ok("403 error mentions 403 Forbidden", /403 Forbidden/i.test(t403));
   ok("403 does NOT render an empty/'not found' view", !/No activity in this repository|Not found\./i.test(t403));
   const errCls = (function find(n) { for (const c of n._children || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has("err")) return true; if (find(c)) return true; } } return false; })(viewNode);
@@ -40,7 +40,7 @@ async function main() {
   global.location.hash = "#/timeline";
   await GS.route(ctx404);
   const t404 = textOf(viewNode);
-  ok("404 bucket renders quietly (no forbidden error)", !/public access appears to be disabled/i.test(t404), t404.slice(0, 120));
+  ok("404 bucket renders quietly (no forbidden error)", !/public access is disabled/i.test(t404), t404.slice(0, 120));
   ok("404 bucket shows the empty-state text", /No activity in this repository yet/i.test(t404), t404.slice(0, 120));
 
   // Single missing object degrades quietly: fetchBytes returns null on 404.
