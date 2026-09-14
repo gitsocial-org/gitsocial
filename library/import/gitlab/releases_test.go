@@ -139,6 +139,23 @@ func TestFetchReleases_LimitStopsPaging(t *testing.T) {
 	}
 }
 
+func TestFetchReleases_DecodesUpdatedAt(t *testing.T) {
+	const editedRelease = `[{"tag_name":"v4.0.0","name":"Edited","description":"",
+		"released_at":"2024-06-15T12:00:00Z","updated_at":"2024-07-02T08:30:00Z",
+		"author":{"username":"alice"},"assets":{"links":[]}}]`
+	server := newGLServer(t, releaseRoutes(t, jsonRoute(editedRelease)))
+	adapter := newTestAdapter(server)
+
+	plan, err := adapter.FetchReleases(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReleases() error = %v", err)
+	}
+	// An unchanged release is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.Releases[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("release UpdatedAt = %v, want the platform timestamp", plan.Releases[0].UpdatedAt)
+	}
+}
+
 func TestFetchReleases_FiltersBySinceAndMapping(t *testing.T) {
 	since := time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)
 	server := newGLServer(t, releaseRoutes(t, jsonRoute(releasesJSON)))

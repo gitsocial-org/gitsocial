@@ -14,6 +14,7 @@ type glRelease struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	ReleasedAt  string   `json:"released_at"`
+	UpdatedAt   string   `json:"updated_at"`
 	Author      glUser   `json:"author"`
 	Assets      glAssets `json:"assets"`
 }
@@ -83,6 +84,7 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 			name = r.TagName
 		}
 		author := a.resolveUser(r.Author.Username)
+		updatedAt, _ := time.Parse(time.RFC3339, r.UpdatedAt)
 		releases = append(releases, importpkg.ImportRelease{
 			ExternalID:  r.TagName,
 			Name:        name,
@@ -96,6 +98,7 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 			AuthorName:  author.name,
 			AuthorEmail: author.email,
 			CreatedAt:   releasedAt,
+			UpdatedAt:   updatedAt,
 		})
 	}
 	return &importpkg.ReleasePlan{Releases: releases, Filtered: filtered}, nil

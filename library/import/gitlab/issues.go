@@ -31,6 +31,7 @@ type glIssue struct {
 	Milestone *glIssueMilestone `json:"milestone"`
 	ClosedBy  *glUser           `json:"closed_by"`
 	CreatedAt string            `json:"created_at"`
+	UpdatedAt string            `json:"updated_at"`
 	ClosedAt  *string           `json:"closed_at"`
 }
 
@@ -138,6 +139,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 			continue
 		}
 		author := a.resolveUser(issue.Author.Username)
+		updatedAt, _ := time.Parse(time.RFC3339, issue.UpdatedAt)
 		im := importpkg.ImportIssue{
 			ExternalID:  fmt.Sprintf("%d", issue.IID),
 			Number:      issue.IID,
@@ -148,6 +150,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 			AuthorName:  author.name,
 			AuthorEmail: author.email,
 			CreatedAt:   createdAt,
+			UpdatedAt:   updatedAt,
 		}
 		assignees := make([]string, 0, len(issue.Assignees))
 		for _, u := range issue.Assignees {

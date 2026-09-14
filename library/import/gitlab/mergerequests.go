@@ -34,6 +34,7 @@ type glMergeRequest struct {
 	MergedAt        *string     `json:"merged_at"`
 	ClosedAt        *string     `json:"closed_at"`
 	CreatedAt       string      `json:"created_at"`
+	UpdatedAt       string      `json:"updated_at"`
 }
 
 // FetchReview fetches merge requests and their notes from GitLab, detecting forks.
@@ -92,6 +93,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			reviewers = append(reviewers, a.resolveUser(r.Username).email)
 		}
 		author := a.resolveUser(mr.Author.Username)
+		updatedAt, _ := time.Parse(time.RFC3339, mr.UpdatedAt)
 		imp := importpkg.ImportPR{
 			ExternalID:  fmt.Sprintf("%d", mr.IID),
 			Number:      mr.IID,
@@ -106,6 +108,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			AuthorName:  author.name,
 			AuthorEmail: author.email,
 			CreatedAt:   createdAt,
+			UpdatedAt:   updatedAt,
 		}
 		imp.HeadSHA = mr.SHA
 		if mr.MergeCommitSHA != nil {

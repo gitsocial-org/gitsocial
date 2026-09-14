@@ -395,6 +395,26 @@ func TestFetchPM_LimitStopsPaging(t *testing.T) {
 	}
 }
 
+func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
+	const issuesJSON = `[{"iid":1,"title":"Edited","description":"","state":"opened",
+		"author":{"username":"alice"},"created_at":"2024-06-15T12:00:00Z",
+		"updated_at":"2024-07-02T08:30:00Z"}]`
+	server := newGLServer(t, pmRoutes(t, jsonRoute(issuesJSON), graphqlUnavailableRoute(), nil))
+	adapter := newTestAdapter(server)
+
+	plan, err := adapter.FetchPM(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchPM() error = %v", err)
+	}
+	if len(plan.Issues) != 1 {
+		t.Fatalf("issues = %d, want 1", len(plan.Issues))
+	}
+	// An unchanged issue is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.Issues[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("issue UpdatedAt = %v, want the platform timestamp", plan.Issues[0].UpdatedAt)
+	}
+}
+
 func TestFetchPM_FiltersBySince(t *testing.T) {
 	since := time.Date(2024, 6, 16, 0, 0, 0, 0, time.UTC)
 	server := newGLServer(t, pmRoutes(t, jsonRoute(pmIssuesJSON), graphqlUnavailableRoute(), nil))

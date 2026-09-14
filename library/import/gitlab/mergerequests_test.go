@@ -220,6 +220,24 @@ func TestFetchReview_LimitStopsPaging(t *testing.T) {
 	}
 }
 
+func TestFetchReview_DecodesUpdatedAt(t *testing.T) {
+	const editedMR = `[{"iid":20,"title":"Edited","description":"","state":"opened",
+		"source_branch":"edit","target_branch":"main","source_project_id":7,"target_project_id":7,
+		"author":{"username":"alice"},"created_at":"2024-06-10T12:00:00Z",
+		"updated_at":"2024-07-02T08:30:00Z"}]`
+	server := newGLServer(t, reviewRoutes(t, jsonRoute(editedMR)))
+	adapter := newTestAdapter(server)
+
+	plan, err := adapter.FetchReview(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReview() error = %v", err)
+	}
+	// An unchanged request is skipped on re-import only when its UpdatedAt reaches the mapping.
+	if !plan.PRs[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("PR UpdatedAt = %v, want the platform timestamp", plan.PRs[0].UpdatedAt)
+	}
+}
+
 func TestFetchReview_FiltersBySinceAndMapping(t *testing.T) {
 	since := time.Date(2024, 6, 12, 0, 0, 0, 0, time.UTC)
 	server := newGLServer(t, reviewRoutes(t, jsonRoute(reviewMRsJSON)))
