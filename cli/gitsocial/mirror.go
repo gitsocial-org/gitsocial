@@ -576,7 +576,7 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 	if err != nil {
 		return importpkg.Stats{}, err
 	}
-	adapter, err := createAdapter(hostType, repoInfo.Owner, repoInfo.Repo, "", "")
+	adapter, err := createAdapter(hostType, repoURL, repoInfo.Owner, repoInfo.Repo, "", "")
 	if err != nil {
 		return importpkg.Stats{}, err
 	}

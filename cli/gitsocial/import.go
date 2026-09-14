@@ -173,7 +173,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	if err != nil {
 		return err
 	}
-	adapter, err := createAdapter(hostType, repoInfo.Owner, repoInfo.Repo, f.apiURL, f.token)
+	adapter, err := createAdapter(hostType, repoURL, repoInfo.Owner, repoInfo.Repo, f.apiURL, f.token)
 	if err != nil {
 		return err
 	}
@@ -612,7 +612,7 @@ func formatCount(n int) string {
 	return string(result)
 }
 
-func createAdapter(host protocol.HostingService, owner, repo, apiURL, token string) (importpkg.SourceAdapter, error) {
+func createAdapter(host protocol.HostingService, repoURL, owner, repo, apiURL, token string) (importpkg.SourceAdapter, error) {
 	switch host {
 	case protocol.HostGitHub:
 		if err := ghimport.CheckGH(); err != nil {
@@ -620,7 +620,7 @@ func createAdapter(host protocol.HostingService, owner, repo, apiURL, token stri
 		}
 		return ghimport.New(owner, repo), nil
 	case protocol.HostGitLab:
-		return glimport.New(owner, repo, glimport.AdapterOptions{BaseURL: apiURL, Token: token}), nil
+		return glimport.New(owner, repo, glimport.OptionsForRepo(repoURL, apiURL, token)), nil
 	case protocol.HostGitea:
 		return nil, fmt.Errorf("gitea import not yet implemented — coming soon")
 	case protocol.HostBitbucket:

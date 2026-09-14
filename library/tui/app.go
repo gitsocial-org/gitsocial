@@ -1716,7 +1716,7 @@ func (m *Model) beginImport() tea.Cmd {
 	if err != nil {
 		return m.host.SetMessageWithTimeout("Import: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 	}
-	adapter, err := createImportAdapter(hostType, repoInfo.Owner, repoInfo.Repo)
+	adapter, err := createImportAdapter(hostType, repoURL, repoInfo.Owner, repoInfo.Repo)
 	if err != nil {
 		return m.host.SetMessageWithTimeout("Import: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 	}
@@ -1797,10 +1797,8 @@ func stopImportTicker(pair [2]chan struct{}) {
 	<-pair[1]
 }
 
-// createImportAdapter builds a SourceAdapter for the resolved host. Mirrors
-// cli/gitsocial/import.go's createAdapter — kept local to avoid pulling the
-// CLI's main package into the TUI.
-func createImportAdapter(host protocol.HostingService, owner, repo string) (importpkg.SourceAdapter, error) {
+// createImportAdapter builds a SourceAdapter for the resolved host, as cli/gitsocial/import.go does.
+func createImportAdapter(host protocol.HostingService, repoURL, owner, repo string) (importpkg.SourceAdapter, error) {
 	switch host {
 	case protocol.HostGitHub:
 		if err := ghimport.CheckGH(); err != nil {
@@ -1808,7 +1806,7 @@ func createImportAdapter(host protocol.HostingService, owner, repo string) (impo
 		}
 		return ghimport.New(owner, repo), nil
 	case protocol.HostGitLab:
-		return glimport.New(owner, repo, glimport.AdapterOptions{}), nil
+		return glimport.New(owner, repo, glimport.OptionsForRepo(repoURL, "", "")), nil
 	case protocol.HostGitea:
 		return nil, fmt.Errorf("gitea import not yet implemented")
 	case protocol.HostBitbucket:

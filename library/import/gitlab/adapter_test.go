@@ -176,6 +176,27 @@ func TestTokenHeader_OmittedWhenUnset(t *testing.T) {
 	}
 }
 
+func TestOptionsForRepo(t *testing.T) {
+	cases := []struct {
+		name, repoURL, baseURL, want string
+	}{
+		{"self-hosted instance", "https://gitlab.example.com/acme/widgets", "", "https://gitlab.example.com"},
+		{"gitlab.com", "https://gitlab.com/acme/widgets", "", "https://gitlab.com"},
+		{"explicit base URL wins", "https://gitlab.example.com/acme/widgets", "https://api.example.com", "https://api.example.com"},
+		{"unparsable repository URL", "acme/widgets", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := OptionsForRepo(c.repoURL, c.baseURL, "t").BaseURL; got != c.want {
+				t.Errorf("BaseURL = %q, want %q", got, c.want)
+			}
+		})
+	}
+	if got := OptionsForRepo("https://gitlab.com/acme/widgets", "", "tok").Token; got != "tok" {
+		t.Errorf("Token = %q, want tok", got)
+	}
+}
+
 func TestSelfHostedBaseURL(t *testing.T) {
 	server := newGLServer(t, releaseRoutes(t, jsonRoute(releasesJSON)))
 	adapter := New("acme", "widgets", AdapterOptions{BaseURL: server.server.URL + "/", Token: "test-token"})

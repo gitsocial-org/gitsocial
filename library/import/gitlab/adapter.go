@@ -27,6 +27,23 @@ type AdapterOptions struct {
 	Token   string
 }
 
+// OptionsForRepo builds adapter options for a repository URL, an explicit base URL winning over it.
+func OptionsForRepo(repoURL, baseURL, token string) AdapterOptions {
+	if baseURL == "" {
+		baseURL = instanceURL(repoURL)
+	}
+	return AdapterOptions{BaseURL: baseURL, Token: token}
+}
+
+// instanceURL returns the scheme and host of a repository URL, empty when it carries neither.
+func instanceURL(repoURL string) string {
+	parsed, err := url.Parse(repoURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
+}
+
 // Adapter implements SourceAdapter for GitLab repositories.
 type Adapter struct {
 	owner          string
