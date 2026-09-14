@@ -139,7 +139,8 @@ Params:
 - `since` (string): ISO 8601 timestamp lower bound; a value that does not parse is dropped
 - `until` (string): ISO 8601 timestamp upper bound; a value that does not parse is dropped
 - `includeImplicit` (boolean): Include implicit posts
-- `sort` (string): Accepted and ignored; results come back newest first
+
+Posts come back newest first. A param this list does not name is ignored.
 
 Result: `Post[]`
 

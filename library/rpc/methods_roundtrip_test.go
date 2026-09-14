@@ -137,11 +137,11 @@ func TestSocialRoundTrip_postCreateReadBack(t *testing.T) {
 		t.Errorf("social.getPosts served %v, want both created posts", ids(posts))
 	}
 
-	// RPC.md 4.1: sort is accepted and ignored.
-	var sorted []postShape
-	decodeResult(t, call(t, server, "social.getPosts", `{"scope":"repository:workspace","sort":"oldest"}`), "social.getPosts", &sorted)
-	if !slices.Equal(ids(sorted), ids(posts)) {
-		t.Errorf("sort changed the order: %v against %v", ids(sorted), ids(posts))
+	// RPC.md 4.1: an undocumented param is ignored, and posts come back newest first.
+	var extra []postShape
+	decodeResult(t, call(t, server, "social.getPosts", `{"scope":"repository:workspace","sort":"oldest"}`), "social.getPosts", &extra)
+	if !slices.Equal(ids(extra), ids(posts)) {
+		t.Errorf("an undocumented param changed the result: %v against %v", ids(extra), ids(posts))
 	}
 
 	assertAppError(t, call(t, server, "social.getPosts", `{"scope":"nonsense"}`), "social.getPosts", CodeAppInternal, "INVALID_SCOPE")

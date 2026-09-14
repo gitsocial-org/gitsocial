@@ -36,7 +36,6 @@ func socialGetPosts(s *Server) HandlerFunc {
 			Until           string   `json:"until"`
 			Limit           int      `json:"limit"`
 			IncludeImplicit bool     `json:"includeImplicit"`
-			Sort            string   `json:"sort"`
 		}](raw)
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -44,7 +43,6 @@ func socialGetPosts(s *Server) HandlerFunc {
 		opts := &social.GetPostsOptions{
 			Limit:           p.Limit,
 			IncludeImplicit: p.IncludeImplicit,
-			SortBy:          p.Sort,
 		}
 		for _, t := range p.Types {
 			opts.Types = append(opts.Types, social.PostType(t))
