@@ -240,6 +240,9 @@ func TestBuildLFSBatchURL(t *testing.T) {
 		{"plain https", "https://github.com/user/repo", "https://github.com/user/repo.git/info/lfs/objects/batch"},
 		{"already dot git", "https://github.com/user/repo.git", "https://github.com/user/repo.git/info/lfs/objects/batch"},
 		{"trailing slash", "https://github.com/user/repo/", "https://github.com/user/repo.git/info/lfs/objects/batch"},
+		{"host only", "https://host:8080", "https://host:8080/info/lfs/objects/batch"},
+		{"host only trailing slash", "https://host:8080/", "https://host:8080/info/lfs/objects/batch"},
+		{"host with port and repo", "https://host:8080/user/repo", "https://host:8080/user/repo.git/info/lfs/objects/batch"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

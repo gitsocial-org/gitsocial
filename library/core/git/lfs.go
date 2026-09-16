@@ -221,11 +221,24 @@ func downloadLFSObject(action lfsAction, client *http.Client) ([]byte, error) {
 
 // buildLFSBatchURL constructs the LFS Batch API URL from a repo URL.
 func buildLFSBatchURL(repoURL string) string {
-	base := strings.TrimSuffix(repoURL, "/")
-	if !strings.HasSuffix(base, ".git") {
-		base += ".git"
+	parsed, err := url.Parse(repoURL)
+	if err != nil || parsed.Host == "" {
+		base := strings.TrimSuffix(repoURL, "/")
+		if !strings.HasSuffix(base, ".git") {
+			base += ".git"
+		}
+		return base + "/info/lfs/objects/batch"
 	}
-	return base + "/info/lfs/objects/batch"
+	repoPath := strings.Trim(parsed.Path, "/")
+	if repoPath == "" {
+		parsed.Path = "/info/lfs/objects/batch"
+		return parsed.String()
+	}
+	if !strings.HasSuffix(repoPath, ".git") {
+		repoPath += ".git"
+	}
+	parsed.Path = "/" + repoPath + "/info/lfs/objects/batch"
+	return parsed.String()
 }
 
 // getGitCredentials retrieves credentials for a URL via git credential fill.
