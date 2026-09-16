@@ -18,6 +18,7 @@ type glMilestone struct {
 	State       string  `json:"state"`
 	DueDate     *string `json:"due_date"`
 	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
 }
 
 type glIssue struct {
@@ -75,6 +76,7 @@ func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.Impo
 			continue
 		}
 		createdAt, _ := time.Parse(time.RFC3339, m.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339, m.UpdatedAt)
 		im := importpkg.ImportMilestone{
 			ExternalID: m.Title,
 			Number:     m.ID,
@@ -82,6 +84,7 @@ func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.Impo
 			Body:       m.Description,
 			State:      normalizeMilestoneState(m.State),
 			CreatedAt:  createdAt,
+			UpdatedAt:  updatedAt,
 		}
 		if m.DueDate != nil {
 			if t, err := time.Parse("2006-01-02", *m.DueDate); err == nil {

@@ -150,6 +150,9 @@ func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
 	const editedIssueJSON = `[{"number":4,"title":"Edited","body":"","state":"OPEN",
 		"author":{"login":"alice"},"createdAt":"2024-06-15T12:00:00Z",
 		"updatedAt":"2024-07-02T08:30:00Z"}]`
+	const editedMilestoneJSON = `[{"title":"v1.1","state":"open","description":"Edited",
+		"number":2,"creator":{"login":"alice"},"created_at":"2024-06-01T00:00:00Z",
+		"updated_at":"2024-07-02T08:30:00Z"}]`
 	adapter := New("acme", "widgets")
 	var fields string
 	fakeGHRoutes(t, func(args []string) ghResponse {
@@ -158,7 +161,7 @@ func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
 		}
 		switch {
 		case ghArg(args, "/milestones"):
-			return ghResponse{stdout: "[]"}
+			return ghResponse{stdout: editedMilestoneJSON}
 		case len(args) > 1 && args[0] == "issue" && args[1] == "list":
 			fields = strings.Join(args, " ")
 			return ghResponse{stdout: editedIssueJSON}
@@ -179,6 +182,12 @@ func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
 	// An unchanged issue is skipped on re-import only when its UpdatedAt reaches the mapping.
 	if !plan.Issues[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
 		t.Errorf("issue UpdatedAt = %v, want the platform timestamp", plan.Issues[0].UpdatedAt)
+	}
+	if len(plan.Milestones) != 1 {
+		t.Fatalf("milestones = %d, want 1", len(plan.Milestones))
+	}
+	if !plan.Milestones[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("milestone UpdatedAt = %v, want the platform timestamp", plan.Milestones[0].UpdatedAt)
 	}
 }
 

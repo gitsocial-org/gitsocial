@@ -15,7 +15,8 @@ import (
 // pmMilestonesJSON holds an active milestone with a due date, a closed one, and one with an unparsable date.
 const pmMilestonesJSON = `[
 	{"id":11,"title":"v1.0","description":"First milestone","state":"active",
-	 "due_date":"2024-12-31","created_at":"2024-06-01T00:00:00Z"},
+	 "due_date":"2024-12-31","created_at":"2024-06-01T00:00:00Z",
+	 "updated_at":"2024-07-02T08:30:00Z"},
 	{"id":12,"title":"v0.9","description":"Shipped","state":"closed",
 	 "due_date":null,"created_at":"2024-01-01T00:00:00Z"},
 	{"id":13,"title":"v2.0","description":"","state":"active",
@@ -412,6 +413,12 @@ func TestFetchPM_DecodesUpdatedAt(t *testing.T) {
 	// An unchanged issue is skipped on re-import only when its UpdatedAt reaches the mapping.
 	if !plan.Issues[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
 		t.Errorf("issue UpdatedAt = %v, want the platform timestamp", plan.Issues[0].UpdatedAt)
+	}
+	if len(plan.Milestones) == 0 {
+		t.Fatal("milestones = 0, want the fixture milestones")
+	}
+	if !plan.Milestones[0].UpdatedAt.Equal(time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)) {
+		t.Errorf("milestone UpdatedAt = %v, want the platform timestamp", plan.Milestones[0].UpdatedAt)
 	}
 }
 

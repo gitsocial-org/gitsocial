@@ -21,6 +21,7 @@ type ghMilestone struct {
 		Login string `json:"login"`
 	} `json:"creator"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ghIssue struct {
@@ -89,6 +90,7 @@ func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.Impo
 			Body:       m.Description,
 			State:      normalizeState(m.State),
 			CreatedAt:  m.CreatedAt,
+			UpdatedAt:  m.UpdatedAt,
 		}
 		if m.Creator != nil {
 			creator := a.resolveUser(m.Creator.Login)

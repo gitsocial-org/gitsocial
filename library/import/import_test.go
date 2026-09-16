@@ -330,10 +330,12 @@ func TestExecuteItemComments_DryRun(t *testing.T) {
 func TestSkipByUpdatedAt(t *testing.T) {
 	updatedAt := time.Date(2024, 7, 2, 8, 30, 0, 0, time.UTC)
 	mapping := &MappingFile{Source: "github", Items: map[string]MappedItem{
-		"github:issue:1": {Hash: "aaa111222333", Branch: "gitmsg/pm", Type: "issue"},
-		"github:issue:2": {Hash: "bbb444555666", Branch: "gitmsg/pm", Type: "issue"},
+		"github:issue:1":        {Hash: "aaa111222333", Branch: "gitmsg/pm", Type: "issue"},
+		"github:issue:2":        {Hash: "bbb444555666", Branch: "gitmsg/pm", Type: "issue"},
+		"github:milestone:v1.0": {Hash: "ccc777888999", Branch: "gitmsg/pm", Type: "milestone"},
 	}}
 	mapping.SetUpdatedAt("github:issue:1", updatedAt)
+	mapping.SetUpdatedAt("github:milestone:v1.0", updatedAt)
 	if !skipByUpdatedAt(mapping, "github:issue:1", updatedAt) {
 		t.Error("an item whose platform time matches the mapping was not skipped")
 	}
@@ -346,6 +348,13 @@ func TestSkipByUpdatedAt(t *testing.T) {
 	}
 	if skipByUpdatedAt(mapping, "github:issue:2", updatedAt) {
 		t.Error("an item with no stored time was skipped")
+	}
+	key := MappingKey("github", "milestone", "v1.0")
+	if !skipByUpdatedAt(mapping, key, updatedAt) {
+		t.Error("a milestone whose platform time matches the mapping was not skipped")
+	}
+	if skipByUpdatedAt(mapping, key, updatedAt.Add(time.Hour)) {
+		t.Error("an edited milestone was skipped")
 	}
 }
 
