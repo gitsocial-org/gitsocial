@@ -2,6 +2,8 @@
 package notifications
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -39,6 +41,38 @@ func divergedRepo(t *testing.T) string {
 	runGit(t, workdir, "reset", "--hard", "HEAD~1")
 	emptyCommit(t, workdir, "social: rewritten locally")
 	return workdir
+}
+
+// aheadBehindRepo returns a workdir with one gitmsg branch ahead of its origin and one behind it.
+func aheadBehindRepo(t *testing.T) string {
+	t.Helper()
+	workdir := cloneFixture(t)
+	origin := t.TempDir()
+	runGit(t, origin, "init", "--bare", "-b", "main")
+	runGit(t, workdir, "remote", "add", "origin", origin)
+	runGit(t, workdir, "checkout", "-b", "gitmsg/social")
+	emptyCommit(t, workdir, "social: shared base")
+	runGit(t, workdir, "push", "origin", "gitmsg/social")
+	emptyCommit(t, workdir, "social: unpushed")
+	runGit(t, workdir, "checkout", "-b", "gitmsg/pm", "gitmsg/social~1")
+	emptyCommit(t, workdir, "pm: shared base")
+	runGit(t, workdir, "push", "origin", "gitmsg/pm")
+	emptyCommit(t, workdir, "pm: published")
+	runGit(t, workdir, "push", "origin", "gitmsg/pm")
+	runGit(t, workdir, "reset", "--hard", "HEAD~1")
+	return workdir
+}
+
+// countingExecutor installs a git executor counting the processes it spawns, restored on cleanup.
+func countingExecutor(t *testing.T) *atomic.Int64 {
+	t.Helper()
+	var calls atomic.Int64
+	restore := git.SetExecutor(func(ctx context.Context, workdir string, args []string) (*git.ExecResult, error) {
+		calls.Add(1)
+		return git.DefaultExec(ctx, workdir, args)
+	})
+	t.Cleanup(restore)
+	return &calls
 }
 
 // divergenceItems returns the notifications this provider contributed to GetAll.
@@ -99,5 +133,44 @@ func TestDivergenceProvider_countsDivergedBranches(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("GetUnreadCount() = %d, want 1", count)
+	}
+}
+
+// TestDivergenceProvider_aheadOrBehindIsNotDiverged checks a branch only ahead of or only behind its remote reports nothing.
+func TestDivergenceProvider_aheadOrBehindIsNotDiverged(t *testing.T) {
+	setupTestDB(t)
+	workdir := aheadBehindRepo(t)
+
+	p := &divergenceProvider{}
+	notifs, err := p.GetNotifications(workdir, Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	if len(notifs) != 0 {
+		t.Errorf("GetNotifications() returned %d notifications, want 0: %+v", len(notifs), notifs)
+	}
+}
+
+// TestDivergenceProvider_convergedRepositoryOneProcess checks a converged repository costs one git process per count.
+func TestDivergenceProvider_convergedRepositoryOneProcess(t *testing.T) {
+	setupTestDB(t)
+	workdir := divergedRepo(t)
+	runGit(t, workdir, "reset", "--hard", "origin/gitmsg/social")
+	calls := countingExecutor(t)
+
+	p := &divergenceProvider{}
+	if _, err := p.GetUnreadCount(workdir); err != nil {
+		t.Fatalf("GetUnreadCount() error = %v", err)
+	}
+	warm := calls.Load()
+	count, err := p.GetUnreadCount(workdir)
+	if err != nil {
+		t.Fatalf("GetUnreadCount() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("GetUnreadCount() = %d, want 0", count)
+	}
+	if spawned := calls.Load() - warm; spawned != 1 {
+		t.Errorf("GetUnreadCount() spawned %d git processes, want 1", spawned)
 	}
 }

@@ -2,12 +2,18 @@
 package notifications
 
 import (
-	"errors"
+	"fmt"
+	"log/slog"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
+
+// gitmsgBranchPrefix is the refs/heads prefix every extension branch carries.
+const gitmsgBranchPrefix = "gitmsg/"
 
 type divergenceProvider struct{}
 
@@ -30,12 +36,27 @@ func (p *divergenceProvider) GetNotifications(workdir string, _ Filter) ([]Notif
 	if repoURL == "" {
 		return nil, nil
 	}
-	now := time.Now()
+	local, remotes, err := git.ReadBranchTips(workdir, gitmsgBranchPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("read gitmsg branch tips: %w", err)
+	}
+	if !anyRemoteTipDiffers(local, remotes) {
+		return nil, nil
+	}
 	remote := git.PushRemote(workdir)
+	now := time.Now()
 	var out []Notification
-	for _, branch := range gitmsg.GetExtBranches(workdir) {
-		err := git.ValidatePushPreconditions(workdir, remote, branch)
-		if err == nil || !errors.Is(err, git.ErrDiverged) {
+	for _, branch := range slices.Sorted(maps.Keys(local)) {
+		tip, ok := remotes[remote][branch]
+		if !ok || tip == local[branch] {
+			continue
+		}
+		diverged, err := git.BranchDiverged(workdir, remote, branch)
+		if err != nil {
+			slog.Debug("divergence check", "error", err, "branch", branch, "remote", remote)
+			continue
+		}
+		if !diverged {
 			continue
 		}
 		// The entry clears itself once the branch converges, so it carries no read state.
@@ -50,6 +71,18 @@ func (p *divergenceProvider) GetNotifications(workdir string, _ Filter) ([]Notif
 		})
 	}
 	return out, nil
+}
+
+// anyRemoteTipDiffers reports whether a remote holds a tracked branch at a hash its local branch does not carry.
+func anyRemoteTipDiffers(local map[string]string, remotes map[string]map[string]string) bool {
+	for _, tips := range remotes {
+		for branch, tip := range tips {
+			if localTip, ok := local[branch]; ok && localTip != tip {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetUnreadCount returns the count of diverged branches.

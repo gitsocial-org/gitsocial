@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -113,6 +114,66 @@ func ListRemoteBranches(workdir, remoteName string) ([]string, error) {
 		}
 	}
 	return branches, nil
+}
+
+// ReadBranchTips reads the local and remote-tracking tips of every branch under prefix in one for-each-ref.
+func ReadBranchTips(workdir, prefix string) (map[string]string, map[string]map[string]string, error) {
+	result, err := ExecGit(workdir, []string{
+		"for-each-ref", "--format=%(refname) %(objectname)",
+		"refs/heads/" + prefix, "refs/remotes/",
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("for-each-ref %s: %w", prefix, err)
+	}
+	local := make(map[string]string)
+	remote := make(map[string]map[string]string)
+	for _, line := range strings.Split(result.Stdout, "\n") {
+		refname, hash, ok := strings.Cut(strings.TrimSpace(line), " ")
+		if !ok {
+			continue
+		}
+		if branch, isLocal := strings.CutPrefix(refname, "refs/heads/"); isLocal {
+			local[branch] = hash
+			continue
+		}
+		rest, isRemote := strings.CutPrefix(refname, "refs/remotes/")
+		if !isRemote {
+			continue
+		}
+		at := strings.Index(rest, "/"+prefix)
+		if at < 0 {
+			continue
+		}
+		name, branch := rest[:at], rest[at+1:]
+		if remote[name] == nil {
+			remote[name] = make(map[string]string)
+		}
+		remote[name][branch] = hash
+	}
+	return local, remote, nil
+}
+
+// BranchDiverged reports whether a branch and its remote-tracking branch each hold commits the other lacks.
+func BranchDiverged(workdir, remoteName, branch string) (bool, error) {
+	result, err := ExecGit(workdir, []string{
+		"rev-list", "--left-right", "--count", remoteName + "/" + branch + "..." + branch,
+	})
+	if err != nil {
+		return false, fmt.Errorf("rev-list %s: %w", branch, err)
+	}
+	counts := strings.Fields(result.Stdout)
+	if len(counts) != 2 {
+		return false, fmt.Errorf("rev-list %s: unexpected output %q", branch, result.Stdout)
+	}
+	behind, err := strconv.Atoi(counts[0])
+	if err != nil {
+		return false, fmt.Errorf("rev-list %s: read behind count: %w", branch, err)
+	}
+	ahead, err := strconv.Atoi(counts[1])
+	if err != nil {
+		return false, fmt.Errorf("rev-list %s: read ahead count: %w", branch, err)
+	}
+	return behind > 0 && ahead > 0, nil
 }
 
 // ReadRemoteRef reads a branch tip hash from a remote URL using ls-remote.
