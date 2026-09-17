@@ -47,7 +47,7 @@ documentation/IDENTITY.md.`,
 						return err
 					}
 				} else {
-					fmt.Printf("Unverified: %s\n", err.Error())
+					fmt.Fprintf(cmd.OutOrStdout(), "Unverified: %s\n", err.Error())
 				}
 				return nil
 			}
@@ -78,14 +78,14 @@ documentation/IDENTITY.md.`,
 				return PrintJSON(cmd, out)
 			}
 			if binding != nil && binding.Verified {
-				fmt.Printf("Verified: %s (%s, source: %s", email, signerFormat, binding.Source)
+				fmt.Fprintf(cmd.OutOrStdout(), "Verified: %s (%s, source: %s", email, signerFormat, binding.Source)
 				if binding.ForgeHost != "" {
-					fmt.Printf(", host: %s", binding.ForgeHost)
+					fmt.Fprintf(cmd.OutOrStdout(), ", host: %s", binding.ForgeHost)
 				}
-				fmt.Println(")")
+				fmt.Fprintln(cmd.OutOrStdout(), ")")
 				return nil
 			}
-			fmt.Println("Unverified")
+			fmt.Fprintln(cmd.OutOrStdout(), "Unverified")
 			return nil
 		},
 	}
@@ -111,16 +111,16 @@ endpoint of its domain.`,
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, resolved)
 			} else {
-				fmt.Printf("Email:    %s\n", resolved.Email)
-				fmt.Printf("Key:      %s\n", resolved.Key)
-				fmt.Printf("Type:     %s\n", resolved.KeyType())
+				fmt.Fprintf(cmd.OutOrStdout(), "Email:    %s\n", resolved.Email)
+				fmt.Fprintf(cmd.OutOrStdout(), "Key:      %s\n", resolved.Key)
+				fmt.Fprintf(cmd.OutOrStdout(), "Type:     %s\n", resolved.KeyType())
 				if resolved.Repo != "" {
-					fmt.Printf("Repo:     %s\n", resolved.Repo)
+					fmt.Fprintf(cmd.OutOrStdout(), "Repo:     %s\n", resolved.Repo)
 				}
 				if resolved.Cached {
-					fmt.Printf("Source:   cached\n")
+					fmt.Fprintf(cmd.OutOrStdout(), "Source:   cached\n")
 				} else {
-					fmt.Printf("Source:   fetched\n")
+					fmt.Fprintf(cmd.OutOrStdout(), "Source:   fetched\n")
 				}
 			}
 			return nil

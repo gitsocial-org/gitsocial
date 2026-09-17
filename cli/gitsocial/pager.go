@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 	"github.com/mattn/go-isatty"
+	"github.com/spf13/cobra"
 )
 
 // getPager returns the pager command from environment or defaults to less.
@@ -41,9 +42,11 @@ func countLines(s string) int {
 }
 
 // printWithPager prints output through a pager if content exceeds terminal height.
-func printWithPager(output string) {
-	if !isatty.IsTerminal(os.Stdout.Fd()) {
-		fmt.Println(output)
+func printWithPager(cmd *cobra.Command, output string) {
+	out := cmd.OutOrStdout()
+	// Paging needs the command's output to be the process terminal.
+	if out != io.Writer(os.Stdout) || !isatty.IsTerminal(os.Stdout.Fd()) {
+		fmt.Fprintln(out, output)
 		return
 	}
 
@@ -51,33 +54,34 @@ func printWithPager(output string) {
 	height := getTerminalHeight()
 
 	if lines <= height-2 {
-		fmt.Println(output)
+		fmt.Fprintln(out, output)
 		return
 	}
 
 	pager := getPager()
 	if pager == "" {
-		fmt.Println(output)
+		fmt.Fprintln(out, output)
 		return
 	}
 
-	cmd := exec.Command(pager)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// The pager draws on the terminal, so it inherits the process streams.
+	pagerCmd := exec.Command(pager)
+	pagerCmd.Stdout = os.Stdout
+	pagerCmd.Stderr = os.Stderr
 
-	stdin, err := cmd.StdinPipe()
+	stdin, err := pagerCmd.StdinPipe()
 	if err != nil {
-		fmt.Println(output)
+		fmt.Fprintln(out, output)
 		return
 	}
 
-	if err := cmd.Start(); err != nil {
-		fmt.Println(output)
+	if err := pagerCmd.Start(); err != nil {
+		fmt.Fprintln(out, output)
 		return
 	}
 
 	_, _ = io.WriteString(stdin, output+"\n")
 	_ = stdin.Close()
 
-	_ = cmd.Wait()
+	_ = pagerCmd.Wait()
 }

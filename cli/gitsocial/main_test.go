@@ -4,7 +4,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,48 +91,23 @@ func runInProcessStdin(t *testing.T, dir, cacheDir, stdin string, args ...string
 	t.Helper()
 	// The cache is a singleton, so --cache-dir only lands on a fresh open.
 	cache.Reset()
-	outWriter, readStdout := capturedStream(t)
-	errWriter, readStderr := capturedStream(t)
-	realStdout, realStderr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = outWriter, errWriter
+	var outBuf, errBuf strings.Builder
 
 	// A fresh tree per run: the global flag vars are package level.
 	root := buildRootCmd()
-	root.SetOut(outWriter)
-	root.SetErr(errWriter)
+	root.SetOut(&outBuf)
+	root.SetErr(&errBuf)
 	root.SetIn(strings.NewReader(stdin))
 	root.SetArgs(append([]string{"-C", dir, "--cache-dir", cacheDir}, args...))
 	cmd, err := root.ExecuteC()
 	// main prints what a command did not: cobra's own errors carry no exit code.
 	var coded exitError
 	if err != nil && !errors.As(err, &coded) {
-		fmt.Fprintln(errWriter, cmd.ErrPrefix(), err)
-		fmt.Fprintln(errWriter, cmd.UsageString())
+		fmt.Fprintln(&errBuf, cmd.ErrPrefix(), err)
+		fmt.Fprintln(&errBuf, cmd.UsageString())
 	}
 
-	os.Stdout, os.Stderr = realStdout, realStderr
-	return readStdout(), readStderr(), exitCode(err)
-}
-
-// capturedStream returns a pipe to write to and a function returning what was written.
-func capturedStream(t *testing.T) (*os.File, func() string) {
-	t.Helper()
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		_, _ = io.Copy(&buf, reader) // a read error ends the copy; the test reads what arrived
-		done <- buf.String()
-	}()
-	return writer, func() string {
-		_ = writer.Close()
-		text := <-done
-		_ = reader.Close()
-		return text
-	}
+	return outBuf.String(), errBuf.String(), exitCode(err)
 }
 
 // cliBinary returns the gitsocial binary, building it once per test run.

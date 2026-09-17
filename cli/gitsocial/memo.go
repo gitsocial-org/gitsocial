@@ -84,17 +84,17 @@ func newMemoStatusCmd() *cobra.Command {
 					"inherits":            inherits,
 				})
 			}
-			fmt.Println("Memo:")
-			fmt.Printf("  Project initialized: %v\n", projectInit)
-			fmt.Printf("  Personal repo: %s\n", personalPath)
-			fmt.Printf("  Session dir: %s\n", sessionDir)
-			fmt.Printf("  Counts: session=%d personal=%d project=%d\n",
+			fmt.Fprintln(cmd.OutOrStdout(), "Memo:")
+			fmt.Fprintf(cmd.OutOrStdout(), "  Project initialized: %v\n", projectInit)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Personal repo: %s\n", personalPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Session dir: %s\n", sessionDir)
+			fmt.Fprintf(cmd.OutOrStdout(), "  Counts: session=%d personal=%d project=%d\n",
 				counts["session"], counts["personal"], counts["project"])
 			if sessions.Success {
-				fmt.Printf("  Active sessions: %d\n", len(sessions.Data))
+				fmt.Fprintf(cmd.OutOrStdout(), "  Active sessions: %d\n", len(sessions.Data))
 			}
 			if len(inherits) > 0 {
-				fmt.Printf("  Inherited: %s\n", formatInheritsLine(inherits))
+				fmt.Fprintf(cmd.OutOrStdout(), "  Inherited: %s\n", formatInheritsLine(inherits))
 			}
 			return nil
 		},
@@ -214,7 +214,7 @@ printed.`,
 			if cfg != nil && cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]string{"session_id": res.Data})
 			} else {
-				fmt.Println(res.Data)
+				fmt.Fprintln(cmd.OutOrStdout(), res.Data)
 			}
 			return nil
 		},
@@ -237,7 +237,7 @@ printed.`,
 				return PrintJSON(cmd, res.Data)
 			}
 			if len(res.Data) == 0 {
-				fmt.Println("(no sessions)")
+				fmt.Fprintln(cmd.OutOrStdout(), "(no sessions)")
 				return nil
 			}
 			for _, s := range res.Data {
@@ -245,7 +245,7 @@ printed.`,
 				if s.HasRemote {
 					remote = " (remote)"
 				}
-				fmt.Printf("%s  %s%s\n", s.ID, memo.FormatAge(s.LastUsed), remote)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s  %s%s\n", s.ID, memo.FormatAge(s.LastUsed), remote)
 			}
 			return nil
 		},
@@ -309,7 +309,7 @@ printed.`,
 			if cfg != nil && cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]interface{}{"deleted": res.Data})
 			}
-			fmt.Printf("deleted %d session(s)\n", len(res.Data))
+			fmt.Fprintf(cmd.OutOrStdout(), "deleted %d session(s)\n", len(res.Data))
 			return nil
 		}
 		if len(args) != 1 {
@@ -371,11 +371,11 @@ is followed through the memo-inherits list.`,
 				return PrintJSON(cmd, urls)
 			}
 			if len(urls) == 0 {
-				fmt.Println("(no inherited sources)")
+				fmt.Fprintln(cmd.OutOrStdout(), "(no inherited sources)")
 				return nil
 			}
 			for _, u := range urls {
-				fmt.Println(u)
+				fmt.Fprintln(cmd.OutOrStdout(), u)
 			}
 			return nil
 		},
@@ -439,7 +439,7 @@ $GITSOCIAL_EDITOR, then $EDITOR, $VISUAL, vi.`,
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, res.Data)
 			}
-			fmt.Printf("memo created: %s\n", res.Data.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "memo created: %s\n", res.Data.ID)
 			return nil
 		},
 	}
@@ -566,7 +566,7 @@ the target tier and the source memo stays where it is.`,
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, res.Data)
 			}
-			fmt.Printf("promoted to %s: %s\n", tier, res.Data.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "promoted to %s: %s\n", tier, res.Data.ID)
 			return nil
 		},
 	}
@@ -610,7 +610,7 @@ reasons, need --include-external.`,
 				return PrintJSON(cmd, res.Data)
 			}
 			if len(res.Data) == 0 {
-				fmt.Println("(no memos)")
+				fmt.Fprintln(cmd.OutOrStdout(), "(no memos)")
 				return nil
 			}
 			for _, m := range res.Data {
@@ -618,7 +618,7 @@ reasons, need --include-external.`,
 				if len(m.Labels) > 0 {
 					labelStr = " [" + strings.Join(m.Labels, ",") + "]"
 				}
-				fmt.Printf("%-9s %s  %s%s\n", m.Tier, shortHash(m.ID), m.Subject, labelStr)
+				fmt.Fprintf(cmd.OutOrStdout(), "%-9s %s  %s%s\n", m.Tier, shortHash(m.ID), m.Subject, labelStr)
 			}
 			return nil
 		},
@@ -651,18 +651,18 @@ func newMemoShowCmd() *cobra.Command {
 				return PrintJSON(cmd, res.Data)
 			}
 			m := res.Data
-			fmt.Printf("ID:     %s\n", m.ID)
-			fmt.Printf("Tier:   %s\n", m.Tier)
-			fmt.Printf("Author: %s <%s>\n", m.Author.Name, m.Author.Email)
-			fmt.Printf("Time:   %s\n", m.Timestamp.Format(time.RFC3339))
+			fmt.Fprintf(cmd.OutOrStdout(), "ID:     %s\n", m.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "Tier:   %s\n", m.Tier)
+			fmt.Fprintf(cmd.OutOrStdout(), "Author: %s <%s>\n", m.Author.Name, m.Author.Email)
+			fmt.Fprintf(cmd.OutOrStdout(), "Time:   %s\n", m.Timestamp.Format(time.RFC3339))
 			if len(m.Labels) > 0 {
-				fmt.Printf("Labels: %s\n", strings.Join(m.Labels, ","))
+				fmt.Fprintf(cmd.OutOrStdout(), "Labels: %s\n", strings.Join(m.Labels, ","))
 			}
-			fmt.Println()
-			fmt.Println(m.Subject)
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), m.Subject)
 			if m.Body != "" {
-				fmt.Println()
-				fmt.Println(m.Body)
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), m.Body)
 			}
 			return nil
 		},

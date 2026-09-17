@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -99,7 +98,7 @@ The file is written with 0600 permissions.`,
 			// Prompts go to stderr so piped stdin and --json stdout stay clean.
 			reader := bufio.NewReader(cmd.InOrStdin())
 			readLine := func(prompt string) string {
-				fmt.Fprint(os.Stderr, prompt)
+				fmt.Fprint(cmd.ErrOrStderr(), prompt)
 				line, err := reader.ReadString('\n')
 				if err != nil && line == "" {
 					return ""
@@ -159,11 +158,11 @@ masked, and secret keys do not print.`,
 				return PrintJSON(cmd, masked)
 			}
 			if len(hosts) == 0 {
-				fmt.Println("No credentials stored")
+				fmt.Fprintln(cmd.OutOrStdout(), "No credentials stored")
 				return nil
 			}
 			for _, host := range hosts {
-				fmt.Printf("%s = %s\n", host, maskKey(creds[host].AccessKey))
+				fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", host, maskKey(creds[host].AccessKey))
 			}
 			return nil
 		},

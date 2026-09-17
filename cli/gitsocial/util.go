@@ -110,7 +110,7 @@ func PrintSuccess(cmd *cobra.Command, msg string) {
 	if cfg != nil && cfg.JSONOutput {
 		_ = PrintJSON(cmd, map[string]string{"status": "success", "message": msg}) // a string map always marshals
 	} else {
-		fmt.Printf("✓ %s\n", msg)
+		fmt.Fprintf(cmd.OutOrStdout(), "✓ %s\n", msg)
 	}
 }
 

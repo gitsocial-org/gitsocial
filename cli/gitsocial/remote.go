@@ -113,9 +113,9 @@ Examples:
 					return PrintJSON(cmd, map[string]any{"configured": git.ConfiguredPushRemotes(cfg.WorkDir), "resolved": resolved})
 				}
 				if resolution == git.PushConfigured {
-					fmt.Println(strings.Join(resolved, " "))
+					fmt.Fprintln(cmd.OutOrStdout(), strings.Join(resolved, " "))
 				} else {
-					fmt.Printf("heuristic: %s\n", strings.Join(resolved, " "))
+					fmt.Fprintf(cmd.OutOrStdout(), "heuristic: %s\n", strings.Join(resolved, " "))
 				}
 				return nil
 			}

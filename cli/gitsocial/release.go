@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -76,9 +77,9 @@ func newReleaseStatusCmd() *cobra.Command {
 					"releases": count,
 				})
 			} else {
-				fmt.Println("Release:")
-				fmt.Printf("  Branch: %s\n", branch)
-				fmt.Printf("  Releases: %d\n", count)
+				fmt.Fprintln(cmd.OutOrStdout(), "Release:")
+				fmt.Fprintf(cmd.OutOrStdout(), "  Branch: %s\n", branch)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Releases: %d\n", count)
 			}
 			return nil
 		},
@@ -205,8 +206,8 @@ func newReleaseCreateCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Release created")
-				fmt.Println()
-				printReleaseDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printReleaseDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -261,11 +262,11 @@ func newReleaseListCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No releases found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No releases found")
 					return nil
 				}
 				for _, rel := range result.Data {
-					printReleaseLine(rel)
+					printReleaseLine(cmd.OutOrStdout(), rel)
 				}
 			}
 			return nil
@@ -303,7 +304,7 @@ func newReleaseShowCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				printReleaseDetails(result.Data)
+				printReleaseDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -380,8 +381,8 @@ func newReleaseEditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Release updated")
-				fmt.Println()
-				printReleaseDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printReleaseDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -474,7 +475,7 @@ uploads the files to the s3 push remote's bucket.`,
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Recorded %d artifact(s) on %s", len(result.Data.Files), version))
 				for _, f := range result.Data.Files {
-					fmt.Printf("  %s  %s  %d bytes\n", f.SHA256[:12], f.Filename, f.Size)
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s  %s  %d bytes\n", f.SHA256[:12], f.Filename, f.Size)
 				}
 			}
 			return nil
@@ -504,21 +505,21 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No artifacts found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No artifacts found")
 					return nil
 				}
 				for _, f := range result.Data {
 					if f.SHA256 == "" {
 						// Externally hosted artifact (artifact-url fallback): the
 						// record carries only filenames.
-						fmt.Println(f.Filename)
+						fmt.Fprintln(cmd.OutOrStdout(), f.Filename)
 						continue
 					}
 					sha := f.SHA256
 					if len(sha) > 12 {
 						sha = sha[:12]
 					}
-					fmt.Printf("%s  %s  %d bytes\n", sha, f.Filename, f.Size)
+					fmt.Fprintf(cmd.OutOrStdout(), "%s  %s  %d bytes\n", sha, f.Filename, f.Size)
 				}
 			}
 			return nil
@@ -553,7 +554,7 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 					filenames = append(filenames, info.Filename)
 				}
 				if len(filenames) == 0 {
-					fmt.Println("No artifacts found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No artifacts found")
 					return nil
 				}
 			}
@@ -564,14 +565,14 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 					PrintError(cmd, fmt.Sprintf("%s: %s", filename, res.Error.Text()))
 					continue
 				}
-				fmt.Printf("Saved %s → %s\n", filename, res.Data)
+				fmt.Fprintf(cmd.OutOrStdout(), "Saved %s → %s\n", filename, res.Data)
 			}
 			return nil
 		},
 	}
 }
 
-func printReleaseLine(rel release.Release) {
+func printReleaseLine(out io.Writer, rel release.Release) {
 	icon := "⏏"
 	if rel.Prerelease {
 		icon = "◇"
@@ -586,38 +587,38 @@ func printReleaseLine(rel release.Release) {
 	}
 
 	dateStr := rel.Timestamp.Format("2006-01-02")
-	fmt.Printf("%s %s  %s  %s\n", icon, versionStr, rel.Subject, dateStr)
+	fmt.Fprintf(out, "%s %s  %s  %s\n", icon, versionStr, rel.Subject, dateStr)
 }
 
-func printReleaseDetails(rel release.Release) {
-	fmt.Printf("Release: %s\n", rel.ID)
+func printReleaseDetails(out io.Writer, rel release.Release) {
+	fmt.Fprintf(out, "Release: %s\n", rel.ID)
 
 	if rel.Version != "" {
-		fmt.Printf("Version: %s\n", rel.Version)
+		fmt.Fprintf(out, "Version: %s\n", rel.Version)
 	}
 	if rel.Tag != "" {
-		fmt.Printf("Tag: %s\n", rel.Tag)
+		fmt.Fprintf(out, "Tag: %s\n", rel.Tag)
 	}
 	if rel.Prerelease {
-		fmt.Println("Pre-release: yes")
+		fmt.Fprintln(out, "Pre-release: yes")
 	}
 
 	authorName, authorEmail, created := ResolveDisplayIdentity(rel.Author.Name, rel.Author.Email, rel.Timestamp, rel.Origin)
-	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, rel.Repository, protocol.ParseRef(rel.ID).Value))
-	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
+	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, rel.Repository, protocol.ParseRef(rel.ID).Value))
+	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
 
 	if len(rel.Labels) > 0 {
-		fmt.Printf("Labels: %s\n", strings.Join(rel.Labels, ", "))
+		fmt.Fprintf(out, "Labels: %s\n", strings.Join(rel.Labels, ", "))
 	}
 
 	if len(rel.Artifacts) > 0 {
-		fmt.Printf("Artifacts: %s\n", strings.Join(rel.Artifacts, ", "))
+		fmt.Fprintf(out, "Artifacts: %s\n", strings.Join(rel.Artifacts, ", "))
 	}
 	if rel.ArtifactURL != "" {
-		fmt.Printf("Artifact URL: %s\n", rel.ArtifactURL)
+		fmt.Fprintf(out, "Artifact URL: %s\n", rel.ArtifactURL)
 	}
 	if rel.Checksums != "" {
-		fmt.Printf("Checksums: %s\n", rel.Checksums)
+		fmt.Fprintf(out, "Checksums: %s\n", rel.Checksums)
 	}
 	if rel.SBOM != "" {
 		sbomLine := rel.SBOM
@@ -628,9 +629,9 @@ func printReleaseDetails(rel release.Release) {
 			}
 			if summary, err := release.GetSBOMSummary(".", repoURL, rel.Version, rel.SBOM, rel.ArtifactURL); err == nil {
 				sbomLine += fmt.Sprintf(" (%s) · %d packages", summary.Format, summary.Packages)
-				fmt.Printf("SBOM: %s\n", sbomLine)
+				fmt.Fprintf(out, "SBOM: %s\n", sbomLine)
 				if summary.Generator != "" {
-					fmt.Printf("  Generator: %s\n", summary.Generator)
+					fmt.Fprintf(out, "  Generator: %s\n", summary.Generator)
 				}
 				if len(summary.Licenses) > 0 {
 					entries := release.SortedLicenses(summary.Licenses)
@@ -638,25 +639,25 @@ func printReleaseDetails(rel release.Release) {
 					for _, e := range entries {
 						parts = append(parts, fmt.Sprintf("%d %s", e.Count, e.Name))
 					}
-					fmt.Printf("  Licenses: %s\n", strings.Join(parts, " · "))
+					fmt.Fprintf(out, "  Licenses: %s\n", strings.Join(parts, " · "))
 				}
 			} else {
-				fmt.Printf("SBOM: %s\n", sbomLine)
+				fmt.Fprintf(out, "SBOM: %s\n", sbomLine)
 			}
 		} else {
-			fmt.Printf("SBOM: %s\n", sbomLine)
+			fmt.Fprintf(out, "SBOM: %s\n", sbomLine)
 		}
 	}
 	if rel.SignedBy != "" {
-		fmt.Printf("Signed by: %s\n", rel.SignedBy)
+		fmt.Fprintf(out, "Signed by: %s\n", rel.SignedBy)
 	}
 	if rel.IsEdited {
-		fmt.Println("(edited)")
+		fmt.Fprintln(out, "(edited)")
 	}
 
 	if rel.Body != "" {
-		fmt.Println()
-		fmt.Println(rel.Body)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, rel.Body)
 	}
 }
 
@@ -703,7 +704,7 @@ func newReleaseSBOMCmd() *cobra.Command {
 						return err
 					}
 				} else {
-					fmt.Print(rawRes.Data)
+					fmt.Fprint(cmd.OutOrStdout(), rawRes.Data)
 				}
 				return nil
 			}
@@ -722,23 +723,23 @@ func newReleaseSBOMCmd() *cobra.Command {
 				return PrintJSON(cmd, summary)
 			}
 
-			fmt.Printf("SBOM: %s\n", rel.SBOM)
-			fmt.Printf("Format: %s\n", summary.Format)
-			fmt.Printf("Packages: %d\n", summary.Packages)
+			fmt.Fprintf(cmd.OutOrStdout(), "SBOM: %s\n", rel.SBOM)
+			fmt.Fprintf(cmd.OutOrStdout(), "Format: %s\n", summary.Format)
+			fmt.Fprintf(cmd.OutOrStdout(), "Packages: %d\n", summary.Packages)
 			if summary.Generator != "" {
-				fmt.Printf("Generator: %s\n", summary.Generator)
+				fmt.Fprintf(cmd.OutOrStdout(), "Generator: %s\n", summary.Generator)
 			}
 			if len(summary.Licenses) > 0 {
-				fmt.Println()
-				fmt.Println("Licenses:")
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "Licenses:")
 				entries := release.SortedLicenses(summary.Licenses)
 				for _, e := range entries {
-					fmt.Printf("  %3d  %s\n", e.Count, e.Name)
+					fmt.Fprintf(cmd.OutOrStdout(), "  %3d  %s\n", e.Count, e.Name)
 				}
 			}
 			if len(summary.Items) > 0 {
-				fmt.Println()
-				fmt.Println("Packages:")
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "Packages:")
 				nameW, verW := 20, 10
 				for _, p := range summary.Items {
 					if len(p.Name) > nameW {
@@ -754,13 +755,13 @@ func newReleaseSBOMCmd() *cobra.Command {
 				if verW > 20 {
 					verW = 20
 				}
-				fmt.Printf("  %-*s  %-*s  %s\n", nameW, "NAME", verW, "VERSION", "LICENSE")
+				fmt.Fprintf(cmd.OutOrStdout(), "  %-*s  %-*s  %s\n", nameW, "NAME", verW, "VERSION", "LICENSE")
 				for _, p := range summary.Items {
 					name := p.Name
 					if len(name) > nameW {
 						name = name[:nameW-1] + "…"
 					}
-					fmt.Printf("  %-*s  %-*s  %s\n", nameW, name, verW, p.Version, p.License)
+					fmt.Fprintf(cmd.OutOrStdout(), "  %-*s  %-*s  %s\n", nameW, name, verW, p.Version, p.License)
 				}
 			}
 			return nil

@@ -102,11 +102,11 @@ func newForkListCmd() *cobra.Command {
 				return PrintJSON(cmd, out)
 			} else {
 				if len(forks) == 0 {
-					fmt.Println("No forks registered")
+					fmt.Fprintln(cmd.OutOrStdout(), "No forks registered")
 					return nil
 				}
 				for _, f := range forks {
-					fmt.Println(f)
+					fmt.Fprintln(cmd.OutOrStdout(), f)
 				}
 			}
 			return nil

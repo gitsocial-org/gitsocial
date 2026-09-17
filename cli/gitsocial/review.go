@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -74,11 +75,11 @@ func newReviewStatusCmd() *cobra.Command {
 					"forks":         len(forks),
 				})
 			} else {
-				fmt.Println("Review:")
-				fmt.Printf("  Branch: %s\n", branch)
-				fmt.Printf("  Pull Requests: %d (%d open)\n", count, openCount)
+				fmt.Fprintln(cmd.OutOrStdout(), "Review:")
+				fmt.Fprintf(cmd.OutOrStdout(), "  Branch: %s\n", branch)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Pull Requests: %d (%d open)\n", count, openCount)
 				if len(forks) > 0 {
-					fmt.Printf("  Forks: %d\n", len(forks))
+					fmt.Fprintf(cmd.OutOrStdout(), "  Forks: %d\n", len(forks))
 				}
 			}
 			return nil
@@ -205,7 +206,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 				headParsed := protocol.ParseRef(protocol.LocalizeRef(protocol.EnsureBranchRef(head), gitmsg.ResolveRepoURL(cfg.WorkDir)))
 				if headParsed.Repository == "" && headParsed.Value != "" {
 					if unpushed, err := git.GetUnpushedCommits(cfg.WorkDir, headParsed.Value); err == nil && len(unpushed) > 0 {
-						fmt.Printf("warning: local %s is %d commit(s) ahead of origin — those commits won't be in the PR until you push.\n",
+						fmt.Fprintf(cmd.OutOrStdout(), "warning: local %s is %d commit(s) ahead of origin — those commits won't be in the PR until you push.\n",
 							headParsed.Value, len(unpushed))
 					}
 				}
@@ -240,8 +241,8 @@ func newReviewPRCreateCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request created")
-				fmt.Println()
-				printPRDetails(cfg.WorkDir, result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printPRDetails(cmd.OutOrStdout(), cfg.WorkDir, result.Data)
 			}
 			return nil
 		},
@@ -307,11 +308,11 @@ func newReviewPRListCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No pull requests found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No pull requests found")
 					return nil
 				}
 				for _, pr := range result.Data {
-					printPRLine(pr)
+					printPRLine(cmd.OutOrStdout(), pr)
 				}
 			}
 			return nil
@@ -366,25 +367,25 @@ func newReviewPRShowCmd() *cobra.Command {
 				}
 				return PrintJSON(cmd, data)
 			} else {
-				printPRDetails(cfg.WorkDir, pr)
+				printPRDetails(cmd.OutOrStdout(), cfg.WorkDir, pr)
 
 				// Version-aware reviews
 				vaRes := review.GetVersionAwareReviews(cfg.WorkDir, args[0])
 				if vaRes.Success && len(vaRes.Data) > 0 {
-					fmt.Println()
-					fmt.Println("Reviews:")
+					fmt.Fprintln(cmd.OutOrStdout())
+					fmt.Fprintln(cmd.OutOrStdout(), "Reviews:")
 					for _, r := range vaRes.Data {
-						printVersionAwareReview(r)
+						printVersionAwareReview(cmd.OutOrStdout(), r)
 					}
 				}
 
 				// Show feedback
 				feedbackResult := review.GetFeedbackForPR(pr.Repository, extractHash(pr.ID), pr.Branch)
 				if feedbackResult.Success && len(feedbackResult.Data) > 0 {
-					fmt.Println()
-					fmt.Println("Feedback:")
+					fmt.Fprintln(cmd.OutOrStdout())
+					fmt.Fprintln(cmd.OutOrStdout(), "Feedback:")
 					for _, r := range feedbackResult.Data {
-						printFeedbackLine(r)
+						printFeedbackLine(cmd.OutOrStdout(), r)
 					}
 				}
 
@@ -392,9 +393,9 @@ func newReviewPRShowCmd() *cobra.Command {
 				if showVersions {
 					vRes := review.GetPRVersions(pr.ID, gitmsg.ResolveRepoURL(cfg.WorkDir))
 					if vRes.Success && len(vRes.Data) > 0 {
-						fmt.Println()
-						fmt.Println("Versions:")
-						fmt.Printf("  %-4s %-10s %-14s %-14s %-12s %s\n", "#", "Label", "Base-Tip", "Head-Tip", "Author", "Date")
+						fmt.Fprintln(cmd.OutOrStdout())
+						fmt.Fprintln(cmd.OutOrStdout(), "Versions:")
+						fmt.Fprintf(cmd.OutOrStdout(), "  %-4s %-10s %-14s %-14s %-12s %s\n", "#", "Label", "Base-Tip", "Head-Tip", "Author", "Date")
 						for _, v := range vRes.Data {
 							baseTip := v.BaseTip
 							if baseTip == "" {
@@ -404,7 +405,7 @@ func newReviewPRShowCmd() *cobra.Command {
 							if headTip == "" {
 								headTip = "-"
 							}
-							fmt.Printf("  %-4d %-10s %-14s %-14s %-12s %s\n",
+							fmt.Fprintf(cmd.OutOrStdout(), "  %-4d %-10s %-14s %-14s %-12s %s\n",
 								v.Number, v.Label, baseTip, headTip, v.AuthorName, v.Timestamp.Format("2006-01-02"))
 						}
 					}
@@ -478,8 +479,8 @@ func newReviewPREditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request updated")
-				fmt.Println()
-				printPRDetails(cfg.WorkDir, result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printPRDetails(cmd.OutOrStdout(), cfg.WorkDir, result.Data)
 			}
 			return nil
 		},
@@ -684,7 +685,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 					"range_diff": result.Data,
 				})
 			} else {
-				fmt.Print(result.Data)
+				fmt.Fprint(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -808,7 +809,7 @@ func newReviewPRStackCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				fmt.Printf("Stack (%d PRs):\n", len(result.Data))
+				fmt.Fprintf(cmd.OutOrStdout(), "Stack (%d PRs):\n", len(result.Data))
 				for _, entry := range result.Data {
 					pr := entry.PullRequest
 					icon := "  "
@@ -826,7 +827,7 @@ func newReviewPRStackCmd() *cobra.Command {
 					}
 					baseShort := shortenBranchRef(pr.Base)
 					headShort := shortenBranchRef(pr.Head)
-					fmt.Printf("  %s#%-2d %s  %s ← %s  [%s]\n",
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s#%-2d %s  %s ← %s  [%s]\n",
 						icon, entry.Position+1, pr.Subject, baseShort, headShort, pr.State)
 				}
 			}
@@ -857,7 +858,7 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				for _, pr := range result.Data {
-					fmt.Printf("  Rebased: %s (%s ← %s)\n", pr.Subject, shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
+					fmt.Fprintf(cmd.OutOrStdout(), "  Rebased: %s (%s ← %s)\n", pr.Subject, shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
 				}
 				PrintSuccess(cmd, fmt.Sprintf("Rebased %d PR(s) in the stack", len(result.Data)))
 			}
@@ -1142,11 +1143,11 @@ func newReviewForkListCmd() *cobra.Command {
 				return PrintJSON(cmd, forks)
 			} else {
 				if len(forks) == 0 {
-					fmt.Println("No forks registered")
+					fmt.Fprintln(cmd.OutOrStdout(), "No forks registered")
 					return nil
 				}
 				for _, f := range forks {
-					fmt.Println(f)
+					fmt.Fprintln(cmd.OutOrStdout(), f)
 				}
 			}
 			return nil
@@ -1156,7 +1157,7 @@ func newReviewForkListCmd() *cobra.Command {
 
 // --- helpers ---
 
-func printPRLine(pr review.PullRequest) {
+func printPRLine(out io.Writer, pr review.PullRequest) {
 	icon := "⑂"
 	stateStr := string(pr.State)
 	if pr.IsDraft {
@@ -1165,34 +1166,34 @@ func printPRLine(pr review.PullRequest) {
 	dateStr := pr.Timestamp.Format("2006-01-02")
 	baseShort := shortenBranchRef(pr.Base)
 	headShort := shortenBranchRef(pr.Head)
-	fmt.Printf("%s %s  %s ← %s  [%s]  %s\n", icon, pr.Subject, baseShort, headShort, stateStr, dateStr)
+	fmt.Fprintf(out, "%s %s  %s ← %s  [%s]  %s\n", icon, pr.Subject, baseShort, headShort, stateStr, dateStr)
 }
 
-func printPRDetails(workdir string, pr review.PullRequest) {
-	fmt.Printf("Pull Request: %s\n", pr.ID)
+func printPRDetails(out io.Writer, workdir string, pr review.PullRequest) {
+	fmt.Fprintf(out, "Pull Request: %s\n", pr.ID)
 	if pr.IsDraft {
-		fmt.Printf("State: %s (draft)\n", pr.State)
+		fmt.Fprintf(out, "State: %s (draft)\n", pr.State)
 	} else {
-		fmt.Printf("State: %s\n", pr.State)
+		fmt.Fprintf(out, "State: %s\n", pr.State)
 	}
 	authorName, authorEmail, created := ResolveDisplayIdentity(pr.Author.Name, pr.Author.Email, pr.Timestamp, pr.Origin)
-	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, pr.Repository, protocol.ParseRef(pr.ID).Value))
-	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
+	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, pr.Repository, protocol.ParseRef(pr.ID).Value))
+	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
 	var observation *review.PRObservation
 	if pr.State == review.PRStateOpen {
 		observation = review.ObserveLivePR(workdir, pr)
 	}
 	if pr.Base != "" {
-		fmt.Printf("Base: %s%s\n", pr.Base, formatTipStaleMarker("base", pr.BaseTip, observation))
+		fmt.Fprintf(out, "Base: %s%s\n", pr.Base, formatTipStaleMarker("base", pr.BaseTip, observation))
 	}
 	if pr.Head != "" {
-		fmt.Printf("Head: %s%s\n", pr.Head, formatTipStaleMarker("head", pr.HeadTip, observation))
+		fmt.Fprintf(out, "Head: %s%s\n", pr.Head, formatTipStaleMarker("head", pr.HeadTip, observation))
 	}
 	// Fork info
 	headParsed := protocol.ParseRef(pr.Head)
 	wsURL := gitmsg.ResolveRepoURL(workdir)
 	if headParsed.Repository != "" && headParsed.Repository != wsURL {
-		fmt.Printf("Fork: %s\n", headParsed.Repository)
+		fmt.Fprintf(out, "Fork: %s\n", headParsed.Repository)
 	}
 	// Behind count
 	if pr.State == review.PRStateOpen {
@@ -1200,24 +1201,24 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 		headName := headParsed.Value
 		if baseName != "" && headName != "" && (headParsed.Repository == "" || headParsed.Repository == wsURL) {
 			if behind, err := git.GetBehindCount(workdir, baseName, headName); err == nil && behind > 0 {
-				fmt.Printf("Behind: %d commits behind %s\n", behind, baseName)
+				fmt.Fprintf(out, "Behind: %d commits behind %s\n", behind, baseName)
 			}
 		}
 	}
 	if len(pr.Labels) > 0 {
-		fmt.Printf("Labels: %s\n", strings.Join(pr.Labels, ", "))
+		fmt.Fprintf(out, "Labels: %s\n", strings.Join(pr.Labels, ", "))
 	}
 	if len(pr.Reviewers) > 0 {
-		fmt.Printf("Reviewers: %s\n", strings.Join(pr.Reviewers, ", "))
+		fmt.Fprintf(out, "Reviewers: %s\n", strings.Join(pr.Reviewers, ", "))
 	}
 	if len(pr.DependsOn) > 0 {
-		fmt.Printf("Depends on: %s\n", strings.Join(pr.DependsOn, ", "))
+		fmt.Fprintf(out, "Depends on: %s\n", strings.Join(pr.DependsOn, ", "))
 	}
 	if len(pr.Closes) > 0 {
-		fmt.Printf("Closes: %s\n", strings.Join(pr.Closes, ", "))
+		fmt.Fprintf(out, "Closes: %s\n", strings.Join(pr.Closes, ", "))
 	}
 	if pr.IsEdited {
-		fmt.Println("(edited)")
+		fmt.Fprintln(out, "(edited)")
 	}
 
 	// Merge/close metadata
@@ -1225,32 +1226,32 @@ func printPRDetails(workdir string, pr review.PullRequest) {
 	switch pr.State {
 	case review.PRStateMerged:
 		if info, err := review.GetStateChangeInfo(pr.Repository, hash, pr.Branch, review.PRStateMerged); err == nil {
-			fmt.Printf("Merged by: %s <%s> on %s\n", info.AuthorName, info.AuthorEmail, info.Timestamp.Format(time.RFC3339))
+			fmt.Fprintf(out, "Merged by: %s <%s> on %s\n", info.AuthorName, info.AuthorEmail, info.Timestamp.Format(time.RFC3339))
 		}
 	case review.PRStateClosed:
 		if info, err := review.GetStateChangeInfo(pr.Repository, hash, pr.Branch, review.PRStateClosed); err == nil {
-			fmt.Printf("Closed by: %s <%s> on %s\n", info.AuthorName, info.AuthorEmail, info.Timestamp.Format(time.RFC3339))
+			fmt.Fprintf(out, "Closed by: %s <%s> on %s\n", info.AuthorName, info.AuthorEmail, info.Timestamp.Format(time.RFC3339))
 		}
 	}
 
 	summary := pr.ReviewSummary
 	if summary.Approved > 0 || summary.ChangesRequested > 0 || summary.Pending > 0 {
-		fmt.Printf("Review: %d approved, %d changes requested, %d pending\n",
+		fmt.Fprintf(out, "Review: %d approved, %d changes requested, %d pending\n",
 			summary.Approved, summary.ChangesRequested, summary.Pending)
 	}
 
 	ref := protocol.ParseRef(pr.ID)
 	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(refs) > 0 {
-		fmt.Printf("\nReferenced by:\n")
+		fmt.Fprintf(out, "\nReferenced by:\n")
 		for _, r := range refs {
 			subject, _ := protocol.SplitSubjectBody(r.Message)
-			fmt.Printf("  %s %s (%s)  %s\n", r.Hash[:12], subject, r.AuthorName, r.TrailerKey)
+			fmt.Fprintf(out, "  %s %s (%s)  %s\n", r.Hash[:12], subject, r.AuthorName, r.TrailerKey)
 		}
 	}
 
 	if pr.Body != "" {
-		fmt.Println()
-		fmt.Println(pr.Body)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, pr.Body)
 	}
 }
 
@@ -1281,7 +1282,7 @@ func formatTipStaleMarker(side, storedTip string, obs *review.PRObservation) str
 	return "  ⚠ updated to #" + observedTip + " (run `pr update`)"
 }
 
-func printVersionAwareReview(r review.VersionAwareReview) {
+func printVersionAwareReview(out io.Writer, r review.VersionAwareReview) {
 	icon := "  "
 	switch r.State {
 	case review.ReviewStateApproved:
@@ -1308,10 +1309,10 @@ func printVersionAwareReview(r review.VersionAwareReview) {
 	if r.Stale {
 		stale = " [stale]"
 	}
-	fmt.Printf("  %s%-25s %s%s\n", icon, r.ReviewerEmail, status, stale)
+	fmt.Fprintf(out, "  %s%-25s %s%s\n", icon, r.ReviewerEmail, status, stale)
 }
 
-func printFeedbackLine(r review.Feedback) {
+func printFeedbackLine(out io.Writer, r review.Feedback) {
 	icon := "  "
 	switch r.ReviewState {
 	case review.ReviewStateApproved:
@@ -1331,7 +1332,7 @@ func printFeedbackLine(r review.Feedback) {
 	}
 
 	dateStr := r.Timestamp.Format("2006-01-02 15:04")
-	fmt.Printf("%s%s%s  %s  %s\n", icon, r.Author.Name, location, dateStr, truncate(r.Content, 60))
+	fmt.Fprintf(out, "%s%s%s  %s  %s\n", icon, r.Author.Name, location, dateStr, truncate(r.Content, 60))
 }
 
 func readStdinSubjectBody() (string, string) {

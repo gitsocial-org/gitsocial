@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -22,17 +23,17 @@ import (
 const pmExt = "pm"
 
 // warnIfFeatureHidden prints a warning if the feature is hidden by the current framework.
-func warnIfFeatureHidden(workdir string, feature string) {
+func warnIfFeatureHidden(out io.Writer, workdir string, feature string) {
 	hasMilestones, hasSprints := pm.FrameworkFeatures(workdir)
 	config := pm.GetPMConfig(workdir)
 	switch feature {
 	case "milestone":
 		if !hasMilestones {
-			fmt.Fprintf(os.Stderr, "warning: milestones are not part of the '%s' framework; consider switching to 'kanban' or 'scrum'\n", config.Framework)
+			fmt.Fprintf(out, "warning: milestones are not part of the '%s' framework; consider switching to 'kanban' or 'scrum'\n", config.Framework)
 		}
 	case "sprint":
 		if !hasSprints {
-			fmt.Fprintf(os.Stderr, "warning: sprints are not part of the '%s' framework; consider switching to 'scrum'\n", config.Framework)
+			fmt.Fprintf(out, "warning: sprints are not part of the '%s' framework; consider switching to 'scrum'\n", config.Framework)
 		}
 	}
 }
@@ -48,7 +49,7 @@ func runRootThenWarn(cmd *cobra.Command, args []string, feature string) error {
 		}
 	}
 	if cfg := GetConfig(cmd); cfg != nil {
-		warnIfFeatureHidden(cfg.WorkDir, feature)
+		warnIfFeatureHidden(cmd.ErrOrStderr(), cfg.WorkDir, feature)
 	}
 	return nil
 }
@@ -108,10 +109,10 @@ func newPMStatusCmd() *cobra.Command {
 					"closed_issues": closedCount,
 				})
 			} else {
-				fmt.Println("PM:")
-				fmt.Printf("  Branch: %s\n", branch)
-				fmt.Printf("  Framework: %s\n", framework)
-				fmt.Printf("  Issues: %d open, %d closed\n", openCount, closedCount)
+				fmt.Fprintln(cmd.OutOrStdout(), "PM:")
+				fmt.Fprintf(cmd.OutOrStdout(), "  Branch: %s\n", branch)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Framework: %s\n", framework)
+				fmt.Fprintf(cmd.OutOrStdout(), "  Issues: %d open, %d closed\n", openCount, closedCount)
 			}
 			return nil
 		},
@@ -283,12 +284,12 @@ Sort by created, due or priority, each with :asc or :desc.`,
 				return PrintJSON(cmd, issues)
 			} else {
 				if len(items) == 0 {
-					fmt.Println("No issues found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No issues found")
 					return nil
 				}
 				for _, item := range items {
 					issue := pm.PMItemToIssue(item)
-					printIssueLine(issue)
+					printIssueLine(cmd.OutOrStdout(), issue)
 				}
 			}
 			return nil
@@ -330,7 +331,7 @@ func newPMIssueShowCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, issue)
 			} else {
-				printIssueDetails(issue)
+				printIssueDetails(cmd.OutOrStdout(), issue)
 			}
 			return nil
 		},
@@ -439,8 +440,8 @@ func newPMIssueCreateCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue created")
-				fmt.Println()
-				printIssueDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printIssueDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -556,8 +557,8 @@ func newPMIssueEditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue updated")
-				fmt.Println()
-				printIssueDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printIssueDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -752,13 +753,13 @@ func newPMIssueCommentsCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No comments")
+					fmt.Fprintln(cmd.OutOrStdout(), "No comments")
 					return nil
 				}
 				for _, comment := range result.Data {
-					fmt.Printf("%s %s <%s>\n", comment.Timestamp.Format("2006-01-02 15:04"), comment.Author.Name, comment.Author.Email)
-					fmt.Println(comment.Content)
-					fmt.Println()
+					fmt.Fprintf(cmd.OutOrStdout(), "%s %s <%s>\n", comment.Timestamp.Format("2006-01-02 15:04"), comment.Author.Name, comment.Author.Email)
+					fmt.Fprintln(cmd.OutOrStdout(), comment.Content)
+					fmt.Fprintln(cmd.OutOrStdout())
 				}
 			}
 			return nil
@@ -835,11 +836,11 @@ func newPMMilestoneListCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No milestones found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No milestones found")
 					return nil
 				}
 				for _, m := range result.Data {
-					printMilestoneLine(m)
+					printMilestoneLine(cmd.OutOrStdout(), m)
 				}
 			}
 			return nil
@@ -878,14 +879,14 @@ func newPMMilestoneShowCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, milestone)
 			} else {
-				printMilestoneDetails(milestone)
+				printMilestoneDetails(cmd.OutOrStdout(), milestone)
 
 				// Show linked issues
 				issueResult := pm.GetMilestoneIssues(milestone.ID, []string{string(pm.StateOpen), string(pm.StateClosed)})
 				if issueResult.Success && len(issueResult.Data) > 0 {
-					fmt.Println("\nLinked Issues:")
+					fmt.Fprintln(cmd.OutOrStdout(), "\nLinked Issues:")
 					for _, issue := range issueResult.Data {
-						printIssueLine(issue)
+						printIssueLine(cmd.OutOrStdout(), issue)
 					}
 				}
 			}
@@ -957,8 +958,8 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone created")
-				fmt.Println()
-				printMilestoneDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printMilestoneDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -1027,8 +1028,8 @@ func newPMMilestoneEditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone updated")
-				fmt.Println()
-				printMilestoneDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printMilestoneDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -1237,11 +1238,11 @@ func newPMSprintListCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
-					fmt.Println("No sprints found")
+					fmt.Fprintln(cmd.OutOrStdout(), "No sprints found")
 					return nil
 				}
 				for _, s := range result.Data {
-					printSprintLine(s)
+					printSprintLine(cmd.OutOrStdout(), s)
 				}
 			}
 			return nil
@@ -1280,14 +1281,14 @@ func newPMSprintShowCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, sprint)
 			} else {
-				printSprintDetails(sprint)
+				printSprintDetails(cmd.OutOrStdout(), sprint)
 
 				// Show linked issues
 				issueResult := pm.GetSprintIssues(sprint.ID, []string{string(pm.StateOpen), string(pm.StateClosed)})
 				if issueResult.Success && len(issueResult.Data) > 0 {
-					fmt.Println("\nLinked Issues:")
+					fmt.Fprintln(cmd.OutOrStdout(), "\nLinked Issues:")
 					for _, issue := range issueResult.Data {
-						printIssueLine(issue)
+						printIssueLine(cmd.OutOrStdout(), issue)
 					}
 				}
 			}
@@ -1371,8 +1372,8 @@ func newPMSprintCreateCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint created")
-				fmt.Println()
-				printSprintDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printSprintDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -1445,8 +1446,8 @@ func newPMSprintEditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint updated")
-				fmt.Println()
-				printSprintDetails(result.Data)
+				fmt.Fprintln(cmd.OutOrStdout())
+				printSprintDetails(cmd.OutOrStdout(), result.Data)
 			}
 			return nil
 		},
@@ -1582,7 +1583,7 @@ func newPMSprintDeleteCmd() *cobra.Command {
 	}
 }
 
-func printMilestoneLine(m pm.Milestone) {
+func printMilestoneLine(out io.Writer, m pm.Milestone) {
 	stateIcon := "◇"
 	switch m.State {
 	case pm.StateClosed:
@@ -1601,32 +1602,32 @@ func printMilestoneLine(m pm.Milestone) {
 		id = id[:12]
 	}
 
-	fmt.Printf("%s %s %s%s\n", stateIcon, id, m.Title, dueStr)
+	fmt.Fprintf(out, "%s %s %s%s\n", stateIcon, id, m.Title, dueStr)
 }
 
-func printMilestoneDetails(m pm.Milestone) {
+func printMilestoneDetails(out io.Writer, m pm.Milestone) {
 	authorName, authorEmail, created := ResolveDisplayIdentity(m.Author.Name, m.Author.Email, m.Timestamp, m.Origin)
-	fmt.Printf("Milestone: %s\n", m.ID)
-	fmt.Printf("State: %s\n", m.State)
-	fmt.Printf("Title: %s\n", m.Title)
-	fmt.Printf("Author: %s <%s>\n", authorName, authorEmail)
-	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
+	fmt.Fprintf(out, "Milestone: %s\n", m.ID)
+	fmt.Fprintf(out, "State: %s\n", m.State)
+	fmt.Fprintf(out, "Title: %s\n", m.Title)
+	fmt.Fprintf(out, "Author: %s <%s>\n", authorName, authorEmail)
+	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
 
 	if len(m.Labels) > 0 {
-		fmt.Printf("Labels: %s\n", strings.Join(m.Labels, ", "))
+		fmt.Fprintf(out, "Labels: %s\n", strings.Join(m.Labels, ", "))
 	}
 
 	if m.Due != nil {
-		fmt.Printf("Due: %s\n", m.Due.Format("2006-01-02"))
+		fmt.Fprintf(out, "Due: %s\n", m.Due.Format("2006-01-02"))
 	}
 
 	if m.Body != "" {
-		fmt.Println()
-		fmt.Println(m.Body)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, m.Body)
 	}
 }
 
-func printSprintLine(s pm.Sprint) {
+func printSprintLine(out io.Writer, s pm.Sprint) {
 	stateIcon := "◷"
 	switch s.State {
 	case pm.SprintStateActive:
@@ -1644,30 +1645,30 @@ func printSprintLine(s pm.Sprint) {
 		id = id[:12]
 	}
 
-	fmt.Printf("%s %s %s (%s)\n", stateIcon, id, s.Title, dateRange)
+	fmt.Fprintf(out, "%s %s %s (%s)\n", stateIcon, id, s.Title, dateRange)
 }
 
-func printSprintDetails(s pm.Sprint) {
+func printSprintDetails(out io.Writer, s pm.Sprint) {
 	authorName, authorEmail, created := ResolveDisplayIdentity(s.Author.Name, s.Author.Email, s.Timestamp, s.Origin)
-	fmt.Printf("Sprint: %s\n", s.ID)
-	fmt.Printf("State: %s\n", s.State)
-	fmt.Printf("Title: %s\n", s.Title)
-	fmt.Printf("Author: %s <%s>\n", authorName, authorEmail)
-	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
-	fmt.Printf("Start: %s\n", s.Start.Format("2006-01-02"))
-	fmt.Printf("End: %s\n", s.End.Format("2006-01-02"))
+	fmt.Fprintf(out, "Sprint: %s\n", s.ID)
+	fmt.Fprintf(out, "State: %s\n", s.State)
+	fmt.Fprintf(out, "Title: %s\n", s.Title)
+	fmt.Fprintf(out, "Author: %s <%s>\n", authorName, authorEmail)
+	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
+	fmt.Fprintf(out, "Start: %s\n", s.Start.Format("2006-01-02"))
+	fmt.Fprintf(out, "End: %s\n", s.End.Format("2006-01-02"))
 
 	if len(s.Labels) > 0 {
-		fmt.Printf("Labels: %s\n", strings.Join(s.Labels, ", "))
+		fmt.Fprintf(out, "Labels: %s\n", strings.Join(s.Labels, ", "))
 	}
 
 	if s.Body != "" {
-		fmt.Println()
-		fmt.Println(s.Body)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, s.Body)
 	}
 }
 
-func printIssueLine(issue pm.Issue) {
+func printIssueLine(out io.Writer, issue pm.Issue) {
 	stateIcon := "○"
 	if issue.State == pm.StateClosed {
 		stateIcon = "●"
@@ -1687,21 +1688,21 @@ func printIssueLine(issue pm.Issue) {
 		labelsDisplay = " [" + strings.Join(labelStrs, ", ") + "]"
 	}
 
-	fmt.Printf("%s %s %s%s\n", stateIcon, issue.ID, issue.Subject, labelsDisplay)
+	fmt.Fprintf(out, "%s %s %s%s\n", stateIcon, issue.ID, issue.Subject, labelsDisplay)
 }
 
-func printIssueDetails(issue pm.Issue) {
+func printIssueDetails(out io.Writer, issue pm.Issue) {
 	stateDisplay := "open"
 	if issue.State == pm.StateClosed {
 		stateDisplay = "closed"
 	}
 
 	authorName, authorEmail, created := ResolveDisplayIdentity(issue.Author.Name, issue.Author.Email, issue.Timestamp, issue.Origin)
-	fmt.Printf("Issue: %s\n", issue.ID)
-	fmt.Printf("State: %s\n", stateDisplay)
-	fmt.Printf("Subject: %s\n", issue.Subject)
-	fmt.Printf("Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, issue.Repository, protocol.ParseRef(issue.ID).Value))
-	fmt.Printf("Created: %s\n", created.Format(time.RFC3339))
+	fmt.Fprintf(out, "Issue: %s\n", issue.ID)
+	fmt.Fprintf(out, "State: %s\n", stateDisplay)
+	fmt.Fprintf(out, "Subject: %s\n", issue.Subject)
+	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, issue.Repository, protocol.ParseRef(issue.ID).Value))
+	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
 
 	if len(issue.Labels) > 0 {
 		var labelStrs []string
@@ -1712,40 +1713,40 @@ func printIssueDetails(issue pm.Issue) {
 				labelStrs = append(labelStrs, l.Value)
 			}
 		}
-		fmt.Printf("Labels: %s\n", strings.Join(labelStrs, ", "))
+		fmt.Fprintf(out, "Labels: %s\n", strings.Join(labelStrs, ", "))
 	}
 
 	if len(issue.Assignees) > 0 {
-		fmt.Printf("Assignees: %s\n", strings.Join(issue.Assignees, ", "))
+		fmt.Fprintf(out, "Assignees: %s\n", strings.Join(issue.Assignees, ", "))
 	}
 
 	if issue.Due != nil {
-		fmt.Printf("Due: %s\n", issue.Due.Format("2006-01-02"))
+		fmt.Fprintf(out, "Due: %s\n", issue.Due.Format("2006-01-02"))
 	}
 
 	// Parent — a direct child's root IS its parent (GITPM.md §1.7).
 	if parentRef := issue.Parent; parentRef != nil {
-		fmt.Printf("Parent: %s\n", formatParentDisplay(*parentRef))
+		fmt.Fprintf(out, "Parent: %s\n", formatParentDisplay(*parentRef))
 	} else if issue.Root != nil {
-		fmt.Printf("Parent: %s\n", formatParentDisplay(*issue.Root))
+		fmt.Fprintf(out, "Parent: %s\n", formatParentDisplay(*issue.Root))
 	}
 
 	if len(issue.Blocks) > 0 {
-		fmt.Printf("Blocks: %s\n", formatIssueRefList(issue.Blocks))
+		fmt.Fprintf(out, "Blocks: %s\n", formatIssueRefList(issue.Blocks))
 	}
 	if len(issue.BlockedBy) > 0 {
-		fmt.Printf("Blocked by: %s\n", formatIssueRefList(issue.BlockedBy))
+		fmt.Fprintf(out, "Blocked by: %s\n", formatIssueRefList(issue.BlockedBy))
 	}
 	if len(issue.Related) > 0 {
-		fmt.Printf("Related: %s\n", formatIssueRefList(issue.Related))
+		fmt.Fprintf(out, "Related: %s\n", formatIssueRefList(issue.Related))
 	}
 
 	ref := protocol.ParseRef(issue.ID)
 	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(refs) > 0 {
-		fmt.Printf("\nReferenced by:\n")
+		fmt.Fprintf(out, "\nReferenced by:\n")
 		for _, r := range refs {
 			subject, _ := protocol.SplitSubjectBody(r.Message)
-			fmt.Printf("  %s %s (%s)  %s\n", r.Hash[:12], subject, r.AuthorName, r.TrailerKey)
+			fmt.Fprintf(out, "  %s %s (%s)  %s\n", r.Hash[:12], subject, r.AuthorName, r.TrailerKey)
 		}
 	}
 
@@ -1758,19 +1759,19 @@ func printIssueDetails(issue pm.Issue) {
 				open++
 			}
 		}
-		fmt.Printf("\nSub-issues (%d open, %d closed):\n", open, closed)
+		fmt.Fprintf(out, "\nSub-issues (%d open, %d closed):\n", open, closed)
 		for _, c := range childRes.Data {
 			icon := "○"
 			if c.State == pm.StateClosed {
 				icon = "●"
 			}
-			fmt.Printf("  %s %s  %s\n", icon, c.Subject, protocol.FormatShortRef(c.ID, ""))
+			fmt.Fprintf(out, "  %s %s  %s\n", icon, c.Subject, protocol.FormatShortRef(c.ID, ""))
 		}
 	}
 
 	if issue.Body != "" {
-		fmt.Println()
-		fmt.Println(issue.Body)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, issue.Body)
 	}
 }
 
@@ -1820,14 +1821,15 @@ func newPMBoardCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, board)
 			} else {
-				printBoard(board)
+				printBoard(cmd.OutOrStdout(), board)
 			}
 			return nil
 		},
 	}
 }
 
-func printBoard(board pm.BoardView) {
+// printBoard writes the kanban board columns to out.
+func printBoard(out io.Writer, board pm.BoardView) {
 	// Calculate column widths
 	colWidth := 30
 	separator := strings.Repeat("─", colWidth)
@@ -1841,8 +1843,8 @@ func printBoard(board pm.BoardView) {
 		}
 		headers = append(headers, padRight(header, colWidth))
 	}
-	fmt.Println(strings.Join(headers, " │ "))
-	fmt.Println(strings.Repeat(separator+" ┼ ", len(board.Columns)-1) + separator)
+	fmt.Fprintln(out, strings.Join(headers, " │ "))
+	fmt.Fprintln(out, strings.Repeat(separator+" ┼ ", len(board.Columns)-1)+separator)
 
 	// Find max issues in any column
 	maxIssues := 0
@@ -1871,11 +1873,11 @@ func printBoard(board pm.BoardView) {
 				cells = append(cells, strings.Repeat(" ", colWidth))
 			}
 		}
-		fmt.Println(strings.Join(cells, " │ "))
+		fmt.Fprintln(out, strings.Join(cells, " │ "))
 	}
 
 	if maxIssues == 0 {
-		fmt.Println("  (no issues)")
+		fmt.Fprintln(out, "  (no issues)")
 	}
 }
 

@@ -59,7 +59,7 @@ func newExtConfigGetCmd(ext string) *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]string{"key": key, "value": value})
 			} else {
-				fmt.Println(value)
+				fmt.Fprintln(cmd.OutOrStdout(), value)
 			}
 			return nil
 		},
@@ -107,11 +107,11 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 				return PrintJSON(cmd, items)
 			} else {
 				if len(items) == 0 {
-					fmt.Println("No config set")
+					fmt.Fprintln(cmd.OutOrStdout(), "No config set")
 					return nil
 				}
 				for _, item := range items {
-					fmt.Printf("%s = %s\n", item.Key, item.Value)
+					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", item.Key, item.Value)
 				}
 			}
 			return nil
@@ -244,7 +244,7 @@ func newSiteConfigGetCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]string{"key": key, "value": val})
 			} else {
-				fmt.Println(val)
+				fmt.Fprintln(cmd.OutOrStdout(), val)
 			}
 			return nil
 		},
@@ -269,12 +269,12 @@ func newSiteConfigListCmd() *cobra.Command {
 				return PrintJSON(cmd, site)
 			}
 			if len(site) == 0 {
-				fmt.Println("No site customization set")
+				fmt.Fprintln(cmd.OutOrStdout(), "No site customization set")
 				return nil
 			}
 			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "filesInclude", "filesExclude"} {
 				if v, ok := site[k].(string); ok && v != "" {
-					fmt.Printf("%s = %s\n", k, siteConfigDisplay(k, v))
+					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", k, siteConfigDisplay(k, v))
 				}
 			}
 			return nil

@@ -11,6 +11,7 @@ import (
 )
 
 func TestExitCode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		code string
 		want int
@@ -34,6 +35,7 @@ func TestExitCode(t *testing.T) {
 }
 
 func TestWithConfig_GetConfig(t *testing.T) {
+	t.Parallel()
 	cfg := &Config{WorkDir: "/test", CacheDir: "/cache", JSONOutput: true}
 	ctx := WithConfig(context.Background(), cfg)
 
@@ -56,6 +58,7 @@ func TestWithConfig_GetConfig(t *testing.T) {
 }
 
 func TestGetConfig_nilContext(t *testing.T) {
+	t.Parallel()
 	cmd := &cobra.Command{}
 	got := GetConfig(cmd)
 	if got != nil {
@@ -64,6 +67,7 @@ func TestGetConfig_nilContext(t *testing.T) {
 }
 
 func TestGetConfig_noConfig(t *testing.T) {
+	t.Parallel()
 	cmd := &cobra.Command{}
 	cmd.SetContext(context.Background())
 	got := GetConfig(cmd)
@@ -73,6 +77,7 @@ func TestGetConfig_noConfig(t *testing.T) {
 }
 
 func TestExitConstants(t *testing.T) {
+	t.Parallel()
 	if ExitSuccess != 0 {
 		t.Errorf("ExitSuccess = %d, want 0", ExitSuccess)
 	}
@@ -87,6 +92,7 @@ func TestExitConstants(t *testing.T) {
 // TestStripCommentLines locks the §3.8 editor convention: `#`-prefixed lines
 // in the editor's saved content are dropped before the body is sent to memo.
 func TestStripCommentLines(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		in   string

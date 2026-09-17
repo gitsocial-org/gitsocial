@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -141,7 +142,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	}
 
 	if f.dryRun {
-		printMirrorPlan(forgeURL, wsDir, wsAction, targets, f)
+		printMirrorPlan(cmd.OutOrStdout(), forgeURL, wsDir, wsAction, targets, f)
 		return nil
 	}
 
@@ -149,11 +150,11 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	// Every later step is expensive and none of it is usable if the bucket is
 	// wrong, so the cheap check that can reject the run goes first.
 	for _, host := range mirrorEndpointHosts(targets) {
-		if err := ensureMirrorCredentials(wsCfg, host, !f.yes); err != nil {
+		if err := ensureMirrorCredentials(cmd, wsCfg, host, !f.yes); err != nil {
 			return err
 		}
 	}
-	if err := probeMirrorTargets(wsCfg, targets); err != nil {
+	if err := probeMirrorTargets(cmd, wsCfg, targets); err != nil {
 		return err
 	}
 
@@ -161,7 +162,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	// everything that mutates it.
 	if wsAction == "clone" {
 		if !wsCfg.JSONOutput {
-			fmt.Printf("Cloning %s into %s ...\n", forgeURL, wsDir)
+			fmt.Fprintf(cmd.OutOrStdout(), "Cloning %s into %s ...\n", forgeURL, wsDir)
 		}
 		ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
 		defer cancel()
@@ -176,20 +177,20 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	defer release()
 
 	if !wsCfg.JSONOutput {
-		fmt.Println("Fetching latest updates...")
+		fmt.Fprintln(cmd.OutOrStdout(), "Fetching latest updates...")
 	}
-	mirrorFetch(wsCfg, f, true)
+	mirrorFetch(cmd, wsCfg, f, true)
 	if !wsCfg.JSONOutput {
 		if wsAction == "clone" {
-			fmt.Printf("Workspace: cloned into %s\n", wsDir)
+			fmt.Fprintf(cmd.OutOrStdout(), "Workspace: cloned into %s\n", wsDir)
 		} else {
-			fmt.Printf("Workspace: %s (fetched)\n", wsDir)
+			fmt.Fprintf(cmd.OutOrStdout(), "Workspace: %s (fetched)\n", wsDir)
 		}
 	}
 
 	// Step 5: attach the bucket (remote + push default + site.publish), all
 	// set-if-absent.
-	if err := ensureMirrorTargets(wsCfg, targets, f.noSite); err != nil {
+	if err := ensureMirrorTargets(cmd, wsCfg, targets, f.noSite); err != nil {
 		return err
 	}
 
@@ -197,7 +198,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	var importStats importpkg.Stats
 	importRan := false
 	if !f.noImport {
-		importStats, err = runMirrorImport(wsCfg, forgeURL, f)
+		importStats, err = runMirrorImport(cmd, wsCfg, forgeURL, f)
 		if err != nil {
 			return err
 		}
@@ -205,25 +206,25 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 		// Post-import fetch so the cache reflects the freshly imported items
 		// (same tail the import command runs).
 		if !wsCfg.JSONOutput {
-			fmt.Println("\nIngesting imported items...")
+			fmt.Fprintln(cmd.OutOrStdout(), "\nIngesting imported items...")
 		}
-		mirrorFetch(wsCfg, f, false)
+		mirrorFetch(cmd, wsCfg, f, false)
 	} else if !wsCfg.JSONOutput {
-		fmt.Println("Import: skipped (--no-import)")
+		fmt.Fprintln(cmd.OutOrStdout(), "Import: skipped (--no-import)")
 	}
 
 	// Step 7: site config — read-before-write lives inside WriteExtConfig, so
 	// repeated sets are commit-free no-ops.
-	publicURL, err := applyMirrorSiteConfig(wsCfg, f)
+	publicURL, err := applyMirrorSiteConfig(cmd, wsCfg, f)
 	if err != nil {
 		return err
 	}
 
 	// Step 8: push data and code, then rebuild the site.
-	if err := syncMirrorBranches(wsCfg, f.defaultBranchOnly); err != nil {
+	if err := syncMirrorBranches(cmd, wsCfg, f.defaultBranchOnly); err != nil {
 		return err
 	}
-	pushErr := runMirrorPush(wsCfg, targets, f)
+	pushErr := runMirrorPush(cmd, wsCfg, targets, f)
 
 	// Step 9: report.
 	if wsCfg.JSONOutput {
@@ -242,7 +243,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 			return err
 		}
 	} else {
-		printMirrorReport(wsDir, publicURL, f.noSite)
+		printMirrorReport(cmd.OutOrStdout(), wsDir, publicURL, f.noSite)
 	}
 	if pushErr != nil {
 		return pushErr
@@ -444,17 +445,17 @@ func mirrorEndpointHosts(targets []mirrorTarget) []string {
 // When nothing resolves it prompts (TTY only, and only when allowed) and
 // stores the pair; otherwise it fails printing the exact setup command.
 // Resolving credentials are used as-is — never re-prompted, never rewritten.
-func ensureMirrorCredentials(cfg *Config, host string, allowPrompt bool) error {
+func ensureMirrorCredentials(cmd *cobra.Command, cfg *Config, host string, allowPrompt bool) error {
 	if objstore.HasCredentials(host) {
 		return nil
 	}
 	if !allowPrompt || !isatty.IsTerminal(os.Stdin.Fd()) {
 		return fmt.Errorf("no S3 credentials for %s: run gitsocial config credentials set %s", host, host)
 	}
-	fmt.Fprintf(os.Stderr, "No S3 credentials for %s.\n", host)
-	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprintf(cmd.ErrOrStderr(), "No S3 credentials for %s.\n", host)
+	reader := bufio.NewReader(cmd.InOrStdin())
 	readLine := func(prompt string) string {
-		fmt.Fprint(os.Stderr, prompt)
+		fmt.Fprint(cmd.ErrOrStderr(), prompt)
 		line, _ := reader.ReadString('\n')
 		return strings.TrimSpace(line)
 	}
@@ -472,7 +473,7 @@ func ensureMirrorCredentials(cfg *Config, host string, allowPrompt bool) error {
 		return err
 	}
 	if !cfg.JSONOutput {
-		fmt.Printf("Credentials: stored for %s\n", host)
+		fmt.Fprintf(cmd.OutOrStdout(), "Credentials: stored for %s\n", host)
 	}
 	return nil
 }
@@ -483,7 +484,7 @@ func ensureMirrorCredentials(cfg *Config, host string, allowPrompt bool) error {
 // or revoked key, missing bucket — from the work that would otherwise surface
 // them only at the push, after a clone, a fetch and a full import have already
 // run. Read-only: it lists, it never writes.
-func probeMirrorTargets(cfg *Config, targets []mirrorTarget) error {
+func probeMirrorTargets(cmd *cobra.Command, cfg *Config, targets []mirrorTarget) error {
 	for _, t := range targets {
 		if _, err := objstore.ListRemoteRefs(t.url, objstore.HelperEnvFromOS()); err != nil {
 			// Name the endpoint host, not the remote: on a cold start the remote
@@ -497,7 +498,7 @@ func probeMirrorTargets(cfg *Config, targets []mirrorTarget) error {
 		}
 	}
 	if !cfg.JSONOutput {
-		fmt.Printf("Bucket: reachable (%d target%s)\n", len(targets), plural(len(targets)))
+		fmt.Fprintf(cmd.OutOrStdout(), "Bucket: reachable (%d target%s)\n", len(targets), plural(len(targets)))
 	}
 	return nil
 }
@@ -511,9 +512,9 @@ func plural(n int) string {
 }
 
 // mirrorFetch refreshes the workspace: origin when fetchOrigin, and forks and lists under --full-fetch.
-func mirrorFetch(cfg *Config, f *mirrorFlags, fetchOrigin bool) {
+func mirrorFetch(cmd *cobra.Command, cfg *Config, f *mirrorFlags, fetchOrigin bool) {
 	if f.fullFetch {
-		runFullFetch(cfg, client.FetchOptions{}, true, !f.defaultBranchOnly)
+		runFullFetch(cmd, cfg, client.FetchOptions{}, true, !f.defaultBranchOnly)
 		return
 	}
 	if fetchOrigin {
@@ -521,7 +522,7 @@ func mirrorFetch(cfg *Config, f *mirrorFlags, fetchOrigin bool) {
 		client.SyncWorkspaceOrigin(cfg.WorkDir, opts)
 	}
 	if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: workspace sync: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: workspace sync: %v\n", err)
 	}
 }
 
@@ -529,7 +530,7 @@ func mirrorFetch(cfg *Config, f *mirrorFlags, fetchOrigin bool) {
 // match exists, records the s3 helper alias, appends the remote to the push
 // defaults, and (unless the site is skipped) enables site.publish. Every part
 // is set-if-absent, so re-runs change nothing.
-func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error {
+func ensureMirrorTargets(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, noSite bool) error {
 	for i := range targets {
 		t := &targets[i]
 		if !t.exists {
@@ -545,9 +546,9 @@ func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error
 		}
 		if !cfg.JSONOutput {
 			if t.exists {
-				fmt.Printf("Remote: reusing %q → %s\n", t.name, t.url)
+				fmt.Fprintf(cmd.OutOrStdout(), "Remote: reusing %q → %s\n", t.name, t.url)
 			} else {
-				fmt.Printf("Remote: added %q → %s (default push target)\n", t.name, t.url)
+				fmt.Fprintf(cmd.OutOrStdout(), "Remote: added %q → %s (default push target)\n", t.name, t.url)
 			}
 		}
 	}
@@ -559,7 +560,7 @@ func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error
 		return err
 	}
 	if !cfg.JSONOutput && !alreadyOn {
-		fmt.Println("Site rebuild enabled (site.publish = true)")
+		fmt.Fprintln(cmd.OutOrStdout(), "Site rebuild enabled (site.publish = true)")
 	}
 	return nil
 }
@@ -568,7 +569,7 @@ func ensureMirrorTargets(cfg *Config, targets []mirrorTarget, noSite bool) error
 // the import package. Per-item failures are reported and returned on Stats —
 // they do not abort the run, so the push still happens and a re-run retries
 // only the missing items (the mapping file skips what already imported).
-func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.Stats, error) {
+func runMirrorImport(cmd *cobra.Command, cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.Stats, error) {
 	repoURL := protocol.NormalizeURL(forgeURL)
 	repoInfo := protocol.ParseRepo(repoURL)
 	if repoInfo == nil {
@@ -583,7 +584,7 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 		return importpkg.Stats{}, err
 	}
 	if !cfg.JSONOutput {
-		fmt.Printf("Importing all from %s\n", repoURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Importing all from %s\n", repoURL)
 	}
 	fetchOpts := importpkg.FetchOptions{
 		RepoURL:  repoURL,
@@ -603,12 +604,12 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 	}
 	mapped := importpkg.CountMapped(mapping, counts)
 	if !cfg.JSONOutput {
-		printStatusTable(counts, mapped, importpkg.Stats{}, f.limit)
-		fmt.Println(mirrorImportPlanLine(counts, mapped))
+		printStatusTable(cmd.OutOrStdout(), counts, mapped, importpkg.Stats{}, f.limit)
+		fmt.Fprintln(cmd.OutOrStdout(), mirrorImportPlanLine(counts, mapped))
 	}
 	var spinner *importSpinner
 	if isatty.IsTerminal(os.Stderr.Fd()) && !cfg.JSONOutput {
-		spinner = newImportSpinner()
+		spinner = newImportSpinner(cmd.OutOrStdout(), cmd.ErrOrStderr())
 		spinner.Start()
 	}
 	stats, err := importpkg.Run(adapter, importpkg.Options{
@@ -627,7 +628,7 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 			if spinner != nil {
 				spinner.Update(ev)
 			} else {
-				printProgressLine(ev)
+				printProgressLine(cmd.OutOrStdout(), ev)
 			}
 		},
 	})
@@ -638,7 +639,7 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 		return stats, fmt.Errorf("import: %w", err)
 	}
 	for _, e := range stats.Errors {
-		fmt.Fprintf(os.Stderr, "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
+		fmt.Fprintf(cmd.ErrOrStderr(), "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
 	}
 	return stats, nil
 }
@@ -678,7 +679,7 @@ func mirrorImportPlanLine(found, mapped importpkg.ItemCounts) string {
 // applyMirrorSiteConfig sets site.url and site.pages when --url is given (the
 // crawlable layer and OG cards come up in the same run) and returns the public
 // URL to report — the flag's value, or the already-configured one.
-func applyMirrorSiteConfig(cfg *Config, f *mirrorFlags) (string, error) {
+func applyMirrorSiteConfig(cmd *cobra.Command, cfg *Config, f *mirrorFlags) (string, error) {
 	site := readSiteConfigMap(cfg.WorkDir)
 	configured, _ := site["url"].(string)
 	if f.noSite || f.url == "" {
@@ -697,9 +698,9 @@ func applyMirrorSiteConfig(cfg *Config, f *mirrorFlags) (string, error) {
 	}
 	if !cfg.JSONOutput {
 		if current {
-			fmt.Printf("Site config: url = %s, pages = true (already current)\n", norm)
+			fmt.Fprintf(cmd.OutOrStdout(), "Site config: url = %s, pages = true (already current)\n", norm)
 		} else {
-			fmt.Printf("Site config: url = %s, pages = true\n", norm)
+			fmt.Fprintf(cmd.OutOrStdout(), "Site config: url = %s, pages = true\n", norm)
 		}
 	}
 	return norm, nil
@@ -711,7 +712,7 @@ func applyMirrorSiteConfig(cfg *Config, f *mirrorFlags) (string, error) {
 // refs/remotes/origin/*. Creation and fast-forward only — a diverged local
 // branch is skipped with a warning, never overwritten. gitmsg/* branches are
 // excluded (the fetch already fast-forwards them with merge handling).
-func syncMirrorBranches(cfg *Config, defaultOnly bool) error {
+func syncMirrorBranches(cmd *cobra.Command, cfg *Config, defaultOnly bool) error {
 	out, err := git.ExecGit(cfg.WorkDir, []string{"for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin"})
 	if err != nil {
 		return fmt.Errorf("list remote-tracking branches: %w", err)
@@ -750,12 +751,12 @@ func syncMirrorBranches(cfg *Config, defaultOnly bool) error {
 			if _, err := git.ExecGit(cfg.WorkDir, []string{"merge", "--ff-only", "origin/" + branch}); err == nil {
 				updated++
 			} else {
-				fmt.Fprintf(os.Stderr, "warning: could not fast-forward checked-out branch %s; the bucket keeps its previous tip\n", branch)
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not fast-forward checked-out branch %s; the bucket keeps its previous tip\n", branch)
 			}
 			continue
 		}
 		if _, err := git.ExecGit(cfg.WorkDir, []string{"merge-base", "--is-ancestor", localTip, remoteTip}); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: branch %s has local commits not on origin; skipped (not overwritten)\n", branch)
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: branch %s has local commits not on origin; skipped (not overwritten)\n", branch)
 			continue
 		}
 		if _, err := git.ExecGit(cfg.WorkDir, []string{"update-ref", "refs/heads/" + branch, remoteTip, localTip}); err == nil {
@@ -763,13 +764,13 @@ func syncMirrorBranches(cfg *Config, defaultOnly bool) error {
 		}
 	}
 	if !cfg.JSONOutput && (created > 0 || updated > 0) {
-		fmt.Printf("Branches: %d created, %d fast-forwarded from origin\n", created, updated)
+		fmt.Fprintf(cmd.OutOrStdout(), "Branches: %d created, %d fast-forwarded from origin\n", created, updated)
 	}
 	return nil
 }
 
 // runMirrorPush pushes to every target, then drains the site pages cursor.
-func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
+func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 	var siteProgress objstore.Progress
 	siteDone := func() {}
 	if !cfg.JSONOutput {
@@ -788,12 +789,12 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 			AllBranches: !f.defaultBranchOnly,
 		}
 		if !cfg.JSONOutput {
-			fmt.Printf("Pushing to %s (%s) ...\n", t.name, t.url)
+			fmt.Fprintf(cmd.OutOrStdout(), "Pushing to %s (%s) ...\n", t.name, t.url)
 		}
 		result, err := client.Publish(cfg.WorkDir, t.name, opts, onBranch, siteProgress)
 		if err != nil {
 			failed = true
-			fmt.Fprintf(os.Stderr, "error: push to %s: %v\n", t.name, err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "error: push to %s: %v\n", t.name, err)
 			continue
 		}
 		// Drain BEFORE reporting: the push's own site line describes the state
@@ -803,12 +804,12 @@ func runMirrorPush(cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
 		if result.Site.Published && !result.Site.Complete {
 			complete, err := drainMirrorSitePages(cfg, t.name, siteProgress)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: site refresh on %s: %v\n", t.name, err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: site refresh on %s: %v\n", t.name, err)
 			}
 			result.Site.Complete = complete
 		}
 		if !cfg.JSONOutput {
-			printPushResult(result, false)
+			printPushResult(cmd.OutOrStdout(), result, false)
 		}
 	}
 	if failed {
@@ -838,43 +839,43 @@ func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress
 
 // printMirrorPlan renders the --dry-run output: the resolved plan plus the
 // provider checklist mirror cannot automate. Nothing is written.
-func printMirrorPlan(forgeURL, wsDir, wsAction string, targets []mirrorTarget, f *mirrorFlags) {
-	fmt.Println("Mirror plan (dry run — nothing written):")
-	fmt.Printf("  Forge:      %s\n", forgeURL)
+func printMirrorPlan(out io.Writer, forgeURL, wsDir, wsAction string, targets []mirrorTarget, f *mirrorFlags) {
+	fmt.Fprintln(out, "Mirror plan (dry run — nothing written):")
+	fmt.Fprintf(out, "  Forge:      %s\n", forgeURL)
 	if wsAction == "clone" {
-		fmt.Printf("  Workspace:  %s (will clone)\n", wsDir)
+		fmt.Fprintf(out, "  Workspace:  %s (will clone)\n", wsDir)
 	} else {
-		fmt.Printf("  Workspace:  %s (exists; will fetch)\n", wsDir)
+		fmt.Fprintf(out, "  Workspace:  %s (exists; will fetch)\n", wsDir)
 	}
 	for _, t := range targets {
 		if t.exists {
-			fmt.Printf("  Bucket:     %s (reusing remote %q)\n", t.url, t.name)
+			fmt.Fprintf(out, "  Bucket:     %s (reusing remote %q)\n", t.url, t.name)
 		} else {
-			fmt.Printf("  Bucket:     %s (will add remote %q as default push target)\n", t.url, t.name)
+			fmt.Fprintf(out, "  Bucket:     %s (will add remote %q as default push target)\n", t.url, t.name)
 		}
 	}
 	for _, host := range mirrorEndpointHosts(targets) {
 		if objstore.HasCredentials(host) {
-			fmt.Printf("  Credentials: found for %s\n", host)
+			fmt.Fprintf(out, "  Credentials: found for %s\n", host)
 		} else {
-			fmt.Printf("  Credentials: MISSING for %s — run: gitsocial config credentials set %s\n", host, host)
+			fmt.Fprintf(out, "  Credentials: MISSING for %s — run: gitsocial config credentials set %s\n", host, host)
 		}
 	}
 	switch {
 	case f.noImport:
-		fmt.Println("  Import:     skipped (--no-import)")
+		fmt.Fprintln(out, "  Import:     skipped (--no-import)")
 	case f.limit > 0:
-		fmt.Printf("  Import:     issues, PRs, releases, discussions (capped at %d per type)\n", f.limit)
+		fmt.Fprintf(out, "  Import:     issues, PRs, releases, discussions (capped at %d per type)\n", f.limit)
 	default:
-		fmt.Println("  Import:     issues, PRs, releases, discussions (unlimited)")
+		fmt.Fprintln(out, "  Import:     issues, PRs, releases, discussions (unlimited)")
 	}
 	switch {
 	case f.noSite:
-		fmt.Println("  Site:       skipped (--no-site)")
+		fmt.Fprintln(out, "  Site:       skipped (--no-site)")
 	case f.url != "":
-		fmt.Printf("  Site:       rebuild + crawlable pages at %s\n", f.url)
+		fmt.Fprintf(out, "  Site:       rebuild + crawlable pages at %s\n", f.url)
 	default:
-		fmt.Println("  Site:       rebuild (no public URL yet; pass --url to enable crawlable pages)")
+		fmt.Fprintln(out, "  Site:       rebuild (no public URL yet; pass --url to enable crawlable pages)")
 	}
 	scope := "all branches"
 	if f.defaultBranchOnly {
@@ -883,28 +884,28 @@ func printMirrorPlan(forgeURL, wsDir, wsAction string, targets []mirrorTarget, f
 	if f.noCode {
 		scope += ", no code branches"
 	}
-	fmt.Printf("  Push:       data + code, %s\n", scope)
-	fmt.Println("\nProvider checklist (dashboard steps mirror cannot automate):")
-	fmt.Println("  1. Create the bucket and grant the credentials write access")
-	fmt.Println("  2. Enable public read on the bucket so browsers and git can fetch it")
-	fmt.Println("  3. Attach a public domain, then re-run with --url https://<domain>/")
+	fmt.Fprintf(out, "  Push:       data + code, %s\n", scope)
+	fmt.Fprintln(out, "\nProvider checklist (dashboard steps mirror cannot automate):")
+	fmt.Fprintln(out, "  1. Create the bucket and grant the credentials write access")
+	fmt.Fprintln(out, "  2. Enable public read on the bucket so browsers and git can fetch it")
+	fmt.Fprintln(out, "  3. Attach a public domain, then re-run with --url https://<domain>/")
 }
 
 // printMirrorReport prints the closing report: where the workspace is, and the
 // public URL when known, else the exact remaining manual steps.
-func printMirrorReport(wsDir, publicURL string, noSite bool) {
-	fmt.Printf("\nWorkspace: %s\n", wsDir)
+func printMirrorReport(out io.Writer, wsDir, publicURL string, noSite bool) {
+	fmt.Fprintf(out, "\nWorkspace: %s\n", wsDir)
 	if noSite {
 		return
 	}
 	if publicURL != "" {
-		fmt.Printf("Site: %s\n", publicURL)
+		fmt.Fprintf(out, "Site: %s\n", publicURL)
 		return
 	}
-	fmt.Println("To serve the site publicly:")
-	fmt.Println("  1. Enable public read on the bucket (provider dashboard)")
-	fmt.Println("  2. Attach a public domain (e.g. an r2.dev subdomain or a custom domain)")
-	fmt.Println("  3. Re-run with --url https://<domain>/ to enable crawlable pages and canonical links")
+	fmt.Fprintln(out, "To serve the site publicly:")
+	fmt.Fprintln(out, "  1. Enable public read on the bucket (provider dashboard)")
+	fmt.Fprintln(out, "  2. Attach a public domain (e.g. an r2.dev subdomain or a custom domain)")
+	fmt.Fprintln(out, "  3. Re-run with --url https://<domain>/ to enable crawlable pages and canonical links")
 }
 
 // acquireMirrorLock takes the workspace's advisory mirror lock (a PID file in

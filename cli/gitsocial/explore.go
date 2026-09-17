@@ -35,7 +35,7 @@ func newExploreCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				printWithPager(social.FormatRepositories(result.Data))
+				printWithPager(cmd, social.FormatRepositories(result.Data))
 			}
 			return nil
 		},

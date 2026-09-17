@@ -244,6 +244,7 @@ func TestForkCreate_githubUnauthenticatedFallsBackToInstructions(t *testing.T) {
 }
 
 func TestParseGitHubForkSlug(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		output string
 		want   string

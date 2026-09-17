@@ -2,8 +2,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/rpc"
@@ -18,12 +16,12 @@ func newRPCCmd() *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Override root PersistentPreRunE — no cache.Open, no workdir resolve.
 			// Cache opens during initialize (future milestone).
-			initLogging(false)
+			initLogging(cmd.ErrOrStderr(), false)
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			registry := rpc.NewRegistry()
-			server := rpc.NewServer(registry, os.Stdin, os.Stdout)
+			server := rpc.NewServer(registry, cmd.InOrStdin(), cmd.OutOrStdout())
 			rpc.RegisterCoreMethods(server, version)
 			rpc.RegisterSearchMethods(server)
 			rpc.RegisterSocialMethods(server)

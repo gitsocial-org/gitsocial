@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -193,8 +194,8 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	}
 	isTTY := isatty.IsTerminal(os.Stderr.Fd())
 	if !cfg.JSONOutput {
-		fmt.Printf("Importing %s from %s\n", label, repoURL)
-		fmt.Printf("Host: %s\n\n", hostType)
+		fmt.Fprintf(cmd.OutOrStdout(), "Importing %s from %s\n", label, repoURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Host: %s\n\n", hostType)
 	}
 	fetchOpts := importpkg.FetchOptions{
 		RepoURL:  repoURL,
@@ -224,12 +225,12 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	}
 	// Pre-import: full fetch to sync gitmsg branches and populate cache
 	if !cfg.JSONOutput {
-		fmt.Printf("Fetching latest updates...\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Fetching latest updates...\n")
 	}
-	runFullFetch(cfg, client.FetchOptions{}, f.yes, f.allBranches)
+	runFullFetch(cmd, cfg, client.FetchOptions{}, f.yes, f.allBranches)
 	// Count items and show confirmation prompt
 	if !cfg.JSONOutput {
-		fmt.Printf("Counting items...\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Counting items...\n")
 	}
 	counts, _ := adapter.CountItems(fetchOpts)
 	mapping, err := importpkg.ReadMapping(cfg.CacheDir, repoURL, f.mapFile)
@@ -243,23 +244,23 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	if !cfg.JSONOutput {
 		summary := importpkg.FormatItemCounts(counts)
 		if summary != "" {
-			printStatusTable(counts, mapped, importpkg.Stats{}, f.limit)
+			printStatusTable(cmd.OutOrStdout(), counts, mapped, importpkg.Stats{}, f.limit)
 		}
 	}
 	if !f.yes && !f.dryRun && !cfg.JSONOutput && isTTY {
-		fmt.Printf("\nProceed with import? [Y/n] ")
-		reader := bufio.NewReader(os.Stdin)
+		fmt.Fprintf(cmd.OutOrStdout(), "\nProceed with import? [Y/n] ")
+		reader := bufio.NewReader(cmd.InOrStdin())
 		answer, _ := reader.ReadString('\n')
 		answer = strings.TrimSpace(strings.ToLower(answer))
 		if answer != "" && answer != "y" && answer != "yes" {
-			fmt.Println("Import canceled.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Import canceled.")
 			return nil
 		}
-		fmt.Println()
+		fmt.Fprintln(cmd.OutOrStdout())
 	}
 	var spinner *importSpinner
 	if isTTY && !cfg.JSONOutput {
-		spinner = newImportSpinner()
+		spinner = newImportSpinner(cmd.OutOrStdout(), cmd.ErrOrStderr())
 		spinner.Start()
 	}
 	opts := importpkg.Options{
@@ -282,7 +283,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 			if spinner != nil {
 				spinner.Update(ev)
 			} else {
-				printProgressLine(ev)
+				printProgressLine(cmd.OutOrStdout(), ev)
 			}
 		},
 	}
@@ -296,9 +297,9 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	// Post-import: full fetch to pick up activity pushed during import
 	if !f.dryRun {
 		if !cfg.JSONOutput {
-			fmt.Printf("\nFetching latest updates...\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "\nFetching latest updates...\n")
 		}
-		runFullFetch(cfg, client.FetchOptions{}, f.yes, f.allBranches)
+		runFullFetch(cmd, cfg, client.FetchOptions{}, f.yes, f.allBranches)
 	}
 	mapPath := importpkg.ResolveMappingPath(cfg.CacheDir, repoURL, f.mapFile)
 	if cfg.JSONOutput {
@@ -307,7 +308,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		}
 	} else {
 		for _, e := range stats.Errors {
-			fmt.Fprintf(os.Stderr, "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
+			fmt.Fprintf(cmd.ErrOrStderr(), "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
 		}
 		imported := importpkg.ItemCounts{
 			Issues:      addImported(mapped.Issues, stats.Issues),
@@ -315,16 +316,16 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 			Releases:    addImported(mapped.Releases, stats.Releases),
 			Discussions: addImported(mapped.Discussions, stats.Posts),
 		}
-		fmt.Println()
-		printStatusTable(counts, imported, stats, 0)
+		fmt.Fprintln(cmd.OutOrStdout())
+		printStatusTable(cmd.OutOrStdout(), counts, imported, stats, 0)
 		if !f.dryRun {
-			fmt.Printf("Map file: %s\n", mapPath)
+			fmt.Fprintf(cmd.OutOrStdout(), "Map file: %s\n", mapPath)
 		}
 	}
 	// Partial failure must not read as success: report loudly and exit non-zero.
 	if len(stats.Errors) > 0 {
 		if !cfg.JSONOutput {
-			fmt.Fprintf(os.Stderr, "\nImport completed with %d error(s) — the affected items were not imported; fix the cause and re-run (already-imported items are skipped).\n", len(stats.Errors))
+			fmt.Fprintf(cmd.ErrOrStderr(), "\nImport completed with %d error(s) — the affected items were not imported; fix the cause and re-run (already-imported items are skipped).\n", len(stats.Errors))
 		}
 		return exit(ExitError)
 	}
@@ -345,10 +346,10 @@ var phaseVerbs = map[importpkg.ProgressPhase]string{
 }
 
 // printProgressLine prints a simple non-TTY progress line.
-func printProgressLine(ev importpkg.ProgressEvent) {
+func printProgressLine(out io.Writer, ev importpkg.ProgressEvent) {
 	if ev.Phase == importpkg.PhaseCount {
 		if ev.Detail != "" {
-			fmt.Printf("  %s\n", ev.Detail)
+			fmt.Fprintf(out, "  %s\n", ev.Detail)
 		}
 		return
 	}
@@ -358,7 +359,7 @@ func printProgressLine(ev importpkg.ProgressEvent) {
 	desc := extLabels[ev.Extension]
 	line := formatExtStats(ev.Extension, ev.Stats)
 	if line != "" {
-		fmt.Printf("  %s %s\n", desc, line)
+		fmt.Fprintf(out, "  %s %s\n", desc, line)
 	}
 }
 
@@ -368,12 +369,17 @@ type importSpinner struct {
 	stop    chan struct{}
 	done    chan struct{}
 	message string
+	out     io.Writer
+	err     io.Writer
 	frames  []string
 	frame   int
 }
 
-func newImportSpinner() *importSpinner {
+// newImportSpinner builds a spinner writing its lines to out and err.
+func newImportSpinner(out, err io.Writer) *importSpinner {
 	return &importSpinner{
+		out:    out,
+		err:    err,
 		frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 		stop:   make(chan struct{}),
 		done:   make(chan struct{}),
@@ -386,7 +392,7 @@ func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 	if ev.Phase == importpkg.PhaseCount {
 		if ev.Detail != "" {
 			s.clearLine()
-			fmt.Printf("  %s\n", ev.Detail)
+			fmt.Fprintf(s.out, "  %s\n", ev.Detail)
 		}
 		return
 	}
@@ -395,9 +401,9 @@ func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 		desc := extLabels[ev.Extension]
 		line := formatExtStats(ev.Extension, ev.Stats)
 		if line != "" {
-			fmt.Printf("  ✓ %s %s\n", desc, line)
+			fmt.Fprintf(s.out, "  ✓ %s %s\n", desc, line)
 		} else {
-			fmt.Printf("  ✓ %s (nothing to import)\n", desc)
+			fmt.Fprintf(s.out, "  ✓ %s (nothing to import)\n", desc)
 		}
 		return
 	}
@@ -430,7 +436,7 @@ func (s *importSpinner) Start() {
 				s.mu.Lock()
 				if s.message != "" {
 					s.clearLine()
-					fmt.Fprintf(os.Stderr, "  %s %s", s.frames[s.frame], s.message)
+					fmt.Fprintf(s.err, "  %s %s", s.frames[s.frame], s.message)
 					s.frame = (s.frame + 1) % len(s.frames)
 				}
 				s.mu.Unlock()
@@ -445,11 +451,11 @@ func (s *importSpinner) Stop() {
 }
 
 func (s *importSpinner) clearLine() {
-	fmt.Fprintf(os.Stderr, "\r\033[K")
+	fmt.Fprintf(s.err, "\r\033[K")
 }
 
 // printStatusTable displays the import status table with columns: Found, Imported, [Updated], Remaining, Skipped.
-func printStatusTable(found, imported importpkg.ItemCounts, stats importpkg.Stats, limit int) {
+func printStatusTable(out io.Writer, found, imported importpkg.ItemCounts, stats importpkg.Stats, limit int) {
 	totalUpdated := stats.UpdatedIssues + stats.UpdatedPRs + stats.UpdatedMilestones + stats.UpdatedReleases + stats.UpdatedPosts
 	showUpdated := totalUpdated > 0
 	type entry struct {
@@ -515,23 +521,23 @@ func printStatusTable(found, imported importpkg.ItemCounts, stats importpkg.Stat
 		}
 	}
 	printRow := func(r frow) {
-		fmt.Printf("  %-*s", widths[0], r.cols[0])
+		fmt.Fprintf(out, "  %-*s", widths[0], r.cols[0])
 		for i := 1; i < len(r.cols); i++ {
-			fmt.Printf("  %*s", widths[i], r.cols[i])
+			fmt.Fprintf(out, "  %*s", widths[i], r.cols[i])
 		}
-		fmt.Println()
+		fmt.Fprintln(out)
 	}
 	for _, r := range rows {
 		printRow(r)
 	}
-	fmt.Printf("  %s", strings.Repeat("─", widths[0]))
+	fmt.Fprintf(out, "  %s", strings.Repeat("─", widths[0]))
 	for i := 1; i < ncols; i++ {
-		fmt.Printf("  %s", strings.Repeat("─", widths[i]))
+		fmt.Fprintf(out, "  %s", strings.Repeat("─", widths[i]))
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 	printRow(totalRow)
 	if limit > 0 {
-		fmt.Printf("  (limited to %d per type)\n", limit)
+		fmt.Fprintf(out, "  (limited to %d per type)\n", limit)
 	}
 }
 

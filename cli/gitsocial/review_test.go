@@ -9,6 +9,7 @@ import (
 )
 
 func TestFormatTipStaleMarker(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		side      string

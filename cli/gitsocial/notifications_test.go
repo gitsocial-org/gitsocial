@@ -11,6 +11,7 @@ import (
 
 // TestFormatNotification_divergedBranchNamesTheBranch checks the CLI line names the branch and its state.
 func TestFormatNotification_divergedBranchNamesTheBranch(t *testing.T) {
+	t.Parallel()
 	out := formatNotification(notifications.Notification{
 		RepoURL:   "https://github.com/user/repo",
 		Branch:    "gitmsg/social",

@@ -38,7 +38,7 @@ func newRelatedCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, repos)
 			} else {
-				printWithPager(social.FormatRelatedRepositories(repos))
+				printWithPager(cmd, social.FormatRelatedRepositories(repos))
 			}
 			return nil
 		},

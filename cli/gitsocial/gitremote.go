@@ -2,8 +2,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -33,7 +31,7 @@ a command to run by hand.`,
 				name, url = args[0], args[1]
 			}
 			// The hook is the only path from a plain git push to the site.
-			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), os.Stdin, os.Stdout, site.PostPushMaintenance)
+			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), cmd.InOrStdin(), cmd.OutOrStdout(), site.PostPushMaintenance)
 		},
 	}
 }

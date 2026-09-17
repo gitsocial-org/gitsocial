@@ -6,6 +6,7 @@ import (
 )
 
 func TestCountLines(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  int

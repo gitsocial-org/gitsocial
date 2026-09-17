@@ -28,6 +28,7 @@ func initMirrorTestRepo(t *testing.T, originURL string) string {
 }
 
 func TestClassifyMirrorTarget(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		arg      string
 		wantKind string
@@ -64,6 +65,7 @@ func TestClassifyMirrorTarget(t *testing.T) {
 }
 
 func TestClassifyMirrorArgs_orderFree(t *testing.T) {
+	t.Parallel()
 	forge, s3 := "https://github.com/octocat/Hello-World", "s3://127.0.0.1:9111/demo/hello"
 	for _, args := range [][]string{{forge, s3}, {s3, forge}} {
 		gotForge, gotS3, err := classifyMirrorArgs(args)
@@ -77,6 +79,7 @@ func TestClassifyMirrorArgs_orderFree(t *testing.T) {
 }
 
 func TestClassifyMirrorArgs_duplicateKindRefused(t *testing.T) {
+	t.Parallel()
 	if _, _, err := classifyMirrorArgs([]string{"https://github.com/a/b", "https://github.com/c/d"}); err == nil {
 		t.Error("two forge URLs should be refused")
 	}
@@ -86,6 +89,7 @@ func TestClassifyMirrorArgs_duplicateKindRefused(t *testing.T) {
 }
 
 func TestNormalizedRepoURLEqual(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		a, b string
 		want bool
@@ -104,6 +108,7 @@ func TestNormalizedRepoURLEqual(t *testing.T) {
 }
 
 func TestResolveMirrorWorkspace(t *testing.T) {
+	t.Parallel()
 	forge := "https://github.com/octocat/Hello-World"
 
 	t.Run("absent dir clones", func(t *testing.T) {
@@ -148,6 +153,7 @@ func TestResolveMirrorWorkspace(t *testing.T) {
 }
 
 func TestResolveMirrorTargets(t *testing.T) {
+	t.Parallel()
 	canonical := "s3://127.0.0.1:9111/demo/hello"
 
 	t.Run("fresh clone names s3", func(t *testing.T) {
@@ -197,6 +203,7 @@ func TestResolveMirrorTargets(t *testing.T) {
 }
 
 func TestAcquireMirrorLock(t *testing.T) {
+	t.Parallel()
 	repo := initMirrorTestRepo(t, "")
 	lockPath := func() string {
 		out, err := git.ExecGit(repo, []string{"rev-parse", "--absolute-git-dir"})

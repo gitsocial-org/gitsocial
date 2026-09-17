@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -67,8 +68,8 @@ For extension-specific options, use the extension's fetch command directly:
 						return err
 					}
 				} else {
-					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
-					printNotificationDelta(cfg.WorkDir, countBefore)
+					fmt.Fprintf(cmd.OutOrStdout(), "✓ %s (%d posts)\n", repoURL, result.Data.Items)
+					printNotificationDelta(cmd.OutOrStdout(), cfg.WorkDir, countBefore)
 				}
 				return nil
 			}
@@ -79,18 +80,18 @@ For extension-specific options, use the extension's fetch command directly:
 			}
 			if !cfg.JSONOutput {
 				if listID != "" {
-					fmt.Printf("Fetching repositories from list '%s'...\n", listID)
+					fmt.Fprintf(cmd.OutOrStdout(), "Fetching repositories from list '%s'...\n", listID)
 				} else {
-					fmt.Println("Fetching all subscribed repositories...")
+					fmt.Fprintln(cmd.OutOrStdout(), "Fetching all subscribed repositories...")
 				}
 			}
 
-			result, forkStats := runFullFetch(cfg, client.FetchOptions{
+			result, forkStats := runFullFetch(cmd, cfg, client.FetchOptions{
 				ListID:   listID,
 				Parallel: parallel,
 			}, false, allBranches)
 			if !cfg.JSONOutput && forkStats.Items > 0 {
-				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Repositories)
+				fmt.Fprintf(cmd.OutOrStdout(), "Fetched %d items from %d forks\n", forkStats.Items, forkStats.Repositories)
 			}
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())
@@ -103,17 +104,17 @@ For extension-specific options, use the extension's fetch command directly:
 				return PrintJSON(cmd, stats)
 			} else {
 				for _, e := range stats.Errors {
-					fmt.Printf("  ✗ %s (%s)\n", e.Repository, e.Error)
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✗ %s (%s)\n", e.Repository, e.Error)
 				}
 
 				if stats.Repositories > 0 || len(stats.Errors) == 0 {
-					fmt.Printf("\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
+					fmt.Fprintf(cmd.OutOrStdout(), "\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
 				}
 
 				if len(stats.Errors) > 0 {
-					fmt.Printf("Failed: %d repositories\n", len(stats.Errors))
+					fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d repositories\n", len(stats.Errors))
 				}
-				printNotificationDelta(cfg.WorkDir, countBefore)
+				printNotificationDelta(cmd.OutOrStdout(), cfg.WorkDir, countBefore)
 			}
 			return nil
 		},
@@ -129,7 +130,7 @@ For extension-specific options, use the extension's fetch command directly:
 // resolveWorkspaceMode checks the saved workspace fetch mode and prompts on first use.
 // A saved mode always wins. On first use, allBranches selects all-branch mode explicitly;
 // assumeYes, JSON output, or a non-interactive stdin selects the default without prompting.
-func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches bool) bool {
+func resolveWorkspaceMode(cmd *cobra.Command, workdir string, jsonOutput, assumeYes, allBranches bool) bool {
 	originURL := protocol.NormalizeURL(git.GetOriginURL(workdir))
 	if originURL == "" {
 		return false
@@ -152,15 +153,15 @@ func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches boo
 	}
 	branches, _ := git.ListRemoteBranches(workdir, "origin")
 	branchCount := len(branches)
-	fmt.Println("\nWorkspace fetch mode (first time setup):")
-	fmt.Println("  [1] Default branch + gitmsg refs only")
+	fmt.Fprintln(cmd.OutOrStdout(), "\nWorkspace fetch mode (first time setup):")
+	fmt.Fprintln(cmd.OutOrStdout(), "  [1] Default branch + gitmsg refs only")
 	if branchCount > 0 {
-		fmt.Printf("  [2] All upstream branches (%d branches)\n", branchCount)
+		fmt.Fprintf(cmd.OutOrStdout(), "  [2] All upstream branches (%d branches)\n", branchCount)
 	} else {
-		fmt.Println("  [2] All upstream branches")
+		fmt.Fprintln(cmd.OutOrStdout(), "  [2] All upstream branches")
 	}
-	fmt.Print("\nChoice [1]: ")
-	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprint(cmd.OutOrStdout(), "\nChoice [1]: ")
+	reader := bufio.NewReader(cmd.InOrStdin())
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	if input == "2" {
@@ -171,31 +172,31 @@ func resolveWorkspaceMode(workdir string, jsonOutput, assumeYes, allBranches boo
 	if err := settings.WriteWorkspaceMode(originURL, mode); err != nil {
 		slog.Warn("save workspace mode", "error", err)
 	}
-	fmt.Println()
+	fmt.Fprintln(cmd.OutOrStdout())
 	return mode == "*"
 }
 
 // runFullFetch fetches the subscribed repos, the registered forks and the workspace.
-func runFullFetch(cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
-	opts.FetchAllBranches = resolveWorkspaceMode(cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
+func runFullFetch(cmd *cobra.Command, cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
+	opts.FetchAllBranches = resolveWorkspaceMode(cmd, cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
 	return client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 }
 
-// printNotificationDelta prints new notification count if it increased after fetch.
-func printNotificationDelta(workdir string, countBefore int) {
+// printNotificationDelta writes the new notification count to out when it rose after a fetch.
+func printNotificationDelta(out io.Writer, workdir string, countBefore int) {
 	countAfter, _ := notifications.GetUnreadCount(workdir)
 	delta := countAfter - countBefore
 	if delta > 0 {
-		fmt.Printf("You have %d new notification", delta)
+		fmt.Fprintf(out, "You have %d new notification", delta)
 		if delta != 1 {
-			fmt.Print("s")
+			fmt.Fprint(out, "s")
 		}
-		fmt.Println()
+		fmt.Fprintln(out)
 	} else if countAfter > 0 {
-		fmt.Printf("You have %d unread notification", countAfter)
+		fmt.Fprintf(out, "You have %d unread notification", countAfter)
 		if countAfter != 1 {
-			fmt.Print("s")
+			fmt.Fprint(out, "s")
 		}
-		fmt.Println()
+		fmt.Fprintln(out)
 	}
 }

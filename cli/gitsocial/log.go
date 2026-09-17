@@ -87,7 +87,7 @@ Examples:
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				printWithPager(social.FormatLogs(result.Data))
+				printWithPager(cmd, social.FormatLogs(result.Data))
 			}
 			return nil
 		},

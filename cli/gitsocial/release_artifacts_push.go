@@ -46,13 +46,13 @@ overridable per remote).`,
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Pushed %d artifact(s) for %s to %s", len(result.Data.Files), version, result.Data.Remote))
 			for _, f := range result.Data.Files {
-				fmt.Printf("  %s/%s  (%s)\n", result.Data.BaseURL, f.Filename, release.FormatSize(f.Size))
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s/%s  (%s)\n", result.Data.BaseURL, f.Filename, release.FormatSize(f.Size))
 			}
 			if result.Data.LatestAdvanced {
-				fmt.Printf("latest.txt → %s\n", version)
+				fmt.Fprintf(cmd.OutOrStdout(), "latest.txt → %s\n", version)
 			}
 			if result.Data.RecordUpdated {
-				fmt.Printf("Release record updated: artifact-url = %s\n", result.Data.BaseURL)
+				fmt.Fprintf(cmd.OutOrStdout(), "Release record updated: artifact-url = %s\n", result.Data.BaseURL)
 			}
 			return nil
 		},

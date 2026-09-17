@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -48,7 +49,7 @@ func newRootCmd() *cobra.Command {
 				cacheDir = filepath.Join(home, ".cache", "gitsocial")
 			}
 
-			initLogging(jsonOutput)
+			initLogging(cmd.ErrOrStderr(), jsonOutput)
 			applyGitTimeout()
 			// The remote-helper command is itself spawned by git; skip the
 			// workspace alias check there to keep helper invocations lean.
@@ -78,7 +79,7 @@ func newRootCmd() *cobra.Command {
 }
 
 // initLogging initializes the logger based on settings and output format.
-func initLogging(jsonOutput bool) {
+func initLogging(out io.Writer, jsonOutput bool) {
 	settingsPath, err := settings.DefaultPath()
 	if err != nil {
 		slog.Debug("settings default path", "error", err)
@@ -104,7 +105,7 @@ func initLogging(jsonOutput bool) {
 	log.Init(log.Config{
 		Level:  level,
 		Mode:   mode,
-		Output: os.Stderr,
+		Output: out,
 	})
 }
 

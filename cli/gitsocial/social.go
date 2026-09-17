@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -65,17 +66,17 @@ func newSocialStatusCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				printSocialStatus(&result.Data)
+				printSocialStatus(cmd.OutOrStdout(), &result.Data)
 			}
 			return nil
 		},
 	}
 }
 
-// printSocialStatus prints the social extension status to stdout.
-func printSocialStatus(s *social.StatusData) {
-	fmt.Println("Social:")
-	fmt.Printf("  Branch: %s\n", s.Branch)
+// printSocialStatus writes the social extension status to out.
+func printSocialStatus(out io.Writer, s *social.StatusData) {
+	fmt.Fprintln(out, "Social:")
+	fmt.Fprintf(out, "  Branch: %s\n", s.Branch)
 
 	if s.Unpushed != nil && (s.Unpushed.Posts > 0 || s.Unpushed.Lists > 0) {
 		var parts []string
@@ -85,23 +86,23 @@ func printSocialStatus(s *social.StatusData) {
 		if s.Unpushed.Lists > 0 {
 			parts = append(parts, fmt.Sprintf("%d lists", s.Unpushed.Lists))
 		}
-		fmt.Printf("  ⇡ Unpushed: %s\n", strings.Join(parts, ", "))
+		fmt.Fprintf(out, "  ⇡ Unpushed: %s\n", strings.Join(parts, ", "))
 	}
 
 	if !s.LastFetch.IsZero() {
-		fmt.Printf("  Fetched: %s\n", social.FormatRelativeTime(s.LastFetch))
+		fmt.Fprintf(out, "  Fetched: %s\n", social.FormatRelativeTime(s.LastFetch))
 	}
 
 	if len(s.Lists) > 0 {
-		fmt.Printf("  Lists (%d):\n", len(s.Lists))
+		fmt.Fprintf(out, "  Lists (%d):\n", len(s.Lists))
 		for _, list := range s.Lists {
-			fmt.Printf("    - %s (%d repos)\n", list.ID, list.Repos)
+			fmt.Fprintf(out, "    - %s (%d repos)\n", list.ID, list.Repos)
 		}
 	} else {
-		fmt.Println("  Lists: none")
+		fmt.Fprintln(out, "  Lists: none")
 	}
 
-	fmt.Printf("  Items: %d (%d list, %d workspace)\n", s.Items, s.FromLists, s.FromWorkspace)
+	fmt.Fprintf(out, "  Items: %d (%d list, %d workspace)\n", s.Items, s.FromLists, s.FromWorkspace)
 }
 
 // newSocialInitCmd creates the command to initialize GitSocial in a repository.
@@ -188,7 +189,7 @@ func newSocialTimelineCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, posts)
 			} else {
-				fmt.Println(social.FormatTimeline(posts))
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatTimeline(posts))
 			}
 			return nil
 		},
@@ -245,8 +246,8 @@ func newSocialPostCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Post created")
-				fmt.Println()
-				fmt.Println(social.FormatPost(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(result.Data))
 			}
 			return nil
 		},
@@ -308,8 +309,8 @@ func newSocialEditCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Post edited")
-				fmt.Println()
-				fmt.Println(social.FormatPost(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(result.Data))
 			}
 			return nil
 		},
@@ -392,8 +393,8 @@ func newSocialCommentCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Comment created")
-				fmt.Println()
-				fmt.Println(social.FormatPost(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(result.Data))
 			}
 			return nil
 		},
@@ -430,8 +431,8 @@ func newSocialRepostCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Reposted")
-				fmt.Println()
-				fmt.Println(social.FormatPost(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(result.Data))
 			}
 			return nil
 		},
@@ -482,8 +483,8 @@ func newSocialQuoteCmd() *cobra.Command {
 				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Quote created")
-				fmt.Println()
-				fmt.Println(social.FormatPost(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(result.Data))
 			}
 			return nil
 		},
@@ -539,7 +540,7 @@ func newSocialListShowCmd() *cobra.Command {
 						return err
 					}
 				} else {
-					fmt.Println(social.FormatLists(result.Data))
+					fmt.Fprintln(cmd.OutOrStdout(), social.FormatLists(result.Data))
 				}
 				return nil
 			}
@@ -559,11 +560,11 @@ func newSocialListShowCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				fmt.Println(social.FormatList(*result.Data))
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatList(*result.Data))
 				if len(result.Data.Repositories) > 0 {
-					fmt.Println("\nRepositories:")
+					fmt.Fprintln(cmd.OutOrStdout(), "\nRepositories:")
 					for _, repo := range result.Data.Repositories {
-						fmt.Printf("  - %s\n", repo)
+						fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", repo)
 					}
 				}
 			}
@@ -593,7 +594,7 @@ func newSocialListLsCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result.Data)
 			} else {
-				fmt.Println(social.FormatLists(result.Data))
+				fmt.Fprintln(cmd.OutOrStdout(), social.FormatLists(result.Data))
 			}
 			return nil
 		},
@@ -787,7 +788,7 @@ Examples:
 						return err
 					}
 				} else {
-					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
+					fmt.Fprintf(cmd.OutOrStdout(), "✓ %s (%d posts)\n", repoURL, result.Data.Items)
 				}
 				return nil
 			}
@@ -799,9 +800,9 @@ Examples:
 
 			if !cfg.JSONOutput {
 				if listID != "" {
-					fmt.Printf("Fetching repositories from list '%s'...\n", listID)
+					fmt.Fprintf(cmd.OutOrStdout(), "Fetching repositories from list '%s'...\n", listID)
 				} else {
-					fmt.Println("Fetching all subscribed repositories...")
+					fmt.Fprintln(cmd.OutOrStdout(), "Fetching all subscribed repositories...")
 				}
 			}
 
@@ -817,15 +818,15 @@ Examples:
 				return PrintJSON(cmd, stats)
 			} else {
 				for _, e := range stats.Errors {
-					fmt.Printf("  ✗ %s (%s)\n", e.Repository, e.Error)
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✗ %s (%s)\n", e.Repository, e.Error)
 				}
 
 				if stats.Repositories > 0 || len(stats.Errors) == 0 {
-					fmt.Printf("\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
+					fmt.Fprintf(cmd.OutOrStdout(), "\nFetched %d items from %d repositories\n", stats.Items, stats.Repositories)
 				}
 
 				if len(stats.Errors) > 0 {
-					fmt.Printf("Failed: %d repositories\n", len(stats.Errors))
+					fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d repositories\n", len(stats.Errors))
 				}
 			}
 			return nil
@@ -874,14 +875,14 @@ This is detected during fetch when parsing remote repository lists.`,
 				})
 			} else {
 				if len(followers) == 0 {
-					fmt.Println("No followers detected yet.")
-					fmt.Println("Run 'gitsocial fetch' to detect followers from remote repositories.")
+					fmt.Fprintln(cmd.OutOrStdout(), "No followers detected yet.")
+					fmt.Fprintln(cmd.OutOrStdout(), "Run 'gitsocial fetch' to detect followers from remote repositories.")
 				} else {
-					fmt.Printf("Repositories following %s:\n\n", workspaceURL)
+					fmt.Fprintf(cmd.OutOrStdout(), "Repositories following %s:\n\n", workspaceURL)
 					for _, f := range followers {
-						fmt.Printf("  %s\n", f)
+						fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", f)
 					}
-					fmt.Printf("\nTotal: %d\n", len(followers))
+					fmt.Fprintf(cmd.OutOrStdout(), "\nTotal: %d\n", len(followers))
 				}
 			}
 			return nil
@@ -960,14 +961,14 @@ Examples:
 				return PrintJSON(cmd, lists)
 			} else {
 				if len(lists) == 0 {
-					fmt.Println("No lists found for this repository")
+					fmt.Fprintln(cmd.OutOrStdout(), "No lists found for this repository")
 					if !isWorkspace {
-						fmt.Println("(Try running 'gitsocial fetch' first to cache remote data)")
+						fmt.Fprintln(cmd.OutOrStdout(), "(Try running 'gitsocial fetch' first to cache remote data)")
 					}
 				} else {
-					fmt.Printf("Lists from %s:\n\n", repoURL)
+					fmt.Fprintf(cmd.OutOrStdout(), "Lists from %s:\n\n", repoURL)
 					for _, list := range lists {
-						fmt.Printf("  %s (%d repos)\n", list.Name, list.RepoCount)
+						fmt.Fprintf(cmd.OutOrStdout(), "  %s (%d repos)\n", list.Name, list.RepoCount)
 					}
 				}
 			}

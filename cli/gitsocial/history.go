@@ -43,7 +43,7 @@ func newHistoryCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, versions)
 			} else {
-				printWithPager(gitmsg.FormatHistory(versions))
+				printWithPager(cmd, gitmsg.FormatHistory(versions))
 			}
 			return nil
 		},

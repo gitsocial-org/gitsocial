@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -53,7 +54,7 @@ func newStatusCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, status)
 			} else {
-				printStatus(status)
+				printStatus(cmd.OutOrStdout(), status)
 			}
 			return nil
 		},
@@ -118,32 +119,32 @@ func getThinStatus(workdir string) *thinStatus {
 	return st
 }
 
-// printStatus prints the status data to stdout.
-func printStatus(s statusData) {
-	fmt.Printf("Repository: %s\n", s.Repository)
+// printStatus writes the status data to out.
+func printStatus(out io.Writer, s statusData) {
+	fmt.Fprintf(out, "Repository: %s\n", s.Repository)
 	if s.Thin != nil {
-		fmt.Printf("Thin fork of %s, pinned at %d tips\n", s.Thin.Upstream, s.Thin.Pins)
+		fmt.Fprintf(out, "Thin fork of %s, pinned at %d tips\n", s.Thin.Upstream, s.Thin.Pins)
 	}
 
 	if s.Cache != nil {
-		fmt.Println()
-		fmt.Println("Cache:")
-		fmt.Printf("  Location: %s\n", s.Cache.Location)
-		fmt.Printf("  Size: %s\n", formatBytes(s.Cache.SizeBytes))
-		fmt.Printf("  Items: %d\n", s.Cache.Items)
-		fmt.Printf("  Repositories: %d\n", s.Cache.Repositories)
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Cache:")
+		fmt.Fprintf(out, "  Location: %s\n", s.Cache.Location)
+		fmt.Fprintf(out, "  Size: %s\n", formatBytes(s.Cache.SizeBytes))
+		fmt.Fprintf(out, "  Items: %d\n", s.Cache.Items)
+		fmt.Fprintf(out, "  Repositories: %d\n", s.Cache.Repositories)
 	}
 
 	if s.Social != nil {
-		fmt.Println()
-		printSocialSection(s.Social)
+		fmt.Fprintln(out)
+		printSocialSection(out, s.Social)
 	}
 }
 
 // printSocialSection prints the social extension portion of status.
-func printSocialSection(s *social.StatusData) {
-	fmt.Println("Social:")
-	fmt.Printf("  Branch: %s\n", s.Branch)
+func printSocialSection(out io.Writer, s *social.StatusData) {
+	fmt.Fprintln(out, "Social:")
+	fmt.Fprintf(out, "  Branch: %s\n", s.Branch)
 
 	if s.Unpushed != nil && (s.Unpushed.Posts > 0 || s.Unpushed.Lists > 0) {
 		var parts []string
@@ -153,23 +154,23 @@ func printSocialSection(s *social.StatusData) {
 		if s.Unpushed.Lists > 0 {
 			parts = append(parts, fmt.Sprintf("%d lists", s.Unpushed.Lists))
 		}
-		fmt.Printf("  ⇡ Unpushed: %s\n", joinParts(parts))
+		fmt.Fprintf(out, "  ⇡ Unpushed: %s\n", joinParts(parts))
 	}
 
 	if !s.LastFetch.IsZero() {
-		fmt.Printf("  Fetched: %s\n", social.FormatRelativeTime(s.LastFetch))
+		fmt.Fprintf(out, "  Fetched: %s\n", social.FormatRelativeTime(s.LastFetch))
 	}
 
 	if len(s.Lists) > 0 {
-		fmt.Printf("  Lists (%d):\n", len(s.Lists))
+		fmt.Fprintf(out, "  Lists (%d):\n", len(s.Lists))
 		for _, list := range s.Lists {
-			fmt.Printf("    - %s (%d repos)\n", list.ID, list.Repos)
+			fmt.Fprintf(out, "    - %s (%d repos)\n", list.ID, list.Repos)
 		}
 	} else {
-		fmt.Println("  Lists: none")
+		fmt.Fprintln(out, "  Lists: none")
 	}
 
-	fmt.Printf("  Items: %d (%d list, %d workspace)\n", s.Items, s.FromLists, s.FromWorkspace)
+	fmt.Fprintf(out, "  Items: %d (%d list, %d workspace)\n", s.Items, s.FromLists, s.FromWorkspace)
 }
 
 // joinParts joins string parts with commas.

@@ -171,12 +171,12 @@ func newPersonalStatusCmd() *cobra.Command {
 					"remote":      remote,
 				})
 			}
-			fmt.Println("path:        " + path)
-			fmt.Println("initialized: " + boolLabel(exists))
+			fmt.Fprintln(cmd.OutOrStdout(), "path:        "+path)
+			fmt.Fprintln(cmd.OutOrStdout(), "initialized: "+boolLabel(exists))
 			if remote != "" {
-				fmt.Println("remote:      " + remote)
+				fmt.Fprintln(cmd.OutOrStdout(), "remote:      "+remote)
 			} else if exists {
-				fmt.Println("remote:      (none — set with `gitsocial personal init --remote <url>`)")
+				fmt.Fprintln(cmd.OutOrStdout(), "remote:      (none — set with `gitsocial personal init --remote <url>`)")
 			}
 			return nil
 		},

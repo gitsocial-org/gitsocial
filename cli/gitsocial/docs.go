@@ -27,7 +27,7 @@ func newDocsKeybindingsCmd() *cobra.Command {
 			if cfg := GetConfig(cmd); cfg != nil && cfg.JSONOutput {
 				return PrintJSON(cmd, docs)
 			}
-			fmt.Print(tuikeydoc.Generate(docs))
+			fmt.Fprint(cmd.OutOrStdout(), tuikeydoc.Generate(docs))
 			return nil
 		},
 	}

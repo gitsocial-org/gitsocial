@@ -184,7 +184,7 @@ Examples:
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, result)
 			} else {
-				printWithPager(search.FormatResult(result))
+				printWithPager(cmd, search.FormatResult(result))
 			}
 			return nil
 		},

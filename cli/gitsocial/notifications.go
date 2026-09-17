@@ -60,14 +60,14 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 
 			if len(items) == 0 {
 				if all {
-					fmt.Println("No notifications.")
+					fmt.Fprintln(cmd.OutOrStdout(), "No notifications.")
 				} else {
-					fmt.Println("No unread notifications.")
+					fmt.Fprintln(cmd.OutOrStdout(), "No unread notifications.")
 				}
 				return nil
 			}
 
-			fmt.Println(formatNotifications(items))
+			fmt.Fprintln(cmd.OutOrStdout(), formatNotifications(items))
 			return nil
 		},
 	}
@@ -107,7 +107,7 @@ func newNotificationsCountCmd() *cobra.Command {
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]int{"unread": count})
 			} else {
-				fmt.Printf("%d unread\n", count)
+				fmt.Fprintf(cmd.OutOrStdout(), "%d unread\n", count)
 			}
 			return nil
 		},

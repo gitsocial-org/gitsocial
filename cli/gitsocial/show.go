@@ -91,7 +91,7 @@ func showByExtension(cmd *cobra.Command, cfg *Config, workspaceURL string, hit c
 		if cfg.JSONOutput {
 			return true, PrintJSON(cmd, pr)
 		}
-		printPRDetails(cfg.WorkDir, pr)
+		printPRDetails(cmd.OutOrStdout(), cfg.WorkDir, pr)
 		return true, nil
 	case "pm":
 		return showPM(cmd, cfg, "#commit:"+hit.Hash, workspaceURL)
@@ -104,7 +104,7 @@ func showByExtension(cmd *cobra.Command, cfg *Config, workspaceURL string, hit c
 		if cfg.JSONOutput {
 			return true, PrintJSON(cmd, rel)
 		}
-		printReleaseDetails(rel)
+		printReleaseDetails(cmd.OutOrStdout(), rel)
 		return true, nil
 	case "social":
 		item, err := social.GetSocialItem(hit.RepoURL, hit.Hash, hit.Branch, workspaceURL)
@@ -115,7 +115,7 @@ func showByExtension(cmd *cobra.Command, cfg *Config, workspaceURL string, hit c
 		if cfg.JSONOutput {
 			return true, PrintJSON(cmd, post)
 		}
-		fmt.Println(social.FormatPost(post))
+		fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(post))
 		return true, nil
 	}
 	return false, nil
@@ -132,7 +132,7 @@ func showReview(cmd *cobra.Command, cfg *Config, ref string) (bool, error) {
 	if cfg.JSONOutput {
 		return true, PrintJSON(cmd, pr)
 	}
-	printPRDetails(cfg.WorkDir, pr)
+	printPRDetails(cmd.OutOrStdout(), cfg.WorkDir, pr)
 	return true, nil
 }
 
@@ -146,7 +146,7 @@ func showPM(cmd *cobra.Command, cfg *Config, ref, workspaceURL string) (bool, er
 	if cfg.JSONOutput {
 		return true, PrintJSON(cmd, issue)
 	}
-	printIssueDetails(issue)
+	printIssueDetails(cmd.OutOrStdout(), issue)
 	return true, nil
 }
 
@@ -159,7 +159,7 @@ func showRelease(cmd *cobra.Command, cfg *Config, ref string) (bool, error) {
 	if cfg.JSONOutput {
 		return true, PrintJSON(cmd, relResult.Data)
 	}
-	printReleaseDetails(relResult.Data)
+	printReleaseDetails(cmd.OutOrStdout(), relResult.Data)
 	return true, nil
 }
 
@@ -173,6 +173,6 @@ func showSocial(cmd *cobra.Command, cfg *Config, ref, workspaceURL string) (bool
 	if cfg.JSONOutput {
 		return true, PrintJSON(cmd, post)
 	}
-	fmt.Println(social.FormatPost(post))
+	fmt.Fprintln(cmd.OutOrStdout(), social.FormatPost(post))
 	return true, nil
 }

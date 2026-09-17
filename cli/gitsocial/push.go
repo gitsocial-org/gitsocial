@@ -3,7 +3,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -58,10 +58,10 @@ Examples:
 			cfg := GetConfig(cmd)
 
 			remotes, resolution := client.ResolveRemotes(cfg.WorkDir, args)
-			printRemoteHint(cfg.WorkDir, remotes, resolution)
+			printRemoteHint(cmd.ErrOrStderr(), cfg.WorkDir, remotes, resolution)
 
 			if dryRun && !cfg.JSONOutput {
-				fmt.Println("Dry run - no changes will be pushed")
+				fmt.Fprintln(cmd.OutOrStdout(), "Dry run - no changes will be pushed")
 			}
 
 			// Progress goes to stderr, and --json keeps machine output clean.
@@ -77,9 +77,9 @@ Examples:
 			var onRemote func(remote string)
 			if !cfg.JSONOutput && !dryRun {
 				onRemote = func(remote string) {
-					fmt.Printf("Pushing to %s ...\n", remote)
+					fmt.Fprintf(cmd.OutOrStdout(), "Pushing to %s ...\n", remote)
 					if gitmsg.RemoteIsEmpty(cfg.WorkDir, remote) {
-						fmt.Printf("Sending to empty remote %q ...\n", remote)
+						fmt.Fprintf(cmd.OutOrStdout(), "Sending to empty remote %q ...\n", remote)
 					}
 				}
 			}
@@ -108,7 +108,7 @@ Examples:
 				}
 			} else {
 				for i := range results {
-					printPushResult(&results[i], dryRun)
+					printPushResult(cmd.OutOrStdout(), &results[i], dryRun)
 				}
 			}
 
@@ -134,63 +134,63 @@ Examples:
 }
 
 // printRemoteHint writes the one hint a resolution earns, once per command.
-func printRemoteHint(workdir string, remotes []string, resolution git.PushResolution) {
+func printRemoteHint(out io.Writer, workdir string, remotes []string, resolution git.PushResolution) {
 	switch resolution {
 	case git.PushAmbiguous:
-		fmt.Fprintf(os.Stderr, "gitsocial: several s3 remotes, pushing to %q. Choose one with: gitsocial remote default <name>\n", remotes[0])
+		fmt.Fprintf(out, "gitsocial: several s3 remotes, pushing to %q. Choose one with: gitsocial remote default <name>\n", remotes[0])
 	case git.PushStale:
 		configured := strings.Join(git.ConfiguredPushRemotes(workdir), " ")
-		fmt.Fprintf(os.Stderr, "gitsocial: configured push remote %q does not exist, pushing to %q. Set it with: gitsocial remote default <name>\n", configured, remotes[0])
+		fmt.Fprintf(out, "gitsocial: configured push remote %q does not exist, pushing to %q. Set it with: gitsocial remote default <name>\n", configured, remotes[0])
 	}
 }
 
 // printPushResult renders the push and site result for humans.
-func printPushResult(result *client.Result, dryRun bool) {
+func printPushResult(out io.Writer, result *client.Result, dryRun bool) {
 	p := result.Push
 	nothing := p.Commits == 0 && p.CodeCommits == 0 && p.Refs == 0 && p.Tags == 0 && p.AllBranches == 0
 	if nothing && !result.Site.Published {
-		fmt.Println("Nothing to push")
+		fmt.Fprintln(out, "Nothing to push")
 		if result.Site.Err != nil {
-			fmt.Printf("Site: failed: %v\n", result.Site.Err)
+			fmt.Fprintf(out, "Site: failed: %v\n", result.Site.Err)
 		} else if result.Site.Skipped != "" {
-			fmt.Printf("Site: skipped (%s)\n", result.Site.Skipped)
+			fmt.Fprintf(out, "Site: skipped (%s)\n", result.Site.Skipped)
 		}
 		return
 	}
 
 	if dryRun {
-		fmt.Printf("Would push to %s (%s)\n", p.Remote, p.RemoteURL)
+		fmt.Fprintf(out, "Would push to %s (%s)\n", p.Remote, p.RemoteURL)
 	} else {
-		fmt.Printf("Pushed to %s (%s)\n", p.Remote, p.RemoteURL)
+		fmt.Fprintf(out, "Pushed to %s (%s)\n", p.Remote, p.RemoteURL)
 	}
 	if p.Commits > 0 {
-		fmt.Printf("  Commits: %d\n", p.Commits)
+		fmt.Fprintf(out, "  Commits: %d\n", p.Commits)
 	}
 	if p.CodeCommits > 0 {
-		fmt.Printf("  Code commits: %d\n", p.CodeCommits)
+		fmt.Fprintf(out, "  Code commits: %d\n", p.CodeCommits)
 	}
 	if p.AllBranches > 0 {
-		fmt.Printf("  Branches (--all-branches): %d\n", p.AllBranches)
+		fmt.Fprintf(out, "  Branches (--all-branches): %d\n", p.AllBranches)
 	}
 	if p.Refs > 0 {
-		fmt.Printf("  Refs: %d\n", p.Refs)
+		fmt.Fprintf(out, "  Refs: %d\n", p.Refs)
 	}
 	if p.Tags > 0 {
-		fmt.Printf("  Tags: %d\n", p.Tags)
+		fmt.Fprintf(out, "  Tags: %d\n", p.Tags)
 	}
 
 	switch {
 	case result.Site.Published && !result.Site.Complete:
-		fmt.Println("Site: published (incomplete: a bootstrap is still in progress, push again to finish)")
+		fmt.Fprintln(out, "Site: published (incomplete: a bootstrap is still in progress, push again to finish)")
 	case result.Site.Published:
-		fmt.Println("Site: published")
+		fmt.Fprintln(out, "Site: published")
 	case result.Site.Err != nil:
-		fmt.Printf("Site: failed: %v\n", result.Site.Err)
+		fmt.Fprintf(out, "Site: failed: %v\n", result.Site.Err)
 	case result.Site.Skipped != "":
-		fmt.Printf("Site: skipped (%s)\n", result.Site.Skipped)
+		fmt.Fprintf(out, "Site: skipped (%s)\n", result.Site.Skipped)
 	}
 
 	if !dryRun {
-		fmt.Println("Done.")
+		fmt.Fprintln(out, "Done.")
 	}
 }
