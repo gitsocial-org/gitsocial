@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # prose-check.sh - count STYLE.md violations; fail when a count rises above scripts/prose-baseline.txt.
-# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html short-long flag-help
+# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html short-long flag-help error-shape
 # Commit subjects over 72 characters always fail: GITSOCIAL_PUSH_RANGES (set by the hook), else @{upstream}..HEAD, else skipped.
 set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/prose-baseline.txt"
-rules="comment-block-css comment-block-go comment-block-html comment-block-js emdash flag-help short-long"
+rules="comment-block-css comment-block-go comment-block-html comment-block-js emdash error-shape flag-help short-long"
 zero=0000000000000000000000000000000000000000
 
 # tracked files in scope, one per line
@@ -40,6 +40,28 @@ block_runs() {
 		END { flush(prev) }'
 }
 
+# error_shapes prints file:line for each error literal in non-test Go that breaks the STYLE.md error shape
+error_shapes() {
+	printf '%s\n' "$FILES" | grep -E '^(library|cli)/.*\.go$' | grep -v '_test\.go$' | tr '\n' '\0' |
+		xargs -0 grep -HnE -A1 'fmt\.Errorf\(|errors\.New\(|PrintError\(|result\.Err(WithDetails)?(\[[^]]*\])?\(' |
+		awk -v emdash="$(printf '\xe2\x80\x94')" '
+		function check(loc, lit) {
+			if (index(lit, emdash) || lit ~ /[();?]/ || index(lit, "\\n") || lit ~ /\. [A-Za-z]/ || tolower(lit) ~ /failed to/ || lit ~ /^[A-Z][a-z]/ || length(lit) > 100) print loc
+		}
+		{
+			s = $0
+			if (match(s, /(fmt\.Errorf|errors\.New|PrintError|result\.Err(WithDetails)?(\[[^]]*\])?)\(/)) {
+				pending = ""; split($0, a, ":"); loc = a[1] ":" a[2]
+				s = substr(s, RSTART + RLENGTH)
+				if ($0 ~ /result\.Err/ && match(s, /"[^"]*",[[:space:]]*/)) s = substr(s, RSTART + RLENGTH)
+				if (match(s, /"([^"\\]|\\.)*"/)) check(loc, substr(s, RSTART + 1, RLENGTH - 2)); else pending = loc
+				next
+			}
+			if (pending != "" && match($0, /"([^"\\]|\\.)*"/)) check(pending, substr($0, RSTART + 1, RLENGTH - 2))
+			pending = ""
+		}'
+}
+
 # list_rule prints every offending file:line for one rule
 list_rule() {
 	case "$1" in
@@ -49,6 +71,7 @@ list_rule() {
 	comment-block-css) block_runs css '/*' '*/' ;;
 	comment-block-html) block_runs html '<!--' '-->' ;;
 	short-long) grep -HnE 'Short:[[:space:]]*"' cli/gitsocial/*.go | awk -F'"' 'length($2) > 50 { split($0, a, ":"); print a[1] ":" a[2] }' ;;
+	error-shape) error_shapes ;;
 	flag-help)
 		grep -HnE 'Flags\(\)\.(String|Bool|Int|Int64|Uint|Float64|Duration|StringSlice|StringArray|Count|Var)(Var)?P?\(' cli/gitsocial/*.go | awk '{
 			s = $0; n = 0

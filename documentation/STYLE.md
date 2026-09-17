@@ -2,7 +2,7 @@
 
 One register for everything in this repository, the one `README.md` and `specs/` already use: short sentences that say what, not why.
 
-[Where things go](#where-things-go) · [Prose rules](#prose-rules) · [Help text](#help-text) · [Documentation](#documentation) · [Comments](#comments) · [Commits](#commits) · [Tests](#tests) · [Checks](#checks)
+[Where things go](#where-things-go) · [Prose rules](#prose-rules) · [Help text](#help-text) · [Errors](#errors) · [Documentation](#documentation) · [Comments](#comments) · [Commits](#commits) · [Tests](#tests) · [Checks](#checks)
 
 ## Where things go
 
@@ -36,7 +36,7 @@ Apply to help, errors, TUI hints, site strings, log lines, guides, comments and 
 | `Short` | verb first, no period, no parenthetical | 50 characters |
 | flag help | what the flag does; cobra prints the default | 60 characters, no parenthetical |
 | `Long` | one paragraph of what, then the reference the terminal needs (values, inline syntax, scopes, what a command publishes, key tables), then examples; rationale goes to the commit body and guide sentences to the guide | 12 lines of prose; tables and examples are not counted |
-| error | one sentence naming the thing and the next action | one line |
+| error | see [Errors](#errors) | one line |
 | stderr hint | same as error, prefixed `gitsocial:` | one line |
 
 Examples, before and after.
@@ -85,6 +85,29 @@ Examples:
 ```
 
 The current text's explanations (the remote heuristic, the thin-fork escape hatch, why gitmsg branches merge cleanly) become guide steps and reference rows in `S3.md`; the rest goes.
+
+## Errors
+
+An error is one sentence, lowercase, no period: the thing that failed, then the next action when the reader has one. The same rule holds for `fmt.Errorf`, `errors.New`, `result.Err` and the CLI's `PrintError`. A wrap adds one context phrase before the colon and nothing else.
+
+- Name the object, not the verb: `read config: %w`, not `failed to read config: %w`.
+- The next action is something the reader can type, after a colon. What was refused and why goes to the commit body.
+- No parenthesis, semicolon, question mark, newline or em-dash. A second clause is the next action, or it goes.
+- Under 100 characters before the verbs expand.
+- Change the words, not the chain: a sentinel stays, `%w` stays.
+
+Examples, before and after (`[em-dash]` stands for the original's em-dash):
+
+- `no S3 credentials for %s [em-dash] store them with:\n  gitsocial config credentials set %s`
+- `no S3 credentials for %s: run gitsocial config credentials set %s`
+- `%s exists but is not a git repository [em-dash] refusing to touch it; pick another --dir or remove it`
+- `%s is not a git repository: pick another --dir`
+- `invalid --state %q (valid: open, closed, merged, all)`
+- `invalid --state %q: use open, closed, merged or all`
+- `branch %q not found in refs/remotes/origin (run \`git fetch\`?)`
+- `branch %q is not in refs/remotes/origin: run git fetch`
+- `failed to init bare repo: %w`
+- `init bare repo: %w`
 
 ## Documentation
 
@@ -155,7 +178,7 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 
 ## Checks
 
-`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts seven rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts eight rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
 
 | Rule | Counts |
 |---|---|
@@ -163,5 +186,6 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
 | `short-long` | a cobra `Short` over 50 characters |
 | `flag-help` | flag help over 60 characters, or containing a parenthesis |
+| `error-shape` | an error literal in non-test Go with a parenthesis, semicolon, question mark, newline, em-dash, a second sentence, "failed to", a capital first letter, or over 100 characters |
 
 `specs/`, `testdata/`, golden files and the vendored web assets under `library/core/site/assets/` are out of scope for every rule.
