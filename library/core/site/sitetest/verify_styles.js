@@ -90,6 +90,18 @@ function checkMetaRow(theme, metas) {
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 
+// checkEditedBit asserts the edited marker is a plain meta bit, never a chip.
+// edited is a list route's ".edited" record, chips its ".chip" record.
+function checkEditedBit(theme, edited, chips) {
+  if (!edited || !chips) {
+    ok("edited marker " + theme + ": both records captured", false, "edited=" + !!edited + " chips=" + !!chips);
+    return;
+  }
+  const radii = new Set(chips.map((r) => r.borderRadius));
+  ok("edited marker " + theme + ": no pill radius, no chip fill", edited.every((r) => !radii.has(r.borderRadius) && r.backgroundColor === "rgba(0, 0, 0, 0)"),
+    edited.map((r) => r.borderRadius + " " + r.backgroundColor).join("|"));
+}
+
 // ERR_STYLE pins the C.2 tokens the error notice carries: --danger text on a
 // --danger-t1 fill, --pad-panel padding at the 16px root, --r-panel corners.
 const ERR_STYLE = { color: "rgb(207, 34, 46)", padding: "9.6px 14.4px", borderRadius: "10px" };
@@ -185,7 +197,7 @@ async function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, listMetas = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
+  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
   let detailShort = "";
   for (const route of ROUTES) {
     let hash = route.hash;
@@ -197,7 +209,7 @@ async function main() {
     for (const [theme, flags] of Object.entries(THEMES)) {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
-      if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; }
+      if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; }
       if (route.name === "branch-missing") errNotices[theme] = got[".err"];
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];
@@ -223,6 +235,7 @@ async function main() {
   if (!update) for (const theme of Object.keys(THEMES)) {
     checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
     checkMetaRow(theme, listMetas[theme]);
+    checkEditedBit(theme, listEdited[theme], listChips[theme]);
     checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
   }

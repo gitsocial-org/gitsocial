@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -311,15 +311,6 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     if (ev.preventDefault) ev.preventDefault();
     if (parseRoute(location.hash).type === "search") { if (focusSearchInput) focusSearchInput(); return; }
     location.hash = "#/search";
-  }
-
-  // repoTitle derives a display name from the served directory.
-  function repoTitle(base) {
-    try {
-      const u = new URL(base);
-      const segs = u.pathname.split("/").filter(Boolean);
-      return segs.length ? segs[segs.length - 1] : (u.hostname || "repository");
-    } catch { return "repository"; }
   }
 
   // HEX_RE / FAVICON_RE mirror the writer's strict validation (site_customization.go):

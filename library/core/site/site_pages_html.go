@@ -994,19 +994,28 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	return d
 }
 
-// sitePageListChip drops a list row's state pill on the types whose glyph is already tinted by state.
-func sitePageListChip(it *sitePageItem) *sitePageChip {
-	chip := sitePageItemChip(it)
-	if chip == nil || it.Retracted {
-		return chip
+// siteRowChips lists a row's head chips: the head's own chips, less the state pill a tinted glyph already carries. Mirrors rowChips in gs-core.js.
+func siteRowChips(it *sitePageItem, head string) []sitePageChip {
+	chips := siteHeadChips(it, head)
+	if len(chips) == 0 || it.Retracted {
+		return chips
 	}
 	switch pageItemType(it) {
 	case "issue", "pull-request":
-		if strings.HasPrefix(chip.Class, "state ") {
-			return nil
+		if strings.HasPrefix(chips[0].Class, "state ") {
+			return chips[1:]
 		}
 	}
-	return chip
+	return chips
+}
+
+// siteRowHeadChips splits a row's head chips by slot: the pill leading the subject, then the release version trailing it.
+func siteRowHeadChips(it *sitePageItem, head string) (*sitePageChip, []sitePageChip) {
+	chips := siteRowChips(it, head)
+	if len(chips) == 0 || chips[0].Label == siteReleaseVersionChip(pageItemField(it, "version"), head) {
+		return nil, chips
+	}
+	return &chips[0], chips[1:]
 }
 
 // sitePageSubjectOrPlaceholder strips a promoted first line to its words, or falls back to a placeholder.
@@ -1017,15 +1026,20 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 	return "(untitled)"
 }
 
-// buildSiteListEntry renders one root as a list or front row; defaultType suppresses the type bit on a type's own list.
-func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageListEntry {
+// buildSiteListEntry renders one root as a list page's row; defaultType suppresses the type bit on a type's own list.
+func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 	subject = siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
+	// A list page sits one directory below the item pages.
+	href := "../i/" + it.Msg.Short + ".html"
 	meta := []sitePageBit{
 		sitePageAuthorBit(it.Msg),
 		sitePageTimeBit(pageEffectiveTime(it.Msg)),
-		sitePageHashBit(it.Msg.Short, base+"i/"+it.Msg.Short+".html"),
+		sitePageHashBit(it.Msg.Short, href),
+	}
+	if it.Edited && !it.Retracted {
+		meta = append(meta, sitePageEditedBit(it))
 	}
 	if t != defaultType {
 		meta = append(meta, sitePageTextBit(sitePageTypeLabel(t)))
@@ -1038,13 +1052,14 @@ func buildSiteListEntry(it *sitePageItem, base, defaultType string) sitePageList
 	classType := sitePageGlyphClassType(it)
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, classType, state)
+	chip, tail := siteRowHeadChips(it, subject)
 	return sitePageListEntry{
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
 		GlyphTitle: sitePageGlyphTitle(classType, state),
-		Chip:       sitePageListChip(it),
-		TailChips:  siteReleaseVersionChips(it, subject),
-		Href:       base + "i/" + it.Msg.Short + ".html",
+		Chip:       chip,
+		TailChips:  tail,
+		Href:       href,
 		Title:      subject,
 		Meta:       meta,
 	}
@@ -1092,10 +1107,12 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			state := pageItemField(it, "state")
 			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
 			href := "./i/" + it.Msg.Short + ".html"
+			chip, tail := siteRowHeadChips(it, subject)
 			row := sitePageListEntry{
 				Href:       href,
 				Title:      subject,
-				TailChips:  siteReleaseVersionChips(it, subject),
+				Chip:       chip,
+				TailChips:  tail,
 				Meta:       []sitePageBit{sitePageAuthorBit(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg)), sitePageHashBit(it.Msg.Short, href)},
 				Glyph:      glyph,
 				GlyphClass: glyphClass,

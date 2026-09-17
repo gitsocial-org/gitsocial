@@ -3,7 +3,7 @@
 (function () {
   var SELECTORS = [
     ".card", ".card.comment", ".card.board-card", ".card-head", ".card-chips",
-    ".meta", ".chip", ".chip.state", ".subject", ".thread", ".thread-head",
+    ".meta", ".edited", ".chip", ".chip.state", ".subject", ".thread", ".thread-head",
     ".card.feedback", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
     ".detail > .card-head", ".detail > .card-head > h1.subject",
   ];

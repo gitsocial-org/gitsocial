@@ -71,7 +71,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 
 | Component | Classes | Renderers | Notes |
 |---|---|---|---|
-| Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state |
+| Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state; the title is `site.title`, else the bucket name |
 | Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js` |
 | Feedback card | `.card.feedback`, the verdict on `.verdict-<state>` as a 3px left border and on a chip | both | approved or changes-requested; the file and line anchor ride a plain chip, dropped inline under the line they anchor; padding, radius and background come from `.card` |
 | Chip | `.chip` plus one variant class, built by `chipEl` in JS and the `chip` template in Go | both | mono, `--fs-ui`, pill radius, tint fills from the token scale; a chip never carries the edited marker |

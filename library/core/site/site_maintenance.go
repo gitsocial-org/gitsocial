@@ -105,7 +105,7 @@ func reclaimSitePagesFront(client *objstore.Client, prefix string, refs map[stri
 	if !on {
 		return true // layer off: index.html is legitimately the shell
 	}
-	site := sitePageSiteFor(prefix, cfg, url)
+	site := sitePageSiteFor(cfg, url)
 	manifest, err := readSitePagesManifest(client, prefix)
 	if err != nil {
 		return false

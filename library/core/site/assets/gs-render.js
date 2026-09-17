@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, headSubject, releaseVersionChip, headChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -880,7 +880,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       ]);
       const sc = versionRowStateChip(versions, i);
       if (sc) meta.append(sc);
-      if (v.editorName) meta.append(el("span", { class: "chip" }, ["edited by " + v.editorName]));
+      if (v.editorName) meta.append(" · ", editedBit(v.editorName, when));
       const diffPane = el("div", { class: "version-diff-pane" }, []);
       if (i > 0) {
         const dBtn = el("button", { class: "version-diff-btn", type: "button" }, ["diff to previous"]);
@@ -3983,7 +3983,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const branch = item._branch || "";
     const code = item._ext === "code";
     const glyph = code ? el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]) : typeGlyphEl(item, item._ext);
-    const head = cardHead(glyph, commitRef(item.commit.hash, branch), itemSubject(item) || "(untitled)");
+    const title = headSubject(item.header, item._ext, itemSubject(item));
+    const chips = rowHeadChips(item.header, item._ext, title);
+    const head = cardHead(glyph, commitRef(item.commit.hash, branch), title, chips.tail.map(chipEl), chips.lead ? chipEl(chips.lead) : null);
     const meta = el("span", { class: "meta" }, [item.author || "", " · ", timeEl(item.effectiveTime)]);
     if (code) meta.append(" · ", el("a", { class: "hash", href: commitRef(item.commit.hash, branch) }, [item.commit.short]));
     return card({ parts: [head, meta], nav: { hash: item.commit.hash, branch } });
@@ -4075,6 +4077,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeActivityRow, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

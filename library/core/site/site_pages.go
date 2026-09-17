@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"math"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -27,7 +28,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 26
+	sitePagesVersion = 27
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -178,13 +179,13 @@ func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 }
 
 // sitePageSiteFor assembles the site identity every page stamps, resolving a relative site.image against the base URL.
-func sitePageSiteFor(prefix string, cfg siteCustomization, url string) sitePageSite {
-	site := sitePageSite{Title: cfg.Title, URL: url, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
+func sitePageSiteFor(cfg siteCustomization, base string) sitePageSite {
+	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Image != "" && !strings.Contains(site.Image, "://") {
-		site.Image = url + site.Image
+		site.Image = base + site.Image
 	}
 	if site.Title == "" {
-		site.Title = sitePageDefaultTitle(prefix)
+		site.Title = sitePageDefaultTitle(base)
 	}
 	return site
 }
@@ -214,7 +215,7 @@ func sitePagesState(client *objstore.Client, prefix string, refs map[string]stri
 		return "", true
 	}
 	// The file layer's flag comes from the recorded set, since this helper has no default branch to walk a tree from.
-	site := sitePageSiteFor(prefix, cfg, url)
+	site := sitePageSiteFor(cfg, url)
 	site.Files = sitePagesHasFiles(manifest)
 	if manifest.SiteHash != sitePageSiteHash(site) {
 		return "", true
@@ -243,7 +244,7 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 		}
 		return false, sitePagesStateOff, nil
 	}
-	site := sitePageSiteFor(prefix, cfg, url)
+	site := sitePageSiteFor(cfg, url)
 	manifest, err := readSitePagesManifest(client, prefix)
 	if err != nil {
 		return false, "", err
@@ -324,16 +325,19 @@ func readSiteFrontCodeEntries(client *objstore.Client, prefix string, limit int)
 	return out, nil
 }
 
-// sitePageDefaultTitle derives a fallback site title from the key prefix's last segment.
-func sitePageDefaultTitle(prefix string) string {
-	trimmed := strings.TrimSuffix(prefix, "/")
-	if i := strings.LastIndex(trimmed, "/"); i >= 0 {
-		trimmed = trimmed[i+1:]
-	}
-	if trimmed == "" {
+// sitePageDefaultTitle names a site with no configured title: the base URL's last path segment, else its host. Mirrors repoTitle in gs-core.js.
+func sitePageDefaultTitle(base string) string {
+	u, err := url.Parse(base)
+	if err != nil {
 		return "repository"
 	}
-	return trimmed
+	if segs := strings.FieldsFunc(u.Path, func(r rune) bool { return r == '/' }); len(segs) > 0 {
+		return segs[len(segs)-1]
+	}
+	if host := u.Hostname(); host != "" {
+		return host
+	}
+	return "repository"
 }
 
 // readSitePagesManifests reads every present items manifest plus the code index, returning the gitmsg manifests and the consumed-tip map.
@@ -951,7 +955,7 @@ func siteChainedListPage(list sitePageList, entries []sitePageListEntry, metaBit
 func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePageItem, total, sealed int) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(head))
 	for _, it := range head {
-		entries = append(entries, buildSiteListEntry(it, "../", sitePageDefaultTypes[list.Ext]))
+		entries = append(entries, buildSiteListEntry(it, sitePageDefaultTypes[list.Ext]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, list.Label)}
 	if list.Ext == "pm" || list.Ext == "review" {
@@ -988,7 +992,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries []*sitePageItem, n, sealed int) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(pageEntries))
 	for _, it := range pageEntries {
-		entries = append(entries, buildSiteListEntry(it, "../", sitePageDefaultTypes[list.Ext]))
+		entries = append(entries, buildSiteListEntry(it, sitePageDefaultTypes[list.Ext]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
 	d := siteChainedListPage(list, entries, metaBits, n, sealed)

@@ -195,6 +195,7 @@ Each bump gets a row here, newest first:
 
 | Version | What it rewrote |
 |---|---|
+| 27 | the head chips on every row, the edited marker on a list row, and the sidebar title |
 | 26 | the meta row, the empty sentence, the truncation notices, and the copy of `pages-core.css` in every head |
 
 ### Page entry

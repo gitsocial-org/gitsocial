@@ -77,6 +77,18 @@ for (const c of FIX.detailHeads) {
   eq(chipList(GS.headChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": head chips");
 }
 
+console.log("=== parity invariant: list and activity row head subject + chips ===");
+for (const c of FIX.rowHeads) {
+  const subject = GS.headSubject(c.header, c.ext, c.firstLine);
+  eq(subject, c.expectSubject, c.name + ": subject");
+  eq(chipList(GS.rowChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": row chips");
+}
+
+console.log("=== parity invariant: the name an unconfigured site takes ===");
+for (const c of FIX.defaultTitles) {
+  eq(GS.repoTitle(c.base), c.expectTitle, c.name + ": default title");
+}
+
 console.log("=== parity invariant: meta row author label ===");
 for (const c of FIX.metaRow.authors) {
   eq(GS.authorLabel(c.author, c.email), c.expectLabel, c.name + ": label");

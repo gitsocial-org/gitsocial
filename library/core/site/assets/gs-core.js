@@ -30,6 +30,15 @@
     return (loc.origin || "") + dir;
   }
 
+  // repoTitle names a site with no configured title: the base URL's last path segment, else its host. Mirrors sitePageDefaultTitle in site_pages.go.
+  function repoTitle(base) {
+    try {
+      const u = new URL(base);
+      const segs = u.pathname.split("/").filter(Boolean);
+      return segs.length ? segs[segs.length - 1] : (u.hostname || "repository");
+    } catch { return "repository"; }
+  }
+
   // FETCH_TRIES bounds attempts per request; FETCH_HEADERS_MS bounds one attempt's wait for response headers, not its body.
   const FETCH_TRIES = 4;
   const FETCH_HEADERS_MS = 20000;
@@ -2384,6 +2393,25 @@
     return [{ class: "state " + chipStateClass(state), label: state }];
   }
 
+  // GLYPH_STATE_TYPES tint their glyph by state, so a row of that type drops the state pill its head would carry.
+  const GLYPH_STATE_TYPES = { issue: 1, "pull-request": 1 };
+
+  // rowChips lists a row's head chips: the head's own chips, less the state pill a tinted glyph already carries. Mirrors siteRowChips in site_pages_html.go.
+  function rowChips(header, ext, head, retracted) {
+    const h = header || {};
+    const chips = headChips(h, ext, head, retracted);
+    if (!chips.length || retracted || h.retracted === "true") return chips;
+    const type = h.type || EXT_DEFAULT_TYPE[ext] || ext;
+    return GLYPH_STATE_TYPES[type] && /^state /.test(chips[0].class) ? chips.slice(1) : chips;
+  }
+
+  // rowHeadChips splits a row's head chips by slot: the pill leading the subject, then the release version trailing it. Mirrors siteRowHeadChips in site_pages_html.go.
+  function rowHeadChips(header, ext, head, retracted) {
+    const chips = rowChips(header, ext, head, retracted);
+    const lead = chips.length && chips[0].label !== releaseVersionChip((header || {}).version, head) ? chips[0] : null;
+    return { lead, tail: chips.slice(lead ? 1 : 0) };
+  }
+
   // stateCounts tallies items by header state and returns the total with a per-state map.
   function stateCounts(items) {
     const byState = {};
@@ -4019,7 +4047,7 @@
   function iconColorClass(key) { return ICON_COLOR[key] || ""; }
 
   const core = {
-    deriveBase, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
+    deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
@@ -4034,7 +4062,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, headChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary,

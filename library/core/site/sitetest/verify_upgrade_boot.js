@@ -761,15 +761,15 @@ async function main() {
     const painted = findClass(view, "card").map((c) => ({
       glyph: global.__shim.textOf(findClass(c, "type-glyph")[0] || null).trim(),
       glyphClass: tgClass(findClass(c, "type-glyph")[0]),
-      type: global.__shim.textOf(findClass(c, "chip")[0] || null).trim(),
+      chip: global.__shim.textOf(findClass(c, "chip")[0] || null).trim(),
       subject: global.__shim.textOf(findClass(c, "subject")[0] || null).trim(),
     }));
     const section = front.text.slice(front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
-    // No row carries a chip (the glyph, titled with its type, already says what a
-    // label would), so the glyph CLASS is what identifies a row's kind here. The
-    // capture group stays so a chip creeping back in is caught, not ignored.
-    const rows = [...section.matchAll(/<div class="card"><div class="card-head">(?:<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span> )?(?:<span class="chip">([^<]*)<\/span> )?<a class="subject" href="([^"]+)">([^<]*)<\/a>/g)]
-      .map((m) => ({ glyphClass: m[1] || "", glyph: m[2] || "", type: unesc(m[3] || ""), href: m[4], subject: unesc(m[5]) }));
+    // A row leads with its glyph, then the one chip slot the type's list row
+    // fills, so the glyph CLASS identifies a row's kind and the chip is captured
+    // with it: both surfaces fill that slot from the one rule.
+    const rows = [...section.matchAll(/<div class="card"><div class="card-head">(?:<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span> )?(?:<span class="chip[^"]*">([^<]*)<\/span> )?<a class="subject" href="([^"]+)">([^<]*)<\/a>/g)]
+      .map((m) => ({ glyphClass: m[1] || "", glyph: m[2] || "", chip: unesc(m[3] || ""), href: m[4], subject: unesc(m[5]) }));
     ok("home view paints recent-activity rows", painted.length > 0, "painted=" + painted.length);
     ok("front page carries the recent-activity section after the README", front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>') > front.text.indexOf("README"));
     ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.glyphClass === painted[i].glyphClass && r.subject === painted[i].subject),
@@ -792,10 +792,12 @@ async function main() {
     const itemRows = rows.filter((r) => r.glyphClass !== "tg-commit");
     ok("the merge interleaves code commits", codeRows.length > 0 && rows.length > codeRows.length, "code=" + codeRows.length + " of " + rows.length);
     ok("code rows carry the commit glyph", codeRows.every((r) => r.glyph === "◦" && r.glyphClass === "tg-commit"), "glyphs=" + JSON.stringify(codeRows.map((r) => r.glyph + "/" + r.glyphClass)));
-    // Every row is the app's card: glyph, subject, sha on a code row, and no chip
-    // repeating what the glyph's own title already says.
-    ok("no row carries a chip repeating the glyph", rows.every((r) => r.type === "") && painted.every((p) => p.type === ""),
-      "page=" + JSON.stringify(rows.map((r) => r.type)) + " app=" + JSON.stringify(painted.map((p) => p.type)));
+    // Every row is the app's card: glyph, subject, sha on a code row, and the one
+    // chip slot, which no state a tinted glyph already carries may fill.
+    ok("both surfaces fill the row's chip slot alike", rows.every((r, i) => r.chip === painted[i].chip),
+      "page=" + JSON.stringify(rows.map((r) => r.chip)) + " app=" + JSON.stringify(painted.map((p) => p.chip)));
+    ok("no row carries a chip repeating the glyph", stateful.every((r) => r.chip === ""),
+      "page=" + JSON.stringify(stateful.map((r) => r.glyph + ":" + r.chip)));
     ok("code rows carry the commit's short sha in the meta",
       codeRows.every((r) => new RegExp(" · <a class=\"hash\" href=\"[^\"]*\">[0-9a-f]{12}</a></span>").test(section.slice(section.indexOf(r.href)))),
       "hrefs=" + JSON.stringify(codeRows.map((r) => r.href)));

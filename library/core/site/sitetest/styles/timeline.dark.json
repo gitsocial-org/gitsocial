@@ -177,6 +177,18 @@
       "borderRadius": "0px"
     }
   ],
+  ".edited": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.54 0.56 0.61)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "0px"
+    }
+  ],
   ".chip": [
     {
       "shape": "",

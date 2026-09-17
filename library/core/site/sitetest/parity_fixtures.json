@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. metaRow pins the meta row skeleton: the bit classes in order, and the author label and its email title both renderers derive. listEmpty pins each list route\u0027s empty sentence, which both renderers show.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label and its email title both renderers derive. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -280,14 +280,81 @@
       "expectChips": [{ "class": "chip-retracted", "label": "retracted" }]
     }
   ],
+  "rowHeads": [
+    {
+      "name": "issue-row-leaves-the-state-to-its-glyph",
+      "ext": "pm",
+      "header": { "type": "issue", "state": "closed" },
+      "firstLine": "Fix the parser",
+      "expectSubject": "Fix the parser",
+      "expectChips": []
+    },
+    {
+      "name": "draft-pull-request-row-keeps-the-draft-chip",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "open", "draft": "true" },
+      "firstLine": "Expand notes with more lines",
+      "expectSubject": "Expand notes with more lines",
+      "expectChips": [{ "class": "", "label": "draft" }]
+    },
+    {
+      "name": "milestone-row-keeps-its-state-chip",
+      "ext": "pm",
+      "header": { "type": "milestone", "state": "completed" },
+      "firstLine": "v1.0 Launch",
+      "expectSubject": "v1.0 Launch",
+      "expectChips": [{ "class": "state completed", "label": "completed" }]
+    },
+    {
+      "name": "prerelease-row-leads-with-the-prerelease-chip",
+      "ext": "release",
+      "header": { "type": "release", "tag": "nightly", "version": "1.3.0", "prerelease": "true" },
+      "firstLine": "Nightly build",
+      "expectSubject": "nightly",
+      "expectChips": [{ "class": "pre state", "label": "prerelease" }, { "class": "", "label": "v1.3.0" }]
+    },
+    {
+      "name": "stable-release-row-heads-with-its-tag-alone",
+      "ext": "release",
+      "header": { "type": "release", "tag": "v2.0.0", "version": "2.0.0" },
+      "firstLine": "Ship the rewrite",
+      "expectSubject": "v2.0.0",
+      "expectChips": []
+    },
+    {
+      "name": "retracted-row-heads-with-one-tombstone-chip",
+      "ext": "release",
+      "header": { "type": "release", "tag": "v3.0.0", "version": "3.0.0", "retracted": "true" },
+      "retracted": true,
+      "firstLine": "Ship it",
+      "expectSubject": "v3.0.0",
+      "expectChips": [{ "class": "chip-retracted", "label": "retracted" }]
+    },
+    {
+      "name": "post-row-heads-bare",
+      "ext": "social",
+      "header": {},
+      "firstLine": "Anyone tried the new thread view yet?",
+      "expectSubject": "Anyone tried the new thread view yet?",
+      "expectChips": []
+    }
+  ],
   "metaRow": {
     "bits": ["author", "reltime", "hash"],
+    "editedBits": ["author", "reltime", "hash", "edited"],
     "authors": [
       { "name": "a display name over its email", "author": "Ada Lovelace", "email": "ada@example.com", "expectLabel": "Ada Lovelace", "expectTitle": "ada@example.com" },
       { "name": "an email alone labels the row", "author": "", "email": "ada@example.com", "expectLabel": "ada@example.com", "expectTitle": "" },
       { "name": "neither name nor email reads unknown", "author": "", "email": "", "expectLabel": "unknown", "expectTitle": "" }
     ]
   },
+  "defaultTitles": [
+    { "name": "a bucket under a host", "base": "https://example.com/thread-demo/", "expectTitle": "thread-demo" },
+    { "name": "a bucket under a prefix", "base": "https://example.com/team/thread-demo/", "expectTitle": "thread-demo" },
+    { "name": "a site at the root of its host", "base": "https://gitsocial.org/", "expectTitle": "gitsocial.org" },
+    { "name": "a host with a port", "base": "http://127.0.0.1:8000/docs-repo/", "expectTitle": "docs-repo" },
+    { "name": "no base at all", "base": "", "expectTitle": "repository" }
+  ],
   "listEmpty": {
     "issues": "No issues in this repository.",
     "milestones": "No milestones in this repository.",

@@ -80,10 +80,18 @@ type parityAuthorCase struct {
 	ExpectTitle string `json:"expectTitle"`
 }
 
-// parityMetaRow pins the meta row skeleton: its bit classes in order, and its author cases.
+// parityMetaRow pins the meta row skeleton: its bit classes in order, the edited row's, and its author cases.
 type parityMetaRow struct {
-	Bits    []string           `json:"bits"`
-	Authors []parityAuthorCase `json:"authors"`
+	Bits       []string           `json:"bits"`
+	EditedBits []string           `json:"editedBits"`
+	Authors    []parityAuthorCase `json:"authors"`
+}
+
+// parityDefaultTitle pins the name a site with no configured title takes.
+type parityDefaultTitle struct {
+	Name        string `json:"name"`
+	Base        string `json:"base"`
+	ExpectTitle string `json:"expectTitle"`
 }
 
 // parityFixtures is the shared fixture file shape.
@@ -93,7 +101,9 @@ type parityFixtures struct {
 	FeedbackCards  []parityFeedbackCase    `json:"feedbackCards"`
 	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
 	DetailHeads    []parityDetailHeadCase  `json:"detailHeads"`
+	RowHeads       []parityDetailHeadCase  `json:"rowHeads"`
 	MetaRow        parityMetaRow           `json:"metaRow"`
+	DefaultTitles  []parityDefaultTitle    `json:"defaultTitles"`
 	ListEmpty      map[string]string       `json:"listEmpty"`
 	ListHeadings   map[string]string       `json:"listHeadings"`
 }
@@ -174,12 +184,57 @@ func TestParityMetaRow(t *testing.T) {
 	if got := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("item page meta bits = %q, want %q", got, want)
 	}
-	row := buildSiteListEntry(it, "../", "issue")
+	row := buildSiteListEntry(it, "issue")
 	if got := strings.Join(parityBitClasses(row.Meta, len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("list row meta bits = %q, want %q", got, want)
 	}
 	if row.Meta[2].Href != "../i/"+msg.Short+".html" {
 		t.Errorf("list row hash href = %q, want the item's own page", row.Meta[2].Href)
+	}
+}
+
+// TestParityEditedMetaRow asserts an edited item carries the marker as a bit
+// after the hash, on its item page and on its list row alike.
+func TestParityEditedMetaRow(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.MetaRow.EditedBits) == 0 {
+		t.Fatal("no edited meta row case in parity fixtures")
+	}
+	header := &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}
+	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("c", 40), Short: strings.Repeat("c", 12), Message: "An issue", TS: 1700000000, Header: header}
+	edit := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("d", 40), Short: strings.Repeat("d", 12), Message: "An issue, edited", TS: 1700003600, Author: "Bob", Email: "bob@example.com", Header: header}
+	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
+	want := strings.Join(f.MetaRow.EditedBits, ",")
+	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta} {
+		if got := strings.Join(parityBitClasses(bits, len(f.MetaRow.EditedBits)), ","); got != want {
+			t.Errorf("%s meta bits = %q, want %q", name, got, want)
+		}
+	}
+	bit := sitePageEditedBit(it)
+	if bit.Text != "edited by Bob" || bit.Title != sitePagePreciseTime(edit.TS) {
+		t.Errorf("edited bit = %+v, want the editor's name and the edit's precise time", bit)
+	}
+}
+
+// TestParityDefaultTitle asserts an unconfigured site takes the bucket name the
+// app's own repoTitle derives, against the fixture unit_parity.js also asserts.
+func TestParityDefaultTitle(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.DefaultTitles) == 0 {
+		t.Fatal("no default title cases in parity fixtures")
+	}
+	for _, c := range f.DefaultTitles {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := sitePageDefaultTitle(c.Base); got != c.ExpectTitle {
+				t.Errorf("default title = %q, want %q", got, c.ExpectTitle)
+			}
+			if got := sitePageSiteFor(siteCustomization{}, c.Base).Title; got != c.ExpectTitle {
+				t.Errorf("stamped site title = %q, want %q", got, c.ExpectTitle)
+			}
+		})
+	}
+	if got := sitePageSiteFor(siteCustomization{Title: "Thread Demo"}, "https://example.com/thread-demo/").Title; got != "Thread Demo" {
+		t.Errorf("configured site title = %q, want the configured value", got)
 	}
 }
 
@@ -306,6 +361,32 @@ func TestParityDetailHead(t *testing.T) {
 				want = append(want, chip.Class+"|"+chip.Label)
 			}
 			got := parityChipList(siteHeadChips(it, subject))
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("chips = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// TestParityRowHead asserts every row type's head subject and chips against the fixture unit_parity.js also asserts.
+func TestParityRowHead(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.RowHeads) == 0 {
+		t.Fatal("no row head cases in parity fixtures")
+	}
+	for _, c := range f.RowHeads {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: c.Ext, Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+			it := &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Retracted}
+			subject := siteHeadSubject(pageItemType(it), pageItemField(it, "tag"), pageItemField(it, "version"), c.FirstLine)
+			if subject != c.ExpectSubject {
+				t.Errorf("subject = %q, want %q", subject, c.ExpectSubject)
+			}
+			want := make([]string, 0, len(c.ExpectChips))
+			for _, chip := range c.ExpectChips {
+				want = append(want, chip.Class+"|"+chip.Label)
+			}
+			got := parityChipList(siteRowChips(it, subject))
 			if strings.Join(got, ",") != strings.Join(want, ",") {
 				t.Errorf("chips = %v, want %v", got, want)
 			}
