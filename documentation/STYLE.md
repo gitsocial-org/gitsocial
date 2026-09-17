@@ -184,7 +184,7 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 |---|---|
 | `emdash` | em-dashes in any tracked file |
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
-| `comment-heavy` | a commit in the pushed range whose added comment lines outnumber its added code lines |
+| `comment-heavy` | a commit in the pushed range whose net new comment lines, added minus removed, outnumber its added code lines |
 | `short-long` | a cobra `Short` over 50 characters |
 | `flag-help` | flag help over 60 characters, or containing a parenthesis |
 | `error-shape` | an error literal in non-test Go with a parenthesis, semicolon, question mark, newline, em-dash, a second sentence, "failed to", a capital first letter, or over 100 characters |

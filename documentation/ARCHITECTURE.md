@@ -72,7 +72,7 @@ One set of rules for every session.
 - A consistency-sensitive change gets its [design note](#design-notes) first, then one medium review, findings triaged by cause.
 - A mechanical change merges on a green quick tier and one review; the tiers are in [Test and lint](#test-and-lint).
 - Every commit carries a body; [STYLE.md](STYLE.md) holds the register and the examples.
-- A commit whose added comment lines outnumber its added code lines fails the push, unless it changes only documentation.
+- A commit whose net new comment lines outnumber its added code lines fails the push, unless it changes only documentation.
 - The branch flow is in [Branching and builds](#branching-and-builds), and the closing list is [Definition of done](#definition-of-done).
 
 ## Code Rules

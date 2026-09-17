@@ -69,20 +69,20 @@ error_shapes() {
 		}'
 }
 
-# comment_heavy prints hash<TAB>comments/code for each commit in the range adding more comment lines than code lines
+# comment_heavy prints hash<TAB>comments/code for each commit in the range whose net new comment lines outnumber its added code lines
 comment_heavy() {
 	[ -n "$ranges" ] || return 0
 	# shellcheck disable=SC2086
 	for h in $(git log --no-merges --since="$comment_heavy_since" --format=%H $ranges 2>/dev/null); do
 		git show --format= --name-only "$h" | grep -qvE '\.md$|(^|/)testdata/|\.golden$' || continue
 		git show --format= --unified=0 "$h" | awk -v h="$h" '
-			/^\+\+\+/ { next }
-			/^\+/ {
+			/^(\+\+\+|---)/ { next }
+			/^[-+]/ {
 				s = substr($0, 2); sub(/^[[:space:]]+/, "", s)
 				if (s == "") next
-				if (s ~ /^(\/\/|\/\*|\*\/|\*|<!--|-->)/) c++; else k++
+				if (s ~ /^(\/\/|\/\*|\*\/|\*|<!--|-->)/) { if ($0 ~ /^\+/) c++; else r++ } else if ($0 ~ /^\+/) k++
 			}
-			END { if (c > k) print h "\t" c "/" (k + 0) }'
+			END { if (c - r > k) print h "\t" (c - r) "/" (k + 0) }'
 	done
 }
 
