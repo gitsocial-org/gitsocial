@@ -62,6 +62,24 @@
     document.documentElement.setAttribute("data-gs-styles", JSON.stringify(collect()));
   }
 
-  if (window.__gsOnFirstView) window.__gsOnFirstView(function () { setTimeout(emit, 400); });
-  else addEventListener("load", function () { setTimeout(emit, 2500); });
+  // QUIET is how still the DOM must be before a sample; CAP bounds the wait.
+  var QUIET = 400, CAP = 6000;
+
+  // emitSettled samples once the DOM stops changing: a route's deferred
+  // sections, the front page's activity among them, land after the first view,
+  // and a fixed timer races them.
+  function emitSettled() {
+    var last = Date.now(), start = last;
+    var obs = new MutationObserver(function () { last = Date.now(); });
+    obs.observe(document.documentElement, { childList: true, subtree: true });
+    (function tick() {
+      var now = Date.now();
+      if (now - last < QUIET && now - start < CAP) { setTimeout(tick, 50); return; }
+      obs.disconnect();
+      emit();
+    })();
+  }
+
+  if (window.__gsOnFirstView) window.__gsOnFirstView(emitSettled);
+  else addEventListener("load", emitSettled);
 })();

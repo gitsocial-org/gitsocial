@@ -45,9 +45,18 @@ put("b4", "blob", "deep text\n");
 put("b5", "blob", "leaf text\n");
 put("bb", "blob", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]));
 put("b6", "blob", "package lib\n");
+put("b7", "blob", "../README.md");
+put("b8", "blob", (() => { const b = new Uint8Array(2048); b[7] = 0; b[8] = 0x41; return b; })());
+put("b9", "blob", "version https://git-lfs.github.com/spec/v1\noid sha256:4d7a214614ab2935c943f9e0ff69d22eadbb8f32b1258daaa5e2ca24d17e2393\nsize 12345678\n");
 put("a7", "tree", treeBody([{ mode: "100644", name: "leaf.md", sha: sha("b5") }]));
 put("a9", "tree", treeBody([{ mode: "40000", name: "nested", sha: sha("a7") }, { mode: "100644", name: "deep.txt", sha: sha("b4") }]));
-put("a6", "tree", treeBody([{ mode: "100644", name: "util.go", sha: sha("b6") }]));
+put("a6", "tree", treeBody([
+  { mode: "100644", name: "util.go", sha: sha("b6") },
+  { mode: "100644", name: "data.bin", sha: sha("b8") },
+  { mode: "100644", name: "model.bin", sha: sha("b9") },
+  { mode: "120000", name: "LINK.md", sha: sha("b7") },
+  { mode: "160000", name: "vendor", sha: sha("ab") },
+]));
 const rootEntries = (goSha) => treeBody([
   { mode: "40000", name: "docs", sha: sha("a9") },
   { mode: "40000", name: "lib", sha: sha("a6") },
@@ -162,6 +171,21 @@ async function main() {
   eq(rawBtn.getAttribute("aria-pressed"), "true", "the toggle reports its state");
   fire(rawBtn, "click");
   eq(findTag(mdBlob, "h1").map(textOf), ["Title"], "toggling back restores the prose");
+
+  console.log("=== a blob view labels the object it cannot render ===");
+  const labelOf = (node) => findClass(node, "empty").map(textOf);
+  const binBlob = (await GS.treeOrBlob(ctx, "lib/data.bin", "trunk"))[0];
+  eq(labelOf(binBlob), ["Binary file, 2.0 KB"], "a binary blob is labeled with its size");
+  eq(findClass(binBlob, "blob-row").length, 0, "a labeled object renders no source lines");
+  const lfsBlob = (await GS.treeOrBlob(ctx, "lib/model.bin", "trunk"))[0];
+  eq(labelOf(lfsBlob), ["Git LFS pointer"], "an LFS pointer is labeled, not printed as its three lines");
+  eq(findClass(lfsBlob, "blob-row").length, 0, "the pointer body stays off the page");
+  const subBlob = (await GS.treeOrBlob(ctx, "lib/vendor", "trunk"))[0];
+  eq(labelOf(subBlob), ["Submodule at ab0000000000"], "a submodule is labeled with the commit it pins");
+  eq(findClass(subBlob, "empty")[0].getAttribute("title"), sha("ab"), "the full sha rides the label title");
+  const linkBlob = (await GS.treeOrBlob(ctx, "lib/LINK.md", "trunk"))[0];
+  eq(labelOf(linkBlob), ["Symlink to ../README.md"], "a symlink is labeled with its target, not rendered as prose");
+  eq(findClass(linkBlob, "view-toggle").length, 0, "a symlink to markdown offers no Raw toggle");
 
   const dirView = (await GS.treeOrBlob(ctx, "docs", "trunk"))[0];
   eq(findClass(dirView, "breadcrumb").map(textOf), ["trunk / docs"], "a directory path renders the tree with its breadcrumb");

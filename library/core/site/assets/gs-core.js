@@ -1926,6 +1926,30 @@
     return m[1] === "/" || !INLINE_HTML.has(m[2].toLowerCase());
   }
 
+  // MARKDOWN_PATH_RE matches the extensions both renderers render as prose. Mirrors siteFileDocExts in site_pages_files.go.
+  const MARKDOWN_PATH_RE = /\.(md|markdown|mdown|mdx)$/i;
+
+  // isMarkdownPath reports whether a path renders as prose rather than as source.
+  function isMarkdownPath(path) { return MARKDOWN_PATH_RE.test(path || ""); }
+
+  // isMDXPath reports whether a path carries MDX, whose imports and standalone JSX are stripped before parsing.
+  function isMDXPath(path) { return /\.mdx$/i.test(path || ""); }
+
+  // stripMDX drops the import, export and standalone JSX lines the markdown grammar has no rule for. Mirrors siteFileStripMDX in site_pages_files.go.
+  function stripMDX(source) {
+    const kept = [];
+    for (const line of (source || "").split("\n")) {
+      const t = line.trim();
+      if (t.startsWith("import ") || t.startsWith("export ")) continue;
+      if (t.length > 1 && t[0] === "<" && t[t.length - 1] === ">") {
+        const r = t[1];
+        if (r === "/" || (r >= "A" && r <= "Z")) continue;
+      }
+      kept.push(line);
+    }
+    return kept.join("\n");
+  }
+
   // parseMarkdown parses text into a block list; markdown-native blocks are plain data, and html blocks carry verbatim source for the sanitizer.
   function parseMarkdown(text) {
     const lines = (text || "").replace(/\r/g, "").split("\n");
@@ -2348,6 +2372,13 @@
     const checksums = header.checksums ? { name: header.checksums, href: href(header.checksums) } : null;
     const sbom = header.sbom ? { name: header.sbom, href: href(header.sbom) } : null;
     return { artifactUrl: base, artifacts, checksums, sbom, signedBy: header["signed-by"] || "" };
+  }
+
+  // releaseAssetLabel words a release row's asset count, "" when it names none. Mirrors siteReleaseAssetLabel in site_pages_html.go.
+  function releaseAssetLabel(artifacts) {
+    const n = (artifacts || "").split(",").map((s) => s.trim()).filter(Boolean).length;
+    if (!n) return "";
+    return n === 1 ? "1 asset" : n + " assets";
   }
 
   // headSubject titles a card or detail head: a release leads with its tag, every other type with its first line. Mirrors siteHeadSubject in site_pages_html.go.
@@ -3645,6 +3676,16 @@
     return false;
   }
 
+  // LFS_POINTER_PREFIX is a Git LFS pointer's first line; mirrors lfsPointerPrefix in core/git/lfs.go.
+  const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
+
+  // isLFSPointer reports whether a blob opens with the Git LFS pointer line. Mirrors IsLFSPointer in core/git/lfs.go.
+  function isLFSPointer(bytes) {
+    if (!bytes || bytes.length < LFS_POINTER_PREFIX.length) return false;
+    for (let i = 0; i < LFS_POINTER_PREFIX.length; i++) if (bytes[i] !== LFS_POINTER_PREFIX.charCodeAt(i)) return false;
+    return true;
+  }
+
   // ---- Lists (per-element refs; discovery/parsing is DOM-free, testable) ----
 
   // List refs (gitmsg/list.go): metadata at <name>/_meta, one member per ref under <name>/items/<hash>.
@@ -4059,14 +4100,14 @@
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
-    parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow,
+    parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
-    CONCURRENCY, isBinary,
-    itemLabels, isBodyOnly, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
+    CONCURRENCY, isBinary, isLFSPointer,
+    itemLabels, isBodyOnly, facetType, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
     SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel,
     buildIssueHierarchy, pmProgress, searchItems, searchItemsFaceted, parseSearchFilters, itemMatchesHash, searchableText, itemSubject, typeGlyph, loadSearchWindow, fullSearchBytes,
     SEARCH_GROUPS, hashEq,

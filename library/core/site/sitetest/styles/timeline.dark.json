@@ -61,6 +61,26 @@
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(201, 209, 217)",
       "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.chip.open.state > a.subject",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.chip.planned.state > a.subject",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "0px"
     }
   ],
   ".card-chips": [
@@ -205,6 +225,26 @@
       "padding": "0.8px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",
+      "color": "rgb(255, 255, 255)",
+      "backgroundColor": "rgb(107, 114, 128)",
+      "borderLeftColor": "rgb(255, 255, 255)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "",
+      "padding": "0.8px 9.6px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(255, 255, 255)",
+      "backgroundColor": "rgb(31, 157, 85)",
+      "borderLeftColor": "rgb(255, 255, 255)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "",
+      "padding": "0.8px 9.6px",
+      "margin": "0px",
+      "fontSize": "12.8px",
       "color": "srgb(0.54 0.56 0.61)",
       "backgroundColor": "srgb(0.79 0.82 0.85 / 0.09)",
       "borderLeftColor": "srgb(0.54 0.56 0.61)",
@@ -218,6 +258,28 @@
       "color": "rgb(201, 209, 217)",
       "backgroundColor": "srgb(0.79 0.82 0.85 / 0.09)",
       "borderLeftColor": "rgb(201, 209, 217)",
+      "borderRadius": "999px"
+    }
+  ],
+  ".chip.state": [
+    {
+      "shape": "",
+      "padding": "0.8px 9.6px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(255, 255, 255)",
+      "backgroundColor": "rgb(107, 114, 128)",
+      "borderLeftColor": "rgb(255, 255, 255)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "",
+      "padding": "0.8px 9.6px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "rgb(255, 255, 255)",
+      "backgroundColor": "rgb(31, 157, 85)",
+      "borderLeftColor": "rgb(255, 255, 255)",
       "borderRadius": "999px"
     }
   ],

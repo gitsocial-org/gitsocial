@@ -37,7 +37,11 @@ eq(findClass(rich, "chip-priority")[0].className.indexOf("prio-high") !== -1, tr
 
 const marked = GS.memoCard(item("b", { type: "memo", retracted: "true", "origin-platform": "github", "origin-url": "https://example.com/1" }, "Memo"));
 const markedChips = chipText(marked);
-eq([markedChips[0], markedChips[1]], ["retracted", "↗ github"], "retracted leads the row, then the origin badge");
+eq([markedChips[0], markedChips[1]], ["retracted", "↗ github"], "retracted leads the card, then the origin badge");
+eq(chipText(findClass(marked, "card-head")[0]), ["retracted"], "the retracted marker rides the head's one chip slot");
+eq(chipText(findClass(marked, "card-chips")[0]), ["↗ github"], "and the chip row carries the rest");
+const deadComment = GS.timelineCard(Object.assign(item("z", { type: "comment", retracted: "true" }, "Gone"), { _ext: "social" }));
+eq(chipText(findClass(deadComment, "meta")[0]), ["retracted"], "a body-only card has no head, so the marker leads its meta row");
 eq(findClass(marked, "chip-origin")[0].getAttribute("title"), "https://example.com/1", "the origin chip links its upstream URL in the title");
 eq(chipText(GS.memoCard(item("c", { type: "memo", "origin-author-email": "49699333+dependabot[bot]@users.noreply.github.com", "origin-author-name": "dependabot[bot]" }, "Bump"))).indexOf("⚙ bot") !== -1, true, "an automation author gets a bot chip");
 eq(chipText(GS.memoCard(item("d", { type: "memo", "origin-author-email": "ada@example.com", "origin-author-name": "Ada" }, "Note"))).indexOf("⚙ bot"), -1, "a human origin author gets no bot chip");
@@ -46,6 +50,33 @@ const counted = GS.prCard(item("e", { type: "pull-request", state: "open" }, "Co
 const countedText = chipText(counted);
 ok(countedText.indexOf("✓2 ✗1") !== -1, "the review chip tallies approvals and change requests", countedText.join(" | "));
 ok(countedText.indexOf("↩ 4") !== -1 && countedText.indexOf("↻ 3") !== -1 && countedText.indexOf("❞ 1") !== -1, "comment, repost and quote counts each get a chip", countedText.join(" | "));
+
+console.log("=== a release row counts its assets where another row links its hash ===");
+const metaBits = (node) => textOf(findClass(node, "meta")[0]).split(" · ");
+const shipped = GS.releaseCard(item("r", { type: "release", tag: "v1.0", version: "1.0", artifacts: "linux.tar.gz, mac.tar.gz" }, "Ship it"));
+eq(metaBits(shipped).slice(0, 1).concat(metaBits(shipped).slice(2)), ["Ada", "2 assets"], "the release row ends on its asset count");
+eq(findClass(shipped, "hash").length, 0, "and carries no commit hash");
+eq(chipText(shipped).indexOf("2 assets"), -1, "the count is a meta bit, not a head chip");
+eq(metaBits(GS.releaseCard(item("s", { type: "release", tag: "v1.1", artifacts: "one.tar.gz" }, "Ship one"))).slice(2), ["1 asset"], "one artifact reads singular");
+eq(metaBits(GS.releaseCard(item("t", { type: "release", tag: "v1.2" }, "Ship none"))).length, 2, "a release naming no artifact drops the bit");
+eq(findClass(GS.memoCard(item("u", { type: "memo" }, "A memo")), "hash").length, 1, "every other row keeps its hash");
+
+console.log("=== a row's type glyph takes its class from the item type ===");
+const FIX = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "parity_fixtures.json"), "utf8"));
+for (const c of FIX.rowGlyphs) {
+  const row = GS.homeActivityRow(Object.assign(item("g", c.header, "A row"), { _ext: c.ext, _branch: "gitmsg/" + c.ext }));
+  const g = findClass(row, "type-glyph")[0];
+  eq(Array.from(g._cls).filter((x) => x !== "type-glyph"), [c.expectClass], c.name + ": glyph class");
+  eq(g.getAttribute("title"), c.expectTitle, c.name + ": glyph title");
+}
+
+console.log("=== the front activity row is the one meta row ===");
+const bitClasses = (node) => findClass(node, "meta")[0]._children.filter((c) => c.nodeType === 1).map((c) => Array.from(c._cls).join("."));
+const activityItem = Object.assign(item("v", { type: "issue", state: "open" }, "An issue"), { _ext: "pm", _branch: "gitmsg/pm" });
+eq(bitClasses(GS.homeActivityRow(activityItem)), ["author", "reltime", "hash"], "an item row carries the author, time and hash bits");
+eq(bitClasses(GS.homeActivityRow(Object.assign({}, activityItem, { edited: true, editorName: "Bob" }))), ["author", "reltime", "hash", "edited"], "an edited row marks the edit after the hash");
+const codeActivity = { _ext: "code", _branch: "trunk", author: "Ada", effectiveTime: 1750000000, commit: { hash: sha40("8"), short: H("8"), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } };
+eq(bitClasses(GS.homeActivityRow(codeActivity)), ["author", "reltime", "hash"], "a code commit row carries the same bits");
 
 console.log("=== card dispatch and navigation ===");
 const branchOf = (node) => (findClass(node, "subject")[0].getAttribute("href") || "").split("@")[1];

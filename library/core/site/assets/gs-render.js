@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isBodyOnly, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -427,10 +427,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // metaRow renders an item's author, time and hash link, then its edited marker.
   function metaRow(item, branch) {
     const c = item.commit;
+    const h = item.header || {};
     const when = item.effectiveTime || c.authorTime;
     const author = authorLabel(item.author, c.authorName || c.authorEmail);
-    const row = el("span", { class: "meta" }, [authorEl(author, effectiveAuthorEmail(c, item.header)), " · ", timeEl(when), " · "]);
-    row.append(el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]));
+    const row = el("span", { class: "meta" }, [authorEl(author, effectiveAuthorEmail(c, h)), " · ", timeEl(when)]);
+    // A release is named by its tag, so its row counts assets where another row links its hash.
+    if (h.type === "release") {
+      const assets = releaseAssetLabel(h.artifacts);
+      if (assets) row.append(" · ", assets);
+    } else {
+      row.append(" · ", el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]));
+    }
     if (item.edited) row.append(" · ", editedBit(item.editorName, item.editedTime || when));
     return row;
   }
@@ -469,12 +476,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return isBot ? el("span", { class: "chip chip-bot", title: h["origin-author-email"] || "automated author" }, ["⚙ bot"]) : null;
   }
 
-  // headerChips builds the chips a card shows from its header and optional interaction counts.
+  // headerChips builds the chips a card shows from its header and optional interaction counts; the head's one slot carries the retracted marker.
   function headerChips(header, counts) {
     const h = header || {};
     const chips = [];
-    const rc = retractedChip(h);
-    if (rc) chips.push(rc);
     const bc = botChip(h);
     if (bc) chips.push(bc);
     const oc = originChip(h);
@@ -533,9 +538,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return chips && chips.length ? el("div", { class: "card-chips" }, chips) : null;
   }
 
-  // retractedChip returns a "retracted" chip when the header marks the item retracted, else null.
-  function retractedChip(header) {
-    return (header && header.retracted === "true") ? el("span", { class: "chip chip-retracted" }, ["retracted"]) : null;
+  // cardHeadChips splits a card's head chips by slot: the pill leading the subject, then the chips trailing it.
+  function cardHeadChips(header, ext, head) {
+    const chips = rowHeadChips(header, ext, head);
+    return { lead: chips.lead ? chipEl(chips.lead) : null, tail: chips.tail.map(chipEl) };
   }
 
   // typeGlyphEl renders the type glyph; a state-bearing glyph is tinted and names its state in the title.
@@ -543,7 +549,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const g = typeGlyph(item, ext);
     if (!g) return null;
     const h = item.header || {};
-    const t = h.type || ext;
+    const t = facetType(item, ext);
     const stateful = t === "issue" || t === "pull-request";
     const mod = stateful ? glyphStateClass(h.state) : t;
     return el("span", { class: "type-glyph tg-" + mod, title: stateful ? t + " · " + (h.state || "open") : t }, [g]);
@@ -715,6 +721,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // opens a sentence under the thing they answer, and is never a title.
     if (isBodyOnly(item, "social")) {
       const meta = metaRow(item, "gitmsg/social");
+      const marker = cardHeadChips(item.header, "social", subject).lead;
+      if (marker) meta.prepend(marker);
       prependGlyph(meta, item, "social");
       const text = subject + (body ? "\n" + body : "");
       return card({
@@ -722,7 +730,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         nav: { hash: item.commit.hash, branch: "gitmsg/social" },
       });
     }
-    const head = cardHead(typeGlyphEl(item, "social"), commitRef(item.commit.hash, "gitmsg/social"), subjectText(subject) || "(untitled)");
+    const title = subjectText(subject) || "(untitled)";
+    const slots = cardHeadChips(item.header, "social", title);
+    const head = cardHead(typeGlyphEl(item, "social"), commitRef(item.commit.hash, "gitmsg/social"), title, slots.tail, slots.lead);
     return card({
       parts: [head, metaRow(item, "gitmsg/social"), chips, body ? clampedBody(body) : null, quote],
       nav: { hash: item.commit.hash, branch: "gitmsg/social" },
@@ -731,9 +741,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // issueCard renders an issue card; subCount adds an "n sub" chip.
   function issueCard(item, subCount, counts) {
-    const subject = itemSubject(item);
-    const head = cardHead(typeGlyphEl(item, "pm"), commitRef(item.commit.hash, "gitmsg/pm"), subject || "(untitled)",
-      [subCount ? el("span", { class: "chip pm-sub-chip" }, [subCount + " sub"]) : null]);
+    const subject = itemSubject(item) || "(untitled)";
+    const chips = cardHeadChips(item.header, "pm", subject);
+    const head = cardHead(typeGlyphEl(item, "pm"), commitRef(item.commit.hash, "gitmsg/pm"), subject,
+      chips.tail.concat(subCount ? [el("span", { class: "chip pm-sub-chip" }, [subCount + " sub"])] : []), chips.lead);
     return card({
       parts: [head, metaRow(item, "gitmsg/pm"), chipRow(headerChips(item.header, counts))],
       nav: { hash: item.commit.hash, branch: "gitmsg/pm" },
@@ -742,10 +753,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // prCard renders a pull request card with its head to base flow.
   function prCard(item, counts) {
-    const subject = itemSubject(item);
+    const subject = itemSubject(item) || "(untitled)";
     const h = item.header || {};
-    const head = cardHead(typeGlyphEl(item, "review"), commitRef(item.commit.hash, "gitmsg/review"), subject || "(untitled)",
-      null, h.draft === "true" ? el("span", { class: "chip" }, ["draft"]) : null);
+    const chips = cardHeadChips(h, "review", subject);
+    const head = cardHead(typeGlyphEl(item, "review"), commitRef(item.commit.hash, "gitmsg/review"), subject, chips.tail, chips.lead);
     const row = metaRow(item, "gitmsg/review");
     row.append(el("span", { class: "chip" }, [(h.head || "?") + " → " + (h.base || "?")]));
     if (h["depends-on"]) row.append(el("span", { class: "chip" }, ["stacked"]));
@@ -755,17 +766,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
-  // releaseCard renders a release card headed by its tag, with version, prerelease and asset chips.
+  // releaseCard renders a release card headed by its tag, with the prerelease and version chips.
   function releaseCard(item) {
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
-    const assets = releaseAssets(h);
     const title = headSubject(h, "release", subject);
-    const version = releaseVersionChip(h.version, title);
-    const head = cardHead(typeGlyphEl(item, "release"), commitRef(item.commit.hash, "gitmsg/release"), title, [
-      version ? el("span", { class: "chip" }, [version]) : null,
-      assets.artifacts.length ? el("span", { class: "chip" }, [assets.artifacts.length + (assets.artifacts.length === 1 ? " asset" : " assets")]) : null,
-    ], h.prerelease === "true" ? el("span", { class: "chip pre state" }, ["prerelease"]) : null);
+    const chips = cardHeadChips(h, "release", title);
+    const head = cardHead(typeGlyphEl(item, "release"), commitRef(item.commit.hash, "gitmsg/release"), title, chips.tail, chips.lead);
     const showBody = subject && subject !== h.tag;
     return card({
       parts: [head, metaRow(item, "gitmsg/release"), chipRow(headerChips(h)), showBody ? clampedBody(subject + (body ? "\n" + body : "")) : null],
@@ -777,7 +784,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function memoCard(item) {
     const [subject, body] = subjectBody(item.content);
     const h = item.header || {};
-    const head = cardHead(typeGlyphEl(item, "memo"), commitRef(item.commit.hash, "gitmsg/memo"), subjectText(subject) || "(untitled)");
+    const title = subjectText(subject) || "(untitled)";
+    const chips = cardHeadChips(h, "memo", title);
+    const head = cardHead(typeGlyphEl(item, "memo"), commitRef(item.commit.hash, "gitmsg/memo"), title, chips.tail, chips.lead);
     return card({
       parts: [head, metaRow(item, "gitmsg/memo"), chipRow(headerChips(h)), body ? clampedBody(body) : null],
       nav: { hash: item.commit.hash, branch: "gitmsg/memo" },
@@ -1768,8 +1777,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { code, firstHl };
   }
 
+  // blobLabelView renders an object the blob view labels instead of rendering: the breadcrumb, then one naming line.
+  function blobLabelView(path, branch, label, title) {
+    const line = el("div", { class: "empty" }, [label]);
+    if (title) line.setAttribute("title", title);
+    return [el("div", { class: "detail" }, [el("div", { class: "blob-head" }, [breadcrumb(path, branch)]), line])];
+  }
+
   // blobView renders a file: images and videos inline before the binary sniff, else text with a Raw toggle for markdown.
   function blobView(bytes, path, branch, line, lineEnd, ctx, tip) {
+    if (isLFSPointer(bytes)) return blobLabelView(path, branch, "Git LFS pointer");
     const wrap = el("div", { class: "detail" }, []);
     const blobMeta = el("div", { class: "meta blob-meta" }, [humanSize(bytes.length)]);
     const head = el("div", { class: "blob-head" }, [breadcrumb(path, branch), blobMeta]);
@@ -1792,7 +1809,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return [wrap];
     }
     if (isBinary(bytes)) {
-      wrap.append(el("div", { class: "empty" }, ["Binary file not shown."]));
+      wrap.append(el("div", { class: "empty" }, ["Binary file, " + humanSize(bytes.length)]));
       return [wrap];
     }
     let slice = bytes, truncated = false;
@@ -1804,11 +1821,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (raw.firstHl) setTimeout(() => raw.firstHl.scrollIntoView({ block: "center" }), 0);
       return wrapFullscreen(raw.code);
     };
-    if (/\.(md|markdown)$/i.test(path)) {
+    if (isMarkdownPath(path)) {
       const dir = path.indexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/")) : "";
+      const prose = isMDXPath(path) ? stripMDX(textStr) : textStr;
       const pane = el("div", {}, []);
       const btn = rawToggle(
-        () => pane.replaceChildren(renderMarkdown(textStr, { ctx, branch, dir, tip })),
+        () => pane.replaceChildren(renderMarkdown(prose, { ctx, branch, dir, tip })),
         () => pane.replaceChildren(renderRaw()),
         !!line);
       head.append(el("div", { class: "view-modes" }, [btn]));
@@ -3871,6 +3889,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const entries = await getTree(ctx, node.sha);
       return treeView(ctx, entries || [], path, branch);
     }
+    if (node.type === "commit") return blobLabelView(path, branch, "Submodule at " + node.sha.slice(0, 12), node.sha);
+    if (node.mode === "120000") {
+      const target = await getContentObject(ctx, node.sha);
+      if (!target) return [el("div", { class: "err" }, ["Object not found."])];
+      return blobLabelView(path, branch, "Symlink to " + new TextDecoder().decode(target.body).trim());
+    }
     // A file view awaits the tokenizer, bounded, so the pane renders highlighted the first time.
     const prismReady = langForPath(path) ? ensurePrism() : null;
     const obj = await getContentObject(ctx, node.sha);
@@ -3984,11 +4008,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const code = item._ext === "code";
     const glyph = code ? el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]) : typeGlyphEl(item, item._ext);
     const title = headSubject(item.header, item._ext, itemSubject(item));
-    const chips = rowHeadChips(item.header, item._ext, title);
-    const head = cardHead(glyph, commitRef(item.commit.hash, branch), title, chips.tail.map(chipEl), chips.lead ? chipEl(chips.lead) : null);
-    const meta = el("span", { class: "meta" }, [item.author || "", " · ", timeEl(item.effectiveTime)]);
-    if (code) meta.append(" · ", el("a", { class: "hash", href: commitRef(item.commit.hash, branch) }, [item.commit.short]));
-    return card({ parts: [head, meta], nav: { hash: item.commit.hash, branch } });
+    const chips = cardHeadChips(item.header, item._ext, title);
+    const head = cardHead(glyph, commitRef(item.commit.hash, branch), title, chips.tail, chips.lead);
+    return card({ parts: [head, metaRow(item, branch)], nav: { hash: item.commit.hash, branch } });
   }
 
   // homeActivityMore renders the trailing link to the full timeline.

@@ -134,7 +134,7 @@ func writeSiteCommitPages(client *objstore.Client, prefix string, entries []site
 // buildSiteCommitEntry renders one commit row: its subject linking into the app's commit view, its meta line, and the id that makes the row citable.
 func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntry {
 	short := e.SHA[:12]
-	glyph, glyphClass := sitePageGlyph("commit", "commit", "")
+	glyph, glyphClass := sitePageGlyph("commit", "")
 	href := base + "index.html#commit:" + short + "@" + branch
 	return sitePageListEntry{
 		ID:         "c-" + short,

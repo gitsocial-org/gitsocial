@@ -84,6 +84,19 @@ for (const c of FIX.rowHeads) {
   eq(chipList(GS.rowChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": row chips");
 }
 
+console.log("=== parity invariant: the asset count a release row carries ===");
+for (const c of FIX.releaseRows) {
+  eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
+}
+
+console.log("=== parity invariant: which files render as prose, and the MDX strip ===");
+for (const c of FIX.markdownPaths) {
+  eq(GS.isMarkdownPath(c.path), c.expectProse, c.name + ": renders as prose");
+}
+for (const c of FIX.mdxStrip) {
+  eq(GS.stripMDX(c.source), c.expect, c.name);
+}
+
 console.log("=== parity invariant: the name an unconfigured site takes ===");
 for (const c of FIX.defaultTitles) {
   eq(GS.repoTitle(c.base), c.expectTitle, c.name + ": default title");

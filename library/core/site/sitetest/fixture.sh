@@ -28,7 +28,7 @@ fi
 # Everything under <out> is regenerated below, so it all goes: a per-workspace
 # list drifts as buckets are added (a leftover workspace re-inits, its commit
 # finds nothing to commit, and the build dies half-built).
-rm -rf "${out:?}"/* "$stampfile"
+rm -rf "${out:?}"/* "$stampfile" "$out/.tick"
 mkdir -p "$served" "$out/xdg"
 
 fixture_build_bins
@@ -39,8 +39,24 @@ fixture_start_locals3
 # Unset in production, where the shard size stays 4000.
 export GITSOCIAL_SITE_SHARD_COUNT="${GITSOCIAL_SITE_SHARD_COUNT:-4}"
 
-# gg runs the binary against the current workspace $W and the isolated cache.
-gg() { "$bin" --cache-dir "$cache" -C "$W" "$@"; }
+# FIXTURE_EPOCH bases the fixture's own clock ten minutes back. Every commit
+# takes its own second from it, so a newest-first list never falls back to the
+# sha tiebreak between two items a wall clock wrote in the same second.
+FIXTURE_EPOCH=$(( $(date +%s) - 900 ))
+tickfile="$out/.tick"
+# stamp_clock advances the fixture clock one second and exports it to git. The
+# counter lives in a file, since half the builder's calls run in a subshell that
+# reads an id back and would drop a shell variable's increment.
+stamp_clock() {
+	local tick=$(( $(cat "$tickfile" 2>/dev/null || echo 0) + 1 ))
+	printf '%s\n' "$tick" >"$tickfile"
+	export GIT_AUTHOR_DATE="$((FIXTURE_EPOCH + tick)) +0000"
+	export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+}
+# gg runs the binary against the current workspace $W on the next clock tick.
+gg() { stamp_clock; "$bin" --cache-dir "$cache" -C "$W" "$@"; }
+# gcommit stages the workspace and commits it on the next clock tick.
+gcommit() { stamp_clock; git -C "$W" add -A; git -C "$W" commit -qm "$1"; }
 # idof extracts the first 12-hex commit short hash from a command's output.
 idof() { grep -oE '#commit:[0-9a-f]{12}' | head -1 | cut -d: -f2; }
 
@@ -50,7 +66,7 @@ mkdir -p "$W"
 git init -q -b main "$W"
 ident "Grace Hopper" "grace@example.com"
 printf 'other-demo\n' >"$W/README.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
+gcommit "Initial commit"
 gg social init >/dev/null
 UP=$(gg --json social post "Original upstream idea: loose-object readers over dumb HTTP." | idof)
 gg remote add "s3://$HOST/other-demo" >/dev/null
@@ -72,17 +88,17 @@ ident "Ada Lovelace" "ada@example.com"
 # (site_markdown.go) and verify_upgrade_boot.js asserts the served structure
 # against what the app's home view renders from the same blob.
 printf '<div align="center">\n  <img src="https://img.example.com/badge.svg" alt="build badge">\n  <h1>thread-demo</h1>\n</div>\n\nShowcase fixture.\n\n## About\n\n- rendered on the served page\n- and again in the app\n\n[About](#about)\n' >"$W/README.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Initial commit: README"
+gcommit "Initial commit: README"
 printf 'one\ntwo\n' >"$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
+gcommit "Add notes"
 printf 'one\ntwo\nthree\n' >"$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Extend notes"
+gcommit "Extend notes"
 # Source files in non-base languages, so the reader lazy-loads their grammars
 # (grammars/prism-python.js, prism-rust.js) when a visitor opens them; the shell
 # ships every grammar file (E1 coverage: verify_grammars.js / verify_site_features.js).
 printf 'def main():\n    print("hello")\n' >"$W/hello.py"
 printf 'fn main() {\n    println!("hi");\n}\n' >"$W/main.rs"
-git -C "$W" add -A && git -C "$W" commit -qm "Add python and rust sources"
+gcommit "Add python and rust sources"
 
 gg social init >/dev/null
 gg pm init >/dev/null
@@ -96,15 +112,7 @@ gg social post "Docs update landed for the ref grammar." >/dev/null
 C1=$(gg --json social comment "$P1" "Congrats, this is huge!" | idof)
 gg social comment "$P1" "What about generation-mode buckets?" >/dev/null
 gg social comment "$P1" "Looking forward to trying it." >/dev/null
-# A thread page flattens replies into timestamp order (site_pages_thread.go),
-# with the sha as the tiebreak. Commit shas change every build, so a reply
-# created in the same second as the one it answers lands either side of it at
-# random, and the ordering assertion in verify_html_pages.js is then a coin
-# flip. Second-granularity timestamps are the constraint, so put a second
-# between the nested replies and the comment they answer.
-sleep 1
 R1=$(gg --json social comment "$C1" "Thanks, appreciate it!" | idof)
-sleep 1
 gg social comment "$R1" "Seconded, well earned." >/dev/null
 
 # social: markdown + multi-line posts (richer render coverage).
@@ -150,7 +158,7 @@ gg pm issue close "$KBD" >/dev/null
 # change request; feedback is authored under distinct reviewer identities.
 git -C "$W" switch -q -c feature/notes-expand
 printf 'one\ntwo\nthree\nline four (added, documented)\nfive\n' >"$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Expand and edit notes"
+gcommit "Expand and edit notes"
 git -C "$W" switch -q main
 HEADTIP=$(git -C "$W" rev-parse feature/notes-expand | cut -c1-12)
 PR=$(gg --json review pr create "Expand notes with more lines" --base '#branch:main' --head '#branch:feature/notes-expand' --reviewers bob@example.com,carol@example.com --allow-unpublished-head | idof)
@@ -235,7 +243,7 @@ for B in interrupted-demo healed-demo; do
 	git init -q -b main "$W"
 	ident "Ada Lovelace" "ada@example.com"
 	printf '%s\n' "$B" >"$W/README.md"
-	git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
+	gcommit "Initial commit"
 	gg social init >/dev/null
 	gg social post "First post before the interruption." >/dev/null
 	gg social post "Second post before the interruption." >/dev/null
@@ -272,7 +280,7 @@ for B in partial-demo extended-demo; do
 	git init -q -b main "$W"
 	ident "Ada Lovelace" "ada@example.com"
 	printf '%s\n' "$B" >"$W/README.md"
-	git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
+	gcommit "Initial commit"
 	gg social init >/dev/null
 	# More posts than the budget, so one index push cannot reach the branch root.
 	for i in $(seq 1 14); do
@@ -298,7 +306,7 @@ mkdir -p "$W"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
 printf 'sparse-demo\n' >"$W/README.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
+gcommit "Initial commit"
 gg pm init >/dev/null
 gg pm issue create "Only-issue repo: no social corpus at all" -l "kind/task" >/dev/null
 gg pm issue create "Second issue so the board has cards" -l "kind/feature" >/dev/null
@@ -318,7 +326,7 @@ mkdir -p "$W"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
 printf 'main\n' >"$W/README.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Initial commit"
+gcommit "Initial commit"
 gg review init >/dev/null
 gg remote add "s3://$HOST/merged-demo" >/dev/null
 gg config site set publish true >/dev/null
@@ -326,10 +334,10 @@ gg config site set publish true >/dev/null
 # merge commit (head tip = merge^2, reachable from no published branch ref).
 git -C "$W" switch -q -c feature/changelog
 printf '# Changelog\n\n- first entry\n- second entry\n' >"$W/CHANGELOG.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Add CHANGELOG"
+gcommit "Add CHANGELOG"
 git -C "$W" switch -q main
 printf 'main\nmore\n' >"$W/README.md"
-git -C "$W" add -A && git -C "$W" commit -qm "Touch README on main"
+gcommit "Touch README on main"
 MPR=$(gg --json review pr create "Add a changelog" --base '#branch:main' --head '#branch:feature/changelog' --allow-unpublished-head | idof)
 gg review pr merge "$MPR" >/dev/null
 git -C "$W" branch -q -D feature/changelog
@@ -373,16 +381,16 @@ printf '# packed-demo\n\nEvery git object here lives in a packfile.\n' >"$W/READ
 for i in $(seq 1 800); do
 	printf 'sample record %03d for the packed content corpus\n' "$i" >"$W/data/record-$i.txt"
 done
-git -C "$W" add -A && git -C "$W" commit -qm "Initial commit: README"
+gcommit "Initial commit: README"
 notes_seed >"$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Add notes"
+gcommit "Add notes"
 notes_revise 2 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Amend notes"
+gcommit "Amend notes"
 notes_revise 3 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Revise notes"
+gcommit "Revise notes"
 notes_revise 4 "$W/notes.txt" >"$W/notes.next" && mv "$W/notes.next" "$W/notes.txt"
 printf 'gamma tail appended by the final revision\n' >>"$W/notes.txt"
-git -C "$W" add -A && git -C "$W" commit -qm "Extend notes"
+gcommit "Extend notes"
 gg social init >/dev/null
 gg pm init >/dev/null
 gg social post "Commit bodies read straight out of a packfile." >/dev/null

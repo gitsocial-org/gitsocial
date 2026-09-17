@@ -94,6 +94,36 @@ type parityDefaultTitle struct {
 	ExpectTitle string `json:"expectTitle"`
 }
 
+// parityRowGlyphCase pins the type glyph class and title a row carries.
+type parityRowGlyphCase struct {
+	Name        string            `json:"name"`
+	Ext         string            `json:"ext"`
+	Header      map[string]string `json:"header"`
+	ExpectClass string            `json:"expectClass"`
+	ExpectTitle string            `json:"expectTitle"`
+}
+
+// parityReleaseRowCase pins the asset count a release row carries.
+type parityReleaseRowCase struct {
+	Name        string `json:"name"`
+	Artifacts   string `json:"artifacts"`
+	ExpectLabel string `json:"expectLabel"`
+}
+
+// parityMarkdownPath pins whether a path renders as prose on both surfaces.
+type parityMarkdownPath struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	ExpectProse bool   `json:"expectProse"`
+}
+
+// parityMDXStripCase pins the source an MDX document renders from.
+type parityMDXStripCase struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Expect string `json:"expect"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	MessageCases   []parityMessageCase     `json:"messageCases"`
@@ -104,6 +134,10 @@ type parityFixtures struct {
 	RowHeads       []parityDetailHeadCase  `json:"rowHeads"`
 	MetaRow        parityMetaRow           `json:"metaRow"`
 	DefaultTitles  []parityDefaultTitle    `json:"defaultTitles"`
+	RowGlyphs      []parityRowGlyphCase    `json:"rowGlyphs"`
+	ReleaseRows    []parityReleaseRowCase  `json:"releaseRows"`
+	MarkdownPaths  []parityMarkdownPath    `json:"markdownPaths"`
+	MDXStrip       []parityMDXStripCase    `json:"mdxStrip"`
 	ListEmpty      map[string]string       `json:"listEmpty"`
 	ListHeadings   map[string]string       `json:"listHeadings"`
 }
@@ -205,7 +239,11 @@ func TestParityEditedMetaRow(t *testing.T) {
 	edit := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("d", 40), Short: strings.Repeat("d", 12), Message: "An issue, edited", TS: 1700003600, Author: "Bob", Email: "bob@example.com", Header: header}
 	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
 	want := strings.Join(f.MetaRow.EditedBits, ",")
-	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta} {
+	front := buildSiteFrontActivity(map[string][]*sitePageItem{"pm": {it}}, map[string]int{"pm": 1}, nil, sitePageSite{URL: "https://example.com/"})
+	if len(front) != 1 {
+		t.Fatalf("front activity rows = %d, want 1", len(front))
+	}
+	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta, "front activity row": front[0].Meta} {
 		if got := strings.Join(parityBitClasses(bits, len(f.MetaRow.EditedBits)), ","); got != want {
 			t.Errorf("%s meta bits = %q, want %q", name, got, want)
 		}
@@ -258,6 +296,92 @@ func TestParityListEmpty(t *testing.T) {
 	want := `<p class="empty">No issues in this repository.</p>`
 	if !strings.Contains(string(page), want) {
 		t.Errorf("an empty list page carries %s", want)
+	}
+}
+
+// TestParityRowGlyph asserts a row's type glyph takes its class and title from
+// the item's type, the extension default standing in for a header that names
+// none, against the fixture unit_render_cards.js also asserts.
+func TestParityRowGlyph(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.RowGlyphs) == 0 {
+		t.Fatal("no row glyph cases in parity fixtures")
+	}
+	for _, c := range f.RowGlyphs {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: c.Ext, SHA: strings.Repeat("f", 40), Short: strings.Repeat("f", 12), Message: "A row", Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+			it := &sitePageItem{Msg: msg, Resolved: msg}
+			itemType := pageItemType(it)
+			state := pageItemField(it, "state")
+			if _, class := sitePageGlyph(itemType, state); class != c.ExpectClass {
+				t.Errorf("glyph class = %q, want %q", class, c.ExpectClass)
+			}
+			if got := sitePageGlyphTitle(itemType, state); got != c.ExpectTitle {
+				t.Errorf("glyph title = %q, want %q", got, c.ExpectTitle)
+			}
+		})
+	}
+}
+
+// TestParityReleaseRow asserts a release row counts its assets where every
+// other row links its hash, against the fixture unit_parity.js also asserts.
+func TestParityReleaseRow(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ReleaseRows) == 0 {
+		t.Fatal("no release row cases in parity fixtures")
+	}
+	for _, c := range f.ReleaseRows {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := siteReleaseAssetLabel(c.Artifacts); got != c.ExpectLabel {
+				t.Errorf("asset label = %q, want %q", got, c.ExpectLabel)
+			}
+			fields := map[string]string{"type": "release", "tag": "v1.0", "artifacts": c.Artifacts}
+			msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("e", 40), Short: strings.Repeat("e", 12), Message: "v1.0", TS: 1700000000, Header: &protocol.Header{Ext: "release", Fields: fields}}
+			row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, "release")
+			var bits []string
+			for _, b := range row.Meta {
+				bits = append(bits, b.Class+"|"+b.Text)
+			}
+			want := []string{"author|unknown", "reltime|" + sitePageDate(msg.TS)}
+			if c.ExpectLabel != "" {
+				want = append(want, "|"+c.ExpectLabel)
+			}
+			if strings.Join(bits, ",") != strings.Join(want, ",") {
+				t.Errorf("release row meta = %v, want %v", bits, want)
+			}
+		})
+	}
+}
+
+// TestParityMarkdownPaths asserts the page layer renders as prose exactly the
+// paths the app's own isMarkdownPath accepts (unit_parity.js).
+func TestParityMarkdownPaths(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.MarkdownPaths) == 0 {
+		t.Fatal("no markdown path cases in parity fixtures")
+	}
+	for _, c := range f.MarkdownPaths {
+		t.Run(c.Name, func(t *testing.T) {
+			if markdown, _ := siteFileIsDocument(c.Path); markdown != c.ExpectProse {
+				t.Errorf("%s renders as prose = %v, want %v", c.Path, markdown, c.ExpectProse)
+			}
+		})
+	}
+}
+
+// TestParityMDXStrip asserts siteFileStripMDX drops the lines the app's own
+// stripMDX drops, against the fixture unit_parity.js also asserts.
+func TestParityMDXStrip(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.MDXStrip) == 0 {
+		t.Fatal("no mdx strip cases in parity fixtures")
+	}
+	for _, c := range f.MDXStrip {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := siteFileStripMDX(c.Source); got != c.Expect {
+				t.Errorf("siteFileStripMDX = %q, want %q", got, c.Expect)
+			}
+		})
 	}
 }
 

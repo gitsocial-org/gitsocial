@@ -518,8 +518,8 @@ var sitePageTypeGlyph = map[string]string{
 	"release": "⏏", "memo": "☞", "commit": "◦",
 }
 
-// sitePageGlyph returns a type's glyph and tint class (gs-render.js typeGlyphEl): itemType picks the character, classType the class and title.
-func sitePageGlyph(itemType, classType, state string) (glyph, class string) {
+// sitePageGlyph returns a type's glyph and tint class (gs-render.js typeGlyphEl); a state-bearing type is tinted by its state.
+func sitePageGlyph(itemType, state string) (glyph, class string) {
 	if itemType == "issue" {
 		glyph = "○"
 		if state == "closed" || state == "canceled" || state == "completed" {
@@ -528,33 +528,22 @@ func sitePageGlyph(itemType, classType, state string) (glyph, class string) {
 	} else {
 		glyph = sitePageTypeGlyph[itemType]
 	}
-	class = classType
-	if classType == "issue" || classType == "pull-request" {
+	class = itemType
+	if itemType == "issue" || itemType == "pull-request" {
 		class = sitePageStateClass(state)
 	}
 	return glyph, "tg-" + class
 }
 
-// sitePageGlyphTitle returns a glyph's title attribute: the class type, plus its state on a state-bearing type.
-func sitePageGlyphTitle(classType, state string) string {
-	if classType != "issue" && classType != "pull-request" {
-		return classType
+// sitePageGlyphTitle returns a glyph's title attribute: the item type, plus its state on a state-bearing type.
+func sitePageGlyphTitle(itemType, state string) string {
+	if itemType != "issue" && itemType != "pull-request" {
+		return itemType
 	}
 	if state == "" {
 		state = "open"
 	}
-	return classType + " · " + state
-}
-
-// sitePageGlyphClassType returns the type the app tints a glyph by: the item's header type, else the extension name.
-func sitePageGlyphClassType(it *sitePageItem) string {
-	if t := pageHeaderField(it.Msg, "type"); t != "" {
-		return t
-	}
-	if t := pageHeaderField(it.Resolved, "type"); t != "" {
-		return t
-	}
-	return it.Msg.Ext
+	return itemType + " · " + state
 }
 
 // siteActivityMoreLabel labels the recent-activity section's trailing link on both surfaces.
@@ -814,7 +803,7 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 		return sitePageReply{Variant: "comment", Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
 	}
 	t := pageMsgType(r.Msg)
-	glyph, glyphClass := sitePageGlyph(t, t, "")
+	glyph, glyphClass := sitePageGlyph(t, "")
 	s := sitePageReply{
 		Variant:    "comment",
 		Depth:      r.Depth,
@@ -1018,6 +1007,40 @@ func siteRowHeadChips(it *sitePageItem, head string) (*sitePageChip, []sitePageC
 	return &chips[0], chips[1:]
 }
 
+// siteReleaseAssetLabel words a release row's asset count, "" when it names none. Mirrors releaseAssetLabel in gs-core.js.
+func siteReleaseAssetLabel(artifacts string) string {
+	n := 0
+	for _, a := range strings.Split(artifacts, ",") {
+		if strings.TrimSpace(a) != "" {
+			n++
+		}
+	}
+	switch n {
+	case 0:
+		return ""
+	case 1:
+		return "1 asset"
+	}
+	return fmt.Sprintf("%d assets", n)
+}
+
+// siteRowMeta builds a row's meta line: the author, the date, the hash, then the edited marker.
+func siteRowMeta(it *sitePageItem, href string) []sitePageBit {
+	meta := []sitePageBit{sitePageAuthorBit(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg))}
+	// A release is named by its tag, so its row counts assets where another row links its hash.
+	if pageItemType(it) == "release" {
+		if label := siteReleaseAssetLabel(pageItemField(it, "artifacts")); label != "" {
+			meta = append(meta, sitePageTextBit(label))
+		}
+	} else {
+		meta = append(meta, sitePageHashBit(it.Msg.Short, href))
+	}
+	if it.Edited && !it.Retracted {
+		meta = append(meta, sitePageEditedBit(it))
+	}
+	return meta
+}
+
 // sitePageSubjectOrPlaceholder strips a promoted first line to its words, or falls back to a placeholder.
 func sitePageSubjectOrPlaceholder(subject string) string {
 	if stripped := siteSubjectText(subject); stripped != "" {
@@ -1033,14 +1056,7 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	subject = siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 	// A list page sits one directory below the item pages.
 	href := "../i/" + it.Msg.Short + ".html"
-	meta := []sitePageBit{
-		sitePageAuthorBit(it.Msg),
-		sitePageTimeBit(pageEffectiveTime(it.Msg)),
-		sitePageHashBit(it.Msg.Short, href),
-	}
-	if it.Edited && !it.Retracted {
-		meta = append(meta, sitePageEditedBit(it))
-	}
+	meta := siteRowMeta(it, href)
 	if t != defaultType {
 		meta = append(meta, sitePageTextBit(sitePageTypeLabel(t)))
 	}
@@ -1049,14 +1065,13 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	} else if n > 0 || t == "issue" || t == "pull-request" {
 		meta = append(meta, sitePageTextBit(fmt.Sprintf("%d comments", n)))
 	}
-	classType := sitePageGlyphClassType(it)
 	state := pageItemField(it, "state")
-	glyph, glyphClass := sitePageGlyph(t, classType, state)
+	glyph, glyphClass := sitePageGlyph(t, state)
 	chip, tail := siteRowHeadChips(it, subject)
 	return sitePageListEntry{
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
-		GlyphTitle: sitePageGlyphTitle(classType, state),
+		GlyphTitle: sitePageGlyphTitle(t, state),
 		Chip:       chip,
 		TailChips:  tail,
 		Href:       href,
@@ -1080,7 +1095,7 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 		if len(short) > 12 {
 			short = short[:12]
 		}
-		glyph, glyphClass := sitePageGlyph("commit", "commit", "")
+		glyph, glyphClass := sitePageGlyph("commit", "")
 		href := sitePageAppURL(site, "commit:"+short+"@"+e.Branch)
 		row := sitePageListEntry{
 			Href:       href,
@@ -1103,9 +1118,8 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 			itemType := pageItemType(it)
 			subject = siteHeadSubject(itemType, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
-			classType := sitePageGlyphClassType(it)
 			state := pageItemField(it, "state")
-			glyph, glyphClass := sitePageGlyph(itemType, classType, state)
+			glyph, glyphClass := sitePageGlyph(itemType, state)
 			href := "./i/" + it.Msg.Short + ".html"
 			chip, tail := siteRowHeadChips(it, subject)
 			row := sitePageListEntry{
@@ -1113,10 +1127,10 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 				Title:      subject,
 				Chip:       chip,
 				TailChips:  tail,
-				Meta:       []sitePageBit{sitePageAuthorBit(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg)), sitePageHashBit(it.Msg.Short, href)},
+				Meta:       siteRowMeta(it, href),
 				Glyph:      glyph,
 				GlyphClass: glyphClass,
-				GlyphTitle: sitePageGlyphTitle(classType, state),
+				GlyphTitle: sitePageGlyphTitle(itemType, state),
 			}
 			merged = append(merged, siteFrontActivityEntry{row: row, ts: pageEffectiveTime(it.Msg), sha: it.Msg.SHA})
 		}

@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label and its email title both renderers derive. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label and its email title both renderers derive. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row in place of its hash. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX lines both drop before parsing.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -354,6 +354,42 @@
     { "name": "a site at the root of its host", "base": "https://gitsocial.org/", "expectTitle": "gitsocial.org" },
     { "name": "a host with a port", "base": "http://127.0.0.1:8000/docs-repo/", "expectTitle": "docs-repo" },
     { "name": "no base at all", "base": "", "expectTitle": "repository" }
+  ],
+  "rowGlyphs": [
+    { "name": "a typeless post reads as a post", "ext": "social", "header": {}, "expectClass": "tg-post", "expectTitle": "post" },
+    { "name": "a post that names its type agrees", "ext": "social", "header": { "type": "post" }, "expectClass": "tg-post", "expectTitle": "post" },
+    { "name": "a comment", "ext": "social", "header": { "type": "comment" }, "expectClass": "tg-comment", "expectTitle": "comment" },
+    { "name": "a typeless pm item reads as an issue", "ext": "pm", "header": {}, "expectClass": "tg-open", "expectTitle": "issue \u00b7 open" },
+    { "name": "a closed issue is tinted closed", "ext": "pm", "header": { "type": "issue", "state": "closed" }, "expectClass": "tg-closed", "expectTitle": "issue \u00b7 closed" },
+    { "name": "a merged pull request is tinted merged", "ext": "review", "header": { "type": "pull-request", "state": "merged" }, "expectClass": "tg-merged", "expectTitle": "pull-request \u00b7 merged" },
+    { "name": "a milestone", "ext": "pm", "header": { "type": "milestone", "state": "completed" }, "expectClass": "tg-milestone", "expectTitle": "milestone" },
+    { "name": "a release", "ext": "release", "header": { "type": "release", "tag": "v1.0" }, "expectClass": "tg-release", "expectTitle": "release" },
+    { "name": "a typeless memo reads as a memo", "ext": "memo", "header": {}, "expectClass": "tg-memo", "expectTitle": "memo" }
+  ],
+  "releaseRows": [
+    { "name": "two artifacts", "artifacts": "gitsocial-linux.tar.gz, gitsocial-mac.tar.gz", "expectLabel": "2 assets" },
+    { "name": "one artifact", "artifacts": "gitsocial-linux.tar.gz", "expectLabel": "1 asset" },
+    { "name": "a trailing separator counts once", "artifacts": "only.tar.gz,", "expectLabel": "1 asset" },
+    { "name": "no artifacts drops the bit", "artifacts": "", "expectLabel": "" },
+    { "name": "separators alone drop the bit", "artifacts": " , ", "expectLabel": "" }
+  ],
+  "markdownPaths": [
+    { "name": "markdown", "path": "docs/intro.md", "expectProse": true },
+    { "name": "the long spelling", "path": "docs/intro.markdown", "expectProse": true },
+    { "name": "the mdown spelling", "path": "docs/intro.mdown", "expectProse": true },
+    { "name": "mdx", "path": "docs/intro.mdx", "expectProse": true },
+    { "name": "plain text", "path": "notes/todo.txt", "expectProse": false },
+    { "name": "a convention document reads preformatted", "path": "LICENSE", "expectProse": false },
+    { "name": "source", "path": "src/main.go", "expectProse": false }
+  ],
+  "mdxStrip": [
+    { "name": "an import line goes", "source": "import { Callout } from \"../components/Callout\"\n\n# Introduction\n", "expect": "\n# Introduction\n" },
+    { "name": "an export line goes", "source": "export const meta = {}\n\n# Guide\n", "expect": "\n# Guide\n" },
+    { "name": "a standalone component element goes", "source": "# Guide\n\n<Callout>Read this first.</Callout>\n\nProse.\n", "expect": "# Guide\n\n\nProse.\n" },
+    { "name": "a standalone closing tag goes", "source": "<Tabs>\n\nreal prose the jsx wraps.\n\n</Tabs>\n", "expect": "\nreal prose the jsx wraps.\n\n" },
+    { "name": "a lowercase html block stays", "source": "<div align=\"center\">\n\ncentered prose.\n", "expect": "<div align=\"center\">\n\ncentered prose.\n" },
+    { "name": "an inline component stays in its sentence", "source": "Read <Callout>this</Callout> first.\n", "expect": "Read <Callout>this</Callout> first.\n" },
+    { "name": "prose naming an import stays", "source": "The import line is dropped.\n", "expect": "The import line is dropped.\n" }
   ],
   "listEmpty": {
     "issues": "No issues in this repository.",
