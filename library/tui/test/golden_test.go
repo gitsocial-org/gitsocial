@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -162,6 +163,17 @@ func TestGoldenWidth_rejectsNavOneColumnTooWide(t *testing.T) {
 	}
 	if over := frameOverflow(frame(goldenCols), goldenCols); len(over) != 0 {
 		t.Errorf("a nav row of %d columns: got %d overflow reports, want 0: %v", goldenCols, len(over), over)
+	}
+}
+
+// A fixture commit keeps its relative-time label however long a run takes.
+func TestGoldenTime_labelHoldsForALongRun(t *testing.T) {
+	now := time.Now()
+	want := tuicore.FormatTime(now.Add(-fixtureCommitAge))
+	for _, elapsed := range []time.Duration{time.Minute, time.Hour, 6 * time.Hour} {
+		if got := tuicore.FormatTime(now.Add(-fixtureCommitAge - elapsed)); got != want {
+			t.Errorf("a fixture commit renders %q after %s, want %q", got, elapsed, want)
+		}
 	}
 }
 

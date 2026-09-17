@@ -91,7 +91,7 @@ Seeded through the extension APIs, with data from the protocol specs:
 - Memo: the project tier, 2 memos (one edited, one labeled), 1 inherited source; the personal and session tiers live outside the repository and are not seeded
 - Forks: 1 registered fork; the fork closes the workspace issue, which leaves an inert proposal
 
-The cache is filled with `client.SyncWorkspace`, workspace first and fork second. A cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending now, so relative times render as "just now" and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
+The cache is filled with `client.SyncWorkspace`, workspace first and fork second. A cross-repo edit resolves only once its canonical is cached. Commit timestamps are rewritten one second apart, ending `fixtureCommitAge` before the run, so every row renders the same relative time however long a run takes, and ordering stays deterministic. Generation points `HOME`, `XDG_CONFIG_HOME` and `GITSOCIAL_PERSONAL_REPO` at a throwaway directory.
 
 ## Inventory
 
@@ -99,7 +99,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 |---|---|---|
 | `smoke_test.go` | `TestSmoke/AllKeysAllViews`, `GlobalShortcuts`, `UnregisteredKeysIgnored` | every view with the keys its own context binds and one key nothing binds, then each global shortcut once on the first view that binds it (86 subtests), without a panic; full tier only |
 | `display_test.go` | `TestDisplay/*`: Timeline, Search, MyRepository, Board, IssuesList, Milestones, Sprints, PRList, ReleasesList, Notifications, Memos, ProjectMemos, MemoDetail, MemoHistory, MemoInherits, Forks, Settings, Site, Cache, Help | seeded content appears on each view |
-| `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help}_120x40`, `LayoutProperties`, `TestGoldenWidth_rejectsNavOneColumnTooWide` | ANSI-stripped renders against `testdata/*.golden`, each frame also 120 columns wide and 40 lines; every route fits the width and the height at 120x40, 80x24 and 200x60 (full tier only); a nav row one column too wide is rejected |
+| `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help}_120x40`, `LayoutProperties`, `TestGoldenWidth_rejectsNavOneColumnTooWide`, `TestGoldenTime_labelHoldsForALongRun` | ANSI-stripped renders against `testdata/*.golden`, each frame also 120 columns wide and 40 lines; every route fits the width and the height at 120x40, 80x24 and 200x60 (full tier only); a nav row one column too wide is rejected; the fixture keeps one relative-time label for the length of a run |
 | `navigation_test.go` | `TestNavigation/GlobalKeys` (`S`, `P`, `R`, `V`, `M`), `Back`, `SiteEditToggle`, `MultiLevelBack`, `Detail`, `Search`, `Help`, `Notifications` | the global jump keys land on their routes; `esc`, `/`, `?` and `@` do what they say |
 | `sequence_test.go` | `TestSequence/*`: AllExtensions, BrowseAndReturn, IssuesFlow, SettingsAndBack, QuickJumpOverridesHistory, the `*OpensForm` and `*Navigates` flows per item type, PostRetractShowsConfirm, SearchFlow, PRDiffNavigates, MultipleViewRenders, PushConfirmNamesRemote | multi-step flows; full tier only |
 | `cursor_test.go` | `TestTimelineCursorSurvivesFetch`, `TestTimelineCursorSurvivesBackNav` | the timeline selection survives a fetch and a detail round trip |

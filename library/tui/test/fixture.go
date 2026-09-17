@@ -34,6 +34,8 @@ const (
 	// fixtureInheritURL is a memo inherit source: a ref in the workspace repo,
 	// so it survives the tarball without needing a repo behind it.
 	fixtureInheritURL = "https://github.com/acme/handbook"
+	// fixtureCommitAge holds the middle of one relative-time bucket, 12 h from either edge.
+	fixtureCommitAge = 84 * time.Hour
 )
 
 // sharedFixture is the per-package fixture created by TestMain and handed to
@@ -131,8 +133,7 @@ func setupFixtureForMain() *Fixture {
 	// The fork's cross-repo edit only resolves once the canonical it edits is
 	// cached, so the fork is synced after the workspace.
 	syncAllPanic(f.ForkDir)
-	// Rewrite commit timestamps so relative time is always "just now",
-	// regardless of when the fixture tarballs were generated.
+	// Rewrite commit timestamps so the render does not depend on the tarball's age.
 	resetTimestampsPanic()
 	return &f
 }
@@ -440,8 +441,8 @@ func (f *Fixture) seedProposalPanic() string {
 	return resolved
 }
 
-// resetTimestampsPanic rewrites every cached commit timestamp into the last few
-// seconds, preserving the original order.
+// resetTimestampsPanic rewrites every cached commit timestamp to fixtureCommitAge
+// ago, preserving the original order.
 func resetTimestampsPanic() {
 	if err := cache.ExecLocked(func(db *sql.DB) error {
 		rows, err := db.Query(`SELECT repo_url, hash, branch FROM core_commits ORDER BY timestamp ASC, rowid ASC`)
@@ -460,10 +461,8 @@ func resetTimestampsPanic() {
 		if err := rows.Err(); err != nil {
 			return err
 		}
-		// One second apart, ending now, so every commit still renders as
-		// "just now" while the original order (and therefore version numbering
-		// and list order) stays deterministic.
-		base := time.Now().UTC().Add(-time.Duration(len(keys)) * time.Second)
+		// One second apart, so version numbering and list order stay deterministic.
+		base := time.Now().UTC().Add(-fixtureCommitAge - time.Duration(len(keys))*time.Second)
 		for i, k := range keys {
 			ts := base.Add(time.Duration(i) * time.Second).Format(time.RFC3339)
 			if _, err := db.Exec(
