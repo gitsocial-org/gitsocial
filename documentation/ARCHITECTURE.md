@@ -155,7 +155,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   ├── tui/                   # TUI
 │   └── internal/testutil/     # shared test fixtures
 ├── documentation/
-├── scripts/                   # check.sh, prose-check.sh, import-graph.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh
+├── scripts/                   # check.sh, prose-check.sh, import-graph.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh, site-coverage.sh
 └── specs/
 ```
 

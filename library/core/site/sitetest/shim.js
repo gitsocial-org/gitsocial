@@ -26,17 +26,23 @@ function mkEl(tag) {
       return {
         add(...cs) { for (const c of cs) n._cls.add(c); },
         remove(...cs) { for (const c of cs) n._cls.delete(c); },
-        toggle(c) { if (n._cls.has(c)) { n._cls.delete(c); return false; } n._cls.add(c); return true; },
+        toggle(c, force) {
+          if (force !== undefined) { if (force) n._cls.add(c); else n._cls.delete(c); return !!force; }
+          if (n._cls.has(c)) { n._cls.delete(c); return false; }
+          n._cls.add(c); return true;
+        },
         contains(c) { return n._cls.has(c); },
       };
     },
-    append(...cs) { for (const c of cs) { const n = norm(c); if (n && typeof n === "object") n._parent = this; this._children.push(n); } },
-    appendChild(c) { const n = norm(c); if (n && typeof n === "object") n._parent = this; this._children.push(n); return n; },
-    insertBefore(node, ref) { const n = norm(node); if (n && typeof n === "object") n._parent = this; const i = ref ? this._children.indexOf(ref) : -1; if (i >= 0) this._children.splice(i, 0, n); else this._children.push(n); return n; },
+    // Insertion moves a node: the real DOM detaches it from its old parent first.
+    append(...cs) { for (const c of cs) { const n = adopt(this, c); this._children.push(n); } },
+    appendChild(c) { const n = adopt(this, c); this._children.push(n); return n; },
+    insertBefore(node, ref) { const n = adopt(this, node); const i = ref ? this._children.indexOf(ref) : -1; if (i >= 0) this._children.splice(i, 0, n); else this._children.push(n); return n; },
     get nextSibling() { const p = this._parent; if (!p) return null; const i = p._children.indexOf(this); return i >= 0 && i + 1 < p._children.length ? p._children[i + 1] : null; },
     prepend(...cs) { this._children.unshift(...cs.map(norm)); },
     replaceChildren(...cs) { this._children = cs.map(norm); },
     remove() { if (this._parent) { const i = this._parent._children.indexOf(this); if (i >= 0) this._parent._children.splice(i, 1); } },
+    replaceWith(...ns) { const p = this._parent; if (!p) return; const i = p._children.indexOf(this); if (i < 0) return; p._children.splice(i, 1, ...ns.map((n) => adopt(p, n))); this._parent = null; },
     cloneNode() { const n = mkEl(this.tagName); n._attrs = new Map(this._attrs); n._children = this._children.map((c) => (c && c.cloneNode ? c.cloneNode(true) : c)); return n; },
     addEventListener(ev, fn) { (this._handlers[ev] = this._handlers[ev] || []).push(fn); },
     removeEventListener() {}, scrollIntoView() {}, focus() { global.__lastFocused = this; },
@@ -55,12 +61,29 @@ function mkEl(tag) {
   };
 }
 function norm(c) { return (typeof c === "string" || typeof c === "number") ? { nodeType: 3, nodeValue: String(c) } : c; }
+// adopt normalizes a child, unlinks it from its previous parent and reparents it.
+function adopt(parent, c) {
+  const n = norm(c);
+  if (n && typeof n === "object") {
+    const old = n._parent;
+    if (old && old !== parent && old._children) { const i = old._children.indexOf(n); if (i >= 0) old._children.splice(i, 1); }
+    n._parent = parent;
+  }
+  return n;
+}
 function textOf(n) { if (n == null) return ""; if (typeof n === "string") return n; if (n.nodeType === 3) return n.nodeValue || ""; let s = ""; for (const c of n._children || []) s += textOf(c); return s; }
 function matchSel(node, sel) {
-  const m = /^([a-zA-Z0-9]*)(?:\[([^\]=]+)(?:=["']?([^\]"']*)["']?)?\])?$/.exec(sel.trim());
+  const m = /^([a-zA-Z0-9]*)(?:\[([^\]=^]+)(\^?)(?:=["']?([^\]"']*)["']?)?\])?$/.exec(sel.trim());
   if (!m) return false;
   if (m[1] && node.tagName.toLowerCase() !== m[1].toLowerCase()) return false;
-  if (m[2]) { if (!node.hasAttribute(m[2])) return false; if (m[3] != null && m[3] !== "" && node.getAttribute(m[2]) !== m[3]) return false; }
+  if (m[2]) {
+    if (!node.hasAttribute(m[2])) return false;
+    const want = m[4];
+    if (want != null && want !== "") {
+      const got = node.getAttribute(m[2]);
+      if (m[3] ? !String(got).startsWith(want) : got !== want) return false;
+    }
+  }
   return true;
 }
 function collect(node, sel, out) { for (const c of node._children || []) { if (c && c.nodeType === 1) { if (matchSel(c, sel)) out.push(c); collect(c, sel, out); } } }

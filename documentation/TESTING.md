@@ -86,8 +86,17 @@ A bare run sets `GITSOCIAL_TEST_FULL=1` itself, so its figures carry the guarded
 |---|---|
 | the race detector and the browser battery, at release | `scripts/release.sh vX.Y.Z` |
 | the browser site battery | `scripts/site-test.sh`, or `go test -tags sitetest -timeout 30m ./library/core/site/` |
+| the reader assets' per-file function coverage | `scripts/site-coverage.sh` |
 | the 100k-row thread benchmark | `go test -tags bench -run '^$' -bench . ./library/extensions/social/` |
 | one package with streamed per-test progress | `scripts/test.sh -run TestSmoke ./library/tui/test/` |
+
+`scripts/site-coverage.sh` runs the battery under `NODE_V8_COVERAGE` and prints one row per asset in `library/core/site/assets/`: covered functions, total functions and the percentage. `--list <file>` prints the line and name of each uncovered function. `GS_JSCOV=<dir>` reports an existing profile directory and runs nothing; a run writes `.test-artifacts/jscov/`.
+
+```bash
+scripts/site-coverage.sh                                   # the per-file table
+scripts/site-coverage.sh --list gs-render.js               # the uncovered functions of one asset
+GS_JSCOV=.test-artifacts/jscov scripts/site-coverage.sh    # re-report the last run
+```
 
 `scripts/release.sh` preflights `GITSOCIAL_TEST_FULL=1 go test -race ./...` and the browser battery, each into its own log. The battery needs node, and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
 
@@ -102,6 +111,7 @@ A bare run sets `GITSOCIAL_TEST_FULL=1` itself, so its figures carry the guarded
 | `GS_COVER_PROFILE` | the user | re-reports that profile instead of running the suite |
 | `DAYS` | the user | the churn window of the import report, in days; 90 by default |
 | `CHROME` | the user | the Chrome binary the style suite drives |
+| `GS_JSCOV` | the user | the V8 coverage directory `scripts/site-coverage.sh` reports instead of running the battery |
 
 ## Artifacts
 
@@ -117,5 +127,6 @@ Every run writes under `.test-artifacts/`, which git ignores.
 | `coverage/children/` | the child processes' raw coverage data, and the `children.out` converted from it |
 | `coverage/packages.txt`, `coverage/agg.txt` | the package list and the per-package totals the report is built from |
 | `coverage/test.log` | the suite output of a bare `scripts/coverage.sh` run |
+| `jscov/` | the V8 coverage of one `scripts/site-coverage.sh` run, and the battery log beside it |
 | `release-race.log` | `go test -race ./...` at release |
 | `release-site.log` | the browser battery at release |
