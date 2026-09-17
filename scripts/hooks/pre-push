@@ -8,7 +8,7 @@ set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 zero=0000000000000000000000000000000000000000
 
-# pushed ranges for the commit-subject check: remote..local per ref, a new branch as local --not --remotes
+# pushed ranges for the commit checks: remote..local per ref, a new branch as local --not --remotes
 ranges=""
 not=""
 while read -r _ local_sha _ remote_sha; do

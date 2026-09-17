@@ -178,14 +178,15 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 
 ## Checks
 
-`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts eight rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts nine rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright. `comment-heavy` reads only the commits dated 2026-09-16 or later.
 
 | Rule | Counts |
 |---|---|
 | `emdash` | em-dashes in any tracked file |
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
+| `comment-heavy` | a commit in the pushed range whose added comment lines outnumber its added code lines |
 | `short-long` | a cobra `Short` over 50 characters |
 | `flag-help` | flag help over 60 characters, or containing a parenthesis |
 | `error-shape` | an error literal in non-test Go with a parenthesis, semicolon, question mark, newline, em-dash, a second sentence, "failed to", a capital first letter, or over 100 characters |
 
-`specs/`, `testdata/`, golden files and the vendored web assets under `library/core/site/assets/` are out of scope for every rule.
+`specs/`, `testdata/`, golden files and the vendored web assets under `library/core/site/assets/` are out of scope for every rule. A commit that touches only documentation, testdata or golden files is out of scope for `comment-heavy`.

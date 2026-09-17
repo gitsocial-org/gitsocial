@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # prose-check.sh - count STYLE.md violations; fail when a count rises above scripts/prose-baseline.txt.
-# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html short-long flag-help error-shape
+# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html comment-heavy short-long flag-help error-shape
 # Commit subjects over 72 characters always fail: GITSOCIAL_PUSH_RANGES (set by the hook), else @{upstream}..HEAD, else skipped.
 set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/prose-baseline.txt"
-rules="comment-block-css comment-block-go comment-block-html comment-block-js emdash error-shape flag-help short-long"
+rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy emdash error-shape flag-help short-long"
+comment_heavy_since=2026-09-16T00:00:00 # commits before the rule are exempt
 zero=0000000000000000000000000000000000000000
+
+# the commits a rule over a range reads: the hook's ranges, else the unpushed commits, else none
+ranges="${GITSOCIAL_PUSH_RANGES:-}"
+if [ -z "$ranges" ] && git rev-parse -q --verify '@{upstream}' >/dev/null 2>&1; then
+	ranges='@{upstream}..HEAD'
+fi
 
 # tracked files in scope, one per line
 FILES=$(git ls-files | grep -vE '^specs/|^library/core/site/assets/(fonts|grammars)/|^library/core/objstore/prismcomp/|^library/core/site/assets/(prism|icons)\.js$|(^|/)testdata/|\.(golden|gz|woff2|png|svg|mp4)$|^go\.sum$' | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)
@@ -62,6 +69,23 @@ error_shapes() {
 		}'
 }
 
+# comment_heavy prints hash<TAB>comments/code for each commit in the range adding more comment lines than code lines
+comment_heavy() {
+	[ -n "$ranges" ] || return 0
+	# shellcheck disable=SC2086
+	for h in $(git log --no-merges --since="$comment_heavy_since" --format=%H $ranges 2>/dev/null); do
+		git show --format= --name-only "$h" | grep -qvE '\.md$|(^|/)testdata/|\.golden$' || continue
+		git show --format= --unified=0 "$h" | awk -v h="$h" '
+			/^\+\+\+/ { next }
+			/^\+/ {
+				s = substr($0, 2); sub(/^[[:space:]]+/, "", s)
+				if (s == "") next
+				if (s ~ /^(\/\/|\/\*|\*\/|\*|<!--|-->)/) c++; else k++
+			}
+			END { if (c > k) print h "\t" c "/" (k + 0) }'
+	done
+}
+
 # list_rule prints every offending file:line for one rule
 list_rule() {
 	case "$1" in
@@ -70,6 +94,7 @@ list_rule() {
 	comment-block-js) slash_runs js; block_runs js '/*' '*/' ;;
 	comment-block-css) block_runs css '/*' '*/' ;;
 	comment-block-html) block_runs html '<!--' '-->' ;;
+	comment-heavy) comment_heavy ;;
 	short-long) grep -HnE 'Short:[[:space:]]*"' cli/gitsocial/*.go | awk -F'"' 'length($2) > 50 { split($0, a, ":"); print a[1] ":" a[2] }' ;;
 	error-shape) error_shapes ;;
 	flag-help)
@@ -111,10 +136,6 @@ while IFS=$'\t' read -r rule n; do
 	fi
 done <<<"$cur"
 
-ranges="${GITSOCIAL_PUSH_RANGES:-}"
-if [ -z "$ranges" ] && git rev-parse -q --verify '@{upstream}' >/dev/null 2>&1; then
-	ranges='@{upstream}..HEAD'
-fi
 if [ -n "$ranges" ]; then
 	# shellcheck disable=SC2086
 	long=$(git log --no-merges --format='%h%x09%s' $ranges 2>/dev/null | awk -F'\t' 'length($2) > 72')
