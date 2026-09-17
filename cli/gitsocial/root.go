@@ -18,14 +18,10 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
-var (
-	jsonOutput bool
-	workdir    string
-	cacheDir   string
-)
-
 // newRootCmd creates the root command with global flags and initialization.
 func newRootCmd() *cobra.Command {
+	// One config per command tree: the flags write here, GetConfig reads it.
+	cfg := &Config{}
 	cmd := &cobra.Command{
 		Use:           "gitsocial",
 		Short:         "GitSocial - Social networking over Git",
@@ -33,45 +29,39 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if workdir == "" {
+			if cfg.WorkDir == "" {
 				wd, err := os.Getwd()
 				if err != nil {
 					return err
 				}
-				workdir = wd
+				cfg.WorkDir = wd
 			}
 
-			if cacheDir == "" {
+			if cfg.CacheDir == "" {
 				home, err := os.UserHomeDir()
 				if err != nil {
 					return err
 				}
-				cacheDir = filepath.Join(home, ".cache", "gitsocial")
+				cfg.CacheDir = filepath.Join(home, ".cache", "gitsocial")
 			}
 
-			initLogging(cmd.ErrOrStderr(), jsonOutput)
+			initLogging(cmd.ErrOrStderr(), cfg.JSONOutput)
 			applyGitTimeout()
 			// The remote-helper command is itself spawned by git; skip the
 			// workspace alias check there to keep helper invocations lean.
 			if cmd.Name() != "__git-remote-s3" {
-				ensureWorkspaceS3Alias(workdir)
+				ensureWorkspaceS3Alias(cfg.WorkDir)
 			}
 
-			cfg := &Config{
-				WorkDir:    workdir,
-				CacheDir:   cacheDir,
-				JSONOutput: jsonOutput,
-			}
-			ctx := WithConfig(context.Background(), cfg)
-			cmd.SetContext(ctx)
+			cmd.SetContext(WithConfig(context.Background(), cfg))
 
-			return cache.Open(cacheDir)
+			return cache.Open(cfg.CacheDir)
 		},
 	}
 
-	cmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
-	cmd.PersistentFlags().StringVarP(&workdir, "workdir", "C", "", "Working directory, default the current directory")
-	cmd.PersistentFlags().StringVar(&cacheDir, "cache-dir", "", "Cache directory, default ~/.cache/gitsocial")
+	cmd.PersistentFlags().BoolVar(&cfg.JSONOutput, "json", false, "Output in JSON format")
+	cmd.PersistentFlags().StringVarP(&cfg.WorkDir, "workdir", "C", "", "Working directory, default the current directory")
+	cmd.PersistentFlags().StringVar(&cfg.CacheDir, "cache-dir", "", "Cache directory, default ~/.cache/gitsocial")
 
 	cmd.CompletionOptions.HiddenDefaultCmd = true
 

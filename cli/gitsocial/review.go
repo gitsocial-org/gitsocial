@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -175,7 +174,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 			body := ""
 
 			if subject == "-" {
-				subject, body = readStdinSubjectBody()
+				subject, body = readStdinSubjectBody(cmd.InOrStdin())
 			}
 			if strings.TrimSpace(subject) == "" {
 				PrintError(cmd, "pull request subject cannot be empty")
@@ -1018,7 +1017,7 @@ func newFeedbackCommentCmd() *cobra.Command {
 
 			content := args[0]
 			if content == "-" {
-				content = readStdin()
+				content = readStdin(cmd.InOrStdin())
 			}
 			if strings.TrimSpace(content) == "" {
 				PrintError(cmd, "feedback comment cannot be empty")
@@ -1335,8 +1334,9 @@ func printFeedbackLine(out io.Writer, r review.Feedback) {
 	fmt.Fprintf(out, "%s%s%s  %s  %s\n", icon, r.Author.Name, location, dateStr, truncate(r.Content, 60))
 }
 
-func readStdinSubjectBody() (string, string) {
-	scanner := bufio.NewScanner(os.Stdin)
+// readStdinSubjectBody reads in until EOF and splits it into a subject and a body.
+func readStdinSubjectBody(in io.Reader) (string, string) {
+	scanner := bufio.NewScanner(in)
 	var lines []string
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
@@ -1351,8 +1351,9 @@ func readStdinSubjectBody() (string, string) {
 	return subject, body
 }
 
-func readStdin() string {
-	scanner := bufio.NewScanner(os.Stdin)
+// readStdin reads in until EOF and returns it as one string.
+func readStdin(in io.Reader) string {
+	scanner := bufio.NewScanner(in)
 	var lines []string
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())

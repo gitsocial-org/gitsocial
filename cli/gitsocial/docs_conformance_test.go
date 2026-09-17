@@ -43,6 +43,7 @@ func docSection(t *testing.T, path, heading string) []string {
 var backtickedToken = regexp.MustCompile("`([^`]+)`")
 
 func TestGlobalFlagsMatchDocumentation(t *testing.T) {
+	t.Parallel()
 	documented := map[string]bool{}
 	for _, line := range docSection(t, cliDocPath, "Command Structure") {
 		for _, name := range docFlagNames(line) {
@@ -88,6 +89,7 @@ func docFlagNames(line string) []string {
 }
 
 func TestPerCommandFlagsMatchDocumentation(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(cliDocPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", cliDocPath, err)
@@ -120,6 +122,7 @@ func TestPerCommandFlagsMatchDocumentation(t *testing.T) {
 }
 
 func TestExitCodesMatchDocumentation(t *testing.T) {
+	t.Parallel()
 	want := map[int]string{
 		ExitSuccess:     "Success",
 		ExitError:       "General error",
@@ -181,6 +184,7 @@ func envLookupsInSource(t *testing.T) map[string]bool {
 }
 
 func TestDocumentedEnvVarsAreRead(t *testing.T) {
+	t.Parallel()
 	read := envLookupsInSource(t)
 	// Registry keys at ScopeEnv are read through a dynamic os.Getenv(key).
 	read["GITSOCIAL_PPROF"] = true

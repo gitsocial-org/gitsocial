@@ -774,7 +774,7 @@ func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *m
 	var siteProgress objstore.Progress
 	siteDone := func() {}
 	if !cfg.JSONOutput {
-		siteProgress, siteDone = objstore.StderrProgress()
+		siteProgress, siteDone = objstore.WriterProgress(cmd.ErrOrStderr())
 	}
 	defer siteDone()
 	failed := false

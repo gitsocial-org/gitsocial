@@ -65,9 +65,9 @@ func newProgressWriter(w io.Writer, tty bool) *progressWriter {
 	return &progressWriter{w: w, tty: tty, thr: newThrottle(interval)}
 }
 
-// StderrProgress returns a throttled stderr Progress hook plus the function that closes its pending TTY line, on the same policy the git-spawned helper uses.
-func StderrProgress() (Progress, func()) {
-	pw := newProgressWriter(os.Stderr, stderrIsTTY())
+// WriterProgress returns a throttled Progress hook on w plus the function that closes its pending TTY line, on the same policy the git-spawned helper uses.
+func WriterProgress(w io.Writer) (Progress, func()) {
+	pw := newProgressWriter(w, writerIsTTY(w))
 	return pw.Progress(), pw.finish
 }
 
@@ -135,7 +135,16 @@ func (p Progress) Call(phase string, done, total int) {
 
 // stderrIsTTY reports whether stderr is a character device, the same signal git reads to choose its progress shape.
 func stderrIsTTY() bool {
-	info, err := os.Stderr.Stat()
+	return writerIsTTY(os.Stderr)
+}
+
+// writerIsTTY reports whether w is a character device.
+func writerIsTTY(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := f.Stat()
 	if err != nil {
 		return false
 	}

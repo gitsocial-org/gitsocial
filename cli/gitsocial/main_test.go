@@ -93,7 +93,7 @@ func runInProcessStdin(t *testing.T, dir, cacheDir, stdin string, args ...string
 	cache.Reset()
 	var outBuf, errBuf strings.Builder
 
-	// A fresh tree per run: the global flag vars are package level.
+	// A fresh tree per run: each tree carries its own flag values.
 	root := buildRootCmd()
 	root.SetOut(&outBuf)
 	root.SetErr(&errBuf)

@@ -69,7 +69,7 @@ Examples:
 			var onBranch func(remote, branch string, done, total int)
 			siteDone := func() {}
 			if !cfg.JSONOutput {
-				siteProgress, siteDone = objstore.StderrProgress()
+				siteProgress, siteDone = objstore.WriterProgress(cmd.ErrOrStderr())
 				onBranch = func(remote, branch string, done, total int) {
 					siteProgress(remote+" "+branch, done, total)
 				}

@@ -135,6 +135,7 @@ func newThinFork(t *testing.T) *thinFixture {
 // of upstream uploads that commit's objects and no more — the whole point of a
 // thin fork bucket.
 func TestThinPush_uploadsOnlyTheForksOwnObjects(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	upstreamTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "main"))
 	commitIn(t, tf.forkDir, tf.env, "fork.txt", "fork work")
@@ -164,6 +165,7 @@ func TestThinPush_uploadsOnlyTheForksOwnObjects(t *testing.T) {
 // gitmsg branches are never thinned, so fork metadata reads from a thin bucket
 // with upstream UNREACHABLE — no overlay, no upstream reachability at all.
 func TestThinPush_gitmsgStaysComplete(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	upstreamData := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "gitmsg/social"))
 	forkData := emptyTreeCommit(t, tf.forkDir, tf.env, upstreamData, "Fork post\n\nGitMsg: ext=\"social\" v=\"0.1.0\" type=\"post\"")
@@ -189,6 +191,7 @@ func TestThinPush_gitmsgStaysComplete(t *testing.T) {
 // pinned tip, so the next thin push drops that tip from the frontier and uploads
 // the objects it no longer covers.
 func TestThinPush_pinDriftUploadsUncoveredObjects(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	releaseTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "release"))
 	releaseBase := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "release~1"))
@@ -221,6 +224,7 @@ func TestThinPush_pinDriftUploadsUncoveredObjects(t *testing.T) {
 
 // TestThinPush_offlinePushesTheFullHistory: an unreachable upstream excludes only what the bucket's own tips cover, never a recorded pin.
 func TestThinPush_offlinePushesTheFullHistory(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	releaseTip := strings.TrimSpace(gitIn(t, tf.forkDir, tf.env, "rev-parse", "release"))
 
@@ -310,6 +314,7 @@ func TestThinRead_roundTrip(t *testing.T) {
 // TestThinRead_missingUpstreamNamesTheCommit: with upstream gone the clone fails
 // naming the commit and the upstream URL, not a bare missing-object error.
 func TestThinRead_missingUpstreamNamesTheCommit(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	upstreamTip, _ := thinPushMain(t, tf)
 	tf.dropUpstream()
@@ -326,6 +331,7 @@ func TestThinRead_missingUpstreamNamesTheCommit(t *testing.T) {
 // TestThinRead_hostileUpstreamURLRefused: .gitsocial/upstream is bucket content,
 // so an ext:: URL is refused naming the key — and no git fetch is spawned.
 func TestThinRead_hostileUpstreamURLRefused(t *testing.T) {
+	t.Parallel()
 	tf := newThinFork(t)
 	thinPushMain(t, tf)
 	sentinel := filepath.Join(t.TempDir(), "spawned")

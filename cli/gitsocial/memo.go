@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -457,7 +456,7 @@ $GITSOCIAL_EDITOR, then $EDITOR, $VISUAL, vi.`,
 func resolveMemoBody(cmd *cobra.Command, body, subject string, tier memo.Tier) (string, error) {
 	if cmd.Flags().Changed("body") {
 		if body == "-" {
-			data, err := io.ReadAll(os.Stdin)
+			data, err := io.ReadAll(cmd.InOrStdin())
 			if err != nil {
 				return "", fmt.Errorf("read stdin: %w", err)
 			}

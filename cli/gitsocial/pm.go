@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -363,7 +362,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 			body := ""
 
 			if subject == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -695,7 +694,7 @@ func newPMIssueCommentCmd() *cobra.Command {
 			if len(args) > 1 {
 				content = strings.Join(args[1:], " ")
 			} else {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -914,7 +913,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 			body := ""
 
 			if title == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -1316,7 +1315,7 @@ func newPMSprintCreateCmd() *cobra.Command {
 			body := ""
 
 			if title == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())

@@ -71,6 +71,7 @@ func commandPaths(t *testing.T) []string {
 }
 
 func TestCommandTreeMetadata(t *testing.T) {
+	t.Parallel()
 	for path, cmd := range walkCommands(buildRootCmd()) {
 		if strings.TrimSpace(cmd.Use) == "" {
 			t.Errorf("%s: empty Use", path)
@@ -82,9 +83,10 @@ func TestCommandTreeMetadata(t *testing.T) {
 }
 
 func TestCommandTreeHelp(t *testing.T) {
+	t.Parallel()
 	for _, path := range commandPaths(t) {
 		t.Run(path, func(t *testing.T) {
-			// A fresh tree per case: the global flag vars are package level.
+			// A fresh tree per case: each tree carries its own flag values.
 			root := buildRootCmd()
 			var out bytes.Buffer
 			root.SetOut(&out)

@@ -21,7 +21,7 @@ func TestCLI_inProcessFailure_exitCodes(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			// A fresh tree per case: the global flag vars are package level.
+			// A fresh tree per case: each tree carries its own flag values.
 			root := buildRootCmd()
 			var out bytes.Buffer
 			root.SetOut(&out)

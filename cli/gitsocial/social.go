@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -218,7 +217,7 @@ func newSocialPostCmd() *cobra.Command {
 			content := args[0]
 
 			if content == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -275,7 +274,7 @@ func newSocialEditCmd() *cobra.Command {
 			content := args[1]
 
 			if content == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -370,7 +369,7 @@ func newSocialCommentCmd() *cobra.Command {
 			content := args[1]
 
 			if content == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())
@@ -460,7 +459,7 @@ func newSocialQuoteCmd() *cobra.Command {
 			content := args[1]
 
 			if content == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())

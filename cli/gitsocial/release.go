@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -153,7 +152,7 @@ func newReleaseCreateCmd() *cobra.Command {
 			body := ""
 
 			if subject == "-" {
-				scanner := bufio.NewScanner(os.Stdin)
+				scanner := bufio.NewScanner(cmd.InOrStdin())
 				var lines []string
 				for scanner.Scan() {
 					lines = append(lines, scanner.Text())

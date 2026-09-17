@@ -276,6 +276,7 @@ func initCLIRepoWithBareRemote(t *testing.T) string {
 // TestCLI_push_noSiteOnNonS3Remote: `push --no-site` to a non-s3 remote reports
 // the site as skipped and exits 0.
 func TestCLI_push_noSiteOnNonS3Remote(t *testing.T) {
+	t.Parallel()
 	dir := initCLIRepoWithBareRemote(t)
 	cacheDir := t.TempDir()
 	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
@@ -297,6 +298,7 @@ func TestCLI_push_noSiteOnNonS3Remote(t *testing.T) {
 // TestCLI_push_dryRunJSON: `push --dry-run --json` emits the combined result and
 // touches nothing.
 func TestCLI_push_dryRunJSON(t *testing.T) {
+	t.Parallel()
 	dir := initCLIRepoWithBareRemote(t)
 	cacheDir := t.TempDir()
 	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
@@ -333,6 +335,7 @@ func TestCLI_push_dryRunJSON(t *testing.T) {
 // failing remote and exits non-zero, but the healthy remote still receives the
 // data (a failed remote must not block the others).
 func TestCLI_push_multiRemote_oneFailingContinues(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	good := t.TempDir()
 	if out, err := exec.Command("git", "init", "--bare", "-b", "main", good).CombinedOutput(); err != nil {
@@ -367,5 +370,28 @@ func TestCLI_push_multiRemote_oneFailingContinues(t *testing.T) {
 	}
 	if out, err := exec.Command("git", "-C", good, "rev-parse", "--verify", "refs/heads/gitmsg/social").CombinedOutput(); err != nil {
 		t.Errorf("good remote did not receive the push despite a failing peer: %v\n%s", err, out)
+	}
+}
+
+// TestCLI_pmIssueCreate_bodyFromStdin: a `-` subject reads the command's stdin,
+// not the process's.
+func TestCLI_pmIssueCreate_bodyFromStdin(t *testing.T) {
+	dir := initCLITestRepo(t)
+	cacheDir := t.TempDir()
+	if _, stderr, code := runInProcess(t, dir, cacheDir, "pm", "init"); code != 0 {
+		t.Fatalf("pm init: exit %d\n%s", code, stderr)
+	}
+
+	stdin := "Subject from stdin\n\nBody from stdin\n"
+	stdout, stderr, code := runInProcessStdin(t, dir, cacheDir, stdin, "--json", "pm", "issue", "create", "-")
+	if code != 0 {
+		t.Fatalf("issue create -: exit %d\n%s%s", code, stdout, stderr)
+	}
+	var created struct{ Subject, Body string }
+	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
+		t.Fatalf("issue create --json output is not JSON: %v\n%s", err, stdout)
+	}
+	if created.Subject != "Subject from stdin" || created.Body != "Body from stdin" {
+		t.Errorf("created issue = %+v, want the subject and body from stdin", created)
 	}
 }
