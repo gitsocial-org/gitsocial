@@ -4,7 +4,11 @@ package rpc
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
 func TestIsNotification(t *testing.T) {
@@ -100,6 +104,22 @@ func TestProcessRequest_success(t *testing.T) {
 	}
 	if resp.JSONRPC != "2.0" {
 		t.Errorf("JSONRPC = %q", resp.JSONRPC)
+	}
+}
+
+func TestHandleLine_errorDetailsCarryErrorText(t *testing.T) {
+	r := NewRegistry()
+	r.Register("test.fail", func(params json.RawMessage) (any, *RPCError) {
+		return fromResult(result.ErrWithDetails[string]("NETWORK_ERROR", "fetch failed", errors.New("dial tcp: connection refused")))
+	})
+	var out bytes.Buffer
+	s := NewServer(r, bytes.NewReader(nil), &out)
+
+	s.handleLine([]byte(`{"jsonrpc":"2.0","id":1,"method":"test.fail"}`))
+
+	want := `"details":"dial tcp: connection refused"`
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("response = %s, want it to contain %s", strings.TrimSpace(out.String()), want)
 	}
 }
 

@@ -120,6 +120,8 @@ An error built from a library `Result[T]` carries `data.appCode` and, when the l
 {"code":-32001,"message":"post not found","data":{"appCode":"NOT_FOUND"}}
 ```
 
+`data.details` holds an error as its text, and a struct or a map as its JSON object.
+
 The table above is not exhaustive. `appCode` is the library's own code string passed through, so a `-32000` response can carry `INVALID_SCOPE`, `LIST_NOT_FOUND`, `GIT_ERROR`, `NO_SBOM`, `NO_VERSION`, `SBOM_FAILED` or `READ_FAILED`. Parameter validation (`-32602`) and the search methods return no `data` at all.
 
 ## 4. Methods

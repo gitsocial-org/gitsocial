@@ -80,6 +80,14 @@ func appError(code int, appCode, message string) *RPCError {
 	}
 }
 
+// detailsValue renders an error as its text and leaves any other value to encoding/json.
+func detailsValue(details any) any {
+	if err, ok := details.(error); ok {
+		return err.Error()
+	}
+	return details
+}
+
 // fromResult converts a Result[T] to an RPC (data, error) pair.
 func fromResult[T any](r result.Result[T]) (any, *RPCError) {
 	if r.Success {
@@ -87,7 +95,7 @@ func fromResult[T any](r result.Result[T]) (any, *RPCError) {
 	}
 	data := map[string]any{"appCode": r.Error.Code}
 	if r.Error.Details != nil {
-		data["details"] = r.Error.Details
+		data["details"] = detailsValue(r.Error.Details)
 	}
 	return nil, &RPCError{
 		Code:    appErrorCode(r.Error.Code),

@@ -95,8 +95,8 @@ func TestFromResult_errorWithDetails(t *testing.T) {
 	if !ok {
 		t.Fatal("error Data should be map[string]any")
 	}
-	if rpcData["details"] == nil {
-		t.Error("details should not be nil")
+	if _, ok := rpcData["details"].(map[string]string); !ok {
+		t.Errorf("details = %T, want map[string]string", rpcData["details"])
 	}
 }
 
