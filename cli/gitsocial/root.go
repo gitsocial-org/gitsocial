@@ -26,9 +26,11 @@ var (
 // newRootCmd creates the root command with global flags and initialization.
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "gitsocial",
-		Short:   "GitSocial - Social networking over Git",
-		Version: version,
+		Use:           "gitsocial",
+		Short:         "GitSocial - Social networking over Git",
+		Version:       version,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if workdir == "" {
 				wd, err := os.Getwd()

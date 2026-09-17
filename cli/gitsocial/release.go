@@ -48,9 +48,9 @@ func newReleaseStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show release extension status",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -71,7 +71,7 @@ func newReleaseStatusCmd() *cobra.Command {
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"branch":   branch,
 					"releases": count,
 				})
@@ -80,6 +80,7 @@ func newReleaseStatusCmd() *cobra.Command {
 				fmt.Printf("  Branch: %s\n", branch)
 				fmt.Printf("  Releases: %d\n", count)
 			}
+			return nil
 		},
 	}
 }
@@ -90,9 +91,9 @@ func newReleaseInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitRelease in this repository",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -106,17 +107,18 @@ func newReleaseInitCmd() *cobra.Command {
 			}
 			if err := release.SaveReleaseConfig(cfg.WorkDir, relConfig); err != nil {
 				PrintError(cmd, "save release config: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status": "initialized",
 					"branch": branch,
 				})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("GitRelease initialized (branch: %s)", branch))
 			}
+			return nil
 		},
 	}
 
@@ -140,9 +142,9 @@ func newReleaseCreateCmd() *cobra.Command {
 		Use:   "create <subject>",
 		Short: "Create a new release",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -157,7 +159,7 @@ func newReleaseCreateCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
 				parts := strings.SplitN(content, "\n\n", 2)
@@ -169,7 +171,7 @@ func newReleaseCreateCmd() *cobra.Command {
 
 			if strings.TrimSpace(subject) == "" {
 				PrintError(cmd, "release subject cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			opts := release.CreateReleaseOptions{
@@ -196,16 +198,17 @@ func newReleaseCreateCmd() *cobra.Command {
 			result := release.CreateRelease(cfg.WorkDir, subject, body, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Release created")
 				fmt.Println()
 				printReleaseDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -231,17 +234,17 @@ func newReleaseListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List releases",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
 				fetchResult := release.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
 					PrintError(cmd, fetchResult.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			} else {
 				if !EnsureGitRepo(cmd) {
-					os.Exit(ExitNotRepo)
+					return exit(ExitNotRepo)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -251,20 +254,21 @@ func newReleaseListCmd() *cobra.Command {
 			result := release.GetReleases(repoURL, branch, "", limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No releases found")
-					return
+					return nil
 				}
 				for _, rel := range result.Data {
 					printReleaseLine(rel)
 				}
 			}
+			return nil
 		},
 	}
 
@@ -280,9 +284,9 @@ func newReleaseShowCmd() *cobra.Command {
 		Use:   "show <release-ref>",
 		Short: "Show release details",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -293,14 +297,15 @@ func newReleaseShowCmd() *cobra.Command {
 			result := release.GetSingleRelease(args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				printReleaseDetails(result.Data)
 			}
+			return nil
 		},
 	}
 }
@@ -321,9 +326,9 @@ func newReleaseEditCmd() *cobra.Command {
 		Use:   "edit <release-ref>",
 		Short: "Edit a release",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -368,16 +373,17 @@ func newReleaseEditCmd() *cobra.Command {
 			result := release.EditRelease(cfg.WorkDir, args[0], opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Release updated")
 				fmt.Println()
 				printReleaseDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -400,9 +406,9 @@ func newReleaseRetractCmd() *cobra.Command {
 		Use:   "retract <release-ref>",
 		Short: "Retract a release",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -413,14 +419,15 @@ func newReleaseRetractCmd() *cobra.Command {
 			result := release.RetractRelease(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]bool{"retracted": true})
+				return PrintJSON(cmd, map[string]bool{"retracted": true})
 			} else {
 				PrintSuccess(cmd, "Release retracted")
 			}
+			return nil
 		},
 	}
 }
@@ -450,9 +457,9 @@ artifact ref (refs/gitmsg/release/<version>/artifacts). Nothing is uploaded:
 "record" writes the release's artifact record, "release artifacts push"
 uploads the files to the s3 push remote's bucket.`,
 		Args: cobra.MinimumNArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			version := args[0]
@@ -460,16 +467,17 @@ uploads the files to the s3 push remote's bucket.`,
 			result := release.AddArtifacts(cfg.WorkDir, version, filePaths)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Recorded %d artifact(s) on %s", len(result.Data.Files), version))
 				for _, f := range result.Data.Files {
 					fmt.Printf("  %s  %s  %d bytes\n", f.SHA256[:12], f.Filename, f.Size)
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -479,9 +487,9 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 		Use:   "list <version>",
 		Short: "List artifacts for a release",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -490,14 +498,14 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 			result := release.ListArtifacts(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No artifacts found")
-					return
+					return nil
 				}
 				for _, f := range result.Data {
 					if f.SHA256 == "" {
@@ -513,6 +521,7 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 					fmt.Printf("%s  %s  %d bytes\n", sha, f.Filename, f.Size)
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -522,9 +531,9 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 		Use:   "export <version> [filename...]",
 		Short: "Export artifacts to downloads directory",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -538,14 +547,14 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 				res := release.ListArtifacts(cfg.WorkDir, version)
 				if !res.Success {
 					PrintError(cmd, res.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				for _, info := range res.Data {
 					filenames = append(filenames, info.Filename)
 				}
 				if len(filenames) == 0 {
 					fmt.Println("No artifacts found")
-					return
+					return nil
 				}
 			}
 			for _, filename := range filenames {
@@ -557,6 +566,7 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 				}
 				fmt.Printf("Saved %s → %s\n", filename, res.Data)
 			}
+			return nil
 		},
 	}
 }
@@ -657,9 +667,9 @@ func newReleaseSBOMCmd() *cobra.Command {
 		Use:   "sbom <release-ref>",
 		Short: "Show SBOM details for a release",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -669,31 +679,33 @@ func newReleaseSBOMCmd() *cobra.Command {
 			res := release.GetSingleRelease(args[0])
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			rel := res.Data
 
 			if rel.SBOM == "" {
 				PrintError(cmd, "release has no SBOM")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if rel.Version == "" {
 				PrintError(cmd, "release has no version: set it with gitsocial release edit --version")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if raw {
 				rawRes := release.GetSBOMRaw(cfg.WorkDir, rel.Version, rel.SBOM)
 				if !rawRes.Success {
 					PrintError(cmd, rawRes.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				if cfg.JSONOutput {
-					PrintJSON(json.RawMessage(rawRes.Data))
+					if err := PrintJSON(cmd, json.RawMessage(rawRes.Data)); err != nil {
+						return err
+					}
 				} else {
 					fmt.Print(rawRes.Data)
 				}
-				return
+				return nil
 			}
 
 			repoURL := rel.Repository
@@ -703,12 +715,11 @@ func newReleaseSBOMCmd() *cobra.Command {
 			summary, err := release.GetSBOMSummary(cfg.WorkDir, repoURL, rel.Version, rel.SBOM, rel.ArtifactURL)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(summary)
-				return
+				return PrintJSON(cmd, summary)
 			}
 
 			fmt.Printf("SBOM: %s\n", rel.SBOM)
@@ -752,6 +763,7 @@ func newReleaseSBOMCmd() *cobra.Command {
 					fmt.Printf("  %-*s  %-*s  %s\n", nameW, name, verW, p.Version, p.License)
 				}
 			}
+			return nil
 		},
 	}
 

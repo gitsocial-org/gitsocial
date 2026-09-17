@@ -22,13 +22,13 @@ func newDocsKeybindingsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "keybindings",
 		Short: "Generate keybinding documentation",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			docs := tuikeydoc.CollectAll()
 			if cfg := GetConfig(cmd); cfg != nil && cfg.JSONOutput {
-				PrintJSON(docs)
-				return
+				return PrintJSON(cmd, docs)
 			}
 			fmt.Print(tuikeydoc.Generate(docs))
+			return nil
 		},
 	}
 }

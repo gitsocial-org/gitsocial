@@ -238,7 +238,9 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 		if publicURL != "" {
 			summary["publicURL"] = publicURL
 		}
-		PrintJSON(summary)
+		if err := PrintJSON(cmd, summary); err != nil {
+			return err
+		}
 	} else {
 		printMirrorReport(wsDir, publicURL, f.noSite)
 	}

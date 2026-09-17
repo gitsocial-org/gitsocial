@@ -45,9 +45,9 @@ to the gitsocial push remote. Used by the release driver to publish foreign
 objects such as install.sh at the bucket root. The Cache-Control header follows
 the key's mutability, so a root key like install.sh is stored no-cache.`,
 		Args: cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			key, file := args[0], args[1]
@@ -57,26 +57,26 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 			remoteURL := git.RemoteURL(cfg.WorkDir, remote)
 			if remoteURL == "" {
 				PrintError(cmd, fmt.Sprintf("remote %q is not configured", remote))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if !strings.HasPrefix(remoteURL, "s3://") {
 				PrintError(cmd, fmt.Sprintf("remote %q is %s, not an s3 remote", remote, remoteURL))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			data, err := os.ReadFile(file)
 			if err != nil {
 				PrintError(cmd, fmt.Sprintf("read %s: %v", file, err))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if err := objstore.PutObjectToRemote(remoteURL, objstore.HelperEnvFromOS(), key, data, contentType); err != nil {
 				PrintError(cmd, fmt.Sprintf("upload %s: %v", key, err))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]any{"remote": remote, "key": key, "size": len(data)})
-				return
+				return PrintJSON(cmd, map[string]any{"remote": remote, "key": key, "size": len(data)})
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Uploaded %s (%d bytes) to %s", key, len(data), remote))
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Target remote, default the push remote")
@@ -101,37 +101,37 @@ Examples:
   gitsocial remote default backup     # Set "backup" as the default push remote
   gitsocial remote default r2 s3      # Push to both "r2" and "s3" by default`,
 		Args: cobra.ArbitraryArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 
 			if len(args) == 0 {
 				resolved, resolution := git.ResolvePushRemotes(cfg.WorkDir)
 				if cfg.JSONOutput {
-					PrintJSON(map[string]any{"configured": git.ConfiguredPushRemotes(cfg.WorkDir), "resolved": resolved})
-					return
+					return PrintJSON(cmd, map[string]any{"configured": git.ConfiguredPushRemotes(cfg.WorkDir), "resolved": resolved})
 				}
 				if resolution == git.PushConfigured {
 					fmt.Println(strings.Join(resolved, " "))
 				} else {
 					fmt.Printf("heuristic: %s\n", strings.Join(resolved, " "))
 				}
-				return
+				return nil
 			}
 
 			for _, name := range args {
 				if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", name}); err != nil {
 					PrintError(cmd, fmt.Sprintf("remote %q does not exist", name))
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			}
 			if err := git.SetConfiguredPushRemotes(cfg.WorkDir, args); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Default push remote(s) set to %q", strings.Join(args, " ")))
+			return nil
 		},
 	}
 }
@@ -159,9 +159,9 @@ Examples:
   gitsocial remote add upstream s3://<endpoint-host>/<bucket>/repo
   gitsocial remote add s3 s3://<endpoint-host>/<bucket>/repo --default --site`,
 		Args: cobra.RangeArgs(1, 2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			name, rawURL := "origin", args[0]
@@ -172,36 +172,37 @@ Examples:
 			canonical, isS3, err := protocol.ResolveS3URL(rawURL)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if isS3 {
 				remoteURL = canonical
 			}
 			if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "add", name, remoteURL}); err != nil {
 				PrintError(cmd, fmt.Sprintf("add remote %q: %v", name, err))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if isS3 {
 				if err := ensureLocalS3Alias(cfg.WorkDir); err != nil {
 					PrintError(cmd, err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Added remote %q → %s", name, remoteURL))
 			if makeDefault {
 				if err := git.AppendConfiguredPushRemote(cfg.WorkDir, name); err != nil {
 					PrintError(cmd, err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				PrintSuccess(cmd, fmt.Sprintf("Default push remote(s): %s", strings.Join(git.ConfiguredPushRemotes(cfg.WorkDir), " ")))
 			}
 			if enableSite {
 				if err := writeSiteConfigValue(cfg.WorkDir, "publish", "true"); err != nil {
 					PrintError(cmd, err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				PrintSuccess(cmd, "Site rebuild enabled (site.publish = true)")
 			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&makeDefault, "default", false, "Append the remote to the default push targets")

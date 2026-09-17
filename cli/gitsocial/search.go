@@ -3,7 +3,6 @@ package main
 
 import (
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -92,9 +91,9 @@ Examples:
   gitsocial search --type issue --labels bug --assignee dev@example.com
   gitsocial search --type pr --group-by author --top 5`,
 		Args: cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			var afterTime, beforeTime *time.Time
@@ -102,7 +101,7 @@ Examples:
 				t, err := time.Parse("2006-01-02", after)
 				if err != nil {
 					PrintError(cmd, "invalid --after date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				afterTime = &t
 			}
@@ -110,19 +109,19 @@ Examples:
 				t, err := time.Parse("2006-01-02", before)
 				if err != nil {
 					PrintError(cmd, "invalid --before date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				beforeTime = &t
 			}
 
 			if sortBy != "" && sortBy != "score" && sortBy != "date" {
 				PrintError(cmd, "invalid --sort option: use score or date")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			if groupByField != "" && !search.IsValidGroupBy(groupByField) {
 				PrintError(cmd, "invalid --group-by field: run gitsocial search --help")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			cfg := GetConfig(cmd)
@@ -136,7 +135,7 @@ Examples:
 			if tier != "" {
 				if !strings.EqualFold(typeFilter, "memo") {
 					PrintError(cmd, "--tier is only valid with --type memo")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -147,7 +146,7 @@ Examples:
 				urls := tierRepoURLs(memo.Tier(tier), cfg.WorkDir)
 				if len(urls) == 0 {
 					PrintError(cmd, "no repos for tier "+tier)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				scope = "repos:" + strings.Join(urls, ",")
 			}
@@ -179,14 +178,15 @@ Examples:
 			})
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result)
+				return PrintJSON(cmd, result)
 			} else {
 				printWithPager(search.FormatResult(result))
 			}
+			return nil
 		},
 	}
 

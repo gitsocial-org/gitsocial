@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -34,9 +33,9 @@ func newIDVerifyCmd() *cobra.Command {
 identity.dns_verification is on, a DNS binding. The trust model is in
 documentation/IDENTITY.md.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 
@@ -44,11 +43,13 @@ documentation/IDENTITY.md.`,
 			signerFormat, signerKey, err := git.GetCommitSignerKey(cfg.WorkDir, hash)
 			if err != nil {
 				if cfg.JSONOutput {
-					PrintJSON(map[string]any{"verified": false, "error": err.Error()})
+					if err := PrintJSON(cmd, map[string]any{"verified": false, "error": err.Error()}); err != nil {
+						return err
+					}
 				} else {
 					fmt.Printf("Unverified: %s\n", err.Error())
 				}
-				return
+				return nil
 			}
 			email, _ := getCommitEmail(cfg.WorkDir, hash)
 			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
@@ -74,8 +75,7 @@ documentation/IDENTITY.md.`,
 				if vErr != nil {
 					out["error"] = vErr.Error()
 				}
-				PrintJSON(out)
-				return
+				return PrintJSON(cmd, out)
 			}
 			if binding != nil && binding.Verified {
 				fmt.Printf("Verified: %s (%s, source: %s", email, signerFormat, binding.Source)
@@ -83,9 +83,10 @@ documentation/IDENTITY.md.`,
 					fmt.Printf(", host: %s", binding.ForgeHost)
 				}
 				fmt.Println(")")
-				return
+				return nil
 			}
 			fmt.Println("Unverified")
+			return nil
 		},
 	}
 }
@@ -97,18 +98,18 @@ func newIDResolveCmd() *cobra.Command {
 		Long: `Resolve an email address to its identity through the DNS well-known
 endpoint of its domain.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			email := args[0]
 
 			resolved, err := identity.ResolveIdentity(email)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(resolved)
+				return PrintJSON(cmd, resolved)
 			} else {
 				fmt.Printf("Email:    %s\n", resolved.Email)
 				fmt.Printf("Key:      %s\n", resolved.Key)
@@ -122,6 +123,7 @@ endpoint of its domain.`,
 					fmt.Printf("Source:   fetched\n")
 				}
 			}
+			return nil
 		},
 	}
 }

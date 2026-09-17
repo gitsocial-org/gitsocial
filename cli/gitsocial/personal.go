@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -35,11 +34,11 @@ func newPersonalInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create the personal bare repository",
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := settings.EnsurePersonalRepo()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if remote != "" {
 				if _, err := git.ExecGit(path, []string{"remote", "remove", "origin"}); err != nil {
@@ -47,18 +46,18 @@ func newPersonalInitCmd() *cobra.Command {
 				}
 				if _, err := git.ExecGit(path, []string{"remote", "add", "origin", remote}); err != nil {
 					PrintError(cmd, fmt.Sprintf("attach remote: %s", err))
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			}
 			cfg := GetConfig(cmd)
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(map[string]string{"path": path, "remote": remote})
-				return
+				return PrintJSON(cmd, map[string]string{"path": path, "remote": remote})
 			}
 			PrintSuccess(cmd, fmt.Sprintf("personal repo at %s", path))
 			if remote != "" {
 				PrintSuccess(cmd, "origin → "+remote)
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Attach an `origin` remote URL for sync")
@@ -77,19 +76,19 @@ auto-merge helper, so diverged branches reconcile without conflicts.
 State refs under refs/gitmsg/*, the settings config and the list
 metadata, sync as one bulk refspec. After a fetch, personal-tier memos
 are re-indexed into the cache.`,
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if !settings.PersonalRepoExists() {
 				PrintError(cmd, fmt.Sprintf("personal repo not initialized at %s: run gitsocial personal init", path))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if !personalHasOrigin(path) {
 				PrintError(cmd, "personal repo has no origin remote: run gitsocial personal init --remote <url>")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			doFetch := !pushOnly
 			doPush := !fetchOnly
@@ -99,38 +98,37 @@ are re-indexed into the cache.`,
 				for _, branch := range branches {
 					if err := gitmsg.FetchAndMergeBranch(path, branch); err != nil {
 						PrintError(cmd, fmt.Sprintf("fetch %s: %s", branch, err))
-						os.Exit(ExitError)
+						return exit(ExitError)
 					}
 				}
 				if _, err := git.ExecGit(path, []string{
 					"fetch", "origin", "refs/gitmsg/*:refs/gitmsg/*",
 				}); err != nil {
 					PrintError(cmd, fmt.Sprintf("fetch gitmsg refs: %s", err))
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				if err := memo.SyncTierRepoToCache(path); err != nil {
 					PrintError(cmd, fmt.Sprintf("sync memo cache: %s", err))
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			}
 			if doPush {
 				for _, branch := range branches {
 					if err := gitmsg.PushBranchWithMerge(path, branch); err != nil {
 						PrintError(cmd, fmt.Sprintf("push %s: %s", branch, err))
-						os.Exit(ExitError)
+						return exit(ExitError)
 					}
 				}
 				if _, err := git.ExecGit(path, []string{
 					"push", "origin", "refs/gitmsg/*:refs/gitmsg/*",
 				}); err != nil {
 					PrintError(cmd, fmt.Sprintf("push gitmsg refs: %s", err))
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			}
 			cfg := GetConfig(cmd)
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(map[string]bool{"fetched": doFetch, "pushed": doPush})
-				return
+				return PrintJSON(cmd, map[string]bool{"fetched": doFetch, "pushed": doPush})
 			}
 			switch {
 			case doFetch && doPush:
@@ -140,6 +138,7 @@ are re-indexed into the cache.`,
 			case doPush:
 				PrintSuccess(cmd, "personal repo pushed")
 			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&pushOnly, "push-only", false, "Push only, skip the fetch")
@@ -151,11 +150,11 @@ func newPersonalStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show the personal repository state",
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := settings.PersonalRepoPath()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			exists := settings.PersonalRepoExists()
 			remote := ""
@@ -166,12 +165,11 @@ func newPersonalStatusCmd() *cobra.Command {
 			}
 			cfg := GetConfig(cmd)
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"path":        path,
 					"initialized": exists,
 					"remote":      remote,
 				})
-				return
 			}
 			fmt.Println("path:        " + path)
 			fmt.Println("initialized: " + boolLabel(exists))
@@ -180,6 +178,7 @@ func newPersonalStatusCmd() *cobra.Command {
 			} else if exists {
 				fmt.Println("remote:      (none — set with `gitsocial personal init --remote <url>`)")
 			}
+			return nil
 		},
 	}
 }

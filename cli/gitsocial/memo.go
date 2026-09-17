@@ -48,9 +48,9 @@ func newMemoStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show memo extension status",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -75,7 +75,7 @@ func newMemoStatusCmd() *cobra.Command {
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"project_initialized": projectInit,
 					"personal_repo":       personalPath,
 					"session_dir":         sessionDir,
@@ -83,7 +83,6 @@ func newMemoStatusCmd() *cobra.Command {
 					"sessions":            sessions.Data,
 					"inherits":            inherits,
 				})
-				return
 			}
 			fmt.Println("Memo:")
 			fmt.Printf("  Project initialized: %v\n", projectInit)
@@ -97,6 +96,7 @@ func newMemoStatusCmd() *cobra.Command {
 			if len(inherits) > 0 {
 				fmt.Printf("  Inherited: %s\n", formatInheritsLine(inherits))
 			}
+			return nil
 		},
 	}
 }
@@ -143,17 +143,18 @@ func newMemoProjectCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize the project memo branch",
 		Long:  `Initialize the project memo branch. Running it again changes nothing.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			res := memo.InitProject(cfg.WorkDir)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			PrintSuccess(cmd, "project tier initialized")
+			return nil
 		},
 	})
 	return cmd
@@ -170,13 +171,14 @@ func newMemoPersonalCmd() *cobra.Command {
 		Short: "Initialize the personal bare repository",
 		Long: `Initialize the personal bare repo for personal-tier memos. Running it
 again changes nothing.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			res := memo.InitPersonal()
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			PrintSuccess(cmd, "personal tier initialized at "+res.Data)
+			return nil
 		},
 	})
 	return cmd
@@ -194,7 +196,7 @@ func newMemoSessionCmd() *cobra.Command {
 		Long: `Create a session, or resume the one with this id. The resolved id is
 printed.`,
 		Args: cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			id := ""
 			if len(args) == 1 {
 				id = args[0]
@@ -207,19 +209,20 @@ printed.`,
 			res := memo.InitSession(id, workspaceURL)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(map[string]string{"session_id": res.Data})
+				return PrintJSON(cmd, map[string]string{"session_id": res.Data})
 			} else {
 				fmt.Println(res.Data)
 			}
+			return nil
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List active sessions with ages",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			workspaceURL := ""
 			if cfg != nil {
@@ -228,15 +231,14 @@ printed.`,
 			res := memo.ListSessions(workspaceURL)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(res.Data)
-				return
+				return PrintJSON(cmd, res.Data)
 			}
 			if len(res.Data) == 0 {
 				fmt.Println("(no sessions)")
-				return
+				return nil
 			}
 			for _, s := range res.Data {
 				remote := ""
@@ -245,6 +247,7 @@ printed.`,
 				}
 				fmt.Printf("%s  %s%s\n", s.ID, memo.FormatAge(s.LastUsed), remote)
 			}
+			return nil
 		},
 	})
 	syncCmd := &cobra.Command{
@@ -255,19 +258,19 @@ printed.`,
 	var pushOnly, fetchOnly bool
 	syncCmd.Flags().BoolVar(&pushOnly, "push-only", false, "push only, skip the fetch")
 	syncCmd.Flags().BoolVar(&fetchOnly, "fetch-only", false, "fetch only, skip the push")
-	syncCmd.Run = func(cmd *cobra.Command, args []string) {
+	syncCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		doFetch := !pushOnly
 		doPush := !fetchOnly
 		if doFetch {
 			if res := memo.FetchSession(args[0]); !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 		}
 		if doPush {
 			if res := memo.PushSession(args[0]); !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 		}
 		switch {
@@ -278,6 +281,7 @@ printed.`,
 		case doPush:
 			PrintSuccess(cmd, "pushed session "+args[0])
 		}
+		return nil
 	}
 	cmd.AddCommand(syncCmd)
 	gcCmd := &cobra.Command{
@@ -289,36 +293,36 @@ printed.`,
 	}
 	var olderThan string
 	gcCmd.Flags().StringVar(&olderThan, "older-than", "", "delete sessions idle past this duration, such as 30d")
-	gcCmd.Run = func(cmd *cobra.Command, args []string) {
+	gcCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if olderThan != "" {
 			d, err := parseDurationFriendly(olderThan)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(1)
+				return exit(1)
 			}
 			res := memo.GCSessionsOlderThan(d)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			cfg := GetConfig(cmd)
 			if cfg != nil && cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{"deleted": res.Data})
-				return
+				return PrintJSON(cmd, map[string]interface{}{"deleted": res.Data})
 			}
 			fmt.Printf("deleted %d session(s)\n", len(res.Data))
-			return
+			return nil
 		}
 		if len(args) != 1 {
 			PrintError(cmd, "session id required: pass one or --older-than <duration>")
-			os.Exit(1)
+			return exit(1)
 		}
 		res := memo.GCSession(args[0])
 		if !res.Success {
 			PrintError(cmd, res.Error.Message)
-			os.Exit(1)
+			return exit(1)
 		}
 		PrintSuccess(cmd, "deleted session "+args[0])
+		return nil
 	}
 	cmd.AddCommand(gcCmd)
 	return cmd
@@ -336,43 +340,44 @@ func newMemoInheritCmd() *cobra.Command {
 		Long: `Register a repository this project inherits memos from. The repository
 is followed through the memo-inherits list.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			res := memo.AddInherit(cfg.WorkDir, args[0])
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if res.Data {
 				PrintSuccess(cmd, "added inherit: "+args[0]+" (followed via '"+memo.InheritsListID+"' list — run `gitsocial fetch` to pull memos)")
 			} else {
 				PrintSuccess(cmd, "already inherited: "+args[0])
 			}
+			return nil
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List inherited memo source repos",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			urls := memo.ListInherits(cfg.WorkDir)
 			if cfg.JSONOutput {
-				PrintJSON(urls)
-				return
+				return PrintJSON(cmd, urls)
 			}
 			if len(urls) == 0 {
 				fmt.Println("(no inherited sources)")
-				return
+				return nil
 			}
 			for _, u := range urls {
 				fmt.Println(u)
 			}
+			return nil
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
@@ -381,17 +386,18 @@ is followed through the memo-inherits list.`,
 		Long: `Remove a memo source repository, and its entry in the memo-inherits
 list.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			res := memo.RemoveInherit(cfg.WorkDir, args[0])
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			PrintSuccess(cmd, "removed inherit: "+args[0])
+			return nil
 		},
 	})
 	return cmd
@@ -408,19 +414,19 @@ body comes from --body, from stdin with --body -, or from the editor
 when --body is omitted and the command runs interactively. The editor is
 $GITSOCIAL_EDITOR, then $EDITOR, $VISUAL, vi.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			tier := memo.Tier(strings.TrimSpace(scope))
 			if tier == "" {
 				tier = memo.TierSession
 			}
 			if tier == memo.TierProject && !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			resolvedBody, err := resolveMemoBody(cmd, body, args[0], tier)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(1)
+				return exit(1)
 			}
 			res := memo.CreateMemo(cfg.WorkDir, args[0], resolvedBody, memo.CreateMemoOptions{
 				Tier:   tier,
@@ -428,13 +434,13 @@ $GITSOCIAL_EDITOR, then $EDITOR, $VISUAL, vi.`,
 			})
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(res.Data)
-				return
+				return PrintJSON(cmd, res.Data)
 			}
 			fmt.Printf("memo created: %s\n", res.Data.ID)
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&labels, "labels", "", "comma-separated labels, such as kind/policy")
@@ -482,7 +488,7 @@ func newMemoEditCmd() *cobra.Command {
 		Long: `Edit a memo on the tier it was created on. The edit is a new version of
 the memo, and the earlier versions stay in history.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			opts := memo.EditMemoOptions{}
 			if setSubject {
@@ -498,9 +504,10 @@ the memo, and the earlier versions stay in history.`,
 			res := memo.EditMemo(cfg.WorkDir, args[0], opts)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			PrintSuccess(cmd, "memo edited")
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&subject, "subject", "", "new subject")
@@ -522,14 +529,15 @@ func newMemoRetractCmd() *cobra.Command {
 		Long: `Retract a memo. The retraction is a marker on the edit chain, so the
 memo stays in history, marked as removed.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			res := memo.RetractMemo(cfg.WorkDir, args[0])
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			PrintSuccess(cmd, "memo retracted")
+			return nil
 		},
 	}
 }
@@ -543,23 +551,23 @@ func newMemoPromoteCmd() *cobra.Command {
 		Long: `Promote a memo to a higher tier. The memo is copied as a fresh commit on
 the target tier and the source memo stays where it is.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			tier := memo.Tier(strings.TrimSpace(to))
 			if tier == "" {
 				PrintError(cmd, "--to <tier> is required")
-				os.Exit(1)
+				return exit(1)
 			}
 			res := memo.PromoteMemo(cfg.WorkDir, args[0], tier)
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(res.Data)
-				return
+				return PrintJSON(cmd, res.Data)
 			}
 			fmt.Printf("promoted to %s: %s\n", tier, res.Data.ID)
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&to, "to", "", "target tier: project | personal | session")
@@ -577,7 +585,7 @@ func newMemoListCmd() *cobra.Command {
 		Long: `List memos across tiers. Session, personal, project and inherited memos
 show by default; external memos, from repositories followed for other
 reasons, need --include-external.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 				slog.Debug("sync workspace", "error", err)
@@ -596,15 +604,14 @@ reasons, need --include-external.`,
 			})
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(res.Data)
-				return
+				return PrintJSON(cmd, res.Data)
 			}
 			if len(res.Data) == 0 {
 				fmt.Println("(no memos)")
-				return
+				return nil
 			}
 			for _, m := range res.Data {
 				labelStr := ""
@@ -613,6 +620,7 @@ reasons, need --include-external.`,
 				}
 				fmt.Printf("%-9s %s  %s%s\n", m.Tier, shortHash(m.ID), m.Subject, labelStr)
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&tier, "tier", "", "tier: session, personal, project, inherited or external")
@@ -631,17 +639,16 @@ func newMemoShowCmd() *cobra.Command {
 		Use:   "show <ref>",
 		Short: "Show a single memo",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 			res := memo.GetSingleMemo(args[0], workspaceURL, memo.ListInherits(cfg.WorkDir))
 			if !res.Success {
 				PrintError(cmd, res.Error.Message)
-				os.Exit(1)
+				return exit(1)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(res.Data)
-				return
+				return PrintJSON(cmd, res.Data)
 			}
 			m := res.Data
 			fmt.Printf("ID:     %s\n", m.ID)
@@ -657,6 +664,7 @@ func newMemoShowCmd() *cobra.Command {
 				fmt.Println()
 				fmt.Println(m.Body)
 			}
+			return nil
 		},
 	}
 }

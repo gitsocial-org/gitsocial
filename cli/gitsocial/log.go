@@ -2,7 +2,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 	"time"
 
@@ -38,9 +37,9 @@ Examples:
   gitsocial log --type post,comment
   gitsocial log --after 2024-01-01 --before 2024-06-01
   gitsocial log --author dev@example.com`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			var types []social.LogEntryType
@@ -55,7 +54,7 @@ Examples:
 				t, err := time.Parse("2006-01-02", after)
 				if err != nil {
 					PrintError(cmd, "invalid --after date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				afterTime = &t
 			}
@@ -63,7 +62,7 @@ Examples:
 				t, err := time.Parse("2006-01-02", before)
 				if err != nil {
 					PrintError(cmd, "invalid --before date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				beforeTime = &t
 			}
@@ -82,14 +81,15 @@ Examples:
 			})
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				printWithPager(social.FormatLogs(result.Data))
 			}
+			return nil
 		},
 	}
 

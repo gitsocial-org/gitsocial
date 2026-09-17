@@ -123,14 +123,13 @@ func runForkCreate(cmd *cobra.Command, args []string, f *forkCreateFlags) error 
 	}
 
 	if cfg.JSONOutput {
-		PrintJSON(map[string]interface{}{
+		return PrintJSON(cmd, map[string]interface{}{
 			"upstream":  upstreamURL,
 			"origin":    destURL,
 			"directory": dir,
 			"blobless":  !f.noFilter,
 			"thin":      thin,
 		})
-		return nil
 	}
 	blobless := ""
 	if !f.noFilter {

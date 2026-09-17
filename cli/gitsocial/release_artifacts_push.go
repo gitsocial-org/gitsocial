@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -28,9 +27,9 @@ The full download URL for each file is <site url>/artifacts/<version>/<filename>
 derived from the remote's effective site url (` + "`gitsocial config site set url ...`" + `,
 overridable per remote).`,
 		Args: cobra.MinimumNArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -40,11 +39,10 @@ overridable per remote).`,
 			result := release.PushArtifacts(cfg.WorkDir, version, args[1:], remote)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
-				return
+				return PrintJSON(cmd, result.Data)
 			}
 			PrintSuccess(cmd, fmt.Sprintf("Pushed %d artifact(s) for %s to %s", len(result.Data.Files), version, result.Data.Remote))
 			for _, f := range result.Data.Files {
@@ -56,6 +54,7 @@ overridable per remote).`,
 			if result.Data.RecordUpdated {
 				fmt.Printf("Release record updated: artifact-url = %s\n", result.Data.BaseURL)
 			}
+			return nil
 		},
 	}
 

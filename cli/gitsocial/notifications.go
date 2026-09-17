@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -35,9 +34,9 @@ Use --type to filter by notification type (comma-separated).
 
 Valid types: mention, comment, repost, quote, follow, fork-pr, feedback,
 approved, changes-requested, issue-assigned, new-release, edit`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -52,12 +51,11 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 			items, err := notifications.GetAll(cfg.WorkDir, filter)
 			if err != nil {
 				PrintError(cmd, "read notifications: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(items)
-				return
+				return PrintJSON(cmd, items)
 			}
 
 			if len(items) == 0 {
@@ -66,10 +64,11 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 				} else {
 					fmt.Println("No unread notifications.")
 				}
-				return
+				return nil
 			}
 
 			fmt.Println(formatNotifications(items))
+			return nil
 		},
 	}
 
@@ -93,23 +92,24 @@ func newNotificationsCountCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "count",
 		Short: "Show unread notification count",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			count, err := notifications.GetUnreadCount(cfg.WorkDir)
 			if err != nil {
 				PrintError(cmd, "read the unread count: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]int{"unread": count})
+				return PrintJSON(cmd, map[string]int{"unread": count})
 			} else {
 				fmt.Printf("%d unread\n", count)
 			}
+			return nil
 		},
 	}
 }
@@ -120,9 +120,9 @@ func newNotificationsReadCmd() *cobra.Command {
 		Use:   "read <notification-id>",
 		Short: "Mark a notification as read",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -137,7 +137,7 @@ func newNotificationsReadCmd() *cobra.Command {
 				ref := protocol.ParseRef(id)
 				if ref.Type != "commit" {
 					PrintError(cmd, "invalid notification ID")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				repoURL = ref.Repository
 				hash = ref.Value
@@ -149,14 +149,15 @@ func newNotificationsReadCmd() *cobra.Command {
 
 			if err := notifications.MarkAsRead(repoURL, hash, branch); err != nil {
 				PrintError(cmd, "mark as read: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "read", "id": id})
+				return PrintJSON(cmd, map[string]string{"status": "read", "id": id})
 			} else {
 				PrintSuccess(cmd, "Marked as read")
 			}
+			return nil
 		},
 	}
 }
@@ -166,22 +167,23 @@ func newNotificationsReadAllCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "read-all",
 		Short: "Mark all notifications as read",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			if err := notifications.MarkAllAsRead(cfg.WorkDir); err != nil {
 				PrintError(cmd, "mark all as read: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "all_read"})
+				return PrintJSON(cmd, map[string]string{"status": "all_read"})
 			} else {
 				PrintSuccess(cmd, "All notifications marked as read")
 			}
+			return nil
 		},
 	}
 }
@@ -192,9 +194,9 @@ func newNotificationsUnreadCmd() *cobra.Command {
 		Use:   "unread <notification-id>",
 		Short: "Mark a notification as unread",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -209,7 +211,7 @@ func newNotificationsUnreadCmd() *cobra.Command {
 				ref := protocol.ParseRef(id)
 				if ref.Type != "commit" {
 					PrintError(cmd, "invalid notification ID")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				repoURL = ref.Repository
 				hash = ref.Value
@@ -221,14 +223,15 @@ func newNotificationsUnreadCmd() *cobra.Command {
 
 			if err := notifications.MarkAsUnread(repoURL, hash, branch); err != nil {
 				PrintError(cmd, "mark as unread: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "unread", "id": id})
+				return PrintJSON(cmd, map[string]string{"status": "unread", "id": id})
 			} else {
 				PrintSuccess(cmd, "Marked as unread")
 			}
+			return nil
 		},
 	}
 }
@@ -238,22 +241,23 @@ func newNotificationsUnreadAllCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "unread-all",
 		Short: "Mark all notifications as unread",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			if err := notifications.MarkAllAsUnread(cfg.WorkDir); err != nil {
 				PrintError(cmd, "mark all as unread: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "all_unread"})
+				return PrintJSON(cmd, map[string]string{"status": "all_unread"})
 			} else {
 				PrintSuccess(cmd, "All notifications marked as unread")
 			}
+			return nil
 		},
 	}
 }

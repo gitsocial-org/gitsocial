@@ -86,15 +86,15 @@ secret key, so it works interactively and piped:
 
 The file is written with 0600 permissions.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			host, err := resolveCredentialHost(cfg.WorkDir, args[0])
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			// Prompts go to stderr so piped stdin and --json stdout stay clean.
 			reader := bufio.NewReader(cmd.InOrStdin())
@@ -110,23 +110,24 @@ The file is written with 0600 permissions.`,
 			secret := readLine("Secret key: ")
 			if access == "" || secret == "" {
 				PrintError(cmd, "expected the access key and the secret key as two stdin lines")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			creds, err := objstore.ReadCredentialsFile()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			creds[host] = objstore.Credential{AccessKey: access, SecretKey: secret}
 			if err := objstore.WriteCredentialsFile(creds); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"host": host, "accessKey": maskKey(access)})
+				return PrintJSON(cmd, map[string]string{"host": host, "accessKey": maskKey(access)})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Stored credentials for %s (%s)", host, maskKey(access)))
 			}
+			return nil
 		},
 	}
 }
@@ -138,12 +139,12 @@ func newCredentialsListCmd() *cobra.Command {
 		Long: `List the endpoint hosts with stored credentials. Access keys print
 masked, and secret keys do not print.`,
 		Args: cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			creds, err := objstore.ReadCredentialsFile()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			hosts := make([]string, 0, len(creds))
 			for host := range creds {
@@ -155,16 +156,16 @@ masked, and secret keys do not print.`,
 				for _, host := range hosts {
 					masked[host] = maskKey(creds[host].AccessKey)
 				}
-				PrintJSON(masked)
-				return
+				return PrintJSON(cmd, masked)
 			}
 			if len(hosts) == 0 {
 				fmt.Println("No credentials stored")
-				return
+				return nil
 			}
 			for _, host := range hosts {
 				fmt.Printf("%s = %s\n", host, maskKey(creds[host].AccessKey))
 			}
+			return nil
 		},
 	}
 }
@@ -174,28 +175,29 @@ func newCredentialsRemoveCmd() *cobra.Command {
 		Use:   "remove <host>",
 		Short: "Remove the credentials for a host",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			host := strings.ToLower(strings.TrimSpace(args[0]))
 			creds, err := objstore.ReadCredentialsFile()
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if _, ok := creds[host]; !ok {
 				PrintError(cmd, fmt.Sprintf("no credentials stored for %s", host))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			delete(creds, host)
 			if err := objstore.WriteCredentialsFile(creds); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"removed": host})
+				return PrintJSON(cmd, map[string]string{"removed": host})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Removed credentials for %s", host))
 			}
+			return nil
 		},
 	}
 }

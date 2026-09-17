@@ -50,9 +50,9 @@ Examples:
   gitsocial push --all-branches  # every local branch
   gitsocial push --full          # detach a thin fork bucket`,
 		Args: cobra.ArbitraryArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -98,9 +98,13 @@ Examples:
 			if cfg.JSONOutput {
 				// One remote keeps the object shape, several return the array.
 				if len(remotes) == 1 && len(results) == 1 {
-					PrintJSON(results[0])
+					if err := PrintJSON(cmd, results[0]); err != nil {
+						return err
+					}
 				} else {
-					PrintJSON(results)
+					if err := PrintJSON(cmd, results); err != nil {
+						return err
+					}
 				}
 			} else {
 				for i := range results {
@@ -112,8 +116,9 @@ Examples:
 				if !cfg.JSONOutput {
 					PrintError(cmd, err.Error())
 				}
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
+			return nil
 		},
 	}
 

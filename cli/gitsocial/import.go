@@ -149,7 +149,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		return err
 	}
 	if !EnsureGitRepo(cmd) {
-		os.Exit(ExitNotRepo)
+		return exit(ExitNotRepo)
 	}
 	cfg := GetConfig(cmd)
 	var rawURL string
@@ -302,7 +302,9 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	}
 	mapPath := importpkg.ResolveMappingPath(cfg.CacheDir, repoURL, f.mapFile)
 	if cfg.JSONOutput {
-		PrintJSON(stats)
+		if err := PrintJSON(cmd, stats); err != nil {
+			return err
+		}
 	} else {
 		for _, e := range stats.Errors {
 			fmt.Fprintf(os.Stderr, "  error  %s %s: %s\n", e.Type, e.ExternalID, e.Message)
@@ -324,7 +326,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 		if !cfg.JSONOutput {
 			fmt.Fprintf(os.Stderr, "\nImport completed with %d error(s) — the affected items were not imported; fix the cause and re-run (already-imported items are skipped).\n", len(stats.Errors))
 		}
-		os.Exit(ExitError)
+		return exit(ExitError)
 	}
 	return nil
 }

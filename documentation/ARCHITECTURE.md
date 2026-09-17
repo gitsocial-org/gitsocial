@@ -132,6 +132,7 @@ Internal helpers                      return error
 - A batch operation that continues on failure logs the failure instead of returning it.
 - An intentionally ignored error carries a comment.
 - One `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
+- A CLI command returns its exit code as an error through `RunE`, and `main` exits once.
 - A TUI view implements the `View` interface (`Update`, `Render`); examples in `library/tui/tuicore/`.
 
 ## Directory Structure

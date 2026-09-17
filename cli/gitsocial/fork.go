@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -41,20 +40,21 @@ and just follow an upstream for awareness), use a list instead:
   gitsocial social list add <list> <upstream-url>
 A list follows a repo without entangling its items with your own.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if err := gitmsg.AddFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{"added": args[0]})
+				return PrintJSON(cmd, map[string]interface{}{"added": args[0]})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Fork added: %s", args[0]))
 			}
+			return nil
 		},
 	}
 }
@@ -64,20 +64,21 @@ func newForkRemoveCmd() *cobra.Command {
 		Use:   "remove <url>",
 		Short: "Remove a registered fork",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if err := gitmsg.RemoveFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"removed": args[0]})
+				return PrintJSON(cmd, map[string]string{"removed": args[0]})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Fork removed: %s", args[0]))
 			}
+			return nil
 		},
 	}
 }
@@ -87,9 +88,9 @@ func newForkListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List registered forks",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			forks := gitmsg.GetForks(cfg.WorkDir)
@@ -98,16 +99,17 @@ func newForkListCmd() *cobra.Command {
 				for _, f := range forks {
 					out = append(out, map[string]interface{}{"url": f})
 				}
-				PrintJSON(out)
+				return PrintJSON(cmd, out)
 			} else {
 				if len(forks) == 0 {
 					fmt.Println("No forks registered")
-					return
+					return nil
 				}
 				for _, f := range forks {
 					fmt.Println(f)
 				}
 			}
+			return nil
 		},
 	}
 }

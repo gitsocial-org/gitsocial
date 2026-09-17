@@ -3,7 +3,6 @@ package main
 
 import (
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -17,9 +16,9 @@ func newHistoryCmd() *cobra.Command {
 		Use:   "history <ref>",
 		Short: "View edit history of a message",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -33,19 +32,20 @@ func newHistoryCmd() *cobra.Command {
 			versions, err := gitmsg.GetHistory(ref, workspaceURL)
 			if err != nil {
 				PrintError(cmd, "read history: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if len(versions) == 0 {
 				PrintError(cmd, "no edit history for "+ref)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(versions)
+				return PrintJSON(cmd, versions)
 			} else {
 				printWithPager(gitmsg.FormatHistory(versions))
 			}
+			return nil
 		},
 	}
 

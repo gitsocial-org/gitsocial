@@ -50,23 +50,24 @@ func newSocialStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show social extension status",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			result := social.Status(cfg.WorkDir, cfg.CacheDir)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				printSocialStatus(&result.Data)
 			}
+			return nil
 		},
 	}
 }
@@ -110,9 +111,9 @@ func newSocialInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitSocial in this repository",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -123,17 +124,18 @@ func newSocialInitCmd() *cobra.Command {
 
 			if err := gitmsg.SetExtConfigValue(cfg.WorkDir, "social", "branch", branch); err != nil {
 				PrintError(cmd, "save social config: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status": "initialized",
 					"branch": branch,
 				})
 			} else {
 				PrintSuccess(cmd, "GitSocial initialized on branch: "+branch)
 			}
+			return nil
 		},
 	}
 
@@ -152,9 +154,9 @@ func newSocialTimelineCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "timeline",
 		Short: "View posts from your timeline",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -178,16 +180,17 @@ func newSocialTimelineCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			posts := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(posts)
+				return PrintJSON(cmd, posts)
 			} else {
 				fmt.Println(social.FormatTimeline(posts))
 			}
+			return nil
 		},
 	}
 
@@ -205,9 +208,9 @@ func newSocialPostCmd() *cobra.Command {
 		Use:   "post <text>",
 		Short: "Create a new post",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -221,30 +224,31 @@ func newSocialPostCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
 			}
 
 			if strings.TrimSpace(content) == "" {
 				PrintError(cmd, "post content cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			result := social.CreatePost(cfg.WorkDir, content, &social.CreatePostOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Post created")
 				fmt.Println()
 				fmt.Println(social.FormatPost(result.Data))
 			}
+			return nil
 		},
 	}
 
@@ -260,9 +264,9 @@ func newSocialEditCmd() *cobra.Command {
 		Use:   "edit <post-id> <new-text>",
 		Short: "Edit an existing post",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -277,14 +281,14 @@ func newSocialEditCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
 			}
 
 			if strings.TrimSpace(content) == "" {
 				PrintError(cmd, "post content cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			var opts *social.EditPostOptions
@@ -297,16 +301,17 @@ func newSocialEditCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Post edited")
 				fmt.Println()
 				fmt.Println(social.FormatPost(result.Data))
 			}
+			return nil
 		},
 	}
 
@@ -320,9 +325,9 @@ func newSocialRetractCmd() *cobra.Command {
 		Use:   "retract <post-id>",
 		Short: "Retract a post",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -332,14 +337,15 @@ func newSocialRetractCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "retracted", "post": postID})
+				return PrintJSON(cmd, map[string]string{"status": "retracted", "post": postID})
 			} else {
 				PrintSuccess(cmd, "Post retracted")
 			}
+			return nil
 		},
 	}
 
@@ -353,9 +359,9 @@ func newSocialCommentCmd() *cobra.Command {
 		Use:   "comment <post-id> <text>",
 		Short: "Comment on a post",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -370,7 +376,7 @@ func newSocialCommentCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
 			}
@@ -379,16 +385,17 @@ func newSocialCommentCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Comment created")
 				fmt.Println()
 				fmt.Println(social.FormatPost(result.Data))
 			}
+			return nil
 		},
 	}
 
@@ -404,9 +411,9 @@ func newSocialRepostCmd() *cobra.Command {
 		Use:   "repost <post-id>",
 		Short: "Repost a post",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -416,16 +423,17 @@ func newSocialRepostCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Reposted")
 				fmt.Println()
 				fmt.Println(social.FormatPost(result.Data))
 			}
+			return nil
 		},
 	}
 
@@ -441,9 +449,9 @@ func newSocialQuoteCmd() *cobra.Command {
 		Use:   "quote <post-id> <text>",
 		Short: "Quote a post with your own commentary",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -458,7 +466,7 @@ func newSocialQuoteCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
 			}
@@ -467,16 +475,17 @@ func newSocialQuoteCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Quote created")
 				fmt.Println()
 				fmt.Println(social.FormatPost(result.Data))
 			}
+			return nil
 		},
 	}
 
@@ -511,9 +520,9 @@ func newSocialListShowCmd() *cobra.Command {
 		Use:   "show [name]",
 		Short: "Show lists or a specific list",
 		Args:  cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -522,31 +531,33 @@ func newSocialListShowCmd() *cobra.Command {
 				result := social.GetLists(cfg.WorkDir)
 				if !result.Success {
 					PrintError(cmd, result.Error.Message)
-					os.Exit(ExitCode(result.Error.Code))
+					return exit(ExitCode(result.Error.Code))
 				}
 
 				if cfg.JSONOutput {
-					PrintJSON(result.Data)
+					if err := PrintJSON(cmd, result.Data); err != nil {
+						return err
+					}
 				} else {
 					fmt.Println(social.FormatLists(result.Data))
 				}
-				return
+				return nil
 			}
 
 			listID := args[0]
 			result := social.GetList(cfg.WorkDir, listID)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if result.Data == nil {
 				PrintError(cmd, "list not found: "+listID)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				fmt.Println(social.FormatList(*result.Data))
 				if len(result.Data.Repositories) > 0 {
@@ -556,6 +567,7 @@ func newSocialListShowCmd() *cobra.Command {
 					}
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -566,23 +578,24 @@ func newSocialListLsCmd() *cobra.Command {
 		Use:   "ls",
 		Short: "List all lists (alias for 'show')",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			result := social.GetLists(cfg.WorkDir)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				fmt.Println(social.FormatLists(result.Data))
 			}
+			return nil
 		},
 	}
 }
@@ -595,9 +608,9 @@ func newSocialListCreateCmd() *cobra.Command {
 		Use:   "create <id>",
 		Short: "Create a new list",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -606,14 +619,15 @@ func newSocialListCreateCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "List created: "+listID)
 			}
+			return nil
 		},
 	}
 
@@ -628,9 +642,9 @@ func newSocialListDeleteCmd() *cobra.Command {
 		Use:   "delete <id>",
 		Short: "Delete a list",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -639,14 +653,15 @@ func newSocialListDeleteCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"status": "deleted", "list": listID})
+				return PrintJSON(cmd, map[string]string{"status": "deleted", "list": listID})
 			} else {
 				PrintSuccess(cmd, "List deleted: "+listID)
 			}
+			return nil
 		},
 	}
 }
@@ -660,14 +675,14 @@ func newSocialListAddCmd() *cobra.Command {
 		Use:   "add <list-id> <repository-url>",
 		Short: "Add a repository to a list",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			if allBranches && branch != "" {
 				PrintError(cmd, "--all-branches and --branch are mutually exclusive")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			cfg := GetConfig(cmd)
@@ -678,11 +693,11 @@ func newSocialListAddCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status":     "added",
 					"list":       listID,
 					"repository": result.Data,
@@ -690,6 +705,7 @@ func newSocialListAddCmd() *cobra.Command {
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Added %s to list %s", result.Data, listID))
 			}
+			return nil
 		},
 	}
 
@@ -705,9 +721,9 @@ func newSocialListRemoveCmd() *cobra.Command {
 		Use:   "remove <list-id> <repository-url>",
 		Short: "Remove a repository from a list",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -718,11 +734,11 @@ func newSocialListRemoveCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status":     "removed",
 					"list":       listID,
 					"repository": repoURL,
@@ -730,6 +746,7 @@ func newSocialListRemoveCmd() *cobra.Command {
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Removed %s from list %s", repoURL, listID))
 			}
+			return nil
 		},
 	}
 }
@@ -749,9 +766,9 @@ Examples:
   gitsocial social fetch --list reading      # Fetch only repos in 'reading' list
   gitsocial social fetch https://github.com/user/repo  # Fetch specific repo`,
 		Args: cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -762,15 +779,17 @@ Examples:
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Message)
-					os.Exit(ExitCode(result.Error.Code))
+					return exit(ExitCode(result.Error.Code))
 				}
 
 				if cfg.JSONOutput {
-					PrintJSON(result.Data)
+					if err := PrintJSON(cmd, result.Data); err != nil {
+						return err
+					}
 				} else {
 					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
 				}
-				return
+				return nil
 			}
 
 			opts := client.FetchOptions{
@@ -789,13 +808,13 @@ Examples:
 			result, _ := client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			stats := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(stats)
+				return PrintJSON(cmd, stats)
 			} else {
 				for _, e := range stats.Errors {
 					fmt.Printf("  ✗ %s (%s)\n", e.Repository, e.Error)
@@ -809,6 +828,7 @@ Examples:
 					fmt.Printf("Failed: %d repositories\n", len(stats.Errors))
 				}
 			}
+			return nil
 		},
 	}
 
@@ -827,9 +847,9 @@ func newSocialFollowersCmd() *cobra.Command {
 
 A repository "follows" you if they have your repository URL in one of their lists.
 This is detected during fetch when parsing remote repository lists.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -837,17 +857,17 @@ This is detected during fetch when parsing remote repository lists.`,
 
 			if workspaceURL == "" {
 				PrintError(cmd, "no origin remote: add one with git remote add origin <url>")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			followers, err := social.GetFollowers(workspaceURL)
 			if err != nil {
 				PrintError(cmd, "read followers: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"workspace": workspaceURL,
 					"followers": followers,
 					"count":     len(followers),
@@ -864,6 +884,7 @@ This is detected during fetch when parsing remote repository lists.`,
 					fmt.Printf("\nTotal: %d\n", len(followers))
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -881,9 +902,9 @@ For external repositories, lists are read from the cache (populated during fetch
 Examples:
   gitsocial social list repo https://github.com/user/repo`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -905,7 +926,7 @@ Examples:
 				listIDs, err := gitmsg.EnumerateLists(cfg.WorkDir, socialExt)
 				if err != nil {
 					PrintError(cmd, "enumerate lists: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				for _, id := range listIDs {
 					data, _ := gitmsg.ReadList(cfg.WorkDir, socialExt, id)
@@ -923,7 +944,7 @@ Examples:
 				cachedLists, err := cache.GetExternalRepoLists(repoURL)
 				if err != nil {
 					PrintError(cmd, "read lists from cache: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				for _, list := range cachedLists {
 					lists = append(lists, listView{
@@ -936,7 +957,7 @@ Examples:
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(lists)
+				return PrintJSON(cmd, lists)
 			} else {
 				if len(lists) == 0 {
 					fmt.Println("No lists found for this repository")
@@ -950,6 +971,7 @@ Examples:
 					}
 				}
 			}
+			return nil
 		},
 	}
 }

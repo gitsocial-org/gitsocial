@@ -76,9 +76,9 @@ func newPMStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show PM extension status",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -101,7 +101,7 @@ func newPMStatusCmd() *cobra.Command {
 			closedCount, _ := pm.CountIssues([]string{"closed"})
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"branch":        branch,
 					"framework":     framework,
 					"open_issues":   openCount,
@@ -113,6 +113,7 @@ func newPMStatusCmd() *cobra.Command {
 				fmt.Printf("  Framework: %s\n", framework)
 				fmt.Printf("  Issues: %d open, %d closed\n", openCount, closedCount)
 			}
+			return nil
 		},
 	}
 }
@@ -125,9 +126,9 @@ func newPMInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitPM in this repository",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -142,7 +143,7 @@ func newPMInitCmd() *cobra.Command {
 			// Validate framework
 			if pm.GetFramework(framework) == nil {
 				PrintError(cmd, fmt.Sprintf("unknown framework %q: use %s", framework, strings.Join(pm.ListFrameworks(), ", ")))
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			// Save PM config with framework
@@ -153,11 +154,11 @@ func newPMInitCmd() *cobra.Command {
 			}
 			if err := pm.SavePMConfig(cfg.WorkDir, pmConfig); err != nil {
 				PrintError(cmd, "save pm config: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status":    "initialized",
 					"branch":    branch,
 					"framework": framework,
@@ -165,6 +166,7 @@ func newPMInitCmd() *cobra.Command {
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("GitPM initialized (branch: %s, framework: %s)", branch, framework))
 			}
+			return nil
 		},
 	}
 
@@ -221,17 +223,17 @@ Filter syntax:
   "search text"           text search
 
 Sort by created, due or priority, each with :asc or :desc.`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
 					PrintError(cmd, fetchResult.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			} else {
 				if !EnsureGitRepo(cmd) {
-					os.Exit(ExitNotRepo)
+					return exit(ExitNotRepo)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -270,7 +272,7 @@ Sort by created, due or priority, each with :asc or :desc.`,
 			items, err := pm.GetPMItems(q)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
@@ -278,17 +280,18 @@ Sort by created, due or priority, each with :asc or :desc.`,
 				for i, item := range items {
 					issues[i] = pm.PMItemToIssue(item)
 				}
-				PrintJSON(issues)
+				return PrintJSON(cmd, issues)
 			} else {
 				if len(items) == 0 {
 					fmt.Println("No issues found")
-					return
+					return nil
 				}
 				for _, item := range items {
 					issue := pm.PMItemToIssue(item)
 					printIssueLine(issue)
 				}
 			}
+			return nil
 		},
 	}
 
@@ -308,9 +311,9 @@ func newPMIssueShowCmd() *cobra.Command {
 		Use:   "show <issue-id>",
 		Short: "Show issue details",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -319,16 +322,17 @@ func newPMIssueShowCmd() *cobra.Command {
 			item, err := pm.GetPMItemByRef(issueRef, "")
 			if err != nil {
 				PrintError(cmd, "issue not found")
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			issue := pm.PMItemToIssue(*item)
 
 			if cfg.JSONOutput {
-				PrintJSON(issue)
+				return PrintJSON(cmd, issue)
 			} else {
 				printIssueDetails(issue)
 			}
+			return nil
 		},
 	}
 }
@@ -348,9 +352,9 @@ func newPMIssueCreateCmd() *cobra.Command {
 		Use:   "create <subject>",
 		Short: "Create a new issue",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -365,7 +369,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
 				parts := strings.SplitN(content, "\n\n", 2)
@@ -377,7 +381,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 
 			if strings.TrimSpace(subject) == "" {
 				PrintError(cmd, "issue subject cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			opts := pm.CreateIssueOptions{
@@ -396,7 +400,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
 			}
@@ -414,7 +418,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 				parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, "")
 				if err != nil {
 					PrintError(cmd, err.Error())
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Parent = parent
 				opts.Root = root
@@ -428,16 +432,17 @@ func newPMIssueCreateCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue created")
 				fmt.Println()
 				printIssueDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -463,9 +468,9 @@ func newPMIssueEditCmd() *cobra.Command {
 		Use:   "edit <issue-id>",
 		Short: "Edit an issue's metadata",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -491,12 +496,12 @@ func newPMIssueEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("due") {
 				if strings.TrimSpace(dueDateStr) == "" {
 					PrintError(cmd, "--due cannot be cleared: pass a YYYY-MM-DD date")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
 			}
@@ -522,7 +527,7 @@ func newPMIssueEditCmd() *cobra.Command {
 					parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, args[0])
 					if err != nil {
 						PrintError(cmd, err.Error())
-						os.Exit(ExitInvalidArgs)
+						return exit(ExitInvalidArgs)
 					}
 					opts.Parent = &parent
 					opts.Root = &root
@@ -544,16 +549,17 @@ func newPMIssueEditCmd() *cobra.Command {
 			result := pm.UpdateIssue(cfg.WorkDir, args[0], opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue updated")
 				fmt.Println()
 				printIssueDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -616,9 +622,9 @@ func newPMIssueCloseCmd() *cobra.Command {
 		Use:   "close <issue-id>",
 		Short: "Close an issue",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -628,14 +634,15 @@ func newPMIssueCloseCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue closed")
 			}
+			return nil
 		},
 	}
 }
@@ -645,9 +652,9 @@ func newPMIssueReopenCmd() *cobra.Command {
 		Use:   "reopen <issue-id>",
 		Short: "Reopen an issue",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -657,14 +664,15 @@ func newPMIssueReopenCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Issue reopened")
 			}
+			return nil
 		},
 	}
 }
@@ -674,9 +682,9 @@ func newPMIssueCommentCmd() *cobra.Command {
 		Use:   "comment <issue-id> <message>",
 		Short: "Add a comment to an issue",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -693,28 +701,29 @@ func newPMIssueCommentCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
 			}
 
 			if strings.TrimSpace(content) == "" {
 				PrintError(cmd, "comment content cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			result := pm.CommentOnItem(cfg.WorkDir, issueRef, content)
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Comment added")
 			}
+			return nil
 		},
 	}
 }
@@ -724,9 +733,9 @@ func newPMIssueCommentsCmd() *cobra.Command {
 		Use:   "comments <issue-id>",
 		Short: "List comments on an issue",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -736,15 +745,15 @@ func newPMIssueCommentsCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No comments")
-					return
+					return nil
 				}
 				for _, comment := range result.Data {
 					fmt.Printf("%s %s <%s>\n", comment.Timestamp.Format("2006-01-02 15:04"), comment.Author.Name, comment.Author.Email)
@@ -752,6 +761,7 @@ func newPMIssueCommentsCmd() *cobra.Command {
 					fmt.Println()
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -789,17 +799,17 @@ func newPMMilestoneListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List milestones",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
 					PrintError(cmd, fetchResult.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			} else {
 				if !EnsureGitRepo(cmd) {
-					os.Exit(ExitNotRepo)
+					return exit(ExitNotRepo)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -818,20 +828,21 @@ func newPMMilestoneListCmd() *cobra.Command {
 			result := pm.GetMilestones(repoURL, branch, states, "", limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No milestones found")
-					return
+					return nil
 				}
 				for _, m := range result.Data {
 					printMilestoneLine(m)
 				}
 			}
+			return nil
 		},
 	}
 
@@ -848,9 +859,9 @@ func newPMMilestoneShowCmd() *cobra.Command {
 		Use:   "show <milestone-id>",
 		Short: "Show milestone details",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -859,13 +870,13 @@ func newPMMilestoneShowCmd() *cobra.Command {
 			result := pm.GetMilestone(milestoneRef)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			milestone := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(milestone)
+				return PrintJSON(cmd, milestone)
 			} else {
 				printMilestoneDetails(milestone)
 
@@ -878,6 +889,7 @@ func newPMMilestoneShowCmd() *cobra.Command {
 					}
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -891,9 +903,9 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 		Use:   "create <title>",
 		Short: "Create a new milestone",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -908,7 +920,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
 				parts := strings.SplitN(content, "\n\n", 2)
@@ -920,7 +932,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 
 			if strings.TrimSpace(title) == "" {
 				PrintError(cmd, "milestone title cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			opts := pm.CreateMilestoneOptions{AllowDuplicate: allowDuplicate, Labels: text.SplitCSV(labelsStr)}
@@ -929,7 +941,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
 			}
@@ -938,16 +950,17 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone created")
 				fmt.Println()
 				printMilestoneDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -966,9 +979,9 @@ func newPMMilestoneEditCmd() *cobra.Command {
 		Use:   "edit <milestone-id>",
 		Short: "Edit a milestone's metadata",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -990,12 +1003,12 @@ func newPMMilestoneEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("due") {
 				if strings.TrimSpace(dueDateStr) == "" {
 					PrintError(cmd, "--due cannot be cleared: pass a YYYY-MM-DD date")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
 			}
@@ -1007,16 +1020,17 @@ func newPMMilestoneEditCmd() *cobra.Command {
 			result := pm.UpdateMilestone(cfg.WorkDir, args[0], opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone updated")
 				fmt.Println()
 				printMilestoneDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -1034,9 +1048,9 @@ func newPMMilestoneCloseCmd() *cobra.Command {
 		Use:   "close <milestone-id>",
 		Short: "Close a milestone",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1046,14 +1060,15 @@ func newPMMilestoneCloseCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone closed")
 			}
+			return nil
 		},
 	}
 }
@@ -1063,9 +1078,9 @@ func newPMMilestoneReopenCmd() *cobra.Command {
 		Use:   "reopen <milestone-id>",
 		Short: "Reopen a milestone",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1075,14 +1090,15 @@ func newPMMilestoneReopenCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone reopened")
 			}
+			return nil
 		},
 	}
 }
@@ -1092,9 +1108,9 @@ func newPMMilestoneCancelCmd() *cobra.Command {
 		Use:   "cancel <milestone-id>",
 		Short: "Cancel a milestone",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1104,14 +1120,15 @@ func newPMMilestoneCancelCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Milestone canceled")
 			}
+			return nil
 		},
 	}
 }
@@ -1121,9 +1138,9 @@ func newPMMilestoneDeleteCmd() *cobra.Command {
 		Use:   "delete <milestone-id>",
 		Short: "Delete (retract) a milestone",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1133,14 +1150,15 @@ func newPMMilestoneDeleteCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]bool{"deleted": true})
+				return PrintJSON(cmd, map[string]bool{"deleted": true})
 			} else {
 				PrintSuccess(cmd, "Milestone deleted")
 			}
+			return nil
 		},
 	}
 }
@@ -1178,17 +1196,17 @@ func newPMSprintListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List sprints",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
 					PrintError(cmd, fetchResult.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			} else {
 				if !EnsureGitRepo(cmd) {
-					os.Exit(ExitNotRepo)
+					return exit(ExitNotRepo)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -1212,20 +1230,21 @@ func newPMSprintListCmd() *cobra.Command {
 			result := pm.GetSprints(repoURL, branch, states, "", limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No sprints found")
-					return
+					return nil
 				}
 				for _, s := range result.Data {
 					printSprintLine(s)
 				}
 			}
+			return nil
 		},
 	}
 
@@ -1242,9 +1261,9 @@ func newPMSprintShowCmd() *cobra.Command {
 		Use:   "show <sprint-id>",
 		Short: "Show sprint details",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1253,13 +1272,13 @@ func newPMSprintShowCmd() *cobra.Command {
 			result := pm.GetSprint(sprintRef)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			sprint := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(sprint)
+				return PrintJSON(cmd, sprint)
 			} else {
 				printSprintDetails(sprint)
 
@@ -1272,6 +1291,7 @@ func newPMSprintShowCmd() *cobra.Command {
 					}
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -1285,9 +1305,9 @@ func newPMSprintCreateCmd() *cobra.Command {
 		Use:   "create <title>",
 		Short: "Create a new sprint",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1302,7 +1322,7 @@ func newPMSprintCreateCmd() *cobra.Command {
 				}
 				if err := scanner.Err(); err != nil {
 					PrintError(cmd, "read stdin: "+err.Error())
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
 				parts := strings.SplitN(content, "\n\n", 2)
@@ -1314,24 +1334,24 @@ func newPMSprintCreateCmd() *cobra.Command {
 
 			if strings.TrimSpace(title) == "" {
 				PrintError(cmd, "sprint title cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			if startDateStr == "" || endDateStr == "" {
 				PrintError(cmd, "start and end dates are required: pass --start and --end")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			start, err := time.Parse("2006-01-02", startDateStr)
 			if err != nil {
 				PrintError(cmd, "invalid --start date: use YYYY-MM-DD")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			end, err := time.Parse("2006-01-02", endDateStr)
 			if err != nil {
 				PrintError(cmd, "invalid --end date: use YYYY-MM-DD")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			opts := pm.CreateSprintOptions{
@@ -1344,16 +1364,17 @@ func newPMSprintCreateCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint created")
 				fmt.Println()
 				printSprintDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -1372,9 +1393,9 @@ func newPMSprintEditCmd() *cobra.Command {
 		Use:   "edit <sprint-id>",
 		Short: "Edit a sprint's metadata",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1397,7 +1418,7 @@ func newPMSprintEditCmd() *cobra.Command {
 				t, err := time.Parse("2006-01-02", startDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --start date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.Start = &t
 			}
@@ -1405,7 +1426,7 @@ func newPMSprintEditCmd() *cobra.Command {
 				t, err := time.Parse("2006-01-02", endDateStr)
 				if err != nil {
 					PrintError(cmd, "invalid --end date: use YYYY-MM-DD")
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 				opts.End = &t
 			}
@@ -1417,16 +1438,17 @@ func newPMSprintEditCmd() *cobra.Command {
 			result := pm.UpdateSprint(cfg.WorkDir, args[0], opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint updated")
 				fmt.Println()
 				printSprintDetails(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -1445,9 +1467,9 @@ func newPMSprintStartCmd() *cobra.Command {
 		Use:   "start <sprint-id>",
 		Short: "Start (activate) a sprint",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1457,14 +1479,15 @@ func newPMSprintStartCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint started")
 			}
+			return nil
 		},
 	}
 }
@@ -1474,9 +1497,9 @@ func newPMSprintCompleteCmd() *cobra.Command {
 		Use:   "complete <sprint-id>",
 		Short: "Complete a sprint",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1486,14 +1509,15 @@ func newPMSprintCompleteCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint completed")
 			}
+			return nil
 		},
 	}
 }
@@ -1503,9 +1527,9 @@ func newPMSprintCancelCmd() *cobra.Command {
 		Use:   "cancel <sprint-id>",
 		Short: "Cancel a sprint",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1515,14 +1539,15 @@ func newPMSprintCancelCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Sprint canceled")
 			}
+			return nil
 		},
 	}
 }
@@ -1532,9 +1557,9 @@ func newPMSprintDeleteCmd() *cobra.Command {
 		Use:   "delete <sprint-id>",
 		Short: "Delete (retract) a sprint",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1544,14 +1569,15 @@ func newPMSprintDeleteCmd() *cobra.Command {
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]bool{"deleted": true})
+				return PrintJSON(cmd, map[string]bool{"deleted": true})
 			} else {
 				PrintSuccess(cmd, "Sprint deleted")
 			}
+			return nil
 		},
 	}
 }
@@ -1773,9 +1799,9 @@ func newPMBoardCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "board",
 		Short: "Show kanban board view of issues",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1786,16 +1812,17 @@ func newPMBoardCmd() *cobra.Command {
 			result := pm.GetBoardView(cfg.WorkDir)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			board := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(board)
+				return PrintJSON(cmd, board)
 			} else {
 				printBoard(board)
 			}
+			return nil
 		},
 	}
 }

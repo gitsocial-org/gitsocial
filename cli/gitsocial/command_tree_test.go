@@ -90,8 +90,7 @@ func TestCommandTreeHelp(t *testing.T) {
 			root.SetOut(&out)
 			root.SetErr(&out)
 			root.SetArgs(append(strings.Fields(path), "--help"))
-			// main exits with ExitError exactly when Execute returns an error,
-			// so a nil error here is an exit code of 0.
+			// main exits with exitCode(err), so a nil error here is an exit code of 0.
 			if err := root.Execute(); err != nil {
 				t.Fatalf("--help returned %v\n%s", err, out.String())
 			}

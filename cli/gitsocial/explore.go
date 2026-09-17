@@ -2,8 +2,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
@@ -17,9 +15,9 @@ func newExploreCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "explore",
 		Short: "Browse and discover repositories",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -31,14 +29,15 @@ func newExploreCmd() *cobra.Command {
 			result := social.GetRepositories(cfg.WorkDir, scope, limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				printWithPager(social.FormatRepositories(result.Data))
 			}
+			return nil
 		},
 	}
 

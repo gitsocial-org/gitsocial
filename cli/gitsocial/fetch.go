@@ -42,9 +42,9 @@ Examples:
 For extension-specific options, use the extension's fetch command directly:
   gitsocial social fetch --list reading`,
 		Args: cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -59,16 +59,18 @@ For extension-specific options, use the extension's fetch command directly:
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Message)
-					os.Exit(ExitCode(result.Error.Code))
+					return exit(ExitCode(result.Error.Code))
 				}
 
 				if cfg.JSONOutput {
-					PrintJSON(result.Data)
+					if err := PrintJSON(cmd, result.Data); err != nil {
+						return err
+					}
 				} else {
 					fmt.Printf("✓ %s (%d posts)\n", repoURL, result.Data.Items)
 					printNotificationDelta(cfg.WorkDir, countBefore)
 				}
-				return
+				return nil
 			}
 
 			countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
@@ -92,13 +94,13 @@ For extension-specific options, use the extension's fetch command directly:
 			}
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			stats := result.Data
 
 			if cfg.JSONOutput {
-				PrintJSON(stats)
+				return PrintJSON(cmd, stats)
 			} else {
 				for _, e := range stats.Errors {
 					fmt.Printf("  ✗ %s (%s)\n", e.Repository, e.Error)
@@ -113,6 +115,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 				printNotificationDelta(cfg.WorkDir, countBefore)
 			}
+			return nil
 		},
 	}
 

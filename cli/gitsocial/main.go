@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -32,7 +33,7 @@ func resolveVersion() string {
 // startProfiling wires CPU/memory/trace profiling controlled by GITSOCIAL_PPROF.
 // Modes: "cpu" (default file /tmp/gitsocial-cpu.pprof), "mem" (heap snapshot at
 // exit -> /tmp/gitsocial-mem.pprof), "trace" (execution trace -> /tmp/gitsocial.trace).
-// The returned stop function should be deferred so output flushes on exit.
+// The returned stop function flushes the output; main calls it before the exit.
 func startProfiling() func() {
 	mode := os.Getenv("GITSOCIAL_PPROF")
 	if mode == "" {
@@ -98,13 +99,17 @@ func startProfiling() func() {
 // main is the CLI entry point that registers commands and executes the root command.
 func main() {
 	stop := startProfiling()
-	defer stop()
-
 	version = resolveVersion()
-	if err := buildRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(ExitError)
+	cmd, err := buildRootCmd().ExecuteC()
+	stop()
+
+	// A command that failed has printed its own error; cobra's own errors have not.
+	var coded exitError
+	if err != nil && !errors.As(err, &coded) {
+		fmt.Fprintln(os.Stderr, cmd.ErrPrefix(), err)
+		fmt.Fprintln(os.Stderr, cmd.UsageString())
 	}
+	os.Exit(exitCode(err))
 }
 
 // buildRootCmd assembles the full command tree: root, core commands, and every
@@ -150,16 +155,17 @@ func newTUICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui",
 		Short: "Launch interactive TUI for browsing posts",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			if err := tui.Run(cfg.WorkDir, cfg.CacheDir); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
+			return nil
 		},
 	}
 

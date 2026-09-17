@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -32,33 +31,34 @@ func newSettingsGetCmd() *cobra.Command {
 		Use:   "get <key>",
 		Short: "Get a settings value",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			key := args[0]
 
 			path, err := settings.DefaultPath()
 			if err != nil {
 				PrintError(cmd, "resolve settings path: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			s, err := settings.Load(path)
 			if err != nil {
 				PrintError(cmd, "load settings: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			value, ok := settings.Get(s, key)
 			if !ok {
 				PrintError(cmd, "unknown key "+key+": run gitsocial settings list")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": value})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": value})
 			} else {
 				fmt.Println(value)
 			}
+			return nil
 		},
 	}
 }
@@ -71,21 +71,22 @@ func newSettingsSetCmd() *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "Set a settings value",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			key := args[0]
 			value := args[1]
 
 			if err := settings.NewManager().Write(key, value); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": value})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": value})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, value))
 			}
+			return nil
 		},
 	}
 }
@@ -96,25 +97,25 @@ func newSettingsListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all settings values",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 
 			path, err := settings.DefaultPath()
 			if err != nil {
 				PrintError(cmd, "resolve settings path: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			s, err := settings.Load(path)
 			if err != nil {
 				PrintError(cmd, "load settings: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			items := settings.ListAll(s)
 
 			if cfg.JSONOutput {
-				PrintJSON(items)
+				return PrintJSON(cmd, items)
 			} else {
 				for _, item := range items {
 					if item.Value != "" {
@@ -124,6 +125,7 @@ func newSettingsListCmd() *cobra.Command {
 					}
 				}
 			}
+			return nil
 		},
 	}
 }

@@ -2,7 +2,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -18,9 +17,9 @@ func newRelatedCmd() *cobra.Command {
 		Use:   "related <repository>",
 		Short: "Find repositories related to one",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -28,7 +27,7 @@ func newRelatedCmd() *cobra.Command {
 			result := social.GetRelatedRepositories(cfg.WorkDir, repoURL)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitCode(result.Error.Code))
+				return exit(ExitCode(result.Error.Code))
 			}
 
 			repos := result.Data
@@ -37,10 +36,11 @@ func newRelatedCmd() *cobra.Command {
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(repos)
+				return PrintJSON(cmd, repos)
 			} else {
 				printWithPager(social.FormatRelatedRepositories(repos))
 			}
+			return nil
 		},
 	}
 

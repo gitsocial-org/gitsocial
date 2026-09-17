@@ -45,9 +45,9 @@ func newReviewStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show review extension status",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -67,7 +67,7 @@ func newReviewStatusCmd() *cobra.Command {
 
 			forks := gitmsg.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"branch":        branch,
 					"pull_requests": count,
 					"open":          openCount,
@@ -81,6 +81,7 @@ func newReviewStatusCmd() *cobra.Command {
 					fmt.Printf("  Forks: %d\n", len(forks))
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -93,9 +94,9 @@ func newReviewInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitReview in this repository",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -109,17 +110,18 @@ func newReviewInitCmd() *cobra.Command {
 			}
 			if err := review.SaveReviewConfig(cfg.WorkDir, revConfig); err != nil {
 				PrintError(cmd, "save review config: "+err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{
+				return PrintJSON(cmd, map[string]string{
 					"status": "initialized",
 					"branch": branch,
 				})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("GitReview initialized (branch: %s)", branch))
 			}
+			return nil
 		},
 	}
 
@@ -162,9 +164,9 @@ func newReviewPRCreateCmd() *cobra.Command {
 		Use:   "create <subject>",
 		Short: "Create a new pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -176,7 +178,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 			}
 			if strings.TrimSpace(subject) == "" {
 				PrintError(cmd, "pull request subject cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			// Auto-detect stack relationship from base branch matching
@@ -194,7 +196,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 					// No match — not an error, base may target trunk
 				default:
 					PrintError(cmd, fmt.Sprintf("%d open PRs have head %s: pass --depends-on <pr-ref>", len(matches), base))
-					os.Exit(ExitInvalidArgs)
+					return exit(ExitInvalidArgs)
 				}
 			}
 
@@ -231,16 +233,17 @@ func newReviewPRCreateCmd() *cobra.Command {
 			result := review.CreatePR(cfg.WorkDir, subject, body, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request created")
 				fmt.Println()
 				printPRDetails(cfg.WorkDir, result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -265,17 +268,17 @@ func newReviewPRListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List pull requests",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			if repoURL != "" {
 				fetchResult := review.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
 					PrintError(cmd, fetchResult.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 			} else {
 				if !EnsureGitRepo(cmd) {
-					os.Exit(ExitNotRepo)
+					return exit(ExitNotRepo)
 				}
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
@@ -297,20 +300,21 @@ func newReviewPRListCmd() *cobra.Command {
 			}
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				if len(result.Data) == 0 {
 					fmt.Println("No pull requests found")
-					return
+					return nil
 				}
 				for _, pr := range result.Data {
 					printPRLine(pr)
 				}
 			}
+			return nil
 		},
 	}
 
@@ -329,9 +333,9 @@ func newReviewPRShowCmd() *cobra.Command {
 		Use:   "show <pr-ref>",
 		Short: "Show pull request details",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -342,7 +346,7 @@ func newReviewPRShowCmd() *cobra.Command {
 			result := review.GetPR(args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			pr := result.Data
@@ -360,7 +364,7 @@ func newReviewPRShowCmd() *cobra.Command {
 				if vaRes.Success && len(vaRes.Data) > 0 {
 					data["version_aware_reviews"] = vaRes.Data
 				}
-				PrintJSON(data)
+				return PrintJSON(cmd, data)
 			} else {
 				printPRDetails(cfg.WorkDir, pr)
 
@@ -406,6 +410,7 @@ func newReviewPRShowCmd() *cobra.Command {
 					}
 				}
 			}
+			return nil
 		},
 	}
 
@@ -423,9 +428,9 @@ func newReviewPREditCmd() *cobra.Command {
 		Use:   "edit <pr-ref>",
 		Short: "Edit a pull request's metadata",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -466,16 +471,17 @@ func newReviewPREditCmd() *cobra.Command {
 			result := review.UpdatePR(cfg.WorkDir, args[0], opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request updated")
 				fmt.Println()
 				printPRDetails(cfg.WorkDir, result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -498,9 +504,9 @@ func newReviewPRUpdateCmd() *cobra.Command {
 		Long: `Update a pull request with the current tips of its head and base
 branches, which signals that new code is ready for review.`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -509,13 +515,14 @@ branches, which signals that new code is ready for review.`,
 			result := review.UpdatePRTips(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request updated with current branch tips")
 			}
+			return nil
 		},
 	}
 }
@@ -527,9 +534,9 @@ func newReviewPRMergeCmd() *cobra.Command {
 		Use:   "merge <pr-ref>",
 		Short: "Merge a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -540,7 +547,7 @@ func newReviewPRMergeCmd() *cobra.Command {
 			result := review.MergePR(cfg.WorkDir, args[0], review.MergeStrategy(strategy))
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			// Publish the merged base so origin's code agrees with the merged
@@ -548,13 +555,16 @@ func newReviewPRMergeCmd() *cobra.Command {
 			pushErr := review.PushMergedBase(cfg.WorkDir, result.Data)
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				if err := PrintJSON(cmd, result.Data); err != nil {
+					return err
+				}
 			} else {
 				PrintSuccess(cmd, "Pull request merged")
 			}
 			if pushErr != nil {
 				PrintError(cmd, fmt.Sprintf("push the merged base branch: %s", pushErr))
 			}
+			return nil
 		},
 	}
 
@@ -567,9 +577,9 @@ func newReviewPRCloseCmd() *cobra.Command {
 		Use:   "close <pr-ref>",
 		Short: "Close a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -580,14 +590,15 @@ func newReviewPRCloseCmd() *cobra.Command {
 			result := review.ClosePR(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request closed")
 			}
+			return nil
 		},
 	}
 }
@@ -597,9 +608,9 @@ func newReviewPRRetractCmd() *cobra.Command {
 		Use:   "retract <pr-ref>",
 		Short: "Retract a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -610,14 +621,15 @@ func newReviewPRRetractCmd() *cobra.Command {
 			result := review.RetractPR(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]bool{"retracted": true})
+				return PrintJSON(cmd, map[string]bool{"retracted": true})
 			} else {
 				PrintSuccess(cmd, "Pull request retracted")
 			}
+			return nil
 		},
 	}
 }
@@ -629,9 +641,9 @@ func newReviewPRDiffCmd() *cobra.Command {
 		Use:   "diff <pr-ref>",
 		Short: "Show range-diff between PR versions",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -644,12 +656,12 @@ func newReviewPRDiffCmd() *cobra.Command {
 				vRes := review.GetPRVersions(args[0], gitmsg.ResolveRepoURL(cfg.WorkDir))
 				if !vRes.Success {
 					PrintError(cmd, vRes.Error.Message)
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				n := len(vRes.Data)
 				if n < 2 {
 					PrintError(cmd, "need at least 2 versions for range-diff")
-					os.Exit(ExitError)
+					return exit(ExitError)
 				}
 				if !cmd.Flags().Changed("from") {
 					from = n - 2
@@ -662,11 +674,11 @@ func newReviewPRDiffCmd() *cobra.Command {
 			result := review.ComparePRVersions(cfg.WorkDir, cfg.CacheDir, args[0], from, to)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(map[string]interface{}{
+				return PrintJSON(cmd, map[string]interface{}{
 					"from":       from,
 					"to":         to,
 					"range_diff": result.Data,
@@ -674,6 +686,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 			} else {
 				fmt.Print(result.Data)
 			}
+			return nil
 		},
 	}
 
@@ -689,9 +702,9 @@ func newReviewPRSyncCmd() *cobra.Command {
 		Use:   "sync <pr-ref>",
 		Short: "Sync a PR head with its base branch",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -702,14 +715,15 @@ func newReviewPRSyncCmd() *cobra.Command {
 			result := review.SyncPRBranch(cfg.WorkDir, args[0], strategy)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "PR branch synced with base")
 			}
+			return nil
 		},
 	}
 
@@ -722,9 +736,9 @@ func newReviewPRReadyCmd() *cobra.Command {
 		Use:   "ready <pr-ref>",
 		Short: "Mark a draft pull request ready",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -733,13 +747,14 @@ func newReviewPRReadyCmd() *cobra.Command {
 			result := review.MarkReady(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request marked as ready for review")
 			}
+			return nil
 		},
 	}
 }
@@ -749,9 +764,9 @@ func newReviewPRDraftCmd() *cobra.Command {
 		Use:   "draft <pr-ref>",
 		Short: "Convert an open pull request to draft",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -760,13 +775,14 @@ func newReviewPRDraftCmd() *cobra.Command {
 			result := review.ConvertToDraft(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request converted to draft")
 			}
+			return nil
 		},
 	}
 }
@@ -776,9 +792,9 @@ func newReviewPRStackCmd() *cobra.Command {
 		Use:   "stack <pr-ref>",
 		Short: "Show the full stack for a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -787,10 +803,10 @@ func newReviewPRStackCmd() *cobra.Command {
 			result := review.GetStack(args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				fmt.Printf("Stack (%d PRs):\n", len(result.Data))
 				for _, entry := range result.Data {
@@ -814,6 +830,7 @@ func newReviewPRStackCmd() *cobra.Command {
 						icon, entry.Position+1, pr.Subject, baseShort, headShort, pr.State)
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -823,9 +840,9 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 		Use:   "rebase-stack <pr-ref>",
 		Short: "Rebase the PRs above this one",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -834,16 +851,17 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 			result := review.RebaseStack(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				for _, pr := range result.Data {
 					fmt.Printf("  Rebased: %s (%s ← %s)\n", pr.Subject, shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
 				}
 				PrintSuccess(cmd, fmt.Sprintf("Rebased %d PR(s) in the stack", len(result.Data)))
 			}
+			return nil
 		},
 	}
 }
@@ -853,9 +871,9 @@ func newReviewPRSyncStackCmd() *cobra.Command {
 		Use:   "sync-stack <pr-ref>",
 		Short: "Update branch tips across the stack",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
@@ -864,13 +882,14 @@ func newReviewPRSyncStackCmd() *cobra.Command {
 			result := review.SyncStackTips(cfg.WorkDir, args[0])
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Updated tips for %d PR(s)", len(result.Data)))
 			}
+			return nil
 		},
 	}
 }
@@ -897,9 +916,9 @@ func newFeedbackApproveCmd() *cobra.Command {
 		Use:   "approve <pr-ref>",
 		Short: "Approve a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -917,14 +936,15 @@ func newFeedbackApproveCmd() *cobra.Command {
 			result := review.CreateFeedback(cfg.WorkDir, message, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Pull request approved")
 			}
+			return nil
 		},
 	}
 
@@ -939,9 +959,9 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 		Use:   "request-changes <pr-ref>",
 		Short: "Request changes on a pull request",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -951,7 +971,7 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 
 			if message == "" {
 				PrintError(cmd, "request-changes needs a message: pass -m <message>")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 			opts := review.CreateFeedbackOptions{
 				PullRequest: args[0],
@@ -960,14 +980,15 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 			result := review.CreateFeedback(cfg.WorkDir, message, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Changes requested")
 			}
+			return nil
 		},
 	}
 
@@ -984,9 +1005,9 @@ func newFeedbackCommentCmd() *cobra.Command {
 		Use:   "comment <message>",
 		Short: "Create an inline feedback comment",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -1000,7 +1021,7 @@ func newFeedbackCommentCmd() *cobra.Command {
 			}
 			if strings.TrimSpace(content) == "" {
 				PrintError(cmd, "feedback comment cannot be empty")
-				os.Exit(ExitInvalidArgs)
+				return exit(ExitInvalidArgs)
 			}
 
 			opts := review.CreateFeedbackOptions{
@@ -1017,14 +1038,15 @@ func newFeedbackCommentCmd() *cobra.Command {
 			result := review.CreateFeedback(cfg.WorkDir, content, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Message)
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				PrintJSON(result.Data)
+				return PrintJSON(cmd, result.Data)
 			} else {
 				PrintSuccess(cmd, "Feedback comment created")
 			}
+			return nil
 		},
 	}
 
@@ -1062,20 +1084,21 @@ func newReviewForkAddCmd() *cobra.Command {
 		Use:   "add <url>",
 		Short: "Register a fork for PR discovery",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if err := gitmsg.AddFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"added": args[0]})
+				return PrintJSON(cmd, map[string]string{"added": args[0]})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Fork added: %s", args[0]))
 			}
+			return nil
 		},
 	}
 }
@@ -1085,20 +1108,21 @@ func newReviewForkRemoveCmd() *cobra.Command {
 		Use:   "remove <url>",
 		Short: "Remove a registered fork",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			if err := gitmsg.RemoveFork(cfg.WorkDir, args[0]); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"removed": args[0]})
+				return PrintJSON(cmd, map[string]string{"removed": args[0]})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("Fork removed: %s", args[0]))
 			}
+			return nil
 		},
 	}
 }
@@ -1108,23 +1132,24 @@ func newReviewForkListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List registered forks",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			forks := gitmsg.GetForks(cfg.WorkDir)
 			if cfg.JSONOutput {
-				PrintJSON(forks)
+				return PrintJSON(cmd, forks)
 			} else {
 				if len(forks) == 0 {
 					fmt.Println("No forks registered")
-					return
+					return nil
 				}
 				for _, f := range forks {
 					fmt.Println(f)
 				}
 			}
+			return nil
 		},
 	}
 }

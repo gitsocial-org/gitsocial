@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -43,19 +42,20 @@ func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show GitSocial status for this repository",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
 			status := getStatusData(cfg)
 
 			if cfg.JSONOutput {
-				PrintJSON(status)
+				return PrintJSON(cmd, status)
 			} else {
 				printStatus(status)
 			}
+			return nil
 		},
 	}
 }

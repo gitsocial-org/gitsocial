@@ -4,7 +4,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -30,9 +29,9 @@ Examples:
   gitsocial show #commit:abc123
   gitsocial show https://github.com/user/repo#commit:abc123`,
 		Args: cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 
 			cfg := GetConfig(cmd)
@@ -52,135 +51,128 @@ Examples:
 			// Fast dispatch: detect which extension owns this hash via raw table lookup,
 			// then call only the matching getter instead of trying all 4 sequentially.
 			if hits, err := cache.DetectExtension(bareRef); err == nil && len(hits) > 0 {
-				if showByExtension(cmd, cfg, workspaceURL, hits[0]) {
-					return
+				if shown, err := showByExtension(cmd, cfg, workspaceURL, hits[0]); shown || err != nil {
+					return err
 				}
 			}
 
 			// Fallback: try each extension (handles refs that DetectExtension can't resolve,
 			// e.g. full URL refs or non-hash ref types).
-			if showReview(cmd, cfg, bareRef) {
-				return
+			if shown, err := showReview(cmd, cfg, bareRef); shown || err != nil {
+				return err
 			}
-			if showPM(cmd, cfg, bareRef, workspaceURL) {
-				return
+			if shown, err := showPM(cmd, cfg, bareRef, workspaceURL); shown || err != nil {
+				return err
 			}
-			if showRelease(cmd, cfg, bareRef) {
-				return
+			if shown, err := showRelease(cmd, cfg, bareRef); shown || err != nil {
+				return err
 			}
-			if showSocial(cmd, cfg, bareRef, workspaceURL) {
-				return
+			if shown, err := showSocial(cmd, cfg, bareRef, workspaceURL); shown || err != nil {
+				return err
 			}
 
 			slog.Debug("show: no extension matched", "ref", ref)
 			PrintError(cmd, "item not found: "+ref)
-			os.Exit(ExitError)
+			return exit(ExitError)
 		},
 	}
 }
 
 // showByExtension dispatches to the correct extension getter using the full PK from DetectExtension.
-func showByExtension(_ *cobra.Command, cfg *Config, workspaceURL string, hit cache.ExtensionHit) bool {
+func showByExtension(cmd *cobra.Command, cfg *Config, workspaceURL string, hit cache.ExtensionHit) (bool, error) {
 	switch hit.Extension {
 	case "review":
 		item, err := review.GetReviewItem(hit.RepoURL, hit.Hash, hit.Branch)
 		if err != nil || item.Type != string(review.ItemTypePullRequest) {
-			return false
+			return false, nil
 		}
 		pr := review.ReviewItemToPullRequest(*item)
 		pr.ReviewSummary = review.GetReviewSummary(pr.Repository, extractHash(pr.ID), pr.Branch, pr.Reviewers)
 		if cfg.JSONOutput {
-			PrintJSON(pr)
-		} else {
-			printPRDetails(cfg.WorkDir, pr)
+			return true, PrintJSON(cmd, pr)
 		}
-		return true
+		printPRDetails(cfg.WorkDir, pr)
+		return true, nil
 	case "pm":
-		return showPM(nil, cfg, "#commit:"+hit.Hash, workspaceURL)
+		return showPM(cmd, cfg, "#commit:"+hit.Hash, workspaceURL)
 	case "release":
 		item, err := release.GetReleaseItem(hit.RepoURL, hit.Hash, hit.Branch)
 		if err != nil {
-			return false
+			return false, nil
 		}
 		rel := release.ReleaseItemToRelease(*item)
 		if cfg.JSONOutput {
-			PrintJSON(rel)
-		} else {
-			printReleaseDetails(rel)
+			return true, PrintJSON(cmd, rel)
 		}
-		return true
+		printReleaseDetails(rel)
+		return true, nil
 	case "social":
 		item, err := social.GetSocialItem(hit.RepoURL, hit.Hash, hit.Branch, workspaceURL)
 		if err != nil {
-			return false
+			return false, nil
 		}
 		post := social.SocialItemToPost(*item)
 		if cfg.JSONOutput {
-			PrintJSON(post)
-		} else {
-			fmt.Println(social.FormatPost(post))
+			return true, PrintJSON(cmd, post)
 		}
-		return true
+		fmt.Println(social.FormatPost(post))
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // showReview displays a pull request if the ref matches.
-func showReview(_ *cobra.Command, cfg *Config, ref string) bool {
+func showReview(cmd *cobra.Command, cfg *Config, ref string) (bool, error) {
 	prResult := review.GetPR(ref)
 	if !prResult.Success {
-		return false
+		return false, nil
 	}
 	pr := prResult.Data
 	pr.ReviewSummary = review.GetReviewSummary(pr.Repository, extractHash(pr.ID), pr.Branch, pr.Reviewers)
 	if cfg.JSONOutput {
-		PrintJSON(pr)
-	} else {
-		printPRDetails(cfg.WorkDir, pr)
+		return true, PrintJSON(cmd, pr)
 	}
-	return true
+	printPRDetails(cfg.WorkDir, pr)
+	return true, nil
 }
 
 // showPM displays a PM item (issue/milestone/sprint) if the ref matches.
-func showPM(_ *cobra.Command, cfg *Config, ref, workspaceURL string) bool {
+func showPM(cmd *cobra.Command, cfg *Config, ref, workspaceURL string) (bool, error) {
 	item, err := pm.GetPMItemByRef(ref, workspaceURL)
 	if err != nil {
-		return false
+		return false, nil
 	}
 	issue := pm.PMItemToIssue(*item)
 	if cfg.JSONOutput {
-		PrintJSON(issue)
-	} else {
-		printIssueDetails(issue)
+		return true, PrintJSON(cmd, issue)
 	}
-	return true
+	printIssueDetails(issue)
+	return true, nil
 }
 
 // showRelease displays a release if the ref matches.
-func showRelease(_ *cobra.Command, cfg *Config, ref string) bool {
+func showRelease(cmd *cobra.Command, cfg *Config, ref string) (bool, error) {
 	relResult := release.GetSingleRelease(ref)
 	if !relResult.Success {
-		return false
+		return false, nil
 	}
 	if cfg.JSONOutput {
-		PrintJSON(relResult.Data)
-	} else {
-		printReleaseDetails(relResult.Data)
+		return true, PrintJSON(cmd, relResult.Data)
 	}
-	return true
+	printReleaseDetails(relResult.Data)
+	return true, nil
 }
 
 // showSocial displays a social post if the ref matches.
-func showSocial(_ *cobra.Command, cfg *Config, ref, workspaceURL string) bool {
+func showSocial(cmd *cobra.Command, cfg *Config, ref, workspaceURL string) (bool, error) {
 	item, err := social.GetSocialItemByRef(ref, workspaceURL)
 	if err != nil {
-		return false
+		return false, nil
 	}
 	post := social.SocialItemToPost(*item)
 	if cfg.JSONOutput {
-		PrintJSON(post)
-	} else {
-		fmt.Println(social.FormatPost(post))
+		return true, PrintJSON(cmd, post)
 	}
-	return true
+	fmt.Println(social.FormatPost(post))
+	return true, nil
 }

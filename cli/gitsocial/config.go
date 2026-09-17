@@ -45,22 +45,23 @@ func newExtConfigGetCmd(ext string) *cobra.Command {
 		Use:   "get <key>",
 		Short: "Get a config value",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			key := args[0]
 			value, ok := gitmsg.GetExtConfigValue(cfg.WorkDir, ext, key)
 			if !ok {
 				PrintError(cmd, fmt.Sprintf("key not found: %s", key))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": value})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": value})
 			} else {
 				fmt.Println(value)
 			}
+			return nil
 		},
 	}
 }
@@ -70,22 +71,23 @@ func newExtConfigSetCmd(ext string) *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "Set a config value",
 		Args:  cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			key := args[0]
 			value := args[1]
 			if err := gitmsg.SetExtConfigValue(cfg.WorkDir, ext, key, value); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": value})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": value})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, value))
 			}
+			return nil
 		},
 	}
 }
@@ -95,23 +97,24 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 		Use:   "list",
 		Short: "List all config values",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			items := gitmsg.ListExtConfig(cfg.WorkDir, ext)
 			if cfg.JSONOutput {
-				PrintJSON(items)
+				return PrintJSON(cmd, items)
 			} else {
 				if len(items) == 0 {
 					fmt.Println("No config set")
-					return
+					return nil
 				}
 				for _, item := range items {
 					fmt.Printf("%s = %s\n", item.Key, item.Value)
 				}
 			}
+			return nil
 		},
 	}
 }
@@ -226,9 +229,9 @@ func newSiteConfigGetCmd() *cobra.Command {
 		Use:   "get <key>",
 		Short: "Get a site customization value",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			key := args[0]
@@ -236,13 +239,14 @@ func newSiteConfigGetCmd() *cobra.Command {
 			val, ok := site[key].(string)
 			if !ok || val == "" {
 				PrintError(cmd, fmt.Sprintf("key not found: %s", key))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": val})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": val})
 			} else {
 				fmt.Println(val)
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective value for this remote")
@@ -255,25 +259,25 @@ func newSiteConfigListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List site customization values",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			site := effectiveSiteConfigMap(cfg.WorkDir, remote)
 			if cfg.JSONOutput {
-				PrintJSON(site)
-				return
+				return PrintJSON(cmd, site)
 			}
 			if len(site) == 0 {
 				fmt.Println("No site customization set")
-				return
+				return nil
 			}
 			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "filesInclude", "filesExclude"} {
 				if v, ok := site[k].(string); ok && v != "" {
 					fmt.Printf("%s = %s\n", k, siteConfigDisplay(k, v))
 				}
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective values for this remote")
@@ -312,34 +316,34 @@ With --remote <name> the value is stored in git config as
 remote.<name>.gitsocial-site-<key> and applies only to pushes to that
 remote. Only url, publish and pages are overridable per remote.`,
 		Args: cobra.ExactArgs(2),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
-				os.Exit(ExitNotRepo)
+				return exit(ExitNotRepo)
 			}
 			cfg := GetConfig(cmd)
 			key, value := args[0], args[1]
 			if remote != "" {
-				setRemoteSiteOverride(cmd, cfg, remote, key, value)
-				return
+				return setRemoteSiteOverride(cmd, cfg, remote, key, value)
 			}
 			if !siteConfigKeys[key] {
 				PrintError(cmd, fmt.Sprintf("unknown site key %q: run gitsocial config site set --help", key))
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			resolved, err := resolveSiteConfigValue(key, value)
 			if err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if err := writeSiteConfigValue(cfg.WorkDir, key, resolved); err != nil {
 				PrintError(cmd, err.Error())
-				os.Exit(ExitError)
+				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				PrintJSON(map[string]string{"key": key, "value": siteConfigDisplay(key, resolved)})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": siteConfigDisplay(key, resolved)})
 			} else {
 				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, siteConfigDisplay(key, resolved)))
 			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Store the value per remote in git config")
@@ -350,30 +354,31 @@ remote. Only url, publish and pages are overridable per remote.`,
 // (remote.<name>.gitsocial-site-<key>). Only the deployment keys url/publish/
 // pages are overridable, and each is validated with the same rules as the shared
 // config key before it is stored.
-func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value string) {
+func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value string) error {
 	suffix, ok := siteOverrideKeys[key]
 	if !ok {
 		PrintError(cmd, fmt.Sprintf("%q is not overridable per remote: use url, publish or pages", key))
-		os.Exit(ExitError)
+		return exit(ExitError)
 	}
 	if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", remote}); err != nil {
 		PrintError(cmd, fmt.Sprintf("remote %q does not exist", remote))
-		os.Exit(ExitError)
+		return exit(ExitError)
 	}
 	resolved, err := resolveSiteConfigValue(key, value)
 	if err != nil {
 		PrintError(cmd, err.Error())
-		os.Exit(ExitError)
+		return exit(ExitError)
 	}
 	if _, err := git.ExecGit(cfg.WorkDir, []string{"config", "remote." + remote + "." + suffix, resolved}); err != nil {
 		PrintError(cmd, fmt.Sprintf("set remote.%s.%s: %v", remote, suffix, err))
-		os.Exit(ExitError)
+		return exit(ExitError)
 	}
 	if cfg.JSONOutput {
-		PrintJSON(map[string]string{"remote": remote, "key": key, "value": resolved})
+		return PrintJSON(cmd, map[string]string{"remote": remote, "key": key, "value": resolved})
 	} else {
 		PrintSuccess(cmd, fmt.Sprintf("remote %q: %s = %s", remote, key, resolved))
 	}
+	return nil
 }
 
 // resolveSiteConfigValue validates (and for a favicon, loads/encodes) a raw CLI

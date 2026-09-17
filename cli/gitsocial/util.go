@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,6 +26,27 @@ const (
 	ExitNetwork     = 4
 	ExitNotRepo     = 5
 )
+
+// exitError carries the exit code a command asks the process to end with.
+type exitError struct{ code int }
+
+// Error names the exit code the command asked for.
+func (e exitError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
+
+// exit returns the error a command returns to exit with the given code.
+func exit(code int) error { return exitError{code: code} }
+
+// exitCode reports the process exit code for a command error.
+func exitCode(err error) int {
+	if err == nil {
+		return ExitSuccess
+	}
+	var coded exitError
+	if errors.As(err, &coded) {
+		return coded.code
+	}
+	return ExitError
+}
 
 type Config struct {
 	WorkDir    string
@@ -61,23 +83,24 @@ func EnsureGitRepo(cmd *cobra.Command) bool {
 	return true
 }
 
-// PrintJSON outputs the value as formatted JSON to stdout.
-func PrintJSON(v interface{}) {
+// PrintJSON writes the value as indented JSON to the command's stdout.
+func PrintJSON(cmd *cobra.Command, v interface{}) error {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: marshal JSON")
-		os.Exit(ExitError)
+		PrintError(cmd, "marshal JSON")
+		return exit(ExitError)
 	}
-	fmt.Println(string(data))
+	fmt.Fprintln(cmd.OutOrStdout(), string(data))
+	return nil
 }
 
 // PrintError outputs an error message in text or JSON format.
 func PrintError(cmd *cobra.Command, msg string) {
 	cfg := GetConfig(cmd)
 	if cfg != nil && cfg.JSONOutput {
-		PrintJSON(map[string]string{"error": msg})
+		_ = PrintJSON(cmd, map[string]string{"error": msg}) // a string map always marshals
 	} else {
-		fmt.Fprintf(os.Stderr, "error: %s\n", msg)
+		fmt.Fprintf(cmd.ErrOrStderr(), "error: %s\n", msg)
 	}
 }
 
@@ -85,7 +108,7 @@ func PrintError(cmd *cobra.Command, msg string) {
 func PrintSuccess(cmd *cobra.Command, msg string) {
 	cfg := GetConfig(cmd)
 	if cfg != nil && cfg.JSONOutput {
-		PrintJSON(map[string]string{"status": "success", "message": msg})
+		_ = PrintJSON(cmd, map[string]string{"status": "success", "message": msg}) // a string map always marshals
 	} else {
 		fmt.Printf("✓ %s\n", msg)
 	}
