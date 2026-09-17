@@ -138,35 +138,39 @@ async function main() {
   const { viewNode, textOf, setHash } = global.__shim;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
-  await wait(300); // drain auto init route
+  // until polls the app's own state until it holds; the cap only bounds a hang.
+  // A fixed sleep raced the loose walk here whenever the machine was loaded.
+  async function until(cond, ms) {
+    const deadline = Date.now() + (ms || 60000);
+    while (!cond()) { if (Date.now() > deadline) return false; await wait(20); }
+    return true;
+  }
+  await until(() => findClass(viewNode, "loading").length === 0); // the auto-run init route's own paint
 
   async function checkBucket(b, mode) {
     const ctx = GS.newContext(origin + "/" + b.name + "/");
     setHash(GS.commitRef(b.prSha, "gitmsg/review"));
     looseGets = 0;
     // Drive the router (not itemDetail directly) so the watchdog wiring is exercised.
-    const routed = GS.route(ctx);
-    // First paint: the base detail must land WITHOUT the whole code-branch walk.
-    // Poll briefly for the detail node (a couple of macrotasks is plenty — the
-    // commit object is one loose GET).
-    let painted = false, getsAtPaint = 0;
-    for (let i = 0; i < 20; i++) {
-      await wait(50);
-      if (findClass(viewNode, "detail").length > 0) { painted = true; getsAtPaint = looseGets; break; }
-    }
+    // GS.setView is the app's one #view write, so hooking it samples the count at
+    // the paint itself, and route()'s own promise is the wait, not a poll budget.
+    const realSetView = GS.setView;
+    let getsAtPaint = -1;
+    GS.setView = (nodes) => { realSetView(nodes); if (getsAtPaint < 0 && findClass(viewNode, "detail").length > 0) getsAtPaint = looseGets; };
+    try { await GS.route(ctx); } finally { GS.setView = realSetView; }
+    const painted = getsAtPaint >= 0;
     ok("[" + mode + "] detail route paints (not stuck on Loading…)", painted && findClass(viewNode, "loading").length === 0, textOf(viewNode).slice(0, 60));
     // First paint costs at most the review branch's first find-window; the deep
     // merge-base..merge-head walk of the code branch (~CODE_N loose GETs) must NOT
     // run before paint. A generous few-windows bound proves the deep walk is off
     // the first-paint path without being brittle to the find-window size.
     ok("[" + mode + "] first paint is BOUNDED (does not walk the deep code branch before painting)",
-      getsAtPaint < CODE_N / 2, "getsAtPaint=" + getsAtPaint + " codeBranch=" + CODE_N);
+      painted && getsAtPaint < CODE_N / 2, "getsAtPaint=" + getsAtPaint + " codeBranch=" + CODE_N);
     ok("[" + mode + "] base detail shows the PR subject/body", /Add feature X/.test(textOf(viewNode)), textOf(viewNode).slice(0, 80));
     ok("[" + mode + "] base detail shows the merged state header", /merged/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
-    // Let the backgrounded diff enrichment settle: the merged-range diff (or its
-    // graceful notice) appears AFTER paint. Either way the route never hangs.
-    await routed;
-    await wait(2500);
+    // The backgrounded merged-range diff appends AFTER paint; wait on the section
+    // landing rather than on a sleep. Either way the route never hangs.
+    await until(() => /Files changed/.test(textOf(viewNode)));
     ok("[" + mode + "] no watchdog / error banner after settle", findClass(viewNode, "err").length === 0, textOf(viewNode).slice(0, 120));
     ok("[" + mode + "] the Files-changed diff enriched in after paint (progressive)",
       /Files changed/.test(textOf(viewNode)), textOf(viewNode).slice(-160));
