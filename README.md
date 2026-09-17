@@ -85,6 +85,7 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
 | [S3 Remote](documentation/S3.md) | Buckets as git remotes, canonical URLs |
 | [Static Site](documentation/STATIC-SITE.md) | Repo website served from the bucket: timeline, issues, PRs, releases, code |
+| [Static Site Design](documentation/STATIC-SITE-DESIGN.md) | What that website looks like: tokens, components, states, visual tests |
 | [Identity Verification](documentation/IDENTITY.md) | Decentralized trust model, attestation sources, caching |
 | [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
 

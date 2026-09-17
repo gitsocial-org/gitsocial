@@ -67,6 +67,8 @@ A branch that changes `core/objstore`, `core/site`, `core/gitmsg` or `core/cache
 - Once the push tier passes: one medium review of the branch against the note. Triage every finding by cause before fixing any: fix, accept and record in the commit body, or defer to an issue. No second full review.
 - On merge the note goes; each invariant lives on as its test, a row in the owning doc's reference tables, and a one-line comment where the code enforces it.
 
+A change to what the site looks like takes [STATIC-SITE-DESIGN.md](STATIC-SITE-DESIGN.md) as its note: the rule lands there first, and it stays after the merge.
+
 Go back to the note instead of another fix when a function is about to be rewritten a second time, a finding is a consequence of a decision, three findings share a cause, or a fix needs a concept the guide does not describe.
 
 ### Definition of done
@@ -77,7 +79,7 @@ A change is done when every line below holds; a review checks them in order.
 - The quick tier is green on the branch and the full tier before the fast-forward to `main`.
 - Every client the feature reaches is updated in the same branch: CLI, TUI, RPC and the site do not learn about a feature at different times.
 - The guide says what the reader types or sees, the reference table carries the values, and a spec change lands in `specs/` first.
-- A consistency-sensitive change has its design note, its one review and its triage recorded, and the note is gone at merge.
+- A consistency-sensitive change has its design note, its one review and its triage recorded, and the note is gone at merge; a site change uses [STATIC-SITE-DESIGN.md](STATIC-SITE-DESIGN.md) and it stays.
 - A number that the plan ratchets, a prose count, a lint ceiling, an import edge, a coverage floor, has moved toward its target or stayed.
 
 ### Working in a session
