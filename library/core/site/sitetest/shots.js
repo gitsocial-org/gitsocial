@@ -1,13 +1,14 @@
 // shots.js - screenshot every repo-shape route at two widths in both themes.
-// Builds the fixtures (shapes.sh), serves them (serve.js) and runs one headless
-// Chrome per shot into the directory given on argv. Exits 2 without Chrome.
+// Builds the fixtures (shapes.sh), serves them (serve.js) and drives one
+// headless Chrome into the directory given on argv. Exits 2 without Chrome.
 const fs = require("fs");
 const path = require("path");
-const { execFileSync, spawn, spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const chrome = require("./chrome.js");
+const cdp = require("./cdp.js");
 
 const WIDTHS = { 1280: 900, 390: 844 };
-const THEMES = { light: "1", dark: "0" };
+const THEMES = ["light", "dark"];
 // BUDGET is the virtual time one page gets to boot, load its shell and settle.
 const BUDGET = 20000;
 
@@ -60,13 +61,15 @@ function buildFixtures() {
   return { served: path.join(home, "served"), now: fs.readFileSync(path.join(home, "now"), "utf8").trim() };
 }
 
-// capture runs one headless Chrome and writes one screenshot.
-function capture(bin, url, width, height, theme, out) {
-  const args = ["--headless", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1",
-    "--window-size=" + width + "," + height, "--virtual-time-budget=" + BUDGET,
-    "--blink-settings=preferredColorScheme=" + THEMES[theme],
-    "--screenshot=" + out, url];
-  execFileSync(bin, args, { stdio: ["ignore", "ignore", "ignore"], timeout: 120000, env: Object.assign({}, process.env, { TZ: "UTC" }) });
+// capture opens one page at the shot's own viewport and writes its screenshot.
+async function capture(browser, shot, out) {
+  const page = await cdp.open(browser, shot.width, shot.height, shot.theme);
+  try {
+    await cdp.load(browser, page, shot.url, BUDGET);
+    fs.writeFileSync(out, await cdp.screenshot(browser, page));
+  } finally {
+    await cdp.close(browser, page);
+  }
 }
 
 // startServer launches serve.js over root and resolves once it prints its port.
@@ -91,7 +94,7 @@ function shotsFor(fixture, route, origin, now) {
   const url = origin + "/" + fixture + "/" + key + "?now=" + now + (route.nojs ? "&nojs=1" : "") + hash;
   const shots = [];
   for (const [width, height] of Object.entries(WIDTHS)) {
-    for (const theme of Object.keys(THEMES)) {
+    for (const theme of THEMES) {
       shots.push({ name: fixture + "-" + route.name + "-" + width + "-" + theme + ".png", url, width: Number(width), height, theme });
     }
   }
@@ -106,17 +109,19 @@ async function main() {
   const { served, now } = buildFixtures();
   const { child, port } = await startServer(served);
   const origin = "http://127.0.0.1:" + port;
+  const browser = cdp.launch(bin, Object.assign({}, process.env, { TZ: "UTC" }));
   try {
     for (const [fixture, routes] of Object.entries(ROUTES)) {
       for (const route of routes) {
         for (const s of shotsFor(fixture, route, origin, now)) {
           const out = path.join(outDir, s.name);
-          capture(bin, s.url, s.width, s.height, s.theme, out);
+          await capture(browser, s, out);
           console.log("shot " + s.name + " " + fs.statSync(out).size);
         }
       }
     }
   } finally {
+    await cdp.quit(browser);
     child.kill();
   }
 }

@@ -4,12 +4,14 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const chrome = require("./chrome.js");
+const cdp = require("./cdp.js");
 
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const BASE = ORIGIN + "/thread-demo/";
 const DIR = path.join(__dirname, "styles");
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, "parity_fixtures.json"), "utf8"));
 const WIDTH = 1280, HEIGHT = 900, BUDGET = 9000;
+const PHONE_WIDTH = 390, PHONE_HEIGHT = 844;
 const THEMES = { dark: [], light: ["--blink-settings=preferredColorScheme=1"] };
 
 let pass = 0, fail = 0;
@@ -106,6 +108,49 @@ function checkErr(theme, err) {
     err.map((r) => r.backgroundColor).join("|"));
 }
 
+// WIDTH_EXPR reports the document against the viewport and names the first box
+// crossing the right edge. A fixed element is chrome, not content.
+const WIDTH_EXPR = `(function () {
+  var vw = document.documentElement.clientWidth;
+  var wide = "";
+  var all = document.querySelectorAll("body *");
+  for (var i = 0; i < all.length && !wide; i++) {
+    var el = all[i], box = el.getBoundingClientRect();
+    if (!box.width && !box.height) continue;
+    if (getComputedStyle(el).position === "fixed") continue;
+    if (box.right > vw + 1) wide = el.tagName.toLowerCase() + "." + String(el.className || "").trim().replace(/\\s+/g, ".") + " right=" + Math.round(box.right);
+  }
+  return { vw: vw, scrollWidth: document.documentElement.scrollWidth, wide: wide };
+})()`;
+
+// checkPhoneWidth asserts no route runs past a phone viewport, in the served
+// document and in the app it boots into.
+async function checkPhoneWidth(bin, item) {
+  const routes = [
+    { name: "front page", url: "" },
+    { name: "front page served", url: "?nojs=1" },
+    { name: "list page", url: "issues/index.html" },
+    { name: "list page served", url: "issues/index.html?nojs=1" },
+    { name: "item page", url: item },
+    { name: "item page served", url: item + "?nojs=1" },
+    { name: "code route", url: "#/code" },
+  ];
+  const browser = cdp.launch(bin);
+  try {
+    for (const route of routes) {
+      const page = await cdp.open(browser, PHONE_WIDTH, PHONE_HEIGHT, "light");
+      await cdp.load(browser, page, BASE + route.url, BUDGET);
+      const got = await cdp.evaluate(browser, page, WIDTH_EXPR);
+      await cdp.close(browser, page);
+      ok("phone width " + route.name + ": the content stays inside " + PHONE_WIDTH + "px",
+        got.vw === PHONE_WIDTH && got.scrollWidth <= PHONE_WIDTH && !got.wide,
+        "viewport=" + got.vw + " document=" + got.scrollWidth + " " + got.wide);
+    }
+  } finally {
+    await cdp.quit(browser);
+  }
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -118,20 +163,20 @@ function capture(bin, hash, flags) {
   return JSON.parse(unescaped);
 }
 
-// resolveDetail finds a pull request's route by its subject, so a rebuild that
-// renumbers or reorders the list still lands on the same item.
-function resolveDetail(subject) {
+// resolveShort finds a pull request's short ref by its subject, so a rebuild
+// that renumbers or reorders the list still lands on the same item.
+function resolveShort(subject) {
   const list = execFileSync("curl", ["-s", BASE + "prs/index.html"], { encoding: "utf8" });
   const rows = list.split('<div class="card"');
   for (const row of rows) {
     if (!row.includes(subject)) continue;
     const href = /href="\.\.\/i\/([0-9a-f]+)\.html"/.exec(row);
-    if (href) return "#commit:" + href[1] + "@gitmsg/review";
+    if (href) return href[1];
   }
   return "";
 }
 
-function main() {
+async function main() {
   const bin = chrome.find();
   if (!bin) {
     console.log("SKIP: no Chrome found (set CHROME to override)");
@@ -141,10 +186,12 @@ function main() {
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
   const listCards = {}, listMetas = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
+  let detailShort = "";
   for (const route of ROUTES) {
     let hash = route.hash;
     if (!hash) {
-      hash = resolveDetail(route.subject);
+      detailShort = resolveShort(route.subject);
+      hash = detailShort ? "#commit:" + detailShort + "@gitmsg/review" : "";
       if (!hash) { ok(route.name + ": resolved by subject", false, "no row matching " + JSON.stringify(route.subject)); continue; }
     }
     for (const [theme, flags] of Object.entries(THEMES)) {
@@ -179,8 +226,12 @@ function main() {
     checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
   }
+  if (!update) {
+    ok("phone width: the item page resolved", detailShort !== "", "no pull request row to open");
+    if (detailShort) await checkPhoneWidth(bin, "i/" + detailShort + ".html");
+  }
   if (update) console.log("baselines written to " + DIR);
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }
-main();
+main().catch((err) => { console.error(err); process.exit(1); });

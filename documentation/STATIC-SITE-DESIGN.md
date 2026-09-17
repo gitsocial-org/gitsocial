@@ -133,6 +133,8 @@ Each shape above has one fixture bucket in the [repo-shape goldens](STATIC-SITE.
 
 The tokens, the components and their states are checked by `verify_styles.js`, one of the [browser suites](STATIC-SITE.md#testing). Both suites need Chrome.
 
+`verify_styles.js` also holds the phone rule: at 390 px the front page, a list page, an item page and the code route stay inside the viewport, in the served document and in the app it boots into. Both suites set the viewport through `cdp.js`, since a headless window stops at the platform's own floor.
+
 ## Change rules
 
 - A new component, state or route is added here first, with its empty and error states, then built in both renderers. `site_docs_conformance_test.go` holds the chip variants, the route table and the version entry.
