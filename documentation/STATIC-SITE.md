@@ -1,6 +1,6 @@
 # Static Site
 
-`gitsocial mirror` and `gitsocial push` build a browsable website of the repository in a bucket, as static files the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics.
+`gitsocial mirror` and `gitsocial push` build a browsable website of the repository in a bucket, as static files the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics. [STATIC-SITE-DESIGN.md](STATIC-SITE-DESIGN.md) says what that website looks like.
 
 [Mirror](#mirror) · [Publish](#publish) · [Customization](#customization) · [HTML pages](#html-pages) · [Testing](#testing) · [Reference](#reference)
 
@@ -71,7 +71,7 @@ gitsocial config site set url "https://example.com/"   # absolute base for canon
 
 Effective when `publish`, `pages` and a valid `url` are all set. Every rebuild then maintains the [page keys](#page-keys):
 
-- An item page inlines its thread: replies in time order, edits resolved with an "edited" marker, tombstones for retractions, review chips and `file:line` feedback on pull requests, artifact blocks on releases. A thread caps at about 100 replies or 200 KB with a "N more replies" marker.
+- An item page inlines its thread, capped at about 100 replies or 200 KB.
 - A list page holds 100 entries: a mutable `index.html` head and sealed `<n>.html` pages, each linking to the older one. Page 1 is the oldest. The sealed page that was newest when it sealed keeps its `← newer` link to the head after it stops being newest, and the head's `older →` chain reaches every page, so a crawler walking either direction lands on a real document. Milestones and sprints fold into `issues`.
 - `index.html` is dual-owned: the page layer holds it whenever the layer is effective, the shell otherwise. Every effective rebuild reclaims it, since the same rebuild's shell upload may have written over it.
 - The commits list covers the default branch, one row per commit, no diffs, no per-commit page. Each row has an id, so `commits/<n>.html#c-<sha12>` is a citable URL. Its rows come from the code index, not a second git walk, so the list, the timeline and the front page's activity agree on which commits belong to the branch.
@@ -87,7 +87,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every rebuild t
 - A file page's key mirrors the repo path with the extension swapped for `.html`, which is a one-to-one map onto the `file:<path>@<branch>` route the page stamps as its boot hook. Two documents that would claim one key put the second at `<path>.html`.
 - Discovery is the one place the page layer reads a git tree instead of the rebuild's own index artifacts, since those carry commits and not files. It walks the default branch from the pusher's local odb. A tree it cannot read carries the published set forward rather than reading as an empty repo.
 - A changed default branch rewrites every page, since the branch is in each page's route and meta line. Each page's date comes from one history walk over the tree, not a `git log` per path.
-- The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app. The page has no heading of its own; the README's headings stand as written and the repo title is the `<title>` and the sidebar.
+- The front page: the site description, the default branch and its tip commit, the root file listing, the README rendered from up to 8 KB of source, and the newest 10 entries across items and code commits. Item rows link to their pages; commit rows link into the app.
 - `sitemap.xml` lists the front page, every indexable item page, non-empty list pages, the commits pages and the file pages, each with `lastmod`. Not listed: retracted items, empty lists, file pages under the word floor.
 - `feed.xml` is Atom 1.0 with the newest 50 non-retracted top-level items, memos excluded. Each type directory has its own `feed.xml`.
 
@@ -99,15 +99,9 @@ Rules that hold on every page:
 - Retraction tombstones and file pages under the word floor carry `noindex,follow`. The page stays, so existing links keep working.
 - Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer, and they are the one typed value a page body carries. Everything else on a page is context-escaped by `html/template`; the other typed value is the favicon href, which is either the shell's own constant or a data URI already narrowed to an image type.
 - The markdown renderer builds every tag itself and escapes every text node, attribute value and code body. Raw HTML in the source is lexed and rebuilt against an allowlist that admits no event handler, no `style`, no `script`, `iframe` or `object`, and no image or link target that is not an absolute `https:`, `mailto:`, in-page or app reference.
-- A list page heads with its sidebar label (Issues, Pull Requests, Timeline), and so do its `<title>`, description and feed title. The app heads the same routes with the same label from one table, pinned by `sitetest/parity_fixtures.json`, so the boot swap moves no heading. The one exception is `f/index.html`, which boots into the tree view.
-- Every element with class `card` the app renders is built by one function, `card` in `gs-render.js`, from an ordered part list plus an optional id, variant classes and click-through. A part the list has no name for is a new component, not a card variant. Review feedback is a `feedback` card variant, its verdict on a `verdict-<state>` class and its file and line anchor on a chip.
+- `f/index.html` is the one list page that boots into another route, the tree view.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.
-- An item page heads with one `.card-head`: an `h1.subject`, then the head's one chip slot. The state, draft, prerelease, retracted and version chips ride that slot on both renderers. The meta line follows in a `.detail-meta` row. A body-only type promotes no first line, so it heads with the meta row alone. `siteHeadChips` in Go and its mirror `headChips` in `gs-core.js` are pinned by `sitetest/parity_fixtures.json`.
-- A release heads with its tag, and its version rides one chip after the subject. The chip is dropped when the head already names the version, so no version string renders twice. `siteHeadSubject` in Go and its mirror `headSubject` in `gs-core.js` are pinned by `sitetest/parity_fixtures.json`.
-- A meta row holds `span.author`, `span.reltime` and `a.hash` in that order, separated by a middle dot, in both renderers. The author is the display name with the email in `title`, and "unknown" when both are empty. The time carries the precise stamp in `title`, the app showing the relative time and the page the `YYYY-MM-DD` date in UTC. The hash is the 12-character short form linking to the item's page or route. An edited item adds an "edited" bit after the hash, "edited by <name>" when the editor is not the author, with the edit's time in `title`. The page layer's type label, `head → base`, "due", the sprint range and "signed" follow. `sitetest/parity_fixtures.json` pins the skeleton and `verify_styles.js` the app's own elements.
-- A list with no rows shows one sentence in `.empty`: "No <items> in this repository." with the list's noun, and "No activity in this repository yet." on the timeline. The app reads the same sentences from `LIST_EMPTY`, pinned by `sitetest/parity_fixtures.json`.
-- A cap that hides content says so in one `.notice` sentence: "N more replies not shown." on a thread, "Truncated. The full file is in the repository." on a file page or the front page's README, and "N more not shown." on a list, tree or diff in the app.
-- A thread reply is a comment card in both renderers, under a `Comments (N)` heading, with its type glyph leading the meta row and one rail per depth level. Ordering is the app's: a reply follows the one it answers, siblings run oldest first, depth caps at four. The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
+- The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
 - First-time generation runs item pages, then file pages, then commits pages. `GITSOCIAL_SITE_PAGES_BUDGET` caps the item pages one rebuild writes ([S3.md](S3.md#environment-variables)); the rest resume on the next push. The cap is unset by default.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
 
@@ -131,7 +125,7 @@ Chrome resolves through `chrome.js`: a `CHROME` override, then a candidate list 
 GS_STYLES_UPDATE=1 node library/core/site/sitetest/verify_styles.js   # recapture the baselines
 ```
 
-A baseline records the distinct variants a selector renders, not whichever element is first, because a fixture rebuild reorders lists. Type classes are dropped from the structure fingerprint for the same reason; their tints still show as colours on their own variants. A visual change ships with its baseline update in the same commit.
+A baseline records the distinct variants a selector renders, not whichever element is first, because a fixture rebuild reorders lists. Type classes are dropped from the structure fingerprint for the same reason; their tints still show as colours on their own variants.
 
 ### Repo-shape goldens
 
@@ -146,7 +140,7 @@ A baseline records the distinct variants a selector renders, not whichever eleme
 | `big-tree-repo` | 6,000 generated files, 5,900 of them in one directory |
 | `binary-repo` | an image, a binary blob, an LFS pointer, a submodule and a symlink |
 
-Every fixture commit takes a date off one fixed clock and `shots.js` pins `Date.now()` through the server's `?now=`, so a golden's shas, dates and relative times are the same on every run. A `-nojs` golden is the served document with its scripts stripped. A visual change ships with its golden update in the same commit.
+Every fixture commit takes a date off one fixed clock and `shots.js` pins `Date.now()` through the server's `?now=`, so a golden's shas, dates and relative times are the same on every run. A `-nojs` golden is the served document with its scripts stripped. The shapes the fixtures stand for are in [STATIC-SITE-DESIGN.md](STATIC-SITE-DESIGN.md#repo-shape-rules).
 
 ```bash
 go test -tags sitetest -run TestSiteShapeGoldens ./library/core/site/ -update   # regenerate the goldens
@@ -174,7 +168,7 @@ A generated page inlines `pages-core.css` into its head, comments stripped, and 
 
 Two rules follow. `pages-core.css` carries no `url()`, since pages sit at several directory depths where a relative URL resolves against the page. A change to it bumps `sitePagesVersion`, since every page's head carries a copy.
 
-Type sizes, colours and spacing come from the tokens `pages-core.css` declares. Outside them a spacing literal is a mark under 4px, or an `em` that scales with its own text. `site_pages_tokens_test.go` holds that rule over both sheets.
+Type sizes, colours and spacing come from the [tokens](STATIC-SITE-DESIGN.md#tokens) `pages-core.css` declares.
 
 A configured accent is site data, not part of the sheet. It is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
 

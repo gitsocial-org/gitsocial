@@ -21,7 +21,7 @@ Declared once in `pages-core.css`, consumed by both stylesheets and both rendere
 | Group | Tokens | Rule |
 |---|---|---|
 | Type | `--fs-h1` 2.25rem, `--fs-h2` 2rem, `--fs-h3` 1.75rem, `--fs-h4` 1.5rem, `--fs-body` 24px with `--lh-body` 1.1, `--fs-md` 0.95rem, `--fs-ui` 0.8rem, `--fs-code` 0.85rem, `--fs-dense` 0.72rem | no `font-size` literal outside these |
-| Fonts | `--serif` EB Garamond, Georgia; `--mono` IBM Plex Mono | webfonts only in `pages-full.css`; a page without it reads in Georgia at the same size |
+| Fonts | `--serif` EB Garamond, Georgia; `--mono` IBM Plex Mono | a page that has not loaded `pages-full.css` reads in Georgia at the same size |
 | Palette | `--bg`, `--text`, `--link`, from the light set `--pl-*` or the dark set `--pd-*`; file-type hues `--i-*` | no hex outside `:root` |
 | State colors | `--open` #1f9d55, `--closed` #8957e5, `--merged` #8250df, `--warn` #bf8700, `--danger` #cf222e | one meaning per color, everywhere |
 | Derived | `--muted`, `--line`, `--panel`, `--chip`, `--code-bg`, `--btn`; tints `--link-t1..3`, `--open-t1..3`, `--warn-t1..3`, `--danger-t1..3` | computed with `color-mix` on `body`, never restated |
@@ -56,7 +56,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Type glyph | `.type-glyph.tg-<type>` | both | plain characters, so a page without JS carries the same mark; tinted by state on issues and pull requests |
 | Meta row | `.meta` holding `span.author`, `span.reltime`, `a.hash` in that order, separated by a middle dot; inside `.detail-meta` on a detail page | both | mono and muted; the author is the display name with the email in `title`, "unknown" when both are empty |
 | Meta row bits | the precise stamp in the time's `title`; the relative time in the app and the `YYYY-MM-DD` UTC date on a page; the hash as the 12-character short form linking to the item | both | the page layer's type label, `head → base`, "due", the sprint range and "signed" follow the hash |
-| List page | `h1`, cards, `.filter-chip` filters, `.load-more` (app) or "older" pagination (pages) | both | the heading is the nav label verbatim, and so are the `<title>`, the description and the feed title |
+| List page | `h1`, cards, `.filter-chip` filters, and `.load-more` in the app where a page carries its sealed-page links | both | the heading is the nav label verbatim, and so are the `<title>`, the description and the feed title |
 | Detail page | `.card-head > h1.subject` plus the head's one chip slot, then `.detail-meta`, `.body` with a raw toggle, the thread, `.version-row` history, `.asset-list` on releases, diff and review sections on pull requests; the app wraps it in `.detail` | both | the state, draft, prerelease, retracted and version chips ride the head's one slot, never the meta line; a body-only type promotes no first line and heads with the meta row alone |
 | Release head | the tag as the subject, then one version chip | both | the chip is dropped when the head already names the version |
 | Thread | comment cards in time order under a `Comments (N)` heading, one rail per depth level | both | a reply follows the one it answers, siblings run oldest first, depth caps at four; the type glyph leads a comment's meta row; a missing parent falls back to a quote |
@@ -105,9 +105,9 @@ Each rule has a fixture that checks it, in [Fixtures and visual tests](#fixtures
 
 ## Fixtures and visual tests
 
-The shapes above are checked by the [repo-shape goldens](STATIC-SITE.md#repo-shape-goldens): one fixture bucket per shape, screenshot at both widths in both themes, compared to `sitetest/goldens/`. A shape with no fixture is not a rule yet, and a new shape gets its fixture and its row in the same branch.
+Each shape above has one fixture bucket in the [repo-shape goldens](STATIC-SITE.md#repo-shape-goldens). A shape with no fixture is not a rule yet, and a new shape gets its fixture and its row in the same branch.
 
-`verify_styles.js` checks computed styles and child structure for a fixed selector list against the baselines in `sitetest/styles/`. Both suites need Chrome and run in the browser battery ([Testing](STATIC-SITE.md#testing)).
+The tokens, the components and their states are checked by `verify_styles.js`, one of the [browser suites](STATIC-SITE.md#testing). Both suites need Chrome.
 
 ## Change rules
 
