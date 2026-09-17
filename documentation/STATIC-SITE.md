@@ -121,7 +121,7 @@ go test -tags sitetest -timeout 30m ./library/core/site/      # the same from go
 bin/locals3 -root <dir>                                           # serve a pushed site locally, see S3.md
 ```
 
-The harness is `library/core/site/sitetest/`: `fixture.sh` builds the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
+The harness is `library/core/site/sitetest/`: `fixture.sh` and `shapes.sh` build the fixture buckets, `serve.js` serves them with real cache headers and `Range` support, `runner.js` runs the suites and `shots.js` takes the screenshots. Fixture-size overrides are in [S3.md](S3.md#environment-variables). The battery runs at release; nothing in `go test ./...` covers the browser side.
 
 Every suite but one runs under a DOM shim that computes no styles. `verify_styles.js` is the exception: it drives a real Chrome, reads computed styles and child structure for a fixed selector list on ten routes in both themes, and compares them to the baselines in `sitetest/styles/`.
 
@@ -132,6 +132,25 @@ GS_STYLES_UPDATE=1 node library/core/site/sitetest/verify_styles.js   # recaptur
 ```
 
 A baseline records the distinct variants a selector renders, not whichever element is first, because a fixture rebuild reorders lists. Type classes are dropped from the structure fingerprint for the same reason; their tints still show as colours on their own variants. A visual change ships with its baseline update in the same commit.
+
+### Repo-shape goldens
+
+`shapes.sh` builds six fixture buckets, `shots.js` screenshots each fixture's routes at 1280 and 390 px in both themes, and `TestSiteShapeGoldens` compares every shot to `sitetest/goldens/`. It runs under the `sitetest` tag and skips without Chrome.
+
+| Fixture | Shape |
+|---|---|
+| `src-repo` | a source tree on the `trunk` default branch, no docs directory, `.txt` files under fixture directories |
+| `docs-repo` | an `.mdx` documentation site |
+| `empty-repo` | one commit, no README, no extension |
+| `code-only-repo` | code, branches and tags, no `gitmsg/*` branches |
+| `big-tree-repo` | 6,000 generated files, 5,900 of them in one directory |
+| `binary-repo` | an image, a binary blob, an LFS pointer, a submodule and a symlink |
+
+Every fixture commit takes a date off one fixed clock and `shots.js` pins `Date.now()` through the server's `?now=`, so a golden's shas, dates and relative times are the same on every run. A `-nojs` golden is the served document with its scripts stripped. A visual change ships with its golden update in the same commit.
+
+```bash
+go test -tags sitetest -run TestSiteShapeGoldens ./library/core/site/ -update   # regenerate the goldens
+```
 
 ## Reference
 

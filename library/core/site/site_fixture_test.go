@@ -21,9 +21,11 @@ func fullTierOnly(t *testing.T) {
 func TestSiteFixtureBuild(t *testing.T) {
 	fullTierOnly(t)
 	script := filepath.Join("sitetest", "fixture.sh")
-	// Read the script so the test cache keys on its content, as the fixture stamp does.
-	if _, err := os.ReadFile(script); err != nil {
-		t.Fatalf("read %s: %v", script, err)
+	// Read both scripts so the test cache keys on their content, as the fixture stamp does.
+	for _, f := range []string{script, filepath.Join("sitetest", "fixture-lib.sh")} {
+		if _, err := os.ReadFile(f); err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
 	}
 	out, err := exec.Command("bash", script).CombinedOutput()
 	if err != nil {

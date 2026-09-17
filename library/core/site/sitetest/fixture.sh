@@ -6,9 +6,7 @@
 # default site-test battery has a reproducible served surface with no scratchpad
 # dependence. All state is isolated under <out> (its own XDG_CONFIG_HOME and
 # --cache-dir); the real user config and cache are never touched. Idempotent: a
-# second run is a no-op while the served manifest is present. The s3 identity
-# host is the generic RFC-2606 placeholder fake.example.com; actual traffic is
-# redirected to the local locals3 server by the GITSOCIAL_S3_ENDPOINT override.
+# second run is a no-op while the served manifest is present.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -17,24 +15,11 @@ out="${1:-$here/.fixture}"
 served="$out/served"
 marker="$served/thread-demo/.gitsocial/refs.json"
 stampfile="$out/.stamp"
-HOST=fake.example.com
+. "$here/fixture-lib.sh"
 
-# fixture_stamp identifies the sources the fixture's served bytes are generated
-# from: the embedded site assets, every site generator file, and this builder
-# script (which decides what the buckets contain). Reusing a fixture is only
-# sound while that stamp is unchanged — otherwise the suites validate HTML a
-# previous binary wrote, and a negative assertion ("activity excludes replies",
-# "no state is the static content") passes against content nothing under test
-# produced. sitePagesVersion moving 7 → 8 is exactly that.
-fixture_stamp() {
-	(
-		cd "$repo/library/core/site"
-		find assets -type f | sort | xargs git hash-object
-		find . -maxdepth 1 -name 'site_*.go' ! -name '*_test.go' | sort | xargs git hash-object
-		git hash-object "$here/fixture.sh"
-	) | git hash-object --stdin
-}
-stamp=$(fixture_stamp)
+# A stale stamp would let the suites validate HTML a previous binary wrote, so a
+# negative assertion would pass against content nothing under test produced.
+stamp=$(fixture_stamp "$here/fixture.sh")
 
 if [ -f "$marker" ] && [ "$(cat "$stampfile" 2>/dev/null)" = "$stamp" ] && [ -d "$served/interrupted-demo" ] && [ -d "$served/extended-demo" ] && [ -d "$served/sparse-demo" ] && [ -d "$served/merged-demo" ] && [ -d "$served/packed-demo/objects/pack" ] && [ -d "$served/refdelta-demo/objects/pack" ]; then
 	echo "fixture present: $served"
@@ -46,37 +31,8 @@ fi
 rm -rf "${out:?}"/* "$stampfile"
 mkdir -p "$served" "$out/xdg"
 
-# Always rebuilt, never reused: the stamp above says which sources this fixture
-# is meant to have been built from, and only a binary built from them now makes
-# that true.
-bin="$repo/bin/gitsocial"
-echo "building bin/gitsocial ..."
-(cd "$repo" && go build -o bin/gitsocial ./cli/gitsocial)
-# Plain `git push` resolves the s3 remote through the repo-local alias
-# `!gitsocial __git-remote-s3`, which looks the binary up in PATH — without
-# this, an installed gitsocial (a release, or another branch) would serve the
-# fixture's push surface instead of the binary just built from these sources.
-export PATH="$repo/bin:$PATH"
-locals3bin="$out/locals3bin"
-go build -o "$locals3bin" "$here/../../objstore/locals3"
-export XDG_CONFIG_HOME="$out/xdg"
-cache="$out/cache"
-
-"$locals3bin" -addr 127.0.0.1:0 -root "$served" >"$out/locals3.log" 2>&1 &
-s3pid=$!
-trap 'kill $s3pid 2>/dev/null || true' EXIT
-port=""
-for _ in $(seq 1 50); do
-	port=$(sed -nE 's#.*127\.0\.0\.1:([0-9]+).*#\1#p' "$out/locals3.log" | head -1)
-	[ -n "$port" ] && break
-	sleep 0.1
-done
-[ -n "$port" ] || { echo "locals3 did not start" >&2; cat "$out/locals3.log" >&2; exit 1; }
-export GITSOCIAL_S3_ENDPOINT="http://127.0.0.1:$port"
-export GITSOCIAL_S3_PATH_STYLE=1
-export GITSOCIAL_S3_ACCESS_KEY=dummy
-export GITSOCIAL_S3_SECRET_KEY=dummy
-export GITSOCIAL_S3_REGION=us-east-1
+fixture_build_bins
+fixture_start_locals3
 # Lower the sealed-shard size so this small fixture produces a MULTI-shard items
 # and bodies index (immutable sealed shards + head + manifest), exercising the
 # reader's eager-set (newest shard + head) plus on-demand older-shard loading.
@@ -87,8 +43,6 @@ export GITSOCIAL_SITE_SHARD_COUNT="${GITSOCIAL_SITE_SHARD_COUNT:-4}"
 gg() { "$bin" --cache-dir "$cache" -C "$W" "$@"; }
 # idof extracts the first 12-hex commit short hash from a command's output.
 idof() { grep -oE '#commit:[0-9a-f]{12}' | head -1 | cut -d: -f2; }
-# ident switches the workspace git author identity.
-ident() { git -C "$W" config user.name "$1"; git -C "$W" config user.email "$2"; }
 
 # ---- upstream workspace: other-demo (Grace Hopper) ----
 W="$out/other-demo"

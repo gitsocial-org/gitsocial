@@ -31,6 +31,9 @@ function cacheControlFor(rel) {
   return (loose || shard || sealedList || sealedSitemap || artifact) ? "public, max-age=31536000, immutable" : "no-cache";
 }
 
+// SCRIPT_TAG matches one script element, inline or external, for the nojs strip.
+const SCRIPT_TAG = new RegExp("<script\\b[^>]*>[\\s\\S]*?</" + "script>", "gi");
+
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -62,6 +65,19 @@ function createServer(root) {
         const probed = data.toString().replace("</head>", "<script>" + probeSource + "</scr" + "ipt></head>");
         res.writeHead(200, { "Content-Type": TYPES[".html"], "Cache-Control": "no-store" });
         res.end(probed);
+        return;
+      }
+      // Screenshot controls read by shots.js: ?now=<unix> pins Date.now() before
+      // any app script runs, so a golden's relative times hold, and &nojs=1 drops
+      // every script, serving the document a reader without JS gets.
+      const frozen = /[?&]now=(\d+)/.exec(req.url);
+      const bare = /[?&]nojs=1/.test(req.url);
+      if ((frozen || bare) && path.extname(file) === ".html") {
+        let html = data.toString();
+        if (frozen) html = html.replace("<head>", "<head><script>Date.now=function(){return " + frozen[1] + "000;};</scr" + "ipt>");
+        if (bare) html = html.replace(SCRIPT_TAG, "");
+        res.writeHead(200, { "Content-Type": TYPES[".html"], "Cache-Control": "no-store" });
+        res.end(html);
         return;
       }
       const etag = '"' + crypto.createHash("md5").update(data).digest("hex") + '"';
