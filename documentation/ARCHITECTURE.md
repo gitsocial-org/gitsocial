@@ -80,6 +80,17 @@ A change is done when every line below holds; a review checks them in order.
 - A consistency-sensitive change has its design note, its one review and its triage recorded, and the note is gone at merge.
 - A number that the plan ratchets, a prose count, a lint ceiling, an import edge, a coverage floor, has moved toward its target or stayed.
 
+### Working in a session
+
+One set of rules for every session.
+
+- Read the files a change touches in full before a note, a review or a fix. Do not work from search hits.
+- A consistency-sensitive change gets its [design note](#design-notes) first, then one medium review, findings triaged by cause.
+- A mechanical change merges on a green quick tier and one review; the tiers are in [Test and lint](#test-and-lint).
+- Every commit carries a body; [STYLE.md](STYLE.md) holds the register and the examples.
+- A commit whose added comment lines outnumber its added code lines fails the push, unless it changes only documentation.
+- The branch flow is in [Branching and builds](#branching-and-builds), and the closing list is [Definition of done](#definition-of-done).
+
 ## Code Rules
 
 ### Layers
@@ -103,7 +114,6 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 ### Do
 
 - Read the relevant spec first: `specs/GITMSG.md`, `specs/GITSOCIAL.md`, `specs/GITPM.md`, `specs/GITRELEASE.md`, `specs/GITREVIEW.md`.
-- Read the files a change touches in full before a design note, a review or a fix. Do not work from search hits.
 - Follow [STYLE.md](STYLE.md) for prose, help text, comments and commits.
 - Start each file with a one-line header comment (`// commits.go - Git commit operations`) and each function with a one-line comment.
 - Prefer functions to methods. Methods are for interfaces and for Bubbletea models in `tui`.
