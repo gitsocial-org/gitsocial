@@ -337,7 +337,7 @@ func (f *PRForm) CreatePRFromForm() tea.Cmd {
 		}
 		result := review.CreatePR(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
 		if !result.Success {
-			return PRCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRCreatedMsg{PR: result.Data}
 	}
@@ -372,7 +372,7 @@ func (f *PRForm) UpdatePRFromForm() tea.Cmd {
 		}
 		result := review.UpdatePR(workdir, prID, opts)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -468,7 +468,7 @@ func (v *PREditFormView) loadPR() tea.Cmd {
 	return func() tea.Msg {
 		result := review.GetPR(prID)
 		if !result.Success {
-			return prEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return prEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		pr := result.Data
 		return prEditFormLoadedMsg{PR: &pr}

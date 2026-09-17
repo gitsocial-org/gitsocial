@@ -123,7 +123,7 @@ func (v *IssuesView) loadIssues() tea.Cmd {
 		forks := gitmsg.GetForks(workdir)
 		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, "", limit+1)
 		if !result.Success {
-			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		issues, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -156,7 +156,7 @@ func (v *IssuesView) loadMoreIssues() tea.Cmd {
 		forks := gitmsg.GetForks(workdir)
 		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		issues, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)

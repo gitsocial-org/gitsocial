@@ -154,7 +154,7 @@ func (v *TimelineView) loadPosts() tea.Cmd {
 			GitRoot: gitRoot,
 		})
 		if !result.Success {
-			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
 		return TimelineLoadedMsg{Posts: posts, HasMore: hasMore}
@@ -173,7 +173,7 @@ func (v *TimelineView) loadMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
-			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message), Append: true}
+			return TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text()), Append: true}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		return TimelineLoadedMsg{Posts: posts, HasMore: hasMore, Append: true}

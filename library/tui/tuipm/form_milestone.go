@@ -155,7 +155,7 @@ func (f *MilestoneForm) CreateMilestoneFromForm() tea.Cmd {
 		}
 		result := pm.CreateMilestone(workdir, data.Title, data.Body, opts)
 		if !result.Success {
-			return MilestoneCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return MilestoneCreatedMsg{Milestone: result.Data}
 	}
@@ -225,7 +225,7 @@ func (f *MilestoneForm) UpdateMilestoneFromForm() tea.Cmd {
 		}
 		result := pm.UpdateMilestone(workdir, milestoneID, opts)
 		if !result.Success {
-			return MilestoneUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return MilestoneUpdatedMsg{Milestone: result.Data}
 	}
@@ -266,7 +266,7 @@ func (v *MilestoneEditFormView) loadMilestone() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetMilestone(milestoneID)
 		if !result.Success {
-			return MilestoneEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return MilestoneEditFormLoadedMsg{Milestone: &result.Data}
 	}

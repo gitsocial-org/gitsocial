@@ -71,7 +71,7 @@ func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		vRes := review.GetPRVersions(prID, workspaceURL)
 		if !vRes.Success {
-			return interdiffLoadedMsg{err: vRes.Error.Message}
+			return interdiffLoadedMsg{err: vRes.Error.Text()}
 		}
 		versions := vRes.Data
 		if len(versions) < 2 {
@@ -81,7 +81,7 @@ func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
 		to := len(versions) - 1
 		dRes := review.ComparePRVersions(workdir, cacheDir, prID, versions[from].Number, versions[to].Number)
 		if !dRes.Success {
-			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Message}
+			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Text()}
 		}
 		return interdiffLoadedMsg{versions: versions, diff: dRes.Data, from: from, to: to}
 	}
@@ -154,7 +154,7 @@ func (v *InterdiffView) cycleVersions(dir int) tea.Cmd {
 	return func() tea.Msg {
 		dRes := review.ComparePRVersions(workdir, cacheDir, prID, versions[from].Number, versions[to].Number)
 		if !dRes.Success {
-			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Message}
+			return interdiffLoadedMsg{versions: versions, from: from, to: to, err: dRes.Error.Text()}
 		}
 		return interdiffLoadedMsg{versions: versions, diff: dRes.Data, from: from, to: to}
 	}

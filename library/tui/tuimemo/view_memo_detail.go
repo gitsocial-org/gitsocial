@@ -117,7 +117,7 @@ func (v *MemoDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		res := memo.GetSingleMemo(id, workspaceURL, memo.ListInherits(workdir))
 		if !res.Success {
-			return memoDetailLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return memoDetailLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		m := res.Data
 		var comments []social.Post
@@ -399,7 +399,7 @@ func (v *MemoDetailView) startPromote(state *tuicore.State) tea.Cmd {
 		return func() tea.Msg {
 			res := memo.PromoteMemo(workdir, id, target)
 			if !res.Success {
-				return MemoPromotedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
+				return MemoPromotedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			return MemoPromotedMsg{Memo: res.Data, Tier: target}
 		}
@@ -437,7 +437,7 @@ func (v *MemoDetailView) doRetract() tea.Cmd {
 	return func() tea.Msg {
 		res := memo.RetractMemo(workdir, id)
 		if !res.Success {
-			return memoRetractedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return memoRetractedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return memoRetractedMsg{}
 	}

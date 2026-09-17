@@ -228,7 +228,7 @@ func (v *PostView) loadThread(postID string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "thread:"+postID, nil)
 		if !result.Success {
-			return ThreadLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return ThreadLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ThreadLoadedMsg{Posts: result.Data}
 	}
@@ -1062,7 +1062,7 @@ func (v *PostView) doRetract() tea.Cmd {
 		func() tea.Msg {
 			result := social.RetractPost(workdir, postID)
 			if !result.Success {
-				return PostRetractedMsg{PostID: postID, Err: fmt.Errorf("%s", result.Error.Message)}
+				return PostRetractedMsg{PostID: postID, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
 			return PostRetractedMsg{PostID: postID}
 		},

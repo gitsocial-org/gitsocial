@@ -58,7 +58,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
-					PrintError(cmd, result.Error.Message)
+					PrintError(cmd, result.Error.Text())
 					return exit(ExitCode(result.Error.Code))
 				}
 
@@ -93,7 +93,7 @@ For extension-specific options, use the extension's fetch command directly:
 				fmt.Printf("Fetched %d items from %d forks\n", forkStats.Items, forkStats.Repositories)
 			}
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 

@@ -128,7 +128,7 @@ func (v *SprintsView) loadSprints() tea.Cmd {
 		}
 		result := pm.GetSprints(repoURL, branch, states, "", limit+1)
 		if !result.Success {
-			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		sprints, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -164,7 +164,7 @@ func (v *SprintsView) loadMoreSprints() tea.Cmd {
 		}
 		result := pm.GetSprints(repoURL, branch, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		sprints, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)

@@ -138,7 +138,7 @@ func (f *PostForm) Submit() tea.Cmd {
 			}
 			res := social.CreatePost(workdir, body, &social.CreatePostOptions{Labels: data.Labels})
 			if !res.Success {
-				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Message)}
+				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			return PostSubmittedMsg{Mode: mode, Post: res.Data}
 		case PostFormComment:
@@ -147,7 +147,7 @@ func (f *PostForm) Submit() tea.Cmd {
 			}
 			res := social.CreateComment(workdir, targetID, body, &social.CreateCommentOptions{Labels: data.Labels})
 			if !res.Success {
-				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Message)}
+				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			return PostSubmittedMsg{Mode: mode, Post: res.Data, TargetID: targetID}
 		case PostFormQuote:
@@ -155,13 +155,13 @@ func (f *PostForm) Submit() tea.Cmd {
 			if body == "" {
 				res := social.CreateRepost(workdir, targetID, &social.CreateRepostOptions{Labels: data.Labels})
 				if !res.Success {
-					return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Message)}
+					return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Text())}
 				}
 				return PostSubmittedMsg{Mode: mode, Post: res.Data, TargetID: targetID}
 			}
 			res := social.CreateQuote(workdir, targetID, body, &social.CreateQuoteOptions{Labels: data.Labels})
 			if !res.Success {
-				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Message)}
+				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			return PostSubmittedMsg{Mode: mode, Post: res.Data, TargetID: targetID}
 		case PostFormEdit:
@@ -171,7 +171,7 @@ func (f *PostForm) Submit() tea.Cmd {
 			labels := data.Labels
 			res := social.EditPost(workdir, targetID, body, &social.EditPostOptions{Labels: &labels})
 			if !res.Success {
-				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Message)}
+				return PostSubmittedMsg{Mode: mode, Err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			return PostSubmittedMsg{Mode: mode, Post: res.Data, TargetID: targetID}
 		}

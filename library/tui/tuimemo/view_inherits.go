@@ -170,7 +170,7 @@ func (v *InheritsView) updateInput(msg tea.Msg) tea.Cmd {
 func (v *InheritsView) doAdd(url string) tea.Cmd {
 	res := memo.AddInherit(v.workdir, url)
 	if !res.Success {
-		return func() tea.Msg { return inheritsErrMsg{err: fmt.Errorf("%s", res.Error.Message)} }
+		return func() tea.Msg { return inheritsErrMsg{err: fmt.Errorf("%s", res.Error.Text())} }
 	}
 	v.urls = memo.ListInherits(v.workdir)
 	for i, u := range v.urls {
@@ -186,7 +186,7 @@ func (v *InheritsView) doRemove(url string) tea.Cmd {
 	return func() tea.Msg {
 		res := memo.RemoveInherit(v.workdir, url)
 		if !res.Success {
-			return inheritsErrMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return inheritsErrMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return inheritsRemovedMsg{url: url}
 	}

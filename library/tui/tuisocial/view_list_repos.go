@@ -305,7 +305,7 @@ func (v *ListReposView) removeRepo(repoURL string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.RemoveRepositoryFromList(workdir, listID, repoURL)
 		if !result.Success {
-			return RepoRemovedMsg{ListID: listID, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepoRemovedMsg{ListID: listID, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return RepoRemovedMsg{ListID: listID, RepoURL: repoURL}
 	}
@@ -355,7 +355,7 @@ func (v *ListReposView) addRepo(repoURL, branch string, allBranches bool) tea.Cm
 	return func() tea.Msg {
 		result := social.AddRepositoryToList(workdir, listID, repoURL, branch, allBranches)
 		if !result.Success {
-			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
 	}

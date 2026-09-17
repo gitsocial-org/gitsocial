@@ -138,7 +138,7 @@ func (f *FeedbackForm) CreateFeedbackFromForm() tea.Cmd {
 		}
 		result := review.CreateFeedback(workdir, content, opts)
 		if !result.Success {
-			return FeedbackCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return FeedbackCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return FeedbackCreatedMsg{Feedback: result.Data, PRID: prID}
 	}

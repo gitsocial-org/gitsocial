@@ -386,7 +386,7 @@ func (v *MemosView) syncTier(state *tuicore.State, action string) tea.Cmd {
 		return func() tea.Msg {
 			res := memo.PushPersonal()
 			if !res.Success {
-				return memoSyncMsg{summary: "Push failed: " + res.Error.Message, isErr: true}
+				return memoSyncMsg{summary: "Push failed: " + res.Error.Text(), isErr: true}
 			}
 			return memoSyncMsg{summary: "Pushed personal memos"}
 		}
@@ -395,7 +395,7 @@ func (v *MemosView) syncTier(state *tuicore.State, action string) tea.Cmd {
 	return func() tea.Msg {
 		res := memo.FetchPersonal()
 		if !res.Success {
-			return memoSyncMsg{summary: "Fetch failed: " + res.Error.Message, isErr: true}
+			return memoSyncMsg{summary: "Fetch failed: " + res.Error.Text(), isErr: true}
 		}
 		return memoSyncMsg{summary: "Fetched personal memos"}
 	}
@@ -447,7 +447,7 @@ func (v *MemosView) loadMemos() tea.Cmd {
 		}
 		res := memo.ListMemos(workdir, opts)
 		if !res.Success {
-			return memosLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return memosLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return memosLoadedMsg{
 			memos:        res.Data,

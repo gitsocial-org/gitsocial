@@ -123,7 +123,7 @@ func (v *MilestonesView) loadMilestones() tea.Cmd {
 		}
 		result := pm.GetMilestones(repoURL, branch, states, "", limit+1)
 		if !result.Success {
-			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		milestones, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -154,7 +154,7 @@ func (v *MilestonesView) loadMoreMilestones() tea.Cmd {
 		}
 		result := pm.GetMilestones(repoURL, branch, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		milestones, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)

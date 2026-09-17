@@ -220,7 +220,7 @@ func (v *SessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd
 		return func() tea.Msg {
 			res := memo.PushSession(id)
 			if !res.Success {
-				return sessionSyncMsg{summary: "Push failed: " + res.Error.Message, isErr: true}
+				return sessionSyncMsg{summary: "Push failed: " + res.Error.Text(), isErr: true}
 			}
 			return sessionSyncMsg{summary: "Pushed session " + id}
 		}
@@ -229,7 +229,7 @@ func (v *SessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd
 	return func() tea.Msg {
 		res := memo.FetchSession(id)
 		if !res.Success {
-			return sessionSyncMsg{summary: "Fetch failed: " + res.Error.Message, isErr: true}
+			return sessionSyncMsg{summary: "Fetch failed: " + res.Error.Text(), isErr: true}
 		}
 		return sessionSyncMsg{summary: "Fetched session " + id}
 	}

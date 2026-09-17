@@ -189,7 +189,7 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return failureWithDetails[Post]("COMMIT_ERROR", "create commit failed", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "create commit", err)
 	}
 
 	now := time.Now()
@@ -276,7 +276,7 @@ func getTimelinePosts(workdir string, workspaceURL string, opts *GetPostsOptions
 	forkURLs := gitmsg.GetForks(workdir)
 	items, err := getTimeline(listIDs, workspaceURL, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read timeline failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read timeline", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -338,7 +338,7 @@ func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOption
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -364,7 +364,7 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -390,7 +390,7 @@ func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Res
 	// The empty workspace leaves workspace posts out of a list scope; the follower mark still reads against it.
 	items, err := getTimeline([]string{listID}, "", workspaceURL, nil, limit, cursor)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -406,7 +406,7 @@ func getSinglePost(postID string, workspaceURL string) Result[[]Post] {
 	postID = cache.ResolveRefToCanonical(postID)
 	item, err := GetSocialItemByRef(postID, workspaceURL)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read post failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read post", err)
 	}
 
 	if item == nil {
@@ -456,7 +456,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	}
 	items, err := getThread(parsed.Repository, parsed.Value, branch, workspaceURL, forkURLs)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "read thread failed", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read thread", err)
 	}
 
 	// A failed ancestor read drops the thread context, not the thread.

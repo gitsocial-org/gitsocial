@@ -26,7 +26,7 @@ func newRelatedCmd() *cobra.Command {
 			repoURL := normalizeRepoURL(args[0])
 			result := social.GetRelatedRepositories(cfg.WorkDir, repoURL)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 

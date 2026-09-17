@@ -128,7 +128,7 @@ func (v *ListPostsView) loadListPosts(listID string) tea.Cmd {
 		}
 		result := social.GetPosts(workdir, "list:"+listID, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
 		return ListPostsLoadedMsg{ListID: listID, List: list, Posts: posts, HasMore: hasMore}
@@ -148,7 +148,7 @@ func (v *ListPostsView) loadMoreListPosts() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "list:"+listID, &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		return ListPostsLoadedMsg{ListID: listID, Posts: posts, HasMore: hasMore, Append: true}
@@ -166,7 +166,7 @@ func (v *ListPostsView) loadExternalListPosts(owner, listID string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "list:"+owner+"#list:"+listID, nil)
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ListPostsLoadedMsg{ListID: listID, Posts: result.Data}
 	}

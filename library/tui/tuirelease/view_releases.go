@@ -370,7 +370,7 @@ func (v *ReleasesView) loadReleases() tea.Cmd {
 
 		res := release.GetReleases(repoURL, branch, "", limit+1)
 		if !res.Success {
-			return releasesLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return releasesLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		releases, hasMore := tuicore.TrimPage(res.Data, limit)
 		total, _ := release.CountReleases(repoURL, branch)
@@ -388,7 +388,7 @@ func (v *ReleasesView) loadMoreReleases() tea.Cmd {
 
 		res := release.GetReleases(repoURL, branch, cursor, tuicore.PageSize+1)
 		if !res.Success {
-			return releasesLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return releasesLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		releases, hasMore := tuicore.TrimPage(res.Data, tuicore.PageSize)
 		return releasesLoadedMsg{releases: releases, hasMore: hasMore, append: true}

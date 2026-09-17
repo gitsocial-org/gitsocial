@@ -1167,7 +1167,7 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		before, _ := cache.CountCommitsByBranch()
 		result, forkStats := client.Fetch(m.workdir, m.cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
 		if !result.Success {
-			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Message), Auto: auto}
+			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Text()), Auto: auto}
 		}
 		after, _ := cache.CountCommitsByBranch()
 		breakdown := fetchBreakdown(before, after)
@@ -1384,7 +1384,7 @@ func (m Model) exportArtifact(msg tuicore.ExportArtifactMsg) tea.Cmd {
 		destPath := filepath.Join(destDir, msg.Filename)
 		res := release.ExportArtifact(repoDir, repoURL, msg.Version, msg.Filename, destPath)
 		if !res.Success {
-			return exportArtifactDoneMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return exportArtifactDoneMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return exportArtifactDoneMsg{path: res.Data}
 	}
@@ -1517,7 +1517,7 @@ func (m Model) refreshTimeline() tea.Cmd {
 	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, "timeline", &social.GetPostsOptions{Limit: tuicore.PageSize + 1, GitRoot: gitRoot})
 		if !result.Success {
-			return tuisocial.TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return tuisocial.TimelineLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		return tuisocial.TimelineLoadedMsg{Posts: posts, HasMore: hasMore}
@@ -1542,7 +1542,7 @@ func (m Model) fetchAddedRepo(repoRef string) tea.Cmd {
 		// Fetch complete history (regardless of what's already cached)
 		result := client.FetchRepository(cacheDir, id.Repository, id.Branch, workspaceURL)
 		if !result.Success {
-			return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Err: fmt.Errorf("%s", result.Error.Message)}
+			return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return tuisocial.RepoFetchedAfterAddMsg{RepoURL: repoRef, Posts: result.Data.Items}
 	}

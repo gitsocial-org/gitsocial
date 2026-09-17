@@ -135,7 +135,7 @@ func (v *ListPickerView) loadLists() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetLists(workdir)
 		if !result.Success {
-			return ListsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ListsLoadedMsg{Lists: result.Data}
 	}
@@ -337,7 +337,7 @@ func (v *ListPickerView) createList(id, name string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.CreateList(workdir, id, name)
 		if !result.Success {
-			return ListCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ListCreatedMsg{List: result.Data}
 	}
@@ -349,7 +349,7 @@ func (v *ListPickerView) deleteList(id string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.DeleteList(workdir, id)
 		if !result.Success {
-			return ListDeletedMsg{ListID: id, Err: fmt.Errorf("%s", result.Error.Message)}
+			return ListDeletedMsg{ListID: id, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ListDeletedMsg{ListID: id}
 	}
@@ -362,7 +362,7 @@ func (v *ListPickerView) addRepoToList(listID, listName string) tea.Cmd {
 	return func() tea.Msg {
 		result := social.AddRepositoryToList(workdir, listID, repoURL, "", false)
 		if !result.Success {
-			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
 	}

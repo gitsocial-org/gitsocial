@@ -86,7 +86,7 @@ func (v *MilestoneDetailView) loadMilestone() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetMilestone(milestoneID)
 		if !result.Success {
-			return MilestoneDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -333,7 +333,7 @@ func (v *MilestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
 		func() tea.Msg {
 			result := pm.CloseMilestone("", milestoneID)
 			if !result.Success {
-				return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+				return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
 			return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed}
 		},
@@ -347,7 +347,7 @@ func (v *MilestoneDetailView) doRetract(proposed bool) tea.Cmd {
 	retract := func() tea.Msg {
 		result := pm.RetractMilestone(workdir, milestoneID)
 		if !result.Success {
-			return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+			return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed}
 	}

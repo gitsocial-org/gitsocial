@@ -222,7 +222,7 @@ func (v *RepositoryView) loadPosts() tea.Cmd {
 	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
-			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
 		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore}
@@ -248,7 +248,7 @@ func (v *RepositoryView) loadMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
-			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore, Append: true}
@@ -303,7 +303,7 @@ func (v *RepositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
-			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{social.YearMonthFromRange(m)}}
 	}
@@ -340,7 +340,7 @@ func (v *RepositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
-			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{ym}}
 	}

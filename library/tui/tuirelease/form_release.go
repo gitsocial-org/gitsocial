@@ -202,7 +202,7 @@ func (f *ReleaseForm) CreateReleaseFromForm() tea.Cmd {
 
 		result := release.CreateRelease(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
 		if !result.Success {
-			return ReleaseCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return ReleaseCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ReleaseCreatedMsg{Release: result.Data}
 	}
@@ -243,7 +243,7 @@ func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
 
 		result := release.EditRelease(workdir, releaseID, opts)
 		if !result.Success {
-			return ReleaseUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return ReleaseUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ReleaseUpdatedMsg{Release: result.Data}
 	}
@@ -314,7 +314,7 @@ func (v *ReleaseEditFormView) loadRelease() tea.Cmd {
 	return func() tea.Msg {
 		result := release.GetSingleRelease(releaseID)
 		if !result.Success {
-			return releaseEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return releaseEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		rel := result.Data
 		return releaseEditFormLoadedMsg{Release: &rel}

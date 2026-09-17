@@ -86,7 +86,7 @@ func (v *SprintDetailView) loadSprint() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetSprint(sprintID)
 		if !result.Success {
-			return SprintDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -333,7 +333,7 @@ func (v *SprintDetailView) completeSprint(proposed bool) tea.Cmd {
 		func() tea.Msg {
 			result := pm.CompleteSprint("", sprintID)
 			if !result.Success {
-				return SprintCompletedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+				return SprintCompletedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
 			return SprintCompletedMsg{ID: sprintID, Proposed: proposed}
 		},
@@ -347,7 +347,7 @@ func (v *SprintDetailView) doRetract(proposed bool) tea.Cmd {
 	retract := func() tea.Msg {
 		result := pm.RetractSprint(workdir, sprintID)
 		if !result.Success {
-			return SprintRetractedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintRetractedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return SprintRetractedMsg{ID: sprintID, Proposed: proposed}
 	}

@@ -406,7 +406,7 @@ func (v *PRsView) loadPRs() tea.Cmd {
 
 		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, "", limit+1)
 		if !res.Success {
-			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 
 		prs, hasMore := tuicore.TrimPage(res.Data, limit)
@@ -446,7 +446,7 @@ func (v *PRsView) loadMorePRs() tea.Cmd {
 
 		res := review.GetPullRequestsWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
 		if !res.Success {
-			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+			return prsLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 		}
 
 		prs, hasMore := tuicore.TrimPage(res.Data, tuicore.PageSize)

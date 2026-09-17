@@ -80,7 +80,7 @@ Examples:
 				Author: author,
 			})
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 

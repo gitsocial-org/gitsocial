@@ -222,7 +222,7 @@ func createInteraction(workdir string, interactionType PostType, targetPostID, c
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return failureWithDetails[Post]("COMMIT_ERROR", "create commit failed", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "create commit", err)
 	}
 
 	originalID := fields["original"]
@@ -391,7 +391,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return failureWithDetails[Post]("COMMIT_ERROR", "create commit failed", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "create commit", err)
 	}
 
 	now := time.Now()
@@ -475,7 +475,7 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 
 	hash, author, _, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return failureWithDetails[bool]("COMMIT_ERROR", "create commit failed", err)
+		return failureWithDetails[bool]("COMMIT_ERROR", "create commit", err)
 	}
 
 	recordSocialCommit(SocialItem{

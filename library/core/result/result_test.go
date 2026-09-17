@@ -2,6 +2,7 @@
 package result
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -97,5 +98,26 @@ func TestErrWithDetails_nilDetails(t *testing.T) {
 	r := ErrWithDetails[string]("ERR", "msg", nil)
 	if r.Error.Details != nil {
 		t.Error("Details should be nil when passed nil")
+	}
+}
+
+func TestText_messageOnly(t *testing.T) {
+	r := Err[string]("ERR", "create commit")
+	if got := r.Error.Text(); got != "create commit" {
+		t.Errorf("Text() = %q, want %q", got, "create commit")
+	}
+}
+
+func TestText_withDetails(t *testing.T) {
+	r := ErrWithDetails[string]("COMMIT_ERROR", "create commit", errors.New("empty subject"))
+	if got := r.Error.Text(); got != "create commit: empty subject" {
+		t.Errorf("Text() = %q, want %q", got, "create commit: empty subject")
+	}
+}
+
+func TestText_nilError(t *testing.T) {
+	var e *Error
+	if got := e.Text(); got != "" {
+		t.Errorf("Text() = %q, want empty", got)
 	}
 }

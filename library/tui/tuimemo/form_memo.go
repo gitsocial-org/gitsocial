@@ -154,7 +154,7 @@ func (f *MemoForm) SubmitEdit() tea.Cmd {
 		}
 		res := memo.EditMemo(workdir, memoID, opts)
 		if !res.Success {
-			return MemoEditedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
+			return MemoEditedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return MemoEditedMsg{Memo: res.Data, MemoID: memoID}
 	}
@@ -178,7 +178,7 @@ func (f *MemoForm) SubmitCreate() tea.Cmd {
 			Labels: data.Labels,
 		})
 		if !res.Success {
-			return MemoCreatedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
+			return MemoCreatedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return MemoCreatedMsg{Memo: res.Data}
 	}

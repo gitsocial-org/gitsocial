@@ -150,7 +150,7 @@ func newMemoProjectCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			res := memo.InitProject(cfg.WorkDir)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			PrintSuccess(cmd, "project tier initialized")
@@ -174,7 +174,7 @@ again changes nothing.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res := memo.InitPersonal()
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			PrintSuccess(cmd, "personal tier initialized at "+res.Data)
@@ -208,7 +208,7 @@ printed.`,
 			}
 			res := memo.InitSession(id, workspaceURL)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg != nil && cfg.JSONOutput {
@@ -230,7 +230,7 @@ printed.`,
 			}
 			res := memo.ListSessions(workspaceURL)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg != nil && cfg.JSONOutput {
@@ -263,13 +263,13 @@ printed.`,
 		doPush := !fetchOnly
 		if doFetch {
 			if res := memo.FetchSession(args[0]); !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 		}
 		if doPush {
 			if res := memo.PushSession(args[0]); !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 		}
@@ -302,7 +302,7 @@ printed.`,
 			}
 			res := memo.GCSessionsOlderThan(d)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			cfg := GetConfig(cmd)
@@ -318,7 +318,7 @@ printed.`,
 		}
 		res := memo.GCSession(args[0])
 		if !res.Success {
-			PrintError(cmd, res.Error.Message)
+			PrintError(cmd, res.Error.Text())
 			return exit(1)
 		}
 		PrintSuccess(cmd, "deleted session "+args[0])
@@ -347,7 +347,7 @@ is followed through the memo-inherits list.`,
 			cfg := GetConfig(cmd)
 			res := memo.AddInherit(cfg.WorkDir, args[0])
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if res.Data {
@@ -393,7 +393,7 @@ list.`,
 			cfg := GetConfig(cmd)
 			res := memo.RemoveInherit(cfg.WorkDir, args[0])
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			PrintSuccess(cmd, "removed inherit: "+args[0])
@@ -433,7 +433,7 @@ $GITSOCIAL_EDITOR, then $EDITOR, $VISUAL, vi.`,
 				Labels: text.SplitCSV(labels),
 			})
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg.JSONOutput {
@@ -503,7 +503,7 @@ the memo, and the earlier versions stay in history.`,
 			}
 			res := memo.EditMemo(cfg.WorkDir, args[0], opts)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			PrintSuccess(cmd, "memo edited")
@@ -533,7 +533,7 @@ memo stays in history, marked as removed.`,
 			cfg := GetConfig(cmd)
 			res := memo.RetractMemo(cfg.WorkDir, args[0])
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			PrintSuccess(cmd, "memo retracted")
@@ -560,7 +560,7 @@ the target tier and the source memo stays where it is.`,
 			}
 			res := memo.PromoteMemo(cfg.WorkDir, args[0], tier)
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg.JSONOutput {
@@ -603,7 +603,7 @@ reasons, need --include-external.`,
 				Limit:           limit,
 			})
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg.JSONOutput {
@@ -644,7 +644,7 @@ func newMemoShowCmd() *cobra.Command {
 			workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 			res := memo.GetSingleMemo(args[0], workspaceURL, memo.ListInherits(cfg.WorkDir))
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(1)
 			}
 			if cfg.JSONOutput {

@@ -20,7 +20,7 @@ const socialExtension = "social"
 func GetLists(workdir string) Result[[]List] {
 	names, err := gitmsg.EnumerateLists(workdir, socialExtension)
 	if err != nil {
-		return failureWithDetails[[]List]("GIT_ERROR", "enumerate lists failed", err)
+		return failureWithDetails[[]List]("GIT_ERROR", "enumerate lists", err)
 	}
 
 	lists := make([]List, 0, len(names))
@@ -39,7 +39,7 @@ func GetLists(workdir string) Result[[]List] {
 func GetList(workdir, listID string) Result[*List] {
 	data, err := gitmsg.ReadList(workdir, socialExtension, listID)
 	if err != nil {
-		return failureWithDetails[*List]("GIT_ERROR", "read list failed", err)
+		return failureWithDetails[*List]("GIT_ERROR", "read list", err)
 	}
 
 	if data == nil {
@@ -73,7 +73,7 @@ func CreateList(workdir, listID, name string) Result[List] {
 	}
 
 	if err := gitmsg.WriteList(workdir, socialExtension, listID, data); err != nil {
-		return failureWithDetails[List]("GIT_ERROR", "create list failed", err)
+		return failureWithDetails[List]("GIT_ERROR", "create list", err)
 	}
 
 	return success(listDataToList(data))
@@ -87,7 +87,7 @@ func DeleteList(workdir, listID string) Result[struct{}] {
 	}
 
 	if err := gitmsg.DeleteList(workdir, socialExtension, listID); err != nil {
-		return failureWithDetails[struct{}]("GIT_ERROR", "delete list failed", err)
+		return failureWithDetails[struct{}]("GIT_ERROR", "delete list", err)
 	}
 
 	return success(struct{}{})
@@ -117,7 +117,7 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 	}
 
 	if err := gitmsg.AddListMember(workdir, socialExtension, listID, repoRef); err != nil {
-		return failureWithDetails[string]("GIT_ERROR", "update list failed", err)
+		return failureWithDetails[string]("GIT_ERROR", "update list", err)
 	}
 
 	// Sync to cache for immediate visibility
@@ -151,7 +151,7 @@ func RemoveRepositoryFromList(workdir, listID, repoURL string) Result[struct{}] 
 	}
 
 	if err := gitmsg.RemoveListMember(workdir, socialExtension, listID, foundRef); err != nil {
-		return failureWithDetails[struct{}]("GIT_ERROR", "update list failed", err)
+		return failureWithDetails[struct{}]("GIT_ERROR", "update list", err)
 	}
 
 	return success(struct{}{})

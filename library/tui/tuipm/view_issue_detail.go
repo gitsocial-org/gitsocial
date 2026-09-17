@@ -434,7 +434,7 @@ func (v *IssueDetailView) closeIssue(proposed bool) tea.Cmd {
 		func() tea.Msg {
 			result := pm.CloseIssue("", issueID)
 			if !result.Success {
-				return IssueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+				return IssueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
 			return IssueClosedMsg{ID: issueID, Proposed: proposed}
 		},
@@ -448,7 +448,7 @@ func (v *IssueDetailView) doRetract(proposed bool) tea.Cmd {
 	retract := func() tea.Msg {
 		result := pm.RetractIssue(workdir, issueID)
 		if !result.Success {
-			return IssueRetractedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssueRetractedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return IssueRetractedMsg{ID: issueID, Proposed: proposed}
 	}

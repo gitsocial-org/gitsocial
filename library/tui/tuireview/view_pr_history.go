@@ -124,7 +124,7 @@ func (v PRVersionItem) RenderDetail(width int) string {
 func loadPRHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
 	res := review.GetPRVersions(ctx.Ref, ctx.WorkspaceURL)
 	if !res.Success {
-		return nil, fmt.Errorf("%s", res.Error.Message)
+		return nil, fmt.Errorf("%s", res.Error.Text())
 	}
 	items := make([]tuicore.VersionItem, len(res.Data))
 	for i, version := range res.Data {

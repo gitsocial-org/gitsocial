@@ -38,7 +38,7 @@ overridable per remote).`,
 			version := normalizeReleaseVersion(args[0])
 			result := release.PushArtifacts(cfg.WorkDir, version, args[1:], remote)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {

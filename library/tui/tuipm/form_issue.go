@@ -415,7 +415,7 @@ func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
 
 		result := pm.CreateIssue(workdir, data.Subject, data.Body, opts)
 		if !result.Success {
-			return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return IssueCreatedMsg{Issue: result.Data}
 	}
@@ -456,7 +456,7 @@ func (f *IssueForm) UpdateIssueFromForm() tea.Cmd {
 
 		result := pm.UpdateIssue(workdir, issueID, opts)
 		if !result.Success {
-			return IssueUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return IssueUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return IssueUpdatedMsg{Issue: result.Data}
 	}
@@ -597,7 +597,7 @@ func (v *IssueEditFormView) loadIssue() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetIssue(issueID)
 		if !result.Success {
-			return EditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return EditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return EditFormLoadedMsg{Issue: &result.Data}
 	}

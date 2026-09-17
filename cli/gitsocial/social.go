@@ -58,7 +58,7 @@ func newSocialStatusCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			result := social.Status(cfg.WorkDir, cfg.CacheDir)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -179,7 +179,7 @@ func newSocialTimelineCmd() *cobra.Command {
 			})
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -237,7 +237,7 @@ func newSocialPostCmd() *cobra.Command {
 			result := social.CreatePost(cfg.WorkDir, content, &social.CreatePostOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -300,7 +300,7 @@ func newSocialEditCmd() *cobra.Command {
 			result := social.EditPost(cfg.WorkDir, postID, content, opts)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -336,7 +336,7 @@ func newSocialRetractCmd() *cobra.Command {
 			result := social.RetractPost(cfg.WorkDir, postID)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -384,7 +384,7 @@ func newSocialCommentCmd() *cobra.Command {
 			result := social.CreateComment(cfg.WorkDir, postID, content, &social.CreateCommentOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -422,7 +422,7 @@ func newSocialRepostCmd() *cobra.Command {
 			result := social.CreateRepost(cfg.WorkDir, postID, &social.CreateRepostOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -474,7 +474,7 @@ func newSocialQuoteCmd() *cobra.Command {
 			result := social.CreateQuote(cfg.WorkDir, postID, content, &social.CreateQuoteOptions{Labels: text.SplitCSV(labelsStr)})
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -530,7 +530,7 @@ func newSocialListShowCmd() *cobra.Command {
 			if len(args) == 0 {
 				result := social.GetLists(cfg.WorkDir)
 				if !result.Success {
-					PrintError(cmd, result.Error.Message)
+					PrintError(cmd, result.Error.Text())
 					return exit(ExitCode(result.Error.Code))
 				}
 
@@ -547,7 +547,7 @@ func newSocialListShowCmd() *cobra.Command {
 			listID := args[0]
 			result := social.GetList(cfg.WorkDir, listID)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -586,7 +586,7 @@ func newSocialListLsCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			result := social.GetLists(cfg.WorkDir)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -618,7 +618,7 @@ func newSocialListCreateCmd() *cobra.Command {
 			result := social.CreateList(cfg.WorkDir, listID, name)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -652,7 +652,7 @@ func newSocialListDeleteCmd() *cobra.Command {
 			result := social.DeleteList(cfg.WorkDir, listID)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -692,7 +692,7 @@ func newSocialListAddCmd() *cobra.Command {
 			result := social.AddRepositoryToList(cfg.WorkDir, listID, repoURL, branch, allBranches)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -733,7 +733,7 @@ func newSocialListRemoveCmd() *cobra.Command {
 			result := social.RemoveRepositoryFromList(cfg.WorkDir, listID, repoURL)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 
@@ -778,7 +778,7 @@ Examples:
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
-					PrintError(cmd, result.Error.Message)
+					PrintError(cmd, result.Error.Text())
 					return exit(ExitCode(result.Error.Code))
 				}
 
@@ -807,7 +807,7 @@ Examples:
 
 			result, _ := client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
 

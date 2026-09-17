@@ -228,7 +228,7 @@ Sort by created, due or priority, each with :asc or :desc.`,
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
-					PrintError(cmd, fetchResult.Error.Message)
+					PrintError(cmd, fetchResult.Error.Text())
 					return exit(ExitError)
 				}
 			} else {
@@ -431,7 +431,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 			result := pm.CreateIssue(cfg.WorkDir, subject, body, opts)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -548,7 +548,7 @@ func newPMIssueEditCmd() *cobra.Command {
 
 			result := pm.UpdateIssue(cfg.WorkDir, args[0], opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -633,7 +633,7 @@ func newPMIssueCloseCmd() *cobra.Command {
 			result := pm.CloseIssue(cfg.WorkDir, issueRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -663,7 +663,7 @@ func newPMIssueReopenCmd() *cobra.Command {
 			result := pm.ReopenIssue(cfg.WorkDir, issueRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -714,7 +714,7 @@ func newPMIssueCommentCmd() *cobra.Command {
 			result := pm.CommentOnItem(cfg.WorkDir, issueRef, content)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -744,7 +744,7 @@ func newPMIssueCommentsCmd() *cobra.Command {
 			result := pm.GetItemComments(issueRef, "")
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -804,7 +804,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
-					PrintError(cmd, fetchResult.Error.Message)
+					PrintError(cmd, fetchResult.Error.Text())
 					return exit(ExitError)
 				}
 			} else {
@@ -827,7 +827,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 
 			result := pm.GetMilestones(repoURL, branch, states, "", limit)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -869,7 +869,7 @@ func newPMMilestoneShowCmd() *cobra.Command {
 
 			result := pm.GetMilestone(milestoneRef)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -949,7 +949,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 			result := pm.CreateMilestone(cfg.WorkDir, title, body, opts)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1019,7 +1019,7 @@ func newPMMilestoneEditCmd() *cobra.Command {
 
 			result := pm.UpdateMilestone(cfg.WorkDir, args[0], opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1059,7 +1059,7 @@ func newPMMilestoneCloseCmd() *cobra.Command {
 			result := pm.CloseMilestone(cfg.WorkDir, milestoneRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1089,7 +1089,7 @@ func newPMMilestoneReopenCmd() *cobra.Command {
 			result := pm.ReopenMilestone(cfg.WorkDir, milestoneRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1119,7 +1119,7 @@ func newPMMilestoneCancelCmd() *cobra.Command {
 			result := pm.CancelMilestone(cfg.WorkDir, milestoneRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1149,7 +1149,7 @@ func newPMMilestoneDeleteCmd() *cobra.Command {
 			result := pm.RetractMilestone(cfg.WorkDir, milestoneRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1201,7 +1201,7 @@ func newPMSprintListCmd() *cobra.Command {
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
-					PrintError(cmd, fetchResult.Error.Message)
+					PrintError(cmd, fetchResult.Error.Text())
 					return exit(ExitError)
 				}
 			} else {
@@ -1229,7 +1229,7 @@ func newPMSprintListCmd() *cobra.Command {
 
 			result := pm.GetSprints(repoURL, branch, states, "", limit)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1271,7 +1271,7 @@ func newPMSprintShowCmd() *cobra.Command {
 
 			result := pm.GetSprint(sprintRef)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1363,7 +1363,7 @@ func newPMSprintCreateCmd() *cobra.Command {
 			result := pm.CreateSprint(cfg.WorkDir, title, body, opts)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1437,7 +1437,7 @@ func newPMSprintEditCmd() *cobra.Command {
 
 			result := pm.UpdateSprint(cfg.WorkDir, args[0], opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1478,7 +1478,7 @@ func newPMSprintStartCmd() *cobra.Command {
 			result := pm.ActivateSprint(cfg.WorkDir, sprintRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1508,7 +1508,7 @@ func newPMSprintCompleteCmd() *cobra.Command {
 			result := pm.CompleteSprint(cfg.WorkDir, sprintRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1538,7 +1538,7 @@ func newPMSprintCancelCmd() *cobra.Command {
 			result := pm.CancelSprint(cfg.WorkDir, sprintRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1568,7 +1568,7 @@ func newPMSprintDeleteCmd() *cobra.Command {
 			result := pm.RetractSprint(cfg.WorkDir, sprintRef)
 
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1811,7 +1811,7 @@ func newPMBoardCmd() *cobra.Command {
 
 			result := pm.GetBoardView(cfg.WorkDir)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 

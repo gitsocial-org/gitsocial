@@ -433,7 +433,7 @@ func (v *PRDetailView) applySuggestion() tea.Cmd {
 	return func() tea.Msg {
 		res := review.ApplySuggestion(workdir, r)
 		if !res.Success {
-			return SuggestionAppliedMsg{Err: fmt.Errorf("%s", res.Error.Message)}
+			return SuggestionAppliedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return SuggestionAppliedMsg{File: res.Data}
 	}
@@ -833,7 +833,7 @@ func (v *PRDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
 	return func() tea.Msg {
 		result := review.MergePR(workdir, prID, strategy)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		// Publish the merged base so origin's code agrees with the merged
 		// state on gitmsg/review. Failure is a warning: the merge succeeded.
@@ -850,7 +850,7 @@ func (v *PRDetailView) doSync(strategy string) tea.Cmd {
 	return func() tea.Msg {
 		result := review.SyncPRBranch(workdir, prID, strategy)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -862,7 +862,7 @@ func (v *PRDetailView) doClose() tea.Cmd {
 	return func() tea.Msg {
 		result := review.ClosePR(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -874,7 +874,7 @@ func (v *PRDetailView) doMarkReady() tea.Cmd {
 	return func() tea.Msg {
 		result := review.MarkReady(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -886,7 +886,7 @@ func (v *PRDetailView) doConvertToDraft() tea.Cmd {
 	return func() tea.Msg {
 		result := review.ConvertToDraft(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -898,7 +898,7 @@ func (v *PRDetailView) doUpdateTips() tea.Cmd {
 	return func() tea.Msg {
 		result := review.UpdatePRTips(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRUpdatedMsg{PR: result.Data}
 	}
@@ -911,7 +911,7 @@ func (v *PRDetailView) doRebaseStack() tea.Cmd {
 	return func() tea.Msg {
 		result := review.RebaseStack(workdir, prID)
 		if !result.Success {
-			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRStackUpdatedMsg{PRID: prID, Action: "Rebased", Count: len(result.Data)}
 	}
@@ -924,7 +924,7 @@ func (v *PRDetailView) doSyncStack() tea.Cmd {
 	return func() tea.Msg {
 		result := review.SyncStackTips(workdir, prID)
 		if !result.Success {
-			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRStackUpdatedMsg{PRID: prID, Action: "Synced tips for", Count: len(result.Data)}
 	}
@@ -976,7 +976,7 @@ func (v *PRDetailView) doRetract() tea.Cmd {
 	return func() tea.Msg {
 		result := review.RetractPR(workdir, prID)
 		if !result.Success {
-			return PRRetractedMsg{ID: prID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return PRRetractedMsg{ID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return PRRetractedMsg{ID: prID}
 	}

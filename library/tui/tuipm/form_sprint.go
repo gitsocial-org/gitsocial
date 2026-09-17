@@ -177,7 +177,7 @@ func (f *SprintForm) CreateSprintFromForm() tea.Cmd {
 		}
 		result := pm.CreateSprint(workdir, data.Title, data.Body, opts)
 		if !result.Success {
-			return SprintCreatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return SprintCreatedMsg{Sprint: result.Data}
 	}
@@ -252,7 +252,7 @@ func (f *SprintForm) UpdateSprintFromForm() tea.Cmd {
 		}
 		result := pm.UpdateSprint(workdir, sprintID, opts)
 		if !result.Success {
-			return SprintUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return SprintUpdatedMsg{Sprint: result.Data}
 	}
@@ -293,7 +293,7 @@ func (v *SprintEditFormView) loadSprint() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetSprint(sprintID)
 		if !result.Success {
-			return SprintEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return SprintEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return SprintEditFormLoadedMsg{Sprint: &result.Data}
 	}

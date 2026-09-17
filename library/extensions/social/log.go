@@ -51,7 +51,7 @@ func GetLogs(workdir, scope string, opts *GetLogsOptions) Result[[]LogEntry] {
 
 	commits, err := git.GetCommits(workdir, gitOpts)
 	if err != nil {
-		return failureWithDetails[[]LogEntry]("GIT_ERROR", "read commits failed", err)
+		return failureWithDetails[[]LogEntry]("GIT_ERROR", "read commits", err)
 	}
 
 	refs, err := git.ListRefs(workdir, "social/")

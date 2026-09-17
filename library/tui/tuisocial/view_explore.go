@@ -99,7 +99,7 @@ func (v *ExploreView) load() tea.Cmd {
 		case modeRelated:
 			res := social.GetRelatedRepositories(workdir, target)
 			if !res.Success {
-				return exploreLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+				return exploreLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			rows := make([]exploreRow, 0, len(res.Data))
 			for _, r := range res.Data {
@@ -124,7 +124,7 @@ func (v *ExploreView) load() tea.Cmd {
 		default:
 			res := social.GetRepositories(workdir, "all", 0)
 			if !res.Success {
-				return exploreLoadedMsg{err: fmt.Errorf("%s", res.Error.Message)}
+				return exploreLoadedMsg{err: fmt.Errorf("%s", res.Error.Text())}
 			}
 			rows := make([]exploreRow, 0, len(res.Data))
 			for _, r := range res.Data {

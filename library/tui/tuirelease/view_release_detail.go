@@ -368,7 +368,7 @@ func (v *ReleaseDetailView) doRetract() tea.Cmd {
 	return func() tea.Msg {
 		result := release.RetractRelease(workdir, releaseID)
 		if !result.Success {
-			return ReleaseRetractedMsg{ID: releaseID, Err: fmt.Errorf("%s", result.Error.Message)}
+			return ReleaseRetractedMsg{ID: releaseID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		return ReleaseRetractedMsg{ID: releaseID}
 	}

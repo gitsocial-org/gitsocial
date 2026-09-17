@@ -197,7 +197,7 @@ func newReleaseCreateCmd() *cobra.Command {
 
 			result := release.CreateRelease(cfg.WorkDir, subject, body, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -239,7 +239,7 @@ func newReleaseListCmd() *cobra.Command {
 			if repoURL != "" {
 				fetchResult := release.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
-					PrintError(cmd, fetchResult.Error.Message)
+					PrintError(cmd, fetchResult.Error.Text())
 					return exit(ExitError)
 				}
 			} else {
@@ -253,7 +253,7 @@ func newReleaseListCmd() *cobra.Command {
 
 			result := release.GetReleases(repoURL, branch, "", limit)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -296,7 +296,7 @@ func newReleaseShowCmd() *cobra.Command {
 
 			result := release.GetSingleRelease(args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -372,7 +372,7 @@ func newReleaseEditCmd() *cobra.Command {
 
 			result := release.EditRelease(cfg.WorkDir, args[0], opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -418,7 +418,7 @@ func newReleaseRetractCmd() *cobra.Command {
 
 			result := release.RetractRelease(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -466,7 +466,7 @@ uploads the files to the s3 push remote's bucket.`,
 			filePaths := args[1:]
 			result := release.AddArtifacts(cfg.WorkDir, version, filePaths)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -497,7 +497,7 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 			}
 			result := release.ListArtifacts(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -546,7 +546,7 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 			if len(filenames) == 0 {
 				res := release.ListArtifacts(cfg.WorkDir, version)
 				if !res.Success {
-					PrintError(cmd, res.Error.Message)
+					PrintError(cmd, res.Error.Text())
 					return exit(ExitError)
 				}
 				for _, info := range res.Data {
@@ -561,7 +561,7 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 				destPath := filepath.Join(destDir, filename)
 				res := release.ExportArtifact(cfg.WorkDir, repoURL, version, filename, destPath)
 				if !res.Success {
-					PrintError(cmd, fmt.Sprintf("%s: %s", filename, res.Error.Message))
+					PrintError(cmd, fmt.Sprintf("%s: %s", filename, res.Error.Text()))
 					continue
 				}
 				fmt.Printf("Saved %s → %s\n", filename, res.Data)
@@ -678,7 +678,7 @@ func newReleaseSBOMCmd() *cobra.Command {
 
 			res := release.GetSingleRelease(args[0])
 			if !res.Success {
-				PrintError(cmd, res.Error.Message)
+				PrintError(cmd, res.Error.Text())
 				return exit(ExitError)
 			}
 			rel := res.Data
@@ -695,7 +695,7 @@ func newReleaseSBOMCmd() *cobra.Command {
 			if raw {
 				rawRes := release.GetSBOMRaw(cfg.WorkDir, rel.Version, rel.SBOM)
 				if !rawRes.Success {
-					PrintError(cmd, rawRes.Error.Message)
+					PrintError(cmd, rawRes.Error.Text())
 					return exit(ExitError)
 				}
 				if cfg.JSONOutput {

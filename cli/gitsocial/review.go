@@ -232,7 +232,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 
 			result := review.CreatePR(cfg.WorkDir, subject, body, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -273,7 +273,7 @@ func newReviewPRListCmd() *cobra.Command {
 			if repoURL != "" {
 				fetchResult := review.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
-					PrintError(cmd, fetchResult.Error.Message)
+					PrintError(cmd, fetchResult.Error.Text())
 					return exit(ExitError)
 				}
 			} else {
@@ -299,7 +299,7 @@ func newReviewPRListCmd() *cobra.Command {
 				result = review.GetPullRequests(repoURL, branch, states, "", limit)
 			}
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -345,7 +345,7 @@ func newReviewPRShowCmd() *cobra.Command {
 
 			result := review.GetPR(args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -470,7 +470,7 @@ func newReviewPREditCmd() *cobra.Command {
 
 			result := review.UpdatePR(cfg.WorkDir, args[0], opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -514,7 +514,7 @@ branches, which signals that new code is ready for review.`,
 			}
 			result := review.UpdatePRTips(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -546,7 +546,7 @@ func newReviewPRMergeCmd() *cobra.Command {
 
 			result := review.MergePR(cfg.WorkDir, args[0], review.MergeStrategy(strategy))
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -589,7 +589,7 @@ func newReviewPRCloseCmd() *cobra.Command {
 
 			result := review.ClosePR(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -620,7 +620,7 @@ func newReviewPRRetractCmd() *cobra.Command {
 
 			result := review.RetractPR(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -655,7 +655,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 			if !cmd.Flags().Changed("from") || !cmd.Flags().Changed("to") {
 				vRes := review.GetPRVersions(args[0], gitmsg.ResolveRepoURL(cfg.WorkDir))
 				if !vRes.Success {
-					PrintError(cmd, vRes.Error.Message)
+					PrintError(cmd, vRes.Error.Text())
 					return exit(ExitError)
 				}
 				n := len(vRes.Data)
@@ -673,7 +673,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 
 			result := review.ComparePRVersions(cfg.WorkDir, cfg.CacheDir, args[0], from, to)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -714,7 +714,7 @@ func newReviewPRSyncCmd() *cobra.Command {
 
 			result := review.SyncPRBranch(cfg.WorkDir, args[0], strategy)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -746,7 +746,7 @@ func newReviewPRReadyCmd() *cobra.Command {
 			}
 			result := review.MarkReady(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -774,7 +774,7 @@ func newReviewPRDraftCmd() *cobra.Command {
 			}
 			result := review.ConvertToDraft(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -802,7 +802,7 @@ func newReviewPRStackCmd() *cobra.Command {
 			}
 			result := review.GetStack(args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -850,7 +850,7 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 			}
 			result := review.RebaseStack(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -881,7 +881,7 @@ func newReviewPRSyncStackCmd() *cobra.Command {
 			}
 			result := review.SyncStackTips(cfg.WorkDir, args[0])
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
@@ -935,7 +935,7 @@ func newFeedbackApproveCmd() *cobra.Command {
 			}
 			result := review.CreateFeedback(cfg.WorkDir, message, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -979,7 +979,7 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 			}
 			result := review.CreateFeedback(cfg.WorkDir, message, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
@@ -1037,7 +1037,7 @@ func newFeedbackCommentCmd() *cobra.Command {
 
 			result := review.CreateFeedback(cfg.WorkDir, content, opts)
 			if !result.Success {
-				PrintError(cmd, result.Error.Message)
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 

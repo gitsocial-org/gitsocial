@@ -21,7 +21,7 @@ func Decline(workdir, ref string) (ok bool, errMsg, canonicalRef string) {
 // Result carries a nil Error, so the message is only read on failure.
 func flatten(out proposals.Result[proposals.Outcome]) (ok bool, errMsg, canonicalRef string) {
 	if !out.Success {
-		return false, out.Error.Message, ""
+		return false, out.Error.Text(), ""
 	}
 	return true, "", out.Data.CanonicalRef
 }

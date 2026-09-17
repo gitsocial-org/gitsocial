@@ -30,7 +30,7 @@ func GetRepositories(workdir, scope string, limit int) Result[[]Repository] {
 func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 	data, err := gitmsg.ReadList(workdir, socialExtension, listID)
 	if err != nil {
-		return failureWithDetails[[]Repository]("GIT_ERROR", "read list failed", err)
+		return failureWithDetails[[]Repository]("GIT_ERROR", "read list", err)
 	}
 	if data == nil {
 		return failure[[]Repository]("LIST_NOT_FOUND", "list '"+listID+"' not found")
@@ -64,7 +64,7 @@ func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 func getAllRepositories(workdir string) Result[[]Repository] {
 	listsResult := GetLists(workdir)
 	if !listsResult.Success {
-		return failure[[]Repository](listsResult.Error.Code, listsResult.Error.Message)
+		return failureWithDetails[[]Repository](listsResult.Error.Code, listsResult.Error.Message, listsResult.Error.Details)
 	}
 
 	repoMap := make(map[string]*Repository)
@@ -125,7 +125,7 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepository] {
 	listsResult := GetLists(workdir)
 	if !listsResult.Success {
-		return failure[[]RelatedRepository](listsResult.Error.Code, listsResult.Error.Message)
+		return failureWithDetails[[]RelatedRepository](listsResult.Error.Code, listsResult.Error.Message, listsResult.Error.Details)
 	}
 
 	targetLists := make(map[string]bool)

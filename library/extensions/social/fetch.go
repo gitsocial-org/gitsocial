@@ -37,7 +37,7 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 
 	result := GetLists(workdir)
 	if !result.Success {
-		return failure[fetch.Stats](result.Error.Code, result.Error.Message)
+		return failureWithDetails[fetch.Stats](result.Error.Code, result.Error.Message, result.Error.Details)
 	}
 
 	var repos []fetch.RepoInfo

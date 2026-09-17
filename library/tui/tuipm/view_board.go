@@ -69,7 +69,7 @@ func (v *BoardView) loadBoard() tea.Cmd {
 	return func() tea.Msg {
 		result := pm.GetBoardView(workdir)
 		if !result.Success {
-			return BoardLoadedMsg{Err: fmt.Errorf("%s", result.Error.Message)}
+			return BoardLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -262,7 +262,7 @@ func (v *BoardView) moveIssue(destCol int) tea.Cmd {
 	return func() tea.Msg {
 		res := pm.UpdateIssue(workdir, issueID, opts)
 		if !res.Success {
-			return columnMoveResultMsg{destCol: destCol, err: fmt.Errorf("%s", res.Error.Message)}
+			return columnMoveResultMsg{destCol: destCol, err: fmt.Errorf("%s", res.Error.Text())}
 		}
 		return columnMoveResultMsg{destCol: destCol}
 	}
