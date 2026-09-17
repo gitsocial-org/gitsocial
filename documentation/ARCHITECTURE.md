@@ -31,33 +31,15 @@ bin/gitsocial tui
 
 ### Test and lint
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too; run that before merging to `main` and at release. A missing `golangci-lint` fails unless `--skip-lint` is passed.
-
-The guarded tests call `fullTierOnly`: the TUI matrices `TestSmoke`, `TestSequence` and `TestGolden/LayoutProperties`, the CLI `--json` walk `TestCommandTreeJSONOutput`, the `TestS3Helper_*` child-process tests, and the site fixture build `TestSiteFixtureBuild`. The fixture build needs neither node nor Chrome. It reruns when the site assets, the site generators, `sitetest/fixture.sh` or `sitetest/fixture-lib.sh` change. `-race` and the browser site battery run at release from `scripts/release.sh`. `-short` skips the real-git subtests. It is a local smoke run, not a tier.
-
-`scripts/prose-check.sh` is stage 0. It counts [STYLE.md](STYLE.md) violations and fails when a count rises above `scripts/prose-baseline.txt`; `--update` accepts lowered counts, `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright.
-
-`scripts/import-graph.sh --check` is stage 1. It fails on an upward import edge missing from `scripts/import-baseline.txt`, and on a package over 15,000 non-test lines; `--update` accepts the current edges. It also fails when a `core` package imports one at or above its tier in the stack sentence under [Layers](#layers), which it reads from this file. With no argument it prints the per-package size, fan-in, fan-out and churn report, marking any edge against that order with `!`.
-
-`scripts/coverage.sh --check` is stage 5, in the full tier only. The tests write `.test-artifacts/coverage/coverage.out` under `-coverpkg=./...`, and the stage fails when a package's statement coverage sits more than 2.0 points under its line in `scripts/coverage-baseline.txt`; `--update` accepts a lowered floor in the commit that earns it.
-
-`funlen` and `gocognit` in `.golangci.yml` hold today's largest function and highest complexity, and a threshold only moves down.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors; run it before merging to `main` and at release.
 
 ```bash
 scripts/check.sh --quick                    # the push tier
 scripts/check.sh                            # the full tier
-scripts/check.sh -short ./...               # extra args go to the test stage; a smoke run, not a gate run
 git config core.hooksPath scripts/hooks     # install the pre-push hook, once per clone
-GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
-scripts/test.sh -run TestSmoke ./library/tui/test/          # go test -json with streamed per-test progress
-scripts/coverage.sh                         # statement-weighted coverage with -coverpkg=./..., into .test-artifacts/coverage/
-scripts/coverage.sh --update                # accept the current per-package coverage as the floor
-scripts/import-graph.sh                     # the per-package size, fan-in, fan-out and churn report
-go test -tags sitetest -timeout 30m ./library/core/site/   # the browser site battery; needs node
-go test -tags bench -run '^$' -bench . ./library/extensions/social/   # the 100k-row thread benchmark
 ```
 
-Coverage is a floor: the S3 helper tests run the helper as a child process, and the browser suites run under node, so neither is credited.
+[TESTING.md](TESTING.md) holds the six stages and what fails each, the guarded tests, the coverage ratchet and its child-process credit, the environment variables and the artifact paths. Every baseline is a ratchet: `--update` accepts a count that fell.
 
 ### Design notes
 

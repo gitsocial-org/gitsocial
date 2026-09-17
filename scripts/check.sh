@@ -6,6 +6,9 @@
 #   scripts/check.sh               # full tier: every test and the coverage check; before merging to main and at release
 #   scripts/check.sh --skip-lint   # allow a missing golangci-lint (not a gate run)
 #   scripts/check.sh -short ./...  # extra args go to the test stage (smoke run, not a gate run)
+#
+# The full tier points the child processes at .test-artifacts/coverage/children
+# through GITSOCIAL_COVERDIR, then merges what they wrote into the profile.
 set -o pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -66,10 +69,13 @@ if $QUICK; then
 else
 	log "4/$last go test ./... (full tier, writing the coverage profile)"
 	export GITSOCIAL_TEST_FULL=1
-	mkdir -p "$coverdir"
+	export GITSOCIAL_COVERDIR="$coverdir/children"
+	mkdir -p "$GITSOCIAL_COVERDIR"
+	rm -f "$GITSOCIAL_COVERDIR"/cov*
 	# The cover flags fill the argument list, so name the packages here.
 	[ ${#TEST_ARGS[@]} -gt 0 ] || TEST_ARGS=(./...)
 	"$root/scripts/test.sh" "${TEST_ARGS[@]}" -coverpkg=./... -coverprofile="$coverdir/coverage.out" || die "go test"
+	"$root/scripts/coverage.sh" --merge "$coverdir/coverage.out" || die "coverage merge"
 
 	log "5/$last scripts/coverage.sh --check"
 	"$root/scripts/coverage.sh" --check "$coverdir/coverage.out" || die "coverage"

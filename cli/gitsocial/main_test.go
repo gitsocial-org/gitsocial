@@ -24,6 +24,7 @@ var (
 	cliBuildErr    error
 	harnessHome    string
 	hostHome       string
+	coverDir       string
 )
 
 // TestMain points HOME and the XDG paths at an isolated directory, then strips
@@ -77,7 +78,25 @@ func setupHarnessHome() error {
 			return err
 		}
 	}
-	return nil
+	return setupCoverDir()
+}
+
+// setupCoverDir points the child processes at the directory a coverage run names in GITSOCIAL_COVERDIR.
+func setupCoverDir() error {
+	dir := os.Getenv("GITSOCIAL_COVERDIR")
+	if dir == "" {
+		return nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return err
+	}
+	coverDir = abs
+	// Every child inherits GOCOVERDIR, so a -cover build writes its counters there.
+	return os.Setenv("GOCOVERDIR", abs)
 }
 
 // runInProcess runs the command tree in the test process and returns stdout, stderr and the exit code.
@@ -128,7 +147,13 @@ func buildCLIBinary() {
 		return
 	}
 	cliBinaryPath = filepath.Join(binDir, "gitsocial")
-	build := exec.Command("go", "build", "-o", cliBinaryPath, ".")
+	args := []string{"build"}
+	if coverDir != "" {
+		// A coverage run instruments the whole module, so the child credits the library too.
+		args = append(args, "-cover", "-coverpkg=github.com/gitsocial-org/gitsocial/...")
+	}
+	args = append(args, "-o", cliBinaryPath, ".")
+	build := exec.Command("go", args...)
 	// The build cache and the module cache live under the host's HOME.
 	build.Env = append(os.Environ(), "HOME="+hostHome)
 	out, err := build.CombinedOutput()

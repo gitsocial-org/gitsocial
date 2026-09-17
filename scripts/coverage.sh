@@ -7,14 +7,19 @@
 # offset a 6,000-statement package at 3%). Packages with no test files of their
 # own are included: `-coverpkg` instruments them too.
 #
+# GITSOCIAL_COVERDIR names the directory the child processes write coverage data
+# into. The CLI tests build their binary with `-cover` when it is set, so the
+# push verbs, the S3 helper and the thin-bucket tests credit what they run.
+#
 # Usage:
 #   scripts/coverage.sh                    # writes .test-artifacts/coverage/
 #   scripts/coverage.sh <outdir>           # writes somewhere else
 #   scripts/coverage.sh --check [profile]  # fail on a package more than 2.0 points under the baseline
 #   scripts/coverage.sh --update [profile] # rewrite scripts/coverage-baseline.txt from a profile
+#   scripts/coverage.sh --merge [profile]  # fold the child-process data into a profile
 #   GS_COVER_PROFILE=old.out scripts/coverage.sh   # re-report an existing profile
 #
-# --check and --update default to .test-artifacts/coverage/coverage.out, the profile the full tier writes.
+# --check, --update and --merge default to .test-artifacts/coverage/coverage.out, the profile the full tier writes.
 #
 # Outputs (in <outdir>):
 #   coverage.out         the merged profile
@@ -22,6 +27,7 @@
 #   summary.txt          this report (total, ranked package table, blind spots)
 #   functions.txt        per-function coverage (`go tool cover -func`)
 #   zero-functions.txt   every function at 0.0%
+#   children/            the child processes' raw data, and children.out kept from it
 set -o pipefail
 
 # Resolve repo root from this script's location so it runs from anywhere.
@@ -29,6 +35,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 module="github.com/gitsocial-org/gitsocial/"
 baseline="$root/scripts/coverage-baseline.txt"
 gateprofile="$root/.test-artifacts/coverage/coverage.out"
+childdir="$root/.test-artifacts/coverage/children"
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -62,6 +69,31 @@ aggregate() {
 # percentages prints package, percentage and statement count, tab separated, one line per package
 percentages() {
 	grep '^PKG ' "$1" | awk -v m="$module" '{ p = $2; sub(m, "", p); printf "%s\t%.1f\t%d\n", p, $4 ? 100 * $3 / $4 : 0, $4 }' | sort
+}
+
+# merge_children appends the child processes' coverage data, converted to a text profile, to a profile
+merge_children() {
+	local profile="${1:-$gateprofile}" dir="${2:-$childdir}" text work
+	text="$dir/children.out"
+	if ls "$dir"/covmeta.* >/dev/null 2>&1; then
+		(cd "$root" && go tool covdata textfmt -i="$dir" -o="$text") || return 1
+	elif [ -s "$text" ]; then
+		# The test cache replayed the runs that wrote it, so their data is replayed too.
+		info "no new child-process data, reusing $text"
+	else
+		info "no child-process coverage data in $dir"
+		return 0
+	fi
+	if [ ! -s "$profile" ]; then
+		printf 'coverage: no profile at %s; run scripts/check.sh or scripts/coverage.sh first\n' "$profile" >&2
+		return 1
+	fi
+	work="$(mktemp)"
+	# A block the profile does not carry comes from an edited file, and goes.
+	awk 'FNR == NR { if (FNR > 1) known[$1] = 1; next } FNR > 1 && ($1 in known)' "$profile" "$text" >"$work"
+	cat "$work" >>"$profile"
+	info "merged $(wc -l <"$work" | tr -d ' ') child-process blocks"
+	rm -f "$work"
 }
 
 # ratchet rewrites the baseline from a profile, or fails when a package sits more than 2.0 points under it
@@ -107,6 +139,7 @@ ratchet() {
 case "${1:-}" in
 --check) ratchet check "${2:-}"; exit $? ;;
 --update) ratchet update "${2:-}"; exit $? ;;
+--merge) merge_children "${2:-}"; exit $? ;;
 -h | --help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
 esac
 
@@ -115,6 +148,7 @@ mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 profile="$out/coverage.out"
 summary="$out/summary.txt"
+childdir="$out/children"
 
 # Run the suite under -coverpkg unless a profile was supplied to re-report.
 if [ -n "${GS_COVER_PROFILE:-}" ]; then
@@ -122,11 +156,15 @@ if [ -n "${GS_COVER_PROFILE:-}" ]; then
 	[ "$GS_COVER_PROFILE" -ef "$profile" ] || cp "$GS_COVER_PROFILE" "$profile"
 else
 	log "go test ./... -coverpkg=./... (full suite, ~10 min)"
+	mkdir -p "$childdir"
+	rm -f "$childdir"/cov*
+	export GITSOCIAL_TEST_FULL=1 GITSOCIAL_COVERDIR="$childdir"
 	if ! (cd "$root" && go test ./... -coverpkg=./... -coverprofile="$profile" >"$out/test.log" 2>&1); then
 		info "WARNING: the suite is RED — figures below describe a failing run"
 		info "see $out/test.log"
 	fi
 	[ -s "$profile" ] || { printf '\033[31merror: no coverage profile produced (see %s)\033[0m\n' "$out/test.log" >&2; exit 1; }
+	merge_children "$profile" "$childdir" || exit 1
 fi
 
 # Statement-weighted totals and per-package table, computed from the profile.
@@ -144,12 +182,11 @@ listed=$(wc -l <"$out/packages.txt" | tr -d ' ')
 	printf 'Measured with -coverpkg=./... over `go list ./...` (%s packages), so a\n' "$listed"
 	printf 'package with no test files of its own still counts, and code exercised by\n'
 	printf 'another package'"'"'s integration tests gets credit.\n\n'
-	printf 'THE NUMBER IS A FLOOR. Coverage cannot see two real test tiers:\n'
-	printf '  1. The S3 helper tests drive `git push` and run the remote helper as a\n'
-	printf '     CHILD PROCESS, so helper_push.go and thin.go get zero credit for ~20\n'
-	printf '     passing tests.\n'
-	printf '  2. ~40 browser suites behind `-tags sitetest` are JavaScript, so\n'
-	printf '     site_pages*.go looks untested and is not.\n'
+	printf 'THE NUMBER IS A FLOOR. Coverage cannot see one real test tier:\n'
+	printf '  ~40 browser suites behind `-tags sitetest` are JavaScript, so\n'
+	printf '  site_pages*.go looks untested and is not.\n'
+	printf 'The child processes are credited: the CLI binary is built with -cover,\n'
+	printf 'and its counters are merged in, so helper_push.go and thin.go count.\n'
 	printf 'Covered is also not correct: read the 0.0%% function list, not the table.\n\n'
 	printf 'Per package, ranked (weakest first; statements are the weight):\n\n'
 	printf '%-46s %7s %10s\n' "package" "cover" "stmts"
@@ -166,7 +203,7 @@ zero=$(wc -l <"$out/zero-functions.txt" | tr -d ' ')
 zerolib=$(grep -cE '^library/(core|extensions|proposals|client)' "$out/zero-functions.txt")
 printf '\n%s functions at 0.0%%: %s\n' "$zero" "$out/zero-functions.txt" >>"$summary"
 printf '%s of them under library/{core,extensions,proposals,client*}; the rest are cli/ and tui/.\n' "$zerolib" >>"$summary"
-printf '(ignore helper_push.go, thin.go and site_pages*.go there: blind spots, not gaps)\n' >>"$summary"
+printf '(ignore site_pages*.go there: a blind spot, not a gap)\n' >>"$summary"
 
 (cd "$root" && go tool cover -html="$profile" -o "$out/coverage.html")
 
