@@ -89,6 +89,13 @@ for (const c of FIX.releaseRows) {
   eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
 }
 
+console.log("=== parity invariant: what the front page says about the root entries it hides ===");
+for (const c of FIX.frontFiles.cases) {
+  const cut = GS.homeFilesTruncation(c.total, FIX.frontFiles.limit);
+  eq(cut.notice, c.expectNotice, c.name + ": notice");
+  eq(cut.label, c.expectLabel, c.name + ": control label");
+}
+
 console.log("=== parity invariant: which files render as prose, and the MDX strip ===");
 for (const c of FIX.markdownPaths) {
   eq(GS.isMarkdownPath(c.path), c.expectProse, c.name + ": renders as prose");

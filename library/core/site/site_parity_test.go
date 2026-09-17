@@ -110,6 +110,20 @@ type parityReleaseRowCase struct {
 	ExpectLabel string `json:"expectLabel"`
 }
 
+// parityFrontFilesCase pins what the front page says for one root-entry count.
+type parityFrontFilesCase struct {
+	Name         string `json:"name"`
+	Total        int    `json:"total"`
+	ExpectNotice string `json:"expectNotice"`
+	ExpectLabel  string `json:"expectLabel"`
+}
+
+// parityFrontFiles pins the front page's root-listing cap and its cases.
+type parityFrontFiles struct {
+	Limit int                    `json:"limit"`
+	Cases []parityFrontFilesCase `json:"cases"`
+}
+
 // parityMarkdownPath pins whether a path renders as prose on both surfaces.
 type parityMarkdownPath struct {
 	Name        string `json:"name"`
@@ -136,6 +150,7 @@ type parityFixtures struct {
 	DefaultTitles  []parityDefaultTitle    `json:"defaultTitles"`
 	RowGlyphs      []parityRowGlyphCase    `json:"rowGlyphs"`
 	ReleaseRows    []parityReleaseRowCase  `json:"releaseRows"`
+	FrontFiles     parityFrontFiles        `json:"frontFiles"`
 	MarkdownPaths  []parityMarkdownPath    `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase    `json:"mdxStrip"`
 	ListEmpty      map[string]string       `json:"listEmpty"`
@@ -348,6 +363,26 @@ func TestParityReleaseRow(t *testing.T) {
 			}
 			if strings.Join(bits, ",") != strings.Join(want, ",") {
 				t.Errorf("release row meta = %v, want %v", bits, want)
+			}
+		})
+	}
+}
+
+// TestParityFrontFiles asserts the front page's root-listing cap and truncation
+// wording against the fixture unit_parity.js also asserts.
+func TestParityFrontFiles(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.FrontFiles.Cases) == 0 {
+		t.Fatal("no front file cases in parity fixtures")
+	}
+	if f.FrontFiles.Limit != sitePagesHomeFiles {
+		t.Errorf("front file cap = %d, fixture %d", sitePagesHomeFiles, f.FrontFiles.Limit)
+	}
+	for _, c := range f.FrontFiles.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			notice, label := siteFrontFilesTruncation(c.Total, f.FrontFiles.Limit)
+			if notice != c.ExpectNotice || label != c.ExpectLabel {
+				t.Errorf("notice %q label %q, want %q and %q", notice, label, c.ExpectNotice, c.ExpectLabel)
 			}
 		})
 	}

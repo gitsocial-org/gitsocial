@@ -278,5 +278,29 @@
       "borderLeftColor": "rgb(26, 26, 26)",
       "borderRadius": "0px"
     }
+  ],
+  ".detail > .detail-topbar": [
+    {
+      "shape": "a.back > div.page-actions",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(26, 26, 26)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".detail > .detail-topbar > .page-actions": [
+    {
+      "shape": "div.body-modes.view-modes > button.share-link",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "24px",
+      "color": "rgb(26, 26, 26)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(26, 26, 26)",
+      "borderRadius": "0px"
+    }
   ]
 }

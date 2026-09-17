@@ -373,6 +373,15 @@
     { "name": "no artifacts drops the bit", "artifacts": "", "expectLabel": "" },
     { "name": "separators alone drop the bit", "artifacts": " , ", "expectLabel": "" }
   ],
+  "frontFiles": {
+    "limit": 3,
+    "cases": [
+      { "name": "under the cap hides nothing", "total": 2, "expectNotice": "", "expectLabel": "" },
+      { "name": "at the cap hides nothing", "total": 3, "expectNotice": "", "expectLabel": "" },
+      { "name": "one hidden", "total": 4, "expectNotice": "1 more not shown.", "expectLabel": "Show all 4" },
+      { "name": "nine hidden", "total": 12, "expectNotice": "9 more not shown.", "expectLabel": "Show all 12" }
+    ]
+  },
   "markdownPaths": [
     { "name": "markdown", "path": "docs/intro.md", "expectProse": true },
     { "name": "the long spelling", "path": "docs/intro.markdown", "expectProse": true },

@@ -71,7 +71,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 
 | Component | Classes | Renderers | Notes |
 |---|---|---|---|
-| Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state; the title is `site.title`, else the bucket name |
+| Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-tree-slot` (app), `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state; the title is `site.title`, else the bucket name; the app's file tree scrolls inside `.nav-tree-slot`, so no nav row runs under the pinned credit |
 | Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js`; the head's one slot carries the retracted marker, and a body-only card, which has no head, leads its meta row with it |
 | Feedback card | `.card.feedback`, the verdict on `.verdict-<state>` as a 3px left border and on a chip | both | approved or changes-requested; the file and line anchor ride a plain chip, dropped inline under the line they anchor; padding, radius and background come from `.card` |
 | Chip | `.chip` plus one variant class, built by `chipEl` in JS and the `chip` template in Go | both | mono, `--fs-ui`, pill radius, tint fills from the token scale; a chip never carries the edited marker |
@@ -81,16 +81,17 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Meta row | `.meta` holding `span.author`, `span.reltime`, `a.hash` in that order, separated by a middle dot; inside `.detail-meta` on a detail page | both | mono and muted; the author is the display name with the email in `title`, "unknown" when both are empty |
 | Meta row bits | the precise stamp in the time's `title`; the relative time in the app and the `YYYY-MM-DD` UTC date on a page; the hash as the 12-character short form linking to the item | both | the page layer's type label, `head → base`, "due", the sprint range and "signed" follow the hash |
 | List page | `h1`, cards, `.filter-chip` filters, and `.load-more` in the app where a page carries its sealed-page links | both | the heading is the nav label verbatim, and so are the `<title>`, the description and the feed title |
-| Detail page | `.card-head > h1.subject` plus the head's one chip slot, then `.detail-meta`, `.body` with a raw toggle, the thread, `.version-row` history, `.asset-list` on releases, diff and review sections on pull requests; the app wraps it in `.detail` | both | the state, draft, prerelease, retracted and version chips ride the head's one slot, never the meta line; a body-only type promotes no first line and heads with the meta row alone |
+| Detail page | `.card-head > h1.subject` plus the head's one chip slot, then `.detail-meta`, `.body`, the thread, `.version-row` history, `.asset-list` on releases, diff and review sections on pull requests; the app wraps it in `.detail` | both | the state, draft, prerelease, retracted and version chips ride the head's one slot, never the meta line; a body-only type promotes no first line and heads with the meta row alone; the app's raw toggle and copy-link control share the top bar's one `.page-actions` row |
 | Release head | the tag as the subject, then one version chip | both | the chip is dropped when the head already names the version |
 | Release row | the release head over a meta row of the author, the date and the asset count | both | the count stands where every other row links its hash, and goes when the release names no artifact |
 | Thread | comment cards in time order under a `Comments (N)` heading, one rail per depth level | both | a reply follows the one it answers, siblings run oldest first, depth caps at four; the type glyph leads a comment's meta row; a missing parent falls back to a quote |
+| Trailers | `.detail dl` with a `dt` and `dd` per field | app | mono, muted, `--fs-ui`; it carries the header fields no other component on the page shows, so the route's `ext` and `type`, the head's `state`, `draft`, `retracted`, `tag`, `version` and `prerelease`, and the meta row's `origin-author-name`, `origin-author-email` and `origin-time` stay out; `origin-platform` and `origin-url` fold into one `origin` row |
 | Markdown | `.markdown`, headings with `md-` ids, lists, tables, fences, images, blockquotes | both | one grammar, ported between JS and Go, asserted equal |
 | Code | tree (`.tree-row`, `.tree-node`, chevrons, tree search), blob (highlighted, raw pane, images, video), diff (`.diff-section`, unified or split, inline feedback) | app | a blob the view labels rather than renders carries its one sentence in `.empty` under the breadcrumb, with the submodule's full sha in the label's `title` |
 | Board | columns, WIP indicator, collapsed columns, group-by | app | |
 | Search | input, scope help, tier note, snippets, result cards | app | |
 | Notice | `.notice` for degraded content, `.empty`, `.loading`, `.err` | `.notice` and `.empty` both; `.loading` and `.err` app | one sentence in place of the content; the wording is in [States](#states) |
-| Controls | `.action-link`, `.back`, `.page-actions`, `.view-modes`, `.view-toggle`, `.load-more` | both | mono, `--r-ctl`, `--btn` surface |
+| Controls | `.action-link`, `.back`, `.page-actions`, `.view-modes`, `.view-toggle`, `.share-link`, `.load-more` | both | mono, `--r-ctl`, `--btn` surface; a surface's controls sit on one `.page-actions` row, never on two |
 
 `sitetest/parity_fixtures.json` pins the shapes both renderers share: `siteHeadChips` and `headChips`, `siteHeadSubject` and `headSubject`, the meta row skeleton, the list labels and the empty sentences. `verify_styles.js` pins the app's own elements.
 
@@ -107,7 +108,7 @@ Every component defines these where they apply. The wording is fixed, so it read
 | Retracted | a tombstone: "retracted <type>" as the subject, `.chip-retracted`, no body |
 | Edited | an "edited" bit in the meta row after the hash, with the edit's precise time in `title`; "edited by <name>" when the editor is not the author; both renderers, and never a chip |
 | Stale | a commit no longer on its branch: dimmed text, no chip |
-| Truncated | one sentence in `.notice` as the last row, both renderers: "N more not shown." for a list, tree or diff, "N more replies not shown." for a thread, "Truncated. The full file is in the repository." for a file or README, "Search truncated at N entries; refine the query." for a search; a `.load-more` control below it where the app can load more, a link to the app route where a page cannot |
+| Truncated | one sentence in `.notice` as the last row, both renderers: "N more not shown." for a list, tree, diff or the front page's root file listing, "N more replies not shown." for a thread, "Truncated. The full file is in the repository." for a file or README, "Search truncated at N entries; refine the query." for a search; a `.load-more` or `.show-more` control below it where the app can expand, a link to the app route where a page cannot |
 | Retry | an app fetch retries 429, 5xx and header timeouts with backoff, then shows the error state |
 
 ## Repo-shape rules

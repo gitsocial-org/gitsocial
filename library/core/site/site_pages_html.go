@@ -203,7 +203,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Files}}<ul class="files">
 {{range .Files}}<li><a href="{{.Href}}">{{.Name}}</a></li>
 {{end}}</ul>
-{{if .MoreHref}}<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
+{{if .MoreHref}}<p class="notice">{{.MoreNotice}}</p>
+<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
 {{end}}{{end}}{{if .Readme}}<section><p class="meta">README</p>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}</section>
@@ -379,6 +380,7 @@ type siteFrontHome struct {
 	Latest       *siteFrontCommit // default branch tip (nil when unreadable)
 	Files        []siteFrontFile  // root entries, directories first, capped
 	MoreHref     string           // app link to the code browser ("" — nothing hidden)
+	MoreNotice   string           // "N more not shown.", the truncation sentence
 	MoreLabel    string           // "Show all N", the app's collapse control
 	Readme       *siteFrontReadme
 }
@@ -551,6 +553,14 @@ const siteActivityMoreLabel = "See more"
 
 // siteActivityMoreKey is that link's crawlable destination, the served page for the app's /timeline route.
 const siteActivityMoreKey = "./posts/index.html"
+
+// siteFrontFilesTruncation names the root entries the front page hides: the notice sentence and the control label. Mirrors homeFilesTruncation in gs-core.js.
+func siteFrontFilesTruncation(total, limit int) (notice, label string) {
+	if total <= limit {
+		return "", ""
+	}
+	return strconv.Itoa(total-limit) + " more not shown.", "Show all " + strconv.Itoa(total)
+}
 
 // sitePageStateClass maps a workflow state to its chip color class; a cancel state matches by prefix, since the misspell linter rewrites the doubled-l spelling.
 func sitePageStateClass(state string) string {

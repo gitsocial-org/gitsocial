@@ -278,10 +278,11 @@
   .detail .subject { font-size: var(--fs-h1); margin-bottom: var(--sp-2); }
   .detail .card .subject, .card .subject { font-size: var(--fs-body); }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-size: var(--fs-ui); }
-  /* Detail top bar: the back link on the left, the copy-link/share control on the
-     right, on one row so the share affordance never disturbs the meta line. */
+  /* Detail top bar: the back link on the left, the page's controls on the right,
+     on one row so neither disturbs the meta line. */
   .detail-topbar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
   .detail-topbar .back { margin-bottom: var(--sp-4); }
+  .detail-topbar .page-actions, .detail-topbar .view-modes { margin: 0; }
   .share-link {
     flex: 0 0 auto; max-width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
@@ -364,8 +365,10 @@
      nav item so files stay navigable while the content pane shows a blob.
      Smaller than the content tree to fit the 220px column; long names ellipsize
      with the full name in a title attr. Hidden when empty, when the sidebar is
-     collapsed (the nav is hidden then), and on the narrow top-nav layout. */
-  .nav-tree-slot { margin: 0.1rem 0 var(--sp-1) var(--sp-2); overflow-x: hidden; }
+     collapsed (the nav is hidden then), and on the narrow top-nav layout.
+     The tree scrolls in its own box, so a deep expansion cannot push the rows
+     below it under the viewport-pinned .nav-footer. */
+  .nav-tree-slot { margin: 0.1rem 0 var(--sp-1) var(--sp-2); max-height: 18rem; overflow-x: hidden; overflow-y: auto; }
   .nav-tree-slot:empty { display: none; }
   .nav-tree-list { border: none; background: transparent; }
   .nav-tree-list .tree-row { padding: 0.06rem var(--sp-2); line-height: 1.4; font-size: var(--fs-ui); border-radius: var(--r-ctl); }
@@ -958,6 +961,8 @@
       padding: var(--sp-3) 0; z-index: auto;
     }
     .nav { padding-bottom: var(--sp-4); }
+    /* The drawer's footer is in flow, so the tree scrolls with the drawer. */
+    .nav-tree-slot { max-height: none; overflow-y: visible; }
     body.nav-collapsed .nav-footer { display: flex; }
     body.nav-open .nav { transform: translateX(0); }
     body.nav-open .nav-scrim { display: block; position: fixed; inset: 0; z-index: 8; background: color-mix(in srgb, #000 45%, transparent); }

@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, homeFilesTruncation, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -922,6 +922,36 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return val;
   }
 
+  // TRAILER_SKIP are the header fields another component on a detail page carries: the route, the head's chips and the meta row.
+  const TRAILER_SKIP = {
+    v: 1, ext: 1, type: 1, state: 1, draft: 1, retracted: 1, tag: 1, version: 1, prerelease: 1,
+    "origin-author-name": 1, "origin-author-email": 1, "origin-time": 1, "origin-platform": 1, "origin-url": 1,
+  };
+
+  // trailerRows lists a detail's trailer rows in key order, the origin fields folded into one linked row.
+  function trailerRows(header, skip) {
+    const h = header || {};
+    const rows = {};
+    for (const key of Object.keys(h)) {
+      if (TRAILER_SKIP[key] || (skip || []).indexOf(key) !== -1) continue;
+      rows[key] = trailerValue(key, h[key]);
+    }
+    const platform = h["origin-platform"] || "", url = h["origin-url"] || "";
+    if (platform || url) {
+      rows.origin = /^https?:/i.test(url) ? el("a", { href: url, rel: "noopener" }, [platform || url]) : (platform || url);
+    }
+    return Object.keys(rows).sort().map((key) => ({ key, value: rows[key] }));
+  }
+
+  // trailerList fills a definition list with a detail's trailer rows.
+  function trailerList(dl, header, skip) {
+    dl.replaceChildren();
+    for (const row of trailerRows(header, skip)) {
+      dl.append(el("dt", {}, [row.key]));
+      dl.append(el("dd", {}, [row.value]));
+    }
+  }
+
   // shareURL returns the item's page URL when the site config enables pages, else the in-app hash URL.
   function shareURL(ctx, short, branch) {
     const cfg = ctx && ctx.siteCustomization;
@@ -958,9 +988,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const ext = (COMMIT_VIEW[kind.branch] || {}).ext;
     const bodyOnly = isBodyOnly(item, ext);
     const wrap = el("div", { class: "detail" }, []);
+    const actions = el("div", { class: "page-actions" }, []);
+    const share = shareControl(ctx, item.commit.short, kind.branch);
     wrap.append(el("div", { class: "detail-topbar" }, [
       el("a", { class: "back", href: detailBackHref(ctx, "#/" + kind.tab) }, ["← back"]),
-      shareControl(ctx, item.commit.short, kind.branch),
+      actions,
     ]));
     const subjectEl = bodyOnly ? null : el("h1", { class: "subject" }, []);
     const headEl = subjectEl ? el("div", { class: "card-head" }, [subjectEl]) : null;
@@ -980,15 +1012,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         headEl.replaceChildren(subjectEl, ...headChips(v.header, ext, subjectEl.textContent).map(chipEl));
       }
       const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage);
-      metaSlot.replaceChildren(versionMetaRow(v, kind.branch), cb.modes);
+      actions.replaceChildren(cb.modes, share);
+      metaSlot.replaceChildren(versionMetaRow(v, kind.branch));
       bodyPane.replaceChildren(cb.pane);
-      dl.replaceChildren();
-      const h = v.header || {};
-      for (const key of Object.keys(h).sort()) {
-        if (key === "v" || skip.indexOf(key) !== -1) continue;
-        dl.append(el("dt", {}, [key]));
-        dl.append(el("dd", {}, [trailerValue(key, h[key])]));
-      }
+      trailerList(dl, v.header, skip);
     }
     if (versions.length > 1) wrap.append(versionHistorySection(versions, (i) => { sel.idx = i; paint(); }));
     paint();
@@ -1028,10 +1055,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     wrap.append(cb.pane);
     if (c.gitmsg) {
       const dl = el("dl", {}, []);
-      for (const key of Object.keys(c.gitmsg).sort()) {
-        dl.append(el("dt", {}, [key]));
-        dl.append(el("dd", {}, [trailerValue(key, c.gitmsg[key])]));
-      }
+      trailerList(dl, c.gitmsg, []);
       wrap.append(dl);
     }
     wrap.append(await commitChangesSection(ctx, c));
@@ -2279,8 +2303,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- PM rendering (browser only) ----
 
-  // RELEASE_DETAIL_SKIP are the header keys a release detail shows outside its field table: the assets section, and the tag its head carries.
-  const RELEASE_DETAIL_SKIP = ["artifacts", "artifact-url", "checksums", "sbom", "signed-by", "tag"];
+  // RELEASE_DETAIL_SKIP are the header keys the assets section carries, so the trailer list leaves them out.
+  const RELEASE_DETAIL_SKIP = ["artifacts", "artifact-url", "checksums", "sbom", "signed-by"];
   const ISSUE_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "closed", label: "Closed" }];
   const PR_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "merged", label: "Merged" }, { key: "closed", label: "Closed" }];
   // filterState is the per-tab state filter selection, kept out of the route.
@@ -3984,21 +4008,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     for (const r of rows) listNode.append(r);
     box.append(listNode);
     if (all.length <= HOME_FILE_LIMIT) return box;
+    const cut = homeFilesTruncation(all.length, HOME_FILE_LIMIT);
     const fade = el("div", { class: "tree-fade" }, []);
+    const notice = el("div", { class: "notice" }, [cut.notice]);
     const glyph = el("span", { class: "show-more-icon" }, []);
     const label = el("span", { class: "show-more-label" }, []);
     const toggle = el("button", { class: "show-more", type: "button" }, [glyph, label]);
+    box.append(notice, toggle);
     let expanded = false;
     const apply = () => {
       rows.forEach((r, i) => { r.style.display = expanded || i < HOME_FILE_LIMIT ? "" : "none"; });
       glyph.replaceChildren(chevronEl(expanded ? "up" : "down") || document.createTextNode(expanded ? "⌃" : "⌄"));
-      label.textContent = expanded ? "Show less" : "Show all " + all.length;
+      label.textContent = expanded ? "Show less" : cut.label;
+      notice.style.display = expanded ? "none" : "";
       if (expanded) fade.remove();
       else listNode.append(fade);
     };
     toggle.addEventListener("click", () => { expanded = !expanded; apply(); });
     apply();
-    box.append(toggle);
     return box;
   }
 

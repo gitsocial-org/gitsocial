@@ -31,7 +31,7 @@ commit("d1", null, 1750000000, "Cache the walk\n\nThe first version of the body.
 commit("d2", "d1", 1750000100, "v1.0", { ext: "pm", type: "milestone", state: "open", due: "2026-09-01" });
 commit("d3", "d2", 1750000200, "Cache the walk\n\nThe second version of the body.", { ext: "pm", state: "closed", edits: ref("d1", "pm") });
 commit("d4", "d3", 1750000300, "A child task", { ext: "pm", type: "issue", state: "closed", parent: ref("d1", "pm"), milestone: ref("d2", "pm") });
-commit("e1", null, 1750000400, "Release notes", { ext: "release", type: "release", tag: "v1.2", version: "1.2.0", artifacts: "gitsocial-linux.tar.gz,gitsocial-mac.tar.gz", "artifact-url": "https://example.com/dl", checksums: "SHA256SUMS", sbom: "sbom.json", "signed-by": "ada@example.com" });
+commit("e1", null, 1750000400, "Release notes", { ext: "release", type: "release", tag: "v1.2", version: "1.2.0", artifacts: "gitsocial-linux.tar.gz,gitsocial-mac.tar.gz", "artifact-url": "https://example.com/dl", checksums: "SHA256SUMS", sbom: "sbom.json", "signed-by": "ada@example.com", "origin-platform": "github", "origin-url": "https://example.com/releases/9", "origin-author-name": "Ada Lovelace", "origin-time": "2026-01-02T03:04:05Z" });
 commit("f1", null, 1750000500, "A comment on the issue", { ext: "social", type: "comment", original: ref("d1", "pm") });
 ctx.manifest = Promise.resolve({
   "refs/heads/gitmsg/pm": sha("d4"),
@@ -127,6 +127,16 @@ async function main() {
   ok(text(assets).indexOf("signed-by ada@example.com") !== -1, "the signing identity is shown", text(assets));
   const bare = GS.releaseCard({ commit: { hash: sha("e2"), short: short("e2"), authorTime: 1, refs: [] }, header: { type: "release", tag: "v9" }, content: "v9", effectiveTime: 1, author: "Ada" });
   ok(!!bare, "a release with no assets still renders its card");
+
+  console.log("=== the trailer list ===");
+  const keys = (node) => findTag(node, "dt").map(textOf);
+  const fresh = (await GS.itemDetail(ctx, sha("d1"), "gitmsg/pm"))[0];
+  await tick(60);
+  eq(keys(fresh).filter((k) => ["ext", "type", "state"].indexOf(k) !== -1), [], "the route's ext and type and the head's state stay out");
+  ok(keys(fresh).indexOf("labels") !== -1, "a field no other component carries stays", keys(fresh).join(","));
+  eq(keys(release), ["origin"], "a release lists one row: its head, chips and assets section carry the rest, the origin fields fold into one");
+  eq(findTag(findTag(release, "dd")[0], "a").map((a) => a.getAttribute("href")), ["https://example.com/releases/9"],
+    "the origin row links to the imported item");
 
   console.log("=== the configuration page ===");
   document.body._cls = new Set();

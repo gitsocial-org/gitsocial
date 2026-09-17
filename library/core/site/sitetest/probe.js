@@ -6,6 +6,7 @@
     ".meta", ".edited", ".chip", ".chip.state", ".subject", ".thread", ".thread-head",
     ".card.feedback", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
     ".detail > .card-head", ".detail > .card-head > h1.subject",
+    ".detail > .detail-topbar", ".detail > .detail-topbar > .page-actions",
   ];
   var PROPS = ["padding", "margin", "fontSize", "color", "backgroundColor", "borderLeftColor", "borderRadius"];
 

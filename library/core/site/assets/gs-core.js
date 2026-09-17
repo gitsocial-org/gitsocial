@@ -2374,6 +2374,12 @@
     return { artifactUrl: base, artifacts, checksums, sbom, signedBy: header["signed-by"] || "" };
   }
 
+  // homeFilesTruncation names the root entries the front page hides: the notice sentence and the control label. Mirrors siteFrontFilesTruncation in site_pages_html.go.
+  function homeFilesTruncation(total, limit) {
+    if (total <= limit) return { notice: "", label: "" };
+    return { notice: (total - limit) + " more not shown.", label: "Show all " + total };
+  }
+
   // releaseAssetLabel words a release row's asset count, "" when it names none. Mirrors siteReleaseAssetLabel in site_pages_html.go.
   function releaseAssetLabel(artifacts) {
     const n = (artifacts || "").split(",").map((s) => s.trim()).filter(Boolean).length;
@@ -4103,7 +4109,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, homeFilesTruncation, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,

@@ -75,6 +75,26 @@ function checkDetailHead(theme, head, subject) {
   ok("detail head " + theme + ": the subject takes the page's h1 size", sizes.size === 1 && sizes.has(DETAIL_HEAD_SIZE), [...sizes].join("|"));
 }
 
+// TOPBAR_SHAPE is the detail top bar: the back link, then the one controls row.
+const TOPBAR_SHAPE = "a.back > div.page-actions";
+
+// ACTIONS_SHAPE is that row: the raw toggle, then the copy-link control.
+const ACTIONS_SHAPE = "div.body-modes.view-modes > button.share-link";
+
+// checkDetailActions asserts the raw toggle and the copy-link control share one
+// row. topbar is the detail route's ".detail > .detail-topbar" record, actions
+// its ".page-actions" child's.
+function checkDetailActions(theme, topbar, actions) {
+  if (!topbar || !actions) {
+    ok("detail actions " + theme + ": both records captured", false, "topbar=" + !!topbar + " actions=" + !!actions);
+    return;
+  }
+  ok("detail actions " + theme + ": the back link, then one controls row", topbar.every((r) => r.shape === TOPBAR_SHAPE),
+    topbar.map((r) => r.shape).join(" | "));
+  ok("detail actions " + theme + ": the raw toggle and the copy link share it", actions.every((r) => r.shape === ACTIONS_SHAPE),
+    actions.map((r) => r.shape).join(" | "));
+}
+
 // META_SHAPE is the meta row skeleton the parity fixture names: the author, the
 // time, then the hash link, with the edited marker as the one trailing bit.
 const META_SHAPE = new RegExp("^" + FIX.metaRow.bits.map((c, i) => (i === 2 ? "a." : "span.") + c).join(" > ") + "( > span\\.edited)?$");
@@ -163,6 +183,49 @@ async function checkPhoneWidth(bin, item) {
   }
 }
 
+// NAV_FOOTER_EXPR reports the sidebar tree's own bound and any nav row painted
+// under the pinned brand credit. elementsFromPoint sees what is on screen, so a
+// row the tree's scroll box clips is not a hit.
+const NAV_FOOTER_EXPR = `(function () {
+  var foot = document.querySelector(".nav-footer"), slot = document.getElementById("nav-tree-slot");
+  if (!foot || !slot) return { found: false };
+  var cs = getComputedStyle(slot), b = foot.getBoundingClientRect(), hits = {};
+  for (var y = Math.ceil(b.top) + 1; y < b.bottom - 1; y += 4) {
+    for (var x = Math.ceil(b.left) + 1; x < b.right - 1; x += 8) {
+      var stack = document.elementsFromPoint(x, y);
+      for (var i = 0; i < stack.length; i++) {
+        var el = stack[i];
+        if (el.closest(".nav-footer")) continue;
+        if (el.matches("#nav a, #nav .nav-section, .tree-row")) hits[(el.textContent || "").trim().slice(0, 40)] = 1;
+      }
+    }
+  }
+  return { found: true, maxHeight: cs.maxHeight, overflowY: cs.overflowY, rows: slot.querySelectorAll(".tree-row").length,
+    clientHeight: slot.clientHeight, hits: Object.keys(hits) };
+})()`;
+
+// checkNavFooter asserts the sidebar tree is bounded and no nav row runs under
+// the credit pinned at the sidebar's bottom.
+async function checkNavFooter(bin) {
+  const browser = cdp.launch(bin);
+  try {
+    const page = await cdp.open(browser, WIDTH, HEIGHT, "light");
+    await cdp.load(browser, page, BASE + "#/code", BUDGET);
+    const got = await cdp.evaluate(browser, page, NAV_FOOTER_EXPR);
+    await cdp.close(browser, page);
+    if (!got.found) {
+      ok("sidebar tree: the code route fills the slot", false, "no .nav-footer or #nav-tree-slot");
+      return;
+    }
+    const bound = got.maxHeight !== "none" && parseFloat(got.maxHeight) > 0 && got.overflowY === "auto";
+    ok("sidebar tree: it scrolls inside its own box", bound, "max-height=" + got.maxHeight + " overflow-y=" + got.overflowY);
+    ok("sidebar tree: the box holds the cap", got.clientHeight <= parseFloat(got.maxHeight), "height=" + got.clientHeight + " cap=" + got.maxHeight);
+    ok("sidebar tree: no nav row runs under the credit at " + WIDTH + "x" + HEIGHT, got.hits.length === 0, got.hits.join(" | "));
+  } finally {
+    await cdp.quit(browser);
+  }
+}
+
 // capture runs one route in one theme and returns the probe's record.
 function capture(bin, hash, flags) {
   const args = ["--headless", "--disable-gpu", "--hide-scrollbars",
@@ -198,6 +261,7 @@ async function main() {
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
   const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
+  const detailTopbars = {}, detailActions = {};
   let detailShort = "";
   for (const route of ROUTES) {
     let hash = route.hash;
@@ -215,6 +279,8 @@ async function main() {
         feedbackCards[theme] = got[".card.feedback"];
         detailHeads[theme] = got[".detail > .card-head"];
         detailSubjects[theme] = got[".detail > .card-head > h1.subject"];
+        detailTopbars[theme] = got[".detail > .detail-topbar"];
+        detailActions[theme] = got[".detail > .detail-topbar > .page-actions"];
       }
       const file = path.join(DIR, route.name + "." + theme + ".json");
       if (update) { fs.writeFileSync(file, JSON.stringify(got, null, 2) + "\n"); continue; }
@@ -238,10 +304,12 @@ async function main() {
     checkEditedBit(theme, listEdited[theme], listChips[theme]);
     checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
+    checkDetailActions(theme, detailTopbars[theme], detailActions[theme]);
   }
   if (!update) {
     ok("phone width: the item page resolved", detailShort !== "", "no pull request row to open");
     if (detailShort) await checkPhoneWidth(bin, "i/" + detailShort + ".html");
+    await checkNavFooter(bin);
   }
   if (update) console.log("baselines written to " + DIR);
   console.log("\n" + pass + " passed, " + fail + " failed");
