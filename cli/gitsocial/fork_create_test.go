@@ -38,41 +38,30 @@ func gitConfigValue(t *testing.T, repoDir, key string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// runForkCLI runs the built binary in dir with an isolated HOME, a stub
-// directory prepended to PATH, and extra environment entries.
+// runForkCLI runs the CLI in dir with a HOME of its own, a stub directory
+// prepended to PATH, and extra environment entries.
 func runForkCLI(t *testing.T, dir string, stubDir string, extraEnv []string, args ...string) (string, string, int) {
 	t.Helper()
-	cmd := exec.Command(cliBinary(t), append([]string{"-C", dir, "--cache-dir", t.TempDir()}, args...)...)
 	home := t.TempDir()
-	path := os.Getenv("PATH")
-	if stubDir != "" {
-		path = stubDir + string(os.PathListSeparator) + path
-	}
-	cmd.Env = append(os.Environ(),
-		"HOME="+home,
-		"PATH="+path,
-		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
-		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
-		"GIT_TERMINAL_PROMPT=0",
+	env := []string{
+		"HOME=" + home,
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
+		"XDG_CACHE_HOME=" + filepath.Join(home, ".cache"),
 		"GIT_AUTHOR_NAME=Fork Test",
 		"GIT_AUTHOR_EMAIL=fork@test.com",
 		"GIT_COMMITTER_NAME=Fork Test",
 		"GIT_COMMITTER_EMAIL=fork@test.com",
 		"GITLAB_TOKEN=",
 		"GITLAB_PRIVATE_TOKEN=",
-	)
-	cmd.Env = append(cmd.Env, extraEnv...)
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	code := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		code = exitErr.ExitCode()
-	} else if err != nil {
-		t.Fatalf("run %v: %v", args, err)
 	}
-	return stdout.String(), stderr.String(), code
+	if stubDir != "" {
+		env = append(env, "PATH="+stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+	for _, entry := range append(env, extraEnv...) {
+		key, value, _ := strings.Cut(entry, "=")
+		t.Setenv(key, value)
+	}
+	return runInProcess(t, dir, t.TempDir(), args...)
 }
 
 // writeGHStub writes a gh shim whose behavior is driven by the environment:
@@ -190,11 +179,14 @@ func TestForkCreate_githubUsesForkAPI(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "gh.log")
 	// Rewrite the GitHub URL to the local source so the flow is exercised
 	// end to end without a network: the fork API is stubbed, the clone is not.
-	gitConfig := filepath.Join(t.TempDir(), "gitconfig")
-	if err := os.WriteFile(gitConfig, []byte("[url \"file://"+upstream+"\"]\n\tinsteadOf = https://github.com/octo/repo\n"), 0o644); err != nil {
-		t.Fatalf("write gitconfig: %v", err)
+	// The rewrite rides GIT_CONFIG_COUNT, the one config channel a test run
+	// leaves open: core/git points GIT_CONFIG_GLOBAL at /dev/null under `go test`.
+	env := []string{
+		"GH_STUB_LOG=" + logFile,
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=url.file://" + upstream + ".insteadOf",
+		"GIT_CONFIG_VALUE_0=https://github.com/octo/repo",
 	}
-	env := []string{"GH_STUB_LOG=" + logFile, "GIT_CONFIG_GLOBAL=" + gitConfig, "GIT_CONFIG_NOSYSTEM=1"}
 	workdir := t.TempDir()
 
 	stdout, stderr, code := runForkCLI(t, workdir, stubDir, env, "fork", "create", "https://github.com/octo/repo", "--to", "https://github.com/tester/repo", "my-fork")

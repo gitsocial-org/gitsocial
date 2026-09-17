@@ -1,4 +1,4 @@
-// destructive_test.go - The destructive CLI verbs through the binary: create, refuse a wrong target, act, read the state back
+// destructive_test.go - The destructive CLI verbs: create, refuse a wrong target, act, read the state back
 package main
 
 import (
@@ -36,10 +36,10 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// mustRunCLI runs the CLI, fails on a non-zero exit, and returns stdout.
+// mustRunCLI runs the CLI in the test process, fails on a non-zero exit, and returns stdout.
 func mustRunCLI(t *testing.T, dir, cacheDir string, args ...string) string {
 	t.Helper()
-	stdout, stderr, code := runCLI(t, dir, cacheDir, args...)
+	stdout, stderr, code := runInProcess(t, dir, cacheDir, args...)
 	if code != ExitSuccess {
 		t.Fatalf("%v: exit %d\n%s%s", args, code, stdout, stderr)
 	}
@@ -63,7 +63,7 @@ func createdID(t *testing.T, dir, cacheDir string, args ...string) string {
 // refuses asserts the command exits with ExitError and names the missing target.
 func refuses(t *testing.T, dir, cacheDir string, args ...string) {
 	t.Helper()
-	stdout, stderr, code := runCLI(t, dir, cacheDir, args...)
+	stdout, stderr, code := runInProcess(t, dir, cacheDir, args...)
 	if code != ExitError {
 		t.Errorf("%v on a wrong target: exit %d, want %d\n%s%s", args, code, ExitError, stdout, stderr)
 	}
@@ -138,7 +138,7 @@ func TestCLI_destructiveVerbs_refuseWrongTargetThenAct(t *testing.T) {
 	assertDestructiveState(t, dir, cacheDir, postID, issueID, memoID, mergePR, closePR)
 }
 
-// assertDestructiveState reads every acted-on item back through the binary's --json.
+// assertDestructiveState reads every acted-on item back through --json.
 func assertDestructiveState(t *testing.T, dir, cacheDir, postID, issueID, memoID, mergePR, closePR string) {
 	t.Helper()
 

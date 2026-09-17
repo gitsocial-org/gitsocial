@@ -106,7 +106,7 @@ func TestCommandTreeJSONOutput(t *testing.T) {
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
 	for _, ext := range []string{"social", "pm", "review", "release"} {
-		if _, stderr, code := runCLI(t, dir, cacheDir, ext, "init"); code != 0 {
+		if _, stderr, code := runInProcess(t, dir, cacheDir, ext, "init"); code != 0 {
 			t.Fatalf("%s init: exit %d\n%s", ext, code, stderr)
 		}
 	}
@@ -118,7 +118,7 @@ func TestCommandTreeJSONOutput(t *testing.T) {
 			continue
 		}
 		t.Run(path, func(t *testing.T) {
-			stdout, stderr, code := runCLI(t, dir, cacheDir, append([]string{"--json"}, strings.Fields(path)...)...)
+			stdout, stderr, code := runInProcess(t, dir, cacheDir, append([]string{"--json"}, strings.Fields(path)...)...)
 			if code < ExitSuccess || code > ExitNotRepo {
 				t.Fatalf("--json exit %d, want a documented exit code\n%s%s", code, stdout, stderr)
 			}

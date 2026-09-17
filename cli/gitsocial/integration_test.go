@@ -1,26 +1,19 @@
-// integration_test.go - Binary-level CLI tests: JSON output shape, exit codes, flag validation
+// integration_test.go - CLI tests: JSON output shape, exit codes, flag validation
 package main
 
 import (
 	"encoding/json"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// runCLI executes the binary in dir with an isolated HOME and per-call cache
-// dir, returning stdout, stderr, and the exit code.
+// runCLI executes the binary in dir with a per-call cache dir, returning
+// stdout, stderr, and the exit code. It inherits the environment TestMain
+// isolated.
 func runCLI(t *testing.T, dir, cacheDir string, args ...string) (string, string, int) {
 	t.Helper()
 	cmd := exec.Command(cliBinary(t), append([]string{"-C", dir, "--cache-dir", cacheDir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"HOME="+harnessHome,
-		"XDG_CONFIG_HOME="+filepath.Join(harnessHome, ".config"),
-		"XDG_CACHE_HOME="+filepath.Join(harnessHome, ".cache"),
-		"GIT_TERMINAL_PROMPT=0",
-	)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -55,14 +48,14 @@ func initCLITestRepo(t *testing.T) string {
 
 func TestCLI_notARepo_exitCode(t *testing.T) {
 	dir := t.TempDir()
-	_, _, code := runCLI(t, dir, t.TempDir(), "pm", "init")
+	_, _, code := runInProcess(t, dir, t.TempDir(), "pm", "init")
 	if code != ExitNotRepo {
 		t.Errorf("pm init outside a repo: exit %d, want %d", code, ExitNotRepo)
 	}
 }
 
 func TestCLI_unknownCommand_exitCode(t *testing.T) {
-	_, stderr, code := runCLI(t, t.TempDir(), t.TempDir(), "no-such-command")
+	_, stderr, code := runInProcess(t, t.TempDir(), t.TempDir(), "no-such-command")
 	if code == 0 {
 		t.Error("unknown command should exit non-zero")
 	}
@@ -75,7 +68,7 @@ func TestCLI_pmIssueRoundTrip_JSON(t *testing.T) {
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
 
-	stdout, stderr, code := runCLI(t, dir, cacheDir, "--json", "pm", "init")
+	stdout, stderr, code := runInProcess(t, dir, cacheDir, "--json", "pm", "init")
 	if code != 0 {
 		t.Fatalf("pm init: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -87,7 +80,7 @@ func TestCLI_pmIssueRoundTrip_JSON(t *testing.T) {
 		t.Errorf("pm init JSON = %v", initOut)
 	}
 
-	stdout, stderr, code = runCLI(t, dir, cacheDir, "--json", "pm", "issue", "create", "Test issue subject", "--labels", "kind/bug")
+	stdout, stderr, code = runInProcess(t, dir, cacheDir, "--json", "pm", "issue", "create", "Test issue subject", "--labels", "kind/bug")
 	if code != 0 {
 		t.Fatalf("issue create: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -103,7 +96,7 @@ func TestCLI_pmIssueRoundTrip_JSON(t *testing.T) {
 		t.Errorf("issue create JSON = %+v", created)
 	}
 
-	stdout, stderr, code = runCLI(t, dir, cacheDir, "--json", "pm", "issue", "list")
+	stdout, stderr, code = runInProcess(t, dir, cacheDir, "--json", "pm", "issue", "list")
 	if code != 0 {
 		t.Fatalf("issue list: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -126,7 +119,7 @@ func TestCLI_pmIssueRoundTrip_JSON(t *testing.T) {
 		t.Errorf("listed labels = %+v, want kind/bug", issues[0].Labels)
 	}
 
-	stdout, stderr, code = runCLI(t, dir, cacheDir, "--json", "pm", "issue", "show", created.ID)
+	stdout, stderr, code = runInProcess(t, dir, cacheDir, "--json", "pm", "issue", "show", created.ID)
 	if code != 0 {
 		t.Fatalf("issue show: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -142,8 +135,8 @@ func TestCLI_pmIssueRoundTrip_JSON(t *testing.T) {
 func TestCLI_pmIssueShow_notFound(t *testing.T) {
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
-	runCLI(t, dir, cacheDir, "pm", "init")
-	_, stderr, code := runCLI(t, dir, cacheDir, "pm", "issue", "show", "#commit:000000000000")
+	runInProcess(t, dir, cacheDir, "pm", "init")
+	_, stderr, code := runInProcess(t, dir, cacheDir, "pm", "issue", "show", "#commit:000000000000")
 	if code != ExitError {
 		t.Errorf("issue show missing: exit %d, want %d", code, ExitError)
 	}
@@ -156,10 +149,10 @@ func TestCLI_socialPostRoundTrip_JSON(t *testing.T) {
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
 
-	if _, stderr, code := runCLI(t, dir, cacheDir, "social", "init"); code != 0 {
+	if _, stderr, code := runInProcess(t, dir, cacheDir, "social", "init"); code != 0 {
 		t.Fatalf("social init: exit %d\n%s", code, stderr)
 	}
-	stdout, stderr, code := runCLI(t, dir, cacheDir, "--json", "social", "post", "Hello from the integration test")
+	stdout, stderr, code := runInProcess(t, dir, cacheDir, "--json", "social", "post", "Hello from the integration test")
 	if code != 0 {
 		t.Fatalf("social post: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -181,7 +174,7 @@ func TestCLI_importInvalidFlags(t *testing.T) {
 		{[]string{"import", "--host", "guthib", "https://github.com/test/x"}, "--host"},
 	}
 	for _, c := range cases {
-		_, stderr, code := runCLI(t, dir, cacheDir, c.args...)
+		_, stderr, code := runInProcess(t, dir, cacheDir, c.args...)
 		if code == 0 {
 			t.Errorf("%v: exit 0, want non-zero", c.args)
 		}
@@ -193,7 +186,7 @@ func TestCLI_importInvalidFlags(t *testing.T) {
 
 func TestCLI_statusJSON(t *testing.T) {
 	dir := initCLITestRepo(t)
-	stdout, stderr, code := runCLI(t, dir, t.TempDir(), "--json", "status")
+	stdout, stderr, code := runInProcess(t, dir, t.TempDir(), "--json", "status")
 	if code != 0 {
 		t.Fatalf("status: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -211,7 +204,7 @@ func TestCLI_remoteDefault_setAndShow(t *testing.T) {
 	cacheDir := t.TempDir()
 
 	// No config yet: reports the heuristic resolution (origin here).
-	stdout, stderr, code := runCLI(t, dir, cacheDir, "remote", "default")
+	stdout, stderr, code := runInProcess(t, dir, cacheDir, "remote", "default")
 	if code != 0 {
 		t.Fatalf("remote default (show): exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -224,13 +217,13 @@ func TestCLI_remoteDefault_setAndShow(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git remote add backup: %v\n%s", err, out)
 	}
-	_, stderr, code = runCLI(t, dir, cacheDir, "remote", "default", "backup")
+	_, stderr, code = runInProcess(t, dir, cacheDir, "remote", "default", "backup")
 	if code != 0 {
 		t.Fatalf("remote default backup: exit %d\n%s", code, stderr)
 	}
 
 	// Now it reports the configured name (not the heuristic).
-	stdout, _, code = runCLI(t, dir, cacheDir, "remote", "default")
+	stdout, _, code = runInProcess(t, dir, cacheDir, "remote", "default")
 	if code != 0 {
 		t.Fatalf("remote default (show configured): exit %d", code)
 	}
@@ -241,7 +234,7 @@ func TestCLI_remoteDefault_setAndShow(t *testing.T) {
 
 func TestCLI_remoteDefault_missingRemoteErrors(t *testing.T) {
 	dir := initCLITestRepo(t)
-	_, stderr, code := runCLI(t, dir, t.TempDir(), "remote", "default", "ghost")
+	_, stderr, code := runInProcess(t, dir, t.TempDir(), "remote", "default", "ghost")
 	if code == 0 {
 		t.Error("remote default with a nonexistent remote should exit non-zero")
 	}
