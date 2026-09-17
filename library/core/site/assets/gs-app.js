@@ -24,19 +24,11 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // stall, never a slow-but-progressing load).
   const WATCHDOG_MS = 30000;
 
-  // firstViewSignalled guards the page-entry boot handshake. gs-upgrade.js puts
-  // the app's chrome on screen as soon as it can be styled and holds the content
-  // slot on a loading treatment, then installs window.__gsOnFirstView; calling it
-  // drops that treatment, so the finished view appears in a frame the visitor is
-  // already looking at. It runs exactly once, after the first route has
-  // settled, INCLUDING any deferred section a view chooses to publish as
-  // ctx.viewSettled. No view publishes one today: home's recent activity did
-  // until the boot stopped holding the static page, at which point waiting for
-  // a below-the-fold section bought nothing visible and cost most of the boot.
-  // The hook stays for a view whose deferred content is ABOVE the fold, where
-  // revealing without it would show a half-built page. Called on every route exit,
-  // painted or errored: a failed route must reveal its own error surface, never
-  // strand the visitor on a page whose upgrade silently stopped.
+  // firstViewSignalled guards the page-entry boot handshake: gs-upgrade.js holds
+  // the content slot on a loading treatment and installs window.__gsOnFirstView,
+  // called once after the first route settles, including any ctx.viewSettled an
+  // above-the-fold section publishes. Call it on every route exit, painted or
+  // errored, so a failed route reveals its own error surface.
   let firstViewSignalled = false;
 
   // signalFirstView performs that handshake; a no-op in the plain shell, which
@@ -116,12 +108,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     highlightNav(activeTab);
     revokeObjectUrls();
     setView([el("div", { class: "loading" }, ["Loading…"])]);
-    // Boot watchdog: a route whose async work never settles (an unsettled promise
-    // or a wedged walk) would otherwise leave the page on "Loading…" forever with
-    // NO console error. This bounds that failure: if the view is still the loading
-    // placeholder after WATCHDOG_MS, surface a visible, actionable error and log
-    // it, so a hang is never silent. `settled` is flipped by every real setView
-    // below (routeSettled), so a slow-but-valid load that DID paint never trips it.
+    // Boot watchdog: a route whose async work never settles would otherwise sit on
+    // "Loading…" with no console error. If the view is still the loading placeholder
+    // after WATCHDOG_MS, surface a visible error and log it. `settled` is flipped by
+    // every real setView below (routeSettled), so a slow load that painted is spared.
     let settled = false;
     const watchdog = (typeof setTimeout === "function") ? setTimeout(() => {
       if (settled) return;
@@ -366,14 +356,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(cfg.favicon); }
   }
 
-  // startFreshnessWatch keeps a long-lived tab honest: loaded state is never
-  // mutated in place, so a maintainer's push would otherwise stay invisible
-  // until a manual reload. On return to the tab (focus / visibility), refs.json
-  // is re-read (a no-cache key: a cheap 304 when unchanged) and any change —
-  // every push moves a ref — surfaces a reload pill instead of silent
-  // staleness. The baseline is the body the route already loaded (ctx.manifestText),
-  // so establishing it costs nothing; only a bucket the route never read one from
-  // pays a fetch, shortly after boot and off the critical path.
+  // startFreshnessWatch surfaces a maintainer's push in a long-lived tab: on return
+  // to the tab (focus / visibility) refs.json is re-read (a no-cache key, a cheap
+  // 304 when unchanged) and any change raises a reload pill. The baseline is the
+  // body the route already loaded (ctx.manifestText).
   function startFreshnessWatch(ctx) {
     let baseline = null, lastCheck = 0, pill = null;
     const showPill = () => {

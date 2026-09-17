@@ -91,7 +91,7 @@ func NewLabelsField(value *[]string, placeholder string) *TagField {
 }
 
 // BodyHeight returns the WithHeight value for a form's multi-line body field
-// such that the body fills exactly the space left over by every other field.
+// such that the body fills the space left over by every other field.
 // `totalHeight` is the form's outer height; `otherRowsTotal` is the summed
 // rendered height of every non-body field in the form (each inline single-row
 // field counts as 1). The "+1" matches the same offset callers apply when

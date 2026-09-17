@@ -17,7 +17,7 @@ import (
 // (refs/gitmsg/release/config vs branch gitmsg/release), whose mirror the old
 // refs/remotes/<remote>/gitmsg/* namespace could never hold (directory/file
 // ref conflict with the branch tracking ref), leaving it counted as unpushed
-// forever.
+// on every later preview.
 func TestPush_explicitRemoteWins(t *testing.T) {
 	originRemote := t.TempDir()
 	backupRemote := t.TempDir()

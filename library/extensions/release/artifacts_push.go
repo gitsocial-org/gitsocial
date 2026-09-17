@@ -38,7 +38,7 @@ type ArtifactPushResult struct {
 // at artifacts/<version>/<basename> (remote "" resolves like `gitsocial push`),
 // advances artifacts/latest.txt when the version is a newer non-prerelease,
 // and sets artifact-url on the version's release record when the record exists
-// without one. Re-pushing a version silently overwrites its objects.
+// without one. Re-pushing a version overwrites its objects.
 func PushArtifacts(workdir, version string, filePaths []string, remote string) Result[ArtifactPushResult] {
 	if len(filePaths) == 0 {
 		return result.Err[ArtifactPushResult]("INVALID_ARGS", "no artifact files given")

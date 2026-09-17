@@ -7,9 +7,9 @@
 //   - an extension branch absent from .gitsocial/refs.json. The manifest is
 //     the fast path and NOT proof of absence — it is written best-effort by
 //     whichever pusher last succeeded, so treating its silence as authoritative
-//     would make a whole extension branch read as empty forever, with no error
-//     anywhere. So an omitted refname is probed live, and the bound is that the
-//     probe happens ONCE per context rather than once per route,
+//     would leave an extension branch reading as empty, with no error anywhere.
+//     So an omitted refname is probed live, and the bound is that the probe
+//     happens ONCE per context rather than once per route,
 //   - a pack map shard for a sha the caller already knows is a tree or a blob
 //     (the map indexes commits and tags only, and is written sparsely),
 //   - /favicon.ico at the ORIGIN root, which a generated page provokes by
@@ -36,13 +36,13 @@ global.fetch = async (url, opts) => {
 const mark = () => log.length;
 const since = (at) => log.slice(at);
 const hits = (rows, re) => rows.filter((r) => re.test(r.url));
-// probesFor counts the requests that ended at exactly this refname's key.
+// probesFor counts the requests that ended at this refname's key.
 const probesFor = (rows, ref) => hits(rows, new RegExp(ref.replace(/\//g, "\\/") + "$")).length;
 
 // drain waits for the route in flight to stop fetching, rather than sleeping a
 // fixed span. Every count below is read off the log, so a late fetch that lands
-// after a fixed sleep silently lands inside the NEXT measurement instead — on a
-// loaded machine that turns "refs.json read exactly once" into a coin flip.
+// after a fixed sleep lands inside the NEXT measurement instead — on a loaded
+// machine that turns "refs.json read once" into a coin flip.
 async function drain(quietMs, maxMs) {
   const quiet = quietMs || 400, deadline = Date.now() + (maxMs || 15000);
   let seen = -1, still = Date.now();
@@ -74,7 +74,7 @@ async function main() {
   const overProbed = absent.filter((ref) => probesFor(home, ref) > 1);
   ok("a manifest-omitted branch is probed at most once on the route that first asks for it",
     overProbed.length === 0, overProbed.map((ref) => ref + " x" + probesFor(home, ref)).join(", "));
-  ok("home reads the refs manifest exactly once",
+  ok("home reads the refs manifest once",
     hits(home, /refs\.json/).length === 1, hits(home, /refs\.json/).length + " reads");
   // And the probe asks for one bit, so it must not pay for a body. An object
   // store answers a missing key with a full error document (R2 serves ~27 KB),
@@ -131,7 +131,7 @@ async function main() {
   ok("nothing in a content read 404s", content.every((r) => r.status < 400),
     content.filter((r) => r.status >= 400).map((r) => r.status + " " + r.url).join(" | "));
 
-  // The map is genuinely sparse, so a shard the reader skips is often not there
+  // The map is sparse, so a shard the reader skips is often not there
   // to be found — which is what makes such a probe a 404 rather than a small 200.
   let missing = 0;
   for (let i = 0; i < 256; i++) {

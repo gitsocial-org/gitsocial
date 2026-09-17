@@ -69,7 +69,7 @@ func forkHasObject(f *s3Fixture, sha string) bool {
 
 // emptyTreeCommit writes a gitmsg-shaped commit (empty tree, optional parent)
 // and returns its sha, so a data branch's history stays disjoint from the code
-// branches — exactly the shape the never-thinned invariant is about.
+// branches, the shape the never-thinned invariant is about.
 func emptyTreeCommit(t *testing.T, dir string, env []string, parent, msg string) string {
 	t.Helper()
 	args := []string{"commit-tree", emptyTreeSHA, "-m", msg}
@@ -132,8 +132,8 @@ func newThinFork(t *testing.T) *thinFixture {
 }
 
 // TestThinPush_uploadsOnlyTheForksOwnObjects: a thin push of one commit on top
-// of upstream uploads that commit's objects and no more — the whole point of a
-// thin fork bucket.
+// of upstream uploads that commit's objects and no more, the point of a thin
+// fork bucket.
 func TestThinPush_uploadsOnlyTheForksOwnObjects(t *testing.T) {
 	t.Parallel()
 	tf := newThinFork(t)

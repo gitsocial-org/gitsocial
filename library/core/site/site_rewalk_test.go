@@ -42,7 +42,7 @@ func TestRewalk_CompletedIndexIsNotRewalked(t *testing.T) {
 			shas := seedChain(t, client, "", "", n)
 			tip := shas[n-1]
 
-			// Run A: bootstrap the whole branch to a complete manifest.
+			// Run A: bootstrap every commit on the branch to a complete manifest.
 			if walked := countWalkedCommits(t, client, tip); walked != n {
 				t.Fatalf("run A walked %d, want the full %d (initial bootstrap)", walked, n)
 			}
@@ -60,7 +60,7 @@ func TestRewalk_CompletedIndexIsNotRewalked(t *testing.T) {
 }
 
 // TestRewalk_AdvancedTipAppendsBoundedGap: a later run whose tip advanced walks
-// only the bounded gap (the new commits), never the whole branch from scratch.
+// only the bounded gap (the new commits), not the branch from scratch.
 func TestRewalk_AdvancedTipAppendsBoundedGap(t *testing.T) {
 	withTestShardCount(func() {
 		withTestWalkBudget(50000, func() {

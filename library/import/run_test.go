@@ -21,7 +21,7 @@ import (
 
 var runRepoTemplate string
 
-// TestMain builds one repo template and one cache for the whole package.
+// TestMain builds one repo template and one cache for the package.
 func TestMain(m *testing.M) {
 	dir, err := testutil.NewRepoTemplate()
 	if err != nil {

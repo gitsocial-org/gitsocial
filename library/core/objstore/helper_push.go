@@ -22,7 +22,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 )
 
-// pushCommand is one parsed "push [+]<src>:<dst>" line, with src resolved once for the whole batch.
+// pushCommand is one parsed "push [+]<src>:<dst>" line, with src resolved once for the batch.
 type pushCommand struct {
 	src     string // empty = delete dst
 	dst     string
@@ -203,7 +203,7 @@ func (h *remoteHelper) postPushMaintenance(branchPushed string, updates map[stri
 		h.remoteRefs = refs
 	}
 	refs := h.remoteRefs
-	// One local commit source serves the whole pass; the helper runs as a git child, so the pushed objects are already here.
+	// One local commit source serves the pass; the helper runs as a git child, so the pushed objects are already here.
 	src := NewLocalCommitSource(h.gitDir, "")
 	defer src.Close()
 	// Refresh the dumb-HTTP surface on every ref-moving push, ahead of the hook, so stock git keeps cloning.

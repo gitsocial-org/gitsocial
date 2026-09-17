@@ -53,7 +53,7 @@ func TestPushArtifactObjects(t *testing.T) {
 		t.Fatalf("latest.txt = %q, want %q", body, "1.0.0\n")
 	}
 
-	t.Run("re-push overwrites silently and hands the callback the current latest", func(t *testing.T) {
+	t.Run("re-push overwrites and hands the callback the current latest", func(t *testing.T) {
 		got := ""
 		advanced, err := PushArtifactObjects(remoteURL, env, "1.0.0", map[string][]byte{
 			"app-linux-amd64.tar.gz": []byte("rebuilt bytes"),

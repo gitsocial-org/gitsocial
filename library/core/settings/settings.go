@@ -124,8 +124,8 @@ func DefaultPath() (string, error) {
 
 // overlayPersonalConfig applies values from the personal-config ref onto the
 // in-memory *Settings for every Registry key declared at ScopePersonalConfig.
-// Errors from validation or a missing personal repo are silently ignored —
-// the overlay is best-effort, since a missing repo must not stop the CLI.
+// Errors from validation or a missing personal repo are ignored: the overlay
+// is best-effort, and a missing repo must not stop the CLI.
 func overlayPersonalConfig(s *Settings) {
 	pb := NewPersonalConfigBackend()
 	for _, spec := range Registry {

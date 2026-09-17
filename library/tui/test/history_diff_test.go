@@ -9,9 +9,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// TestHistoryDiffFooter asserts each history-diff context registers exactly the
-// expected footer entries, without duplicates and without conflicting with the
-// global key set.
+// TestHistoryDiffFooter asserts each history-diff context registers the
+// expected footer entries and no others, without duplicates and without
+// conflicting with the global key set.
 func TestHistoryDiffFooter(t *testing.T) {
 	f := getFixture(t)
 	h := New(t, f.Workdir, f.CacheDir)
@@ -36,7 +36,7 @@ func TestHistoryDiffFooter(t *testing.T) {
 			for _, b := range bindings {
 				gotByKey[b.Key] = append(gotByKey[b.Key], b.Label)
 			}
-			// New combined-key entries must each appear exactly once.
+			// New combined-key entries must each appear once.
 			for _, k := range wantKeys {
 				if got := len(gotByKey[k]); got != 1 {
 					t.Errorf("expected 1 binding for %q in %s, got %d (labels=%v)",

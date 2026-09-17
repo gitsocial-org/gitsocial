@@ -1612,7 +1612,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       ]));
     }
 
-    // rerender rebuilds the whole tree from the root entries, honoring the Set.
+    // rerender rebuilds the tree from the root entries, honoring the Set.
     function rerender() { listNode.replaceChildren(); return renderLevel(listNode, rootEntries, rootPath, 0); }
 
     // ---- In-place search (hide non-matches; expand ancestors of matches) ----
@@ -1620,7 +1620,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // fullIndex caches the one-time recursive walk under the root.
     let fullIndex = null;
 
-    // buildIndex walks the whole tree once, collecting { path, name, type } up to TREE_SEARCH_CAP.
+    // buildIndex walks every directory once, collecting { path, name, type } up to TREE_SEARCH_CAP.
     async function buildIndex() {
       if (fullIndex) return fullIndex;
       const all = [];
@@ -3417,7 +3417,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         toggle.disabled = false;
         if (all && all.length > forks.length) forks = all;
         if (!all || all.failed) {
-          // Failed or partial: stay capped and honest, keep the retry.
+          // Failed or partial: stay capped, say so, and keep the retry.
           toggle.textContent = "Load all " + total + " forks";
           note.textContent = all
             ? "Could not load " + all.failed + " of " + total + " forks (the host may be rate limiting). Try again to fetch the rest."
@@ -3856,7 +3856,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const wrap = el("div", { class: "detail graph" }, []);
     wrap.append(el("div", { class: "subject" }, ["Commit graph"]));
     if (!data.commits.length) { wrap.append(el("div", { class: "empty" }, ["No commits in this repository."])); return [wrap]; }
-    // Lanes shift as off-window parents arrive, so a load-more redraws the whole graph.
+    // Lanes shift as off-window parents arrive, so a load-more redraws every row.
     const scroll = el("div", { class: "graph-scroll" }, []);
     let moreWrap = null;
     // render lays out lanes over the loaded commits and refreshes Load more.

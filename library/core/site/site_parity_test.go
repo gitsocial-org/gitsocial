@@ -353,7 +353,7 @@ func TestParityReleaseRow(t *testing.T) {
 	}
 }
 
-// TestParityMarkdownPaths asserts the page layer renders as prose exactly the
+// TestParityMarkdownPaths asserts the page layer renders as prose the same
 // paths the app's own isMarkdownPath accepts (unit_parity.js).
 func TestParityMarkdownPaths(t *testing.T) {
 	f := loadParityFixtures(t)
@@ -532,7 +532,7 @@ func TestParityDetailHeadMarkup(t *testing.T) {
 		t.Errorf("detail head markup missing:\nwant %s\ngot %.900s", want, page)
 	}
 	if strings.Count(string(page), "<h1") != 1 {
-		t.Errorf("an item page carries exactly one h1, got %d", strings.Count(string(page), "<h1"))
+		t.Errorf("an item page carries one h1, got %d", strings.Count(string(page), "<h1"))
 	}
 }
 

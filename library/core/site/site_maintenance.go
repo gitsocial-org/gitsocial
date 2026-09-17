@@ -19,7 +19,7 @@ func PostPushMaintenance(out objstore.PushOutcome) {
 		}
 		return
 	}
-	// One local commit source serves the whole pass; the helper runs as a git child, so the pushed objects are already here.
+	// One local commit source serves the pass; the helper runs as a git child, so the pushed objects are already here.
 	src := objstore.NewLocalCommitSource(out.GitDir, "")
 	defer src.Close()
 	// The pushed site.publish guard is the only enabler, so a plain s3:// remote stays clean.

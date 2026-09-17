@@ -71,7 +71,7 @@ func RegisterSchema(name, schema string) {
 }
 
 // RegisterMigration registers a migration function that runs after all schemas.
-// Errors from migrations are silently ignored (best-effort, e.g. ALTER TABLE ADD COLUMN
+// Errors from migrations are ignored (best-effort, e.g. ALTER TABLE ADD COLUMN
 // when the column already exists on fresh installs).
 func RegisterMigration(fn func(*sql.DB)) {
 	schemaMu.Lock()
@@ -326,7 +326,7 @@ func Open(cacheDir string) error {
 	dbPath := filepath.Join(cacheDir, "cache.db")
 
 	// Refuse to open a cache whose schema is newer than this binary
-	// supports. Older binaries silently misreading newer caches (missing
+	// supports. Older binaries misreading newer caches (missing
 	// columns surfacing as NULLs, missing tables erroring out at query
 	// time) is a worse failure mode than a clear error here.
 	if cacheVer, ok := readUserVersion(dbPath); ok && cacheVer > schemaVersion {

@@ -15,7 +15,7 @@ import (
 
 // pushTimeout bounds git invocations that transfer objects over the network.
 // The default ExecGit timeout (30s) is sized for local plumbing and kills a
-// large transfer mid-flight (an empty-bucket bootstrap pushes the whole
+// large transfer mid-flight (an empty-bucket bootstrap pushes the full
 // history); 15 minutes matches the clone path's allowance.
 const pushTimeout = 15 * time.Minute
 

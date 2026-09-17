@@ -25,7 +25,7 @@ func writeManifest(t *testing.T, client *Client, claims map[string]string) {
 }
 
 // TestRefsVerify_NoPerRefGETOnConsistentManifest: on a bucket whose refs.json
-// matches every plain ref, the read does exactly one GET (refs.json) and zero
+// matches every plain ref, the read does one GET (refs.json) and zero
 // per-ref GETs, yet returns the correct refname→sha map.
 func TestRefsVerify_NoPerRefGETOnConsistentManifest(t *testing.T) {
 	client, bucket := testClient(t)
@@ -45,7 +45,7 @@ func TestRefsVerify_NoPerRefGETOnConsistentManifest(t *testing.T) {
 		}
 	}
 	if n := bucket.GetCount(bucketRefsKey); n != 1 {
-		t.Errorf("refs.json GETs = %d, want exactly 1", n)
+		t.Errorf("refs.json GETs = %d, want 1", n)
 	}
 	for ref := range want {
 		if n := bucket.GetCount(ref); n != 0 {

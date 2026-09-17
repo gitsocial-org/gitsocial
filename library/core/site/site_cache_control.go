@@ -47,12 +47,8 @@ func isSealedSitemapPartKey(key string) bool {
 // mutable index.html type-list heads, the generated front page index.html)
 // stays no-cache: those keys rewrite in place on later pushes.
 //
-// `commits/<n>.html` is deliberately NOT in this class even though it is sealed
-// the same way. A gitmsg data branch is append-only by protocol, so a sealed
-// item list can never stop being true; the default branch can be rebased or
-// force-pushed, and the commits layer's ancestry guard exists precisely to
-// re-derive the pages when it is. A year-long immutable copy in a visitor's
-// browser would outlive that repair, so those pages revalidate.
+// `commits/<n>.html` stays out of this class: a rebase re-derives those pages,
+// and a year-long cached copy would outlive the repair, so they revalidate.
 //
 // Neither is a file page under `f/`, whose key mirrors a repo path and can
 // therefore end in `<type dir>/<n>.html` by coincidence: a document is mutable
@@ -88,7 +84,7 @@ func isSiteFilePageKey(key string) bool {
 
 // isSealedShardKey reports whether a key is a sealed shard of either corpus
 // (`.gitsocial/site/{bodies,items}/<ext>/shard-<hash>.json`), which is
-// content-hashed and written exactly once — the `shard-` basename prefix
+// content-hashed and written once — the `shard-` basename prefix
 // distinguishes it from the sibling no-cache head.json and manifest.json.
 func isSealedShardKey(key string) bool {
 	if !strings.Contains(key, siteBodiesKeyPrefix) && !strings.Contains(key, siteItemsKeyPrefix) {

@@ -1,7 +1,7 @@
 // cache_control.go - HTTP cache policy for uploaded bucket objects.
 //
 // Loose git objects are content-addressed by sha, so a written object can never
-// change: browsers may cache it forever without revalidating. Everything else
+// change: browsers may cache it for a year without revalidating. Everything else
 // (ref keys, HEAD, the ref-mode marker, the site shell, and its index
 // artifacts) changes on push, so it is stored cacheable but with no-cache
 // ("store, but always revalidate"): a conditional GET yields 304 when unchanged

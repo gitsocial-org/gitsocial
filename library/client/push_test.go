@@ -83,8 +83,8 @@ func TestPublishAll_continuesPastFailure(t *testing.T) {
 	}
 }
 
-// TestPublish_nonS3RemoteSkipsSite: a non-s3 remote publishes data but silently
-// skips the site step (nothing to serve a site from).
+// TestPublish_nonS3RemoteSkipsSite: a non-s3 remote publishes data and skips
+// the site step (nothing to serve a site from).
 func TestPublish_nonS3RemoteSkipsSite(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
@@ -134,7 +134,7 @@ func TestPublish_noSiteOptOut(t *testing.T) {
 }
 
 // TestPublish_siteOnlyNonS3Errors: an explicit --site-only against a non-s3
-// remote fails loudly (a plain push would just skip the site), and pushes no
+// remote is an error (a plain push would just skip the site), and pushes no
 // data even where a full publish would have.
 func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
 	remote := t.TempDir()

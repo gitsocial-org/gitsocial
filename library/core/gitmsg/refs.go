@@ -83,11 +83,11 @@ func getLocalGitMsgRefs(workdir string) (map[string]string, error) {
 }
 
 // trackingPrefix returns the local namespace mirroring the remote's
-// refs/gitmsg/* state refs, as last seen by a push or fetch. Deliberately
-// outside refs/remotes/<remote>/: there the gitmsg/<ext> branch tracking refs
+// refs/gitmsg/* state refs, as last seen by a push or fetch. It sits outside
+// refs/remotes/<remote>/: there the gitmsg/<ext> branch tracking refs
 // (e.g. .../gitmsg/release) block child mirrors (.../gitmsg/release/0.1.0/artifacts)
 // with git's directory/file ref conflict, so those mirrors could never be
-// written and their refs read as unpushed forever.
+// written and their refs read as unpushed.
 func trackingPrefix(remote string) string {
 	return "refs/gitsocial/tracking/" + remote + "/gitmsg/"
 }

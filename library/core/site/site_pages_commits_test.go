@@ -2,7 +2,7 @@
 // in-process S3 stub: the sealed/head layout and row shape, sitemap coverage and
 // cache policy, the frontier ancestry guard on BOTH branches (history still an
 // ancestor → seal onward and never rewrite a sealed page; history rewritten →
-// re-derive the whole chain), and the budgeted, resumable bootstrap.
+// re-derive the chain), and the budgeted, resumable bootstrap.
 
 package site
 
@@ -66,7 +66,7 @@ func commitsState(t *testing.T, client *objstore.Client) siteCommitsState {
 }
 
 // TestSiteCommits_SealCount pins the sealing boundary the integration tests
-// straddle rather than land on: a head of exactly one page's worth seals
+// straddle rather than land on: a head of one page's worth seals
 // nothing, which is what keeps the head non-empty and page 1 the oldest hundred.
 func TestSiteCommits_SealCount(t *testing.T) {
 	size := sitePagesListSize
@@ -82,7 +82,7 @@ func TestSiteCommits_SealCount(t *testing.T) {
 
 // TestSiteCommits_SealedLayoutAndRows: 230 default-branch commits become two
 // sealed pages (1 = oldest hundred) plus a 30-row head, each row carrying the
-// citable anchor and the metadata a crawler indexes, with the whole set in the
+// citable anchor and the metadata a crawler indexes, with every page in the
 // sitemap.
 func TestSiteCommits_SealedLayoutAndRows(t *testing.T) {
 	client, _ := testClient(t)
@@ -106,7 +106,7 @@ func TestSiteCommits_SealedLayoutAndRows(t *testing.T) {
 		t.Error("head meta line must carry the total, the branch and the order")
 	}
 	if !strings.Contains(head, "commit 229") || strings.Contains(head, "commit 199") {
-		t.Error("head must hold exactly the unsealed newest rows (200..229)")
+		t.Error("head must hold the unsealed newest rows (200..229)")
 	}
 	// The row shape IS the feature: a stable id per row, the subject linking into
 	// the app's commit view, and author/date/sha as indexable text.
@@ -196,7 +196,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 	}
 	page3 := getKey(t, client, "commits/3.html")
 	if !strings.Contains(page3, "later commit 0") || !strings.Contains(page3, ">commit 229<") {
-		t.Error("page 3 must seal exactly the rows that overflowed the head")
+		t.Error("page 3 must seal the rows that overflowed the head")
 	}
 	if h := getKey(t, client, "commits/index.html"); !strings.Contains(h, "later commit 79") || strings.Contains(h, "later commit 69") {
 		t.Error("the head must keep only the newest ten rows")
@@ -233,7 +233,7 @@ func TestSiteCommits_FrontierGuard(t *testing.T) {
 	}
 }
 
-// TestSiteCommits_BudgetResumesSealing: a budget too small for the whole chain
+// TestSiteCommits_BudgetResumesSealing: a budget too small for the chain
 // seals what it can, leaves a valid (larger) head rather than a half-written
 // chain, reports the layer as pending, and finishes on the next pass.
 func TestSiteCommits_BudgetResumesSealing(t *testing.T) {
@@ -274,7 +274,7 @@ func TestSiteCommits_BudgetResumesSealing(t *testing.T) {
 
 // TestSiteCommits_NoSealingWhileTheCodeIndexBootstraps: while the code corpus is
 // still walking older history, today's oldest row is not the oldest row, so
-// nothing may seal — page 1 must be the oldest hundred forever.
+// nothing may seal — page 1 stays the oldest hundred until the corpus completes.
 func TestSiteCommits_NoSealingWhileTheCodeIndexBootstraps(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())

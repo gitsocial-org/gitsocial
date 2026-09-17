@@ -100,7 +100,7 @@ func AddFork(workdir, forkURL string) error {
 }
 
 // AddForks registers multiple fork URLs and returns the count of new
-// additions. Existing forks are skipped silently (idempotent).
+// additions. Existing forks are skipped (idempotent).
 func AddForks(workdir string, forkURLs []string) (int, error) {
 	added := 0
 	for _, u := range forkURLs {

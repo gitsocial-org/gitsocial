@@ -441,7 +441,7 @@ func repairCodeTail(client *objstore.Client, prefix string, tips []codeTip, defa
 	return finalizeCursor(client, prefix, siteCodeExt, pending)
 }
 
-// deleteCodeArtifacts removes the whole code corpus, for a repo that dropped every code branch.
+// deleteCodeArtifacts removes every code-corpus artifact, for a repo that dropped its last code branch.
 func deleteCodeArtifacts(client *objstore.Client, prefix string) error {
 	manifest, err := readItemsManifest(client, prefix, siteCodeExt)
 	if err != nil {

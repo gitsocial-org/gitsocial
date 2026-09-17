@@ -52,7 +52,7 @@ async function main() {
     ok("loadItemsIndex returns a v4 index with residentShas", idx && idx.version === 4 && idx.residentShas && idx.residentShas.size > 0);
     ok("index reports pending older shards", idx && !idx.allResident && idx.olderShards.length === m.shards.length - 1, "older=" + (idx && idx.olderShards.length));
     const fetched = shardFetches(inst.seen, ext, m);
-    ok("eager load fetches exactly one (newest) sealed shard", fetched === 1, "fetched=" + fetched);
+    ok("eager load fetches one (newest) sealed shard", fetched === 1, "fetched=" + fetched);
     ok("eager load fetches head.json", inst.seen.some((u) => u.endsWith("/items/" + ext + "/head.json")));
     ok("bodiesBytes surfaced on the index", idx && idx.bodiesBytes > 0, "bodiesBytes=" + (idx && idx.bodiesBytes));
   }

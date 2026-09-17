@@ -12,7 +12,7 @@ const mk = (id, parents, t) => ({ hash: sha(id), short: sha(id).slice(0, 12), pa
 
 console.log("=== linear chain, scrambled author dates (rebase shape) ===");
 // Chain f -> e -> d -> c -> b -> a (f newest tip, a root), author times
-// deliberately NON-monotonic along the chain — exactly what a rebase produces.
+// NON-monotonic along the chain, the shape a rebase produces.
 const chain = [
   mk("f", ["e"], 60), mk("e", ["d"], 10), mk("d", ["c"], 50),
   mk("c", ["b"], 20), mk("b", ["a"], 40), mk("a", [], 30),

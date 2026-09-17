@@ -25,7 +25,7 @@ type ExtBackfillSpec struct {
 // skipped so a backfill failure never poisons the fetch result. Closes the
 // gap where a processor wired into the pipeline after a commit was first
 // cached (cdfa2d5 added social.Processors to fork fetch) never sees that
-// commit again — FilterUnfetchedCommits skips it forever otherwise.
+// commit again, which FilterUnfetchedCommits would otherwise skip.
 func BackfillExtensionItems(repoURLs []string, specs []ExtBackfillSpec, processors []CommitProcessor) {
 	if len(repoURLs) == 0 || len(specs) == 0 || len(processors) == 0 {
 		return

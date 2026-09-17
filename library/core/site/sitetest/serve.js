@@ -59,8 +59,8 @@ function createServer(root) {
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); res.end("not found"); return; }
       // The probe is injected before the hash, and its response never
-      // revalidates: a 304 would carry no script and the run would silently
-      // measure an unprobed page.
+      // revalidates: a 304 would carry no script and the run would measure an
+      // unprobed page.
       if (probeSource && /probe=1/.test(req.url) && path.extname(file) === ".html") {
         const probed = data.toString().replace("</head>", "<script>" + probeSource + "</scr" + "ipt></head>");
         res.writeHead(200, { "Content-Type": TYPES[".html"], "Cache-Control": "no-store" });

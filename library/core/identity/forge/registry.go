@@ -14,8 +14,8 @@ var (
 // Register adds a forge adapter to the registry, keyed by lowercase host.
 // Replaces an existing entry for the same host.
 //
-// SECURITY: registered adapters are trusted to honestly attest commit
-// verification. Only first-party adapters should be registered. If user-defined
+// SECURITY: registered adapters are trusted to report commit
+// verification correctly. Only first-party adapters should be registered. If user-defined
 // adapters are ever exposed (e.g. via config), gate registration on an explicit
 // trust list — a malicious adapter can affirm any (key, email) binding for its
 // host and pollute downstream UI.

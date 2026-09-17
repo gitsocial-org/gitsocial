@@ -61,7 +61,7 @@ func InvalidateExtConfig(workdir, ext string) {
 // WriteExtConfig writes an extension's configuration to git ref. Writing
 // content identical to what the ref already holds is a no-op: without that
 // guard every repeated set (e.g. under a cron) would grow the config ref by
-// one commit forever.
+// one commit each time.
 func WriteExtConfig(workdir, ext string, config map[string]interface{}) error {
 	if config["version"] == nil {
 		config["version"] = configVersion

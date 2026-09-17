@@ -31,7 +31,7 @@ func TestBuildPushConfirmPrompt_EmptyPreviewStillOffers(t *testing.T) {
 		t.Errorf("empty preview must still offer a push, got %q", got)
 	}
 	if !strings.Contains(got, "no counted changes; tags checked at push") {
-		t.Errorf("empty prompt missing honest note: %q", got)
+		t.Errorf("empty prompt missing the no-counts note: %q", got)
 	}
 	if !strings.Contains(got, "Push to origin") {
 		t.Errorf("empty prompt should still name remote: %q", got)

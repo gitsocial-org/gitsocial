@@ -960,7 +960,7 @@ func applyStackRelationships(opts Options, plan *ReviewPlan, mapping *MappingFil
 		}
 		childRef := protocol.CreateRef(protocol.RefTypeCommit, childHash, "", branch)
 		parentRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", branch)
-		// Idempotency: skip if child already has exactly this depends-on.
+		// Idempotency: skip if the child already has this depends-on and no other.
 		if existing := review.GetPR(childRef); existing.Success {
 			if len(existing.Data.DependsOn) == 1 && existing.Data.DependsOn[0] == parentRef {
 				continue

@@ -26,7 +26,7 @@ func promoteRank(t Tier) int {
 // PromoteMemo copies a memo to the target tier as a fresh commit. The source
 // stays put — there is no edit chain or back-reference. The same memo can
 // therefore appear at multiple tiers; this is intentional so that `memo list`
-// reflects exactly where each version lives.
+// reflects where each version lives.
 func PromoteMemo(workdir, memoRef string, target Tier) Result[Memo] {
 	if target != TierPersonal && target != TierProject {
 		return result.Err[Memo]("INVALID_ARGS", "promote target must be personal or project")

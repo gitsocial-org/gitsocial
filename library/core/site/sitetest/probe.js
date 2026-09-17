@@ -56,8 +56,8 @@
     return out;
   }
 
-  // One theme per run: only the browser's colour-scheme flag flips the whole
-  // palette. Stamping the light class moves text but leaves panel fills dark.
+  // One theme per run: only the browser's colour-scheme flag flips every
+  // palette token. Stamping the light class moves text but leaves panel fills dark.
   function emit() {
     document.documentElement.setAttribute("data-gs-styles", JSON.stringify(collect()));
   }

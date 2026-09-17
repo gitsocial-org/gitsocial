@@ -1,7 +1,7 @@
 // main.go - locals3, a disk-backed local S3 server for development and the site-test fixture builder
 //
 // It serves the subset of the S3 API the helper needs, plus the pushed site
-// browsably, so one port is the whole local provider. Stdlib only, with no repo
+// browsably, so one port is the local provider. Stdlib only, with no repo
 // deps, so it stays standalone.
 package main
 
@@ -348,7 +348,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				if body, err := os.ReadFile(objectPath(bucket + "/" + k)); err == nil {
 					etag = etagOf(body)
 				}
-				// Escape the key, since "&" is legal in a ref name and would make the whole document unparseable.
+				// Escape the key, since "&" is legal in a ref name and would make the document unparseable.
 				fmt.Fprint(w, "<Contents><Key>")
 				_ = xml.EscapeText(w, []byte(k))
 				fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", etag)

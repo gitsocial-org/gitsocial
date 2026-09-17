@@ -1,5 +1,5 @@
 // refs_manifest_test.go - the ref manifest follows every ref-moving transfer
-// and describes exactly the refs the bucket carries.
+// and describes the refs the bucket carries, and no others.
 
 package objstore
 
@@ -37,7 +37,7 @@ func TestPostPushMaintenance_ManifestOnDeferredTransfer(t *testing.T) {
 		t.Fatal("deferred transfer must still publish the manifest")
 	}
 	if _, ok := got["refs/heads/gone"]; ok || len(got) != len(want) {
-		t.Errorf("manifest = %v, want exactly the bucket's refs %v", got, want)
+		t.Errorf("manifest = %v, want the bucket's refs %v and no others", got, want)
 	}
 	if v, err := client.Get(siteMarkerKey); err != nil || string(v) != "stale-version\n" {
 		t.Error("deferred transfer must leave the site maintenance to the last one")

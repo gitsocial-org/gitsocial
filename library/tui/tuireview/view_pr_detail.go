@@ -105,7 +105,7 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 		branch := gitmsg.GetExtBranch(workdir, "review")
 		// Start GetUnpushedCommits in parallel with GetPR (only needs branch).
 		// Result arrives on a channel so the wait below can time out: the
-		// marker is cosmetic and must not stall the whole detail load behind a
+		// marker is cosmetic and must not stall the detail load behind a
 		// slow git invocation (lock contention, slow FS).
 		unpushedCh := make(chan map[string]struct{}, 1)
 		go func() {

@@ -16,5 +16,5 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # `go test -json` exits non-zero on failure; testfmt re-exits non-zero on failure.
-# pipefail surfaces either, so the overall exit code reflects failure exactly once.
+# pipefail surfaces either, so a failure reaches the caller once.
 go test -json "$@" | go run "$root/scripts/testfmt"

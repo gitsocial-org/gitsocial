@@ -30,8 +30,8 @@ func TestWalk_AbsorbsTransient500MidWalk(t *testing.T) {
 	assertLockstepState(t, client, "social", shas, tip)
 }
 
-// TestWalk_FailsOnPersistentFault: a walk over a commit whose object 500s forever
-// still fails (the retry is bounded, not infinite).
+// TestWalk_FailsOnPersistentFault: a walk over a commit whose object keeps
+// returning 500 still fails; the retry is bounded.
 func TestWalk_FailsOnPersistentFault(t *testing.T) {
 	client, bucket := testClient(t)
 	const n = 6

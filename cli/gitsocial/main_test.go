@@ -149,7 +149,7 @@ func buildCLIBinary() {
 	cliBinaryPath = filepath.Join(binDir, "gitsocial")
 	args := []string{"build"}
 	if coverDir != "" {
-		// A coverage run instruments the whole module, so the child credits the library too.
+		// A coverage run instruments every package, so the child credits the library too.
 		args = append(args, "-cover", "-coverpkg=github.com/gitsocial-org/gitsocial/...")
 	}
 	args = append(args, "-o", cliBinaryPath, ".")

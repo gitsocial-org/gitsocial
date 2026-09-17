@@ -485,7 +485,7 @@ func maintainSiteFilePages(client *objstore.Client, prefix string, site sitePage
 		return nil, budget, nil
 	}
 	state := &siteFilesState{Branch: branch, Files: map[string]siteFileRecord{}}
-	// A branch change moves every page's route and meta line, so it rewrites the whole set.
+	// A branch change moves every page's route and meta line, so it rewrites every page.
 	regen = regen || prior == nil || prior.Branch != branch
 	changed := regen
 	titles := map[string]bool{}

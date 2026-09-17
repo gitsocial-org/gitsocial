@@ -9,7 +9,7 @@
 // reachable only from a shell script, so `go test ./...` stayed green with all
 // of it broken. This wires them into the same command.
 //
-// Behind a build tag rather than on by default because one run builds the whole
+// Behind a build tag rather than on by default because one run builds the full
 // fixture (the CLI binary, ten buckets on a local S3 server) and takes minutes:
 //
 //	go test -tags sitetest -timeout 30m ./library/core/site/

@@ -53,9 +53,9 @@ func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL
 }
 
 // FetchForks fetches every registered fork with the full processor set, then
-// backfills any extension items row missed by dedup. Fetch and backfill are
-// paired in one call so a fork commit can't linger in core_commits without its
-// extension row, which the dedup would then skip forever.
+// backfills any extension items row dedup missed. They are paired in one call:
+// dedup skips a fork commit already in core_commits, so its extension row would
+// never be written.
 func FetchForks(workdir, cacheDir string) fetch.Stats {
 	procs := processors()
 	stats := fetch.FetchForks(workdir, cacheDir, procs)

@@ -120,7 +120,7 @@ func TestMultiCloneCollab(t *testing.T) {
 		t.Errorf("head-deleted notification missing; got %v", notifTypes(notifs))
 	}
 
-	// MergePR should now refuse instead of silently flipping state, since
+	// MergePR should now refuse instead of flipping state, since
 	// alice's local refs/heads/feature is also gone after she didn't keep a
 	// local branch (she only worked on main).
 	if _, err := git.ExecGit(alice, []string{"branch", "-D", "feature"}); err != nil {

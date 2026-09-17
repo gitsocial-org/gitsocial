@@ -278,7 +278,7 @@ func insertCommitsTxn(commits []Commit) error {
 		}
 	}
 
-	// Apply each affected canonical exactly once. If multiple edits in this
+	// Apply each affected canonical once. If multiple edits in this
 	// batch target the same canonical, applyEditToCanonical picks the latest
 	// by timestamp, so per-canonical work doesn't scale with edit count.
 	for k := range canonicals {

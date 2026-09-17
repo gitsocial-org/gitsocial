@@ -20,8 +20,8 @@
 //      before the body paints — and the takeover then arrives in TWO steps: the
 //      app's chrome as soon as pages-full.css can style it, and the first view
 //      into that chrome's content slot once it has settled. So an entry reads
-//      blank-loading → chrome → content, with the content transition still
-//      happening exactly once and the chrome not moving across it. Both steps are
+//      blank-loading → chrome → content, with the content transition happening
+//      in one step and the chrome not moving across it. Both steps are
 //      reversible, and each way the boot can fail (a 404 or a hang on any shell
 //      asset, a throw, a route that never settles) puts the readable, styled
 //      static page back on screen AND takes the chrome back off it.
@@ -90,7 +90,7 @@ async function bootLike(pageBase, metaRoute, deepHash) {
 // (exported from gs-upgrade.js) drive a simulated bucket without a browser. It
 // installs the fake on the globals gs-upgrade reads, records the history stack,
 // and lets a test push a hash (an in-app nav), fire a hashchange, or pop (a
-// back/forward) exactly as the browser would. url tracks the full location; the
+// back/forward) as the browser would. url tracks the full location; the
 // stack + index model back/forward.
 function mkBrowser(startURL) {
   const parse = (u) => {
@@ -149,8 +149,8 @@ function mkBrowser(startURL) {
 
 // ASSET_MS models per-request latency. The boot's steps have to be ordered in
 // TIME, not collapsed into one microtask flush, or "what was on screen while
-// this request was in flight" has no meaning, and that question is the whole
-// subject of the reveal contract.
+// this request was in flight" has no meaning, and that question is what the
+// reveal contract is about.
 const ASSET_MS = 5;
 
 // LOADING is what the served page paints while `gs-boot` is on <html>: the
@@ -165,8 +165,8 @@ const LOADING = "Loading…";
 const CHROME = "[chrome]";
 // APP_VIEW stands in for the first view's rendered content: what gs-app puts in
 // #view before it signals. It has to be distinguishable from the loading state,
-// because "the slot was already filled but still showed loading" is exactly the
-// property the `gs-loading` class exists to provide.
+// because "the slot was already filled but still showed loading" is the property
+// the `gs-loading` class exists to provide.
 const APP_VIEW = "APP VIEW";
 const CHROME_LOADING = CHROME + " " + LOADING;
 const CHROME_VIEW = CHROME + " " + APP_VIEW;
@@ -210,7 +210,7 @@ function mkPage(opts) {
   head._children.push(pageStyle);
   pageStyle._parent = head;
   // documentElement models <html> and its two class flags, which between them are
-  // the whole hide mechanism. The page's inline head script adds "gs-boot" before
+  // the hide mechanism. The page's inline head script adds "gs-boot" before
   // the body is parsed; gs-upgrade swaps it for "gs-loading" when the chrome
   // takes the screen (pages-full.css hangs the content slot's loading treatment
   // off that one), and drops "gs-loading" when the first view lands. A restore
@@ -238,8 +238,8 @@ function mkPage(opts) {
   const viewNode = () => findIn(body, (n) => n.getAttribute("id") === "view");
   // chromeUp: the app's frame is on screen. stageChrome appends the chrome's top
   // level nodes to the body at display:none and the reveal unhides them, so the
-  // shell's own display is the honest read — and it stays honest after a restore,
-  // which puts them back to hidden.
+  // shell's own display is the read to trust, after a restore too, which puts
+  // them back to hidden.
   const chromeUp = () => { const s = shellNode(); return !!s && s.style.display !== "none"; };
   // visible: what a reader would see. Three shapes, in the order the boot can
   // produce them: the served page's own loading line while `gs-boot` is set, the
@@ -333,7 +333,7 @@ function mkPage(opts) {
     appCSS: () => head._children.find((n) => /pages-full\.css$/.test(String(n.href || ""))) || null,
     // styledByPage: the served page's own sheet is GOVERNING. The reveal suspends
     // it by media rather than detaching it, because a boot that fails after the
-    // chrome is up has to hand the page back exactly as served; only the final
+    // chrome is up has to hand the page back as served; only the final
     // reveal, once restoring is off the table, drops it from the head for good.
     styledByPage: () => head._children.indexOf(pageStyle) >= 0 && pageStyle.media !== "not all",
     // coreKept: the inlined shared base is still live — the boot may never
@@ -350,7 +350,7 @@ function mkPage(opts) {
 // runBoot drives the real boot() over a page and reports how it settled. The
 // first-view signal is delivered ONLY when the boot resolved, because gs-app.js
 // is what delivers it: a boot that never loaded the app never gets one, and
-// faking it would hide exactly the failure this suite is here to pin.
+// faking it would hide the one failure this suite is here to pin.
 async function runBoot(page) {
   page.activate();
   UP._resetSync();
@@ -433,12 +433,12 @@ async function main() {
     // with whatever is loaded (plain), and the load it kicks off is registered on
     // highlightsSettled — the same wait the page-entry reveal takes, which is what
     // keeps a first view from appearing as plain code that highlights a beat
-    // later. Awaiting it here is exactly what the reveal does.
+    // later. Awaiting it here is what the reveal does.
     setHash("#file:hello.py@main");
     await GS.route(GS.newContext(base));
     await GS.highlightsSettled();
     await wait(50);
-    ok("a route with code fetches prism.js exactly once", prismFetches === before + 1, "fetches=" + (prismFetches - before));
+    ok("a route with code fetches prism.js once", prismFetches === before + 1, "fetches=" + (prismFetches - before));
     ok("the tokenizer is in the page after that route", prismIn(), "loaded=" + prismIn());
     const tokens = findClass(global.__shim.viewNode, "token");
     ok("the blob is highlighted by the time the reveal wait resolves", tokens.length > 0, "token spans=" + tokens.length);
@@ -598,7 +598,7 @@ async function main() {
     // The loading line is the app's own treatment (muted, centered, generous
     // padding) so the boot and the app that follows read as one design.
     ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*content:\s*"Loading…"[^}]*text-align:\s*center/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
-    // The whole point of the no-JS contract: the page still reads.
+    // The no-JS contract: the page still reads.
     ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /Recent activity/.test(front.text));
     ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<p class="meta">README</p>'));
 
@@ -633,8 +633,8 @@ async function main() {
   // marks <html> with `gs-loading`; that class does nothing on its own. The rules
   // that hold the content slot on a loading line — and hide whatever gs-app has
   // already rendered into it — are in that sheet, a different file, so a rename
-  // or a cleanup there would silently turn the split reveal into a slot that
-  // fills in while the visitor watches. Pin the pair together.
+  // or a cleanup there would turn the split reveal into a slot that fills in
+  // while the visitor watches, with nothing failing. Pin the pair together.
   {
     const css = await get(base + "pages-full.css");
     ok("pages-full.css served", css.status === 200);
@@ -649,9 +649,9 @@ async function main() {
     // The front page stays on screen while the shell downloads and is then
     // swapped for the app's render of the SAME content, so any base metric the
     // two disagree on is a visible jump at that swap. The refactor makes that
-    // impossible by construction: the page's head inlines pages-core.css — the
-    // very file the shell links — so there is no second copy of the tokens to
-    // drift. Assert the construction, not the numbers.
+    // impossible: the page's head inlines pages-core.css — the very file the
+    // shell links — so there is no second copy of the tokens to drift. Assert
+    // the construction, not the numbers.
     const coreCSS = await get(base + "pages-core.css");
     ok("pages-core.css served", coreCSS.status === 200);
     const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -664,7 +664,7 @@ async function main() {
     // url() would resolve against the page's directory, not the site root.
     ok("the core carries no url()", !/url\(/i.test(stripComments(coreCSS.text)));
     // border-box is what makes the shared 1012px mean the same thing on both
-    // surfaces (max-width INCLUDES padding), and it now exists exactly once.
+    // surfaces (max-width INCLUDES padding), and it now exists in one place.
     ok("the core resets the box model globally", /\*\s*\{\s*box-sizing:\s*border-box/.test(headCSS), headCSS.slice(0, 120));
     ok("the full sheet no longer restates the reset or the tokens", !/box-sizing:\s*border-box/.test(stripComments(css.text)) && !/--pl-link:/.test(stripComments(css.text)));
     // The one value stated twice (a media query cannot consume a custom
@@ -786,7 +786,7 @@ async function main() {
     const stateful = rows.filter((r) => r.glyph === "○" || r.glyph === "●" || r.glyph === "⑂");
     ok("state-bearing rows carry a tinted glyph class", stateful.length > 0 && stateful.every((r) => /^tg-(open|closed|merged)$/.test(r.glyphClass)), "classes=" + JSON.stringify(rows.map((r) => r.glyph + ":" + r.glyphClass)));
     // Code commits interleave with the items on both surfaces. They are the rows
-    // that keep the section honest on a repo whose gitmsg corpus is mostly one
+    // that keep the section representative on a repo whose gitmsg corpus is mostly one
     // extension, so the merge (not just the item set) is what must agree.
     const codeRows = rows.filter((r) => r.glyphClass === "tg-commit");
     const itemRows = rows.filter((r) => r.glyphClass !== "tg-commit");
@@ -954,15 +954,15 @@ async function main() {
     // The shell batch is fetched onto the page's own loading line: nothing can be
     // styled until pages-full.css lands, so the chrome cannot precede it and every
     // asset up to and including it settles onto a blank page.
-    ok("matching route: the whole shell batch loads on the page's own loading line", duringLoad(page).length === 6 && ["icons.js", "gs-core.js", "gs-render.js", "pages-full.css"].every((n) => shownAt(page, n)[0] === LOADING),
+    ok("matching route: every shell asset loads on the page's own loading line", duringLoad(page).length === 6 && ["icons.js", "gs-core.js", "gs-render.js", "pages-full.css"].every((n) => shownAt(page, n)[0] === LOADING),
       JSON.stringify(duringLoad(page)));
     // And the chrome is up for BOTH gs-app.js touches — the preload that lands in
-    // the same batch and the script that actually runs it. That gap is the whole
-    // point of the split reveal: it is where the visitor stops looking at a blank
-    // page, and it opens before the app has been asked for, let alone any data.
+    // the same batch and the script that actually runs it. That gap is what the
+    // split reveal is for: it is where the visitor stops looking at a blank page,
+    // and it opens before the app has been asked for, let alone any data.
     ok("matching route: the chrome is up before gs-app.js is ever fetched", shownAt(page, "gs-app.js").length === 2 && shownAt(page, "gs-app.js").every((v) => v === CHROME_LOADING),
       JSON.stringify(shownAt(page, "gs-app.js")));
-    ok("matching route: no state in the whole boot is the static content", !page.states().includes(HOST), JSON.stringify(page.states()));
+    ok("matching route: no state anywhere in the boot is the static content", !page.states().includes(HOST), JSON.stringify(page.states()));
 
     // The uncloaked entry: the front page reached without a deep link. The
     // served document already IS this route's finished content, so the visitor
@@ -976,16 +976,16 @@ async function main() {
       ok("uncloaked: the boot completed", !pr.err, "err=" + (pr.err && pr.err.message));
       ok("uncloaked: no state is ever the loading line", !plain.states().includes(LOADING), JSON.stringify(plain.states()));
       ok("uncloaked: the served content is what the visitor reads from the start", plain.states()[0] === HOST, JSON.stringify(plain.states()));
-      // The whole shell downloads while the finished page is on screen, which is
-      // the entire point: on a slow link the visitor is reading, not waiting.
-      ok("uncloaked: the whole shell batch loads with the page still readable",
+      // Every shell asset downloads while the finished page is on screen: on a
+      // slow link the visitor is reading, not waiting.
+      ok("uncloaked: every shell asset loads with the page still readable",
         ["icons.js", "gs-core.js", "gs-render.js", "pages-full.css", "gs-app.js"].every((n) => shownAt(plain, n).every((v) => v === HOST)),
         JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-full.css", "gs-app.js"].map((n) => n + "=" + JSON.stringify(shownAt(plain, n)))));
-      // Exactly one visual change, and it is the finished app arriving. No state
+      // One visual change, and it is the finished app arriving. No state
       // may show the chrome over a loading slot, and none may show the chrome
       // and the static content at once.
       ok("uncloaked: the chrome never goes up before the app is ready", !plain.states().some((s) => s === CHROME_LOADING || (s.startsWith(CHROME) && s.includes(HOST))), JSON.stringify(plain.states()));
-      ok("uncloaked: the entry is exactly served-page then app", plain.states().length === 2 && plain.states()[1].startsWith(CHROME), JSON.stringify(plain.states()));
+      ok("uncloaked: the entry is served-page then app, nothing between", plain.states().length === 2 && plain.states()[1].startsWith(CHROME), JSON.stringify(plain.states()));
     }
 
     // The shell is ONE round trip, not one per file. Every asset is requested
@@ -995,11 +995,11 @@ async function main() {
     // every page entry, paid by every visitor and scaling with nothing.
     const reqs = page.events.filter((e) => e.ev === "request");
     const firstSettle = page.events.findIndex((e) => e.ev === "settle");
-    ok("the whole shell is requested before the first byte of it arrives", firstSettle === 5 && page.events.slice(0, 5).every((e) => e.ev === "request"),
+    ok("every shell asset is requested before the first byte of it arrives", firstSettle === 5 && page.events.slice(0, 5).every((e) => e.ev === "request"),
       "firstSettle=" + firstSettle + " head=" + JSON.stringify(page.events.slice(0, 6).map((e) => e.ev + ":" + e.name)));
     ok("the batch is icons + the reader + the app stylesheet", JSON.stringify(reqs.slice(0, 4).map((e) => e.name)) === JSON.stringify(["icons.js", "gs-core.js", "gs-render.js", "pages-full.css"]),
       JSON.stringify(reqs.map((e) => e.name + (e.rel ? "(" + e.rel + ")" : ""))));
-    // async=false is the whole trick: parallel download, insertion-order
+    // async=false is the trick: parallel download, insertion-order
     // execution, so gs-core still runs before gs-render with no serialization.
     ok("every injected script is async=false (parallel download, ordered execution)", reqs.filter((e) => /\.js$/.test(e.name) && !e.rel).every((e) => e.async === false),
       JSON.stringify(reqs.map((e) => e.name + ":" + e.async)));
@@ -1014,7 +1014,7 @@ async function main() {
     // mid-assembly and before its highlights, which is the second transition the
     // handshake exists to prevent.
     ok("matching route: a slot already filled by the app still reads as loading", r.beforeReveal === CHROME_LOADING, "visible=" + r.beforeReveal);
-    // Two visual steps, and exactly two: the chrome arrives, then the content
+    // Two visual steps, no more: the chrome arrives, then the content
     // lands in it. The static content is in neither, and the chrome does not
     // change between them.
     ok("matching route: the entry is chrome-then-content, once each", JSON.stringify(page.states()) === JSON.stringify([LOADING, CHROME_LOADING, CHROME_VIEW]), JSON.stringify(page.states()));
@@ -1039,7 +1039,7 @@ async function main() {
 
   console.log("\n--- Matching and mismatched entries are now the same boot ---");
   // The old contract branched here: a page booting its own route held the static
-  // content for the whole load, a deep link dropped it early for a placeholder.
+  // content for the full load, a deep link dropped it early for a placeholder.
   // Both now show the loading state and then the finished app, so an entry's
   // sequence no longer depends on where the visitor came from.
   {
@@ -1051,7 +1051,7 @@ async function main() {
   }
   {
     // A shared link to the page's OWN item resolves to the same route the meta
-    // names, and gets exactly the same sequence.
+    // names, and gets the same sequence.
     const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, hash: "#" + ITEM_ROUTE, dataBase: "../", content: ITEM });
     const r = await runBoot(page);
     ok("a deep link to the page's own route gets the same two steps", r.beforeSignal === CHROME_LOADING && page.states().length === 3 && !page.states().includes(ITEM), JSON.stringify(page.states()));
@@ -1139,8 +1139,8 @@ async function main() {
   }
   // Loading the shell as one batch means a failure can land while its siblings are
   // still in flight. Each one must abort the takeover BEFORE anything is staged —
-  // the chrome reveal is gated on the whole batch, so none of these ever paints a
-  // frame — and hand back the readable, styled static page exactly as served.
+  // the chrome reveal is gated on the full batch, so none of these ever paints a
+  // frame — and hand back the readable, styled static page as served.
   for (const dead of ["gs-core.js", "gs-render.js", "pages-full.css"]) {
     const page = mkPage({ url: base + "index.html", metaRoute: "/", dataBase: "./", content: HOST, serves: { [dead]: false } });
     const r = await runBoot(page);

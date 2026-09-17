@@ -122,7 +122,7 @@ func newImportSubCmd(name, short string, extensions []string, defaultLimit int) 
 }
 
 // validateImportFlags rejects invalid enum flag values up front, before any
-// repo or network work — a typo must not silently fall back to a default.
+// repo or network work: a typo must not fall back to a default.
 func validateImportFlags(f *importFlags) error {
 	oneOf := func(v string, allowed ...string) bool {
 		for _, a := range allowed {
@@ -322,7 +322,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 			fmt.Fprintf(cmd.OutOrStdout(), "Map file: %s\n", mapPath)
 		}
 	}
-	// Partial failure must not read as success: report loudly and exit non-zero.
+	// Partial failure must not read as success: report it and exit non-zero.
 	if len(stats.Errors) > 0 {
 		if !cfg.JSONOutput {
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nImport completed with %d error(s) — the affected items were not imported; fix the cause and re-run (already-imported items are skipped).\n", len(stats.Errors))

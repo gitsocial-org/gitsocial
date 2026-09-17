@@ -39,8 +39,8 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("index.html served", front.status === 200);
   ok("index.html is the GENERATED front page", /id="gs-page"/.test(front.text) && /name="gs-route" content="\/"/.test(front.text));
   ok("front carries the site title", /Thread Demo/.test(front.text));
-  // The front page IS the app's home landing (the upgrade re-renders exactly
-  // this): default-branch strip with the tip commit, then the root file listing.
+  // The front page IS the app's home landing (the upgrade re-renders the same
+  // thing): default-branch strip with the tip commit, then the root file listing.
   ok("front carries the default-branch strip (app-linked)", /class="chip">main</.test(front.text) && /Add python and rust sources/.test(front.text) && /index\.html#\/branches/.test(front.text));
   ok("front lists the root files (app-linked, capped)", /<ul class="files">/.test(front.text) && /index\.html#file:notes\.txt@main/.test(front.text) && /Show all \d/.test(front.text));
   ok("front carries the README text after the file listing", front.text.indexOf("Showcase fixture.") > front.text.indexOf("</ul>"), "idx=" + front.text.indexOf("Showcase fixture."));

@@ -103,6 +103,6 @@ func walkCorpusTail(client *objstore.Client, prefix, newTip string, manifest *si
 	if met[frontier] {
 		return tail, manifest.Shards, nil
 	}
-	// An unmet frontier means the walk already covered the whole branch, so the tail is the reset walk.
+	// An unmet frontier means the walk already covered the branch, so the tail is the reset walk.
 	return tail, nil, nil
 }

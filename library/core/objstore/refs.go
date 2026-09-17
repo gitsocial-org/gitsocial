@@ -24,7 +24,7 @@ const (
 	genWidth = 10 // zero-padded decimal; ~10 updates/s for 30 years before overflow
 )
 
-// bucketRefsKey holds refname to sha for the whole bucket; legacySiteManifestKey is its pre-manifest site copy, read as a fallback and not written.
+// bucketRefsKey holds refname to sha for every ref in the bucket; legacySiteManifestKey is its pre-manifest site copy, read as a fallback and not written.
 const (
 	bucketRefsKey         = ".gitsocial/refs.json"
 	legacySiteManifestKey = ".gitsocial/site/refs.json"

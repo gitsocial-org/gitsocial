@@ -34,7 +34,7 @@ func makeShas(n int) []string {
 // once and drops the objects already on the bucket, keeping only the missing.
 func TestFilterPresent_SkipsPresentAboveThreshold(t *testing.T) {
 	client, bucket := testClient(t)
-	shas := makeShas(listResumeThreshold) // exactly at the threshold
+	shas := makeShas(listResumeThreshold) // at the threshold
 	// Mark the first half as already uploaded (an interrupted push's progress).
 	half := len(shas) / 2
 	putObjectKeys(t, client, shas[:half])
@@ -43,7 +43,7 @@ func TestFilterPresent_SkipsPresentAboveThreshold(t *testing.T) {
 	kept := filterPresentObjects(client, "", shas)
 
 	if bucket.ListCount() != listsBefore+1 {
-		t.Errorf("expected exactly one LIST above the threshold, saw %d", bucket.ListCount()-listsBefore)
+		t.Errorf("expected one LIST above the threshold, saw %d", bucket.ListCount()-listsBefore)
 	}
 	if len(kept) != len(shas)-half {
 		t.Fatalf("kept %d objects, want %d (the not-yet-present half)", len(kept), len(shas)-half)

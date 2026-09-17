@@ -27,7 +27,7 @@ func TestIntraLineDiff_mergeBridgesShortGaps(t *testing.T) {
 	old := "p Palette"
 	nw := "fg string"
 	oldSpans, newSpans := intraLineDiff(old, nw, 3)
-	// expect ONE span covering the whole differing region on each side
+	// expect ONE span covering the differing region on each side
 	if len(oldSpans) != 1 || oldSpans[0].Start != 0 || oldSpans[0].End != len(old) {
 		t.Errorf("old spans = %+v, want one span covering full string", oldSpans)
 	}

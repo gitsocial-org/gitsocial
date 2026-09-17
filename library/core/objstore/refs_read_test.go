@@ -28,7 +28,7 @@ func seedPlainRefs(t *testing.T, client *Client, n int) map[string]string {
 }
 
 // serialReadRefs reads every ref one GET at a time, the pre-pool baseline the
-// pool must match exactly.
+// pool must match.
 func serialReadRefs(t *testing.T, client *Client, prefix string) map[string]string {
 	t.Helper()
 	keys, err := client.List(prefix + "refs/")
@@ -54,7 +54,7 @@ func serialReadRefs(t *testing.T, client *Client, prefix string) map[string]stri
 	return out
 }
 
-// TestReadRemoteRefs_PoolMatchesSerial: the pooled read returns exactly the same
+// TestReadRemoteRefs_PoolMatchesSerial: the pooled read returns the same
 // refname→sha map as a serial baseline on a bucket with a few hundred refs.
 func TestReadRemoteRefs_PoolMatchesSerial(t *testing.T) {
 	client, _ := testClient(t)

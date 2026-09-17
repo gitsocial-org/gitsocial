@@ -1,4 +1,4 @@
-// command_tree_test.go - Walks the whole cobra command tree and asserts every
+// command_tree_test.go - Walks the cobra command tree and asserts every
 // command carries usage metadata, answers --help, and (for the read-only,
 // zero-argument commands) emits parsable JSON under --json.
 package main

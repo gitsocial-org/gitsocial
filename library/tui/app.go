@@ -803,8 +803,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pushProgressMsg:
 		// Coarse per-branch push step: reflect the current branch on the status
 		// line, then keep draining the channel. Object/site-shard granularity
-		// below the branch push lives in the git helper's stderr (unavailable to
-		// the TUI without streaming ExecGit — kept deliberately coarse here).
+		// below the branch push lives in the git helper's stderr, which the TUI
+		// cannot read without streaming ExecGit, so this step stays coarse.
 		m.host.SetPushingInfo(m.pushStep(msg))
 		return m, drainBgImportCmd(m.bgPushCh)
 
@@ -1100,7 +1100,7 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	// File-like paths that couldn't be resolved: silently ignore instead of routing
+	// File-like paths that couldn't be resolved: ignore instead of routing
 	if ext := filepath.Ext(msg.Location.Path); ext != "" {
 		return m, nil
 	}
@@ -1695,7 +1695,7 @@ var importExtensionLabels = map[string]string{
 }
 
 // beginImport resolves the origin remote, builds an adapter, and kicks off
-// the count phase so the user can see exactly how many items would be
+// the count phase so the user sees how many items would be
 // imported before confirming. Counting runs in a goroutine and reports via
 // importCountedMsg; while it's running the same Importing footer + spinner
 // the actual import uses is shown with phase="counting".

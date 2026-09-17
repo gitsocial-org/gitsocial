@@ -23,7 +23,7 @@
    they go inert the moment the app owns the DOM and can never leak into the
    post-swap render. Element rules use :where(#gs-page) so their specificity
    stays that of the bare element — pages-full.css's classed rules (.markdown
-   headings, chips) override them exactly as they always have; the few classed
+   headings, chips) still override them; the few classed
    rules that must BEAT pages-full.css's same-named classes (.meta, .tomb)
    keep the plain #gs-page prefix for its id weight. */
 
@@ -34,7 +34,7 @@
      tokens, and a var() inside a custom property resolves where the property
      is declared, so :root-level derivations would never see a body-level
      override.
-     Each palette literal exists exactly once: the light set as --pl-*, the
+     Each palette literal exists once: the light set as --pl-*, the
      dark set as --pd-*, both declared here. The theme gates below only remap
      the active tokens onto one set or the other. */
   :root {
@@ -57,7 +57,7 @@
     --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
     /* Font-size scale. Every font-size in either sheet resolves through one of
        these tokens, so a size tweak is a single edit. --fs-ui (mono chrome) and
-       --fs-code (code content) are separate tokens for exactly this reason and
+       --fs-code (code content) are separate tokens for that reason and
        have since diverged (0.8 vs 0.85rem). Headings keep a
        token per hierarchy level; near-duplicate one-offs (0.78-0.85, 0.9-1.0,
        0.7-0.76) collapse onto the nearest token. Inline `.markdown kbd` stays
@@ -83,9 +83,9 @@
        tree rows, the big load-more pill) stay local, as do margins/gaps. */
     --pad-panel: var(--sp-3) var(--sp-4); --pad-row: var(--sp-2) var(--sp-3); --pad-ctl: var(--sp-1) var(--sp-3);
     /* Layout metrics, tokenized so the fixed sidebar footer (.nav-footer) can
-       span exactly the sidebar's width and sit at its horizontal position
-       without hardcoding — and so the pre-rendered pages' #gs-page shell below
-       lands at the same width and x as the app's .shell by construction. */
+       span the sidebar's width and sit at its horizontal position without
+       hardcoding — and so the pre-rendered pages' #gs-page shell below lands
+       at the same width and x as the app's .shell. */
     --nav-w: 220px; --shell-max: 1012px; --shell-pad: 1.25rem; --nav-gap: 1.5rem;
   }
   /* Theme gates. The system preference decides when no choice is stamped; a
@@ -224,7 +224,7 @@
      it, out of flow. A grid was the obvious shape and the wrong one: with the
      content's rows all implicit, `grid-row:1/-1` on the nav resolves -1
      against an explicit grid that has no rows, so the nav stays in row one and
-     makes that row as tall as the whole link stack, leaving a tall gap under
+     makes that row as tall as the full link stack, leaving a tall gap under
      the first heading. Out of flow, the nav cannot size a row. */
   #gs-page {
     position: relative; max-width: var(--shell-max); margin: 0 auto;
@@ -268,9 +268,8 @@
   }
   /* Page-structural rules: the bare-element voice of the generated documents.
      The class vocabulary the pages share with the app (.chip, .card,
-     .markdown, .show-more, …) deliberately is NOT restated here — it comes
-     from pages-full.css, so the pages render the app's own treatment by
-     construction. */
+     .markdown, .show-more, …) is NOT restated here — it comes from
+     pages-full.css, so the pages render the app's own treatment. */
   :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: var(--sp-2) 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
   :where(#gs-page) p { margin: var(--sp-4) 0; }

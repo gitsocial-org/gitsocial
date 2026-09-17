@@ -46,7 +46,7 @@ var (
 	// Global keys that appear dimmed in footer, in display order.
 	// "/" and "@" are shown in sidebar instead (Search [/], Notifications [@]).
 	// "I" is registered only on top-level extension list contexts, so it
-	// surfaces dimmed there and is silently absent elsewhere.
+	// surfaces dimmed there and is absent elsewhere.
 	globalKeyOrder = []string{"tab", "f", "I", "q", "?"}
 	globalKeys     = map[string]bool{"tab": true, "f": true, "I": true, "q": true, "?": true}
 

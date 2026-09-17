@@ -151,7 +151,7 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 	}
 
 	for _, ext := range editableExtensionTables {
-		// Skip silently on any error: sql.ErrNoRows means this extension has no
+		// Skip on any error: sql.ErrNoRows means this extension has no
 		// row for the edit (so nothing to propagate); "no such table" means the
 		// extension's schema isn't registered in this DB (cache-only tests).
 		// Either way, the propagation is a no-op for this table.
@@ -608,8 +608,8 @@ func ReconcileVersions() (int, error) {
 		return 0, nil
 	}
 
-	// Phase 2: Write version records and apply each affected canonical exactly
-	// once. Multiple edits targeting the same canonical fold into a single
+	// Phase 2: Write version records and apply each affected canonical once.
+	// Multiple edits targeting the same canonical fold into a single
 	// applyEditToCanonical call (which already picks the latest by timestamp).
 	type canonicalKey struct{ repoURL, hash, branch string }
 	created := 0

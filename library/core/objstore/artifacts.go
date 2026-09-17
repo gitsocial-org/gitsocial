@@ -24,8 +24,8 @@ const (
 )
 
 // PushArtifactObjects uploads each named file as a plain object at
-// artifacts/<version>/<name> under the remote's prefix, silently overwriting a
-// previous push of the same version, then maintains artifacts/latest.txt:
+// artifacts/<version>/<name> under the remote's prefix, overwriting a previous
+// push of the same version, then maintains artifacts/latest.txt:
 // advance receives its current content ("" when absent) and decides whether
 // the pushed version becomes the new latest. Returns whether latest.txt was
 // rewritten.

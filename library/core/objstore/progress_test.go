@@ -89,7 +89,7 @@ func TestProgressWriter_TTYRewritesLine(t *testing.T) {
 		t.Errorf("TTY terminal line must end with a newline, got %q", out)
 	}
 	if strings.Count(out, "\n") != 1 {
-		t.Errorf("TTY must emit exactly one newline (only the terminal), got %q", out)
+		t.Errorf("TTY must emit one newline, the terminal one, got %q", out)
 	}
 }
 

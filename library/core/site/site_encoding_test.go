@@ -23,7 +23,7 @@ import (
 )
 
 // assertStoredBrotli checks a key was stored brotli-encoded, smaller than raw,
-// and decodes back to exactly the raw bytes.
+// and decodes back to the raw bytes.
 func assertStoredBrotli(t *testing.T, client *objstore.Client, bucket *membucket.Bucket, key string, raw []byte) {
 	t.Helper()
 	if enc := bucket.EncOf(key); enc != "br" {

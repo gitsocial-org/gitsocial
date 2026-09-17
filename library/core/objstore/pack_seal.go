@@ -322,7 +322,7 @@ func pendingRound(state *packState, key string) bool {
 	return false
 }
 
-// deleteRoundLooseObjects removes the loose key of every object a round's packs carry, enumerated from the published indexes; a missing pack fails the whole round.
+// deleteRoundLooseObjects removes the loose key of every object a round's packs carry, enumerated from the published indexes; a missing pack fails the round.
 func deleteRoundLooseObjects(client *Client, prefix string, round packRound, concurrency int) error {
 	var shas []string
 	for _, name := range round.Packs {

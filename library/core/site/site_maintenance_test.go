@@ -9,13 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 )
 
-// TestPostPushMaintenance_FailedManifestWithholdsMarker: the skip marker is
-// keyed on the refs digest, so stamping it after a failed manifest write makes
-// every later push against the same refs skip the whole block, leaving the
-// site's only listing describing an older ref set until refs happen to move
-// again (indefinitely, on a quiet repo: a refname the manifest omits reads as
-// an empty extension branch). A pass told the manifest was lost must therefore
-// leave the marker alone, so the next pass runs in full.
+// TestPostPushMaintenance_FailedManifestWithholdsMarker: a pass told the ref
+// manifest was lost leaves the skip marker alone, so the next pass runs in full.
 func TestPostPushMaintenance_FailedManifestWithholdsMarker(t *testing.T) {
 	client, _ := testClient(t)
 	seedSiteBucket(t, client)

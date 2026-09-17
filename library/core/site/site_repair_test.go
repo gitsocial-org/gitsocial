@@ -142,8 +142,8 @@ func corpusShas(t *testing.T, client *objstore.Client, m *siteShardManifest, dir
 }
 
 // assertLockstepState asserts both corpora are present, at wantTip, with head
-// counts matching their manifests, identical shard boundaries, and exactly the
-// wanted oldest-first sha coverage.
+// counts matching their manifests, identical shard boundaries, and the wanted
+// oldest-first sha coverage.
 func assertLockstepState(t *testing.T, client *objstore.Client, ext string, wantShas []string, wantTip string) {
 	t.Helper()
 	items, err := readItemsManifest(client, "", ext)
@@ -246,8 +246,8 @@ func TestRepair_BodiesManifestAhead(t *testing.T) {
 		shas := seedChain(t, client, "", "", 5)
 		mustUpdate(t, client, "social", shas[4])
 		// Snapshot the items state at tip A, advance to tip B, then rewind the
-		// items manifest + head to A: exactly the state an interruption between
-		// the bodies manifest write and the items manifest write leaves.
+		// items manifest + head to A: the state an interruption between the
+		// bodies manifest write and the items manifest write leaves.
 		oldManifest := rawDoc(t, client, siteItemsManifestKey("social"))
 		oldHead := rawDoc(t, client, siteItemsHeadKey("social"))
 		shas = append(shas, seedChain(t, client, shas[4], "", 2)...)
@@ -357,7 +357,7 @@ func TestRepair_ConcurrentAppends_LastWriterStale(t *testing.T) {
 		itemsHead0, _ := readItemsHeadEntries(client, siteItemsHeadKey("social"))
 		bodiesHead0, _ := readBodyDocItems(client, bodiesHeadKey("social"))
 		shas = append(shas, seedChain(t, client, shas[5], "", 2)...)
-		// Writer 1 (fast) appends the whole gap to tip B; writer 2 (slow, read
+		// Writer 1 (fast) appends the full gap to tip B; writer 2 (slow, read
 		// the same pre-push state) appends only to tip A and lands LAST,
 		// clobbering the manifests back to A while the branch is at B.
 		mustUpdate(t, client, "social", shas[7])

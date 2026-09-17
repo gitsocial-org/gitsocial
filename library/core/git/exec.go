@@ -19,7 +19,7 @@ import (
 
 // gitRedirectEnv are the variables that point git at a repository other than
 // the one the caller named. An ambient value overrides cmd.Dir, so under
-// `go test` one of these in the environment silently retargets every
+// `go test` one of these in the environment retargets every
 // invocation: a test that builds a temp repo would then commit into whatever
 // repo the variable names.
 var gitRedirectEnv = []string{

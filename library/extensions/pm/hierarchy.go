@@ -52,7 +52,7 @@ func DeriveHierarchy(parentRef, defaultRepoURL, selfRef string) (parent, root st
 // parent. GITPM.md §1.7 keeps `root` alone at the first level (parent and root
 // are the same commit there) and both fields below it, and DeriveHierarchy
 // reads a missing root as "this parent is top-level", so a caller that skips
-// the derivation silently mis-roots every level beneath it.
+// the derivation mis-roots every level beneath it.
 func resolveHierarchy(opts *CreateIssueOptions, repoURL, selfRef string) error {
 	parent, root, err := DeriveHierarchy(opts.Parent, repoURL, selfRef)
 	if err != nil {

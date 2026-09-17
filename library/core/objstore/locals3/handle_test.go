@@ -286,7 +286,7 @@ func TestDeleteRemovesObjectAndSidecar(t *testing.T) {
 }
 
 // TestUnsupportedMethodIs405 checks a verb outside the served subset is
-// refused rather than silently treated as one of them.
+// refused rather than treated as one of them.
 func TestUnsupportedMethodIs405(t *testing.T) {
 	newBucketRoot(t)
 	for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodOptions} {
@@ -436,7 +436,7 @@ func TestRangeGetFallsBackToWholeBody(t *testing.T) {
 			continue
 		}
 		if res.Body.String() != body {
-			t.Errorf("GET %s body = %q, want the whole object", header, res.Body.String())
+			t.Errorf("GET %s body = %q, want the full object", header, res.Body.String())
 		}
 		if got := res.Header().Get("Content-Range"); got != "" {
 			t.Errorf("GET %s set Content-Range = %q on a 200", header, got)
@@ -554,7 +554,7 @@ func TestListObjectsV2ETagTracksValue(t *testing.T) {
 
 // TestListObjectsV2EscapesKeys pins that a key holding a character XML reserves
 // survives the listing. "&" is legal in a git ref name (git check-ref-format
-// accepts refs/heads/foo&bar), and writing it raw would make the whole document
+// accepts refs/heads/foo&bar), and writing it raw would make the document
 // unparseable rather than just that entry, breaking every ListObjectsV2 consumer
 // (ref listing, push state, the thin-fork walk) against a locally pushed repo.
 func TestListObjectsV2EscapesKeys(t *testing.T) {

@@ -133,7 +133,7 @@ func TestExtraProcessorsRecordMentions(t *testing.T) {
 
 // TestBackfillSpecsCoverEveryExtension checks the backfill scans one items
 // table per extension: a missing spec means an orphaned row is never repaired,
-// since dedup skips the commit forever.
+// since dedup skips the commit on every later fetch.
 func TestBackfillSpecsCoverEveryExtension(t *testing.T) {
 	want := map[string]string{
 		"social":  "social_items",
@@ -199,7 +199,7 @@ func TestBackfillReposListsWorkspaceThenForks(t *testing.T) {
 	}
 }
 
-// TestFetch_everyExtensionIngests runs the whole sequence over a workspace
+// TestFetch_everyExtensionIngests runs the full sequence over a workspace
 // carrying one item per extension and one registered fork, and looks for the
 // row each extension owes: the drift this package exists to close is a fetch
 // path that leaves an item table empty.

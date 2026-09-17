@@ -59,7 +59,7 @@ func TestBootstrapWalk_PlainCount(t *testing.T) {
 	}
 	for _, l := range lines {
 		if strings.Contains(l, "%") {
-			t.Errorf("bootstrap walk line %q has a percentage; the budget is a cap, so a plain count is the only honest report", l)
+			t.Errorf("bootstrap walk line %q has a percentage; the budget is a cap, so the line must be a plain count", l)
 		}
 	}
 	last := lines[len(lines)-1]

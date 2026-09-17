@@ -42,7 +42,7 @@ func MappingKey(platform, itemType, externalID string) string {
 
 // ReadMapping loads an existing mapping file, returning an empty one when the
 // file doesn't exist. A file that exists but can't be parsed (or was written by
-// a newer schema) is an error: silently treating it as empty would re-import
+// a newer schema) is an error: treating it as empty would re-import
 // everything and create duplicates.
 func ReadMapping(cacheDir, repoURL, mapFile string) (*MappingFile, error) {
 	path := resolveMappingPath(cacheDir, repoURL, mapFile)

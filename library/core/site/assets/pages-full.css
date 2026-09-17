@@ -261,7 +261,7 @@
      of a blank page. `gs-loading` on <html> is what makes that safe: it holds the
      content slot on the same loading treatment as `.loading` above and hides
      whatever the app has rendered into it, so the slot goes from loading to the
-     finished view exactly once rather than assembling itself in view. The boot
+     finished view in one step rather than assembling itself in view. The boot
      removes the class at that transition; the plain shell never sets it. */
   html.gs-loading #view > * { display: none; }
   html.gs-loading #view::before {
@@ -364,7 +364,7 @@
      nav item so files stay navigable while the content pane shows a blob.
      Smaller than the content tree to fit the 220px column; long names ellipsize
      with the full name in a title attr. Hidden when empty, when the sidebar is
-     collapsed (the whole nav is hidden then), and on the narrow top-nav layout. */
+     collapsed (the nav is hidden then), and on the narrow top-nav layout. */
   .nav-tree-slot { margin: 0.1rem 0 var(--sp-1) var(--sp-2); overflow-x: hidden; }
   .nav-tree-slot:empty { display: none; }
   .nav-tree-list { border: none; background: transparent; }
@@ -443,7 +443,7 @@
      trailer block) reads as a code block — mono at the code scale, panel
      background, bordered, rounded. Kept pre-wrap (not pre + horizontal scroll):
      the message is mostly prose that wants to wrap, and word-break folds the
-     long GitMsg trailer refs rather than forcing the whole pane to scroll
+     long GitMsg trailer refs rather than forcing the pane to scroll
      sideways (overflow-x stays as a safety valve for anything unbreakable). */
   .raw-body {
     white-space: pre-wrap; word-break: break-word; overflow-x: auto;
@@ -601,7 +601,7 @@
      window and appends its resolved items. */
   .load-more-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); }
   .search-tier-note { max-width: 34rem; margin: 0 auto; text-align: center; line-height: 1.5; color: var(--muted); font-size: var(--fs-ui); }
-  /* The list continuation keeps a deliberately larger hit area than the base pill. */
+  /* The list continuation keeps a larger hit area than the base pill. */
   .load-more { padding: var(--sp-2) var(--sp-5); }
   .load-more:disabled { cursor: default; opacity: 0.6; }
   .thread { margin-top: var(--sp-5); }
@@ -818,7 +818,7 @@
   pre.suggestion-code code { font-family: var(--mono); font-size: var(--fs-code); }
   .diff-offscreen { border-top: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-ui); }
   .diff-offscreen > .card { margin-bottom: var(--sp-2); }
-  /* Sidebar footer: fixed to the viewport bottom, spanning exactly the sidebar's
+  /* Sidebar footer: fixed to the viewport bottom, spanning the sidebar's own
      width (--nav-w) at the sidebar's horizontal position. The shell is centered
      (max-width --shell-max, margin auto) with --shell-pad inset, so the sidebar's
      left edge from the viewport is the centering margin plus the pad; max() clamps

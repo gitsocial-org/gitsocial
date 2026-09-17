@@ -35,7 +35,7 @@ async function main() {
   ok("P1 thread has 3 top-level nodes (C1,C2,C3; R2 nested under R1)", thread.length === 3, "got " + thread.length);
   ok("P1 top-level chronological C1<C2<C3", topContents[0].startsWith("Congrats") && topContents[1].startsWith("What about") && topContents[2].startsWith("Looking forward"), JSON.stringify(topContents));
   const c1node = thread.find((n) => n.comment.commit.short === C1);
-  ok("C1 node found with exactly 1 nested reply (R1)", c1node && c1node.replies.length === 1 && c1node.replies[0].comment.commit.short === R1, c1node ? "replies=" + c1node.replies.map((r) => r.comment.commit.short) : "no C1 node");
+  ok("C1 node found with 1 nested reply (R1)", c1node && c1node.replies.length === 1 && c1node.replies[0].comment.commit.short === R1, c1node ? "replies=" + c1node.replies.map((r) => r.comment.commit.short) : "no C1 node");
   ok("R1 nested content = 'Thanks, appreciate it!'", c1node && c1node.replies[0].comment.content.startsWith("Thanks"), c1node && c1node.replies[0] && c1node.replies[0].comment.content);
   const r1node = c1node && c1node.replies[0];
   ok("R2 (reply-to-a-reply) nests under R1 at depth 2", !!r1node && r1node.replies.length === 1 && r1node.replies[0].comment.commit.short === R2 && r1node.replies[0].depth === 2, r1node ? "R1 depth=" + r1node.depth + " replies=" + r1node.replies.map((r) => r.comment.commit.short) : "no R1");

@@ -43,8 +43,8 @@ func seedGitChain(t *testing.T, client *objstore.Client, n int) (gitDir string, 
 	log := run("log", "--format=%H", "--reverse")
 	for _, sha := range strings.Fields(log) {
 		shas = append(shas, sha)
-		// Copy the commit's loose object bytes from the repo to the bucket, exactly
-		// as a push would have (content-addressed: identical bytes in both stores).
+		// Copy the commit's loose object bytes from the repo to the bucket as a push
+		// would (content-addressed: identical bytes in both stores).
 		cmd := exec.Command("git", "cat-file", "commit", sha)
 		cmd.Dir = dir
 		body, err := cmd.Output()
@@ -137,7 +137,7 @@ func TestLocalWalk_FallsBackPerMissingObject(t *testing.T) {
 		})
 	})
 	assertLockstepState(t, client, "social", shas, tip)
-	// The missing object fell back to exactly one bucket GET; its neighbors did not.
+	// The missing object fell back to one bucket GET; its neighbors did not.
 	if got := bucket.GetCount("objects/" + missing[:2] + "/" + missing[2:]); got != 1 {
 		t.Errorf("missing object %s got %d bucket GETs, want 1 (per-object fallback)", missing[:8], got)
 	}

@@ -6,8 +6,8 @@
 //
 // Two contracts, self-contained (builds its own loose-object bucket in Node and
 // serves it via the harness serve.js — no Go binary, no showcase fixture):
-//   1. loadInteractionCounts must be BOUNDED on such a bucket: it must never walk
-//      the whole data branch to exhaustion (the old loadExtItemsAll did), because
+//   1. loadInteractionCounts must be BOUNDED on such a bucket: it must not walk
+//      the data branch to exhaustion (the old loadExtItemsAll did), because
 //      counts are a card-stat nicety, not first-paint content.
 //   2. The timeline route must PAINT with a bounded number of loose-object GETs,
 //      not sit on "Loading…" behind an unbounded walk. First paint must not wait
@@ -141,13 +141,13 @@ async function main() {
     ok("timeline route paints cards (not stuck on Loading…)", painted, textOf(viewNode).slice(0, 60));
     ok("timeline paints the code commits from master", /Fix bug/.test(textOf(viewNode)), textOf(viewNode).slice(0, 60));
     // First paint must be bounded: the window walk (code + review prefix) only,
-    // NOT the whole review branch. This is the core regression: before the fix,
+    // NOT the full review branch. This is the core regression: before the fix,
     // the count load in the Promise.all walked all REVIEW_N commits before paint.
-    ok("timeline first paint is BOUNDED (does not walk the whole review branch before painting)",
+    ok("timeline first paint is BOUNDED (does not walk the full review branch before painting)",
       getsAtPaint < REVIEW_N, "getsAtPaint=" + getsAtPaint + " reviewBranch=" + REVIEW_N);
 
     // Let the backgrounded counts settle; total loose work stays bounded (the
-    // count walk is capped, so the whole route never touches all REVIEW_N).
+    // count walk is capped, so the route never touches all REVIEW_N).
     await wait(2000);
     ok("total loose work stays bounded after counts settle (never a full-branch walk)",
       looseGets < REVIEW_N, "totalLooseGets=" + looseGets + " reviewBranch=" + REVIEW_N);

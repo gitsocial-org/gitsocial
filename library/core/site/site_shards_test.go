@@ -273,8 +273,8 @@ func reverseMeta(in []siteMetaEntry) []siteMetaEntry { return reverseGeneric(in)
 // Cloudflare R2 transparently decompresses `Content-Encoding: br` objects when
 // the requester doesn't advertise br support (Go's transport only advertises
 // gzip), so a stored artifact arrives as plain JSON. Such a body must still be
-// read — treating it as absent silently re-bootstrapped every corpus on every
-// push and permanently blocked the HTML page layer.
+// read — treating it as absent re-bootstrapped every corpus on every push, with
+// no error, and blocked the HTML page layer.
 func TestReadCompressedJSON_TranscodedBody(t *testing.T) {
 	client, _ := testClient(t)
 	tip := fmt.Sprintf("%040x", 42)

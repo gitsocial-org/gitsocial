@@ -31,7 +31,7 @@ type s3Fixture struct {
 	bucket  string
 	mu      sync.Mutex
 	objects map[string][]byte
-	// noConditional simulates a bucket that silently ignores conditional
+	// noConditional simulates a bucket that ignores conditional
 	// headers (the MinIO-style gap the push probe must catch).
 	noConditional bool
 	// createOnlyCAS simulates Ceph RGW (DigitalOcean Spaces): If-None-Match: *
@@ -557,8 +557,8 @@ func TestS3Helper_pushReportsBeforeSiteMaintenance(t *testing.T) {
 			}
 		}
 	}()
-	// The report must arrive while maintenance is frozen forever. A pre-fix helper
-	// only reports after maintenance (which never completes), so this times out.
+	// The report must arrive while maintenance is frozen. A pre-fix helper only
+	// reports after maintenance, which never completes here, so this times out.
 	select {
 	case <-reported:
 		// Every ref must have landed on the bucket before the report.
@@ -886,7 +886,7 @@ func TestS3Helper_generationPushRoundTrip(t *testing.T) {
 	fixture.objects["repo/.gitsocial/ref-mode"] = []byte("generation\n")
 	fixture.mu.Unlock()
 
-	// Two incremental pushes: gen 2 and 3; GC must leave exactly gens 2 and 3.
+	// Two incremental pushes: gen 2 and 3; GC must leave only gens 2 and 3.
 	commitIn(t, src, env, "second.md", "second")
 	gitIn(t, src, env, "push", remote, "main")
 	commitIn(t, src, env, "third.md", "third")
@@ -906,7 +906,7 @@ func TestS3Helper_generationPushRoundTrip(t *testing.T) {
 		t.Errorf("fetched incremental main = %s, want %s", got, thirdSHA)
 	}
 
-	// Ref deletion clears the whole chain.
+	// Ref deletion clears every generation in the chain.
 	gitIn(t, src, env, "push", remote, ":refs/gitmsg/core/forks/feed0001")
 	if _, ok := fixture.object("repo/refs/gitmsg/core/forks/feed0001/.gen/0000000001"); ok {
 		t.Error("deleted ref's generation chain still present")
@@ -945,7 +945,7 @@ func TestS3Helper_generationContention(t *testing.T) {
 }
 
 // TestS3Helper_generationNonFastForward: the fast-forward rules hold in
-// generation mode exactly as in etag mode.
+// generation mode as in etag mode.
 func TestS3Helper_generationNonFastForward(t *testing.T) {
 	t.Parallel()
 	fullTierOnly(t)
@@ -977,7 +977,7 @@ func TestS3Helper_generationNonFastForward(t *testing.T) {
 }
 
 // TestS3Helper_rejectsNonCanonicalURLs: the only accepted s3 URL is the
-// canonical host form; bucket-only authorities and query params fail loudly.
+// canonical host form; bucket-only authorities and query params are rejected.
 func TestS3Helper_rejectsNonCanonicalURLs(t *testing.T) {
 	t.Parallel()
 	fullTierOnly(t)
@@ -1063,7 +1063,7 @@ func TestS3Helper_cloneCommand(t *testing.T) {
 		t.Errorf("local alias = %q, want %q", strings.TrimSpace(out), "!gitsocial __git-remote-s3")
 	}
 	// Plain git, no injected alias env: the binary is on PATH as `gitsocial`
-	// (its build name), exactly the production shape.
+	// (its build name), the production shape.
 	plainEnv := append(append([]string(nil), baseEnv...),
 		"PATH="+filepath.Dir(cliBinary(t))+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"AWS_ACCESS_KEY_ID=test-access-key",

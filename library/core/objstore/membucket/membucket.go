@@ -47,7 +47,7 @@ type Bucket struct {
 	// If-Match write the bucket saw, honored or not.
 	rejectIfMatch bool
 	ifMatchTries  int
-	failGets      map[string]int // keys whose GETs return 500 forever (>0 = armed)
+	failGets      map[string]int // keys whose every GET returns 500 (>0 = armed)
 	flakyGets     map[string]int // keys whose next N GETs fail, then succeed
 	getStatus     map[string]int // status a failing GET answers with (0 = 500)
 	truncateLists bool           // every listing claims truncation and offers no continuation token
@@ -353,7 +353,7 @@ func (m *Bucket) list(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `<?xml version="1.0"?><ListBucketResult><IsTruncated>%t</IsTruncated>`, truncated || m.truncateLists)
 	for _, k := range keys {
 		// Escape the key, as a real bucket and locals3 both do: "&" is legal in a
-		// git ref name and writing it raw makes the whole document unparseable.
+		// git ref name and writing it raw makes the document unparseable.
 		fmt.Fprint(w, "<Contents><Key>")
 		_ = xml.EscapeText(w, []byte(k))
 		fmt.Fprintf(w, "</Key><ETag>%s</ETag></Contents>", ETag(m.objs[k].body))

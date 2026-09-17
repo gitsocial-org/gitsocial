@@ -13,7 +13,7 @@
 //
 // Contracts (self-contained: builds its own loose-object bucket, serves it):
 //   1. index-ABSENT review branch: the PR detail PAINTS (subject/body/header)
-//      with a bounded number of loose GETs — it does NOT walk the whole code
+//      with a bounded number of loose GETs — it does NOT walk the full code
 //      branch before painting.
 //   2. STALE-manifest review branch (manifest tip behind the live tip, never
 //      bridged): same bound, same successful paint.
@@ -63,7 +63,7 @@ function build(mode) {
   const chain = (n, mk) => { let p = null; const all = []; for (let i = 0; i < n; i++) { p = commit(p, mk(i, p)); all.push(p); } return all; };
 
   // Base code branch. Pick a deep merge-base / merge-head so the diff-range walk
-  // is a genuinely long loose walk (the shape that hung the real bucket).
+  // is a long loose walk (the shape that hung the real bucket).
   const code = chain(CODE_N, (i) => "Fix bug " + i);
   const masterTip = code[code.length - 1];
   const mergeBaseSha = code[50];   // ~2950 commits deep from the tip

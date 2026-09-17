@@ -116,7 +116,7 @@ func TestWrapRow_continuationAnchorTagged(t *testing.T) {
 }
 
 // TestWrapRow_widthInvariantThroughRender — every wrapped row, when rendered
-// with cols=wrapWidth, must produce exactly wrapWidth display columns.
+// with cols=wrapWidth, must produce wrapWidth display columns.
 func TestWrapRow_widthInvariantThroughRender(t *testing.T) {
 	row := Row{
 		LineBG: "#1a3524",

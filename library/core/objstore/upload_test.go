@@ -31,7 +31,7 @@ func feedObjects(n int) (func(context.Context, chan<- encodedObject) error, []st
 }
 
 // TestUploadEncodedObjects_AllLand: a pool wider than one uploads every object
-// exactly once to its content-addressed key.
+// once to its content-addressed key.
 func TestUploadEncodedObjects_AllLand(t *testing.T) {
 	client, bucket := testClient(t)
 	const n = 300
@@ -77,7 +77,7 @@ func TestUploadEncodedObjects_TransientErrorRetries(t *testing.T) {
 // surface as a wrapped error and cancel the pool so the producer stops.
 func TestUploadEncodedObjects_MidTransferError(t *testing.T) {
 	client, bucket := testClient(t)
-	// Poison one key so its PUT 500s; the pool must fail the whole push.
+	// Poison one key so its PUT 500s; the pool must fail the push.
 	bad := fmt.Sprintf("%040x", 42)
 	badKey := "repo/objects/" + bad[:2] + "/" + bad[2:]
 	bucket.FailPut(badKey)

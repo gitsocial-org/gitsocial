@@ -325,7 +325,7 @@
     return offset === null ? null : { offset, end: undefined };
   }
 
-  // packEntryEnd returns an entry's exclusive end, the next entry's start; null for the last entry, and answerable only with the whole offset table resident.
+  // packEntryEnd returns an entry's exclusive end, the next entry's start; null for the last entry, and answerable only with the full offset table resident.
   function packEntryEnd(idx, offset) {
     const s = idx.sorted;
     let lo = 0, hi = s.length - 1, at = -1;
@@ -2514,7 +2514,7 @@
     return items.filter((it) => ((it.header && it.header.type) || "") === spec.type);
   }
 
-  // loadTimelineItems builds the whole merged timeline feed and hydrates every item; the interactive route uses loadTimelineWindow.
+  // loadTimelineItems builds the merged timeline feed and hydrates every item; the interactive route uses loadTimelineWindow.
   async function loadTimelineItems(ctx) {
     const out = [];
     const [lanes, code] = await Promise.all([

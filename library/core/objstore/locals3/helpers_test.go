@@ -302,7 +302,7 @@ func TestParseRange(t *testing.T) {
 				t.Fatalf("parseRange(%q, %d) status = %d, want %d", c.header, c.size, status, c.status)
 			}
 			// The bounds only carry meaning for a 206; the caller ignores them
-			// otherwise and serves the whole body or a 416.
+			// otherwise and serves the full body or a 416.
 			if status == 206 && (start != c.start || end != c.end) {
 				t.Errorf("parseRange(%q, %d) = [%d, %d), want [%d, %d)", c.header, c.size, start, end, c.start, c.end)
 			}

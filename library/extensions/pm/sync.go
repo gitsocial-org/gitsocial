@@ -144,7 +144,7 @@ func buildPMItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) (
 // pm_items columns (state, assignees, …) catch up — buildPMItem already
 // inserted the version row via ProcessVersionFromHeader, but the
 // applyEditToCanonical inside InsertVersion fires BEFORE the edit's
-// pm_items row exists and silently skips the column propagation. Memo's
+// pm_items row exists and skips the column propagation. Memo's
 // processor follows the same pattern.
 func processPMCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
 	if msg == nil || msg.Header.Ext != "pm" {

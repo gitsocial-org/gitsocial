@@ -17,7 +17,7 @@ import (
 //     would init, add and commit into the repository being pushed instead.
 //   - GITSOCIAL_S3_DEFER_MAINTENANCE, which postPushMaintenance reads to skip
 //     its work for all but the last transfer of a multi-push run, and which
-//     would silently hollow out every test that asserts on that work.
+//     would hollow out every test that asserts on that work.
 //
 // A test that wants either set does so itself with t.Setenv.
 func TestMain(m *testing.M) {

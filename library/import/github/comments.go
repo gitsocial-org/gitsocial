@@ -53,7 +53,7 @@ func buildMoreItemCommentsQuery(owner, repo, field string, number int, cursor st
 // batchFetchComments fetches conversation comments for the given issue or PR
 // numbers, batched over GraphQL with cursor pagination for long threads.
 // Errors are logged and the affected items skipped (partial results win over
-// failing the whole import).
+// failing the import).
 func (a *Adapter) batchFetchComments(field string, numbers []int) map[int][]ghItemComment {
 	result := map[int][]ghItemComment{}
 	for i := 0; i < len(numbers); i += commentBatchSize {

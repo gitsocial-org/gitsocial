@@ -75,7 +75,7 @@ func OriginDisplayAuthor(origin *Origin) string {
 // whoever ran the import and carries the real author in origin-* fields
 // (GITMSG §1.9), so any surface reading a commit directly — rather than through
 // a *_items_resolved view, which COALESCEs this already — must resolve it here
-// or it will attribute the whole mirror to the importer. The name falls back to
+// or it will attribute every mirrored item to the importer. The name falls back to
 // an @handle derived from the origin email, as OriginDisplayAuthor does.
 func EffectiveAuthor(header *Header, gitName, gitEmail string) (string, string) {
 	origin := ExtractOrigin(header)

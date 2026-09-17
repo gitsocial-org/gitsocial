@@ -21,7 +21,7 @@ func renderMD(t *testing.T, text string) string {
 
 // TestSiteMarkdown_Grammar walks every construct a README uses: each case pins
 // what the renderer must emit AND what must not survive as literal source, which
-// is the whole point of pre-rendering (the front page used to serve `## About`
+// is what pre-rendering is for (the front page used to serve `## About`
 // and `<div align="center">` as the text a crawler indexes).
 func TestSiteMarkdown_Grammar(t *testing.T) {
 	cases := []struct {

@@ -13,7 +13,7 @@
 //
 // Contract per route, on both fixture states:
 //   1. It PAINTS (no "Loading…" left behind) with a BOUNDED number of loose GETs
-//      — never the whole data branch. First paint reflects the recent bounded
+//      — never the full data branch. First paint reflects the recent bounded
 //      window, not exhaustion.
 // The index-PRESENT case (exact/exhaustive from cheap metadata shards) is already
 // covered by the showcase suites; here we assert only the degraded-bucket bound.
@@ -147,7 +147,7 @@ async function main() {
 
   // driveRoute paints one hash under a bucket base and returns { painted,
   // looseGets, text }. It runs route() to completion (first paint), then lets any
-  // backgrounded work settle so the reported total is the WHOLE route cost.
+  // backgrounded work settle so the reported total is the full route cost.
   async function driveRoute(bucket, hash, settleMs) {
     const ctx = GS.newContext(origin + "/" + bucket + "/");
     setHash(hash);

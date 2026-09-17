@@ -65,7 +65,7 @@ The fixture build needs neither node nor Chrome. It reruns when the site assets,
 
 ## Coverage
 
-`scripts/coverage.sh` measures statement-weighted coverage under `-coverpkg=./...`, so a package with no test files of its own still counts and another package's integration tests credit the code they reach. The full tier writes the profile the floors read; a bare run writes the whole report.
+`scripts/coverage.sh` measures statement-weighted coverage under `-coverpkg=./...`, so a package with no test files of its own still counts and another package's integration tests credit the code they reach. The full tier writes the profile the floors read; a bare run writes the report in full.
 
 The CLI tests build their binary with `go build -cover` when `GITSOCIAL_COVERDIR` names a directory, and every child process inherits `GOCOVERDIR`. The push verbs, the `TestS3Helper_*` battery and the thin-bucket tests then credit what their children run, down to the s3 remote helper git spawns. `scripts/coverage.sh --merge` converts that data with `go tool covdata textfmt` and appends it to the profile, before the table and the floors are computed from it. The converted `children.out` is kept: a run whose tests the test cache replays reuses it, and a block the profile does not carry is dropped.
 

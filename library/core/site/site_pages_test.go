@@ -547,7 +547,7 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 		t.Fatalf("incremental pending=%v state=%q", pending, state)
 	}
 	if bucket.PutCount(rootKey) != rootPuts+1 {
-		t.Error("the replied-to root's page must be regenerated exactly once")
+		t.Error("the replied-to root's page must be regenerated once")
 	}
 	if bucket.PutCount(bystanderKey) != byPuts {
 		t.Error("an unaffected item's page must not be rewritten")
@@ -843,7 +843,7 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	if pending, _, err := rebuildSitePages(client, "", pagesRefs(client, t), "main", src, nil, objstore.SiteOverride{}); err != nil || pending {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
-	// Asserted on the README SECTION, not the whole page: the page's own boot
+	// Asserted on the README SECTION, not the full page: the page's own boot
 	// hooks are script tags, and this case is about what the README turned into.
 	front := getKey(t, client, sitePagesFrontKey)
 	start := strings.Index(front, `<p class="meta">README</p>`)
@@ -1345,7 +1345,7 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 	assertForeignIntact("pages regen")
 	assertDumbTransportPresent("pages regen")
 
-	// Pages-disable cleanup cycle: the sweep deletes the whole page layer.
+	// Pages-disable cleanup cycle: the sweep deletes every page-layer key.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
 	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
 		t.Fatalf("pushSite disable: %v", err)
@@ -1369,7 +1369,7 @@ func TestSitePageIcon(t *testing.T) {
 	}
 	// The default is lifted from the shell itself, so the SPA and the generated
 	// pages cannot drift apart. If the shell's icon link is ever reshaped, this
-	// is what catches it rather than a silently icon-less page set.
+	// is what catches it rather than an icon-less page set shipping unnoticed.
 	if sitePagesDefaultIcon == "" {
 		t.Fatal("no icon href extracted from the embedded shell")
 	}
@@ -1397,8 +1397,8 @@ func TestSitePageIcon(t *testing.T) {
 }
 
 // TestSitePageIconRendered: the head template actually emits the icon link, and
-// html/template does not rewrite the data: URI to its failsafe (it does exactly
-// that for a plain string in a URL attribute, which is why the field is typed).
+// html/template does not rewrite the data: URI to its failsafe (it rewrites a
+// plain string in a URL attribute, which is why the field is typed).
 func TestSitePageIconRendered(t *testing.T) {
 	site := sitePageSiteFor(siteCustomization{Title: "Demo", Favicon: "data:image/png;base64,iVBORw0KGgo="}, "https://example.com/")
 	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: site.Icon, Base: "../"}})

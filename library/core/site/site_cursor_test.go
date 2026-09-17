@@ -28,9 +28,9 @@ func withTestWalkBudget(budget int, fn func()) {
 
 // assertNewestFirstPrefix asserts a partial (or complete) manifest of the
 // "social" ext is a valid servable newest-first prefix: both corpora lockstepped
-// at wantTip, their shard boundaries identical, the covered shas are exactly the
-// newest len(coverage) of the branch (contiguous, ending at the tip via the
-// head), and complete matches.
+// at wantTip, their shard boundaries identical, the covered shas are the newest
+// len(coverage) of the branch (contiguous, ending at the tip via the head), and
+// complete matches.
 func assertNewestFirstPrefix(t *testing.T, client *objstore.Client, allShas []string, wantCovered int, wantTip string, wantComplete bool) {
 	t.Helper()
 	const ext = "social"

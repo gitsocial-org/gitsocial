@@ -119,7 +119,7 @@ func TestReadMapping_InvalidJSON(t *testing.T) {
 	os.MkdirAll(filepath.Dir(path), 0755)
 	os.WriteFile(path, []byte("not json"), 0644)
 	if _, err := ReadMapping(dir, "", path); err == nil {
-		t.Fatal("ReadMapping should fail loudly for invalid JSON (silent empty would re-import everything)")
+		t.Fatal("ReadMapping should fail for invalid JSON (a silent empty would re-import everything)")
 	}
 }
 

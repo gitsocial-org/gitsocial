@@ -39,7 +39,7 @@ async function main() {
   ok("section titled 'Files changed'", subj.indexOf("Files changed") === 0, subj || "(none)");
   const secText = sections.length ? textOf(sections[0]) : "";
   ok("diff covers the added CHANGELOG.md", secText.includes("CHANGELOG.md"), secText.slice(0, 160));
-  // The whole point: head branch is absent, so a fallback notice would mean the
+  // The head branch is absent, so a fallback notice would mean the
   // merge-base..merge-head reconstruction did not fire.
   ok("did not fall back to 'tips not present'", !textOf(view).includes("not present in this bucket"), "fell back to the tips notice");
 

@@ -178,13 +178,14 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 
 ## Checks
 
-`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts nine rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright. `comment-heavy` reads only the commits dated 2026-09-16 or later.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts ten rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright. `comment-heavy` reads only the commits dated 2026-09-16 or later.
 
 | Rule | Counts |
 |---|---|
 | `emdash` | em-dashes in any tracked file |
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
 | `comment-heavy` | a commit in the pushed range whose net new comment lines, added minus removed, outnumber its added code lines |
+| `confidence` | a line carrying one of the intensifiers the prose rules ban, in any tracked file but this one |
 | `short-long` | a cobra `Short` over 50 characters |
 | `flag-help` | flag help over 60 characters, or containing a parenthesis |
 | `error-shape` | an error literal in non-test Go with a parenthesis, semicolon, question mark, newline, em-dash, a second sentence, "failed to", a capital first letter, or over 100 characters |

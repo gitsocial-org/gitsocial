@@ -47,7 +47,7 @@ func gitInfoRefsRepo(t *testing.T) string {
 	run("tag", "-a", "annot", "-m", "annotated") // annotated → peel line
 	run("-c", "advice.nestedTag=false", "tag", "-a", "annot2", "-m", "tag of tag", "annot")
 	// The gitmsg data branch shape: an extra ref class git clients ignore but
-	// info/refs still lists, exactly as update-server-info does.
+	// info/refs still lists, as update-server-info does.
 	run("branch", "gitmsg/social", "main")
 	run("update-server-info")
 	return dir

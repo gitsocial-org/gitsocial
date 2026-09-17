@@ -27,12 +27,7 @@ func (sp *siteProgress) commitSource() *objstore.LocalCommitSource {
 }
 
 // walk reports commit-walk progress ("site index <ext>: <done>[/<total> (NN%)]").
-// total is the honest ceiling on this walk only when the true remaining size is
-// knowable; a percentage is NEVER shown against the walk budget, which is a
-// per-push cap the walk usually won't reach (a 6k-commit branch against a 50k
-// budget must not read "12%"). Every current caller passes 0 (plain count): the
-// bootstrap/backfill budget is a cap, the append gap is unbounded, and neither
-// the manifest nor the cursor tracks a real remaining count.
+// total is a ceiling only when the remaining size is known; every caller passes 0, so the walk budget reports a plain count.
 func (sp *siteProgress) walk(done, total int) {
 	if sp != nil {
 		sp.progress.Call("site index "+sp.ext, done, total)

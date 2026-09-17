@@ -183,7 +183,7 @@ func packedSet(t *testing.T, client *Client) map[string]bool {
 }
 
 // readPackRange decodes one non-delta pack entry straight out of a packfile's
-// bytes, exactly the way the browser reader does: parse the type/size varint
+// bytes, the way the browser reader does: parse the type/size varint
 // header, then inflate the rest of the recorded range.
 func readPackRange(t *testing.T, pack []byte, offset, size int64) (objType string, body []byte) {
 	t.Helper()
@@ -234,7 +234,7 @@ func TestUploadPacked_TypeSplitAndPackMap(t *testing.T) {
 	if len(names) != 2 {
 		t.Fatalf("bucket carries %d packs (%v), want 2 (commits + content)", len(names), names)
 	}
-	// Classify the two packs by what they hold, then check the split is exactly
+	// Classify the two packs by what they hold, then check the split follows
 	// the type boundary the reader depends on.
 	kinds := map[string]string{}
 	for _, sha := range strings.Fields(gitRun(t, dir, "rev-list", "--objects", "--all")) {
@@ -361,7 +361,7 @@ func TestUploadPacked_StateRefObjectsPack(t *testing.T) {
 	}
 
 	if got := looseObjectKeys(t, client); len(got) != 0 {
-		t.Errorf("packed push wrote %d loose objects; the whole delta, state refs included, must pack", len(got))
+		t.Errorf("packed push wrote %d loose objects; the delta, state refs included, must pack", len(got))
 	}
 	if !packedSet(t, client)[stateSha] {
 		t.Errorf("state-ref commit %s is in no pack", stateSha)
@@ -530,7 +530,7 @@ func TestSealLooseObjects_PacksThenDeletesAfterGrace(t *testing.T) {
 // trigger (packSealLooseThreshold), not the push path's 1,000-object litter
 // threshold, so a cohort between the two — the shape one tag-heavy push leaves
 // behind — is sealed instead of declined. Before the fix such a cohort was
-// declined forever and every stock clone paid one GET per loose object.
+// declined on every push and every stock clone paid one GET per loose object.
 func TestSealLooseObjects_MidSizeCohortSeals(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 25) // 75 objects: above the seal minimum, far below the push threshold
@@ -570,7 +570,7 @@ func TestSealLooseObjects_MidSizeCohortSeals(t *testing.T) {
 // bucket LIST the counter rate-limits), but LooseSinceSeal keeps the measured
 // sealable count instead of being zeroed: zeroing it recorded the decline as a
 // completed seal, so a mid-size cohort re-tripped the trigger, re-declined, and
-// was re-zeroed on every push forever (the production pack-state showed
+// was re-zeroed on every push (the production pack-state showed
 // looseSinceSeal:7 beside ~620 loose objects). And with the counter advanced,
 // a push that uploads nothing loose must not re-attempt (no objects/ LIST)
 // until the interval expires.
@@ -668,7 +668,7 @@ func TestParsePackIdx_MatchesGitShowIndex(t *testing.T) {
 			t.Errorf("object %s: parsed offset %d, git says %s", e.sha, e.offset, got)
 		}
 	}
-	// The published ranges must tile the pack exactly, with nothing overlapping
+	// The published ranges must tile the pack, with nothing overlapping
 	// and nothing left but the 20-byte trailer.
 	var covered int64
 	for _, e := range built.entries {
@@ -687,7 +687,7 @@ func TestParsePackIdx_MatchesGitShowIndex(t *testing.T) {
 // refs/gitmsg/* state refs (a release's artifact refs, say) whose REFNAMES the
 // pushing clone does not have. Resolving those refnames against the local repo
 // made `git rev-list` exit 128, which aborted the pass before it packed
-// anything, on every push forever.
+// anything, on every push.
 func TestSealLooseObjects_BucketStateRefMissingLocally(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 6)
@@ -746,7 +746,7 @@ func TestSealLooseObjects_StateRefObjectsPackAndDelete(t *testing.T) {
 	// A state object present locally whose refname only the bucket has: packs.
 	orphan := orphanStateObject(t, client, dir, "artifacts")
 	// An object this clone does NOT carry: an unresolvable tip contributes
-	// nothing, so its loose key must survive the whole pass.
+	// nothing, so its loose key must survive the pass.
 	foreignSha, foreignLoose := makeLooseCommit(t, "", "a foreign clone's config", 1000)
 	if err := client.Put("objects/"+foreignSha[:2]+"/"+foreignSha[2:], foreignLoose); err != nil {
 		t.Fatalf("upload foreign object: %v", err)
@@ -770,7 +770,7 @@ func TestSealLooseObjects_StateRefObjectsPackAndDelete(t *testing.T) {
 		t.Errorf("locally-absent object %s was packed", foreignSha)
 	}
 
-	// Run the whole grace out; the sealed state objects' loose copies go with
+	// Run the grace out; the sealed state objects' loose copies go with
 	// everything else, the unresolvable tip's object stays.
 	for i := 0; i < packDeleteGrace; i++ {
 		backdatePendingRounds(t, client)
@@ -891,7 +891,7 @@ func TestCommitPackState_ConcurrentPassesMerge(t *testing.T) {
 }
 
 // TestCommitPackState_DeletionMergesOntoAnotherPushersState: a pass that
-// deleted a round's loose copies must drop exactly that round from whatever the
+// deleted a round's loose copies must drop that round alone from whatever the
 // state says now, keeping a round another pusher queued in the meantime — even
 // when that other pusher queued it inside this pass's compare-and-swap window.
 func TestCommitPackState_DeletionMergesOntoAnotherPushersState(t *testing.T) {
@@ -963,7 +963,7 @@ func TestPutCompressedIfMatch_RetriesATransientFault(t *testing.T) {
 // there but cannot be read — unparseable bytes, or a schema version this binary
 // does not write — must fail the pass rather than be replaced by a zeroed one
 // under a passing compare-and-swap. Overwriting drops every pending round, and a
-// dropped round is loose copies nothing ever collects, kept forever beside the
+// dropped round is loose copies nothing ever collects, kept beside the
 // packs that replaced them.
 func TestReadPackState_PresentButUnreadableIsNeverOverwritten(t *testing.T) {
 	foreign, err := CompressJSON(map[string]any{"version": packStateVersion + 99, "generation": 7}, BrotliQualityFull)
@@ -987,7 +987,7 @@ func TestReadPackState_PresentButUnreadableIsNeverOverwritten(t *testing.T) {
 				t.Fatalf("read back the seed: %v", err)
 			}
 			if _, err := readPackState(client, ""); err == nil {
-				t.Error("readPackState returned a state for a document it cannot read; the pass would re-seal the whole bucket on every push")
+				t.Error("readPackState returned a state for a document it cannot read; the pass would re-seal the bucket on every push")
 			}
 			if err := commitPackState(client, capabilityFull, "", packStateUpdate{deleted: map[string]bool{}, sealed: &packRound{Packs: []string{"pack-aaa"}}}); err == nil {
 				t.Error("commitPackState wrote over a document it cannot read")
@@ -1006,9 +1006,9 @@ func TestReadPackState_PresentButUnreadableIsNeverOverwritten(t *testing.T) {
 // TestUnsealableClone: sealing walks the bucket's history through the LOCAL odb,
 // so a clone that cannot answer for it must skip and leave the pass to one that
 // can — a shallow clone cannot see that history at all, and a partial clone
-// would drag the whole repo over its promisor in the middle of someone's push.
+// would drag the repo over its promisor in the middle of someone's push.
 // Untested in either direction, an inverted condition makes every clone skip
-// forever behind one stderr line, and the bucket simply never packs.
+// behind one stderr line, and the bucket never packs.
 func TestUnsealableClone(t *testing.T) {
 	full := packTestRepo(t, 3)
 	gitRun(t, full, "config", "uploadpack.allowFilter", "true")
@@ -1203,7 +1203,7 @@ func TestWritePackMapShard_MergesConcurrentPacks(t *testing.T) {
 	mine := []packMapEntry{{sha: shard + strings.Repeat("1", 38), offset: 12, size: 40}}
 	theirs := []packMapEntry{{sha: shard + strings.Repeat("2", 38), offset: 52, size: 40}}
 	// The competing write lands between this writer's read and its write, which
-	// is the whole window a plain read-merge-write leaves open.
+	// is the window a plain read-merge-write leaves open.
 	if err := updateCompressedJSON(client, capabilityFull, packMapKeyPrefix+shard+".json", func(doc *packMapDoc, found bool) error {
 		if !found {
 			*doc = packMapDoc{Version: packMapVersion, Offsets: map[string][]int64{}}

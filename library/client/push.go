@@ -21,7 +21,7 @@ type Options struct {
 	DryRun      bool // preview only, touch nothing
 	NoCode      bool // skip code branches (default branch + open-PR heads)
 	NoSite      bool // skip the site step (overrides config)
-	SiteOnly    bool // publish only the site, no data push (explicit refresh; fails loudly)
+	SiteOnly    bool // publish only the site, no data push; any failure is an error
 	AllBranches bool // publish every local branch (refs/heads/*), not just reasoned
 	Full        bool // detach a thin fork relationship: upload everything the bucket lacks
 }
@@ -119,13 +119,13 @@ func Publish(workdir, remote string, opts Options, onBranch gitmsg.PushBranchPro
 
 	// Real push (not dry-run) against an s3 remote: reconcile the tracking refs
 	// to the bucket's actual state before counting, so a recreated/drifted bucket
-	// doesn't silently skip branches. Best-effort — a listing failure leaves the
-	// existing (possibly stale) counting, self-healing on the next push.
+	// does not skip branches. A listing failure leaves the existing counting in
+	// place, which the next push repairs.
 	if !opts.DryRun {
 		reconcileTrackingRefs(workdir, remote)
 	}
 
-	// Counted AFTER the reconcile above, which is the whole point of it: the
+	// Counted after the reconcile above, which is what the reconcile is for: the
 	// count reads the tracking refs, so a bucket emptied or rewound since the
 	// last push must be counted against what the bucket actually holds now, not
 	// against the tracking refs the last push wrote.
@@ -179,11 +179,10 @@ func clearThinRelationship(workdir, remote string) {
 	_, _ = git.ExecGit(workdir, []string{"config", "--unset", "remote." + remote + "." + objstore.ThinConfigKey})
 }
 
-// publishSiteOnly runs only the site step (the explicit site refresh, `gitsocial
-// push --site-only`), pushing no data. Unlike a full publish — where the site is
-// a best-effort tail on the data push — an explicit site request fails loudly: a
+// publishSiteOnly runs only the site step (`gitsocial push --site-only`),
+// pushing no data. A full publish treats the site as a best-effort tail; here a
 // missing or non-s3 remote, the site.publish guard being off, and any upload
-// failure are all errors. A dry run stays offline and reports the site skipped.
+// failure are errors. A dry run stays offline and reports the site skipped.
 func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Progress) (*Result, error) {
 	remoteURL := git.RemoteURL(workdir, remote)
 	if remoteURL == "" {
@@ -229,7 +228,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
-		// (an explicit `--site-only` still fails loudly, see publishSiteOnly).
+		// (an explicit `--site-only` still errors, see publishSiteOnly).
 		return SiteOutcome{Skipped: "thin fork bucket"}
 	}
 	if err != nil {

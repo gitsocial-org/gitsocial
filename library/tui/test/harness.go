@@ -164,7 +164,7 @@ func (h *Harness) processCmds(cmd tea.Cmd, depth int) {
 	h.processCmds(next, depth+1)
 }
 
-// shouldSkipCmd returns true for commands known to block forever in headless mode.
+// shouldSkipCmd returns true for commands known to block in headless mode.
 func shouldSkipCmd(cmd tea.Cmd) bool {
 	name := runtime.FuncForPC(reflect.ValueOf(cmd).Pointer()).Name()
 	return strings.Contains(name, "BlinkCmd") ||
@@ -174,7 +174,7 @@ func shouldSkipCmd(cmd tea.Cmd) bool {
 		strings.Contains(name, "bubbletea/v2.Tick")
 }
 
-// cmdTimeout bounds one command so a genuinely blocking one cannot hang the
+// cmdTimeout bounds one command so a blocking one cannot hang the
 // suite. It is not a performance budget: a data load that overruns it is
 // dropped, leaving the view on its loading frame, so keep it far above what a
 // load costs on a busy machine.

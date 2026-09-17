@@ -1,6 +1,6 @@
 // site_pages_tokens_test.go - Drift guards for the two-sheet CSS split: the
 // inlined pages-core.css base and the linked pages-full.css must stay
-// consistent by construction.
+// consistent.
 
 package site
 
@@ -42,7 +42,7 @@ var sitePagesTestVarDeclRe = regexp.MustCompile(`(--[a-z][\w-]*)\s*:`)
 
 // TestSitePagesVarsDeclaredInCore asserts every custom property either sheet
 // consumes is declared in pages-core.css: full declares no tokens of its own,
-// so a var that core stops declaring would silently fall back to nothing.
+// so a var that core stops declaring falls back to nothing, with no error.
 func TestSitePagesVarsDeclaredInCore(t *testing.T) {
 	core := sitePagesTestReadCSS(t, "pages-core.css")
 	full := sitePagesTestReadCSS(t, "pages-full.css")

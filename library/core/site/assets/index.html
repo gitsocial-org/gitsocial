@@ -13,7 +13,7 @@
      the ?base=/?repo= cross-bucket override keeps working.
      object-src/base-uri/form-action are locked down.
      frame-ancestors/report-uri are omitted (ignored in a meta CSP).
-     script-src carries 'unsafe-eval' for exactly one sink: the lazy highlighter
+     script-src carries 'unsafe-eval' for one sink: the lazy highlighter
      loader (gs-render.js ensurePrism/evalGrammar) runs vendored prism.js and its
      grammar components, fetched from the bucket, via new Function — a <script
      src> load would break the cross-bucket override (script-src has no https:),

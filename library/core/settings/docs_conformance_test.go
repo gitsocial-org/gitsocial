@@ -1,5 +1,5 @@
-// docs_conformance_test.go - Asserts documentation/SETTINGS.md describes exactly
-// the keys the Registry declares, with the same types and defaults.
+// docs_conformance_test.go - Asserts documentation/SETTINGS.md describes the
+// keys the Registry declares and no others, with the same types and defaults.
 package settings
 
 import (

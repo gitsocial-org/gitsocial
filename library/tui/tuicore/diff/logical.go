@@ -87,9 +87,9 @@ func (d LogicalDiff) Anchor(rowIdx int) RowAnchor {
 	}
 }
 
-// IndexOf returns the index of the row that exactly matches the given
-// anchor's (FileIdx, HunkIdx, OldLine, NewLine), or -1 if none. Tag is
-// ignored — that's a render-time concern.
+// IndexOf returns the index of the row matching the given anchor's
+// (FileIdx, HunkIdx, OldLine, NewLine), or -1 if none. Tag is ignored:
+// that is a render-time concern.
 func (d LogicalDiff) IndexOf(a RowAnchor) int {
 	for i, r := range d.Rows {
 		if r.FileIdx == a.FileIdx && r.HunkIdx == a.HunkIdx &&

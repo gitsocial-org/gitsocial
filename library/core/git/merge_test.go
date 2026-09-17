@@ -143,7 +143,7 @@ func TestSquashMerge(t *testing.T) {
 	}
 	parents := parentsOf(t, dir, hash)
 	if len(parents) != 1 || parents[0] != mainTip {
-		t.Errorf("parents = %v, want exactly [%s]: a squash keeps no link to the head branch", parents, mainTip)
+		t.Errorf("parents = %v, want [%s] alone: a squash keeps no link to the head branch", parents, mainTip)
 	}
 	if got := revParse(t, dir, "refs/heads/main"); got != hash {
 		t.Errorf("main = %s, want %s", got, hash)

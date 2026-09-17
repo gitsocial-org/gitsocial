@@ -31,7 +31,7 @@ func TestExecGitIgnoresAmbientGitDir(t *testing.T) {
 }
 
 // WriteRef is the other half of the redirect risk: it names a ref rather than a
-// path, so an ambient GIT_DIR sends the write to the wrong repository silently.
+// path, so an ambient GIT_DIR sends the write to the wrong repository.
 func TestWriteRefIgnoresAmbientGitDir(t *testing.T) {
 	bystander := initTestRepo(t)
 	target := initTestRepo(t)

@@ -142,7 +142,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
       │  middleware ← routes, depends-on=PR1      │
       ●  pr create PR3 --stack                    │
       │  routes ← tests, depends-on=PR2           │
-      │                                           ●  pr stack: the whole chain
+      │                                           ●  pr stack: every member
       │                                           ●  approve PR1
       ●  pr merge PR1: PR2 retargets to main      │
       ●  pr sync PR2: rebases it onto main        │

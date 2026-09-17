@@ -248,7 +248,7 @@ func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress
 		return fmt.Errorf("read refs: %w", err)
 	}
 	h := &remoteHelper{client: client, prefix: prefix, capability: capability, workdir: workdir, fetched: map[string]bool{}, progress: progress}
-	// One cat-file batch serves the whole detach, and it is a git child with an open stdin until it closes.
+	// One cat-file batch serves the detach, and it is a git child with an open stdin until it closes.
 	defer func() { h.local.Close() }()
 	missing, err := h.missingBucketObjects(refs)
 	if err != nil {

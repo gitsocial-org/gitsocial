@@ -61,7 +61,7 @@ async function main() {
   await GS.highlightsSettled();
   const settleMs = Date.now() - settleStart;
   ok("the reveal's wait resolves inside the deadline (" + settleMs + " ms)", settleMs < DEADLINE_MS + 1000, "waited " + settleMs + " ms");
-  ok("the whole route-plus-reveal wait finished before prism.js did",
+  ok("the route-plus-reveal wait finished before prism.js did",
     Date.now() - routeStart < STALL_MS, "elapsed " + (Date.now() - routeStart) + " ms of " + STALL_MS);
 
   // Degraded, not disabled: once the stalled fetch finally lands, the tokenizer

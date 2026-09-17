@@ -147,9 +147,8 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	// display/query union semantics (GITPM.md §links: blocks/blocked-by are
 	// directional inverses); serializing those into the edit's header would
 	// fabricate links the author never declared. GetLinks returns only this
-	// issue's forward-declared links. Failing here must abort the edit —
-	// proceeding would silently drop the issue's declared links from the
-	// new header.
+	// issue's forward-declared links. Failing here must abort the edit:
+	// proceeding would drop the issue's declared links from the new header.
 	links, err := GetLinks(existing.RepoURL, existing.Hash, existing.Branch)
 	if err != nil {
 		return result.Err[Issue]("LINKS_FAILED", fmt.Sprintf("load issue links: %v", err))

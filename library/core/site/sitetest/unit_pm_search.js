@@ -22,7 +22,7 @@ const board = GS.buildBoard(issues);
 eq(board.columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "board column names mirror kanban framework");
 // board.go matchIssueToColumn PREFERS a status: label over a state: filter, so a
 // closed issue still carrying a status/in-progress label lands in In Progress
-// (Epsilon), not Done. This mirrors the shipped board exactly (the spec's "closed
+// (Epsilon), not Done. This mirrors the shipped board (the spec's "closed
 // -> last column" SHOULD is not enforced by the implementation).
 eq(board.columns.map((c) => c.issues.length), [1, 2, 1, 1], "counts: unlabeled-open->Backlog, status labels->their col (label preferred over state)");
 ok(board.columns[1].wip === 3 && board.columns[2].wip === 3, "In Progress / Review carry WIP 3");
@@ -180,7 +180,7 @@ eq(GS.parseSearchFilters("abc").hashes, [], "a <7-char token is NOT treated as a
 ok(GS.parseSearchFilters("after:2026-13-40").dateFrom === null, "invalid strict date rejected (not a bound)");
 // hash search surfaces the matching item prominently (first)
 let hs = GS.searchItemsFaceted("hash:abc1234", searchExt);
-eq(hs.total, 1, "hash:abc1234 matches exactly one item");
+eq(hs.total, 1, "hash:abc1234 matches one item");
 eq(hs.groups[0].items[0].commit.short, "aaaaaaaaaaaa", "hash match surfaces the right item");
 eq(GS.searchItemsFaceted("abc1234def", searchExt).total, 1, "bare hex prefix matches by full-hash prefix");
 // date filters (inclusive bounds on effectiveTime)

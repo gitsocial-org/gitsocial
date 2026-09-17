@@ -156,7 +156,7 @@ func SetupFixture(t *testing.T) *Fixture {
 	t.Helper()
 	// The cache handle is process-global and cache.Open is a no-op while one is
 	// already open, so the shared fixture's cache must be closed first or this
-	// "isolated" fixture would silently read and write the shared one.
+	// "isolated" fixture would read and write the shared one.
 	cache.Reset()
 	f := setupFixtureForMain()
 	t.Cleanup(func() {

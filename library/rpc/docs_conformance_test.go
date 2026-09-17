@@ -1,5 +1,5 @@
-// docs_conformance_test.go - Asserts documentation/RPC.md documents exactly the
-// methods the server registers, in both directions.
+// docs_conformance_test.go - Asserts documentation/RPC.md documents the methods
+// the server registers, in both directions.
 package rpc
 
 import (

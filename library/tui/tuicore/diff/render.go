@@ -80,7 +80,7 @@ func styleCell(c Cell, effectiveBG string) lipgloss.Style {
 }
 
 // padCells emits `n` spaces with the given background color (or plain
-// spaces if bg is empty). The whole pad is one styled segment.
+// spaces if bg is empty). The pad is one styled segment.
 func padCells(n int, bg string) string {
 	if n <= 0 {
 		return ""

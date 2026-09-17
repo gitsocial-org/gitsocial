@@ -141,7 +141,7 @@ func (c *Client) do(ctx context.Context, method, key string, query url.Values, b
 	return data, respHeaders, err
 }
 
-// doOnce signs and executes one request attempt, reading the whole body of a 2xx.
+// doOnce signs and executes one request attempt, reading the body of a 2xx in full.
 func (c *Client) doOnce(method, key string, query url.Values, body []byte, headers map[string]string) ([]byte, http.Header, error) {
 	// Refuse an unsigned write here, so the caller reports the cause and not a 403.
 	if c.anonymous && method != http.MethodGet && method != http.MethodHead {
@@ -255,7 +255,7 @@ func (c *Client) getContext(ctx context.Context, key string) ([]byte, error) {
 	return data, err
 }
 
-// getRange downloads one byte range of an object, end exclusive; a server that ignores Range sends the whole body, which is sliced locally.
+// getRange downloads one byte range of an object, end exclusive; a server that ignores Range sends the full object, which is sliced locally.
 func (c *Client) getRange(key string, start, end int64) ([]byte, error) {
 	headers := map[string]string{"Range": fmt.Sprintf("bytes=%d-%d", start, end-1)}
 	data, respHeaders, err := c.do(context.Background(), http.MethodGet, key, nil, nil, headers)

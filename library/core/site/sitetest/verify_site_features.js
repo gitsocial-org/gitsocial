@@ -313,7 +313,7 @@ async function main() {
   ok("timeline includes plain code commits", code.length > 0, "count=" + code.length);
   ok("code commits carry no GitMsg header", code.every((i) => !i.commit.gitmsg && Object.keys(i.header).length === 0));
   // Interleaved (not all grouped at the end): a code commit sits before some
-  // non-code item, and the whole feed stays newest-first by effectiveTime.
+  // non-code item, and every row stays newest-first by effectiveTime.
   const firstCodeIdx = tl.findIndex((i) => i._ext === "code");
   const lastNonCodeIdx = tl.map((i) => i._ext).lastIndexOf("social") >= 0 ? tl.map((i) => i._ext).lastIndexOf("social") : tl.length - 1;
   ok("code commits interleave with ext items (not appended at the end)", firstCodeIdx >= 0 && firstCodeIdx < lastNonCodeIdx, "firstCode=" + firstCodeIdx + " lastSocial=" + lastNonCodeIdx);

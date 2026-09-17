@@ -2,8 +2,8 @@
 // whose git objects — state-ref objects included — live in packfiles, and
 // refdelta-demo, a hand-built REF_DELTA pack of the same objects.
 //
-// Three read paths have to work there, and the split is the whole point of the
-// design: a commit or tag is located by the pack map (one Range GET, no index,
+// Three read paths have to work there, and the split is what the design is for:
+// a commit or tag is located by the pack map (one Range GET, no index,
 // no delta chain, because the commits pack is written with --depth=0), a tree or
 // blob goes through the pack index — range-read via its fanout, never
 // downloaded whole — and may resolve OFS_DELTA / REF_DELTA bases, and a
@@ -26,8 +26,8 @@ let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Record every bucket fetch: the honest visitor cost is both the number of
-// requests and the bytes they carry, and this suite asserts on both.
+// Record every bucket fetch: the visitor pays both in requests and in the bytes
+// they carry, and this suite asserts on both.
 const realFetch = global.fetch;
 let log = [];
 global.fetch = async (url, opts) => {
@@ -61,8 +61,8 @@ function gitSha(obj) {
   return crypto.createHash("sha1").update(Buffer.concat([head, Buffer.from(obj.body)])).digest("hex");
 }
 
-// readsBack asserts that a sha read through getObject reconstructs to exactly
-// that sha, and returns the object for further checks.
+// readsBack asserts that a sha read through getObject reconstructs to that same
+// sha, and returns the object for further checks.
 async function readsBack(ctx, sha, label) {
   const obj = await GS.getObject(ctx, sha);
   const got = obj ? gitSha(obj) : "null";
@@ -111,8 +111,8 @@ async function main() {
   // rewrite is best-effort too — so a reader that took an empty listing as
   // authoritative rendered a fully packed bucket as nothing at all, with every
   // byte present. ctx.packs.packed is the memo that listing fills, so seeding it
-  // false IS the bucket-says-loose state, with the loose key genuinely absent
-  // (asserted above).
+  // false IS the bucket-says-loose state, with the loose key absent (asserted
+  // above).
   const saysLoose = GS.newContext(BASE);
   saysLoose.packs.packed = Promise.resolve(false);
   const viaMap = await GS.getObject(saysLoose, postSha);
@@ -178,7 +178,7 @@ async function main() {
     JSON.stringify(blobText.slice(0, 40)) + " lines=" + blobText.split("\n").length);
 
   // ---- the index is RANGE-read, not downloaded ----
-  // The whole point of the fanout: a cold blob read must cost a fraction of the
+  // The fanout exists for this: a cold blob read must cost a fraction of the
   // index it searched, or a packed bucket's file views pay for the index on
   // every session.
   const rangeCtx = GS.newContext(BASE);
@@ -192,7 +192,7 @@ async function main() {
     const probe = await GS.fetchRange(BASE, "objects/pack/" + name + ".idx", 0, 1);
     if (probe && probe.total > biggest) biggest = probe.total;
   }
-  // "Fewer bytes than the whole index" is not the claim — a read of 99% of it
+  // "Fewer bytes than the full index" is not the claim — a read of 99% of it
   // would pass that. The claim has a SHAPE, and the three kinds of range it is
   // made of scale differently, so each is bounded on its own:
   //   - the HEAD (bytes=0-4095), read once per pack and cached for the session,
@@ -241,7 +241,7 @@ async function main() {
     olderTypes.push(revBlob ? await packEntryType(codeCtx, revBlob.sha) : -1);
     const body = revBlob && await readsBack(codeCtx, revBlob.sha, "the revision behind /" + rev.subject.source + "/");
     const text = body ? new TextDecoder().decode(body.body) : "";
-    ok("the revision behind /" + rev.subject.source + "/ reconstructs exactly",
+    ok("the revision behind /" + rev.subject.source + "/ reconstructs byte for byte",
       text.split("\n").length === 351 && rev.has.test(text) && !rev.hasNot.test(text),
       JSON.stringify(text.slice(0, 40)) + " lines=" + text.split("\n").length);
   }

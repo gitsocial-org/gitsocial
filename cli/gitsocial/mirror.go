@@ -644,11 +644,7 @@ func runMirrorImport(cmd *cobra.Command, cfg *Config, forgeURL string, f *mirror
 	return stats, nil
 }
 
-// mirrorImportPlanLine names the forge read that is about to happen, so the
-// pause it causes reads as work rather than a hang. The adapters list every
-// item and filter the already-imported ones after they arrive, so a repo with
-// nothing new still pays the full read — the line says exactly that instead of
-// leaving a silent gap between the status table and the result.
+// mirrorImportPlanLine names the forge read about to run, with the outstanding item count when it is known.
 func mirrorImportPlanLine(found, mapped importpkg.ItemCounts) string {
 	pairs := [][2]int{
 		{found.Issues, mapped.Issues},

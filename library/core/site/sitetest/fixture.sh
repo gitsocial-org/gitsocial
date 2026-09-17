@@ -71,7 +71,7 @@ gg social init >/dev/null
 UP=$(gg --json social post "Original upstream idea: loose-object readers over dumb HTTP." | idof)
 gg remote add "s3://$HOST/other-demo" >/dev/null
 # The site is guard-gated (default off): enable publish locally so `push --site-only`
-# runs. The config ref is deliberately NOT pushed and pages stay off, so
+# runs. The config ref is NOT pushed and pages stay off, so
 # other-demo doubles as the guards-off page fixture (zero page keys).
 gg config site set publish true >/dev/null
 git -C "$W" push -q origin main
@@ -365,7 +365,7 @@ gg push --site-only >/dev/null
 #
 # The data/ directory exists to push the content pack's index past the reader's
 # index-head request, so a tree or blob read there takes the fanout-bounded
-# RANGE path rather than receiving the whole index in the head. A fixture of a
+# RANGE path rather than receiving the full index in the head. A fixture of a
 # handful of objects would only ever exercise the small-index shortcut.
 notes_seed() {
 	awk 'BEGIN{for(i=1;i<=350;i++) printf "notes line %04d: packed content for the browser pack reader\n", i}'
@@ -432,7 +432,7 @@ idxbytes=$(wc -c <"$(ls -S "$served"/packed-demo/objects/pack/*.idx | head -1)")
 # delta-base-offset extension turned OFF, so bases are named by sha. The setting
 # is passed EXPLICITLY rather than relied on being unset: pack.useDeltaBaseOffset
 # defaults to true in git, and any of the config files in scope could set it, in
-# which case this bucket would silently be a second OFS_DELTA fixture. Objects
+# which case this bucket would be a second OFS_DELTA fixture, unnoticed. Objects
 # only — no refs and no site artifacts — since the suite addresses it by sha.
 R="$served/refdelta-demo"
 mkdir -p "$R/objects/pack" "$R/objects/info" "$out/refdelta"

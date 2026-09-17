@@ -211,7 +211,7 @@ func buildMemoContent(subject, body string, opts CreateMemoOptions, editsRef str
 
 // validateLabels rejects malformed special-form labels.
 // `expires/<date>` must be `YYYY-MM-DD` or RFC3339; otherwise the label
-// silently passes the SQL date filter and the memo never expires.
+// passes the SQL date filter and the memo never expires.
 func validateLabels(labels []string) error {
 	for _, l := range labels {
 		l = strings.TrimSpace(l)

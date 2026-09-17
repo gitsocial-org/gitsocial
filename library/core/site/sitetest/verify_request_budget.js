@@ -3,7 +3,7 @@
 // a bounded number of bucket fetches; this pins that budget per route so a
 // regression (an accidental per-object walk where the index could answer) fails
 // CI. Each route is driven on a fresh context (cold cache), its fetches counted,
-// and asserted under a generous-but-honest ceiling (≈ measured × 1.5). The
+// and asserted under a ceiling with headroom (≈ measured × 1.5). The
 // measured table prints so future readers see the real numbers.
 //
 // Index-fed routes (timeline, default-branch log, list tabs, item/PR detail,
@@ -23,7 +23,7 @@ let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
 
 // Count every bucket fetch (any URL), regardless of caching layers above — the
-// honest visitor cost is the number of network requests the reader issues.
+// visitor pays for each network request the reader issues.
 const realFetch = global.fetch;
 let fetches = 0;
 let inFlight = 0;
@@ -97,10 +97,10 @@ async function main() {
     "issue=" + !!issue + " pr=" + !!pr + " post=" + !!post + " memo=" + !!memo);
   ok("discovered merged-demo PR", !!mergedPR);
   if (!issue || !pr || !post || !memo || !mergedPR) { console.log("\n" + pass + " passed, " + (fail + 1) + " failed"); process.exit(1); }
-  // Releases are the one type thread-demo deliberately does NOT carry (the
+  // Releases are the one type thread-demo does NOT carry (the
   // release extension is left uninitialized there, which verify_pages.js pins).
   // Its ceiling therefore has nothing to measure, and that state is ASSERTED
-  // rather than swallowed by a bare `if`: a ceiling silently skipped is a
+  // rather than swallowed by a bare `if`: a ceiling skipped unannounced is a
   // ceiling that stopped guarding anything, and if the fixture ever gains a
   // release corpus this turns red until the ceiling is wired in with it.
   ok("the release ceiling is skipped only because the fixture carries no releases", rel === null, "found a release item");
@@ -116,7 +116,7 @@ async function main() {
   // happened to land in time. Now that measure() waits for the route to stop
   // fetching, the count is stable and the ceiling is back near it. This drives
   // the app directly (the plain-shell path); a page entry behaves the same way,
-  // since its reveal deliberately does NOT wait for the section. A real bucket
+  // since its reveal does NOT wait for the section. A real bucket
   // pays ~23: this fixture forces 4-entry shards (GITSOCIAL_SITE_SHARD_COUNT),
   // so its tiny branches drain older shards that 4000-entry production shards
   // never touch.
@@ -133,7 +133,7 @@ async function main() {
   await run("tags", TD, "#/tags", 20);
   await run("branches", TD, "#/branches", 20);
   await run("default-branch log", TD, "branch:main", 25);
-  // The commits list is metadata-only by construction: the page layer's published
+  // The commits list is metadata-only: the page layer's published
   // partition (one small doc) plus the code index slice the requested page needs.
   // On this fixture the corpus is one shard, so the ceiling cannot tell a bounded
   // read from a full drain — what it does guard is the regression that would
@@ -149,7 +149,7 @@ async function main() {
   if (rel) await run("release detail", TD, GS.commitRef(rel.commit.hash, "gitmsg/release"), 30);
   await run("post detail", TD, GS.commitRef(post.commit.hash, "gitmsg/social"), 30);
   await run("memo detail", TD, GS.commitRef(memo.commit.hash, "gitmsg/memo"), 30);
-  // The whole point of Task 1: merged-PR detail resolves its short shas from the
+  // What Task 1 bought: merged-PR detail resolves its short shas from the
   // code index, NOT a ~775-GET base-branch walk. Post-fix ceiling.
   await run("merged-PR detail", "merged-demo", GS.commitRef(mergedPR.commit.hash, "gitmsg/review"), 40);
 

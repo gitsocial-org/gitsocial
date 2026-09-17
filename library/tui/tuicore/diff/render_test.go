@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// TestRenderRow_widthInvariant_plainCells asserts RenderRow output has
-// exactly cols display columns when padded.
+// TestRenderRow_widthInvariant_plainCells asserts RenderRow output has cols
+// display columns when padded.
 func TestRenderRow_widthInvariant_plainCells(t *testing.T) {
 	row := Row{Cells: []Cell{{Text: "hello"}}}
 	out := RenderRow(row, 12)

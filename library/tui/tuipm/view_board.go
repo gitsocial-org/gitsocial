@@ -238,7 +238,7 @@ type columnMoveResultMsg struct {
 }
 
 // moveIssue translates a one-column shift of the selected issue into a state
-// or label edit, dispatched asynchronously. Returns nil silently when bounds
+// or label edit, dispatched asynchronously. Returns nil when bounds
 // are invalid; emits a result message with err set for filter or API failures.
 func (v *BoardView) moveIssue(destCol int) tea.Cmd {
 	if destCol < 0 || destCol >= len(v.board.Columns) || destCol == v.selectedCol {

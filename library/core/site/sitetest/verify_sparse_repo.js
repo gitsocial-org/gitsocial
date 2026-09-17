@@ -17,7 +17,7 @@ function findClass(node, cls, out) { out = out || []; for (const c of (node && n
 let ctx = null;
 async function route(hash, fresh) { if (fresh || !ctx) ctx = GS.newContext(BASE); setHash(hash); await GS.route(ctx); await wait(600); }
 // withTimeout rejects if a load hangs, so a regression (an unsettled promise)
-// fails the suite loudly instead of hanging the whole battery.
+// fails the suite instead of hanging the battery.
 function withTimeout(p, ms, label) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(label + " HUNG >" + ms + "ms")), ms))]); }
 
 async function main() {

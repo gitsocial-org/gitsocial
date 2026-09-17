@@ -117,7 +117,7 @@ func TestCode_BootstrapSingleBranch(t *testing.T) {
 
 // TestCode_MultiBranchDedupAndAttribution: a feature branch off main; the shared
 // base is attributed to main (default wins), the feature-only commits to the
-// feature branch, and every commit appears exactly once.
+// feature branch, and every commit appears once.
 func TestCode_MultiBranchDedupAndAttribution(t *testing.T) {
 	withTestShardCount(func() {
 		client, _ := testClient(t)

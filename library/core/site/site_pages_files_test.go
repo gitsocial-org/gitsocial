@@ -319,7 +319,7 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 
 // TestSiteFilePages_UnreadableTree: a pusher whose odb cannot serve the tree
 // (no local repo, a shallow clone) must change nothing. An unreadable tree is
-// not an empty one, and reading it as one would sweep the whole layer and drop
+// not an empty one, and reading it as one would sweep the file layer and drop
 // the Files entry out of every page's sidebar.
 func TestSiteFilePages_UnreadableTree(t *testing.T) {
 	dir, head := pagesFileRepo(t, map[string]string{"README.md": "# Readme\n", "docs/one.md": "# One\n\nkeep me.\n"})
@@ -379,7 +379,7 @@ func TestSiteFilePages_BudgetResume(t *testing.T) {
 		}
 	}
 	if !strings.Contains(getKey(t, client, "f/index.html"), "7 files") {
-		t.Error("the resumed index must list the whole set")
+		t.Error("the resumed index must list every file")
 	}
 }
 
@@ -443,7 +443,7 @@ func TestSiteFilePageKey(t *testing.T) {
 		}
 	}
 	// Two documents whose keys collide: the first keeps the swapped key, the
-	// second keeps its own extension so neither page is silently overwritten.
+	// second keeps its own extension so neither page overwrites the other.
 	docs := selectSiteFileDocs([]siteFileDoc{{Path: "notes.md"}, {Path: "notes.markdown"}, {Path: "index.md"}}, "", nil, nil)
 	got := map[string]string{}
 	for _, d := range docs {

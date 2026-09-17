@@ -35,7 +35,7 @@ for (const c of FIX.messageCases) {
   eq(readerSubject(c.message), c.expectSubject, c.name + ": subject");
   // The reader parses relations from the GitMsg header line; parity means
   // parsing the Go-extracted line yields the same header map as parsing the
-  // whole message (extractHeaderLine picks exactly that line, verbatim).
+  // full message (extractHeaderLine picks that line, verbatim).
   const fromWhole = GS.parseGitmsg(c.message);
   const fromLine = c.expectHeader ? GS.parseGitmsg(c.expectHeader) : null;
   eq(JSON.stringify(fromWhole), JSON.stringify(fromLine), c.name + ": header line parses identically");

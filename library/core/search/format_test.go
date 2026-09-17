@@ -30,7 +30,7 @@ func TestFormatResultNoResults(t *testing.T) {
 	})
 }
 
-// TestFormatResultSingleItem pins the whole rendered block: header, content and
+// TestFormatResultSingleItem pins the rendered block: header, content and
 // the trailing count line with its separator.
 func TestFormatResultSingleItem(t *testing.T) {
 	result := Result{
@@ -166,7 +166,7 @@ func TestFormatItem(t *testing.T) {
 	t.Run("no meta line when there is nothing to show", func(t *testing.T) {
 		item := ScoredItem{Item: Item{AuthorName: "Alice", Extension: "social", Timestamp: fiveMinutesAgo(), Content: "Body"}}
 		if lines := strings.Split(formatItem(item), "\n"); len(lines) != 2 {
-			t.Errorf("lines = %q, want exactly header and content", lines)
+			t.Errorf("lines = %q, want header and content alone", lines)
 		}
 	})
 }
@@ -250,7 +250,7 @@ func TestFormatGroupedResultAuthorOverflow(t *testing.T) {
 }
 
 // TestFormatGroupedResultWithoutAuthors checks the flat subject list used when
-// grouping by author, where the per-item author is deliberately omitted.
+// grouping by author, where the per-item author is omitted.
 func TestFormatGroupedResultWithoutAuthors(t *testing.T) {
 	items := make([]GroupedItem, 0, 7)
 	for i := 1; i <= 7; i++ {
@@ -350,7 +350,7 @@ func TestFormatDate(t *testing.T) {
 		want string
 	}{
 		{"under a minute", now.Add(-30 * time.Second), "just now"},
-		{"exactly now", now, "just now"},
+		{"now", now, "just now"},
 		{"future timestamp", now.Add(time.Hour), "just now"},
 		{"one minute", now.Add(-time.Minute - time.Second), "1m ago"},
 		{"minutes", now.Add(-45 * time.Minute), "45m ago"},
@@ -374,7 +374,7 @@ func TestFormatDate(t *testing.T) {
 			t.Errorf("formatDate() = %q, want %q", got, "Jun 5, 2020")
 		}
 	})
-	t.Run("exactly seven days is absolute", func(t *testing.T) {
+	t.Run("the seven-day boundary is absolute", func(t *testing.T) {
 		at := now.Add(-7 * 24 * time.Hour)
 		if got := formatDate(at); got != at.Format("Jan 2, 2006") {
 			t.Errorf("formatDate() = %q, want the absolute date %q", got, at.Format("Jan 2, 2006"))

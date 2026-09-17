@@ -375,7 +375,7 @@ func RecountAllInteractions() error {
 	})
 }
 
-// recountAllInteractions rebuilds the whole counter table from live rows.
+// recountAllInteractions rebuilds the counter table from live rows.
 func recountAllInteractions(db *sql.DB) {
 	if _, err := db.Exec(`DELETE FROM social_interactions`); err != nil {
 		log.Warn("clear interaction counts failed", "error", err)
@@ -665,7 +665,7 @@ func getAllItemsCount(q socialQuery) (int, error) {
 	})
 }
 
-// uniqueURLs returns root plus each non-empty extra URL exactly once.
+// uniqueURLs returns root plus each non-empty extra URL, without repeats.
 func uniqueURLs(root string, extras []string) []string {
 	out := []string{root}
 	for _, u := range extras {

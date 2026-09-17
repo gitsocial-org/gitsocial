@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # prose-check.sh - count STYLE.md violations; fail when a count rises above scripts/prose-baseline.txt.
-# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html comment-heavy short-long flag-help error-shape
+# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html comment-heavy confidence short-long flag-help error-shape
 # Commit subjects over 72 characters always fail: GITSOCIAL_PUSH_RANGES (set by the hook), else @{upstream}..HEAD, else skipped.
 set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/prose-baseline.txt"
-rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy emdash error-shape flag-help short-long"
+rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy confidence emdash error-shape flag-help short-long"
 comment_heavy_since=2026-09-16T00:00:00 # commits before the rule are exempt
 zero=0000000000000000000000000000000000000000
 
@@ -86,6 +86,12 @@ comment_heavy() {
 	done
 }
 
+# confidence prints file:line for each line carrying an intensifier STYLE.md's prose rules ban; STYLE.md itself lists them
+confidence() {
+	printf '%s\n' "$FILES" | grep -v '^documentation/STYLE\.md$' | tr '\n' '\0' |
+		xargs -0 grep -HniE '\b(exactly|deliberately|silently|loudly|forever|by construction|honest|honestly|genuinely|precisely|the whole)\b' | cut -d: -f1,2
+}
+
 # list_rule prints every offending file:line for one rule
 list_rule() {
 	case "$1" in
@@ -95,6 +101,7 @@ list_rule() {
 	comment-block-css) block_runs css '/*' '*/' ;;
 	comment-block-html) block_runs html '<!--' '-->' ;;
 	comment-heavy) comment_heavy ;;
+	confidence) confidence ;;
 	short-long) grep -HnE 'Short:[[:space:]]*"' cli/gitsocial/*.go | awk -F'"' 'length($2) > 50 { split($0, a, ":"); print a[1] ":" a[2] }' ;;
 	error-shape) error_shapes ;;
 	flag-help)
