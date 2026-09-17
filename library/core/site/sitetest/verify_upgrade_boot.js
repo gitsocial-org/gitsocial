@@ -768,10 +768,22 @@ async function main() {
     }));
     const section = front.text.slice(front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
     // A row leads with its glyph, then the one chip slot the type's list row
-    // fills, so the glyph CLASS identifies a row's kind and the chip is captured
-    // with it: both surfaces fill that slot from the one rule.
-    const rows = [...section.matchAll(/<div class="card"><div class="card-head">(?:<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span> )?(?:<span class="chip[^"]*">([^<]*)<\/span> )?<a class="subject" href="([^"]+)">([^<]*)<\/a>/g)]
-      .map((m) => ({ glyphClass: m[1] || "", glyph: m[2] || "", chip: unesc(m[3] || ""), href: m[4], subject: unesc(m[5]) }));
+    // fills, so the glyph CLASS identifies its kind and the chip rides with it.
+    // A body-only row has no head: the glyph and the marker lead its meta row.
+    const chunks = section.split('<div class="card"').slice(1);
+    const rows = chunks.map((chunk) => {
+      const glyph = /<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span>/.exec(chunk);
+      const chip = /<span class="chip[^"]*">([^<]*)<\/span>/.exec(chunk);
+      const subject = /<a class="subject" href="([^"]+)">([^<]*)<\/a>/.exec(chunk);
+      const hash = /<a class="hash" href="([^"]+)"/.exec(chunk);
+      return {
+        glyphClass: glyph ? glyph[1] : "", glyph: glyph ? glyph[2] : "", chip: chip ? unesc(chip[1]) : "",
+        href: subject ? subject[1] : (hash ? hash[1] : ""), subject: subject ? unesc(subject[2]) : "",
+      };
+    });
+    ok("every row opens with its card head, or with its meta row when body-only",
+      chunks.every((c) => c.startsWith('><div class="card-head">') || c.startsWith('><span class="meta meta-lead">')),
+      JSON.stringify(chunks.map((c) => c.slice(0, 40))));
     ok("home view paints recent-activity rows", painted.length > 0, "painted=" + painted.length);
     ok("front page carries the recent-activity section after the README", front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>') > front.text.indexOf("README"));
     ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.glyphClass === painted[i].glyphClass && r.subject === painted[i].subject),

@@ -9,6 +9,16 @@
       "backgroundColor": "srgb(0.03 0.04 0.13)",
       "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
       "borderRadius": "10px"
+    },
+    {
+      "shape": "span.meta.meta-lead",
+      "padding": "9.6px 14.4px",
+      "margin": "0px 0px 9.6px",
+      "fontSize": "24px",
+      "color": "rgb(201, 209, 217)",
+      "backgroundColor": "srgb(0.03 0.04 0.13)",
+      "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
+      "borderRadius": "10px"
     }
   ],
   ".card-head": [
@@ -53,6 +63,16 @@
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "srgb(0.54 0.56 0.61)",
       "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.author > span.reltime > a.hash",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.54 0.56 0.61)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "0px"
     }
   ],
   ".edited": [
@@ -92,6 +112,16 @@
     }
   ],
   ".type-glyph": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px 3.84px 0px 0px",
+      "fontSize": "12.8px",
+      "color": "srgb(0.54 0.56 0.61)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderRadius": "0px"
+    },
     {
       "shape": "",
       "padding": "0px",

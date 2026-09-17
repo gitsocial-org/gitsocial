@@ -1,4 +1,4 @@
-// unit_parity.js - DOM-free reader-side half of the writer/reader parity invariant: the JS
+// unit_parity.js - reader-side half of the writer/reader parity invariant: the JS
 // reader's subject/header extraction (gs-core.js cleanContent + parseGitmsg,
 // the same code metaCommit feeds) must agree with the Go writer's subjectOf /
 // extractHeaderLine on the shared pinned fixtures (parity_fixtures.json). The Go
@@ -8,7 +8,10 @@
 // "body starts with GitMsg: " case.
 const fs = require("fs");
 const path = require("path");
+require("./shim.js");
+require("../assets/icons.js");
 const GS = require("../assets/gs-core.js");
+require("../assets/gs-render.js");
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, "parity_fixtures.json"), "utf8"));
 let pass = 0, fail = 0;
 function eq(a, b, msg) { if (a === b) { pass++; } else { fail++; console.log("FAIL", msg, "got", JSON.stringify(a), "want", JSON.stringify(b)); } }
@@ -89,6 +92,36 @@ for (const c of FIX.releaseRows) {
   eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
 }
 
+console.log("=== parity invariant: the one card shape ===");
+// slots names a rendered node's child classes in order, the form site_parity_test.go compares.
+const slots = (node) => ((node && node._children) || []).filter((c) => c && c.nodeType === 1)
+  .map((c) => String(c.className || "").trim().split(/\s+/)[0]).join(",");
+for (const c of FIX.cardSkeleton.cases) {
+  const it = {
+    commit: { hash: "a".repeat(40), short: "a".repeat(12), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, refs: [] },
+    header: c.header, content: c.firstLine, author: "Ada", effectiveTime: 1750000000,
+    _ext: c.ext, _branch: "gitmsg/" + c.ext,
+  };
+  const row = GS.homeActivityRow(it);
+  const head = (row._children || []).find((n) => n && n._cls && n._cls.has("card-head"));
+  if (!c.expectHead.length) {
+    eq(!!head, false, c.name + ": a body-only row carries no head");
+    eq(slots(row), FIX.cardSkeleton.bodyOnlyParts.join(","), c.name + ": the meta row, then the body");
+    const meta = (row._children || []).find((n) => n && n._cls && n._cls.has("meta"));
+    eq(slots(meta).split(",").slice(0, c.expectLead.length).join(","), c.expectLead.join(","), c.name + ": what leads the meta row");
+    continue;
+  }
+  eq(slots(head), c.expectHead.join(","), c.name + ": head slots");
+  eq(slots(row), FIX.cardSkeleton.parts.slice(0, 2).join(","), c.name + ": the head, then the meta row");
+}
+// The chip row is the app's own third part, so the full order shows on a card that fills it.
+const chipped = GS.prCard({
+  commit: { hash: "b".repeat(40), short: "b".repeat(12), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, refs: [] },
+  header: { type: "pull-request", state: "open", head: "feature", base: "trunk", labels: "kind/bug" },
+  content: "Rework the walk", author: "Ada", effectiveTime: 1750000000,
+});
+eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
+
 console.log("=== parity invariant: what the front page says about the root entries it hides ===");
 for (const c of FIX.frontFiles.cases) {
   const cut = GS.homeFilesTruncation(c.total, FIX.frontFiles.limit);
@@ -114,7 +147,6 @@ for (const c of FIX.metaRow.authors) {
   eq(GS.authorLabel(c.author, c.email), c.expectLabel, c.name + ": label");
 }
 
-require("../assets/gs-render.js");
 const empties = Object.entries(GS.LIST_EMPTY).sort().map((e) => e.join("=")).join(",");
 const fixtureEmpties = Object.entries(FIX.listEmpty).sort().map((e) => e.join("=")).join(",");
 eq(empties, fixtureEmpties, "LIST_EMPTY matches the page layer's empty sentences");

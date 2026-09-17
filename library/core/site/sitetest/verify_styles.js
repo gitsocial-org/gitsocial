@@ -110,6 +110,18 @@ function checkMetaRow(theme, metas) {
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 
+// checkBodyOnlyCard asserts a body-only card has no head and leads with its meta
+// row. cards is the timeline route's ".card" record.
+function checkBodyOnlyCard(theme, cards) {
+  if (!cards) {
+    ok("body-only card " + theme + ": records captured", false, "no .card record");
+    return;
+  }
+  const shapes = cards.map((r) => r.shape);
+  ok("body-only card " + theme + ": the timeline renders one with no head", shapes.some((s) => s.startsWith("span.meta.meta-lead")), shapes.join(" | "));
+  ok("body-only card " + theme + ": every other card heads with its card head", shapes.every((s) => s.startsWith("div.card-head") || s.startsWith("span.meta.meta-lead")), shapes.join(" | "));
+}
+
 // checkEditedBit asserts the edited marker is a plain meta bit, never a chip.
 // edited is a list route's ".edited" record, chips its ".chip" record.
 function checkEditedBit(theme, edited, chips) {
@@ -260,7 +272,7 @@ async function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {};
+  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {}, timelineCards = {};
   const detailTopbars = {}, detailActions = {};
   let detailShort = "";
   for (const route of ROUTES) {
@@ -274,6 +286,7 @@ async function main() {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
       if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; }
+      if (route.name === "timeline") timelineCards[theme] = got[".card"];
       if (route.name === "branch-missing") errNotices[theme] = got[".err"];
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];
@@ -302,6 +315,7 @@ async function main() {
     checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
     checkMetaRow(theme, listMetas[theme]);
     checkEditedBit(theme, listEdited[theme], listChips[theme]);
+    checkBodyOnlyCard(theme, timelineCards[theme]);
     checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
     checkDetailActions(theme, detailTopbars[theme], detailActions[theme]);

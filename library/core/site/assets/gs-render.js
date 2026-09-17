@@ -4033,11 +4033,21 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function homeActivityRow(item) {
     const branch = item._branch || "";
     const code = item._ext === "code";
+    const nav = { hash: item.commit.hash, branch };
+    // A comment, repost and quote render whole (BODY_ONLY_TYPES), so the row takes the first line of that body and no head.
+    if (!code && isBodyOnly(item, item._ext)) {
+      const first = subjectBody(item.content)[0];
+      const meta = metaRow(item, branch);
+      const marker = cardHeadChips(item.header, item._ext, first).lead;
+      if (marker) meta.prepend(marker);
+      prependGlyph(meta, item, item._ext);
+      return card({ parts: [meta, first ? el("div", { class: "body" }, [first]) : null], nav });
+    }
     const glyph = code ? el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]) : typeGlyphEl(item, item._ext);
     const title = headSubject(item.header, item._ext, itemSubject(item));
     const chips = cardHeadChips(item.header, item._ext, title);
     const head = cardHead(glyph, commitRef(item.commit.hash, branch), title, chips.tail, chips.lead);
-    return card({ parts: [head, metaRow(item, branch)], nav: { hash: item.commit.hash, branch } });
+    return card({ parts: [head, metaRow(item, branch)], nav });
   }
 
   // homeActivityMore renders the trailing link to the full timeline.

@@ -194,6 +194,7 @@ Each bump gets a row here, newest first:
 
 | Version | What it rewrote |
 |---|---|
+| 30 | the body-only list and activity rows: no head, the first line as the card's text |
 | 29 | the front page's truncation notice over its root file listing |
 | 28 | the release row's asset count in place of its hash, and a typeless item's glyph class |
 | 27 | the head chips on every row, the edited marker on a list row, and the sidebar title |

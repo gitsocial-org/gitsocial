@@ -164,8 +164,10 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
 {{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "metaline"}}<p class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}><div class="card-head">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
-<span class="meta">{{template "bits" .Meta}}</span></div>
+{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
+{{if .Text}}<div class="body">{{.Text}}</div>
+{{end}}{{else}}<div class="card-head">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
+<span class="meta">{{template "bits" .Meta}}</span>{{end}}</div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}{{template "detailhead" .}}
@@ -178,7 +180,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}<p class="meta meta-lead">{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
+{{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
 {{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<p class="notice">{{.Omitted}} more replies not shown.</p>
@@ -348,6 +350,8 @@ type sitePageListEntry struct {
 	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
 	Href       string
 	Title      string
+	BodyOnly   bool   // no head: the glyph and the marker lead the meta row (siteRowHead)
+	Text       string // a body-only row's own text, the body's first line
 	Meta       []sitePageBit
 }
 
@@ -1059,11 +1063,22 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 	return "(untitled)"
 }
 
+// siteRowHead resolves a row's head: a body-only type takes none, so the marker leads its meta row and its first line stands as the card's text. Mirrors socialCard in gs-render.js.
+func siteRowHead(it *sitePageItem) sitePageListEntry {
+	t := pageItemType(it)
+	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+	if sitePageBodyOnly(t) {
+		chip, _ := siteRowHeadChips(it, subject)
+		return sitePageListEntry{BodyOnly: true, Chip: chip, Text: subject}
+	}
+	head := siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
+	chip, tail := siteRowHeadChips(it, head)
+	return sitePageListEntry{Chip: chip, TailChips: tail, Title: head}
+}
+
 // buildSiteListEntry renders one root as a list page's row; defaultType suppresses the type bit on a type's own list.
 func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry {
 	t := pageItemType(it)
-	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
-	subject = siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 	// A list page sits one directory below the item pages.
 	href := "../i/" + it.Msg.Short + ".html"
 	meta := siteRowMeta(it, href)
@@ -1077,17 +1092,10 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	}
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, state)
-	chip, tail := siteRowHeadChips(it, subject)
-	return sitePageListEntry{
-		Glyph:      glyph,
-		GlyphClass: glyphClass,
-		GlyphTitle: sitePageGlyphTitle(t, state),
-		Chip:       chip,
-		TailChips:  tail,
-		Href:       href,
-		Title:      subject,
-		Meta:       meta,
-	}
+	row := siteRowHead(it)
+	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
+	row.Href, row.Meta = href, meta
+	return row
 }
 
 // siteFrontActivityEntry pairs a rendered activity row with its sort key.
@@ -1125,23 +1133,13 @@ func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]in
 			if it.Retracted {
 				continue
 			}
-			subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 			itemType := pageItemType(it)
-			subject = siteHeadSubject(itemType, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 			state := pageItemField(it, "state")
 			glyph, glyphClass := sitePageGlyph(itemType, state)
 			href := "./i/" + it.Msg.Short + ".html"
-			chip, tail := siteRowHeadChips(it, subject)
-			row := sitePageListEntry{
-				Href:       href,
-				Title:      subject,
-				Chip:       chip,
-				TailChips:  tail,
-				Meta:       siteRowMeta(it, href),
-				Glyph:      glyph,
-				GlyphClass: glyphClass,
-				GlyphTitle: sitePageGlyphTitle(itemType, state),
-			}
+			row := siteRowHead(it)
+			row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(itemType, state)
+			row.Href, row.Meta = href, siteRowMeta(it, href)
 			merged = append(merged, siteFrontActivityEntry{row: row, ts: pageEffectiveTime(it.Msg), sha: it.Msg.SHA})
 		}
 	}

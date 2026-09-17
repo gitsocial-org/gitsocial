@@ -72,7 +72,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Component | Classes | Renderers | Notes |
 |---|---|---|---|
 | Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-tree-slot` (app), `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state; the title is `site.title`, else the bucket name; the app's file tree scrolls inside `.nav-tree-slot`, so no nav row runs under the pinned credit |
-| Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js`; the head's one slot carries the retracted marker, and a body-only card, which has no head, leads its meta row with it |
+| Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js`; the head's one slot carries the retracted marker, and a body-only card, which has no head, leads its meta row with it and stands on its body, of which a row shows the first line |
 | Feedback card | `.card.feedback`, the verdict on `.verdict-<state>` as a 3px left border and on a chip | both | approved or changes-requested; the file and line anchor ride a plain chip, dropped inline under the line they anchor; padding, radius and background come from `.card` |
 | Chip | `.chip` plus one variant class, built by `chipEl` in JS and the `chip` template in Go | both | mono, `--fs-ui`, pill radius, tint fills from the token scale; a chip never carries the edited marker |
 | Chip variants, both | `.state.<state>` through the one state-class rule (open, closed, merged, completed, active, planned, canceled, unknown), `.pre.state` ("prerelease"), `.chip-retracted` ("retracted"), `.verdict-<state>` with the hyphen read as a space | both | the plain chip carries a version, a branch name, a file anchor and "draft" |
@@ -93,7 +93,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Notice | `.notice` for degraded content, `.empty`, `.loading`, `.err` | `.notice` and `.empty` both; `.loading` and `.err` app | one sentence in place of the content; the wording is in [States](#states) |
 | Controls | `.action-link`, `.back`, `.page-actions`, `.view-modes`, `.view-toggle`, `.share-link`, `.load-more` | both | mono, `--r-ctl`, `--btn` surface; a surface's controls sit on one `.page-actions` row, never on two |
 
-`sitetest/parity_fixtures.json` pins the shapes both renderers share: `siteHeadChips` and `headChips`, `siteHeadSubject` and `headSubject`, the meta row skeleton, the list labels and the empty sentences. `verify_styles.js` pins the app's own elements.
+`sitetest/parity_fixtures.json` pins the shapes both renderers share: `siteHeadChips` and `headChips`, `siteHeadSubject` and `headSubject`, the card skeleton, the meta row skeleton, the front page's truncation wording, the list labels and the empty sentences. `verify_styles.js` pins the app's own elements.
 
 ## States
 
