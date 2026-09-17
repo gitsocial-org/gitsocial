@@ -30,6 +30,9 @@ func TestMain(m *testing.M) {
 	origXDGConfig := os.Getenv("XDG_CONFIG_HOME")
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
 	os.Unsetenv("GITSOCIAL_PERSONAL_REPO")
+	// Pin the session id: the memo tier fixture, the session routes and every
+	// default memo listing resolve the same session from it.
+	os.Setenv("MEMO_SESSION_ID", fixtureSessionID)
 
 	// Create a shared fixture for all tests. This avoids repeating expensive
 	// git init + seed + sync operations per test.

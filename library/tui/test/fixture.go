@@ -16,6 +16,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
@@ -31,11 +32,22 @@ const (
 	// nothing ever fetches it, and no forge adapter matches it, so the suite
 	// stays offline.
 	fixtureForkURL = "https://github.com/bob/repo"
-	// fixtureInheritURL is a memo inherit source: a ref in the workspace repo,
-	// so it survives the tarball without needing a repo behind it.
+	// fixtureInheritURL is the memo inherit source: the workspace's inherits ref
+	// travels in the tarball, the repo behind it is built by setup.
 	fixtureInheritURL = "https://github.com/acme/handbook"
 	// fixtureCommitAge holds the middle of one relative-time bucket, 12 h from either edge.
 	fixtureCommitAge = 84 * time.Hour
+)
+
+// The memo tiers that live outside the workspace repo, seeded by setup.
+const (
+	fixtureSessionID         = "tui-fixture"
+	fixturePersonalMemoSubj  = "Rotate s3 keys quarterly"
+	fixturePersonalMemoBody  = "Each endpoint keeps its own key in credentials.json, never in a repo."
+	fixtureSessionMemoSubj   = "Timeline cursor survives a fetch"
+	fixtureSessionMemoBody   = "The list restores the selected row by id after a reload."
+	fixtureInheritedMemoSubj = "Sign every release tag"
+	fixtureInheritedMemoBody = "A release without a signed tag is rejected at review."
 )
 
 // sharedFixture is the per-package fixture created by TestMain and handed to
@@ -133,6 +145,7 @@ func setupFixtureForMain() *Fixture {
 	// The fork's cross-repo edit only resolves once the canonical it edits is
 	// cached, so the fork is synced after the workspace.
 	syncAllPanic(f.ForkDir)
+	seedMemoTiersPanic(resolved)
 	// Rewrite commit timestamps so the render does not depend on the tarball's age.
 	resetTimestampsPanic()
 	return &f
@@ -197,12 +210,7 @@ func generateFixture() {
 	if resolved == "" {
 		resolved = workdir
 	}
-	if _, err := git.ExecGit(resolved, []string{"config", "user.email", "alice@example.com"}); err != nil {
-		panic(fmt.Sprintf("git config email: %v", err))
-	}
-	if _, err := git.ExecGit(resolved, []string{"config", "user.name", "Alice"}); err != nil {
-		panic(fmt.Sprintf("git config name: %v", err))
-	}
+	configureIdentityPanic(resolved, "Alice", "alice@example.com")
 	if _, err := git.CreateCommit(resolved, git.CommitOptions{Message: "Initial commit", AllowEmpty: true}); err != nil {
 		panic(fmt.Sprintf("CreateCommit: %v", err))
 	}
@@ -422,11 +430,7 @@ func (f *Fixture) seedProposalPanic() string {
 	if resolved == "" {
 		resolved = forkDir
 	}
-	for _, kv := range [][2]string{{"user.email", "bob@example.com"}, {"user.name", "Bob"}} {
-		if _, err := git.ExecGit(resolved, []string{"config", kv[0], kv[1]}); err != nil {
-			panic(fmt.Sprintf("git config %s: %v", kv[0], err))
-		}
-	}
+	configureIdentityPanic(resolved, "Bob", "bob@example.com")
 	if _, err := git.CreateCommit(resolved, git.CommitOptions{Message: "Initial commit", AllowEmpty: true}); err != nil {
 		panic(fmt.Sprintf("CreateCommit fork: %v", err))
 	}
@@ -439,6 +443,100 @@ func (f *Fixture) seedProposalPanic() string {
 	f.ProposalRepoURL = fixtureForkURL
 	f.ProposalIssueID = f.IssueID
 	return resolved
+}
+
+// seedMemoTiersPanic builds the memo tiers outside the workspace repo: personal,
+// one session, and the inherit source. The repos outlive a fixture, so an
+// existing one is kept and only re-indexed.
+func seedMemoTiersPanic(workdir string) {
+	restoreDates := fixCommitDatesPanic()
+	defer restoreDates()
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	if !settings.PersonalRepoExists() {
+		personal := memo.InitPersonal()
+		mustSucceed("memo.InitPersonal", personal.Success, resultErrMsg(personal.Error))
+		configureIdentityPanic(personal.Data, "Alice", "alice@example.com")
+		created := memo.CreateMemo(workdir, fixturePersonalMemoSubj, fixturePersonalMemoBody, memo.CreateMemoOptions{
+			Tier: memo.TierPersonal, Labels: []string{"kind/policy"},
+		})
+		mustSucceed("memo.CreateMemo personal", created.Success, resultErrMsg(created.Error))
+	}
+	sessionPath, err := memo.SessionRepoPath(fixtureSessionID)
+	if err != nil {
+		panic(fmt.Sprintf("SessionRepoPath: %v", err))
+	}
+	if !git.BareRepoExists(sessionPath) {
+		session := memo.InitSession(fixtureSessionID, workspaceURL)
+		mustSucceed("memo.InitSession", session.Success, resultErrMsg(session.Error))
+		configureIdentityPanic(sessionPath, "Alice", "alice@example.com")
+		created := memo.CreateMemo(workdir, fixtureSessionMemoSubj, fixtureSessionMemoBody, memo.CreateMemoOptions{
+			Tier: memo.TierSession, Labels: []string{"kind/context"},
+		})
+		mustSucceed("memo.CreateMemo session", created.Success, resultErrMsg(created.Error))
+	}
+	seedInheritSourcePanic()
+	if err := memo.SyncAllTierReposToCache(workdir); err != nil {
+		panic(fmt.Sprintf("SyncAllTierReposToCache: %v", err))
+	}
+}
+
+// seedInheritSourcePanic builds the repository behind the workspace's inherits
+// ref and indexes it under fixtureInheritURL, so the inherited tier has a memo.
+func seedInheritSourcePanic() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(fmt.Sprintf("UserHomeDir: %v", err))
+	}
+	dir := filepath.Join(home, "memo-inherit-source")
+	if _, err := git.GetRootDir(dir); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			panic(fmt.Sprintf("mkdir inherit source: %v", err))
+		}
+		if err := git.Init(dir, "main"); err != nil {
+			panic(fmt.Sprintf("git.Init inherit source: %v", err))
+		}
+		configureIdentityPanic(dir, "Carol", "carol@example.com")
+		if _, err := git.ExecGit(dir, []string{"remote", "add", "origin", fixtureInheritURL}); err != nil {
+			panic(fmt.Sprintf("git remote add inherit source: %v", err))
+		}
+		writeExtConfigsPanic(dir)
+		proj := memo.InitProject(dir)
+		mustSucceed("memo.InitProject inherit source", proj.Success, resultErrMsg(proj.Error))
+		created := memo.CreateMemo(dir, fixtureInheritedMemoSubj, fixtureInheritedMemoBody, memo.CreateMemoOptions{
+			Tier: memo.TierProject, Labels: []string{"kind/policy"},
+		})
+		mustSucceed("memo.CreateMemo inherited", created.Success, resultErrMsg(created.Error))
+	}
+	syncAllPanic(dir)
+}
+
+// fixCommitDatesPanic pins the author and committer dates to fixtureCommitAge
+// ago, the age the session picker reads off the repo. Returns the restore fn.
+func fixCommitDatesPanic() func() {
+	stamp := time.Now().UTC().Add(-fixtureCommitAge).Format(time.RFC3339)
+	saved := map[string]string{}
+	for _, key := range []string{"GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"} {
+		saved[key] = os.Getenv(key)
+		os.Setenv(key, stamp)
+	}
+	return func() {
+		for key, val := range saved {
+			if val == "" {
+				os.Unsetenv(key)
+			} else {
+				os.Setenv(key, val)
+			}
+		}
+	}
+}
+
+// configureIdentityPanic sets the commit identity on a seeded repository.
+func configureIdentityPanic(repoPath, name, email string) {
+	for _, kv := range [][2]string{{"user.email", email}, {"user.name", name}} {
+		if _, err := git.ExecGit(repoPath, []string{"config", kv[0], kv[1]}); err != nil {
+			panic(fmt.Sprintf("git config %s: %v", kv[0], err))
+		}
+	}
 }
 
 // resetTimestampsPanic rewrites every cached commit timestamp to fixtureCommitAge

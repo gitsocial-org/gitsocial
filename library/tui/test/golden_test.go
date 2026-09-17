@@ -75,20 +75,25 @@ func TestGolden(t *testing.T) {
 
 	views := []struct {
 		name string
-		path string
+		loc  tuicore.Location
 	}{
-		{"timeline_120x40", "/social/timeline"},
-		{"board_120x40", "/pm/board"},
-		{"issues_120x40", "/pm/issues"},
-		{"pr_list_120x40", "/review/prs"},
-		{"releases_120x40", "/release/list"},
-		{"settings_120x40", "/settings"},
-		{"help_120x40", "/help"},
+		{"timeline_120x40", tuicore.Location{Path: "/social/timeline"}},
+		{"board_120x40", tuicore.Location{Path: "/pm/board"}},
+		{"issues_120x40", tuicore.Location{Path: "/pm/issues"}},
+		{"pr_list_120x40", tuicore.Location{Path: "/review/prs"}},
+		{"releases_120x40", tuicore.Location{Path: "/release/list"}},
+		{"settings_120x40", tuicore.Location{Path: "/settings"}},
+		{"help_120x40", tuicore.Location{Path: "/help"}},
+		{"memo_personal_120x40", tuicore.Location{Path: "/memo/personal"}},
+		{"memo_session_120x40", tuicore.Location{Path: "/memo/session"}},
+		{"memo_session_items_120x40", tuicore.LocMemoSessionItems(fixtureSessionID)},
+		{"memo_inherited_120x40", tuicore.Location{Path: "/memo/inherited"}},
+		{"memo_inherits_120x40", tuicore.Location{Path: "/memo/inherits"}},
 	}
 
 	for _, v := range views {
 		t.Run(v.name, func(t *testing.T) {
-			h.Navigate(v.path)
+			h.NavigateTo(v.loc)
 			frame := h.Rendered()
 			assertFrameFits(t, frame, goldenCols, goldenLines)
 			got := normalizeGolden(stripANSI(frame))

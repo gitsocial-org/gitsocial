@@ -1,39 +1,39 @@
-╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/20 ─────────────────────────────────────────────────────────────────╮
+╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/21 ─────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││  ▏•  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
-│  ⚑  Notifications  ·····  @  ││  ▏   Initial commit                                                                  │
-│  ◧  Analytics  ·········  %  ││                                                                                      │
-│ ──────────────────────────── ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ⌘  Social  ············  S  ││                                                                                      │
-│     ⏱  Timeline              ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
-│     ⎇  My Repository         ││      Cache invalidation rules                                                        │
+│  ⌕  Search  ············  /  ││  ▏☞  Carol · TIME                                                                    │
+│  ⚑  Notifications  ·····  @  ││  ▏   Sign every release tag                                                          │
+│  ◧  Analytics  ·········  %  ││  ▏                                                                                   │
+│ ──────────────────────────── ││  ▏   A release without a signed tag is rejected at review.                           │
+│  ⌘  Social  ············  S  ││  ▏   kind/policy                                                                     │
+│     ⏱  Timeline              ││                                                                                      │
+│     ⎇  My Repository         ││   ────────────────────────────────────────────────────────────────────────────────   │
 │     ☷ My Lists              ││                                                                                      │
-│        • Memo Inherits (au...││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
-│     ㋡ My Followers          ││      kind/decision                                                                   │
+│        • Memo Inherits (au...││   •  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
+│     ㋡ My Followers          ││      Initial commit                                                                  │
 │     ➼  Explore               ││                                                                                      │
 │  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││   ☞  Alice ⇡ ✎ · TIME   · #1234026e62fa@gitmsg/memo                                  │
-│  ☞  Memos  ·············  M  ││      Review checklist (updated)                                                      │
+│  ⏏  Release  ···········  V  ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
+│  ☞  Memos  ·············  M  ││      Cache invalidation rules                                                        │
+│                              ││                                                                                      │
+│                              ││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
+│                              ││      kind/decision                                                                   │
+│                              ││                                                                                      │
+│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ☞  Alice ⇡ ✎ · TIME   · #1234026e62fa@gitmsg/memo                                  │
+│                              ││      Review checklist (updated)                                                      │
 │                              ││                                                                                      │
 │                              ││      Check the spec before the code.                                                 │
 │                              ││      kind/howto                                                                      │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │
-│                              ││   •  Alice ⇡ · TIME   · #95346f2791cd@main                                           │
-│                              ││      Merge branch '_gitmsg-merge-tmp' into main                                      │
-│                              ││                                                                                      │
-│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
-│                              ││                                                                                      │
-│                              ││   ⑂  Alice ⇡ · TIME   · open · #328a8a50f210@gitmsg/review                           │
-│                              ││      Add dark mode support                                                           │
-│                              ││                                                                                      │
-│ ──────────────────────────── ││      Implements theme toggle with system preference detection.                       │
-│  ⚙  Configuration            ││                                                                                      │
-│  ⚿  Identity                 ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ⛁  Cache  ········ XXXKB    ││                                                                                      │
-│  ⌨  Settings                 ││   ●  Alice ⇡ · TIME   · canceled · #785b3089ef41@gitmsg/pm                           │
+│ ──────────────────────────── ││   •  Alice ⇡ · TIME   · #95346f2791cd@main                                           │
+│  ⚙  Configuration            ││      Merge branch '_gitmsg-merge-tmp' into main                                      │
+│  ⚿  Identity                 ││                                                                                      │
+│  ⛁  Cache  ········ XXXKB    ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ⌨  Settings                 ││                                                                                      │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││   m:my repo  n:new post  p:push  l:lists  r:refresh  tab:focus  f:fetch  I:import    │
 │.../tui-test-FIXTURE          ││   q:quit  ?:help                                                                     │

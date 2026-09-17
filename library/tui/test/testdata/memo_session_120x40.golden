@@ -1,0 +1,40 @@
+╭─ ※  GitSocial ───────────────╮╭─ ☞  Sessions · 1 ────────────────────────────────────────────────────────────────────╮
+│                              ││                                                                                      │
+│  ⌕  Search  ············  /  ││  ▏   tui-fixture               1 memo · 3d                                           │
+│  ⚑  Notifications  ·····  @  ││  ▏   3d      Alice             Timeline cursor survives a fetch                      │
+│  ◧  Analytics  ·········  %  ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│  ⌘  Social  ············  S  ││                                                                                      │
+│     ⏱  Timeline              ││                                                                                      │
+│     ⎇  My Repository         ││                                                                                      │
+│     ☷ My Lists              ││                                                                                      │
+│        • Memo Inherits (au...││                                                                                      │
+│     ㋡ My Followers          ││                                                                                      │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││                                                                                      │
+│  ⑂  Review  ············  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││                                                                                      │
+│  ☞  Memos  ·············  M  ││                                                                                      │
+│     ·  Project               ││                                                                                      │
+│     ·  Inherited             ││                                                                                      │
+│     ·  Personal              ││                                                                                      │
+│     ·  Session               ││                                                                                      │
+│     ·  All                   ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│                              ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⚿  Identity                 ││                                                                                      │
+│  ⛁  Cache  ········ XXXKB    ││                                                                                      │
+│  ⌨  Settings                 ││                                                                                      │
+│  ⚠  Error Log  ·········  !  ││                                                                                      │
+│ ──────────────────────────── ││                                                                                      │
+│.../tui-test-FIXTURE          ││   n:new  p:push  d:gc  tab:focus  f:fetch  q:quit  ?:help                            │
+╰──────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────╯

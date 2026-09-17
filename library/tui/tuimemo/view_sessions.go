@@ -266,7 +266,11 @@ func (v *SessionsView) Render(state *tuicore.State) string {
 				bar = tuicore.Title.Render("▏")
 				id = tuicore.Bold.Render(s.ID)
 			}
-			meta := []string{fmt.Sprintf("%d memos", s.MemoCount), memo.FormatAge(s.LastUsed)}
+			count := fmt.Sprintf("%d memos", s.MemoCount)
+			if s.MemoCount == 1 {
+				count = "1 memo"
+			}
+			meta := []string{count, memo.FormatAge(s.LastUsed)}
 			if s.HasRemote {
 				meta = append(meta, "remote")
 			}
