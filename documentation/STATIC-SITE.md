@@ -191,6 +191,12 @@ At the prefix root, next to the shell; the cache classes are defined in [S3.md](
 
 Item pages and sealed list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes, so a change to their head or markup bumps it. Everything else is rewritten on every push. A manifest at any other version reads as absent, so a bump regenerates every page.
 
+Each bump gets a row here, newest first:
+
+| Version | What it rewrote |
+|---|---|
+| 26 | the meta row, the empty sentence, the truncation notices, and the copy of `pages-core.css` in every head |
+
 ### Page entry
 
 A generated page hands the app three hooks: a `<meta name="gs-route">` route, a `data-base` attribute on the `<div id="gs-page">` mount, and the mount itself. `gs-upgrade.js` reads them, loads the shell relative to that base and lets `gs-app.js` render.

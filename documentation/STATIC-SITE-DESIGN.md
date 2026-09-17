@@ -41,6 +41,30 @@ Off the spacing scale: a mark under 4px, and an `em` value, which scales with it
 - At the breakpoint and under: a top bar with a hamburger and the title, and the sidebar as a slide-over drawer. Without JS the sidebar is a wrapped row above the content. Nothing is hidden.
 - The boot swap replaces `#gs-page` with the app's render at the same width and x. The chrome appears first, the content fills in, and nothing moves when it lands.
 
+Every surface is a fragment route on `index.html`, parsed by `parseRoute` in `gs-core.js`. A route the page layer pre-renders names the page kind that serves it, and its key is in the [page keys](STATIC-SITE.md#page-keys).
+
+| Route | Fragment | Page |
+|---|---|---|
+| `home` | `#/`, or a bare `#<anchor>` into the README | the `front` page |
+| `index` | `#/timeline`, `#/issues`, `#/prs`, `#/releases`, `#/memos`, `#/milestones`, `#/sprints` | a `list` page per type directory |
+| `commits` | `#/commits`, `#/commits/<n>`, `#/commits:<anchor>` | a `list` page |
+| `commit` | `#commit:<hash>@<branch>` | an `item` page for a gitmsg item, the app alone for a code commit |
+| `file` | `#file:<path>@<branch>` | a `file` page |
+| `code` | `#/code`, `#/tree` | the app, and where `f/index.html` boots |
+| `compare` | `#/compare:<base>...<head>`, `#compare:<base>...<head>` | the app |
+| `branch` | `#branch:<name>` | the app |
+| `tag` | `#tag:<name>` | the app |
+| `list` | `#list:<id>` | the app |
+| `branches` | `#/branches` | the app |
+| `tags` | `#/tags` | the app |
+| `graph` | `#/graph` | the app |
+| `board` | `#/board` | the app |
+| `search` | `#/search/<query>` | the app |
+| `lists` | `#/lists` | the app |
+| `analytics` | `#/analytics` | the app |
+| `config` | `#/config` | the app |
+| `notfound` | a fragment that parses as none of the above | the app |
+
 ## Components
 
 One builder per component in JS and one template in Go. "Both" means the page layer and the app render it; "app" means the app alone.
@@ -111,7 +135,7 @@ The tokens, the components and their states are checked by `verify_styles.js`, o
 
 ## Change rules
 
-- A new component, state or route is added here first, with its empty and error states, then built in both renderers.
+- A new component, state or route is added here first, with its empty and error states, then built in both renderers. `site_docs_conformance_test.go` holds the chip variants, the route table and the version entry.
 - A new chip variant, token or off-scale value gets its row here first.
 - No literal font size, color or spacing outside the tokens. `site_pages_tokens_test.go` holds the line over both stylesheets, `verify_upgrade_boot.js` over the served sheets.
 - Any markup the page layer renders, the app renders from the same class names, and the battery asserts it.
