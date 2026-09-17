@@ -330,7 +330,7 @@ func Open(cacheDir string) error {
 	// columns surfacing as NULLs, missing tables erroring out at query
 	// time) is a worse failure mode than a clear error here.
 	if cacheVer, ok := readUserVersion(dbPath); ok && cacheVer > schemaVersion {
-		err := fmt.Errorf("cache schema version %d is newer than this binary supports (%d) — upgrade gitsocial",
+		err := fmt.Errorf("cache schema version %d is newer than the supported %d: upgrade gitsocial",
 			cacheVer, schemaVersion)
 		initErr = err
 		opened = true

@@ -30,10 +30,10 @@ func GetRepositories(workdir, scope string, limit int) Result[[]Repository] {
 func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 	data, err := gitmsg.ReadList(workdir, socialExtension, listID)
 	if err != nil {
-		return failureWithDetails[[]Repository]("GIT_ERROR", "Failed to read list", err)
+		return failureWithDetails[[]Repository]("GIT_ERROR", "read list failed", err)
 	}
 	if data == nil {
-		return failure[[]Repository]("LIST_NOT_FOUND", "List '"+listID+"' not found")
+		return failure[[]Repository]("LIST_NOT_FOUND", "list '"+listID+"' not found")
 	}
 
 	repos := make([]Repository, 0, len(data.Repositories))

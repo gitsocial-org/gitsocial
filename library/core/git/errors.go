@@ -5,8 +5,8 @@ import "errors"
 
 var (
 	ErrGitExec            = errors.New("git command failed")
-	ErrGitInit            = errors.New("failed to initialize git repository")
-	ErrGitCommit          = errors.New("failed to create commit")
+	ErrGitInit            = errors.New("init git repository")
+	ErrGitCommit          = errors.New("create commit")
 	ErrGitRef             = errors.New("git reference error")
 	ErrGitRemote          = errors.New("git remote error")
 	ErrBranch             = errors.New("branch error")

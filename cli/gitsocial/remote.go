@@ -60,7 +60,7 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 				os.Exit(ExitError)
 			}
 			if !strings.HasPrefix(remoteURL, "s3://") {
-				PrintError(cmd, fmt.Sprintf("remote %q (%s) is not an s3 remote", remote, remoteURL))
+				PrintError(cmd, fmt.Sprintf("remote %q is %s, not an s3 remote", remote, remoteURL))
 				os.Exit(ExitError)
 			}
 			data, err := os.ReadFile(file)

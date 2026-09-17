@@ -190,7 +190,7 @@ func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 		return nil, sql.ErrNoRows
 	}
 	if len(hashes) > 1 {
-		return nil, fmt.Errorf("hash %q is ambiguous: %s and %s both match", prefix, hashes[0], hashes[1])
+		return nil, fmt.Errorf("hash %q is ambiguous between %s and %s: use a longer prefix", prefix, hashes[0], hashes[1])
 	}
 	return cache.QueryLocked(func(db *sql.DB) (*ReviewItem, error) {
 		query := baseSelectFromView + `

@@ -110,7 +110,7 @@ func cloneDir(remoteURL string) (string, error) {
 	}
 	name := path.Base(strings.ReplaceAll(trimmed, ":", "/"))
 	if name == "" || name == "." || name == "/" {
-		return "", fmt.Errorf("cannot derive a directory name from %q; pass one explicitly", remoteURL)
+		return "", fmt.Errorf("no directory name in %q: pass one explicitly", remoteURL)
 	}
 	return name, nil
 }

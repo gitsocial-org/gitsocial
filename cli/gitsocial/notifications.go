@@ -51,7 +51,7 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 
 			items, err := notifications.GetAll(cfg.WorkDir, filter)
 			if err != nil {
-				PrintError(cmd, "failed to get notifications: "+err.Error())
+				PrintError(cmd, "read notifications: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -101,7 +101,7 @@ func newNotificationsCountCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			count, err := notifications.GetUnreadCount(cfg.WorkDir)
 			if err != nil {
-				PrintError(cmd, "failed to get count: "+err.Error())
+				PrintError(cmd, "read the unread count: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -148,7 +148,7 @@ func newNotificationsReadCmd() *cobra.Command {
 			}
 
 			if err := notifications.MarkAsRead(repoURL, hash, branch); err != nil {
-				PrintError(cmd, "failed to mark as read: "+err.Error())
+				PrintError(cmd, "mark as read: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -173,7 +173,7 @@ func newNotificationsReadAllCmd() *cobra.Command {
 
 			cfg := GetConfig(cmd)
 			if err := notifications.MarkAllAsRead(cfg.WorkDir); err != nil {
-				PrintError(cmd, "failed to mark all as read: "+err.Error())
+				PrintError(cmd, "mark all as read: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -220,7 +220,7 @@ func newNotificationsUnreadCmd() *cobra.Command {
 			}
 
 			if err := notifications.MarkAsUnread(repoURL, hash, branch); err != nil {
-				PrintError(cmd, "failed to mark as unread: "+err.Error())
+				PrintError(cmd, "mark as unread: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -245,7 +245,7 @@ func newNotificationsUnreadAllCmd() *cobra.Command {
 
 			cfg := GetConfig(cmd)
 			if err := notifications.MarkAllAsUnread(cfg.WorkDir); err != nil {
-				PrintError(cmd, "failed to mark all as unread: "+err.Error())
+				PrintError(cmd, "mark all as unread: "+err.Error())
 				os.Exit(ExitError)
 			}
 

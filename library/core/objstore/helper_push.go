@@ -335,7 +335,7 @@ func (h *remoteHelper) applyRefUpdateETag(cmd pushCommand) (string, error) {
 		}
 		return sha, nil
 	}
-	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
+	return "", fmt.Errorf("ref %s: contention after %d CAS attempts: %w", cmd.dst, maxCASRetries, lastErr)
 }
 
 // applyRefUpdateGeneration writes or deletes one ref as a generation chain, creating the next key with the only CAS a create-only provider enforces.
@@ -389,7 +389,7 @@ func (h *remoteHelper) applyRefUpdateGeneration(cmd pushCommand) (string, error)
 		h.gcGenerations(cmd.dst, maxGen)
 		return sha, nil
 	}
-	return "", fmt.Errorf("ref %s: too much contention (gave up after %d CAS attempts): %w", cmd.dst, maxCASRetries, lastErr)
+	return "", fmt.Errorf("ref %s: contention after %d CAS attempts: %w", cmd.dst, maxCASRetries, lastErr)
 }
 
 // gcGenerations deletes generations older than the written one's predecessor, so a concurrent reader's list-then-read window survives one more update.
@@ -427,14 +427,14 @@ func (h *remoteHelper) deleteRefGenerations(refName string) error {
 // checkFastForward enforces the non-force rule: the remote's current value must be an ancestor of the pushed one.
 func checkFastForward(src *LocalCommitSource, current, next, dst string) error {
 	if _, _, ok := src.resolve(current); !ok {
-		return fmt.Errorf("remote %s is at %s which is not known locally; fetch first", dst, current[:12])
+		return fmt.Errorf("remote %s is at %s, not known locally: fetch first", dst, current[:12])
 	}
 	ancestor, err := isAncestor(current, next)
 	if err != nil {
 		return err
 	}
 	if !ancestor {
-		return fmt.Errorf("non-fast-forward: remote %s is at %s; fetch and merge first, or force-push", dst, current[:12])
+		return fmt.Errorf("non-fast-forward at %s, remote is at %s: fetch and merge, or force-push", dst, current[:12])
 	}
 	return nil
 }
@@ -483,7 +483,7 @@ func (h *remoteHelper) resolveRefMode() error {
 		}
 	}
 	if mode == refModeETag && h.capability == capabilityCreateOnly {
-		return fmt.Errorf("bucket uses etag ref mode but this provider cannot update refs conditionally (no If-Match support); push from a full-capability provider (aws, r2) or use a fresh prefix")
+		return fmt.Errorf("bucket ref mode etag needs If-Match: push from aws or r2, or use a fresh prefix")
 	}
 	h.refMode = mode
 	return nil
@@ -515,12 +515,12 @@ func (h *remoteHelper) probeCreateCAS() error {
 	// A leftover probe key from a crashed run would fail the first create.
 	_ = h.client.Delete(probe)
 	if err := h.client.putIfAbsent(probe, []byte("probe\n")); err != nil {
-		return fmt.Errorf("conditional-write probe (create): %w", err)
+		return fmt.Errorf("conditional-write create probe: %w", err)
 	}
 	defer func() { _ = h.client.Delete(probe) }()
 	err := h.client.putIfAbsent(probe, []byte("probe2\n"))
 	if err == nil {
-		return fmt.Errorf("bucket does not enforce conditional writes (If-None-Match), so ref updates would race silently; use a provider with conditional-write support (aws, r2, do)")
+		return fmt.Errorf("bucket does not enforce If-None-Match: push to aws, r2 or do")
 	}
 	if !errors.Is(err, errPreconditionFailed) {
 		return fmt.Errorf("conditional-write probe: %w", err)
@@ -535,7 +535,7 @@ func (h *remoteHelper) probeCapability() (writeCapability, error) {
 	}
 	probe := h.prefix + casProbeKey
 	if err := h.client.Put(probe, []byte("probe\n")); err != nil {
-		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write overwrite probe: %w", err)
 	}
 	defer func() { _ = h.client.Delete(probe) }()
 	// A wrong but well-formed ETag: success means If-Match is ignored, so only create-CAS can be trusted.
@@ -544,11 +544,11 @@ func (h *remoteHelper) probeCapability() (writeCapability, error) {
 		return capabilityCreateOnly, nil
 	}
 	if !errors.Is(err, errPreconditionFailed) {
-		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write overwrite probe: %w", err)
 	}
 	_, etag, err := h.client.getWithETag(probe)
 	if err != nil {
-		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write overwrite probe: %w", err)
 	}
 	err = h.client.putIfMatch(probe, []byte("probe4\n"), etag)
 	switch {
@@ -558,7 +558,7 @@ func (h *remoteHelper) probeCapability() (writeCapability, error) {
 		// Ceph RGW shape: a matching If-Match still 412s — overwrites unsupported.
 		return capabilityCreateOnly, nil
 	default:
-		return capabilityUnknown, fmt.Errorf("conditional-write probe (overwrite): %w", err)
+		return capabilityUnknown, fmt.Errorf("conditional-write overwrite probe: %w", err)
 	}
 }
 
@@ -571,7 +571,7 @@ func (h *remoteHelper) publishRefMode(mode string) (string, error) {
 			return "", err
 		}
 		if existing == "" {
-			return "", fmt.Errorf("ref-mode marker contention; retry the push")
+			return "", fmt.Errorf("ref-mode marker contention: retry the push")
 		}
 		return existing, nil
 	}

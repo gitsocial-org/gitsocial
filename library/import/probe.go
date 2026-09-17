@@ -53,7 +53,7 @@ func ResolveHost(repoURL, hostOverride string) (protocol.HostingService, error) 
 		}
 	}
 	if strings.HasPrefix(repoURL, "s3://") {
-		return protocol.HostUnknown, fmt.Errorf("imports are not supported for s3:// remotes (no forge to import from)")
+		return protocol.HostUnknown, fmt.Errorf("imports are not supported for s3 remotes")
 	}
 	host := protocol.DetectHost(repoURL)
 	if host != protocol.HostUnknown {
@@ -63,5 +63,5 @@ func ResolveHost(repoURL, hostOverride string) (protocol.HostingService, error) 
 	if probed != protocol.HostUnknown {
 		return probed, nil
 	}
-	return protocol.HostUnknown, fmt.Errorf("could not detect platform for %s — use --host to specify", repoURL)
+	return protocol.HostUnknown, fmt.Errorf("unknown platform for %s: pass --host", repoURL)
 }

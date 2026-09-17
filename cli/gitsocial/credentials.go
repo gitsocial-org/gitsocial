@@ -56,7 +56,7 @@ func resolveCredentialHost(workdir, arg string) (string, error) {
 		return host, nil
 	}
 	if target != arg {
-		return "", fmt.Errorf("remote %q is not an s3 remote (%s)", arg, target)
+		return "", fmt.Errorf("remote %q is %s, not an s3 remote", arg, target)
 	}
 	host := strings.ToLower(strings.TrimSpace(arg))
 	if host == "" || strings.ContainsAny(host, "/ ") {

@@ -185,7 +185,7 @@ func TestCLI_importInvalidFlags(t *testing.T) {
 		if code == 0 {
 			t.Errorf("%v: exit 0, want non-zero", c.args)
 		}
-		if !strings.Contains(stderr, c.wantMsg) || !strings.Contains(stderr, "valid:") {
+		if !strings.Contains(stderr, c.wantMsg) || !strings.Contains(stderr, "use ") {
 			t.Errorf("%v: stderr = %q, want invalid-flag error naming %s and valid values", c.args, stderr, c.wantMsg)
 		}
 	}

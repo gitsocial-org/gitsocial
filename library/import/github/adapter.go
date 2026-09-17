@@ -279,10 +279,10 @@ func (a *Adapter) CountItems(opts importpkg.FetchOptions) (importpkg.ItemCounts,
 func CheckGH() error {
 	_, err := exec.LookPath("gh")
 	if err != nil {
-		return fmt.Errorf("gh CLI not found — install from https://cli.github.com")
+		return fmt.Errorf("gh CLI not found: install it from https://cli.github.com")
 	}
 	if _, err := gh("auth", "status"); err != nil {
-		return fmt.Errorf("gh not authenticated — run: gh auth login")
+		return fmt.Errorf("gh is not authenticated: run gh auth login")
 	}
 	return nil
 }

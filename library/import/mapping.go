@@ -55,10 +55,10 @@ func ReadMapping(cacheDir, repoURL, mapFile string) (*MappingFile, error) {
 	}
 	var m MappingFile
 	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("mapping file %s is corrupt (fix or remove it): %w", path, err)
+		return nil, fmt.Errorf("mapping file %s is corrupt, remove it to re-import: %w", path, err)
 	}
 	if m.Version > mappingSchemaVersion {
-		return nil, fmt.Errorf("mapping file %s was written by a newer gitsocial (schema v%d, this binary supports v%d)", path, m.Version, mappingSchemaVersion)
+		return nil, fmt.Errorf("mapping file %s is schema v%d, newer than v%d: upgrade gitsocial", path, m.Version, mappingSchemaVersion)
 	}
 	if m.Items == nil {
 		m.Items = make(map[string]MappedItem)
@@ -115,7 +115,7 @@ func LockMapping(cacheDir, repoURL, mapFile string) (func(), error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		if os.IsExist(err) {
-			return nil, fmt.Errorf("another import appears to be running for this repo (lock file %s exists — remove it if that import crashed)", path)
+			return nil, fmt.Errorf("another import is running for this repo: remove the lock file %s if it crashed", path)
 		}
 		return nil, fmt.Errorf("create mapping lock: %w", err)
 	}

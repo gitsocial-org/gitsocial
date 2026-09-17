@@ -21,7 +21,7 @@ func resolveBranchTip(workdir, repoURL, branch string, addresses map[string]stri
 		if tip, err := git.ReadRef(workdir, "refs/remotes/origin/"+branch); err == nil && tip != "" {
 			return tip, nil
 		}
-		return "", fmt.Errorf("branch %q not found in refs/remotes/origin (run `git fetch`?)", branch)
+		return "", fmt.Errorf("branch %q is not in refs/remotes/origin: run git fetch", branch)
 	}
 	if remoteName := findRemoteForURL(workdir, normalizedURL); remoteName != "" {
 		if tip, err := git.ReadRef(workdir, "refs/remotes/"+remoteName+"/"+branch); err == nil && tip != "" {

@@ -132,13 +132,13 @@ func validateImportFlags(f *importFlags) error {
 		return false
 	}
 	if !oneOf(f.labels, "auto", "raw", "skip") {
-		return fmt.Errorf("invalid --labels %q (valid: auto, raw, skip)", f.labels)
+		return fmt.Errorf("invalid --labels %q: use auto, raw or skip", f.labels)
 	}
 	if f.state != "" && !oneOf(f.state, "open", "closed", "merged", "all") {
-		return fmt.Errorf("invalid --state %q (valid: open, closed, merged, all)", f.state)
+		return fmt.Errorf("invalid --state %q: use open, closed, merged or all", f.state)
 	}
 	if f.host != "" && !oneOf(f.host, "github", "gitlab", "gitea", "bitbucket") {
-		return fmt.Errorf("invalid --host %q (valid: github, gitlab, gitea, bitbucket)", f.host)
+		return fmt.Errorf("invalid --host %q: use github, gitlab, gitea or bitbucket", f.host)
 	}
 	return nil
 }
@@ -158,7 +158,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	} else {
 		rawURL = git.GetOriginURL(cfg.WorkDir)
 		if rawURL == "" {
-			return fmt.Errorf("no URL provided and no origin remote found — specify a URL or run from a repo with a remote")
+			return fmt.Errorf("no URL given and no origin remote: pass the repository URL")
 		}
 	}
 	if !strings.Contains(rawURL, "://") && !strings.HasPrefix(rawURL, "git@") {
@@ -167,7 +167,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	repoURL := protocol.NormalizeURL(rawURL)
 	repoInfo := protocol.ParseRepo(repoURL)
 	if repoInfo == nil {
-		return fmt.Errorf("could not parse owner/repo from URL: %s", rawURL)
+		return fmt.Errorf("no owner/repo in %s", rawURL)
 	}
 	hostType, err := importpkg.ResolveHost(repoURL, f.host)
 	if err != nil {
@@ -622,11 +622,11 @@ func createAdapter(host protocol.HostingService, repoURL, owner, repo, apiURL, t
 	case protocol.HostGitLab:
 		return glimport.New(owner, repo, glimport.OptionsForRepo(repoURL, apiURL, token)), nil
 	case protocol.HostGitea:
-		return nil, fmt.Errorf("gitea import not yet implemented — coming soon")
+		return nil, fmt.Errorf("gitea import is not implemented")
 	case protocol.HostBitbucket:
-		return nil, fmt.Errorf("bitbucket import not yet supported")
+		return nil, fmt.Errorf("bitbucket import is not supported")
 	default:
-		return nil, fmt.Errorf("unsupported platform — use --host to specify")
+		return nil, fmt.Errorf("unsupported platform: pass --host")
 	}
 }
 

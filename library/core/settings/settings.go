@@ -270,7 +270,7 @@ func Set(s *Settings, key, value string) error {
 		}
 		s.S3.Concurrency = n
 	case "fetch.workspace_mode":
-		return fmt.Errorf("use settings view to change workspace mode (per-repo setting)")
+		return fmt.Errorf("fetch.workspace_mode is per-repo: change it in the settings view")
 	default:
 		return fmt.Errorf("unknown settings key: %s", key)
 	}

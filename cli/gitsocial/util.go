@@ -65,7 +65,7 @@ func EnsureGitRepo(cmd *cobra.Command) bool {
 func PrintJSON(v interface{}) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: failed to marshal JSON")
+		fmt.Fprintln(os.Stderr, "error: marshal JSON")
 		os.Exit(ExitError)
 	}
 	fmt.Println(string(data))
@@ -136,7 +136,7 @@ func OpenInEditor(initial, suffix string) (string, error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("editor %q exited with error: %w", editor, err)
+		return "", fmt.Errorf("run editor %q: %w", editor, err)
 	}
 
 	raw, err := os.ReadFile(tmpPath)

@@ -134,7 +134,7 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 		postID := strings.TrimPrefix(scope, "thread:")
 		result = getThreadPosts(workdir, postID, workspaceURL)
 	default:
-		return failure[[]Post]("INVALID_SCOPE", "Unknown scope: "+scope)
+		return failure[[]Post]("INVALID_SCOPE", "unknown scope: "+scope)
 	}
 	if result.Success {
 		annotateVerified(result.Data)
@@ -163,7 +163,7 @@ type CreatePostOptions struct {
 // CreatePost creates a new post as a git commit in the workspace.
 func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 	if strings.TrimSpace(content) == "" {
-		return failure[Post]("EMPTY_CONTENT", "Post content cannot be empty")
+		return failure[Post]("EMPTY_CONTENT", "post content is empty")
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "social")
@@ -189,7 +189,7 @@ func CreatePost(workdir, content string, opts *CreatePostOptions) Result[Post] {
 
 	hash, author, isUnpushed, err := commitSocialMessage(workdir, branch, message)
 	if err != nil {
-		return failureWithDetails[Post]("COMMIT_ERROR", "Failed to create commit", err)
+		return failureWithDetails[Post]("COMMIT_ERROR", "create commit failed", err)
 	}
 
 	now := time.Now()
@@ -276,7 +276,7 @@ func getTimelinePosts(workdir string, workspaceURL string, opts *GetPostsOptions
 	forkURLs := gitmsg.GetForks(workdir)
 	items, err := getTimeline(listIDs, workspaceURL, workspaceURL, forkURLs, opts.Limit, opts.Cursor)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get timeline", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read timeline failed", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -338,7 +338,7 @@ func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOption
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -364,7 +364,7 @@ func getRepositoryPosts(repoURL, branch, workspaceURL string, opts *GetPostsOpti
 		ForFollowerCheck: workspaceURL,
 	})
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -390,7 +390,7 @@ func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Res
 	// The empty workspace leaves workspace posts out of a list scope; the follower mark still reads against it.
 	items, err := getTimeline([]string{listID}, "", workspaceURL, nil, limit, cursor)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get posts", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read posts failed", err)
 	}
 
 	posts := make([]Post, 0, len(items))
@@ -406,7 +406,7 @@ func getSinglePost(postID string, workspaceURL string) Result[[]Post] {
 	postID = cache.ResolveRefToCanonical(postID)
 	item, err := GetSocialItemByRef(postID, workspaceURL)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get post", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read post failed", err)
 	}
 
 	if item == nil {
@@ -437,7 +437,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	canonicalPostID := cache.ResolveRefToCanonical(postID)
 	parsed := protocol.ParseRef(canonicalPostID)
 	if parsed.Value == "" {
-		return failure[[]Post]("INVALID_REF", "Invalid post ID: "+postID)
+		return failure[[]Post]("INVALID_REF", "invalid post ID: "+postID)
 	}
 
 	branch := parsed.Branch
@@ -456,7 +456,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 	}
 	items, err := getThread(parsed.Repository, parsed.Value, branch, workspaceURL, forkURLs)
 	if err != nil {
-		return failureWithDetails[[]Post]("CACHE_ERROR", "Failed to get thread", err)
+		return failureWithDetails[[]Post]("CACHE_ERROR", "read thread failed", err)
 	}
 
 	// A failed ancestor read drops the thread context, not the thread.

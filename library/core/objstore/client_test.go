@@ -27,7 +27,7 @@ func TestNewClient_credentialModes(t *testing.T) {
 	}
 
 	// No credentials in the config is anonymous, not an error: an unsigned client
-	// reads a bucket that grants public GetObject. Writes name the missing pairs.
+	// reads a bucket that grants public GetObject. Writes name the credentials command.
 	client, err = NewClient(Config{Bucket: "b"})
 	if err != nil {
 		t.Fatal(err)
@@ -36,8 +36,8 @@ func TestNewClient_credentialModes(t *testing.T) {
 		t.Error("client with no credentials in its config is not anonymous")
 	}
 	_, _, err = client.do(context.Background(), http.MethodPut, "k", nil, []byte("x"), nil)
-	if !errors.Is(err, errCredentialsRequired) || !strings.Contains(err.Error(), "GITSOCIAL_S3_ACCESS_KEY") {
-		t.Errorf("anonymous write error = %v, want it to name both variable sets", err)
+	if !errors.Is(err, errCredentialsRequired) || !strings.Contains(err.Error(), "gitsocial config credentials set") {
+		t.Errorf("anonymous write error = %v, want it to name the credentials command", err)
 	}
 
 	// Half a pair is a typo, not a request for anonymous access.

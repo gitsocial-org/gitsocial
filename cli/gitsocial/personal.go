@@ -84,11 +84,11 @@ are re-indexed into the cache.`,
 				os.Exit(ExitError)
 			}
 			if !settings.PersonalRepoExists() {
-				PrintError(cmd, fmt.Sprintf("personal repo not initialized at %s (run `gitsocial personal init`)", path))
+				PrintError(cmd, fmt.Sprintf("personal repo not initialized at %s: run gitsocial personal init", path))
 				os.Exit(ExitError)
 			}
 			if !personalHasOrigin(path) {
-				PrintError(cmd, "personal repo has no `origin` remote (run `gitsocial personal init --remote <url>`)")
+				PrintError(cmd, "personal repo has no origin remote: run gitsocial personal init --remote <url>")
 				os.Exit(ExitError)
 			}
 			doFetch := !pushOnly

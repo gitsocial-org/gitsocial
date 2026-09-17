@@ -111,7 +111,7 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 			broken = broken || objectMissing
 		}
 		if len(missing) > 0 {
-			ctx.Error = "Could not fetch " + strings.Join(missing, " and ")
+			ctx.Error = "cannot fetch " + strings.Join(missing, " and ")
 		}
 		return ctx, broken
 	}

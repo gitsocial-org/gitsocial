@@ -60,7 +60,7 @@ func CreateRelease(workdir, subject, body string, opts CreateReleaseOptions) Res
 	if !opts.AllowDuplicate && opts.Tag != "" {
 		if existing, err := GetReleaseItemByTagOrVersion(opts.Tag); err == nil && existing != nil {
 			return result.Err[Release]("DUPLICATE",
-				fmt.Sprintf("release with tag %q already exists (pass --allow-duplicate to override)", opts.Tag))
+				fmt.Sprintf("release with tag %q already exists: pass --allow-duplicate", opts.Tag))
 		}
 	}
 	branch := gitmsg.GetExtBranch(workdir, "release")

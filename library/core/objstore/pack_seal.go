@@ -328,7 +328,7 @@ func deleteRoundLooseObjects(client *Client, prefix string, round packRound, con
 	for _, name := range round.Packs {
 		idx, err := client.Get(prefix + packKeyPrefix + name + ".idx")
 		if errors.Is(err, ErrNotFound) {
-			return fmt.Errorf("pack %s: index absent from the bucket, so nothing of this round is safe to delete", name)
+			return fmt.Errorf("pack %s: index absent from the bucket", name)
 		}
 		if err != nil {
 			return fmt.Errorf("read pack index %s: %w", name, err)

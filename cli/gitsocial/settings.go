@@ -38,19 +38,19 @@ func newSettingsGetCmd() *cobra.Command {
 
 			path, err := settings.DefaultPath()
 			if err != nil {
-				PrintError(cmd, "failed to get settings path: "+err.Error())
+				PrintError(cmd, "resolve settings path: "+err.Error())
 				os.Exit(ExitError)
 			}
 
 			s, err := settings.Load(path)
 			if err != nil {
-				PrintError(cmd, "failed to load settings: "+err.Error())
+				PrintError(cmd, "load settings: "+err.Error())
 				os.Exit(ExitError)
 			}
 
 			value, ok := settings.Get(s, key)
 			if !ok {
-				PrintError(cmd, "unknown key: "+key)
+				PrintError(cmd, "unknown key "+key+": run gitsocial settings list")
 				os.Exit(ExitInvalidArgs)
 			}
 
@@ -101,13 +101,13 @@ func newSettingsListCmd() *cobra.Command {
 
 			path, err := settings.DefaultPath()
 			if err != nil {
-				PrintError(cmd, "failed to get settings path: "+err.Error())
+				PrintError(cmd, "resolve settings path: "+err.Error())
 				os.Exit(ExitError)
 			}
 
 			s, err := settings.Load(path)
 			if err != nil {
-				PrintError(cmd, "failed to load settings: "+err.Error())
+				PrintError(cmd, "load settings: "+err.Error())
 				os.Exit(ExitError)
 			}
 

@@ -153,7 +153,7 @@ func getCachedDNSIdentity(email string) (*ResolvedIdentity, bool) {
 		}
 		t, err := time.Parse(time.RFC3339, resolvedAt)
 		if err != nil || time.Since(t) > dnsCacheTTL {
-			return nil, fmt.Errorf("expired")
+			return nil, fmt.Errorf("cached identity expired")
 		}
 		r := ResolvedIdentity{
 			Identity: Identity{Key: key, Email: email},

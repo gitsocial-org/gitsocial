@@ -83,7 +83,7 @@ func ensureNoCycle(start *PMItem, selfKey string) error {
 	for cur != nil {
 		key := itemKey(cur.RepoURL, cur.Hash, cur.Branch)
 		if key == selfKey {
-			return fmt.Errorf("cannot set parent: would create a hierarchy cycle")
+			return fmt.Errorf("parent would create a hierarchy cycle")
 		}
 		if visited[key] {
 			return nil

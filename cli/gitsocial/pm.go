@@ -141,7 +141,7 @@ func newPMInitCmd() *cobra.Command {
 
 			// Validate framework
 			if pm.GetFramework(framework) == nil {
-				PrintError(cmd, fmt.Sprintf("unknown framework: %s (available: %s)", framework, strings.Join(pm.ListFrameworks(), ", ")))
+				PrintError(cmd, fmt.Sprintf("unknown framework %q: use %s", framework, strings.Join(pm.ListFrameworks(), ", ")))
 				os.Exit(ExitInvalidArgs)
 			}
 
@@ -152,7 +152,7 @@ func newPMInitCmd() *cobra.Command {
 				Framework: framework,
 			}
 			if err := pm.SavePMConfig(cfg.WorkDir, pmConfig); err != nil {
-				PrintError(cmd, "failed to initialize: "+err.Error())
+				PrintError(cmd, "save pm config: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -364,7 +364,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
@@ -395,7 +395,7 @@ func newPMIssueCreateCmd() *cobra.Command {
 			if dueDateStr != "" {
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
@@ -490,12 +490,12 @@ func newPMIssueEditCmd() *cobra.Command {
 			}
 			if cmd.Flags().Changed("due") {
 				if strings.TrimSpace(dueDateStr) == "" {
-					PrintError(cmd, "due date cannot be cleared via edit; provide a YYYY-MM-DD date")
+					PrintError(cmd, "--due cannot be cleared: pass a YYYY-MM-DD date")
 					os.Exit(ExitInvalidArgs)
 				}
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
@@ -692,7 +692,7 @@ func newPMIssueCommentCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
@@ -907,7 +907,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
@@ -928,7 +928,7 @@ func newPMMilestoneCreateCmd() *cobra.Command {
 			if dueDateStr != "" {
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
@@ -989,12 +989,12 @@ func newPMMilestoneEditCmd() *cobra.Command {
 			}
 			if cmd.Flags().Changed("due") {
 				if strings.TrimSpace(dueDateStr) == "" {
-					PrintError(cmd, "due date cannot be cleared via edit; provide a YYYY-MM-DD date")
+					PrintError(cmd, "--due cannot be cleared: pass a YYYY-MM-DD date")
 					os.Exit(ExitInvalidArgs)
 				}
 				t, err := time.Parse("2006-01-02", dueDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid due date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --due date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.Due = &t
@@ -1301,7 +1301,7 @@ func newPMSprintCreateCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
@@ -1318,19 +1318,19 @@ func newPMSprintCreateCmd() *cobra.Command {
 			}
 
 			if startDateStr == "" || endDateStr == "" {
-				PrintError(cmd, "start and end dates are required (use --start and --end)")
+				PrintError(cmd, "start and end dates are required: pass --start and --end")
 				os.Exit(ExitInvalidArgs)
 			}
 
 			start, err := time.Parse("2006-01-02", startDateStr)
 			if err != nil {
-				PrintError(cmd, "invalid start date format (use YYYY-MM-DD)")
+				PrintError(cmd, "invalid --start date: use YYYY-MM-DD")
 				os.Exit(ExitInvalidArgs)
 			}
 
 			end, err := time.Parse("2006-01-02", endDateStr)
 			if err != nil {
-				PrintError(cmd, "invalid end date format (use YYYY-MM-DD)")
+				PrintError(cmd, "invalid --end date: use YYYY-MM-DD")
 				os.Exit(ExitInvalidArgs)
 			}
 
@@ -1396,7 +1396,7 @@ func newPMSprintEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("start") {
 				t, err := time.Parse("2006-01-02", startDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid start date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --start date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.Start = &t
@@ -1404,7 +1404,7 @@ func newPMSprintEditCmd() *cobra.Command {
 			if cmd.Flags().Changed("end") {
 				t, err := time.Parse("2006-01-02", endDateStr)
 				if err != nil {
-					PrintError(cmd, "invalid end date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --end date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				opts.End = &t

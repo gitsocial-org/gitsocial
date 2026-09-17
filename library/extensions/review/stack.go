@@ -116,7 +116,7 @@ func RebaseStack(workdir, prRef string) Result[[]PullRequest] {
 	}
 	start := startResult.Data
 	if start.State != PRStateOpen {
-		return result.Err[[]PullRequest]("INVALID_STATE", "cannot rebase stack: PR is "+string(start.State))
+		return result.Err[[]PullRequest]("INVALID_STATE", "cannot rebase stack: pull request is "+string(start.State))
 	}
 
 	// Collect the upward chain from this PR

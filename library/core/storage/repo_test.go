@@ -374,7 +374,7 @@ func TestEnsureRepository_gitInitFails(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when git init fails on read-only dir")
 	}
-	if !strings.Contains(err.Error(), "failed to init bare repo") {
+	if !strings.Contains(err.Error(), "init bare repo") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -392,7 +392,7 @@ func TestEnsureRepository_mkdirFails(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when MkdirAll fails")
 	}
-	if !strings.Contains(err.Error(), "failed to create storage dir") {
+	if !strings.Contains(err.Error(), "create storage dir") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -1145,7 +1145,7 @@ func TestEnsureRepository_partialCloneFilterFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to set partial clone filter") {
+	if !strings.Contains(err.Error(), "set partial clone filter") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -1159,7 +1159,7 @@ func TestEnsureRepository_pushUrlFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to disable push") {
+	if !strings.Contains(err.Error(), "disable push") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -1173,7 +1173,7 @@ func TestEnsureRepository_branchConfigFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to set branch config") {
+	if !strings.Contains(err.Error(), "set branch config") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -1187,7 +1187,7 @@ func TestEnsureRepository_persistentConfigFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "failed to set persistent config") {
+	if !strings.Contains(err.Error(), "set persistent config") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

@@ -54,7 +54,7 @@ Examples:
 			if after != "" {
 				t, err := time.Parse("2006-01-02", after)
 				if err != nil {
-					PrintError(cmd, "invalid --after date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --after date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				afterTime = &t
@@ -62,7 +62,7 @@ Examples:
 			if before != "" {
 				t, err := time.Parse("2006-01-02", before)
 				if err != nil {
-					PrintError(cmd, "invalid --before date format (use YYYY-MM-DD)")
+					PrintError(cmd, "invalid --before date: use YYYY-MM-DD")
 					os.Exit(ExitInvalidArgs)
 				}
 				beforeTime = &t

@@ -105,7 +105,7 @@ func newReleaseInitCmd() *cobra.Command {
 				Branch:  branch,
 			}
 			if err := release.SaveReleaseConfig(cfg.WorkDir, relConfig); err != nil {
-				PrintError(cmd, "failed to initialize: "+err.Error())
+				PrintError(cmd, "save release config: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -156,7 +156,7 @@ func newReleaseCreateCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content := strings.Join(lines, "\n")
@@ -678,7 +678,7 @@ func newReleaseSBOMCmd() *cobra.Command {
 				os.Exit(ExitError)
 			}
 			if rel.Version == "" {
-				PrintError(cmd, "release has no version (required for artifact ref)")
+				PrintError(cmd, "release has no version: set it with gitsocial release edit --version")
 				os.Exit(ExitError)
 			}
 

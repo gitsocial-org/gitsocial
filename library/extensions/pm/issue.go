@@ -256,7 +256,7 @@ func CloseIssue(workdir, issueRef string) Result[Issue] {
 	if ref.Hash != "" {
 		if retracted, _ := IsItemRetracted(ref.RepoURL, ref.Hash, ref.Branch); retracted {
 			return result.Err[Issue]("RETRACTED",
-				"cannot close: issue was retracted")
+				"cannot close a retracted issue")
 		}
 	}
 	closed := StateClosed

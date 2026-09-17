@@ -100,7 +100,7 @@ func TestOpen_newerSchemaIsRefusedNotDeleted(t *testing.T) {
 		t.Fatal("Open() accepted a newer schema, want an error")
 	}
 	defer Reset()
-	if !strings.Contains(err.Error(), "newer than this binary supports") {
+	if !strings.Contains(err.Error(), "newer than the supported") {
 		t.Errorf("Open() error = %v, want a schema-version refusal", err)
 	}
 	if DB() != nil {

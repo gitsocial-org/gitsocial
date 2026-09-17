@@ -42,16 +42,16 @@ func GetLogs(workdir, scope string, opts *GetLogsOptions) Result[[]LogEntry] {
 	case scope == "timeline":
 		gitOpts.All = true
 	case strings.HasPrefix(scope, "list:"):
-		return failure[[]LogEntry]("INVALID_SCOPE", "list scope not supported for logs; use search command instead")
+		return failure[[]LogEntry]("INVALID_SCOPE", "list scope is not supported for logs: use gitsocial search")
 	case strings.HasPrefix(scope, "repository:"):
-		return failure[[]LogEntry]("INVALID_SCOPE", "external repository scope not supported for logs; use search command instead")
+		return failure[[]LogEntry]("INVALID_SCOPE", "external repository scope is not supported for logs: use gitsocial search")
 	default:
 		return failure[[]LogEntry]("INVALID_SCOPE", "unknown scope: "+scope)
 	}
 
 	commits, err := git.GetCommits(workdir, gitOpts)
 	if err != nil {
-		return failureWithDetails[[]LogEntry]("GIT_ERROR", "Failed to get commits", err)
+		return failureWithDetails[[]LogEntry]("GIT_ERROR", "read commits failed", err)
 	}
 
 	refs, err := git.ListRefs(workdir, "social/")

@@ -498,7 +498,7 @@ func handlePostRetracted(msg PostRetractedMsg, ctx tuicore.AppContext) (bool, te
 
 func handleRepoAdded(msg RepoAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
-		if msg.Err.Error() == "Repository already in list" {
+		if strings.HasPrefix(msg.Err.Error(), "repository already in the list") {
 			msgCmd := ctx.Host().SetMessageWithTimeout("Already in "+msg.ListName+": "+msg.RepoURL, tuicore.MessageTypeWarning, 5*time.Second)
 			cmd := ctx.Host().Update(msg)
 			return true, tea.Batch(cmd, msgCmd)

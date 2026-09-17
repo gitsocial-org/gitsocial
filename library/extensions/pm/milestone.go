@@ -38,7 +38,7 @@ func CreateMilestone(workdir, title, body string, opts CreateMilestoneOptions) R
 			for _, m := range existing.Data {
 				if m.Title == title {
 					return result.Err[Milestone]("DUPLICATE",
-						fmt.Sprintf("milestone %q already exists (pass --allow-duplicate to override)", title))
+						fmt.Sprintf("milestone %q already exists: pass --allow-duplicate", title))
 				}
 			}
 		}

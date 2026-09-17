@@ -218,7 +218,7 @@ func FetchRepository(cacheDir, repoURL, branch, workspaceURL string, processors 
 
 	count, err := fetchRepository(cacheDir, repoURL, "", branch, true, "", "", workspaceURL, processors, hooks)
 	if err != nil {
-		return result.ErrWithDetails[Stats]("FETCH_ERROR", "Failed to fetch repository", err)
+		return result.ErrWithDetails[Stats]("FETCH_ERROR", "fetch repository", err)
 	}
 
 	return result.Ok(Stats{
@@ -235,7 +235,7 @@ func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL
 
 	count, err := fetchRepository(cacheDir, repoURL, "", branch, false, since, before, workspaceURL, processors, hooks)
 	if err != nil {
-		return result.ErrWithDetails[Stats]("FETCH_ERROR", "Failed to fetch repository", err)
+		return result.ErrWithDetails[Stats]("FETCH_ERROR", "fetch repository", err)
 	}
 
 	return result.Ok(Stats{

@@ -69,7 +69,7 @@ func WriteExtConfig(workdir, ext string, config map[string]interface{}) error {
 
 	content, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return fmt.Errorf("marshal config: %w", err)
 	}
 
 	ref := extConfigRef(ext)
@@ -83,11 +83,11 @@ func WriteExtConfig(workdir, ext string, config map[string]interface{}) error {
 
 	commitHash, err := git.CreateCommitTree(workdir, string(content), parent)
 	if err != nil {
-		return fmt.Errorf("failed to create config commit: %w", err)
+		return fmt.Errorf("create config commit: %w", err)
 	}
 
 	if err := git.WriteRef(workdir, ref, commitHash); err != nil {
-		return fmt.Errorf("failed to write config ref: %w", err)
+		return fmt.Errorf("write config ref: %w", err)
 	}
 
 	InvalidateExtConfig(workdir, ext)

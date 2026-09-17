@@ -93,7 +93,7 @@ func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 		return nil, err
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("git cat-file --batch-check: %d object(s) missing locally, starting with %s", len(missing), missing[0])
+		return nil, fmt.Errorf("git cat-file --batch-check: %d objects missing locally, starting with %s", len(missing), missing[0])
 	}
 	commitPack, err := buildPack(commitLike, true, true)
 	if err != nil {
@@ -173,7 +173,7 @@ func parsePackIdx(idx []byte) ([]packIdxEntry, error) {
 	offStart := shaStart + count*20 + count*4
 	bigStart := offStart + count*4
 	if len(idx) < bigStart+40 {
-		return nil, fmt.Errorf("pack index: truncated (%d objects, %d bytes)", count, len(idx))
+		return nil, fmt.Errorf("pack index: truncated, %d objects in %d bytes", count, len(idx))
 	}
 	entries := make([]packIdxEntry, count)
 	for i := 0; i < count; i++ {
@@ -332,7 +332,7 @@ func inflatePackEntry(raw []byte) (objType string, body []byte, err error) {
 	}
 	objType, ok := packObjectTypes[code]
 	if !ok {
-		return "", nil, fmt.Errorf("pack entry: type %d is a delta, but a mapped entry is always whole", code)
+		return "", nil, fmt.Errorf("pack entry: type %d is a delta", code)
 	}
 	zr, err := zlib.NewReader(bytes.NewReader(raw[i:]))
 	if err != nil {

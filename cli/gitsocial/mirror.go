@@ -114,7 +114,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	}
 	cfg := GetConfig(cmd)
 	if f.dir != "" && forgeURL == "" {
-		return fmt.Errorf("--dir only applies with a forge URL (the cold-start form); inside a workspace the current repository is the workspace")
+		return fmt.Errorf("--dir applies only with a forge URL: gitsocial mirror <forge-url> --dir <path>")
 	}
 
 	// Step 1 (resolve): the workspace directory and what to do with it.
@@ -246,7 +246,7 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 		return pushErr
 	}
 	if len(importStats.Errors) > 0 {
-		return fmt.Errorf("import completed with %d error(s) — the affected items were not imported; re-run to retry (already-imported items are skipped)", len(importStats.Errors))
+		return fmt.Errorf("import reported %d errors: re-run to retry the affected items", len(importStats.Errors))
 	}
 	return nil
 }
@@ -264,12 +264,12 @@ func classifyMirrorArgs(args []string) (forgeURL, s3URL string, err error) {
 		switch kind {
 		case "forge":
 			if forgeURL != "" {
-				return "", "", fmt.Errorf("two forge URLs given (%s and %s); expected at most one forge URL and one s3:// URL", forgeURL, value)
+				return "", "", fmt.Errorf("two forge URLs given, %s and %s: pass at most one forge URL and one s3 URL", forgeURL, value)
 			}
 			forgeURL = value
 		case "s3":
 			if s3URL != "" {
-				return "", "", fmt.Errorf("two s3 URLs given (%s and %s); expected at most one forge URL and one s3:// URL", s3URL, value)
+				return "", "", fmt.Errorf("two s3 URLs given, %s and %s: pass at most one forge URL and one s3 URL", s3URL, value)
 			}
 			s3URL = value
 		}
@@ -293,7 +293,7 @@ func classifyMirrorTarget(arg string) (kind, value string, err error) {
 			return "forge", normalized, nil
 		}
 	}
-	return "", "", fmt.Errorf("%q is neither an https forge URL (https://<host>/<owner>/<repo>) nor an s3 bucket URL (s3://<endpoint-host>/<bucket>/<prefix>) — refusing to guess, a mistyped target could push imported branches at the wrong remote", arg)
+	return "", "", fmt.Errorf("%q is neither an https forge URL nor an s3 bucket URL: gitsocial mirror <forge-url> <s3-url>", arg)
 }
 
 // normalizedRepoURLEqual compares two repo URLs for identity, tolerating the
@@ -326,11 +326,11 @@ func resolveMirrorWorkspace(baseDir, dirFlag, forgeURL string) (wsDir, action st
 		return "", "", fmt.Errorf("stat %s: %w", dir, err)
 	}
 	if !info.IsDir() || !git.IsRepository(dir) {
-		return "", "", fmt.Errorf("%s exists but is not a git repository — refusing to touch it; pick another --dir or remove it", dir)
+		return "", "", fmt.Errorf("%s is not a git repository: pick another --dir", dir)
 	}
 	origin := git.GetOriginURL(dir)
 	if !normalizedRepoURLEqual(origin, forgeURL) {
-		return "", "", fmt.Errorf("%s has origin %q, not %q — refusing to touch it; pick another --dir", dir, origin, forgeURL)
+		return "", "", fmt.Errorf("%s has origin %q, not %q: pick another --dir", dir, origin, forgeURL)
 	}
 	return dir, "fetch", nil
 }
@@ -340,15 +340,15 @@ func resolveMirrorWorkspace(baseDir, dirFlag, forgeURL string) (wsDir, action st
 // forge URL, for the s3-only and no-argument forms.
 func resolveMirroredWorkspace(workdir string) (wsDir, forgeURL string, err error) {
 	if !git.IsRepository(workdir) {
-		return "", "", fmt.Errorf("not a git repository — run inside a mirrored workspace, or pass the forge URL to start one")
+		return "", "", fmt.Errorf("not a git repository: run inside a mirrored workspace or pass the forge URL")
 	}
 	origin := git.GetOriginURL(workdir)
 	if origin == "" {
-		return "", "", fmt.Errorf("this repository has no origin remote — mirror derives what to mirror from origin")
+		return "", "", fmt.Errorf("no origin remote: add one for the forge repository")
 	}
 	kind, value, err := classifyMirrorTarget(origin)
 	if err != nil || kind != "forge" {
-		return "", "", fmt.Errorf("origin %q is not an https forge URL — mirror refreshes from the forge, so this workspace cannot be mirrored", origin)
+		return "", "", fmt.Errorf("origin %q is not an https forge URL: point origin at the forge repository", origin)
 	}
 	return workdir, value, nil
 }
@@ -369,7 +369,7 @@ func resolveMirrorTargets(wsDir, s3URL string, freshClone bool) ([]mirrorTarget,
 	}
 	targets := s3PushRemotes(wsDir)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no s3 push remote configured — attach a bucket with `gitsocial mirror s3://<endpoint-host>/<bucket>/<prefix>`")
+		return nil, fmt.Errorf("no s3 push remote configured: run gitsocial mirror s3://<endpoint-host>/<bucket>/<prefix>")
 	}
 	return targets, nil
 }
@@ -447,7 +447,7 @@ func ensureMirrorCredentials(cfg *Config, host string, allowPrompt bool) error {
 		return nil
 	}
 	if !allowPrompt || !isatty.IsTerminal(os.Stdin.Fd()) {
-		return fmt.Errorf("no S3 credentials for %s — store them with:\n  gitsocial config credentials set %s", host, host)
+		return fmt.Errorf("no S3 credentials for %s: run gitsocial config credentials set %s", host, host)
 	}
 	fmt.Fprintf(os.Stderr, "No S3 credentials for %s.\n", host)
 	reader := bufio.NewReader(os.Stdin)
@@ -489,9 +489,9 @@ func probeMirrorTargets(cfg *Config, targets []mirrorTarget) error {
 			host, _, _, hostErr := objstore.ParseS3URL(t.url)
 			hint := "verify the URL and that the bucket exists"
 			if hostErr == nil {
-				hint = fmt.Sprintf("verify the URL, that the bucket exists, and the credentials (gitsocial config credentials set %s)", host)
+				hint = fmt.Sprintf("verify the URL and the bucket, or set credentials with gitsocial config credentials set %s", host)
 			}
-			return fmt.Errorf("bucket %s is not usable: %w\n  checked before cloning, so a bad target fails now rather than after the import; %s", t.url, err, hint)
+			return fmt.Errorf("bucket %s is not usable: %w, %s", t.url, err, hint)
 		}
 	}
 	if !cfg.JSONOutput {
@@ -570,7 +570,7 @@ func runMirrorImport(cfg *Config, forgeURL string, f *mirrorFlags) (importpkg.St
 	repoURL := protocol.NormalizeURL(forgeURL)
 	repoInfo := protocol.ParseRepo(repoURL)
 	if repoInfo == nil {
-		return importpkg.Stats{}, fmt.Errorf("could not parse owner/repo from %s", forgeURL)
+		return importpkg.Stats{}, fmt.Errorf("no owner/repo in %s", forgeURL)
 	}
 	hostType, err := importpkg.ResolveHost(repoURL, "")
 	if err != nil {
@@ -928,11 +928,11 @@ func acquireMirrorLock(wsDir string) (func(), error) {
 		data, readErr := os.ReadFile(lockPath)
 		pid, _ := strconv.Atoi(strings.TrimSpace(string(data)))
 		if readErr == nil && pidAlive(pid) {
-			return nil, fmt.Errorf("another mirror run (pid %d) is active in this workspace — wait for it, or remove %s if it is stale", pid, lockPath)
+			return nil, fmt.Errorf("another mirror run is active as pid %d: wait for it, or remove %s if it is stale", pid, lockPath)
 		}
 		os.Remove(lockPath)
 	}
-	return nil, fmt.Errorf("could not acquire lock %s", lockPath)
+	return nil, fmt.Errorf("lock %s is still taken, retry the command", lockPath)
 }
 
 // pidAlive reports whether a process with the given PID exists (signal 0).

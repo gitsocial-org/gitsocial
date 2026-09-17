@@ -58,7 +58,7 @@ func applyProposal(workdir, proposalRef string) Result[Outcome] {
 		return result.Err[Outcome]("NOT_A_PROPOSAL", "ref is not an edit of any canonical")
 	}
 	if ver.EditRepoURL == ver.CanonicalRepoURL {
-		return result.Err[Outcome]("NOT_A_PROPOSAL", "edit is already same-repo (nothing to accept)")
+		return result.Err[Outcome]("NOT_A_PROPOSAL", "edit is already same-repo, nothing to accept")
 	}
 	workspaceURL := protocol.NormalizeURL(gitmsg.ResolveRepoURL(workdir))
 	if ver.CanonicalRepoURL != workspaceURL {
@@ -67,7 +67,7 @@ func applyProposal(workdir, proposalRef string) Result[Outcome] {
 
 	// 2. Refuse if the canonical has been retracted (S5).
 	if lv, lerr := cache.GetLatestVersion(ver.CanonicalRepoURL, ver.CanonicalHash, ver.CanonicalBranch); lerr == nil && lv.IsRetracted {
-		return result.Err[Outcome]("CANONICAL_RETRACTED", "cannot accept: the item has been retracted")
+		return result.Err[Outcome]("CANONICAL_RETRACTED", "the item has been retracted")
 	}
 
 	// 3. Read the proposal and its parent (the version it edited) to derive deltas.
@@ -294,7 +294,7 @@ func applyReview(workdir, canonicalRef string, pMsg, parMsg *protocol.Message, a
 		opts.Labels = &l
 	}
 	if opts == (review.UpdatePROptions{}) {
-		return result.Err[Outcome]("NO_DELTA", "no acceptable content/label change (PR lifecycle is not accepted)")
+		return result.Err[Outcome]("NO_DELTA", "no acceptable content or label change")
 	}
 	opts.Attribution = attribution
 	return outcome(review.UpdatePR(workdir, canonicalRef, opts), "review", canonicalRef)

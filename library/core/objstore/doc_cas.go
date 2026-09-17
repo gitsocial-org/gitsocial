@@ -22,7 +22,7 @@ func readCompressedJSONWithETag(client *Client, key string, v any) (found bool, 
 		raw = data
 	}
 	if json.Unmarshal(raw, v) != nil {
-		return false, etag, fmt.Errorf("read %s: %d bytes present that do not parse as JSON; delete the key to have it rebuilt", key, len(data))
+		return false, etag, fmt.Errorf("read %s: %d bytes are not JSON: delete the key to have it rebuilt", key, len(data))
 	}
 	return true, etag, nil
 }

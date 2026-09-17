@@ -36,17 +36,17 @@ func ResolveS3URL(input string) (canonical string, isS3 bool, err error) {
 	if host == awsConsoleHost || strings.HasSuffix(host, "."+awsConsoleHost) {
 		c, ok := awsConsoleToCanonical(u, host)
 		if !ok {
-			return "", true, fmt.Errorf("could not read region and bucket from AWS console URL %q (expected https://<region>.console.aws.amazon.com/s3/buckets/<bucket>)", input)
+			return "", true, fmt.Errorf("no region or bucket in %q: use https://<region>.console.aws.amazon.com/s3/buckets/<bucket>", input)
 		}
 		return c, true, nil
 	}
 	if strings.EqualFold(u.Scheme, "s3") {
 		c := canonicalS3URL(input)
 		if c == "" {
-			return "", true, fmt.Errorf("invalid s3 URL %q (expected s3://<endpoint-host>/<bucket>/<prefix>)", input)
+			return "", true, fmt.Errorf("invalid s3 URL %q: use s3://<endpoint-host>/<bucket>/<prefix>", input)
 		}
 		if !s3URLNamesBucket(c) {
-			return "", true, fmt.Errorf("missing bucket in %q (expected s3://<endpoint-host>/<bucket>/<prefix>: append the bucket name to the endpoint)", input)
+			return "", true, fmt.Errorf("missing bucket in %q: use s3://<endpoint-host>/<bucket>/<prefix>", input)
 		}
 		return c, true, nil
 	}
@@ -56,7 +56,7 @@ func ResolveS3URL(input string) (canonical string, isS3 bool, err error) {
 	if strings.EqualFold(u.Scheme, "https") || strings.EqualFold(u.Scheme, "http") {
 		if c, ok := recognizedEndpointToCanonical(host, u.Path); ok {
 			if !s3URLNamesBucket(c) {
-				return "", true, fmt.Errorf("missing bucket in %q (expected s3://<endpoint-host>/<bucket>/<prefix>: append the bucket name to the endpoint)", input)
+				return "", true, fmt.Errorf("missing bucket in %q: use s3://<endpoint-host>/<bucket>/<prefix>", input)
 			}
 			return c, true, nil
 		}

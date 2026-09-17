@@ -70,7 +70,7 @@ func casRefManifest(client *Client, prefix, mode string, derive func(attempt int
 			return "", err
 		}
 	}
-	return "", fmt.Errorf("upload %s: too much contention (gave up after %d attempts)", bucketRefsKey, maxCASRetries)
+	return "", fmt.Errorf("upload %s: contention after %d attempts", bucketRefsKey, maxCASRetries)
 }
 
 // RebuildRefManifest republishes the manifest from a fresh listing; the ETag is read before the listing, so a manifest written between the two fails the write.
@@ -119,7 +119,7 @@ func parseGenKey(key string) (refName string, gen uint64, isGen bool, err error)
 	counter := key[idx+len(genDir):]
 	parsed, convErr := strconv.ParseUint(counter, 10, 64)
 	if len(counter) != genWidth || convErr != nil {
-		return "", 0, false, fmt.Errorf("malformed generation key %q — was the bucket written by a non-gitsocial tool?", key)
+		return "", 0, false, fmt.Errorf("malformed generation key %q", key)
 	}
 	return key[:idx], parsed, true, nil
 }
@@ -273,16 +273,16 @@ func noRefSourceError(client *Client, prefix string) error {
 	for _, key := range []string{refModeKey, "HEAD"} {
 		_, err := client.Get(prefix + key)
 		if err == nil {
-			return fmt.Errorf("bucket denies listing and publishes no ref manifest: ask its owner to push once with a current gitsocial, or use credentials carrying s3:ListBucket (`gitsocial config credentials set <remote>`)")
+			return fmt.Errorf("bucket denies listing and publishes no ref manifest: ask its owner to push with a current gitsocial")
 		}
 		if !errors.Is(err, ErrNotFound) {
 			return fmt.Errorf("read %s: %w", key, err)
 		}
 	}
 	if client.anonymous {
-		return fmt.Errorf("%w: every read was denied, so the bucket is private or nothing has been pushed to it yet", errCredentialsRequired)
+		return fmt.Errorf("every read was denied: %w", errCredentialsRequired)
 	}
-	return fmt.Errorf("the credentials for this remote can neither list the bucket nor read its refs: the bucket is empty, or the key lacks s3:GetObject and s3:ListBucket")
+	return fmt.Errorf("credentials can neither list the bucket nor read its refs: grant s3:GetObject and s3:ListBucket")
 }
 
 // readRefModeMarker returns the bucket's recorded ref mode, "" when no push has pinned one.
@@ -296,7 +296,7 @@ func readRefModeMarker(client *Client, prefix string) (string, error) {
 	}
 	mode := strings.TrimSpace(string(value))
 	if mode != refModeETag && mode != refModeGeneration {
-		return "", fmt.Errorf("unrecognized ref mode %q in bucket marker (written by a newer gitsocial or a foreign tool?)", mode)
+		return "", fmt.Errorf("unrecognized ref mode %q in bucket marker", mode)
 	}
 	return mode, nil
 }
@@ -401,7 +401,7 @@ func readChainTip(client *Client, prefix, refName string, gen uint64) (string, e
 				return "", err
 			}
 			if gen == 0 {
-				return "", fmt.Errorf("ref %s: generation chain vanished (deleted concurrently?)", refName)
+				return "", fmt.Errorf("ref %s: generation chain vanished", refName)
 			}
 			continue
 		}
@@ -410,7 +410,7 @@ func readChainTip(client *Client, prefix, refName string, gen uint64) (string, e
 		}
 		return refSHA(refName, value)
 	}
-	return "", fmt.Errorf("ref %s: generation chain kept moving; retry", refName)
+	return "", fmt.Errorf("ref %s: generation chain kept moving: retry", refName)
 }
 
 // maxGeneration lists one ref's chain and returns its highest generation, 0 for none.

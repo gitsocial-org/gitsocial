@@ -1710,7 +1710,7 @@ func (m *Model) beginImport() tea.Cmd {
 	repoURL := protocol.NormalizeURL(rawURL)
 	repoInfo := protocol.ParseRepo(repoURL)
 	if repoInfo == nil {
-		return m.host.SetMessageWithTimeout("Import: could not parse owner/repo from "+rawURL, tuicore.MessageTypeError, 5*time.Second)
+		return m.host.SetMessageWithTimeout("Import: no owner/repo in "+rawURL, tuicore.MessageTypeError, 5*time.Second)
 	}
 	hostType, err := importpkg.ResolveHost(repoURL, "")
 	if err != nil {
@@ -1808,11 +1808,11 @@ func createImportAdapter(host protocol.HostingService, repoURL, owner, repo stri
 	case protocol.HostGitLab:
 		return glimport.New(owner, repo, glimport.OptionsForRepo(repoURL, "", "")), nil
 	case protocol.HostGitea:
-		return nil, fmt.Errorf("gitea import not yet implemented")
+		return nil, fmt.Errorf("gitea import is not implemented")
 	case protocol.HostBitbucket:
-		return nil, fmt.Errorf("bitbucket import not yet supported")
+		return nil, fmt.Errorf("bitbucket import is not supported")
 	default:
-		return nil, fmt.Errorf("unsupported platform")
+		return nil, fmt.Errorf("unsupported platform: run gitsocial import --host <host>")
 	}
 }
 
@@ -1833,7 +1833,7 @@ func (m *Model) startImport(adapter importpkg.SourceAdapter, repoURL string, cou
 	if repoInfo == nil {
 		// Should have been caught in beginImport, but guard anyway.
 		go func() {
-			ch <- importCompletedMsg{RepoURL: repoURL, Err: fmt.Errorf("could not parse owner/repo")}
+			ch <- importCompletedMsg{RepoURL: repoURL, Err: fmt.Errorf("no owner/repo in %s", repoURL)}
 			close(ch)
 		}()
 		return drainBgImportCmd(ch)

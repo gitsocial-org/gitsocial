@@ -47,7 +47,7 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 		return "", "", "", fmt.Errorf("not an s3 URL: %s", raw)
 	}
 	if u.RawQuery != "" {
-		return "", "", "", fmt.Errorf("s3 URLs take no parameters (configure endpoint/path-style via GITSOCIAL_S3_* env): %s", raw)
+		return "", "", "", fmt.Errorf("s3 URLs take no parameters: %s", raw)
 	}
 	// Percent escapes decode into the parts, so re-assembly would respell the URL.
 	if strings.Contains(raw, "%") {
@@ -55,7 +55,7 @@ func ParseS3URL(raw string) (endpointHost, bucket, prefix string, err error) {
 	}
 	rest, isCanonical := strings.CutPrefix(protocol.NormalizeURL(raw), "s3://")
 	if !isCanonical {
-		return "", "", "", fmt.Errorf("s3 URLs must name the endpoint host: s3://<endpoint-host>/<bucket>/<prefix> (got %s)", raw)
+		return "", "", "", fmt.Errorf("s3 URL %s must name the endpoint host: s3://<endpoint-host>/<bucket>/<prefix>", raw)
 	}
 	host, trail, _ := strings.Cut(rest, "/")
 	name, remainder, _ := strings.Cut(trail, "/")
@@ -162,7 +162,7 @@ func clientForRemote(remoteURL string, env HelperEnv) (*Client, string, writeCap
 // RunHelper speaks the git remote-helper protocol on in and out until EOF or an empty command line; remoteName supplies the per-remote site overrides, "" means none, and a nil after runs no site maintenance.
 func RunHelper(remoteName, remoteURL string, env HelperEnv, in io.Reader, out io.Writer, after PostPushHook) error {
 	if env.GitDir == "" {
-		return fmt.Errorf("GIT_DIR not set (helper must be invoked by git)")
+		return fmt.Errorf("GIT_DIR not set: run this helper through git")
 	}
 	client, prefix, capability, err := clientForRemote(remoteURL, env)
 	if err != nil {
@@ -434,7 +434,7 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 		}
 	}
 	if h.client == nil {
-		return "", nil, false, fmt.Errorf("object %s is not in the local odb and this helper has no bucket client to fall back to", sha)
+		return "", nil, false, fmt.Errorf("no bucket client to download object %s", sha)
 	}
 	key := h.prefix + "objects/" + sha[:2] + "/" + sha[2:]
 	data, err := h.client.Get(key)
@@ -448,9 +448,9 @@ func (h *remoteHelper) ensureObject(sha string) (objType string, body []byte, pr
 			if _, _, ok := h.localOdb().typed(sha); ok {
 				return "", nil, true, nil
 			}
-			return "", nil, false, fmt.Errorf("object %s is missing from this thin fork bucket AND from the upstream it names (%s): the fork excluded it as upstream's, and upstream no longer serves it", sha, h.upstreamURL)
+			return "", nil, false, fmt.Errorf("object %s is missing from this fork bucket and from upstream %s", sha, h.upstreamURL)
 		}
-		return "", nil, false, fmt.Errorf("object %s missing from bucket: neither a loose key nor any packfile in objects/info/packs carries it — was the bucket written or repacked by a non-gitsocial tool?", sha)
+		return "", nil, false, fmt.Errorf("object %s missing from bucket: no loose key or packfile carries it", sha)
 	}
 	if err != nil {
 		return "", nil, false, fmt.Errorf("download object %s: %w", sha, err)

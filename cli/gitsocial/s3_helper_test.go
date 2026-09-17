@@ -802,7 +802,7 @@ func TestS3Helper_pushRejectsNonCASBucket(t *testing.T) {
 	fixture.mu.Unlock()
 
 	out := gitInErr(t, src, env, "push", remote, "main")
-	if !strings.Contains(out, "does not enforce conditional writes") {
+	if !strings.Contains(out, "does not enforce If-None-Match") {
 		t.Errorf("push output = %q, want loud conditional-write rejection", out)
 	}
 	if _, ok := fixture.object("repo/refs/heads/main"); ok {

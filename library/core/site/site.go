@@ -243,7 +243,7 @@ func Push(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.
 	}
 	// The thin marker is read from the bucket, not per-clone config, so the refusal holds from any clone.
 	if upstream, thinErr := objstore.ThinUpstreamURL(client, prefix); thinErr == nil && upstream != "" {
-		return false, false, fmt.Errorf("%w (upstream %s)", objstore.ErrThinBucket, upstream)
+		return false, false, fmt.Errorf("upstream %s: %w", upstream, objstore.ErrThinBucket)
 	}
 	// The per-remote override wins over the workspace value, so one remote can carry data with no site.
 	cfg, cfgErr := ReadWorkspaceSiteCustomization(workdir)

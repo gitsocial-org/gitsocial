@@ -32,12 +32,12 @@ func newHistoryCmd() *cobra.Command {
 			workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 			versions, err := gitmsg.GetHistory(ref, workspaceURL)
 			if err != nil {
-				PrintError(cmd, "Failed to get history: "+err.Error())
+				PrintError(cmd, "read history: "+err.Error())
 				os.Exit(ExitError)
 			}
 
 			if len(versions) == 0 {
-				PrintError(cmd, "No history found")
+				PrintError(cmd, "no edit history for "+ref)
 				os.Exit(ExitError)
 			}
 

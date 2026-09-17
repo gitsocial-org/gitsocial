@@ -65,11 +65,11 @@ func PushArtifacts(workdir, version string, filePaths []string, remote string) R
 		return result.Err[ArtifactPushResult]("NOT_FOUND", fmt.Sprintf("remote %q is not configured", remote))
 	}
 	if !strings.HasPrefix(remoteURL, "s3://") {
-		return result.Err[ArtifactPushResult]("NOT_S3", fmt.Sprintf("remote %q (%s) is not an s3 remote", remote, remoteURL))
+		return result.Err[ArtifactPushResult]("NOT_S3", fmt.Sprintf("remote %q is %s, not an s3 remote", remote, remoteURL))
 	}
 	siteURL := effectiveSiteURL(workdir, remote)
 	if siteURL == "" {
-		return result.Err[ArtifactPushResult]("NO_SITE_URL", fmt.Sprintf("no site url configured for remote %q: set it with `gitsocial config site set url https://...` (or a per-remote override)", remote))
+		return result.Err[ArtifactPushResult]("NO_SITE_URL", fmt.Sprintf("no site url for remote %q: run gitsocial config site set url <url>", remote))
 	}
 	baseURL := siteURL + objstore.ArtifactsPrefix + version
 	advanced, err := objstore.PushArtifactObjects(remoteURL, objstore.HelperEnvFromOS(), version, files, func(current string) bool {
@@ -80,7 +80,7 @@ func PushArtifacts(workdir, version string, filePaths []string, remote string) R
 	}
 	updated, err := setRecordArtifactURL(workdir, version, baseURL)
 	if err != nil {
-		return result.Err[ArtifactPushResult]("RECORD_EDIT_FAILED", fmt.Sprintf("artifacts uploaded, but setting artifact-url on the release record failed (re-run to retry): %s", err))
+		return result.Err[ArtifactPushResult]("RECORD_EDIT_FAILED", fmt.Sprintf("artifacts uploaded, artifact-url not set on the release record: %s", err))
 	}
 	return result.Ok(ArtifactPushResult{
 		Version:        version,

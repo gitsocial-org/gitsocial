@@ -321,7 +321,7 @@ func GetSBOMSummary(workdir, repoURL, version, sbomFilename, artifactURL string)
 	} else if artifactURL != "" {
 		fetched, fetchErr := fetchSBOMHTTP(artifactURL, sbomFilename)
 		if fetchErr != nil {
-			return nil, fmt.Errorf("read sbom: artifact ref failed, http fetch failed: %w", fetchErr)
+			return nil, fmt.Errorf("read sbom over http: %w", fetchErr)
 		}
 		data = fetched
 	} else {
@@ -365,7 +365,7 @@ func GetSBOMDetails(workdir, releaseRef string) Result[SBOMSummary] {
 		return result.Err[SBOMSummary]("NO_SBOM", "release has no SBOM")
 	}
 	if rel.Version == "" {
-		return result.Err[SBOMSummary]("NO_VERSION", "release has no version (required for artifact ref)")
+		return result.Err[SBOMSummary]("NO_VERSION", "release has no version: set it with gitsocial release edit --version")
 	}
 	repoURL := rel.Repository
 	if repoURL == "" {

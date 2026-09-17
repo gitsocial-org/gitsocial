@@ -282,7 +282,7 @@ func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonica
 		var count int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
 			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&count); err != nil {
-			return fmt.Errorf("version insert: failed to check canonical: %w", err)
+			return fmt.Errorf("version insert: check canonical: %w", err)
 		}
 		if count == 0 {
 			return fmt.Errorf("version insert: canonical commit not found: %s#%s@%s", canonicalRepoURL, canonicalHash, canonicalBranch)

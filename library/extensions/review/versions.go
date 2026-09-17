@@ -150,10 +150,10 @@ func ComparePRVersions(workdir, cacheDir, prRef string, fromVersion, toVersion i
 	}
 	versions := res.Data
 	if fromVersion < 0 || fromVersion >= len(versions) {
-		return result.Err[string]("INVALID_VERSION", fmt.Sprintf("from version %d out of range (0-%d)", fromVersion, len(versions)-1))
+		return result.Err[string]("INVALID_VERSION", fmt.Sprintf("from version %d is out of range 0-%d", fromVersion, len(versions)-1))
 	}
 	if toVersion < 0 || toVersion >= len(versions) {
-		return result.Err[string]("INVALID_VERSION", fmt.Sprintf("to version %d out of range (0-%d)", toVersion, len(versions)-1))
+		return result.Err[string]("INVALID_VERSION", fmt.Sprintf("to version %d is out of range 0-%d", toVersion, len(versions)-1))
 	}
 	from := versions[fromVersion]
 	to := versions[toVersion]
@@ -177,7 +177,7 @@ func ComparePRVersions(workdir, cacheDir, prRef string, fromVersion, toVersion i
 		}
 	}
 	if !tipsPresent(rd, from, to) {
-		return result.Err[string]("TIPS_UNAVAILABLE", "could not resolve version tips locally (fork PR commits may be unavailable); use the files-changed view (d) to see the current diff")
+		return result.Err[string]("TIPS_UNAVAILABLE", "version tips are not available locally: open the files-changed view with d")
 	}
 	output, err := git.RangeDiff(rd, from.BaseTip, from.HeadTip, to.BaseTip, to.HeadTip)
 	if err != nil {

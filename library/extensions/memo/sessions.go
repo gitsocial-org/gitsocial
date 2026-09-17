@@ -174,7 +174,7 @@ func PushPersonal() Result[bool] {
 		return result.Err[bool]("PERSONAL_DIR_FAILED", err.Error())
 	}
 	return pushBareRepoMemos(path, "NOT_INITIALIZED",
-		"personal repo not initialized; run `gitsocial personal init`")
+		"personal repo not initialized: run gitsocial personal init")
 }
 
 // FetchPersonal pulls from the personal remote, auto-merging on divergence,
@@ -185,7 +185,7 @@ func FetchPersonal() Result[bool] {
 		return result.Err[bool]("PERSONAL_DIR_FAILED", err.Error())
 	}
 	return fetchBareRepoMemos(path, "NOT_INITIALIZED",
-		"personal repo not initialized; run `gitsocial personal init`")
+		"personal repo not initialized: run gitsocial personal init")
 }
 
 // pushBareRepoMemos pushes gitmsg/memo from a bare tier repo with auto-merge.

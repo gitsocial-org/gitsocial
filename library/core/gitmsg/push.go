@@ -338,15 +338,10 @@ func mirrorGitMsgRefsToTracking(workdir, remote string) {
 	}
 }
 
-// wrapCodePushError contextualizes a failed code-branch push. Non-FF here
-// usually means the PR head was rebased; code branches must never auto-merge,
-// so point the user at an explicit force-with-lease instead (honored by s3
-// remotes too via the helper's cas option). --force is the blunt fallback for
-// the lease-can't-work case: a bare --force-with-lease needs a remote-tracking
-// base, which a never-fetched branch on that remote doesn't have.
+// wrapCodePushError names the branch a failed code-branch push was for.
 func wrapCodePushError(remote, branch string, err error) error {
 	if isNonFastForward(err) {
-		return fmt.Errorf("push %s: remote has diverged (rebased head?) — review and push manually with `git push --force-with-lease %s %s` (or --force as a last resort): %w", branch, remote, branch, err)
+		return fmt.Errorf("push %s: run git push --force-with-lease %s %s: %w", branch, remote, branch, err)
 	}
 	return fmt.Errorf("push %s: %w", branch, err)
 }
@@ -358,7 +353,7 @@ func wrapCodePushError(remote, branch string, err error) error {
 func wrapStateRefPushError(err error) error {
 	msg := err.Error()
 	if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") || strings.Contains(msg, "rejected") {
-		return fmt.Errorf("push refs: state-ref conflict on refs/gitmsg/* (two clones wrote different content under the same key — fetch and reconcile manually): %w", err)
+		return fmt.Errorf("push refs: state-ref conflict on refs/gitmsg/*, fetch and reconcile manually: %w", err)
 	}
 	return fmt.Errorf("push refs: %w", err)
 }

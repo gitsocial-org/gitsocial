@@ -137,7 +137,7 @@ func GetCommitSignerKeys(workdir string, hashes []string) (map[string]string, er
 		args = append(args, batch...)
 		result, err := ExecGit(workdir, args)
 		if err != nil {
-			return nil, fmt.Errorf("batch get signer keys (chunk %d-%d): %w", start, end, err)
+			return nil, fmt.Errorf("batch get signer keys %d-%d: %w", start, end, err)
 		}
 		for _, line := range strings.Split(result.Stdout, "\n") {
 			line = strings.TrimSpace(line)
@@ -338,7 +338,7 @@ func CreateCommitOnBranch(workdir, branch, message string) (string, error) {
 
 		_, err = ExecGit(workdir, []string{"update-ref", branchRef, commitHash})
 		if err != nil {
-			return "", fmt.Errorf("%w: failed to update branch reference", ErrGitCommit)
+			return "", fmt.Errorf("%w: update branch reference", ErrGitCommit)
 		}
 
 		shortHash, err := execGitSimple(workdir, []string{"rev-parse", "--short=12", commitHash})
@@ -356,7 +356,7 @@ func CreateCommitOnBranch(workdir, branch, message string) (string, error) {
 
 	_, err = ExecGit(workdir, []string{"update-ref", branchRef, commitHash})
 	if err != nil {
-		return "", fmt.Errorf("%w: failed to create branch reference", ErrGitCommit)
+		return "", fmt.Errorf("%w: create branch reference", ErrGitCommit)
 	}
 
 	shortHash, err := execGitSimple(workdir, []string{"rev-parse", "--short=12", commitHash})
@@ -613,7 +613,7 @@ func ValidatePushPreconditions(workdir, remoteName, branch string) error {
 
 	result, err := ExecGit(workdir, []string{"remote"})
 	if err != nil {
-		return fmt.Errorf("%w: failed to list remotes", ErrGitRemote)
+		return fmt.Errorf("%w: list remotes", ErrGitRemote)
 	}
 
 	remotes := strings.Split(result.Stdout, "\n")
@@ -648,7 +648,7 @@ func ValidatePushPreconditions(workdir, remoteName, branch string) error {
 					slog.Debug("parse ahead count", "error", err, "value", parts[1])
 				}
 				if behind > 0 && ahead > 0 {
-					return fmt.Errorf("%w: branch '%s' has diverged (%d ahead, %d behind %s)",
+					return fmt.Errorf("%w: '%s' is %d ahead and %d behind %s",
 						ErrDiverged, branch, ahead, behind, remoteName)
 				}
 			}

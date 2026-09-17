@@ -108,7 +108,7 @@ func newReviewInitCmd() *cobra.Command {
 				Branch:  branch,
 			}
 			if err := review.SaveReviewConfig(cfg.WorkDir, revConfig); err != nil {
-				PrintError(cmd, "failed to initialize: "+err.Error())
+				PrintError(cmd, "save review config: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -193,7 +193,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 				case 0:
 					// No match — not an error, base may target trunk
 				default:
-					PrintError(cmd, fmt.Sprintf("--stack: %d open PRs have head=%s, use --depends-on to specify which", len(matches), base))
+					PrintError(cmd, fmt.Sprintf("%d open PRs have head %s: pass --depends-on <pr-ref>", len(matches), base))
 					os.Exit(ExitInvalidArgs)
 				}
 			}
@@ -553,7 +553,7 @@ func newReviewPRMergeCmd() *cobra.Command {
 				PrintSuccess(cmd, "Pull request merged")
 			}
 			if pushErr != nil {
-				PrintError(cmd, fmt.Sprintf("merged locally, but pushing the base branch failed (push it manually): %s", pushErr))
+				PrintError(cmd, fmt.Sprintf("push the merged base branch: %s", pushErr))
 			}
 		},
 	}
@@ -950,7 +950,7 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 			}
 
 			if message == "" {
-				PrintError(cmd, "feedback message is required for requesting changes (use -m)")
+				PrintError(cmd, "request-changes needs a message: pass -m <message>")
 				os.Exit(ExitInvalidArgs)
 			}
 			opts := review.CreateFeedbackOptions{

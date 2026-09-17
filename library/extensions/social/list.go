@@ -20,7 +20,7 @@ const socialExtension = "social"
 func GetLists(workdir string) Result[[]List] {
 	names, err := gitmsg.EnumerateLists(workdir, socialExtension)
 	if err != nil {
-		return failureWithDetails[[]List]("GIT_ERROR", "Failed to enumerate lists", err)
+		return failureWithDetails[[]List]("GIT_ERROR", "enumerate lists failed", err)
 	}
 
 	lists := make([]List, 0, len(names))
@@ -39,7 +39,7 @@ func GetLists(workdir string) Result[[]List] {
 func GetList(workdir, listID string) Result[*List] {
 	data, err := gitmsg.ReadList(workdir, socialExtension, listID)
 	if err != nil {
-		return failureWithDetails[*List]("GIT_ERROR", "Failed to read list", err)
+		return failureWithDetails[*List]("GIT_ERROR", "read list failed", err)
 	}
 
 	if data == nil {
@@ -53,12 +53,12 @@ func GetList(workdir, listID string) Result[*List] {
 // CreateList creates a new empty list with the given ID and name.
 func CreateList(workdir, listID, name string) Result[List] {
 	if !listIDPattern.MatchString(listID) {
-		return failure[List]("INVALID_LIST_ID", "List ID must match pattern [a-zA-Z0-9_-]{1,40}")
+		return failure[List]("INVALID_LIST_ID", "list ID must match [a-zA-Z0-9_-]{1,40}")
 	}
 
 	existing, _ := gitmsg.ReadList(workdir, socialExtension, listID)
 	if existing != nil {
-		return failure[List]("LIST_EXISTS", "List '"+listID+"' already exists")
+		return failure[List]("LIST_EXISTS", "list '"+listID+"' already exists")
 	}
 
 	if name == "" {
@@ -73,7 +73,7 @@ func CreateList(workdir, listID, name string) Result[List] {
 	}
 
 	if err := gitmsg.WriteList(workdir, socialExtension, listID, data); err != nil {
-		return failureWithDetails[List]("GIT_ERROR", "Failed to create list", err)
+		return failureWithDetails[List]("GIT_ERROR", "create list failed", err)
 	}
 
 	return success(listDataToList(data))
@@ -83,11 +83,11 @@ func CreateList(workdir, listID, name string) Result[List] {
 func DeleteList(workdir, listID string) Result[struct{}] {
 	existing, _ := gitmsg.ReadList(workdir, socialExtension, listID)
 	if existing == nil {
-		return failure[struct{}]("LIST_NOT_FOUND", "List '"+listID+"' not found")
+		return failure[struct{}]("LIST_NOT_FOUND", "list '"+listID+"' not found")
 	}
 
 	if err := gitmsg.DeleteList(workdir, socialExtension, listID); err != nil {
-		return failureWithDetails[struct{}]("GIT_ERROR", "Failed to delete list", err)
+		return failureWithDetails[struct{}]("GIT_ERROR", "delete list failed", err)
 	}
 
 	return success(struct{}{})
@@ -97,7 +97,7 @@ func DeleteList(workdir, listID string) Result[struct{}] {
 func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bool) Result[string] {
 	data, _ := gitmsg.ReadList(workdir, socialExtension, listID)
 	if data == nil {
-		return failure[string]("LIST_NOT_FOUND", "List '"+listID+"' not found")
+		return failure[string]("LIST_NOT_FOUND", "list '"+listID+"' not found")
 	}
 
 	// The member ref keeps the address, the spelling git is handed; the cache keeps the identity.
@@ -112,12 +112,12 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 
 	for _, repo := range data.Repositories {
 		if protocol.ParseRepositoryID(repo).Repository == identity {
-			return failure[string]("REPOSITORY_EXISTS", "Repository already in list; use --all-branches to follow every branch")
+			return failure[string]("REPOSITORY_EXISTS", "repository already in the list: use --all-branches to follow every branch")
 		}
 	}
 
 	if err := gitmsg.AddListMember(workdir, socialExtension, listID, repoRef); err != nil {
-		return failureWithDetails[string]("GIT_ERROR", "Failed to update list", err)
+		return failureWithDetails[string]("GIT_ERROR", "update list failed", err)
 	}
 
 	// Sync to cache for immediate visibility
@@ -132,7 +132,7 @@ func AddRepositoryToList(workdir, listID, repoURL, branch string, allBranches bo
 func RemoveRepositoryFromList(workdir, listID, repoURL string) Result[struct{}] {
 	data, _ := gitmsg.ReadList(workdir, socialExtension, listID)
 	if data == nil {
-		return failure[struct{}]("LIST_NOT_FOUND", "List '"+listID+"' not found")
+		return failure[struct{}]("LIST_NOT_FOUND", "list '"+listID+"' not found")
 	}
 
 	// Any spelling removes the member: both sides compare as identities, and a branch in the argument picks that member.
@@ -147,11 +147,11 @@ func RemoveRepositoryFromList(workdir, listID, repoURL string) Result[struct{}] 
 		}
 	}
 	if foundRef == "" {
-		return failure[struct{}]("REPOSITORY_NOT_FOUND", "Repository not in list")
+		return failure[struct{}]("REPOSITORY_NOT_FOUND", "repository not in the list")
 	}
 
 	if err := gitmsg.RemoveListMember(workdir, socialExtension, listID, foundRef); err != nil {
-		return failureWithDetails[struct{}]("GIT_ERROR", "Failed to update list", err)
+		return failureWithDetails[struct{}]("GIT_ERROR", "update list failed", err)
 	}
 
 	return success(struct{}{})

@@ -122,7 +122,7 @@ func newSocialInitCmd() *cobra.Command {
 			}
 
 			if err := gitmsg.SetExtConfigValue(cfg.WorkDir, "social", "branch", branch); err != nil {
-				PrintError(cmd, "failed to initialize: "+err.Error())
+				PrintError(cmd, "save social config: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -220,7 +220,7 @@ func newSocialPostCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
@@ -276,7 +276,7 @@ func newSocialEditCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
@@ -369,7 +369,7 @@ func newSocialCommentCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
@@ -457,7 +457,7 @@ func newSocialQuoteCmd() *cobra.Command {
 					lines = append(lines, scanner.Text())
 				}
 				if err := scanner.Err(); err != nil {
-					PrintError(cmd, "failed to read from stdin: "+err.Error())
+					PrintError(cmd, "read stdin: "+err.Error())
 					os.Exit(ExitError)
 				}
 				content = strings.Join(lines, "\n")
@@ -836,13 +836,13 @@ This is detected during fetch when parsing remote repository lists.`,
 			workspaceURL := protocol.NormalizeURL(git.GetOriginURL(cfg.WorkDir))
 
 			if workspaceURL == "" {
-				PrintError(cmd, "No origin remote configured")
+				PrintError(cmd, "no origin remote: add one with git remote add origin <url>")
 				os.Exit(ExitError)
 			}
 
 			followers, err := social.GetFollowers(workspaceURL)
 			if err != nil {
-				PrintError(cmd, "Failed to get followers: "+err.Error())
+				PrintError(cmd, "read followers: "+err.Error())
 				os.Exit(ExitError)
 			}
 
@@ -904,7 +904,7 @@ Examples:
 			if isWorkspace {
 				listIDs, err := gitmsg.EnumerateLists(cfg.WorkDir, socialExt)
 				if err != nil {
-					PrintError(cmd, "failed to enumerate lists: "+err.Error())
+					PrintError(cmd, "enumerate lists: "+err.Error())
 					os.Exit(ExitError)
 				}
 				for _, id := range listIDs {
@@ -922,7 +922,7 @@ Examples:
 			} else {
 				cachedLists, err := cache.GetExternalRepoLists(repoURL)
 				if err != nil {
-					PrintError(cmd, "failed to get lists: "+err.Error())
+					PrintError(cmd, "read lists from cache: "+err.Error())
 					os.Exit(ExitError)
 				}
 				for _, list := range cachedLists {

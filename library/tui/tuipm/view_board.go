@@ -296,7 +296,7 @@ func parseColumnFilter(filter string) (field, value string, ok bool) {
 func buildColumnMoveOpts(issue pm.Issue, sourceFilter, destFilter string) (pm.UpdateIssueOptions, error) {
 	destField, destValue, ok := parseColumnFilter(destFilter)
 	if !ok {
-		return pm.UpdateIssueOptions{}, fmt.Errorf("destination column filter is not simple field:value")
+		return pm.UpdateIssueOptions{}, fmt.Errorf("destination column filter must be field:value")
 	}
 	sourceField, sourceValue, sourceOK := parseColumnFilter(sourceFilter)
 

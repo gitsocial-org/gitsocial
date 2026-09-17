@@ -92,19 +92,19 @@ func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOpti
 	}
 
 	if err := os.MkdirAll(storageDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create storage dir: %w", err)
+		return "", fmt.Errorf("create storage dir: %w", err)
 	}
 
 	_, err := git.ExecGit(storageDir, []string{"init", "--bare"})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to init bare repo: %w", err)
+		return "", fmt.Errorf("init bare repo: %w", err)
 	}
 
 	_, err = git.ExecGit(storageDir, []string{"remote", "add", "upstream", address})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to add remote: %w", err)
+		return "", fmt.Errorf("add remote: %w", err)
 	}
 
 	_, err = git.ExecGit(storageDir, []string{
@@ -112,7 +112,7 @@ func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOpti
 	})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to set partial clone filter: %w", err)
+		return "", fmt.Errorf("set partial clone filter: %w", err)
 	}
 
 	_, err = git.ExecGit(storageDir, []string{
@@ -120,7 +120,7 @@ func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOpti
 	})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to disable push: %w", err)
+		return "", fmt.Errorf("disable push: %w", err)
 	}
 
 	_, err = git.ExecGit(storageDir, []string{
@@ -128,7 +128,7 @@ func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOpti
 	})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to set branch config: %w", err)
+		return "", fmt.Errorf("set branch config: %w", err)
 	}
 
 	persistent := "0"
@@ -140,7 +140,7 @@ func EnsureRepository(baseDir, repoURL, address, branch string, opts *EnsureOpti
 	})
 	if err != nil {
 		os.RemoveAll(storageDir)
-		return "", fmt.Errorf("failed to set persistent config: %w", err)
+		return "", fmt.Errorf("set persistent config: %w", err)
 	}
 
 	return storageDir, nil

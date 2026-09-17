@@ -66,7 +66,7 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 
 	if opts.Head != "" && opts.HeadTip == "" && !opts.AllowUnpublishedHead {
 		return result.Err[PullRequest]("HEAD_NOT_FOUND",
-			fmt.Sprintf("head branch %q not found on origin or locally. Push it first?", opts.Head))
+			fmt.Sprintf("head branch %q is not on origin or in the workspace: push it first", opts.Head))
 	}
 
 	content := buildPRContent(subject, body, opts, "")
@@ -353,7 +353,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 		}
 		if depResult.Data.State != PRStateMerged {
 			return result.Err[PullRequest]("UNMET_DEPENDENCY",
-				fmt.Sprintf("cannot merge: dependency \"%s\" is %s (must be merged first)", depResult.Data.Subject, depResult.Data.State))
+				fmt.Sprintf("cannot merge: dependency \"%s\" is %s, merge it first", depResult.Data.Subject, depResult.Data.State))
 		}
 	}
 

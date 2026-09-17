@@ -195,14 +195,14 @@ func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 		return res, nil
 	}
 	if !strings.HasPrefix(remoteURL, "s3://") {
-		return nil, fmt.Errorf("remote %q is not an s3 remote: %s", remote, remoteURL)
+		return nil, fmt.Errorf("remote %q is %s, not an s3 remote", remote, remoteURL)
 	}
 	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if err != nil {
 		return nil, fmt.Errorf("push site to %s: %w", remoteURL, err)
 	}
 	if !published {
-		return nil, errors.New("site publishing is disabled for this repo; enable with `gitsocial config site set publish true`")
+		return nil, errors.New("site publishing is disabled: enable it with gitsocial config site set publish true")
 	}
 	res.Site = SiteOutcome{Published: true, Complete: complete}
 	return res, nil

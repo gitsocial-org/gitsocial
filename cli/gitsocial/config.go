@@ -323,7 +323,7 @@ remote. Only url, publish and pages are overridable per remote.`,
 				return
 			}
 			if !siteConfigKeys[key] {
-				PrintError(cmd, fmt.Sprintf("unknown key %q (valid: title, accent, accentDark, favicon, image, url, description, publish, pages, filesInclude, filesExclude)", key))
+				PrintError(cmd, fmt.Sprintf("unknown site key %q: run gitsocial config site set --help", key))
 				os.Exit(ExitError)
 			}
 			resolved, err := resolveSiteConfigValue(key, value)
@@ -353,7 +353,7 @@ remote. Only url, publish and pages are overridable per remote.`,
 func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value string) {
 	suffix, ok := siteOverrideKeys[key]
 	if !ok {
-		PrintError(cmd, fmt.Sprintf("only url, publish, and pages are overridable per-remote (got %q)", key))
+		PrintError(cmd, fmt.Sprintf("%q is not overridable per remote: use url, publish or pages", key))
 		os.Exit(ExitError)
 	}
 	if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "get-url", remote}); err != nil {
@@ -393,13 +393,13 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 	case "image":
 		norm, ok := site.NormalizeSiteImage(value)
 		if !ok {
-			return "", fmt.Errorf("image must be a relative bucket key (e.g. og-card.png) or an absolute https:// URL, got %q", value)
+			return "", fmt.Errorf("image must be a bucket key like og-card.png or an absolute https:// URL, got %q", value)
 		}
 		return norm, nil
 	case "url":
 		norm, ok := site.NormalizeSiteURL(value)
 		if !ok {
-			return "", fmt.Errorf("url must be an absolute https:// URL with no query or fragment (http:// only for localhost), got %q", value)
+			return "", fmt.Errorf("url must be an absolute https:// URL with no query or fragment, got %q", value)
 		}
 		return norm, nil
 	case "description":
@@ -408,7 +408,7 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 			return "", fmt.Errorf("description must not be empty")
 		}
 		if len(trimmed) > site.SiteConfigMaxDescription {
-			return "", fmt.Errorf("description too long: %d chars (max %d)", len(trimmed), site.SiteConfigMaxDescription)
+			return "", fmt.Errorf("description is %d chars, over the %d-char cap", len(trimmed), site.SiteConfigMaxDescription)
 		}
 		return trimmed, nil
 	case "publish", "pages":

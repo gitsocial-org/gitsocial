@@ -665,9 +665,9 @@ func (v *PostView) handleThreadLoaded(msg ThreadLoadedMsg) {
 		}
 	}
 	if len(msg.Posts) > 0 {
-		v.loadErr = fmt.Errorf("requested post not found in thread: %s", v.requestedPostID)
+		v.loadErr = fmt.Errorf("post not found in thread: %s", v.requestedPostID)
 	} else {
-		v.loadErr = fmt.Errorf("thread empty for: %s", v.requestedPostID)
+		v.loadErr = fmt.Errorf("thread has no posts: %s", v.requestedPostID)
 	}
 }
 

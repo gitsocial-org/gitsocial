@@ -179,7 +179,7 @@ func TestCorePush_siteOnlyOnNonS3Fails(t *testing.T) {
 	if resp.Error == nil {
 		t.Fatalf("core.push --site-only on a non-s3 remote should fail, got %v", resp.Result)
 	}
-	if !strings.Contains(resp.Error.Message, "is not an s3 remote") {
+	if !strings.Contains(resp.Error.Message, "not an s3 remote") {
 		t.Errorf("error message = %q, want the sequence's non-s3 message", resp.Error.Message)
 	}
 }

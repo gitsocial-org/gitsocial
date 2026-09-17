@@ -310,7 +310,7 @@ printed.`,
 			return
 		}
 		if len(args) != 1 {
-			PrintError(cmd, "session id required (or pass --older-than)")
+			PrintError(cmd, "session id required: pass one or --older-than <duration>")
 			os.Exit(1)
 		}
 		res := memo.GCSession(args[0])

@@ -99,9 +99,9 @@ var (
 	ErrNotFound           = fmt.Errorf("objstore: not found")
 	errPreconditionFailed = fmt.Errorf("objstore: precondition failed")
 	// errAccessDenied is a 403 on a read; it wraps ErrNotFound, since a bucket that denies listing answers 403 for absent keys too.
-	errAccessDenied = fmt.Errorf("%w (access denied)", ErrNotFound)
+	errAccessDenied = fmt.Errorf("%w or access denied", ErrNotFound)
 	// errCredentialsRequired replaces the 403 an unsigned write would earn.
-	errCredentialsRequired = fmt.Errorf("objstore: credentials required (`gitsocial config credentials set <remote>`, GITSOCIAL_S3_ACCESS_KEY / GITSOCIAL_S3_SECRET_KEY, or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
+	errCredentialsRequired = fmt.Errorf("objstore: credentials required: run gitsocial config credentials set <remote>")
 )
 
 // httpStatusError carries a non-2xx status code, so the retry can tell a transient server fault from a client error.
@@ -221,7 +221,7 @@ func (c *Client) statusError(method, key string, code int, snippet []byte) error
 		return &httpStatusError{code: code, err: fmt.Errorf("objstore: %s %s: HTTP 403: %s", method, key, body)}
 	case code == http.StatusPreconditionFailed || code == http.StatusConflict:
 		// 412 is a failed If-Match or If-None-Match and 409 is AWS's conditional-write conflict; both mean re-read and retry.
-		return fmt.Errorf("%w: %s (HTTP %d: %s)", errPreconditionFailed, key, code, body)
+		return fmt.Errorf("%w: %s: HTTP %d: %s", errPreconditionFailed, key, code, body)
 	}
 	return &httpStatusError{code: code, err: fmt.Errorf("objstore: %s %s: HTTP %d: %s", method, key, code, body)}
 }
@@ -391,7 +391,7 @@ func (c *Client) listWithETags(prefix string) ([]listedObject, error) {
 		}
 		// A short listing read as complete drops keys; a v1-marker provider lands here.
 		if result.NextContinuationToken == "" {
-			return nil, fmt.Errorf("objstore: list %s: the provider reported a truncated listing with no continuation token, so the remaining keys cannot be read", prefix)
+			return nil, fmt.Errorf("objstore: list %s: truncated listing with no continuation token", prefix)
 		}
 		token = result.NextContinuationToken
 	}

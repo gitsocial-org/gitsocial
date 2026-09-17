@@ -27,7 +27,7 @@ import (
 
 // errForkNotCreated ends the flow after the manual instructions were printed:
 // there is no destination to clone against yet.
-var errForkNotCreated = errors.New("the fork was not created — follow the instructions above, then re-run with --to")
+var errForkNotCreated = errors.New("the fork was not created: follow the instructions above, then re-run with --to")
 
 type forkCreateFlags struct {
 	to       string
@@ -167,7 +167,7 @@ func resolveForkDestination(cmd *cobra.Command, upstreamURL, to string) (string,
 	upstreamHost := protocol.DetectHost(upstreamURL)
 	if to == "" {
 		if !canForkOnForge(upstreamHost) {
-			return "", fmt.Errorf("cannot fork %s automatically: pass --to <dest-url> (a fork URL on a forge, or s3://<endpoint-host>/<bucket>/<prefix>)", upstreamURL)
+			return "", fmt.Errorf("cannot fork %s automatically: pass --to <fork-url> or s3://<endpoint-host>/<bucket>/<prefix>", upstreamURL)
 		}
 		return forkOnForge(cmd, upstreamURL, "")
 	}
@@ -297,7 +297,7 @@ func forkOnGitLab(cmd *cobra.Command, upstreamURL, destURL string) (string, erro
 	}
 	up := protocol.ParseRepo(upstreamURL)
 	if up == nil {
-		return "", fmt.Errorf("cannot read owner/repo from %s", upstreamURL)
+		return "", fmt.Errorf("no owner/repo in %s", upstreamURL)
 	}
 	body := map[string]string{}
 	if dest := protocol.ParseRepo(destURL); dest != nil {
@@ -338,7 +338,7 @@ func forkOnGitLab(cmd *cobra.Command, upstreamURL, destURL string) (string, erro
 		if destURL != "" {
 			return destURL, nil
 		}
-		return "", fmt.Errorf("GitLab fork response has no web_url: %s", strings.TrimSpace(string(raw)))
+		return "", fmt.Errorf("gitlab fork response has no web_url: %s", strings.TrimSpace(string(raw)))
 	}
 	return created.WebURL, nil
 }

@@ -53,7 +53,7 @@ func checkUpstreamURL(url string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%s names upstream %q, whose transport is not allowed (only https://, http:// and s3:// may be fetched)", thinUpstreamKey, url)
+	return fmt.Errorf("%s names upstream %q with a transport that is not https, http or s3", thinUpstreamKey, url)
 }
 
 // isGitmsgRef reports whether a refname is one of the gitmsg classes a thin push leaves whole.
@@ -169,7 +169,7 @@ func (h *remoteHelper) ensureUpstreamLocal() (ran bool, err error) {
 	}
 	// ran reports that the overlay brought something in, so a network failure is not reported as upstream dropping the object.
 	if !fetched {
-		return false, fmt.Errorf("thin fork: upstream %s is unreachable, so the objects this bucket excluded cannot be resolved: %w", doc.URL, branchErr)
+		return false, fmt.Errorf("thin fork: upstream %s is unreachable: %w", doc.URL, branchErr)
 	}
 	// Record the dependency as a visible remote; idempotent, and a failure is ignored.
 	if _, err := h.git("config", "--get", "remote."+upstreamRemoteName+".url"); err != nil {
@@ -231,7 +231,7 @@ func writeThinUpstream(client *Client, prefix string, doc thinUpstreamDoc) error
 }
 
 // ErrThinBucket is what the site surface refuses a thin fork bucket with.
-var ErrThinBucket = errors.New("thin fork bucket: its history is incomplete without upstream, so no static site is published; detach it with `gitsocial push --full`")
+var ErrThinBucket = errors.New("thin fork bucket publishes no static site: gitsocial push --full")
 
 // PushFull detaches a bucket from its thin relationship: upload what the bucket lacks, restore the ref advertisement, delete the marker. workdir's refs must cover the bucket's tips.
 func PushFull(remoteURL string, env HelperEnv, workdir string, progress Progress) error {
