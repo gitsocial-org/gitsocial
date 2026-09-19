@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # prose-check.sh - count STYLE.md violations; fail when a count rises above scripts/prose-baseline.txt.
-# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html comment-heavy confidence short-long flag-help error-shape
+# Usage: scripts/prose-check.sh [--update | --list <rule>]   rules: emdash comment-block-go comment-block-js comment-block-css comment-block-html comment-heavy confidence short-long flag-help error-shape func-comment
 # Commit subjects over 72 characters always fail: GITSOCIAL_PUSH_RANGES (set by the hook), else @{upstream}..HEAD, else skipped.
 set -o pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/prose-baseline.txt"
-rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy confidence emdash error-shape flag-help short-long"
+rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy confidence emdash error-shape flag-help func-comment short-long"
 comment_heavy_since=2026-09-16T00:00:00 # commits before the rule are exempt
 zero=0000000000000000000000000000000000000000
 
@@ -69,20 +69,21 @@ error_shapes() {
 		}'
 }
 
-# comment_heavy prints hash<TAB>comments/code for each commit in the range whose net new comment lines outnumber its added code lines
+# comment_heavy prints hash<TAB>comments/code for each commit in the range whose net new comment lines outnumber its added code lines; a comment line directly above a func line is the one func-comment requires and does not count
 comment_heavy() {
 	[ -n "$ranges" ] || return 0
 	# shellcheck disable=SC2086
 	for h in $(git log --no-merges --since="$comment_heavy_since" --format=%H $ranges 2>/dev/null); do
 		git show --format= --name-only "$h" | grep -qvE '\.md$|(^|/)testdata/|\.golden$' || continue
-		git show --format= --unified=0 "$h" | awk -v h="$h" '
+		git show --format= --unified=1 "$h" | awk -v h="$h" '
 			/^(\+\+\+|---)/ { next }
-			/^[-+]/ {
+			{
 				s = substr($0, 2); sub(/^[[:space:]]+/, "", s)
-				if (s == "") next
-				if (s ~ /^(\/\/|\/\*|\*\/|\*|<!--|-->)/) { if ($0 ~ /^\+/) c++; else r++ } else if ($0 ~ /^\+/) k++
+				if (pend != "") { if (s !~ /^func /) { if (pend == "+") c++; else r++ } pend = "" }
+				if ($0 !~ /^[-+]/ || s == "") next
+				if (s ~ /^(\/\/|\/\*|\*\/|\*|<!--|-->)/) pend = substr($0, 1, 1); else if ($0 ~ /^\+/) k++
 			}
-			END { if (c - r > k) print h "\t" (c - r) "/" (k + 0) }'
+			END { if (pend == "+") c++; else if (pend == "-") r++; if (c - r > k) print h "\t" (c - r) "/" (k + 0) }'
 	done
 }
 
@@ -90,6 +91,15 @@ comment_heavy() {
 confidence() {
 	printf '%s\n' "$FILES" | grep -v '^documentation/STYLE\.md$' | tr '\n' '\0' |
 		xargs -0 grep -HniE '\b(exactly|deliberately|silently|loudly|forever|by construction|honest|honestly|genuinely|precisely|the whole)\b' | cut -d: -f1,2
+}
+
+# func_comments prints file:line for each function in non-test Go under library and cli with no comment line above it
+func_comments() {
+	printf '%s\n' "$FILES" | grep -E '^(library|cli)/.*\.go$' | grep -v '_test\.go$' | tr '\n' '\0' |
+		xargs -0 awk '
+			FNR == 1 { prev = "" }
+			/^func / { if (prev !~ /^[[:space:]]*\/\//) print FILENAME ":" FNR }
+			/[^[:space:]]/ { prev = $0 }'
 }
 
 # list_rule prints every offending file:line for one rule
@@ -104,6 +114,7 @@ list_rule() {
 	confidence) confidence ;;
 	short-long) grep -HnE 'Short:[[:space:]]*"' cli/gitsocial/*.go | awk -F'"' 'length($2) > 50 { split($0, a, ":"); print a[1] ":" a[2] }' ;;
 	error-shape) error_shapes ;;
+	func-comment) func_comments ;;
 	flag-help)
 		grep -HnE 'Flags\(\)\.(String|Bool|Int|Int64|Uint|Float64|Duration|StringSlice|StringArray|Count|Var)(Var)?P?\(' cli/gitsocial/*.go | awk '{
 			s = $0; n = 0

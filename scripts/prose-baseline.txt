@@ -7,4 +7,5 @@ confidence	2
 emdash	572
 error-shape	0
 flag-help	0
+func-comment	445
 short-long	0
