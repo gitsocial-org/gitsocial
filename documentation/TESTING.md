@@ -1,8 +1,8 @@
 # Testing
 
-The two test tiers, every gate stage, and the flags, environment variables and artifacts the scripts in `scripts/` use.
+The two test tiers, every gate stage, the supported platforms, and the flags, environment variables and artifacts the scripts in `scripts/` use.
 
-[Tiers](#tiers) · [Stages](#stages) · [Guarded tests](#guarded-tests) · [Coverage](#coverage) · [Beyond the gate](#beyond-the-gate) · [Environment](#environment) · [Artifacts](#artifacts)
+[Tiers](#tiers) · [Stages](#stages) · [Guarded tests](#guarded-tests) · [Coverage](#coverage) · [Beyond the gate](#beyond-the-gate) · [Platforms](#platforms) · [Environment](#environment) · [Artifacts](#artifacts)
 
 ## Tiers
 
@@ -22,7 +22,14 @@ git config core.hooksPath scripts/hooks     # install the pre-push hook, once pe
 GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
 ```
 
-A missing `golangci-lint` fails unless `--skip-lint` is passed. `-short` skips the real-git subtests. Every script under `scripts/` prints its usage for `-h`.
+A missing `golangci-lint` fails unless `--skip-lint` is passed. `.golangci.yml` is `version: "2"`, which a v1 binary refuses, so install v2 or newer:
+
+```bash
+brew install golangci-lint
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+```
+
+`-short` skips the real-git subtests. Every script under `scripts/` prints its usage for `-h`.
 
 ## Stages
 
@@ -100,6 +107,20 @@ GS_JSCOV=.test-artifacts/jscov scripts/site-coverage.sh    # re-report the last 
 ```
 
 `scripts/release.sh` preflights `GITSOCIAL_TEST_FULL=1 go test -race ./...`, the browser battery and `govulncheck ./...`, each into its own log. The scan is the one preflight step that reaches the network, so both tiers stay offline. The battery needs node, and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
+
+## Platforms
+
+`.goreleaser.yaml` builds five targets, `scripts/install.sh` covers the four it can, and both tiers run on the maintainer's machine.
+
+| Target | Released | `scripts/install.sh` | Tests run on it |
+|---|---|---|---|
+| darwin/arm64 | yes | yes | yes |
+| darwin/amd64 | yes | yes | no |
+| linux/amd64 | yes | yes | no |
+| linux/arm64 | yes | yes | no |
+| windows/amd64 | yes | no | no |
+
+Windows installs through the Scoop bucket the [README](../README.md#installation) names. No source file carries a platform build tag, and `runtime.GOOS` is read in one place.
 
 ## Environment
 

@@ -108,6 +108,12 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [CLI](documentation/CLI.md) | Commands, flags, output formats |
 | [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
 
+### Development
+
+| Document | Description |
+|----------|-------------|
+| [Testing](documentation/TESTING.md) | Test tiers, gate stages, coverage, supported platforms |
+
 ## Contributing
 
 Platform issues and PRs are disabled on all mirrors. GitSocial uses its own tools for collaboration.
@@ -117,12 +123,15 @@ Platform issues and PRs are disabled on all mirrors. GitSocial uses its own tool
 1. Install GitSocial (see [Installation](#installation))
 2. Fork the repository on any host (GitHub, GitLab, Codeberg, or self-hosted)
 3. Clone your fork: `git clone https://your-host.com/you/gitsocial`
-4. Read [Architecture](documentation/ARCHITECTURE.md) for system design, packages, and cache layout
+4. Build it with Go 1.25.8 or newer: `go build -o bin/ ./...`
+5. Read [Architecture](documentation/ARCHITECTURE.md) for system design, packages, and cache layout
 
 ### Submitting Pull Requests
 
 ```bash
+git config core.hooksPath scripts/hooks   # install the gate hook, once per clone
 git checkout -b feature/my-change         # make changes, commit
+scripts/check.sh --quick                  # the gate the hook runs on push
 
 gitsocial review pr create \
   --base main \
@@ -144,7 +153,9 @@ gitsocial pm issue create "Bug: description"
 gitsocial push
 ```
 
-For quick questions or discussion, use the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org).
+The issue lands in your own repository. Ask in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) for fork registration, so a maintainer runs `gitsocial fork add <your-fork-url>` and sees it.
+
+For quick questions or discussion, use the same room.
 
 ## License
 

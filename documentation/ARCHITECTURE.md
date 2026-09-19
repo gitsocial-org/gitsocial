@@ -109,8 +109,22 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 
 - Run git from an extension; use `core/git`.
 - Create a type for a single use.
-- Add package-level mutable state. The executor seam, the command timeout and the s3 helper alias memo in `core/git`, the per-workdir caches in `core/gitmsg`, the in-flight map in `core/identity`, the two credential warn-once flags in `core/objstore`, the fetched-refs memo in `extensions/review`, and the theme struct, the registries (contexts, views, cards, nav targets, message handlers) and the width-margin flag in `tui/tuicore` are the standing exceptions.
+- Add package-level mutable state outside the seams below. New state takes a new row and a reason.
 - Skip error handling.
+
+| Package | Mutable package-level state |
+|---|---|
+| `core/git` | the executor seam, the command timeout, the s3 helper alias memo |
+| `core/gitmsg` | the per-workdir caches |
+| `core/cache` | the database singleton, the extension schema and migration registry |
+| `core/log` | the process logger |
+| `core/notifications` | the provider registry |
+| `core/identity` | the in-flight map, the DNS policy flag |
+| `core/identity/forge` | the forge registry |
+| `core/objstore` | the two credential warn-once flags |
+| `extensions/review` | the fetched-refs memo |
+| `tui/tuicore` | the theme struct, the registries (contexts, views, cards, nav targets, message handlers), the width-margin flag |
+| `tui/tuicore/diff` | the background-suppression flag |
 
 ### Patterns
 
@@ -256,7 +270,7 @@ Use the view when the WHERE clause is on `core_commits` columns. Join `core_comm
 
 References are `[repo_url]#<type>:<value>`: `https://github.com/user/repo#commit:abc123def456` or, workspace-relative, `#commit:abc123def456`. Types: `commit`, `branch`, `tag`, `file`, `list`.
 
-A repository has two names: the identity, `protocol.NormalizeURL` of any spelling, which keys every cache row, ref path and comparison, and the address, the spelling the user gave, which is stored in the list member or fork ref and handed to git.
+A repository has two names: the identity, `protocol.NormalizeURL` of any spelling, which keys every cache row, ref path and comparison, and the address, the spelling the user gave, which is stored in the list member or fork ref and handed to git. A repository has an identity and a person has a verified binding; the word is not free for a third use.
 
 A virtual commit is one referenced by a `GitMsg-Ref` trailer but not yet fetched; it is stored with `is_virtual = 1` and full metadata, and flips to `0` when fetched.
 
@@ -268,6 +282,11 @@ State refs under `refs/gitmsg/`:
 - `refs/gitmsg/<ext>/lists/<name>/_meta` and `.../items/<refHash>`: list metadata and one ref per member
 
 Per-element refs have no shared write target, so concurrent adds from several clones do not collide. Metadata lives under `_meta` because git refuses a child ref under a same-named parent ref.
+
+Fork refs sit outside `refs/gitmsg/`, keyed by `fetch.URLHash` of the fork identity:
+
+- `refs/forks/<hash>/gitmsg/*`: the protocol branches a registered fork publishes, written by `core/fetch`
+- `refs/fork/<hash>/<branch>`: the code branches a cross-fork diff borrows, written by `extensions/review`
 
 ### Fetch rules
 
@@ -283,9 +302,9 @@ All-branch following stores each commit under its real refname. The workspace al
 ### Extension rules
 
 - Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
-- An extension joins the fetch in `library/client`, the one place listing its `Processors`, its `SyncWorkspaceBatch` and its `BackfillSpec`.
+- An extension joins the fetch in `library/client`, which lists every extension's `Processors`, `SyncWorkspaceBatch` and `BackfillSpec`. `pm`, `release` and `review` name their own `Processors` again in their `FetchRepository`, which serves the `--repo` form of a CLI list command.
 - An extension costs ten imports: `cache`, `fetch`, `git`, `gitmsg`, `log`, `notifications`, `protocol` and `result`, plus `social` for comments and `tui/tuicore` for its navigation items. It registers a notification provider with `notifications.RegisterProvider`.
-- `core/search` names every extension's table itself, in `query.go` and `group.go`, where `notifications` takes a registration. A sixth extension edits `core/search`; the asymmetry stays until one exists.
+- `core/search` names every extension's table itself, in `query.go` and `group.go`, and `core/cache` names them in `analytics.go`, `clear.go`, `commits.go`, `stats.go` and `versions.go`, where `notifications` takes a registration. A sixth extension edits both packages; the asymmetry stays until one exists.
 - Core tables are read-only for extensions; use the cache APIs.
 - Known limits: `storage.GetStorageDir` hashes the URL only, so one URL on two branches shares storage; check `meta.HasCommits` before reading timestamps.
 
@@ -311,6 +330,8 @@ library/tui/
 | `registry_` | a global registry | `registry_nav.go` |
 | `form_` | a modal form | `form_issue.go` |
 | `version_item_` | a history-picker version item | `version_item_issue.go` |
-| `util_` | helpers and the shared types they take | `util_render.go` |
+| `util_` | helpers, and the shared app state they take: `State`, `Router`, `theme` | `util_render.go` |
+
+The table governs `library/tui/*/`, not `test/` and not the `tuicore/diff/` sub-package. A `component_` renders and takes keys; shared app state stays a `util_`.
 
 A new extension gets a `tui/tui<ext>/` directory with its `view_*.go` files and a `util_register.go` exposing `Register(host)`, called from `app.go`.
