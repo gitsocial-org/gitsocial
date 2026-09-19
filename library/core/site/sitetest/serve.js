@@ -119,6 +119,8 @@ if (require.main === module) {
   const port = Number(process.argv[3] || 0);
   const server = createServer(root);
   server.listen(port, "127.0.0.1", () => console.log("listening " + server.address().port));
+  // A piped stdin ends when the spawning runner goes, however it goes, and the server goes with it.
+  if (!process.stdin.isTTY) process.stdin.on("end", () => process.exit(0)).resume();
 }
 
 module.exports = { createServer };

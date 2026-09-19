@@ -61,7 +61,7 @@ function runSuite(file, origin) {
 // startServer launches serve.js over root and resolves once it prints its port.
 function startServer(root) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(here, "serve.js"), root, "0"], { stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn(process.execPath, [path.join(here, "serve.js"), root, "0"], { stdio: ["pipe", "pipe", "inherit"] });
     let buf = "";
     child.stdout.on("data", (d) => {
       buf += d;
