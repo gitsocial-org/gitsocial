@@ -73,6 +73,16 @@ func setupTestCache(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 }
 
+// testRepoURL names a repository after the test and drops the rows an earlier run of that test left.
+func testRepoURL(t *testing.T) string {
+	t.Helper()
+	repoURL := "https://example.com/test/" + t.Name()
+	if err := cache.ResetRepositoryData(repoURL); err != nil {
+		t.Fatalf("ResetRepositoryData() error = %v", err)
+	}
+	return repoURL
+}
+
 // initTestRepo creates a git repo with N commits, returns dir and commit list (newest first).
 func initTestRepo(t *testing.T, commitCount int) (string, []git.Commit) {
 	t.Helper()
@@ -177,7 +187,7 @@ func TestDedupeRepos_preservesOrder(t *testing.T) {
 
 func TestProcessCommits_insertsNewCommits(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-insert"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 	commits := []git.Commit{
@@ -209,7 +219,7 @@ func TestProcessCommits_insertsNewCommits(t *testing.T) {
 
 func TestProcessCommits_filtersAlreadyFetched(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-filter"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 
@@ -237,7 +247,7 @@ func TestProcessCommits_filtersAlreadyFetched(t *testing.T) {
 
 func TestProcessCommits_callsProcessors(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-procs"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 	commits := []git.Commit{
@@ -267,7 +277,7 @@ func TestProcessCommits_callsProcessors(t *testing.T) {
 
 func TestProcessCommits_parsesGitMsgHeaders(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-headers"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 
@@ -303,7 +313,7 @@ func TestProcessCommits_parsesGitMsgHeaders(t *testing.T) {
 
 func TestProcessCommits_nilMsgForPlainCommits(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-nilmsg"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 
@@ -339,7 +349,7 @@ func TestProcessCommits_emptySlice(t *testing.T) {
 
 func TestProcessCommits_multipleProcessors(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-multiproc"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 	commits := []git.Commit{
@@ -361,7 +371,7 @@ func TestProcessCommits_multipleProcessors(t *testing.T) {
 
 func TestProcessCommits_passesCorrectArgs(t *testing.T) {
 	t.Parallel()
-	repoURL := "https://example.com/test/pc-args"
+	repoURL := testRepoURL(t)
 	branch := "main"
 	now := time.Now()
 	commits := []git.Commit{
@@ -716,7 +726,7 @@ func TestFetchFullHistory(t *testing.T) {
 	}
 	t.Parallel()
 	dir, commits := initTestRepo(t, 3)
-	repoURL := "https://example.com/fullhistory"
+	repoURL := testRepoURL(t)
 
 	count, err := fetchAllBranches(dir, repoURL, "main", nil, nil)
 	if err != nil {
@@ -759,7 +769,7 @@ func TestFetchFullHistory_withProcessor(t *testing.T) {
 	}
 	t.Parallel()
 	dir, commits := initTestRepo(t, 2)
-	repoURL := "https://example.com/fullhistory-proc"
+	repoURL := testRepoURL(t)
 
 	var processed int
 	proc := func(commit git.Commit, msg *protocol.Message, rURL, b string) { processed++ }
@@ -782,7 +792,7 @@ func TestFetchFullHistory_idempotent(t *testing.T) {
 	}
 	t.Parallel()
 	dir, _ := initTestRepo(t, 3)
-	repoURL := "https://example.com/fullhistory-idem"
+	repoURL := testRepoURL(t)
 
 	count1, err := fetchAllBranches(dir, repoURL, "main", nil, nil)
 	if err != nil {
@@ -809,7 +819,7 @@ func TestFetchIncremental(t *testing.T) {
 	}
 	t.Parallel()
 	dir, commits := initTestRepo(t, 3)
-	repoURL := "https://example.com/incremental"
+	repoURL := testRepoURL(t)
 
 	// Use yesterday to ensure all today's commits are included (git --since uses date granularity)
 	sinceTime := time.Now().AddDate(0, 0, -1)
@@ -860,7 +870,7 @@ func TestFetch30DayWindow(t *testing.T) {
 	}
 	t.Parallel()
 	dir, commits := initTestRepo(t, 3)
-	repoURL := "https://example.com/window"
+	repoURL := testRepoURL(t)
 
 	since := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	count, err := fetch30DayWindow(dir, repoURL, "main", since, "", nil)

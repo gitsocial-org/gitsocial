@@ -87,7 +87,7 @@ Seeded through the extension APIs, with data from the protocol specs:
 - Social: 2 posts, 1 comment, 1 repost, 1 quote, 1 edit
 - PM: 3 issues (open, closed, canceled), 1 milestone, 1 sprint
 - Release: 2 releases, one a prerelease with artifacts
-- Review: 2 pull requests (one open with feedback, one merged), 1 approval; `stack_test.go` adds a dependent pull request once per run
+- Review: 2 pull requests (one open with feedback, one merged), 1 approval; `stack_test.go` adds a dependent pull request to its own copy
 - Memo: the project tier, 2 memos (one edited, one labeled), 1 inherited source
 - Forks: 1 registered fork; the fork closes the workspace issue, which leaves an inert proposal
 

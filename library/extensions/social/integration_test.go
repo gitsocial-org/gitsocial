@@ -2903,8 +2903,8 @@ func TestNotificationIntegration(t *testing.T) {
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		// Setup external comment
 		setupExternalInteraction(t, workdir, "comment")
-		// Setup follower
-		followerRepo := "https://github.com/fol/markall"
+		// Setup follower, named per run: the read marker below outlives one run of the test
+		followerRepo := fmt.Sprintf("https://github.com/fol/markall%06d", atomic.AddInt64(&extInteractionCounter, 1))
 		_ = insertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
 		// Verify both are unread
 		countBefore, _ := getUnreadCount(workdir)
@@ -2915,6 +2915,8 @@ func TestNotificationIntegration(t *testing.T) {
 		if err := markAllAsRead(workdir); err != nil {
 			t.Fatalf("markAllAsRead() error = %v", err)
 		}
+		// The markers are scoped to this workspace, so the cleanup drops what the test marked
+		t.Cleanup(func() { _ = markAllAsUnread(workdir) })
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
 
