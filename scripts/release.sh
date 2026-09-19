@@ -7,10 +7,10 @@
 #
 # Sequence (each step is idempotent — a mid-release failure is fixed by
 # re-running the driver):
-#   1. Preflight   — clean tree, up-to-date main, tests green (`-race` plus the
-#                    browser site battery, the two checks the per-push gate
-#                    scripts/check.sh is too slow to carry), tools + full
-#                    credential set present. Fails fast before anything ships.
+#   1. Preflight   — clean tree, up-to-date main, tests green (`-race`, the
+#                    browser site battery and govulncheck, the three checks the
+#                    per-push gate scripts/check.sh does not carry), tools +
+#                    full credential set present. Fails fast before anything ships.
 #   2. Tag         — create vX.Y.Z locally (skip if it exists).
 #   3. Build       — `goreleaser release --clean`: all-platform archives +
 #                    checksums.txt + SBOMs into dist/, sign darwin binaries,
@@ -61,6 +61,8 @@
 #                          fresh build of the current tree into bin/gitsocial,
 #                          so the current CLI — including `remote put` — is used)
 set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # --- credential env file ---
 # Credentials live in an untracked, shell-syntax env file: repo-root .env by
@@ -151,11 +153,10 @@ preflight() {
   for tool in git go goreleaser syft rcodesign curl node; do
     have "$tool" || fail "required tool not found on PATH: $tool"
   done
-  # Chrome backs the style-assertion suite and is never on PATH by name, so it
-  # resolves the way the suite does.
-  node "$root/library/core/site/sitetest/chrome.js" >/dev/null 2>&1
-  [ -n "$(node -e 'process.stdout.write(require("'"$root"'/library/core/site/sitetest/chrome.js").find())')" ] \
-    || fail "Chrome not found for the style-assertion suite; set CHROME to its path"
+  # Chrome is never on PATH by name, so it resolves the way the style suite does.
+  chrome="$(node -e 'process.stdout.write(require(process.argv[1]).find())' \
+    "$root/library/core/site/sitetest/chrome.js" 2>/dev/null || true)"
+  [ -n "$chrome" ] || fail "Chrome not found for the style-assertion suite; set CHROME to its path"
   info "tools checked: git go goreleaser syft rcodesign curl node"
 
   # Credentials (documented in the header). Report everything missing at once.
@@ -199,11 +200,13 @@ preflight() {
 
   # Tests green (real run only; dry-run just states it). The per-push gate
   # (scripts/check.sh) already covers vet + lint + the plain suite; a release
-  # additionally pays for the two checks too slow to run on every push:
-  # `-race` (supersedes the plain suite) and the browser site battery.
+  # additionally pays for the three checks the gate does not run: `-race`
+  # (supersedes the plain suite), the browser site battery, and the advisory
+  # scan, which needs the network the gate does not use.
   if $DRY_RUN; then
     printf '    [dry-run] GITSOCIAL_TEST_FULL=1 go test -race ./...\n'
     printf '    [dry-run] go test -tags sitetest -timeout 30m ./library/core/site/\n'
+    printf '    [dry-run] go run golang.org/x/vuln/cmd/govulncheck@latest ./...\n'
   else
     # Output goes to a log, not the terminal: a failing test is named from it,
     # and an intermittent one has to be, since it may not fail on the rerun.
@@ -216,6 +219,10 @@ preflight() {
     go test -tags sitetest -timeout 30m ./library/core/site/ >.test-artifacts/release-site.log 2>&1 \
       || die "site battery failed: $(grep -E 'FAIL' .test-artifacts/release-site.log | head -5 | tr '\n' ';')"
     info "site battery green"
+    info "running govulncheck (log: .test-artifacts/release-vuln.log)"
+    go run golang.org/x/vuln/cmd/govulncheck@latest ./... >.test-artifacts/release-vuln.log 2>&1 \
+      || die "govulncheck: $(grep -E '^(Vulnerability #|Your code is affected)' .test-artifacts/release-vuln.log | head -5 | tr '\n' ';')"
+    info "no reachable advisory"
   fi
 }
 
@@ -460,7 +467,8 @@ main() {
   upload_installer
 
   log "Release $TAG complete"
-  $DRY_RUN && info "(dry run — nothing was changed)"
+  # An && tail would return 1 from main on a real release, and set -e would exit on it.
+  if $DRY_RUN; then info "(dry run, nothing was changed)"; fi
 }
 
 main

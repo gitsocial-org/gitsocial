@@ -84,7 +84,8 @@ A bare run sets `GITSOCIAL_TEST_FULL=1` itself, so its figures carry the guarded
 
 | Run | Command |
 |---|---|
-| the race detector and the browser battery, at release | `scripts/release.sh vX.Y.Z` |
+| the race detector, the browser battery and the advisory scan, at release | `scripts/release.sh vX.Y.Z` |
+| the advisory scan alone; needs the network and downloads the module | `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` |
 | the browser site battery | `scripts/site-test.sh`, or `go test -tags sitetest -timeout 30m ./library/core/site/` |
 | the reader assets' per-file function coverage | `scripts/site-coverage.sh` |
 | the 100k-row thread benchmark | `go test -tags bench -run '^$' -bench . ./library/extensions/social/` |
@@ -98,7 +99,7 @@ scripts/site-coverage.sh --list gs-render.js               # the uncovered funct
 GS_JSCOV=.test-artifacts/jscov scripts/site-coverage.sh    # re-report the last run
 ```
 
-`scripts/release.sh` preflights `GITSOCIAL_TEST_FULL=1 go test -race ./...` and the browser battery, each into its own log. The battery needs node, and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
+`scripts/release.sh` preflights `GITSOCIAL_TEST_FULL=1 go test -race ./...`, the browser battery and `govulncheck ./...`, each into its own log. The scan is the one preflight step that reaches the network, so both tiers stay offline. The battery needs node, and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
 
 ## Environment
 
@@ -130,3 +131,4 @@ Every run writes under `.test-artifacts/`, which git ignores.
 | `jscov/` | the V8 coverage of one `scripts/site-coverage.sh` run, and the battery log beside it |
 | `release-race.log` | `go test -race ./...` at release |
 | `release-site.log` | the browser battery at release |
+| `release-vuln.log` | the advisory scan at release |

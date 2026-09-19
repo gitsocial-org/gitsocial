@@ -6,6 +6,9 @@ builds:
   - id: darwin
     main: ./cli/gitsocial
     binary: gitsocial
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    mod_timestamp: '{{ .CommitTimestamp }}'
     ldflags:
       - -s -w -X main.version={{.Version}}
     goos: [darwin]
@@ -16,6 +19,9 @@ builds:
   - id: other
     main: ./cli/gitsocial
     binary: gitsocial
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    mod_timestamp: '{{ .CommitTimestamp }}'
     ldflags:
       - -s -w -X main.version={{.Version}}
     goos: [linux, windows]
