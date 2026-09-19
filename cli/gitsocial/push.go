@@ -92,7 +92,7 @@ Examples:
 				AllBranches: allBranches,
 				Full:        full,
 			}
-			results, err := client.PublishAll(cfg.WorkDir, remotes, opts, onRemote, onBranch, siteProgress)
+			results, err := client.PushAll(cfg.WorkDir, remotes, opts, onRemote, onBranch, siteProgress)
 			siteDone()
 
 			if cfg.JSONOutput {

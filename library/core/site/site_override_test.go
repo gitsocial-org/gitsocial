@@ -103,19 +103,19 @@ func TestWriteSiteCustomization_overrideStamped(t *testing.T) {
 	}
 }
 
-// TestSitePush_URLOverrideStamped confirms a full site push with a URL override
+// TestSiteRebuild_URLOverrideStamped confirms a full site rebuild with a URL override
 // stamps that bucket's own URL into the crawlable page layer's absolute-URL
 // artifacts (robots sitemap line, the Atom feed) and site-config.json, so the
 // pages and the SPA agree on the bucket's identity.
-func TestSitePush_URLOverrideStamped(t *testing.T) {
+func TestSiteRebuild_URLOverrideStamped(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "true", "url": "https://primary.example/", "title": "Override"})
 	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "hello post\n\nbody"}})
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{URL: "https://r2.example"}, nil); err != nil {
-		t.Fatalf("pushSite: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{URL: "https://r2.example"}, nil); err != nil {
+		t.Fatalf("rebuildSite: %v", err)
 	}
 
 	robots := getKey(t, client, sitePagesRobotsKey)
@@ -138,28 +138,28 @@ func TestSitePush_URLOverrideStamped(t *testing.T) {
 	}
 }
 
-// TestSitePush_PublishOverrideDisablesPagesOnly confirms a publish=false override
-// (no config-ref change) deletes that bucket's page set on the next push while
-// leaving the data artifacts (the refs manifest) intact — the override must
+// TestSiteRebuild_PublishOverrideDisablesPagesOnly confirms a publish=false override
+// (no config-ref change) deletes that bucket's page set on the next rebuild while
+// leaving the data artifacts (the refs manifest) intact: the override must
 // invalidate the skip marker even though no bucket ref moved.
-func TestSitePush_PublishOverrideDisablesPagesOnly(t *testing.T) {
+func TestSiteRebuild_PublishOverrideDisablesPagesOnly(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
 	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "a post\n\nbody"}})
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	// First push (no override) builds the page set and stamps the skip marker.
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite build: %v", err)
+	// First rebuild (no override) builds the page set and stamps the skip marker.
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite build: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
-		t.Fatal("expected a page set after the first push")
+		t.Fatal("expected a page set after the first rebuild")
 	}
 	// A publish=false override, with the config ref and all branch tips unchanged,
 	// must still run a full pass (the folded digest differs) and delete the pages.
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{Publish: "false"}, nil); err != nil {
-		t.Fatalf("pushSite disable: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{Publish: "false"}, nil); err != nil {
+		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	for _, key := range []string{sitePagesManifestKey, sitePagesRobotsKey, sitePagesFeedKey} {
 		if keyExists(client, key) {

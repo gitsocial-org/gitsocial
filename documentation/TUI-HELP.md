@@ -5,14 +5,14 @@ Git-native collaboration: posts, issues, PRs, releases, all in your repo.
 ## How It Works
 
 Everything is a commit. Posts, issues, PRs, reviews and releases are stored
-as git commits on `gitmsg/*` branches. Syncing is git: fetch updates, publish
-with push. Works offline, air-gapped and peer-to-peer. `git clone --mirror`
+as git commits on `gitmsg/*` branches. Syncing is git: fetch updates, push
+your changes. Works offline, air-gapped and peer-to-peer. `git clone --mirror`
 moves the data to any host, with no API scraping and no data loss.
 
 ## Workflow
 
 - **Fetch**: pull updates from repositories you follow
-- **Push**: publish your local changes to your remote
+- **Push**: send your local changes to your remote
 - **Lists**: group repositories into curated feeds
 
 Follow someone by adding their repo to a list. Their posts appear in your

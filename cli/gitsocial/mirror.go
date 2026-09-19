@@ -787,7 +787,7 @@ func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *m
 		if !cfg.JSONOutput {
 			fmt.Fprintf(cmd.OutOrStdout(), "Pushing to %s (%s) ...\n", t.name, t.url)
 		}
-		result, err := client.Publish(cfg.WorkDir, t.name, opts, onBranch, siteProgress)
+		result, err := client.Push(cfg.WorkDir, t.name, opts, onBranch, siteProgress)
 		if err != nil {
 			failed = true
 			fmt.Fprintf(cmd.ErrOrStderr(), "error: push to %s: %v\n", t.name, err)
@@ -816,13 +816,13 @@ func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *m
 
 // drainMirrorSitePages runs site-only passes until one reports the site
 // complete (each pass advances the pages cursor by one budget) or the pass cap
-// is hit, and reports which. Completion is the publish result's own signal, not
+// is hit, and reports which. Completion is the push result's own signal, not
 // a progress phase read in passing, so the loop cannot be fooled by wording;
 // the caller folds the answer into the result it prints, so the reported site
 // state is the one the run actually left behind.
 func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress) (bool, error) {
 	for pass := 0; pass < mirrorSitePassCap; pass++ {
-		result, err := client.Publish(cfg.WorkDir, remote, client.Options{SiteOnly: true}, nil, progress)
+		result, err := client.Push(cfg.WorkDir, remote, client.Options{SiteOnly: true}, nil, progress)
 		if err != nil {
 			return false, err
 		}

@@ -235,8 +235,8 @@ func WriteSiteStats(remoteURL string, env objstore.HelperEnv, stats map[string]a
 	return nil
 }
 
-// Push uploads the shell, seeds the refs manifest and runs the item-artifact state machine over every data branch. The workspace's site.publish guard is the only enabler.
-func Push(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
+// Rebuild uploads the shell, seeds the refs manifest and runs the item-artifact state machine over every data branch. It sends no refs, and the workspace's site.publish guard is the only enabler.
+func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
 	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
 		return false, false, err
@@ -256,12 +256,12 @@ func Push(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.
 	}
 	src := objstore.NewLocalCommitSource(env.GitDir, workdir)
 	defer src.Close()
-	complete, err = pushSite(client, prefix, src, ov, progress)
+	complete, err = rebuildSite(client, prefix, src, ov, progress)
 	return true, complete, err
 }
 
-// pushSite is Push over a resolved client and prefix; complete is false when a bootstrap still owes work a later push must finish.
-func pushSite(client *objstore.Client, prefix string, src *objstore.LocalCommitSource, ov objstore.SiteOverride, progress objstore.Progress) (complete bool, err error) {
+// rebuildSite is Rebuild over a resolved client and prefix; complete is false when a bootstrap still owes work a later pass must finish.
+func rebuildSite(client *objstore.Client, prefix string, src *objstore.LocalCommitSource, ov objstore.SiteOverride, progress objstore.Progress) (complete bool, err error) {
 	// Skip the pass when nothing a site artifact derives from has moved since the last one at this shell version.
 	shellVersion, err := siteVersion()
 	if err != nil {

@@ -198,7 +198,7 @@ Outside the tree:
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
 | `core/objstore`<br>S3 remote | `Client`, `Config`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
-| `core/site`<br>Static site | `SiteCustomization` | `Push`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent`, `ValidSiteFavicon` |
+| `core/site`<br>Static site | `SiteCustomization` | `Rebuild`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent`, `ValidSiteFavicon` |
 | `core/fetch`<br>Fetch orchestration | | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
@@ -211,7 +211,7 @@ Outside the tree:
 | `extensions/release`<br>Releases | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
 | `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `GetPullRequests`, `GetPullRequestsWithForks`, `ResolvePRDiff`, `GetStack`, `RebaseStack`, `Processors` |
 | `extensions/memo`<br>Memos across tiers | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
-| `client`<br>Fetch and push sequences | `FetchOptions`, `Options`, `Result`, `SiteOutcome` | `Fetch`, `SyncWorkspace`, `ResolveRemotes`, `Preview`, `Publish`, `PublishAll`, `PublishSite` |
+| `client`<br>Fetch and push sequences | `FetchOptions`, `Options`, `Result`, `SiteOutcome` | `Fetch`, `SyncWorkspace`, `ResolveRemotes`, `Preview`, `Push`, `PushAll`, `PublishSite` |
 | `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
 | `import`<br>Forge import | `SourceAdapter`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github`<br>GitHub adapter | | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
@@ -222,6 +222,10 @@ Outside the tree:
 | `canonical` | versioning | the first version of a message |
 | `raw` | versioning | the commit's own message, before any edit applies |
 | `edits` | GITMSG field | the reference to the canonical version an edit replaces |
+| `publish` | the site | the site step of a push, guarded by the `site.publish` config key |
+| `rebuild` | the site | the verb of the site step: it uploads the shell and the artifacts, and sends no refs |
+
+A push is the sequence: the data push, then the site step after it.
 
 ## Cache
 

@@ -111,14 +111,14 @@ func reclaimSitePagesFront(client *objstore.Client, prefix string, refs map[stri
 		return false
 	}
 	if manifest == nil || manifest.Cursor != nil || manifest.SiteHash != sitePageSiteHash(site) {
-		return true // page set pending/stale: a site push rebuilds+reclaims
+		return true // page set pending/stale: a site rebuild redoes it and reclaims
 	}
 	manifests, tips, err := readSitePagesManifests(client, prefix, refs)
 	if err != nil {
 		return false
 	}
 	if !sitePagesTipsCurrent(manifest, tips) {
-		return true // tips moved: pending, a site push rebuilds+reclaims
+		return true // tips moved: pending, a site rebuild redoes it and reclaims
 	}
 	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(client, prefix))
 	if err := reclaimSiteFrontPage(client, prefix, site, manifests, home); err != nil {

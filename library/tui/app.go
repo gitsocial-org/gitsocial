@@ -1327,7 +1327,7 @@ func (m *Model) showPushConfirm(remotes []string) tea.Cmd {
 	return nil
 }
 
-// startPush publishes to every remote through client.PublishAll, the sequence the CLI runs.
+// startPush pushes to every remote through client.PushAll, the sequence the CLI runs.
 func (m *Model) startPush(remotes []string) tea.Cmd {
 	m.bgPushCh = make(chan tea.Msg, 64)
 	ch := m.bgPushCh
@@ -1346,7 +1346,7 @@ func (m *Model) startPush(remotes []string) tea.Cmd {
 		siteProgress := func(phase string, done, total int) {
 			send(pushProgressMsg{branch: "site: " + phase, done: done, total: total})
 		}
-		results, err := client.PublishAll(workdir, remotes, client.Options{}, onRemote, onBranch, siteProgress)
+		results, err := client.PushAll(workdir, remotes, client.Options{}, onRemote, onBranch, siteProgress)
 		ch <- tuisocial.PushCompletedMsg{Results: results, Err: err}
 		close(ch)
 	}()

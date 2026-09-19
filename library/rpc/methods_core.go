@@ -359,7 +359,7 @@ func corePush(s *Server) HandlerFunc {
 			Full:        p.Full,
 		}
 		remotes, _ := client.ResolveRemotes(s.session.Workdir, namedRemotes(p.Remote))
-		results, err := client.PublishAll(s.session.Workdir, remotes, opts, nil, nil, nil)
+		results, err := client.PushAll(s.session.Workdir, remotes, opts, nil, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))
 		}

@@ -1,4 +1,4 @@
-// push.go - Publish orchestration for the thin clients: the data push, then the site
+// push.go - the push sequence the thin clients run: the data push, then the site rebuild
 package client
 
 import (
@@ -15,18 +15,18 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
-// Options configures a publish. Zero value = default behavior (reason-based
+// Options configures a push. Zero value = default behavior (reason-based
 // data push + site for s3 remotes).
 type Options struct {
 	DryRun      bool // preview only, touch nothing
 	NoCode      bool // skip code branches (default branch + open-PR heads)
 	NoSite      bool // skip the site step (overrides config)
-	SiteOnly    bool // publish only the site, no data push; any failure is an error
-	AllBranches bool // publish every local branch (refs/heads/*), not just reasoned
+	SiteOnly    bool // rebuild only the site, no data push; any failure is an error
+	AllBranches bool // send every local branch (refs/heads/*), not just reasoned
 	Full        bool // detach a thin fork relationship: upload everything the bucket lacks
 }
 
-// SiteOutcome is the site-publication result of a publish. Published is true
+// SiteOutcome is the site step's result in a push. Published is true
 // when the site step ran successfully; Skipped names why it didn't run (empty
 // when it ran); Err holds a site failure that did NOT fail the data push (the
 // data push still succeeded). Error mirrors Err as a string for JSON/RPC
@@ -34,7 +34,7 @@ type Options struct {
 type SiteOutcome struct {
 	Published bool `json:"published"`
 	// Complete is false when the site published but a bootstrap still owes work
-	// a later push must finish, so a partial mirror is reported rather than
+	// a later pass must finish, so a partial mirror is reported rather than
 	// reading as a finished publish.
 	Complete bool   `json:"complete"`
 	Skipped  string `json:"skipped,omitempty"`
@@ -43,14 +43,14 @@ type SiteOutcome struct {
 }
 
 // Result combines the data-push result with the site outcome and whether the
-// remote was empty before this push (first publish).
+// remote was empty before this push (the first push to it).
 type Result struct {
 	Push      *gitmsg.PushResult `json:"push"`
 	Site      SiteOutcome        `json:"site"`
 	EmptyBoot bool               `json:"emptyBoot"`
 }
 
-// ResolveRemotes returns the remotes a publish targets: the named ones, else the defaults.
+// ResolveRemotes returns the remotes a push targets: the named ones, else the defaults.
 func ResolveRemotes(workdir string, args []string) ([]string, git.PushResolution) {
 	if len(args) > 0 {
 		return args, git.PushConfigured
@@ -97,15 +97,15 @@ func resolveCodeBranches(workdir string, noCode bool, remote string) map[string]
 	return branches
 }
 
-// Publish runs the data push, then (for s3 remotes not opted out) publishes the
+// Push runs the data push, then (for s3 remotes not opted out) rebuilds the
 // browser site. onBranch reports coarse per-branch push progress (nil = none);
 // siteProgress reports site-upload progress (nil = none). The data push and the
 // site step share one operation from the caller's view, but their failure modes
 // differ: a data-push error is returned as err (nothing published); a site error
 // after a good data push lands in Result.Site.Err (the push still succeeded).
-func Publish(workdir, remote string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
+func Push(workdir, remote string, opts Options, onBranch gitmsg.PushBranchProgress, siteProgress objstore.Progress) (*Result, error) {
 	if opts.SiteOnly {
-		return publishSiteOnly(workdir, remote, opts, siteProgress)
+		return rebuildSiteOnly(workdir, remote, opts, siteProgress)
 	}
 	res := &Result{EmptyBoot: gitmsg.RemoteIsEmpty(workdir, remote)}
 
@@ -143,12 +143,12 @@ func Publish(workdir, remote string, opts Options, onBranch gitmsg.PushBranchPro
 		}
 	}
 
-	res.Site = publishSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
+	res.Site = rebuildSite(workdir, remote, pushResult.RemoteURL, opts, siteProgress)
 	return res, nil
 }
 
-// PublishAll publishes to every remote in order, continuing past a failure into one error.
-func PublishAll(workdir string, remotes []string, opts Options, onRemote func(remote string), onBranch func(remote, branch string, done, total int), siteProgress objstore.Progress) ([]Result, error) {
+// PushAll pushes to every remote in order, continuing past a failure into one error.
+func PushAll(workdir string, remotes []string, opts Options, onRemote func(remote string), onBranch func(remote, branch string, done, total int), siteProgress objstore.Progress) ([]Result, error) {
 	results := make([]Result, 0, len(remotes))
 	var failures []string
 	for _, remote := range remotes {
@@ -159,7 +159,7 @@ func PublishAll(workdir string, remotes []string, opts Options, onRemote func(re
 		if onBranch != nil {
 			branchProgress = func(branch string, done, total int) { onBranch(remote, branch, done, total) }
 		}
-		result, err := Publish(workdir, remote, opts, branchProgress, siteProgress)
+		result, err := Push(workdir, remote, opts, branchProgress, siteProgress)
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", remote, err))
 			continue
@@ -179,11 +179,11 @@ func clearThinRelationship(workdir, remote string) {
 	_, _ = git.ExecGit(workdir, []string{"config", "--unset", "remote." + remote + "." + objstore.ThinConfigKey})
 }
 
-// publishSiteOnly runs only the site step (`gitsocial push --site-only`),
-// pushing no data. A full publish treats the site as a best-effort tail; here a
+// rebuildSiteOnly runs only the site step (`gitsocial push --site-only`),
+// sending no refs. A full push treats the site as a best-effort tail; here a
 // missing or non-s3 remote, the site.publish guard being off, and any upload
 // failure are errors. A dry run stays offline and reports the site skipped.
-func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Progress) (*Result, error) {
+func rebuildSiteOnly(workdir, remote string, opts Options, progress objstore.Progress) (*Result, error) {
 	remoteURL := git.RemoteURL(workdir, remote)
 	if remoteURL == "" {
 		return nil, fmt.Errorf("remote %q is not configured", remote)
@@ -198,7 +198,7 @@ func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	}
 	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if err != nil {
-		return nil, fmt.Errorf("push site to %s: %w", remoteURL, err)
+		return nil, fmt.Errorf("rebuild site at %s: %w", remoteURL, err)
 	}
 	if !published {
 		return nil, errors.New("site publishing is disabled: enable it with gitsocial config site set publish true")
@@ -207,12 +207,12 @@ func publishSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	return res, nil
 }
 
-// publishSite runs the site step for the resolved remote URL, deciding whether
+// rebuildSite runs the site step for the resolved remote URL, deciding whether
 // it applies. Non-s3 remotes, opt-outs, and repos without the site.publish
 // guard are skipped with a reason; a dry run never touches the bucket. A site
 // error is captured (warning), not returned, so it can't undo a successful data
 // push.
-func publishSite(workdir, remote, remoteURL string, opts Options, progress objstore.Progress) SiteOutcome {
+func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objstore.Progress) SiteOutcome {
 	if opts.NoSite {
 		return SiteOutcome{Skipped: "--no-site"}
 	}
@@ -228,7 +228,7 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
-		// (an explicit `--site-only` still errors, see publishSiteOnly).
+		// (an explicit `--site-only` still errors, see rebuildSiteOnly).
 		return SiteOutcome{Skipped: "thin fork bucket"}
 	}
 	if err != nil {
@@ -243,13 +243,13 @@ func publishSite(workdir, remote, remoteURL string, opts Options, progress objst
 // PublishSite uploads the browser static site to an s3 bucket and refreshes the
 // bucket HEAD + push-time stats. override carries the target remote's per-remote
 // deployment overrides (url/publish/pages) so the site stamps this bucket's own
-// values. Shared by `gitsocial push` (via Publish) and the explicit
+// values. Shared by `gitsocial push` (via Push) and the explicit
 // `gitsocial push --site-only` so their site wiring can't drift.
 // published is false (no error) when the workspace's site.publish guard is not
-// enabled — the only enabler for the static site. HEAD and stats are
-// best-effort: a failure there does not fail the site push.
+// enabled, the only enabler for the static site. HEAD and stats are
+// best-effort: a failure there does not fail the rebuild.
 func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
-	published, complete, err = site.Push(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
+	published, complete, err = site.Rebuild(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
 	if err != nil || !published {
 		return published, complete, err
 	}

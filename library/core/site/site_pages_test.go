@@ -118,7 +118,7 @@ func pagesRefs(client *objstore.Client, t *testing.T) map[string]string {
 }
 
 // buildPages runs the items index for every present gitmsg data branch and the
-// page layer (the direct, shell-free equivalent of a site push's tail).
+// page layer (the direct, shell-free equivalent of a site rebuild's tail).
 func buildPages(t *testing.T, client *objstore.Client) (pending bool, state string) {
 	t.Helper()
 	refs := pagesRefs(client, t)
@@ -177,12 +177,12 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 		return err == nil && strings.Contains(string(body), `id="gs-page"`)
 	}
 
-	// No config at all: publish is off — a full pushSite must move repo-data
+	// No config at all: publish is off — a full rebuildSite must move repo-data
 	// artifacts only and stamp the marker with pages "off". index.html is the
 	// embedded shell (uploadSiteFiles always ships it), never the generated front
 	// page; the retired timeline.html key must be absent.
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite: %v", err)
 	}
 	if !keyExists(client, "index.html") || generatedFront() {
 		t.Error("guards off: index.html must be the embedded shell, not the generated front page")
@@ -199,8 +199,8 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// publish on, pages off: site artifacts yes, page layer no. index.html stays
 	// the shell.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "title": "Pages Test"})
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite publish-only: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite publish-only: %v", err)
 	}
 	if !keyExists(client, siteCustomizationKey) {
 		t.Error("publish on: site-config.json must exist")
@@ -212,8 +212,8 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// Both guards + url: the page layer appears and index.html BECOMES the
 	// generated front page (the entry flip), overwriting the embedded shell.
 	seedPagesConfig(t, client, pagesTestSite())
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite pages-on: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite pages-on: %v", err)
 	}
 	if !generatedFront() {
 		t.Error("pages on: index.html must be the generated front page")
@@ -252,8 +252,8 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// back — index.html is never deleted, it is dual-owned), and the marker
 	// returns to "off".
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite disable: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	gone := append([]string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
 	for _, key := range gone {
@@ -282,10 +282,10 @@ func TestSitePages_IndexHTMLReclaim(t *testing.T) {
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	// A full pushSite: uploadSiteFiles ships the shell at index.html, then
+	// A full rebuildSite: uploadSiteFiles ships the shell at index.html, then
 	// rebuildSitePages overwrites it with the generated front page (the flip).
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite: %v", err)
 	}
 	isFront := func() bool {
 		body, err := client.Get("index.html")
@@ -310,8 +310,8 @@ func TestSitePages_IndexHTMLReclaim(t *testing.T) {
 	if err := client.Put("refs/tags/v0.1", []byte(socialTip+"\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite reclaim: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite reclaim: %v", err)
 	}
 	if !isFront() {
 		t.Error("a no-op-tips push must reclaim index.html to the generated front page")
@@ -700,8 +700,8 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite: %v", err)
 	}
 	// Simulate an older binary's pass: pages wiped, marker stamped WITHOUT a
 	// pages field at the current shell version and digest.
@@ -719,8 +719,8 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	if up, _ := siteMaintenanceUpToDate(client, "", mustSiteVersion(t), objstore.SiteOverride{}); up {
 		t.Fatal("a pages-unaware marker must not report up-to-date")
 	}
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("recovery pushSite: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("recovery rebuildSite: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
 		t.Error("the pass after an old-format marker must regenerate the pages")
@@ -1336,8 +1336,8 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 
 	// Full push with the page layer on: shell upload, items index, pages regen.
 	seedPagesConfig(t, client, pagesTestSite())
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite pages-on: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite pages-on: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
 		t.Fatal("pages regen did not run (no pages manifest)")
@@ -1347,8 +1347,8 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 
 	// Pages-disable cleanup cycle: the sweep deletes every page-layer key.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
-	if _, err := pushSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
-		t.Fatalf("pushSite disable: %v", err)
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	if keyExists(client, sitePagesManifestKey) {
 		t.Fatal("disable sweep incomplete (pages manifest survived)")

@@ -16,7 +16,7 @@ import (
 
 // buildCodePages runs the code items index for the given default branch, then
 // every gitmsg items index, then the page layer — the shell-free equivalent of a
-// site push's tail on a repo that has code branches.
+// site rebuild's tail on a repo that has code branches.
 func buildCodePages(t *testing.T, client *objstore.Client) (pending bool, state string) {
 	t.Helper()
 	const defaultBranch = "main"

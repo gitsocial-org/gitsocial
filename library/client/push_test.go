@@ -1,4 +1,4 @@
-// push_test.go - tests for the publish flow: remote resolution, the site gate and the result shape.
+// push_test.go - tests for the push flow: remote resolution, the site gate and the result shape.
 package client
 
 import (
@@ -54,8 +54,8 @@ func TestResolveRemotes(t *testing.T) {
 	}
 }
 
-// TestPublishAll_continuesPastFailure: a failed remote stops neither the next one nor the error.
-func TestPublishAll_continuesPastFailure(t *testing.T) {
+// TestPushAll_continuesPastFailure: a failed remote stops neither the next one nor the error.
+func TestPushAll_continuesPastFailure(t *testing.T) {
 	good := t.TempDir()
 	if err := git.EnsureBareRepo(good); err != nil {
 		t.Fatalf("init remote: %v", err)
@@ -68,9 +68,9 @@ func TestPublishAll_continuesPastFailure(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	results, err := PublishAll(work, []string{"broken", "origin"}, Options{}, nil, nil, nil)
+	results, err := PushAll(work, []string{"broken", "origin"}, Options{}, nil, nil, nil)
 	if err == nil {
-		t.Fatal("PublishAll with a broken remote should return an error")
+		t.Fatal("PushAll with a broken remote should return an error")
 	}
 	if !strings.Contains(err.Error(), "broken") {
 		t.Errorf("error = %v, want it to name the broken remote", err)
@@ -83,9 +83,9 @@ func TestPublishAll_continuesPastFailure(t *testing.T) {
 	}
 }
 
-// TestPublish_nonS3RemoteSkipsSite: a non-s3 remote publishes data and skips
+// TestPush_nonS3RemoteSkipsSite: a non-s3 remote sends data and skips
 // the site step (nothing to serve a site from).
-func TestPublish_nonS3RemoteSkipsSite(t *testing.T) {
+func TestPush_nonS3RemoteSkipsSite(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
@@ -96,9 +96,9 @@ func TestPublish_nonS3RemoteSkipsSite(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	res, err := Publish(work, "origin", Options{}, nil, nil)
+	res, err := Push(work, "origin", Options{}, nil, nil)
 	if err != nil {
-		t.Fatalf("Publish: %v", err)
+		t.Fatalf("Push: %v", err)
 	}
 	if res.Site.Published {
 		t.Error("non-s3 remote should not publish a site")
@@ -107,13 +107,13 @@ func TestPublish_nonS3RemoteSkipsSite(t *testing.T) {
 		t.Errorf("Site.Skipped = %q, want %q", res.Site.Skipped, "non-s3 remote")
 	}
 	if res.Push == nil || res.Push.Commits == 0 {
-		t.Errorf("data push should have published the gitmsg/social commit, got %+v", res.Push)
+		t.Errorf("data push should have sent the gitmsg/social commit, got %+v", res.Push)
 	}
 }
 
-// TestPublish_noSiteOptOut: --no-site skips the site with the right reason even
+// TestPush_noSiteOptOut: --no-site skips the site with the right reason even
 // on what would otherwise be an s3 remote path.
-func TestPublish_noSiteOptOut(t *testing.T) {
+func TestPush_noSiteOptOut(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
@@ -121,9 +121,9 @@ func TestPublish_noSiteOptOut(t *testing.T) {
 	work := setupWork(t, remote)
 	git.ExecGit(work, []string{"push", "origin", "main"})
 
-	res, err := Publish(work, "origin", Options{NoSite: true}, nil, nil)
+	res, err := Push(work, "origin", Options{NoSite: true}, nil, nil)
 	if err != nil {
-		t.Fatalf("Publish: %v", err)
+		t.Fatalf("Push: %v", err)
 	}
 	if res.Site.Published {
 		t.Error("--no-site should not publish a site")
@@ -133,10 +133,10 @@ func TestPublish_noSiteOptOut(t *testing.T) {
 	}
 }
 
-// TestPublish_siteOnlyNonS3Errors: an explicit --site-only against a non-s3
+// TestPush_siteOnlyNonS3Errors: an explicit --site-only against a non-s3
 // remote is an error (a plain push would just skip the site), and pushes no
-// data even where a full publish would have.
-func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
+// data even where a full push would have.
+func TestPush_siteOnlyNonS3Errors(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
@@ -147,44 +147,44 @@ func TestPublish_siteOnlyNonS3Errors(t *testing.T) {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	if _, err := Publish(work, "origin", Options{SiteOnly: true}, nil, nil); err == nil {
-		t.Error("site-only publish to a non-s3 remote should error")
+	if _, err := Push(work, "origin", Options{SiteOnly: true}, nil, nil); err == nil {
+		t.Error("site-only push to a non-s3 remote should error")
 	}
 	out, _ := git.ExecGit(remote, []string{"branch", "--list", "gitmsg/social"})
 	if out != nil && out.Stdout != "" {
-		t.Errorf("site-only publish pushed data: %q", out.Stdout)
+		t.Errorf("site-only push sent data: %q", out.Stdout)
 	}
 }
 
-// TestPublish_siteOnlyMissingRemoteErrors: --site-only names a remote that is
+// TestPush_siteOnlyMissingRemoteErrors: --site-only names a remote that is
 // not configured — explicit request, loud failure.
-func TestPublish_siteOnlyMissingRemoteErrors(t *testing.T) {
+func TestPush_siteOnlyMissingRemoteErrors(t *testing.T) {
 	work := setupWork(t, t.TempDir())
-	if _, err := Publish(work, "nosuch", Options{SiteOnly: true}, nil, nil); err == nil {
-		t.Error("site-only publish to a missing remote should error")
+	if _, err := Push(work, "nosuch", Options{SiteOnly: true}, nil, nil); err == nil {
+		t.Error("site-only push to a missing remote should error")
 	}
 }
 
-// TestPublish_siteOnlyDryRun: a site-only dry run stays offline and reports the
+// TestPush_siteOnlyDryRun: a site-only dry run stays offline and reports the
 // site skipped rather than erroring.
-func TestPublish_siteOnlyDryRun(t *testing.T) {
+func TestPush_siteOnlyDryRun(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
 	}
 	work := setupWork(t, remote)
 
-	res, err := Publish(work, "origin", Options{SiteOnly: true, DryRun: true}, nil, nil)
+	res, err := Push(work, "origin", Options{SiteOnly: true, DryRun: true}, nil, nil)
 	if err != nil {
-		t.Fatalf("Publish: %v", err)
+		t.Fatalf("Push: %v", err)
 	}
 	if res.Site.Published || res.Site.Skipped != "dry-run" {
 		t.Errorf("Site = %+v, want skipped dry-run", res.Site)
 	}
 }
 
-// TestPublish_dryRunSkipsSite: a dry run touches nothing, including the site.
-func TestPublish_dryRunSkipsSite(t *testing.T) {
+// TestPush_dryRunSkipsSite: a dry run touches nothing, including the site.
+func TestPush_dryRunSkipsSite(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
@@ -192,42 +192,42 @@ func TestPublish_dryRunSkipsSite(t *testing.T) {
 	work := setupWork(t, remote)
 	git.ExecGit(work, []string{"push", "origin", "main"})
 
-	res, err := Publish(work, "origin", Options{DryRun: true}, nil, nil)
+	res, err := Push(work, "origin", Options{DryRun: true}, nil, nil)
 	if err != nil {
-		t.Fatalf("Publish: %v", err)
+		t.Fatalf("Push: %v", err)
 	}
 	if res.Site.Published {
 		t.Error("dry-run should not publish a site")
 	}
 }
 
-// TestPublish_emptyBoot: a fresh bare remote is reported as the first-publish
-// (bootstrap) case; after publishing, a second publish is not.
-func TestPublish_emptyBoot(t *testing.T) {
+// TestPush_emptyBoot: a fresh bare remote is reported as the first-push
+// (bootstrap) case; after the first push, a second is not.
+func TestPush_emptyBoot(t *testing.T) {
 	remote := t.TempDir()
 	if err := git.EnsureBareRepo(remote); err != nil {
 		t.Fatalf("init remote: %v", err)
 	}
 	work := setupWork(t, remote)
 	// Push main directly so the reason-based gitmsg push has a base, but the
-	// remote is still empty at the moment Publish probes it.
+	// remote is still empty at the moment Push probes it.
 	if _, err := git.CreateCommitOnBranch(work, "gitmsg/social", "a post"); err != nil {
 		t.Fatalf("commit on branch: %v", err)
 	}
 
-	res, err := Publish(work, "origin", Options{}, nil, nil)
+	res, err := Push(work, "origin", Options{}, nil, nil)
 	if err != nil {
-		t.Fatalf("Publish: %v", err)
+		t.Fatalf("Push: %v", err)
 	}
 	if !res.EmptyBoot {
-		t.Error("first publish to a fresh bare remote should set EmptyBoot")
+		t.Error("first push to a fresh bare remote should set EmptyBoot")
 	}
 
-	res2, err := Publish(work, "origin", Options{}, nil, nil)
+	res2, err := Push(work, "origin", Options{}, nil, nil)
 	if err != nil {
-		t.Fatalf("second Publish: %v", err)
+		t.Fatalf("second Push: %v", err)
 	}
 	if res2.EmptyBoot {
-		t.Error("second publish should not report EmptyBoot")
+		t.Error("second push should not report EmptyBoot")
 	}
 }
