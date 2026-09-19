@@ -1,4 +1,4 @@
-// messages.go - PM extension TUI messages
+// util_messages.go - PM extension TUI messages
 package tuipm
 
 import "github.com/gitsocial-org/gitsocial/library/extensions/pm"

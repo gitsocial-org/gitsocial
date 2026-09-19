@@ -1,4 +1,4 @@
-// tuiproposal.go - Adapter from the proposals engine to tuicore's history view.
+// util_proposal.go - Adapter from the proposals engine to tuicore's history view.
 // Lives outside tuicore because proposals imports the extension packages, which
 // import tuicore; a direct tuicore->proposals edge would be an import cycle.
 package tuiproposal

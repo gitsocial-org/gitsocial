@@ -1,4 +1,4 @@
-// feedback_layer.go - Composable PR-feedback decoration for diff.DisplayPlan.
+// util_feedback_layer.go - Composable PR-feedback decoration for diff.DisplayPlan.
 //
 // Inline feedback rows are inserted after the diff line each comment
 // anchors to, using the cell model directly (no ANSI-string round-trip).

@@ -1,4 +1,4 @@
-// card_registry.go - Card renderer registry for extension-agnostic item display
+// registry_card.go - Card renderer registry for extension-agnostic item display
 package tuicore
 
 import (

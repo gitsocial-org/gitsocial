@@ -1,4 +1,4 @@
-// repository.go - Repository view showing posts from a single repo
+// view_repository.go - Repository view showing posts from a single repo
 package tuisocial
 
 import (

@@ -45,7 +45,7 @@ func getRepositoriesByList(workdir, listID string) Result[[]Repository] {
 			URL:    url,
 			Name:   protocol.GetFullDisplayName(url),
 			Branch: branch,
-			Type:   repositoryTypeOther,
+			Type:   repoTypeOther,
 			Lists:  []string{listID},
 		}
 		if ranges, err := cache.GetFetchRanges(url); err == nil && len(ranges) > 0 {
@@ -80,7 +80,7 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 					URL:    url,
 					Name:   protocol.GetFullDisplayName(url),
 					Branch: branch,
-					Type:   repositoryTypeOther,
+					Type:   repoTypeOther,
 					Lists:  []string{list.ID},
 				}
 			}
@@ -96,7 +96,7 @@ func getAllRepositories(workdir string) Result[[]Repository] {
 					URL:    cached.URL,
 					Name:   protocol.GetFullDisplayName(cached.URL),
 					Branch: cached.Branch,
-					Type:   repositoryTypeOther,
+					Type:   repoTypeOther,
 					Lists:  []string{},
 				}
 			}
@@ -177,7 +177,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 					URL:    url,
 					Name:   protocol.GetFullDisplayName(url),
 					Branch: "main",
-					Type:   repositoryTypeOther,
+					Type:   repoTypeOther,
 				},
 				Relationships: RelationshipInfo{
 					SharedLists: sharedLists,
@@ -206,7 +206,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 						URL:    url,
 						Name:   protocol.GetFullDisplayName(url),
 						Branch: "main",
-						Type:   repositoryTypeOther,
+						Type:   repoTypeOther,
 					},
 					Relationships: RelationshipInfo{
 						SharedAuthors: sharedAuthors,

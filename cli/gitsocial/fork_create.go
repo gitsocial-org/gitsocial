@@ -77,7 +77,7 @@ pushed: commit your work, then run gitsocial push.`,
 func runForkCreate(cmd *cobra.Command, args []string, f *forkCreateFlags) error {
 	cfg := GetConfig(cmd)
 	out := cmd.OutOrStdout()
-	upstreamURL, err := canonicalForkURL(args[0])
+	upstreamURL, err := normalizeForkURL(args[0])
 	if err != nil {
 		return err
 	}
@@ -146,15 +146,15 @@ func runForkCreate(cmd *cobra.Command, args []string, f *forkCreateFlags) error 
 	return nil
 }
 
-// canonicalForkURL normalizes a user-supplied URL, resolving s3 aliases (an
-// AWS console URL, a bare endpoint) to the canonical s3:// form.
-func canonicalForkURL(raw string) (string, error) {
-	canonical, isS3, err := protocol.ResolveS3URL(raw)
+// normalizeForkURL normalizes a user-supplied URL, resolving s3 aliases (an
+// AWS console URL, a bare endpoint) to the s3:// identity.
+func normalizeForkURL(raw string) (string, error) {
+	identity, isS3, err := protocol.ResolveS3URL(raw)
 	if err != nil {
 		return "", err
 	}
 	if isS3 {
-		return canonical, nil
+		return identity, nil
 	}
 	return raw, nil
 }
@@ -170,7 +170,7 @@ func resolveForkDestination(cmd *cobra.Command, upstreamURL, to string) (string,
 		}
 		return forkOnForge(cmd, upstreamURL, "")
 	}
-	destURL, err := canonicalForkURL(to)
+	destURL, err := normalizeForkURL(to)
 	if err != nil {
 		return "", err
 	}

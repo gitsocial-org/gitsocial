@@ -1,4 +1,4 @@
-// nav_panel.go - Left navigation sidebar panel with domain/extension menu
+// component_nav_panel.go - Left navigation sidebar panel with domain/extension menu
 package tuicore
 
 import (
@@ -138,7 +138,7 @@ func (p *NavPanel) buildFlatItems() []tuinav.NavItem {
 	currentDomain := p.currentDomain()
 
 	// Separate into extension items, DM, and bottom items (config, cache, settings)
-	var extensionItems, bottomItems []tuinav.NavItem
+	var extItems, bottomItems []tuinav.NavItem
 	var dmItem *tuinav.NavItem
 	for _, top := range p.registry.GetTopLevel() {
 		if top.ID == "dm" {
@@ -147,12 +147,12 @@ func (p *NavPanel) buildFlatItems() []tuinav.NavItem {
 		} else if top.Order >= 9 {
 			bottomItems = append(bottomItems, top)
 		} else {
-			extensionItems = append(extensionItems, top)
+			extItems = append(extItems, top)
 		}
 	}
 
 	// Add extension items (skip disabled/unimplemented)
-	for _, top := range extensionItems {
+	for _, top := range extItems {
 		if !top.Enabled && top.ID != "social" {
 			continue
 		}
@@ -458,7 +458,7 @@ func (p *NavPanel) View() string {
 
 	// Separate top-level items into extensions, DM, and bottom (config, cache, settings)
 	topLevel := p.registry.GetTopLevel()
-	var extensionItems, bottomItems []tuinav.NavItem
+	var extItems, bottomItems []tuinav.NavItem
 	var dmItem *tuinav.NavItem
 	for _, item := range topLevel {
 		if item.ID == "dm" {
@@ -467,7 +467,7 @@ func (p *NavPanel) View() string {
 		} else if item.Order >= 9 {
 			bottomItems = append(bottomItems, item)
 		} else {
-			extensionItems = append(extensionItems, item)
+			extItems = append(extItems, item)
 		}
 	}
 
@@ -520,7 +520,7 @@ func (p *NavPanel) View() string {
 	topContent.WriteString("\n")
 
 	// Render extension domains (skip disabled/unimplemented)
-	for _, item := range extensionItems {
+	for _, item := range extItems {
 		if !item.Enabled && item.ID != "social" {
 			continue
 		}

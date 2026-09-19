@@ -35,10 +35,10 @@ func HasProposedColumn(itemAlias string) string {
 // common commit columns, the extension's own columns, flag columns, comments,
 // and the has_proposed marker, FROM the given view aliased as v. Rows produced
 // by this query are scanned with ScanResolved.
-func ResolvedSelect(view, extColumns string) string {
+func ResolvedSelect(view, extensionColumns string) string {
 	return `
 	SELECT ` + ResolvedCommonColumns + `,
-	       ` + extColumns + `,
+	       ` + extensionColumns + `,
 	       ` + ResolvedFlagColumns + `,
 	       v.comments,
 	       ` + HasProposedColumn("v") + `
@@ -76,15 +76,15 @@ type ResolvedMeta struct {
 }
 
 // ScanResolved scans a row produced by ResolvedSelect: the shared commit
-// columns wrap the extension's own columns, which land in extDest in order.
-func ScanResolved(s RowScanner, extDest ...any) (*ResolvedMeta, error) {
+// columns wrap the extension's own columns, which land in extensionDest in order.
+func ScanResolved(s RowScanner, extensionDest ...any) (*ResolvedMeta, error) {
 	var m ResolvedMeta
 	var ts sql.NullString
 	var isVirtual, isRetracted, hasEdits, hasProposed int
-	dest := make([]any, 0, 14+len(extDest))
+	dest := make([]any, 0, 14+len(extensionDest))
 	dest = append(dest, &m.RepoURL, &m.Hash, &m.Branch,
 		&m.AuthorName, &m.AuthorEmail, &m.Message, &m.OriginalMessage, &ts)
-	dest = append(dest, extDest...)
+	dest = append(dest, extensionDest...)
 	dest = append(dest, &m.EditOf, &isVirtual, &isRetracted, &hasEdits, &m.Comments, &hasProposed)
 	if err := s.Scan(dest...); err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-// milestones.go - Milestones list view for PM
+// view_milestones.go - Milestones list view for PM
 package tuipm
 
 import (

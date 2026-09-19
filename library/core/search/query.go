@@ -64,15 +64,15 @@ func extFilterFromType(typ string) *ExtFilter {
 	return nil
 }
 
-// extensionTable describes an extension table that search can LEFT JOIN.
-type extensionTable struct {
+// extTable describes an extension table that search can LEFT JOIN.
+type extTable struct {
 	alias   string // SQL alias (si, pi, ri, rli)
 	table   string // table name
 	typeCol string // column for item type (type or tag)
 	extName string // extension name for CASE expression
 }
 
-var allExtensionTables = []extensionTable{
+var allExtTables = []extTable{
 	{alias: "si", table: "social_items", typeCol: "type", extName: "social"},
 	{alias: "pi", table: "pm_items", typeCol: "type", extName: "pm"},
 	{alias: "ri", table: "review_items", typeCol: "type", extName: "review"},
@@ -88,9 +88,9 @@ func tableExists(db *sql.DB, name string) bool {
 }
 
 // availableTables returns extension tables that exist in the database.
-func availableTables(db *sql.DB) []extensionTable {
-	var tables []extensionTable
-	for _, t := range allExtensionTables {
+func availableTables(db *sql.DB) []extTable {
+	var tables []extTable
+	for _, t := range allExtTables {
 		if tableExists(db, t.table) {
 			tables = append(tables, t)
 		}
@@ -99,7 +99,7 @@ func availableTables(db *sql.DB) []extensionTable {
 }
 
 // buildSelect constructs the SELECT with LEFT JOINs for available extension tables.
-func buildSelect(tables []extensionTable, hasInteractions bool) string {
+func buildSelect(tables []extTable, hasInteractions bool) string {
 	var socialTypeExpr, extCaseExpr, itemTypeExpr string
 	joins := make([]string, 0, len(tables)+1)
 

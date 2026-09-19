@@ -1,4 +1,4 @@
-// issue_detail.go - Issue detail view with metadata and comments
+// view_issue_detail.go - Issue detail view with metadata and comments
 package tuipm
 
 import (

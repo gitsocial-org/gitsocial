@@ -1,4 +1,4 @@
-// view_registry.go - Centralized view metadata registry for context, title, and nav mapping
+// registry_view.go - Centralized view metadata registry for context, title, and nav mapping
 package tuicore
 
 import "sync"

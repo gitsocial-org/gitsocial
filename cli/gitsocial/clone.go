@@ -39,10 +39,10 @@ works in the clone too.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
 			remoteURL := args[0]
-			if canonical, isS3, err := protocol.ResolveS3URL(remoteURL); err != nil {
+			if identity, isS3, err := protocol.ResolveS3URL(remoteURL); err != nil {
 				return err
 			} else if isS3 {
-				remoteURL = canonical
+				remoteURL = identity
 			}
 			dir := ""
 			if len(args) == 2 {

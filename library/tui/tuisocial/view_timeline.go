@@ -1,4 +1,4 @@
-// timeline.go - Main timeline view showing aggregated posts from all sources
+// view_timeline.go - Main timeline view showing aggregated posts from all sources
 package tuisocial
 
 import (

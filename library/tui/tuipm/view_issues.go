@@ -1,4 +1,4 @@
-// issues.go - Issues list view for PM
+// view_issues.go - Issues list view for PM
 package tuipm
 
 import (

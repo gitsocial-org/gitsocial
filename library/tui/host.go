@@ -80,15 +80,15 @@ type (
 		ClearCacheAll() tea.Cmd
 	}
 
-	repositoryFollower interface {
+	repoFollower interface {
 		FollowRepository() tea.Cmd
 	}
 
-	repositoryListsOpener interface {
+	repoListsOpener interface {
 		OpenRepoLists() tea.Cmd
 	}
 
-	repositorySearcher interface {
+	repoSearcher interface {
 		SearchInRepository() tea.Cmd
 	}
 
@@ -733,7 +733,7 @@ func (h *Host) ClearCacheAll() tea.Cmd {
 // FollowRepository delegates repository following to the current view.
 func (h *Host) FollowRepository() tea.Cmd {
 	if view := h.resolveView(); view != nil {
-		if handler, ok := view.(repositoryFollower); ok {
+		if handler, ok := view.(repoFollower); ok {
 			return handler.FollowRepository()
 		}
 	}
@@ -743,7 +743,7 @@ func (h *Host) FollowRepository() tea.Cmd {
 // OpenRepoLists delegates opening repository lists to the current view.
 func (h *Host) OpenRepoLists() tea.Cmd {
 	if view := h.resolveView(); view != nil {
-		if handler, ok := view.(repositoryListsOpener); ok {
+		if handler, ok := view.(repoListsOpener); ok {
 			return handler.OpenRepoLists()
 		}
 	}
@@ -753,7 +753,7 @@ func (h *Host) OpenRepoLists() tea.Cmd {
 // SearchInRepository delegates repository search to the current view.
 func (h *Host) SearchInRepository() tea.Cmd {
 	if view := h.resolveView(); view != nil {
-		if handler, ok := view.(repositorySearcher); ok {
+		if handler, ok := view.(repoSearcher); ok {
 			return handler.SearchInRepository()
 		}
 	}

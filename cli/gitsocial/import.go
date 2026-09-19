@@ -332,7 +332,7 @@ func runImport(cmd *cobra.Command, args []string, label string, extensions []str
 	return nil
 }
 
-var extLabels = map[string]string{
+var extensionLabels = map[string]string{
 	"pm":      "milestones & issues",
 	"release": "releases",
 	"review":  "pull requests",
@@ -356,7 +356,7 @@ func printProgressLine(out io.Writer, ev importpkg.ProgressEvent) {
 	if ev.Phase != importpkg.PhaseDone {
 		return
 	}
-	desc := extLabels[ev.Extension]
+	desc := extensionLabels[ev.Extension]
 	line := formatExtStats(ev.Extension, ev.Stats)
 	if line != "" {
 		fmt.Fprintf(out, "  %s %s\n", desc, line)
@@ -398,7 +398,7 @@ func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 	}
 	if ev.Phase == importpkg.PhaseDone {
 		s.clearLine()
-		desc := extLabels[ev.Extension]
+		desc := extensionLabels[ev.Extension]
 		line := formatExtStats(ev.Extension, ev.Stats)
 		if line != "" {
 			fmt.Fprintf(s.out, "  ✓ %s %s\n", desc, line)
@@ -408,7 +408,7 @@ func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 		return
 	}
 	verb := phaseVerbs[ev.Phase]
-	desc := extLabels[ev.Extension]
+	desc := extensionLabels[ev.Extension]
 	suffix := ""
 	if ev.ItemCount > 0 {
 		if ev.ItemTotal > 0 {

@@ -1,4 +1,4 @@
-// nav_registry.go - Navigation target registry for cross-extension routing
+// registry_nav_target.go - Navigation target registry for cross-extension routing
 package tuicore
 
 import "sync"

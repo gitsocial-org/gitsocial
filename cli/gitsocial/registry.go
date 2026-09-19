@@ -21,11 +21,11 @@ func RegisterExtension(ext ExtensionRegistration) {
 // RegisterAllExtensions adds all registered extension commands to the root command.
 func RegisterAllExtensions(rootCmd *cobra.Command) {
 	for _, ext := range extensionRegistry {
-		extCmd := &cobra.Command{
+		extensionCmd := &cobra.Command{
 			Use:   ext.Use,
 			Short: ext.Short,
 		}
-		ext.Register(extCmd)
-		rootCmd.AddCommand(extCmd)
+		ext.Register(extensionCmd)
+		rootCmd.AddCommand(extensionCmd)
 	}
 }

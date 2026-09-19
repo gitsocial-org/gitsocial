@@ -1,4 +1,4 @@
-// list_repos.go - Repository list view for managing repos in a list
+// view_list_repos.go - Repository list view for managing repos in a list
 package tuisocial
 
 import (

@@ -41,7 +41,7 @@ keys to:
 }
 
 // resolveCredentialHost maps a remote name, s3:// URL, or bare endpoint host to
-// the credentials-file key (the canonical URL's endpoint host).
+// the credentials-file key (the identity's endpoint host).
 func resolveCredentialHost(workdir, arg string) (string, error) {
 	target := arg
 	if out, err := git.ExecGit(workdir, []string{"remote", "get-url", arg}); err == nil {

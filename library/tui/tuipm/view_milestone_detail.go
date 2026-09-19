@@ -1,4 +1,4 @@
-// milestone_detail.go - Milestone detail view with progress, issues, and comments
+// view_milestone_detail.go - Milestone detail view with progress, issues, and comments
 package tuipm
 
 import (

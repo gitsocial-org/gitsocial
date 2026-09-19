@@ -1,4 +1,4 @@
-// board.go - Kanban board view for PM issues
+// view_board.go - Kanban board view for PM issues
 package tuipm
 
 import (

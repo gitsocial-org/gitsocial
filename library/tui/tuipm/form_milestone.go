@@ -1,4 +1,4 @@
-// milestone_form.go - Milestone creation form using Huh
+// form_milestone.go - Milestone creation form using Huh
 package tuipm
 
 import (

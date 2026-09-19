@@ -1,4 +1,4 @@
-// sprints.go - Sprints list view for PM
+// view_sprints.go - Sprints list view for PM
 package tuipm
 
 import (

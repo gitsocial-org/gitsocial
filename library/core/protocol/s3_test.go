@@ -1,4 +1,4 @@
-// s3_test.go - Canonical s3 URL rule tests
+// s3_test.go - s3 URL identity rule tests
 package protocol
 
 import "testing"
@@ -6,7 +6,7 @@ import "testing"
 // r2acct is a stand-in for a real Cloudflare account id (always 32 hex).
 const r2acct = "abcdef0123456789abcdef0123456789"
 
-func TestNormalizeURL_s3Canonical(t *testing.T) {
+func TestNormalizeURL_s3Identity(t *testing.T) {
 	cases := []struct {
 		name string
 		in   string
@@ -48,7 +48,7 @@ func TestS3HostInfo(t *testing.T) {
 		{"abc123.r2.cloudflarestorage.com", "", "", false},             // account not 32-hex
 		{"bkt." + r2acct + ".r2.cloudflarestorage.com", "", "", false}, // virtual-host, not an endpoint
 		{r2acct + ".xx.r2.cloudflarestorage.com", "", "", false},       // unknown jurisdiction
-		{"bkt.nyc3.digitaloceanspaces.com", "", "", false},             // virtual-host, not a canonical host
+		{"bkt.nyc3.digitaloceanspaces.com", "", "", false},             // virtual-host, not an endpoint host
 		{"minio.example.com", "", "", false},
 	}
 	for _, c := range cases {

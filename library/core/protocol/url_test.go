@@ -256,7 +256,7 @@ func TestParseRepo(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:      "s3 canonical host form",
+			name:      "s3 endpoint host form",
 			input:     "s3://nyc3.digitaloceanspaces.com/mybucket/team/repo",
 			wantOwner: "mybucket",
 			wantRepo:  "repo",

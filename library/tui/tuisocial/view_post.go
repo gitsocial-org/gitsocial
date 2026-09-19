@@ -1,4 +1,4 @@
-// post.go - Post detail view with thread comments and actions
+// view_post.go - Post detail view with thread comments and actions
 package tuisocial
 
 import (

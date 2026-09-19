@@ -42,7 +42,7 @@ type mirrorFlags struct {
 }
 
 // mirrorTarget is one bucket a mirror run pushes to: the git remote name and
-// its canonical s3:// URL.
+// its s3:// identity.
 type mirrorTarget struct {
 	name   string
 	url    string
@@ -134,8 +134,8 @@ func runMirror(cmd *cobra.Command, args []string, f *mirrorFlags) error {
 	}
 	wsCfg := &Config{WorkDir: wsDir, CacheDir: cfg.CacheDir, JSONOutput: cfg.JSONOutput}
 
-	// Step 2 (resolve): the target remotes, reusing any remote whose canonical
-	// URL already matches so re-runs never accumulate remotes.
+	// Step 2 (resolve): the target remotes, reusing any remote whose identity
+	// already matches so re-runs never accumulate remotes.
 	targets, err := resolveMirrorTargets(wsDir, s3URL, wsAction == "clone")
 	if err != nil {
 		return err
@@ -281,15 +281,15 @@ func classifyMirrorArgs(args []string) (forgeURL, s3URL string, err error) {
 }
 
 // classifyMirrorTarget identifies one positional as a forge URL (https, with
-// an owner/repo path) or an s3 bucket URL (canonicalized), refusing anything
+// an owner/repo path) or an s3 bucket URL (normalized), refusing anything
 // else with a message naming both accepted shapes.
 func classifyMirrorTarget(arg string) (kind, value string, err error) {
-	canonical, isS3, err := protocol.ResolveS3URL(arg)
+	identity, isS3, err := protocol.ResolveS3URL(arg)
 	if err != nil {
 		return "", "", err
 	}
 	if isS3 {
-		return "s3", canonical, nil
+		return "s3", identity, nil
 	}
 	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(arg)), "https://") {
 		if normalized := protocol.NormalizeURL(arg); protocol.ParseRepo(normalized) != nil {
@@ -357,7 +357,7 @@ func resolveMirroredWorkspace(workdir string) (wsDir, forgeURL string, err error
 }
 
 // resolveMirrorTargets returns the buckets this run pushes to. With an s3 URL
-// it is that bucket: an existing remote with the same canonical URL is reused,
+// it is that bucket: an existing remote with the same identity is reused,
 // otherwise a free name is picked to add. Without one (the refresh form) it is
 // every s3 remote among the configured push remotes.
 func resolveMirrorTargets(wsDir, s3URL string, freshClone bool) ([]mirrorTarget, error) {
@@ -377,15 +377,15 @@ func resolveMirrorTargets(wsDir, s3URL string, freshClone bool) ([]mirrorTarget,
 	return targets, nil
 }
 
-// findMatchingS3Remote scans the configured remotes for one whose canonical
-// s3 URL equals the target, so re-runs reuse it instead of adding another.
-func findMatchingS3Remote(wsDir, canonical string) (string, bool) {
+// findMatchingS3Remote scans the configured remotes for one whose s3 identity
+// equals the target, so re-runs reuse it instead of adding another.
+func findMatchingS3Remote(wsDir, identity string) (string, bool) {
 	remotes, err := git.ListRemotes(wsDir)
 	if err != nil {
 		return "", false
 	}
 	for _, r := range remotes {
-		if c, isS3, err := protocol.ResolveS3URL(r.URL); err == nil && isS3 && c == canonical {
+		if c, isS3, err := protocol.ResolveS3URL(r.URL); err == nil && isS3 && c == identity {
 			return r.Name, true
 		}
 	}
@@ -526,7 +526,7 @@ func mirrorFetch(cmd *cobra.Command, cfg *Config, f *mirrorFlags, fetchOrigin bo
 	}
 }
 
-// ensureMirrorTargets attaches each bucket: adds the remote when no canonical
+// ensureMirrorTargets attaches each bucket: adds the remote when no identity
 // match exists, records the s3 helper alias, appends the remote to the push
 // defaults, and (unless the site is skipped) enables site.publish. Every part
 // is set-if-absent, so re-runs change nothing.

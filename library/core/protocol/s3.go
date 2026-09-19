@@ -1,9 +1,9 @@
-// s3.go - Canonical s3:// repo URL rules shared by identity normalization
+// s3.go - s3:// repo URL rules shared by identity normalization
 // (NormalizeURL) and the objstore transport. An s3 repo URL is always
 // "s3://<endpoint-host>/<bucket>/<prefix>": the host locates the provider
 // unambiguously, and identity comparison is string equality. The only other
 // accepted spelling is a known provider's virtual-host form, which folds into
-// the same canonical URL.
+// the same identity.
 package protocol
 
 import (
@@ -14,12 +14,12 @@ import (
 )
 
 // awsConsoleHost is the base host of AWS S3 web-console URLs; a pasted console
-// URL is translated to a canonical s3:// remote at the CLI boundary only.
+// URL is translated to an s3:// remote identity at the CLI boundary only.
 const awsConsoleHost = "console.aws.amazon.com"
 
-// ResolveS3URL translates a user-supplied remote URL into a canonical s3://
-// identity for use at the CLI boundary (remote add, clone). It accepts the
-// canonical form, a known provider's virtual-host form, an http(s) endpoint or
+// ResolveS3URL translates a user-supplied remote URL into an s3:// identity
+// for use at the CLI boundary (remote add, clone). It accepts the normalized
+// form, a known provider's virtual-host form, an http(s) endpoint or
 // virtual-host URL for a recognized S3 host (region/account ride in the host,
 // so they are carried verbatim), and a pasted AWS S3 console URL
 // (https://<region>.console.aws.amazon.com/s3/buckets/<bucket>). A resolved URL
@@ -27,21 +27,21 @@ const awsConsoleHost = "console.aws.amazon.com"
 // so a caller can fall back to treating it as a plain git remote; err is
 // non-nil only when the input looked like an s3/console URL but could not be
 // resolved.
-func ResolveS3URL(input string) (canonical string, isS3 bool, err error) {
+func ResolveS3URL(input string) (identity string, isS3 bool, err error) {
 	u, perr := url.Parse(strings.TrimSpace(input))
 	if perr != nil {
 		return "", false, nil
 	}
 	host := strings.ToLower(u.Host)
 	if host == awsConsoleHost || strings.HasSuffix(host, "."+awsConsoleHost) {
-		c, ok := awsConsoleToCanonical(u, host)
+		c, ok := normalizeAWSConsoleURL(u, host)
 		if !ok {
 			return "", true, fmt.Errorf("no region or bucket in %q: use https://<region>.console.aws.amazon.com/s3/buckets/<bucket>", input)
 		}
 		return c, true, nil
 	}
 	if strings.EqualFold(u.Scheme, "s3") {
-		c := canonicalS3URL(input)
+		c := normalizeS3URL(input)
 		if c == "" {
 			return "", true, fmt.Errorf("invalid s3 URL %q: use s3://<endpoint-host>/<bucket>/<prefix>", input)
 		}
@@ -54,7 +54,7 @@ func ResolveS3URL(input string) (canonical string, isS3 bool, err error) {
 	// S3HostInfo so an ordinary website (github.com, ...) passes through as a
 	// plain git remote; a self-hosted S3 endpoint still needs the s3:// scheme.
 	if strings.EqualFold(u.Scheme, "https") || strings.EqualFold(u.Scheme, "http") {
-		if c, ok := recognizedEndpointToCanonical(host, u.Path); ok {
+		if c, ok := normalizeRecognizedEndpoint(host, u.Path); ok {
 			if !s3URLNamesBucket(c) {
 				return "", true, fmt.Errorf("missing bucket in %q: use s3://<endpoint-host>/<bucket>/<prefix>", input)
 			}
@@ -64,20 +64,20 @@ func ResolveS3URL(input string) (canonical string, isS3 bool, err error) {
 	return "", false, nil
 }
 
-// s3URLNamesBucket reports whether a canonical s3 URL carries a bucket, i.e. has
-// a path segment after the endpoint host (canonical form is "s3://<host>" with
-// an optional "/<bucket>/<prefix>").
-func s3URLNamesBucket(canonical string) bool {
-	return strings.Contains(strings.TrimPrefix(canonical, "s3://"), "/")
+// s3URLNamesBucket reports whether a normalized s3 URL carries a bucket, i.e. has
+// a path segment after the endpoint host (the form is "s3://<host>" with an
+// optional "/<bucket>/<prefix>").
+func s3URLNamesBucket(identity string) bool {
+	return strings.Contains(strings.TrimPrefix(identity, "s3://"), "/")
 }
 
-// recognizedEndpointToCanonical folds an http(s) URL into canonical form when
+// normalizeRecognizedEndpoint folds an http(s) URL into an identity when
 // its host is a known S3 endpoint (path-style) or a known provider's
 // virtual-host (<bucket>.<endpoint-host>). ok=false for unrecognized hosts.
 // The path-style check runs first, so an R2 jurisdiction endpoint
 // (<account>.eu.r2…) resolves as an endpoint before the virtual-host split can
 // mistake its account label for a bucket.
-func recognizedEndpointToCanonical(host, rawPath string) (string, bool) {
+func normalizeRecognizedEndpoint(host, rawPath string) (string, bool) {
 	trail := strings.Trim(rawPath, "/")
 	if _, _, known := S3HostInfo(host); known {
 		return joinS3(host, trail), true
@@ -90,10 +90,10 @@ func recognizedEndpointToCanonical(host, rawPath string) (string, bool) {
 	return "", false
 }
 
-// awsConsoleToCanonical builds a canonical aws s3 URL from a parsed console URL:
+// normalizeAWSConsoleURL builds an aws s3 identity from a parsed console URL:
 // region from the subdomain (or ?region= for the global console host), bucket
 // from the path segment after "buckets", and an optional prefix from ?prefix=.
-func awsConsoleToCanonical(u *url.URL, host string) (string, bool) {
+func normalizeAWSConsoleURL(u *url.URL, host string) (string, bool) {
 	region := ""
 	if sub := strings.TrimSuffix(host, "."+awsConsoleHost); sub != host && sub != "" && sub != "s3" {
 		region = sub
@@ -116,7 +116,7 @@ func awsConsoleToCanonical(u *url.URL, host string) (string, bool) {
 	return joinS3("s3."+region+".amazonaws.com", joinS3Path(bucket, prefix)), true
 }
 
-// S3HostInfo reverse-maps a canonical endpoint host to its provider and
+// S3HostInfo reverse-maps a normalized endpoint host to its provider and
 // region; ok=false for hosts no preset recognizes (custom endpoints).
 func S3HostInfo(host string) (provider, region string, ok bool) {
 	switch {
@@ -129,7 +129,7 @@ func S3HostInfo(host string) (provider, region string, ok bool) {
 	case strings.HasSuffix(host, ".digitaloceanspaces.com"):
 		region = strings.TrimSuffix(host, ".digitaloceanspaces.com")
 		if region == "" || strings.Contains(region, ".") {
-			return "", "", false // dotted remainder = virtual-host form, not a canonical host
+			return "", "", false // dotted remainder = virtual-host form, not an endpoint host
 		}
 		return "do", region, true
 	case strings.HasSuffix(host, ".r2.cloudflarestorage.com"):
@@ -162,11 +162,11 @@ func isR2AccountID(s string) bool {
 	return true
 }
 
-// canonicalS3URL normalizes an s3 URL to its canonical identity, stripping
-// query and trailing slash and folding a known provider's virtual-host
-// spelling (<bucket>.<endpoint-host>) into path form. Authorities that don't
-// name an endpoint host (bare bucket names) are invalid and normalize to "".
-func canonicalS3URL(rawURL string) string {
+// normalizeS3URL normalizes an s3 URL to its identity, stripping query and
+// trailing slash and folding a known provider's virtual-host spelling
+// (<bucket>.<endpoint-host>) into path form. Authorities that don't name an
+// endpoint host (bare bucket names) are invalid and normalize to "".
+func normalizeS3URL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	// A dot or a port marks a real endpoint host; a bare bucket name has neither
 	// (bucket names can't contain ":"), so localhost:8000 passes and s3://bucket/repo doesn't.

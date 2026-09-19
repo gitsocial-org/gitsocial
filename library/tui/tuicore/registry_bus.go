@@ -1,4 +1,4 @@
-// bus.go - Message bus for decoupled extension message handling
+// registry_bus.go - Message bus for decoupled extension message handling
 package tuicore
 
 import (

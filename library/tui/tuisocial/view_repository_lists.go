@@ -1,4 +1,4 @@
-// repository_lists.go - View showing lists published by an external repository
+// view_repository_lists.go - View showing lists published by an external repository
 package tuisocial
 
 import (

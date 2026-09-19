@@ -1,4 +1,4 @@
-// sprint_form.go - Sprint creation form using Huh
+// form_sprint.go - Sprint creation form using Huh
 package tuipm
 
 import (

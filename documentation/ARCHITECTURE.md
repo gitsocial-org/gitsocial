@@ -327,7 +327,7 @@ library/tui/
 |--------|---------|---------|
 | `view_` | a routable view, in `tuiviews/` or an extension's `tui<ext>/` | `view_timeline.go` |
 | `component_` | a reusable stateful component | `component_nav_panel.go` |
-| `registry_` | a global registry | `registry_nav.go` |
+| `registry_` | a global registry | `registry_nav_target.go` |
 | `form_` | a modal form | `form_issue.go` |
 | `version_item_` | a history-picker version item | `version_item_issue.go` |
 | `util_` | helpers, and the shared app state they take: `State`, `Router`, `theme` | `util_render.go` |

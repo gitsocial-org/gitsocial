@@ -1,4 +1,4 @@
-// nav_registry_test.go - Tests for cross-extension navigation routing
+// registry_nav_test.go - Tests for cross-extension navigation routing
 package tuicore
 
 import (

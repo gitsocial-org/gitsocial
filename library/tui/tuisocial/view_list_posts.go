@@ -1,4 +1,4 @@
-// list_posts.go - Posts view for displaying timeline from a specific list
+// view_list_posts.go - Posts view for displaying timeline from a specific list
 package tuisocial
 
 import (

@@ -1,4 +1,4 @@
-// nav.go - Navigation items and the registry the TUI and extensions register into
+// registry_nav.go - Navigation items and the registry the TUI and extensions register into
 package tuinav
 
 import "sort"

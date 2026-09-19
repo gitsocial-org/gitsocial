@@ -1,4 +1,4 @@
-// config.go - PM configuration view with framework picker
+// view_config.go - PM configuration view with framework picker
 package tuipm
 
 import (

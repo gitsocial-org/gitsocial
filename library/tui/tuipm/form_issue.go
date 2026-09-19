@@ -1,4 +1,4 @@
-// form.go - Issue creation form using Huh
+// form_issue.go - Issue creation form using Huh
 package tuipm
 
 import (

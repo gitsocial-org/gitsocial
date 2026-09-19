@@ -1,20 +1,10 @@
-// Package diff renders unified or split diff views as a pure pipeline:
+// model.go - Diff cell model: Cell, Row, RowKind, RowAnchor
+
+// Package diff renders unified or split diff views as a pipeline:
+// BuildLogical, BuildPlan, Layer.Decorate, then SliceRow, WrapRow and RenderRow.
 //
-//	[]git.FileDiff
-//	      ↓ BuildLogical
-//	LogicalDiff (immutable source of truth — one LogicalRow per source line)
-//	      ↓ BuildPlan(state)
-//	DisplayPlan (styled cell rows; folds applied; split pairs composed)
-//	      ↓ Layer.Decorate (optional — e.g. PR feedback)
-//	DisplayPlan
-//	      ↓ caller renders via SliceRow / WrapRow / RenderRow
-//	ANSI string
-//
-// Each stage is a pure function over its inputs; no globals, no I/O.
-// ANSI escape codes are produced exclusively by RenderRow; every other
-// operation works on the structured Cell model.
-//
-// model.go defines the data primitives: Cell, Row, RowKind, RowAnchor.
+// Each stage is a pure function over its inputs, with no globals and no I/O.
+// Only RenderRow emits ANSI escape codes; every other stage works on cells.
 package diff
 
 // Cell is the indivisible unit of a row: a plain-text segment with

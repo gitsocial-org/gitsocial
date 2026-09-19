@@ -1,4 +1,4 @@
-// version_picker.go - Reusable version history picker component
+// component_version_picker.go - Reusable version history picker component
 package tuicore
 
 import (

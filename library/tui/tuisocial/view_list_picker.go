@@ -1,4 +1,4 @@
-// list_picker.go - List selection view for choosing or creating repository lists
+// view_list_picker.go - List selection view for choosing or creating repository lists
 package tuisocial
 
 import (

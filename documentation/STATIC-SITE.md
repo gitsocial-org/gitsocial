@@ -13,7 +13,7 @@ gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
 gitsocial mirror                       # later, from the workspace: refresh
 ```
 
-- `--url` is the site's public address and turns the [HTML pages](#html-pages) on.
+- `--url` is the site's public URL and turns the [HTML pages](#html-pages) on.
 - The remaining flags, the refresh behavior and the provider checklist are in [CLI.md](CLI.md#gitsocial-mirror).
 
 ## Publish
@@ -169,7 +169,7 @@ Two rules follow. `pages-core.css` carries no `url()`, since pages sit at severa
 
 Type sizes, colours and spacing come from the [tokens](STATIC-SITE-DESIGN.md#tokens) `pages-core.css` declares.
 
-A configured accent is site data, not part of the sheet. It is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash stay the binary's own identity.
+A configured accent is site data, not part of the sheet. It is stamped per push as a small `:root` override after the inlined core, so the embedded sheet and the shell version hash covering it come from the binary alone.
 
 A grammar is chosen by file extension, then basename (`Dockerfile`, `Makefile`, `CMakeLists.txt`), then a fence's info string, with `markup` as the fallback. Code renders plain first and highlights when the grammar arrives.
 

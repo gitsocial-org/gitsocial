@@ -101,7 +101,7 @@ type List struct {
 
 type RepositoryType string
 
-const repositoryTypeOther RepositoryType = "other"
+const repoTypeOther RepositoryType = "other"
 
 type Repository struct {
 	ID            string

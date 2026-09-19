@@ -214,7 +214,7 @@ func ResolveRefWithDefaults(refStr, defaultRepoURL, defaultBranch string) Resolv
 	return ResolvedRef{RepoURL: repoURL, Hash: parsed.Value, Branch: branch}
 }
 
-// NormalizeRef normalizes a ref string to canonical format.
+// NormalizeRef rewrites a commit ref in full form; other ref types pass through.
 func NormalizeRef(ref string) string {
 	if ref == "" {
 		return ref

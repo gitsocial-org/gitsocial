@@ -1,4 +1,4 @@
-// nav_test.go - Tests for navigation items and the navigation registry
+// registry_nav_test.go - Tests for navigation items and the navigation registry
 package tuinav
 
 import (

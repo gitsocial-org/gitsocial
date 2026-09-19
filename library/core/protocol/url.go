@@ -32,7 +32,7 @@ type RepoInfo struct {
 
 var sshPattern = regexp.MustCompile(`^git@([^:]+):([^/]+)/(.+)`)
 
-// NormalizeURL returns a repository URL's canonical identity: one repository has one identity.
+// NormalizeURL returns a repository URL's identity: one repository has one identity.
 // s3 URLs fold through the grammar in s3.go. NormalizeURL(NormalizeURL(x)) == NormalizeURL(x).
 func NormalizeURL(rawURL string) string {
 	if rawURL == "" {
@@ -40,7 +40,7 @@ func NormalizeURL(rawURL string) string {
 	}
 	normalized := strings.TrimSpace(rawURL)
 	if strings.HasPrefix(strings.ToLower(normalized), "s3://") {
-		return canonicalS3URL(normalized)
+		return normalizeS3URL(normalized)
 	}
 
 	if strings.HasPrefix(normalized, "git@") {
@@ -123,7 +123,7 @@ func ParseRepo(rawURL string) *RepoInfo {
 		return nil
 	}
 	if parsed.Scheme == "s3" {
-		// Canonical host form: the bucket is the first path segment.
+		// Endpoint host form: the bucket is the first path segment.
 		segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
 		if segments[0] == "" {
 			return nil

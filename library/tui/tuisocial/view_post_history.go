@@ -1,4 +1,4 @@
-// post_history.go - Edit history view showing post versions with diff display.
+// view_post_history.go - Edit history view showing post versions with diff display.
 package tuisocial
 
 import (

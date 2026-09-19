@@ -254,7 +254,7 @@ func s3HelperEnv(t *testing.T, serverURL string, baseEnv []string) []string {
 	)
 }
 
-// s3FixtureRemote builds a canonical host-form remote URL for the fixture
+// s3FixtureRemote builds an endpoint host-form remote URL for the fixture
 // server (its host:port is the endpoint host; the scheme and addressing come
 // from the GITSOCIAL_S3_ENDPOINT/PATH_STYLE env override).
 func s3FixtureRemote(serverURL, bucketAndPrefix string) string {
@@ -976,9 +976,9 @@ func TestS3Helper_generationNonFastForward(t *testing.T) {
 	}
 }
 
-// TestS3Helper_rejectsNonCanonicalURLs: the only accepted s3 URL is the
-// canonical host form; bucket-only authorities and query params are rejected.
-func TestS3Helper_rejectsNonCanonicalURLs(t *testing.T) {
+// TestS3Helper_rejectsUnnormalizedURLs: the only accepted s3 URL is the
+// endpoint host form; bucket-only authorities and query params are rejected.
+func TestS3Helper_rejectsUnnormalizedURLs(t *testing.T) {
 	t.Parallel()
 	fullTierOnly(t)
 	src, env, _, remote := pushTestRepo(t)
@@ -1110,7 +1110,7 @@ func TestS3Helper_timelineFromS3Repo(t *testing.T) {
 	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
 	// Short-form URL + env config: the read-path shape (identity stays the
-	// short form; a canonical https URL would be the production shape).
+	// short form; a full https URL would be the production shape).
 	t.Setenv("GITSOCIAL_S3_ENDPOINT", server.URL)
 	t.Setenv("GITSOCIAL_S3_PATH_STYLE", "1")
 

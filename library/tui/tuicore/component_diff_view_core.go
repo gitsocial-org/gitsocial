@@ -1,4 +1,4 @@
-// diff_view_core.go - Shared state machine for commit + PR diff views.
+// component_diff_view_core.go - Shared state machine for commit + PR diff views.
 //
 // Owns the LogicalDiff/ViewState/DisplayPlan pipeline, cursor + scroll,
 // fold mutations, search, and shared keybindings. Wrappers

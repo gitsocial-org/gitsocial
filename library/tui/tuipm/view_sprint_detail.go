@@ -1,4 +1,4 @@
-// sprint_detail.go - Sprint detail view with progress, backlog, and comments
+// view_sprint_detail.go - Sprint detail view with progress, backlog, and comments
 package tuipm
 
 import (

@@ -1,5 +1,5 @@
 // remote.go - gitsocial remote: target-scoped operations — add (translating a
-// pasted AWS S3 console URL to canonical s3:// and recording the s3 helper
+// pasted AWS S3 console URL to the s3:// identity and recording the s3 helper
 // alias), default (the gitsocial.pushRemote defaults), and put (a plain
 // bucket-object upload).
 package main
@@ -137,7 +137,7 @@ Examples:
 }
 
 // newRemoteAddCmd adds a remote, resolving s3:// and pasted AWS S3 console URLs
-// to a canonical s3:// remote and recording the helper alias so plain git works.
+// to the s3:// identity and recording the helper alias so plain git works.
 func newRemoteAddCmd() *cobra.Command {
 	var makeDefault bool
 	var enableSite bool
@@ -169,13 +169,13 @@ Examples:
 				name, rawURL = args[0], args[1]
 			}
 			remoteURL := rawURL
-			canonical, isS3, err := protocol.ResolveS3URL(rawURL)
+			identity, isS3, err := protocol.ResolveS3URL(rawURL)
 			if err != nil {
 				PrintError(cmd, err.Error())
 				return exit(ExitError)
 			}
 			if isS3 {
-				remoteURL = canonical
+				remoteURL = identity
 			}
 			if _, err := git.ExecGit(cfg.WorkDir, []string{"remote", "add", name, remoteURL}); err != nil {
 				PrintError(cmd, fmt.Sprintf("add remote %q: %v", name, err))

@@ -154,10 +154,10 @@ func TestResolveMirrorWorkspace(t *testing.T) {
 
 func TestResolveMirrorTargets(t *testing.T) {
 	t.Parallel()
-	canonical := "s3://127.0.0.1:9111/demo/hello"
+	identity := "s3://127.0.0.1:9111/demo/hello"
 
 	t.Run("fresh clone names s3", func(t *testing.T) {
-		targets, err := resolveMirrorTargets("/nonexistent", canonical, true)
+		targets, err := resolveMirrorTargets("/nonexistent", identity, true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,10 +168,10 @@ func TestResolveMirrorTargets(t *testing.T) {
 
 	t.Run("matching remote reused", func(t *testing.T) {
 		repo := initMirrorTestRepo(t, "https://github.com/octocat/Hello-World")
-		if _, err := git.ExecGit(repo, []string{"remote", "add", "bucket", canonical}); err != nil {
+		if _, err := git.ExecGit(repo, []string{"remote", "add", "bucket", identity}); err != nil {
 			t.Fatal(err)
 		}
-		targets, err := resolveMirrorTargets(repo, canonical, false)
+		targets, err := resolveMirrorTargets(repo, identity, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -185,7 +185,7 @@ func TestResolveMirrorTargets(t *testing.T) {
 		if _, err := git.ExecGit(repo, []string{"remote", "add", "s3", "s3://other:9111/x/y"}); err != nil {
 			t.Fatal(err)
 		}
-		targets, err := resolveMirrorTargets(repo, canonical, false)
+		targets, err := resolveMirrorTargets(repo, identity, false)
 		if err != nil {
 			t.Fatal(err)
 		}
