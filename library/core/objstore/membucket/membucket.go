@@ -69,13 +69,6 @@ func (m *Bucket) FailPut(key string) {
 	m.failPuts[key] = true
 }
 
-// ClearFailPut lets a key's PUTs succeed again, so a test can assert what the pass after a failure does.
-func (m *Bucket) ClearFailPut(key string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.failPuts, key)
-}
-
 // FlakyPut marks a bucket-relative key so its next n PUTs return HTTP 500, after which PUTs succeed.
 func (m *Bucket) FlakyPut(key string, n int) { m.FlakyPutStatus(key, n, 500) }
 

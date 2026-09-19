@@ -45,7 +45,6 @@ type Binding struct {
 
 func init() {
 	cache.RegisterSchema("identity_bindings", bindingsSchema)
-	cache.RegisterMigration(migrateBindingsToPerSource)
 }
 
 const bindingsSchema = `
@@ -61,21 +60,6 @@ CREATE TABLE IF NOT EXISTS core_verified_bindings (
 );
 CREATE INDEX IF NOT EXISTS idx_core_verified_bindings_email ON core_verified_bindings(email);
 `
-
-// migrateBindingsToPerSource drops the table if its PK doesn't include 'source'
-// (legacy single-row-per-(key,email) shape) so the new schema can recreate it.
-// The cache rebuilds on next fetch — no data preserved.
-func migrateBindingsToPerSource(db *sql.DB) {
-	var pkHasSource int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('core_verified_bindings') WHERE pk > 0 AND name = 'source'`).Scan(&pkHasSource); err != nil {
-		return
-	}
-	if pkHasSource > 0 {
-		return
-	}
-	_, _ = db.Exec(`DROP TABLE IF EXISTS core_verified_bindings`)
-	_, _ = db.Exec(bindingsSchema)
-}
 
 // inflight de-duplicates concurrent verification attempts for the same binding.
 var inflight sync.Map

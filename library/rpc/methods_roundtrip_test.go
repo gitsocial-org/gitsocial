@@ -423,12 +423,6 @@ func TestSearchRoundTrip_findsPostThroughBothNames(t *testing.T) {
 		t.Errorf("search hit = %+v, want the social post just created", hit)
 	}
 
-	var alias searchShape
-	decodeResult(t, call(t, server, "social.search", `{"query":"migration","scope":"repository:my"}`), "social.search", &alias)
-	if alias.Total != found.Total || len(alias.Results) != len(found.Results) {
-		t.Errorf("social.search served %d hits, want the %d search serves", alias.Total, found.Total)
-	}
-
 	// RPC.md 3: a call before initialize returns -32010 NOT_READY.
 	fresh := NewServer(NewRegistry(), strings.NewReader(""), io.Discard)
 	registerAll(fresh)

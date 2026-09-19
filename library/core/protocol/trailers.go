@@ -44,12 +44,3 @@ func ExtractTrailers(message string) []Trailer {
 	}
 	return trailers
 }
-
-// IsClosingTrailer returns true if the trailer key implies closing/completing an item.
-func IsClosingTrailer(key string) bool {
-	switch key {
-	case "Fixes", "Closes", "Resolves", "Implements":
-		return true
-	}
-	return false
-}

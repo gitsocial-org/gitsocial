@@ -100,25 +100,3 @@ func TestExtractTrailers(t *testing.T) {
 		})
 	}
 }
-
-func TestIsClosingTrailer(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		key  string
-		want bool
-	}{
-		{"Fixes", true},
-		{"Closes", true},
-		{"Resolves", true},
-		{"Implements", true},
-		{"Refs", false},
-		{"closes", false},
-		{"Signed-off-by", false},
-		{"", false},
-	}
-	for _, tt := range tests {
-		if got := IsClosingTrailer(tt.key); got != tt.want {
-			t.Errorf("IsClosingTrailer(%q) = %v, want %v", tt.key, got, tt.want)
-		}
-	}
-}

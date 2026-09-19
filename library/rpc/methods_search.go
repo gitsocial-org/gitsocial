@@ -8,14 +8,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/search"
 )
 
-// RegisterSearchMethods registers search methods on the server. `search` is the
-// real name: it spans posts, issues, PRs, releases and feedback, so filing it
-// under social would misdescribe it. `social.search` is a compatibility alias
-// for clients written against the name RPC.md used to document.
+// RegisterSearchMethods registers the search method, which spans every extension.
 func RegisterSearchMethods(s *Server) {
-	handler := s.requireInit(rpcSearch(s))
-	s.registry.Register("search", handler)
-	s.registry.Register("social.search", handler)
+	s.registry.Register("search", s.requireInit(rpcSearch(s)))
 }
 
 func rpcSearch(s *Server) HandlerFunc {

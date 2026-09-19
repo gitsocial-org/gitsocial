@@ -110,7 +110,7 @@ func TestProcessRequest_success(t *testing.T) {
 func TestHandleLine_errorDetailsCarryErrorText(t *testing.T) {
 	r := NewRegistry()
 	r.Register("test.fail", func(params json.RawMessage) (any, *RPCError) {
-		return fromResult(result.ErrWithDetails[string]("NETWORK_ERROR", "fetch failed", errors.New("dial tcp: connection refused")))
+		return fromResult(result.ErrWithDetails[string]("GIT_ERROR", "fetch failed", errors.New("dial tcp: connection refused")))
 	})
 	var out bytes.Buffer
 	s := NewServer(r, bytes.NewReader(nil), &out)

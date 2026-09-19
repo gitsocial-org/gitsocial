@@ -33,7 +33,6 @@ const (
 	CodeInvalidRequest = -32600
 	CodeMethodNotFound = -32601
 	CodeInvalidParams  = -32602
-	CodeInternalError  = -32603
 )
 
 // Application error codes (-32000 to -32099)
@@ -43,8 +42,6 @@ const (
 	CodeNotARepository = -32002
 	CodeNotInitialized = -32003
 	CodeInvalidArg     = -32004
-	CodePermission     = -32005
-	CodeNetwork        = -32006
 	CodeConflict       = -32007
 	CodeNotReady       = -32010
 )
@@ -60,10 +57,6 @@ func appErrorCode(code string) int {
 		return CodeNotInitialized
 	case "INVALID_ARGUMENT":
 		return CodeInvalidArg
-	case "PERMISSION_DENIED":
-		return CodePermission
-	case "NETWORK_ERROR":
-		return CodeNetwork
 	case "CONFLICT":
 		return CodeConflict
 	default:

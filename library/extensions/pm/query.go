@@ -265,7 +265,7 @@ func (q *Query) BuildOrderClause() string {
 	case "created":
 		col = "v.timestamp"
 	case "updated":
-		col = "v.timestamp" // TODO: track updated separately
+		col = "v.timestamp"
 	case "due":
 		col = "v.due"
 	case "priority":

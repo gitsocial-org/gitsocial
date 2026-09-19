@@ -1,4 +1,4 @@
-// signing_test.go - Tests for signed commit creation, verification, and signer-key extraction
+// signing_test.go - Tests for signer-key extraction from signed commits
 package git
 
 import (
@@ -63,23 +63,26 @@ func setupSSHSigningRepo(t *testing.T) (string, string) {
 	return dir, fields[1]
 }
 
-func TestCreateSignedCommitTree_andVerify(t *testing.T) {
+// signedCommit writes a signed empty-tree commit and returns its full hash.
+func signedCommit(t *testing.T, dir, message, parent string) string {
+	t.Helper()
+	args := []string{"commit-tree", emptyTree, "-m", message, "-S"}
+	if parent != "" {
+		args = append(args, "-p", parent)
+	}
+	hash, err := execGitSimple(dir, args)
+	if err != nil {
+		t.Fatalf("signed commit-tree: %v", err)
+	}
+	return strings.TrimSpace(hash)
+}
+
+func TestGetCommitSignerKey_sshSignedCommits(t *testing.T) {
 	dir, fingerprint := setupSSHSigningRepo(t)
 
-	hash, err := CreateSignedCommitTree(dir, "signed root", "")
-	if err != nil {
-		t.Fatalf("CreateSignedCommitTree() error = %v", err)
-	}
+	hash := signedCommit(t, dir, "signed root", "")
 	if len(hash) < 40 {
-		t.Fatalf("CreateSignedCommitTree() = %q, want a full object id", hash)
-	}
-
-	output, err := VerifyCommitSignature(dir, hash)
-	if err != nil {
-		t.Fatalf("VerifyCommitSignature() error = %v", err)
-	}
-	if !strings.Contains(output, "Good") || !strings.Contains(output, "signer@example.com") {
-		t.Errorf("VerifyCommitSignature() = %q, want a good signature for signer@example.com", output)
+		t.Fatalf("signed commit = %q, want a full object id", hash)
 	}
 
 	format, key, err := GetCommitSignerKey(dir, hash)
@@ -93,10 +96,7 @@ func TestCreateSignedCommitTree_andVerify(t *testing.T) {
 		t.Errorf("key = %q, want %q", key, fingerprint)
 	}
 
-	child, err := CreateSignedCommitTree(dir, "signed child", hash)
-	if err != nil {
-		t.Fatalf("CreateSignedCommitTree(child) error = %v", err)
-	}
+	child := signedCommit(t, dir, "signed child", hash)
 	parents, err := ExecGit(dir, []string{"log", "-1", "--format=%P", child})
 	if err != nil {
 		t.Fatalf("read parents: %v", err)
@@ -117,16 +117,13 @@ func TestCreateSignedCommitTree_andVerify(t *testing.T) {
 	}
 }
 
-func TestVerifyCommitSignature_unsigned(t *testing.T) {
+func TestGetCommitSignerKey_unsigned(t *testing.T) {
 	dir := initTestRepo(t)
 	commits, err := GetCommits(dir, &GetCommitsOptions{Branch: "main"})
 	if err != nil || len(commits) == 0 {
 		t.Fatalf("GetCommits() = %d commits, err = %v", len(commits), err)
 	}
 
-	if _, err := VerifyCommitSignature(dir, commits[0].Hash); err == nil {
-		t.Error("VerifyCommitSignature() on an unsigned commit should error")
-	}
 	if _, _, err := GetCommitSignerKey(dir, commits[0].Hash); err == nil {
 		t.Error("GetCommitSignerKey() on an unsigned commit should error")
 	}
@@ -136,22 +133,6 @@ func TestVerifyCommitSignature_unsigned(t *testing.T) {
 	}
 	if len(keys) != 0 {
 		t.Errorf("GetCommitSignerKeys() = %v, want no entries for unsigned commits", keys)
-	}
-}
-
-func TestVerifyCommitSignature_unknownCommit(t *testing.T) {
-	dir := initTestRepo(t)
-	if _, err := VerifyCommitSignature(dir, "0123456789abcdef0123456789abcdef01234567"); err == nil {
-		t.Error("VerifyCommitSignature() on a missing object should error")
-	}
-}
-
-func TestCreateSignedCommitTree_missingSigningKey(t *testing.T) {
-	dir := initTestRepo(t)
-	ExecGit(dir, []string{"config", "gpg.format", "ssh"})
-	ExecGit(dir, []string{"config", "user.signingkey", filepath.Join(dir, "absent_key.pub")})
-	if _, err := CreateSignedCommitTree(dir, "unsignable", ""); err == nil {
-		t.Error("CreateSignedCommitTree() with an unusable signing key should error")
 	}
 }
 

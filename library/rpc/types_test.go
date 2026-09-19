@@ -16,8 +16,6 @@ func TestAppErrorCode(t *testing.T) {
 		{"NOT_A_REPOSITORY", CodeNotARepository},
 		{"NOT_INITIALIZED", CodeNotInitialized},
 		{"INVALID_ARGUMENT", CodeInvalidArg},
-		{"PERMISSION_DENIED", CodePermission},
-		{"NETWORK_ERROR", CodeNetwork},
 		{"CONFLICT", CodeConflict},
 		{"UNKNOWN", CodeAppInternal},
 		{"", CodeAppInternal},

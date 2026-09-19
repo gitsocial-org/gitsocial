@@ -346,11 +346,6 @@ func PushSiteEnabled(workdir string) bool {
 	return strings.TrimSpace(result.Stdout) != "false"
 }
 
-// PushRemoteURL returns the push remote's URL, or "" when it isn't configured.
-func PushRemoteURL(workdir string) string {
-	return RemoteURL(workdir, PushRemote(workdir))
-}
-
 // RemoteURL returns the URL of the named remote, or "" when it isn't configured.
 func RemoteURL(workdir, name string) string {
 	remotes, err := ListRemotes(workdir)

@@ -197,23 +197,6 @@ func TierForRepoURL(repoURL, workspaceURL string, inheritedURLs []string) Tier {
 	return TierExternal
 }
 
-// SessionIDForRepoURL extracts the session id from a session-tier repo_url.
-// Returns "" if the URL doesn't point inside the session dir.
-func SessionIDForRepoURL(repoURL string) string {
-	path := PathFromLocalURL(repoURL)
-	if path == "" {
-		return ""
-	}
-	dir, err := SessionDir()
-	if err != nil {
-		return ""
-	}
-	if !samePath(filepath.Dir(path), dir) {
-		return ""
-	}
-	return filepath.Base(path)
-}
-
 // AllTierRepoURLs returns the repo_url strings spanning every initialized
 // tier reachable from the workspace, in priority order: workspace, personal,
 // each session repo whose recorded workspace-url matches (or is unset for

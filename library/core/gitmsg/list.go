@@ -162,16 +162,6 @@ func RemoveListMember(workdir, extension, name, memberRef string) error {
 	return git.DeleteRef(workdir, itemRef)
 }
 
-// HasListMember reports whether a member ref is registered in the list.
-func HasListMember(workdir, extension, name, memberRef string) bool {
-	if memberRef == "" {
-		return false
-	}
-	itemRef := itemRefPath(extension, name, memberRef)
-	_, err := git.ReadRef(workdir, itemRef)
-	return err == nil
-}
-
 // DeleteList removes a list's metadata ref and all of its member refs.
 // Also clears any pre-migration legacy ref at the same name.
 func DeleteList(workdir, extension, name string) error {

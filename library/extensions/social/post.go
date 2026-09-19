@@ -149,7 +149,6 @@ type GetPostsOptions struct {
 	Limit           int
 	Cursor          string // RFC3339 timestamp for keyset pagination (items older than this)
 	IncludeImplicit bool
-	SkipCache       bool
 	GitRoot         string // pre-computed git root to avoid subprocess on hot path
 	SkipUnpushed    bool   // skip unpushed decoration for fast initial load
 }

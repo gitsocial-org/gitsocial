@@ -63,34 +63,6 @@ func GetGitConfig(workdir, key string) string {
 	return strings.TrimSpace(result.Stdout)
 }
 
-// CreateSignedCommitTree creates a signed commit with empty tree, returning the full hash.
-func CreateSignedCommitTree(workdir, message, parent string) (string, error) {
-	args := []string{"commit-tree", emptyTree, "-m", message, "-S"}
-	if parent != "" {
-		args = append(args, "-p", parent)
-	}
-	hash, err := execGitSimple(workdir, args)
-	if err != nil {
-		return "", fmt.Errorf("signed commit-tree: %w", err)
-	}
-	return strings.TrimSpace(hash), nil
-}
-
-// VerifyCommitSignature checks the signature on a commit.
-// Returns the raw output from git verify-commit (good-sig info) or error if unsigned/invalid.
-func VerifyCommitSignature(workdir, hash string) (string, error) {
-	result, err := ExecGit(workdir, []string{"verify-commit", "--raw", hash})
-	if err != nil {
-		return "", fmt.Errorf("verify-commit %s: %w", hash, err)
-	}
-	// verify-commit outputs signature info to stderr
-	output := result.Stderr
-	if output == "" {
-		output = result.Stdout
-	}
-	return output, nil
-}
-
 // GetCommitSignerKey extracts the signing key fingerprint from a commit.
 // For SSH: returns the key fingerprint. For GPG: returns the key ID.
 func GetCommitSignerKey(workdir, hash string) (format string, key string, err error) {

@@ -37,7 +37,6 @@ type FetchOptions struct {
 	Limit           int
 	Since           *time.Time
 	SkipBots        bool
-	APIBaseURL      string
 	Token           string
 	State           string          // "open", "closed", "merged", "all"
 	Categories      []string        // discussion category slugs to import (social only)

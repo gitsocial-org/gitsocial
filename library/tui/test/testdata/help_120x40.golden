@@ -2,38 +2,38 @@
 │                              ││                                                                                      │
 │  ⌕  Search  ············  /  ││   GitSocial                                                                          │
 │  ⚑  Notifications  ·····  @  ││                                                                                      │
-│  ◧  Analytics  ·········  %  ││  Git-native collaboration — posts, issues, PRs, releases, all in your repo.          │
+│  ◧  Analytics  ·········  %  ││  Git-native collaboration: posts, issues, PRs, releases, all in your repo.           │
 │ ──────────────────────────── ││                                                                                      │
 │  ⌘  Social  ············  S  ││  ## How It Works                                                                     │
 │     ⏱  Timeline              ││                                                                                      │
-│     ⎇  My Repository         ││  Everything is a commit: posts, issues, PRs, reviews, releases — all stored          │
+│     ⎇  My Repository         ││  Everything is a commit. Posts, issues, PRs, reviews and releases are stored         │
 │     ☷ My Lists              ││  as git commits on  gitmsg/*  branches. Syncing is git: fetch updates, publish       │
-│        • Memo Inherits (au...││  with push. Works offline, air-gapped, and peer-to-peer. Move to any host            │
-│     ㋡ My Followers          ││  with  git clone --mirror  — no API scraping, no data loss.                          │
+│        • Memo Inherits (au...││  with push. Works offline, air-gapped and peer-to-peer.  git clone --mirror          │
+│     ㋡ My Followers          ││  moves the data to any host, with no API scraping and no data loss.                  │
 │     ➼  Explore               ││                                                                                      │
 │  ▢  PM  ················  P  ││  ## Workflow                                                                         │
 │  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  • Fetch — Pull updates from repositories you follow                                 │
-│  ☞  Memos  ·············  M  ││  • Push — Publish your local changes to your remote                                  │
-│                              ││  • Lists — Group repositories into curated feeds                                     │
+│  ⏏  Release  ···········  V  ││  • Fetch: pull updates from repositories you follow                                  │
+│  ☞  Memos  ·············  M  ││  • Push: publish your local changes to your remote                                   │
+│                              ││  • Lists: group repositories into curated feeds                                      │
 │                              ││                                                                                      │
 │                              ││  Follow someone by adding their repo to a list. Their posts appear in your           │
 │                              ││  timeline after fetch.                                                               │
 │                              ││                                                                                      │
 │                              ││  ## Extensions                                                                       │
 │                              ││                                                                                      │
-│                              ││  • Social — Posts, comments, reposts, quotes, timeline, lists, followers             │
-│                              ││  • PM — Issues, milestones, sprints, boards                                          │
-│                              ││  • Review — Pull requests, inline feedback, fork PRs, merges                         │
-│                              ││  • Release — Releases, artifacts, checksums, signatures                              │
+│                              ││  • Social: posts, comments, reposts, quotes, timeline, lists, followers              │
+│                              ││  • PM: issues, milestones, sprints, boards                                           │
+│                              ││  • Review: pull requests, inline feedback, fork PRs, merges                          │
+│                              ││  • Release: releases, artifacts, checksums, signatures                               │
+│                              ││  • Memo: notes across session, personal, project and inherited tiers                 │
 │                              ││                                                                                      │
 │                              ││  Each extension stores data on its own  gitmsg/*  branch and can be enabled          │
-│                              ││  or disabled in Settings.                                                            │
-│ ──────────────────────────── ││                                                                                      │
-│  ⚙  Configuration            ││  ## TUI Layout                                                                       │
-│  ⚿  Identity                 ││                                                                                      │
-│  ⛁  Cache  ········ XXXKB    ││  • Left panel: navigation sidebar (toggle with  ` )                                  │
-│  ⌨  Settings                 ││  • Right panel: content area for the active view                                     │
+│ ──────────────────────────── ││  or disabled in Settings.                                                            │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⚿  Identity                 ││  ## TUI Layout                                                                       │
+│  ⛁  Cache  ········ XXXKB    ││                                                                                      │
+│  ⌨  Settings                 ││  • Left panel: navigation sidebar                                                    │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
 │.../tui-test-FIXTURE          ││   tab:focus  f:fetch  q:quit                                                         │

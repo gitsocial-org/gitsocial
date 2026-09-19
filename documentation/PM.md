@@ -30,7 +30,7 @@ gitsocial pm issue comments <ref>
 
 - `-f` takes the field terms `state:`, `assignees:`, `milestone:`, `parent:`, `root:` and `due:`, a leading `-` to exclude, and quoted free text for full-text search. Any other `<scope>:<value>` term matches the label `<scope>/<value>`, so `priority:high` finds `priority/high`.
 - `due:` takes `today`, `overdue`, `week` or `<n>d`.
-- `--sort` takes `created`, `due` or `priority`, each with `:asc` or `:desc`.
+- `--sort` takes `created`, `due` or `priority`, each with `:asc` or `:desc`. `updated` sorts by the item's own timestamp.
 - A sub-issue names its `--parent`; `root` is derived. `--blocks`, `--blocked-by` and `--related` link issues.
 - An issue closes when a pull request whose `--closes` names it is merged.
 

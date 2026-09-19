@@ -73,11 +73,6 @@ func (p *PushPreview) TotalCommits() int {
 	return n
 }
 
-// IsEmpty reports whether the preview has nothing to push.
-func (p *PushPreview) IsEmpty() bool {
-	return p.Refs == 0 && p.TotalCommits() == 0 && len(p.Code) == 0 && len(p.All) == 0
-}
-
 // GetPushPreview enumerates branches and refs that would be pushed without
 // touching the remote. Mirrors Push's validation/counting logic so the
 // breakdown matches what Push would actually do. codeBranches maps workspace
@@ -86,7 +81,7 @@ func (p *PushPreview) IsEmpty() bool {
 // because this package can't depend on extensions. remote is the target to
 // count against; "" resolves via git.PushRemote.
 //
-// Note: IsEmpty can be true even when a push would still publish new/moved
+// Note: a preview can be empty even when a push would still publish new/moved
 // tags — git keeps no remote tag-tracking state, so tags are uncountable
 // offline. Callers must therefore still offer a push on an empty preview;
 // Push runs the tags push unconditionally (see PushWithProgress).

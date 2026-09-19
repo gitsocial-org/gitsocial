@@ -57,9 +57,23 @@ func init() {
 	RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_edit_branch TEXT`)
 	})
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`DELETE FROM core_commits WHERE branch LIKE 'tags/%'`)
-	})
+	RegisterMigration(dropTagAttributedCommits)
+}
+
+// dropTagAttributedCommits removes the rows tags were once attributed to, once per cache.
+func dropTagAttributedCommits(db *sql.DB) {
+	const marker = "repair:tags-branch-commits"
+	var done string
+	if err := db.QueryRow(`SELECT tip FROM core_sync_tips WHERE key = ?`, marker).Scan(&done); err == nil {
+		return
+	}
+	if _, err := db.Exec(`DELETE FROM core_commits WHERE branch LIKE 'tags/%'`); err != nil {
+		log.Warn("delete tag-attributed commits failed", "error", err)
+		return
+	}
+	if _, err := db.Exec(`INSERT OR REPLACE INTO core_sync_tips (key, tip) VALUES (?, ?)`, marker, "done"); err != nil {
+		log.Warn("record tag-attributed commit repair failed", "error", err)
+	}
 }
 
 // RegisterSchema registers an extension schema to be executed after core schema.

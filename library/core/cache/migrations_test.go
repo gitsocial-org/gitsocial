@@ -159,7 +159,7 @@ func TestOpen_runsRegisteredMigrations(t *testing.T) {
 	Reset()
 
 	// Roll the file back to a pre-migration shape: the resolved_editor_* columns
-	// gone, the tag-attributed row still present.
+	// gone, the tag-attributed row still present, the repair marker not yet written.
 	editorColumns := []string{"resolved_editor_name", "resolved_editor_email", "resolved_edit_repo_url", "resolved_edit_hash", "resolved_edit_branch"}
 	dbPath := filepath.Join(dir, "cache.db")
 	raw, err := sql.Open("sqlite", dbPath)
@@ -171,6 +171,10 @@ func TestOpen_runsRegisteredMigrations(t *testing.T) {
 			raw.Close()
 			t.Fatalf("drop column %s: %v", col, err)
 		}
+	}
+	if _, err := raw.Exec(`DELETE FROM core_sync_tips WHERE key = 'repair:tags-branch-commits'`); err != nil {
+		raw.Close()
+		t.Fatalf("clear repair marker: %v", err)
 	}
 	raw.Close()
 

@@ -109,8 +109,6 @@ Application errors use the `-32000` to `-32099` range:
 | `-32002` | `NOT_A_REPOSITORY` | Workdir is not a git repository |
 | `-32003` | `NOT_INITIALIZED` | Extension not initialized |
 | `-32004` | `INVALID_ARGUMENT` | Invalid parameter value |
-| `-32005` | `PERMISSION_DENIED` | Operation not permitted |
-| `-32006` | `NETWORK_ERROR` | Network operation failed |
 | `-32007` | `CONFLICT` | Concurrent modification conflict |
 | `-32010` | `NOT_READY` | Server not yet initialized |
 
@@ -1020,12 +1018,9 @@ Result: `true`
 
 ### 4.6. Search
 
-#### search / social.search
+#### search
 
-Cross-extension search (posts, issues, PRs, releases, feedback). `search` is the
-real name: it spans every extension, so filing it under `social.` would
-misdescribe it. `social.search` is registered as an alias for clients written
-against the name this document used to give, and dispatches to the same handler.
+Cross-extension search (posts, issues, PRs, releases, feedback).
 
 Params:
 - `query` (string): Free-text query

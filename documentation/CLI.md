@@ -256,6 +256,7 @@ gitsocial import pm --state open --limit 100 --dry-run
 - URLs: `https://github.com/org/repo`, `git@github.com:org/repo.git` or `github.com/org/repo`.
 - GitHub imports through the `gh` CLI, GitLab through its REST API. Discussions come from GitHub only. Other hosts are detected but not imported.
 - `--host` forces the host type, `--api-url` overrides the instance the URL names, `--token` overrides the platform CLI's token.
+- GitLab reads `GITLAB_TOKEN`, then `GITLAB_PRIVATE_TOKEN`, when `--token` is not given.
 - `--update` syncs changes to items already imported. `--labels auto|raw|skip` controls label mapping. `--email-map <file>` maps usernames to emails. `--skip-bots` is on by default.
 - The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` records platform ids against commit hashes; `--map-file` overrides it.
 
@@ -297,4 +298,5 @@ References follow [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections):
 | `GITSOCIAL_EDITOR` | editor for messages; falls back to `$EDITOR`, `$VISUAL`, then `vi` |
 | `GM_PAGER` | pager for output; falls back to `$PAGER` |
 | `GITSOCIAL_PPROF` | `cpu`, `mem` or `trace`: write a profile to `/tmp/gitsocial-cpu.pprof`, `/tmp/gitsocial-mem.pprof` or `/tmp/gitsocial.trace` on exit |
+| `TERM_PROGRAM` | read by the TUI; `Apple_Terminal` widens the layout margin |
 | S3 credentials, endpoints and tuning | see [S3.md](S3.md#environment-variables) |

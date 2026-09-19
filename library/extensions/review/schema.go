@@ -10,25 +10,12 @@ import (
 // init registers the review schema and its migrations.
 func init() {
 	cache.RegisterSchema("review", schema)
-	cache.RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN draft INTEGER DEFAULT 0`)
-	})
+	// Caches predating the column and the table are carried by these two migrations.
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN depends_on TEXT`)
 	})
 	cache.RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(branchObservationsSchema)
-	})
-	// The per-pull-request observation table is dropped: the next fetch rebuilds the new one.
-	cache.RegisterMigration(func(db *sql.DB) {
-		var pkCols string
-		_ = db.QueryRow(`
-            SELECT GROUP_CONCAT(name, ',') FROM pragma_table_info('review_branch_observations')
-            WHERE pk > 0 ORDER BY pk`).Scan(&pkCols)
-		if pkCols == "pr_repo_url,pr_hash,pr_branch" {
-			_, _ = db.Exec(`DROP TABLE review_branch_observations`)
-			_, _ = db.Exec(branchObservationsSchema)
-		}
 	})
 }
 
@@ -46,7 +33,10 @@ CREATE INDEX IF NOT EXISTS idx_review_branch_obs_missing
     WHERE branch_exists = 0;
 `
 
-const schema = `
+// schema is the full review shape: the item tables, the resolved view and the observations table.
+const schema = reviewTables + branchObservationsSchema
+
+const reviewTables = `
 -- Extension: Review items (pull requests and feedback)
 CREATE TABLE IF NOT EXISTS review_items (
     repo_url TEXT NOT NULL,
@@ -59,6 +49,7 @@ CREATE TABLE IF NOT EXISTS review_items (
     base_tip TEXT,
     head TEXT,
     head_tip TEXT,
+    depends_on TEXT,
     closes TEXT,
     reviewers TEXT,
     pull_request_repo_url TEXT,
