@@ -96,6 +96,42 @@ func TestRefreshOpenPRBranches_DetectsDeletion(t *testing.T) {
 	}
 }
 
+// TestObserveLivePR_branchHeadCommitBase asserts the head is still resolved when only the base is a commit ref.
+func TestObserveLivePR_branchHeadCommitBase(t *testing.T) {
+	setupTestDB(t)
+	dir := initTestRepo(t)
+	if _, err := git.CreateCommitOnBranch(dir, "live-head", "v1"); err != nil {
+		t.Fatalf("CreateCommitOnBranch: %v", err)
+	}
+	headTip, err := git.ReadRef(dir, "live-head")
+	if err != nil {
+		t.Fatalf("ReadRef live-head: %v", err)
+	}
+	if err := git.WriteRef(dir, "refs/remotes/origin/live-head", headTip); err != nil {
+		t.Fatalf("WriteRef origin/live-head: %v", err)
+	}
+	mainTip, err := git.ReadRef(dir, "main")
+	if err != nil {
+		t.Fatalf("ReadRef main: %v", err)
+	}
+
+	created := CreatePR(dir, "onto a commit", "", CreatePROptions{Base: "#commit:" + mainTip[:12], Head: "live-head"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+
+	obs := ObserveLivePR(dir, created.Data)
+	if obs == nil {
+		t.Fatalf("ObserveLivePR() = nil for a branch head on a commit base")
+	}
+	if !obs.HeadExists || obs.HeadTip != headTip[:12] {
+		t.Errorf("HeadExists = %v, HeadTip = %q; want true and %q", obs.HeadExists, obs.HeadTip, headTip[:12])
+	}
+	if obs.BaseTip != "" {
+		t.Errorf("BaseTip = %q for a commit base, want empty", obs.BaseTip)
+	}
+}
+
 func TestNotifications_HeadAdvancedFiresForAuthor(t *testing.T) {
 	setupTestDB(t)
 	dir := initTestRepo(t)

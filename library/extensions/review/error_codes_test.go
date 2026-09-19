@@ -365,6 +365,51 @@ func TestComparePRVersions_tipsOutsideWorkdir(t *testing.T) {
 	}
 }
 
+// removeTreeObject deletes rev's loose tree object, so the commit still resolves and its patch cannot be read.
+func removeTreeObject(t *testing.T, dir, rev string) {
+	t.Helper()
+	out, err := git.ExecGit(dir, []string{"rev-parse", rev + "^{tree}"})
+	if err != nil {
+		t.Fatalf("rev-parse %s^{tree}: %v", rev, err)
+	}
+	tree := strings.TrimSpace(out.Stdout)
+	if len(tree) < 3 {
+		t.Fatalf("rev-parse %s^{tree} = %q", rev, tree)
+	}
+	if err := os.Remove(filepath.Join(dir, ".git", "objects", tree[:2], tree[2:])); err != nil {
+		t.Fatalf("remove the tree object: %v", err)
+	}
+}
+
+// TestComparePRVersions_rangeDiffFailed asserts RANGE_DIFF_FAILED when a version tip is present but its tree is gone.
+func TestComparePRVersions_rangeDiffFailed(t *testing.T) {
+	setupTestDB(t)
+	dir, _, _ := initDivergedPRRepo(t)
+
+	created := CreatePR(dir, "Add feature", "", CreatePROptions{Base: "main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+	}
+	git.ExecGit(dir, []string{"checkout", "feature"})
+	commitFile(t, dir, "feature.txt", "one\ntwo\n", "feature two")
+	publish(t, dir, "feature")
+	git.ExecGit(dir, []string{"checkout", "main"})
+	if updated := UpdatePRTips(dir, created.Data.ID); !updated.Success {
+		t.Fatalf("UpdatePRTips() failed: %s", updated.Error.Message)
+	}
+	versions := GetPRVersions(created.Data.ID, reviewTestRepoURL)
+	if !versions.Success || len(versions.Data) < 2 {
+		t.Fatalf("GetPRVersions() = %+v, want at least two versions", versions)
+	}
+	latest := len(versions.Data) - 1
+	removeTreeObject(t, dir, versions.Data[latest].HeadTip)
+
+	res := ComparePRVersions(dir, t.TempDir(), created.Data.ID, 0, latest)
+	if res.Success || res.Error.Code != "RANGE_DIFF_FAILED" {
+		t.Errorf("ComparePRVersions() over a tip whose tree is gone = %+v, want RANGE_DIFF_FAILED", res)
+	}
+}
+
 // TestApplySuggestion_writeFailed asserts WRITE_ERROR when the target file is read-only.
 func TestApplySuggestion_writeFailed(t *testing.T) {
 	if os.Getuid() == 0 {

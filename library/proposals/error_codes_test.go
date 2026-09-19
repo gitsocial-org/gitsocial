@@ -9,10 +9,12 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
+	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
@@ -178,6 +180,34 @@ func TestApply_unsupportedType(t *testing.T) {
 	out := applyProposal(bob, crossRepoProposal(t, feedback.Data.ID))
 	if out.Success || out.Error.Code != "UNSUPPORTED_TYPE" {
 		t.Errorf("applyProposal() on a feedback proposal = %+v, want UNSUPPORTED_TYPE", out)
+	}
+}
+
+// TestApply_unsupportedExt asserts UNSUPPORTED_EXT when the proposal edits a social item.
+func TestApply_unsupportedExt(t *testing.T) {
+	setupCache(t)
+	bob := cloneAs(t, initBareOrigin(t), "bob", "bob@test.com")
+	alice := cloneAs(t, initBareOrigin(t), "alice", "alice@test.com")
+
+	post := social.CreatePost(bob, "Shipping today", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost: %s", post.Error.Message)
+	}
+	// social.EditPost refuses a cross-repo edit, so the proposal arrives as a commit synced in, the way a fork's edit does.
+	proposal := protocol.FormatMessage("Shipping tomorrow", protocol.Header{
+		Ext: "social", V: "0.1.0",
+		Fields: map[string]string{"type": "post", "edits": post.Data.ID},
+	}, nil)
+	if _, err := git.CreateCommitOnBranch(alice, gitmsg.GetExtBranch(alice, "social"), proposal); err != nil {
+		t.Fatalf("CreateCommitOnBranch: %v", err)
+	}
+	if _, err := fetch.SyncWorkspaceLocal(alice, []fetch.WorkspaceSyncFunc{social.SyncWorkspaceBatch}); err != nil {
+		t.Fatalf("SyncWorkspaceLocal: %v", err)
+	}
+
+	out := applyProposal(bob, crossRepoProposal(t, post.Data.ID))
+	if out.Success || out.Error.Code != "UNSUPPORTED_EXT" {
+		t.Errorf("applyProposal() on a social proposal = %+v, want UNSUPPORTED_EXT", out)
 	}
 }
 

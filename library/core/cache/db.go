@@ -318,7 +318,7 @@ CREATE TABLE IF NOT EXISTS core_sync_tips (
 `
 
 // Open initializes the SQLite database connection and creates schema tables.
-// If a previous call failed, Open will retry initialization on subsequent calls.
+// A failed init stays failed until Reset clears it; later calls return the same error.
 func Open(cacheDir string) error {
 	mu.Lock()
 	defer mu.Unlock()

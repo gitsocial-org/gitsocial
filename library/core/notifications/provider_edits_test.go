@@ -2,43 +2,47 @@
 package notifications
 
 import (
-	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// seedEditPair inserts a canonical commit and an edit commit linked via
-// core_commits_version. Returns the edit's hash for read-state tests.
+const editTestRepoURL = "https://github.com/x/y"
+const editTestBranch = "main"
+
+// seedEditPair writes a canonical commit and an edit of it.
 func seedEditPair(t *testing.T, canonicalHash, canonicalAuthor, editHash, editAuthorName, editAuthorEmail string, ts time.Time) {
 	t.Helper()
-	repoURL := "https://github.com/x/y"
-	branch := "main"
-	tsStr := ts.UTC().Format(time.RFC3339)
-	err := cache.ExecLocked(func(db *sql.DB) error {
-		// Canonical
-		if _, err := db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			repoURL, canonicalHash, branch, "Canonical Author", canonicalAuthor, "canonical msg", tsStr); err != nil {
-			return err
-		}
-		// Edit (use a slightly later timestamp so ORDER BY DESC is stable)
-		editTs := ts.Add(time.Minute).UTC().Format(time.RFC3339)
-		if _, err := db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			repoURL, editHash, branch, editAuthorName, editAuthorEmail, "edit msg", editTs); err != nil {
-			return err
-		}
-		// Version link
-		_, err := db.Exec(`INSERT INTO core_commits_version
-			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
-			VALUES (?, ?, ?, ?, ?, ?, 0)`,
-			repoURL, editHash, branch, repoURL, canonicalHash, branch)
-		return err
+	seedEdit(t, canonicalHash, canonicalAuthor, editHash, editAuthorName, editAuthorEmail, ts, false)
+}
+
+// seedEdit writes the pair through cache.InsertCommits, the path that records the version from the edit's header.
+func seedEdit(t *testing.T, canonicalHash, canonicalAuthor, editHash, editAuthorName, editAuthorEmail string, ts time.Time, retracted bool) {
+	t.Helper()
+	fields := map[string]string{"type": "post", "edits": "#commit:" + canonicalHash}
+	if retracted {
+		fields["retracted"] = "true"
+	}
+	editMessage := protocol.FormatMessage("edit msg", protocol.Header{
+		Ext: "social", V: "0.1.0", Fields: fields,
+	}, nil)
+	// The edit is a minute later, so ORDER BY timestamp DESC is stable.
+	err := cache.InsertCommits([]cache.Commit{
+		{
+			RepoURL: editTestRepoURL, Hash: canonicalHash, Branch: editTestBranch,
+			AuthorName: "Canonical Author", AuthorEmail: canonicalAuthor,
+			Message: "canonical msg", Timestamp: ts,
+		},
+		{
+			RepoURL: editTestRepoURL, Hash: editHash, Branch: editTestBranch,
+			AuthorName: editAuthorName, AuthorEmail: editAuthorEmail,
+			Message: editMessage, Timestamp: ts.Add(time.Minute),
+		},
 	})
 	if err != nil {
-		t.Fatalf("seedEditPair error = %v", err)
+		t.Fatalf("InsertCommits() error = %v", err)
 	}
 }
 
@@ -47,7 +51,7 @@ func TestEditProvider_GetNotifications(t *testing.T) {
 	workdir := setupGitRepo(t) // alice@example.com
 	now := time.Now()
 	// alice's canonical, bob edits it
-	seedEditPair(t, "can111111111", "alice@example.com", "edit11111111", "Bob", "bob@example.com", now)
+	seedEditPair(t, "ca0111111111", "alice@example.com", "ed0111111111", "Bob", "bob@example.com", now)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})
@@ -61,7 +65,7 @@ func TestEditProvider_GetNotifications(t *testing.T) {
 	if got.Type != "edit" || got.Source != "core" {
 		t.Errorf("unexpected type/source: %s/%s", got.Type, got.Source)
 	}
-	if got.Hash != "edit11111111" {
+	if got.Hash != "ed0111111111" {
 		t.Errorf("expected edit hash, got %s", got.Hash)
 	}
 	if got.Actor.Email != "bob@example.com" {
@@ -71,7 +75,7 @@ func TestEditProvider_GetNotifications(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected Item to be EditNotification, got %T", got.Item)
 	}
-	if en.CanonicalHash != "can111111111" {
+	if en.CanonicalHash != "ca0111111111" {
 		t.Errorf("expected canonical hash in item, got %s", en.CanonicalHash)
 	}
 	if en.IsRetracted {
@@ -84,7 +88,7 @@ func TestEditProvider_GetNotifications_excludesSelfEdits(t *testing.T) {
 	workdir := setupGitRepo(t) // alice@example.com
 	now := time.Now()
 	// alice edits alice's own canonical — should NOT notify alice
-	seedEditPair(t, "can222222222", "alice@example.com", "edit22222222", "Alice", "alice@example.com", now)
+	seedEditPair(t, "ca0222222222", "alice@example.com", "ed0222222222", "Alice", "alice@example.com", now)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})
@@ -101,7 +105,7 @@ func TestEditProvider_GetNotifications_excludesEditsToOthersCanonical(t *testing
 	workdir := setupGitRepo(t) // alice@example.com
 	now := time.Now()
 	// bob's canonical, carol edits — alice shouldn't see this (not her canonical)
-	seedEditPair(t, "can333333333", "bob@example.com", "edit33333333", "Carol", "carol@example.com", now)
+	seedEditPair(t, "ca0333333333", "bob@example.com", "ed0333333333", "Carol", "carol@example.com", now)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})
@@ -117,9 +121,9 @@ func TestEditProvider_GetNotifications_unreadOnly(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)
 	now := time.Now()
-	seedEditPair(t, "can444444444", "alice@example.com", "edit44444444", "Bob", "bob@example.com", now)
-	seedEditPair(t, "can555555555", "alice@example.com", "edit55555555", "Carol", "carol@example.com", now)
-	_ = MarkAsRead("https://github.com/x/y", "edit44444444", "main")
+	seedEditPair(t, "ca0444444444", "alice@example.com", "ed0444444444", "Bob", "bob@example.com", now)
+	seedEditPair(t, "ca0555555555", "alice@example.com", "ed0555555555", "Carol", "carol@example.com", now)
+	_ = MarkAsRead(editTestRepoURL, "ed0444444444", editTestBranch)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{UnreadOnly: true})
@@ -129,8 +133,8 @@ func TestEditProvider_GetNotifications_unreadOnly(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("expected 1 unread, got %d", len(items))
 	}
-	if items[0].Hash != "edit55555555" {
-		t.Errorf("expected unread hash edit55555555, got %s", items[0].Hash)
+	if items[0].Hash != "ed0555555555" {
+		t.Errorf("expected unread hash ed0555555555, got %s", items[0].Hash)
 	}
 }
 
@@ -138,8 +142,8 @@ func TestEditProvider_GetNotifications_isReadFlag(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)
 	now := time.Now()
-	seedEditPair(t, "can666666666", "alice@example.com", "edit66666666", "Bob", "bob@example.com", now)
-	_ = MarkAsRead("https://github.com/x/y", "edit66666666", "main")
+	seedEditPair(t, "ca0666666666", "alice@example.com", "ed0666666666", "Bob", "bob@example.com", now)
+	_ = MarkAsRead(editTestRepoURL, "ed0666666666", editTestBranch)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})
@@ -158,9 +162,9 @@ func TestEditProvider_GetNotifications_withLimit(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)
 	now := time.Now()
-	seedEditPair(t, "can777777777", "alice@example.com", "edit77777777", "Bob", "bob@example.com", now)
-	seedEditPair(t, "can888888888", "alice@example.com", "edit88888888", "Carol", "carol@example.com", now.Add(-time.Hour))
-	seedEditPair(t, "can999999999", "alice@example.com", "edit99999999", "Dan", "dan@example.com", now.Add(-2*time.Hour))
+	seedEditPair(t, "ca0777777777", "alice@example.com", "ed0777777777", "Bob", "bob@example.com", now)
+	seedEditPair(t, "ca0888888888", "alice@example.com", "ed0888888888", "Carol", "carol@example.com", now.Add(-time.Hour))
+	seedEditPair(t, "ca0999999999", "alice@example.com", "ed0999999999", "Dan", "dan@example.com", now.Add(-2*time.Hour))
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{Limit: 2})
@@ -176,10 +180,10 @@ func TestEditProvider_GetUnreadCount(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)
 	now := time.Now()
-	seedEditPair(t, "canAAAAAAAAA", "alice@example.com", "editAAAAAAAA", "Bob", "bob@example.com", now)
-	seedEditPair(t, "canBBBBBBBBB", "alice@example.com", "editBBBBBBBB", "Carol", "carol@example.com", now)
+	seedEditPair(t, "ca0aaaaaaaaa", "alice@example.com", "ed0aaaaaaaaa", "Bob", "bob@example.com", now)
+	seedEditPair(t, "ca0bbbbbbbbb", "alice@example.com", "ed0bbbbbbbbb", "Carol", "carol@example.com", now)
 	// One read, one unread
-	_ = MarkAsRead("https://github.com/x/y", "editAAAAAAAA", "main")
+	_ = MarkAsRead(editTestRepoURL, "ed0aaaaaaaaa", editTestBranch)
 
 	p := &editProvider{}
 	count, err := p.GetUnreadCount(workdir)
@@ -208,29 +212,7 @@ func TestEditProvider_GetNotifications_retractedEdit(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)
 	now := time.Now()
-	repoURL := "https://github.com/x/y"
-	branch := "main"
-	// Manually seed a retracted edit (seedEditPair uses is_retracted=0)
-	err := cache.ExecLocked(func(db *sql.DB) error {
-		if _, err := db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			repoURL, "canCCCCCCCCC", branch, "Alice", "alice@example.com", "canonical msg", now.UTC().Format(time.RFC3339)); err != nil {
-			return err
-		}
-		if _, err := db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			repoURL, "editCCCCCCCC", branch, "Bob", "bob@example.com", "retract msg", now.Add(time.Minute).UTC().Format(time.RFC3339)); err != nil {
-			return err
-		}
-		_, err := db.Exec(`INSERT INTO core_commits_version
-			(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)
-			VALUES (?, ?, ?, ?, ?, ?, 1)`,
-			repoURL, "editCCCCCCCC", branch, repoURL, "canCCCCCCCCC", branch)
-		return err
-	})
-	if err != nil {
-		t.Fatalf("seed error = %v", err)
-	}
+	seedEdit(t, "ca0ccccccccc", "alice@example.com", "ed0ccccccccc", "Bob", "bob@example.com", now, true)
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})

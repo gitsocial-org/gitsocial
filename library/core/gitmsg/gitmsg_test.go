@@ -3,6 +3,7 @@ package gitmsg
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,6 +128,68 @@ func TestWriteExtConfig_identicalContentSkipsCommit(t *testing.T) {
 	}
 	if third == first {
 		t.Error("changed content did not move the config ref")
+	}
+	parent, err := git.ExecGit(dir, []string{"rev-parse", "--short=12", third + "^"})
+	if err != nil {
+		t.Fatalf("rev-parse %s^ error = %v", third, err)
+	}
+	if got := strings.TrimSpace(parent.Stdout); got != first {
+		t.Errorf("the changed config commit parents on %s, want the config commit it replaces, %s", got, first)
+	}
+
+	// The same content again, now over a config commit that has a parent.
+	if err := WriteExtConfig(dir, "social", map[string]interface{}{"branch": "gitmsg/other"}); err != nil {
+		t.Fatalf("WriteExtConfig() second rewrite error = %v", err)
+	}
+	fourth, err := git.ReadRef(dir, "refs/gitmsg/social/config")
+	if err != nil {
+		t.Fatalf("ReadRef() error = %v", err)
+	}
+	if fourth != third {
+		t.Errorf("identical rewrite over a parented config moved the ref: %s -> %s", third, fourth)
+	}
+}
+
+// TestReadExtConfig_secondReadHitsTheMemo asserts the second read is served by the memo, not by the ref behind it.
+func TestReadExtConfig_secondReadHitsTheMemo(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+
+	if err := WriteExtConfig(dir, "social", map[string]interface{}{"branch": "gitmsg/first"}); err != nil {
+		t.Fatalf("WriteExtConfig() error = %v", err)
+	}
+	first, err := ReadExtConfig(dir, "social")
+	if err != nil {
+		t.Fatalf("ReadExtConfig() error = %v", err)
+	}
+	if first["branch"] != "gitmsg/first" {
+		t.Fatalf("branch = %v, want gitmsg/first", first["branch"])
+	}
+
+	// Move the ref without invalidating, so only an uncached read could see it.
+	hash, err := git.CreateCommitTree(dir, `{"branch": "gitmsg/second"}`, "")
+	if err != nil {
+		t.Fatalf("CreateCommitTree() error = %v", err)
+	}
+	if err := git.WriteRef(dir, "refs/gitmsg/social/config", hash); err != nil {
+		t.Fatalf("WriteRef() error = %v", err)
+	}
+
+	second, err := ReadExtConfig(dir, "social")
+	if err != nil {
+		t.Fatalf("ReadExtConfig() error = %v", err)
+	}
+	if second["branch"] != "gitmsg/first" {
+		t.Errorf("branch = %v on the second read, want gitmsg/first from the memo", second["branch"])
+	}
+
+	InvalidateExtConfig(dir, "social")
+	third, err := ReadExtConfig(dir, "social")
+	if err != nil {
+		t.Fatalf("ReadExtConfig() error = %v", err)
+	}
+	if third["branch"] != "gitmsg/second" {
+		t.Errorf("branch = %v after InvalidateExtConfig, want gitmsg/second", third["branch"])
 	}
 }
 

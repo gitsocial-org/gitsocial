@@ -46,6 +46,36 @@ func TestOpen_idempotent(t *testing.T) {
 	}
 }
 
+// TestOpen_failedInitStaysFailedUntilReset asserts Open never reports success without a database, and that Reset clears the failure.
+func TestOpen_failedInitStaysFailedUntilReset(t *testing.T) {
+	Reset()
+	defer Reset()
+
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("not a directory"), 0600); err != nil {
+		t.Fatalf("write the blocking file: %v", err)
+	}
+	if err := Open(filepath.Join(blocker, "cache")); err == nil {
+		t.Fatal("Open() under a plain file = nil, want an error")
+	}
+
+	good := t.TempDir()
+	if err := Open(good); err == nil {
+		t.Error("Open() after a failed init = nil, want the recorded failure")
+	}
+	if DB() != nil {
+		t.Error("DB() is not nil although no Open has succeeded")
+	}
+
+	Reset()
+	if err := Open(good); err != nil {
+		t.Fatalf("Open() after Reset error = %v", err)
+	}
+	if DB() == nil {
+		t.Error("DB() is nil after the reopen succeeded")
+	}
+}
+
 func TestReset(t *testing.T) {
 	Reset()
 	dir := t.TempDir()

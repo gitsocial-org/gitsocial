@@ -38,6 +38,11 @@ func TestExtractTrailers(t *testing.T) {
 			want:    []Trailer{{Key: "Refs", Value: "#commit:abc123456789"}},
 		},
 		{
+			name:    "no subject: the blank line is the first line",
+			message: "\nCloses: #commit:abc123456789",
+			want:    []Trailer{{Key: "Closes", Value: "#commit:abc123456789"}},
+		},
+		{
 			name:    "all recognized keys",
 			message: "Subject\n\nFixes: #commit:aaa111222333\nCloses: #commit:bbb111222333\nResolves: #commit:ccc111222333\nImplements: #commit:ddd111222333\nRefs: #commit:eee111222333",
 			want: []Trailer{

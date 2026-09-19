@@ -1097,26 +1097,20 @@ func TestMemoNotificationProvider_commentOnMyMemo(t *testing.T) {
 		t.Fatalf("update memo author: %v", err)
 	}
 
-	// Synthesize a social comment on the memo from someone else.
-	commentHash := "c0ffee0000c0ffee0000c0ffee0000c0ffee0001"
-	commentMsg := "Looks good\n\n--- GitMsg ---\nExt: social\nV: 1.0.0\ntype: comment\nORIGINAL_REPO_URL: " + memoRepoURL + "\nORIGINAL_HASH: " + memoHash + "\nORIGINAL_BRANCH: " + memoBranch + "\n"
-	workspaceURL := gitmsg.ResolveRepoURL(dir)
-	if err := cache.InsertCommits([]cache.Commit{{
-		Hash: commentHash, RepoURL: workspaceURL, Branch: "gitmsg/social",
-		AuthorName: "Other Person", AuthorEmail: "other@example.com",
-		Message: commentMsg, Timestamp: time.Now(),
-	}}); err != nil {
-		t.Fatalf("InsertCommits comment: %v", err)
+	// Comment on the memo as someone else, through the writer memo itself calls.
+	if _, err := git.ExecGit(dir, []string{"config", "user.email", "other@example.com"}); err != nil {
+		t.Fatalf("set the commenter email: %v", err)
 	}
-	if err := cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`INSERT INTO social_items
-			(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			workspaceURL, commentHash, "gitmsg/social", "comment",
-			memoRepoURL, memoHash, memoBranch)
-		return err
-	}); err != nil {
-		t.Fatalf("insert social_items: %v", err)
+	if _, err := git.ExecGit(dir, []string{"config", "user.name", "Other Person"}); err != nil {
+		t.Fatalf("set the commenter name: %v", err)
+	}
+	comment := social.CreateComment(dir, created.Data.ID, "Looks good", nil)
+	if !comment.Success {
+		t.Fatalf("CreateComment: %s", comment.Error.Message)
+	}
+	commentHash := protocol.ParseRef(comment.Data.ID).Value
+	if _, err := git.ExecGit(dir, []string{"config", "user.email", "me@example.com"}); err != nil {
+		t.Fatalf("restore user.email: %v", err)
 	}
 
 	provider := &memoNotificationProvider{}

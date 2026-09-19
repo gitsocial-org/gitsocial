@@ -98,11 +98,9 @@ func TestGetForkPRNotifications_unreadOnly(t *testing.T) {
 		State: cache.ToNullString("open"), Base: cache.ToNullString("#branch:main"),
 	})
 
-	cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)`,
-			forkURL, hash, reviewTestBranch, "2025-10-22T00:00:00Z")
-		return err
-	})
+	if err := notifications.MarkAsRead(forkURL, hash, reviewTestBranch); err != nil {
+		t.Fatalf("MarkAsRead() error = %v", err)
+	}
 
 	notifs, err := getForkPRNotifications(wsURL, "me@test.com", []string{forkURL}, true)
 	if err != nil {
@@ -604,11 +602,9 @@ func TestGetFeedbackNotifications_unreadOnly(t *testing.T) {
 		PullRequestRepoURL: cache.ToNullString(wsURL), PullRequestHash: cache.ToNullString(prHash), PullRequestBranch: cache.ToNullString(reviewTestBranch),
 	})
 
-	cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)`,
-			wsURL, fbHash, reviewTestBranch, "2025-10-23T00:00:00Z")
-		return err
-	})
+	if err := notifications.MarkAsRead(wsURL, fbHash, reviewTestBranch); err != nil {
+		t.Fatalf("MarkAsRead() error = %v", err)
+	}
 
 	notifs, err := getFeedbackNotifications(wsURL, "me@test.com", true)
 	if err != nil {
