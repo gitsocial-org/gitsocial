@@ -120,6 +120,15 @@ func TestToNullString(t *testing.T) {
 	}
 }
 
+func TestFromNullString(t *testing.T) {
+	if got := FromNullString(sql.NullString{String: "hello", Valid: true}); got != "hello" {
+		t.Errorf("FromNullString(valid) = %q", got)
+	}
+	if got := FromNullString(sql.NullString{Valid: false}); got != "" {
+		t.Errorf("FromNullString(invalid) = %q", got)
+	}
+}
+
 func TestToNullInt64(t *testing.T) {
 	tests := []struct {
 		input int

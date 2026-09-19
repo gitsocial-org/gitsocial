@@ -14,7 +14,7 @@ import (
 )
 
 func TestApplySiteOverride(t *testing.T) {
-	base := siteCustomization{Title: "Demo", URL: "https://primary.example/", Publish: "true", Pages: "true"}
+	base := SiteCustomization{Title: "Demo", URL: "https://primary.example/", Publish: "true", Pages: "true"}
 
 	t.Run("empty override is a passthrough", func(t *testing.T) {
 		got, ok := applySiteOverride(base, true, objstore.SiteOverride{})
@@ -55,7 +55,7 @@ func TestApplySiteOverride(t *testing.T) {
 	})
 
 	t.Run("override makes an empty base publishable", func(t *testing.T) {
-		got, ok := applySiteOverride(siteCustomization{}, false, objstore.SiteOverride{Publish: "true", URL: "https://only.example"})
+		got, ok := applySiteOverride(SiteCustomization{}, false, objstore.SiteOverride{Publish: "true", URL: "https://only.example"})
 		if !ok || got.Publish != "true" || got.URL != "https://only.example/" {
 			t.Fatalf("empty-base override = %+v ok=%v", got, ok)
 		}
@@ -91,7 +91,7 @@ func TestWriteSiteCustomization_overrideStamped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read artifact: %v", err)
 	}
-	var got siteCustomization
+	var got SiteCustomization
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("parse artifact: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestSitePush_URLOverrideStamped(t *testing.T) {
 	if f.ID != "https://r2.example/" {
 		t.Errorf("feed id = %q, want the override https://r2.example/", f.ID)
 	}
-	var sc siteCustomization
+	var sc SiteCustomization
 	if err := json.Unmarshal([]byte(getKey(t, client, siteCustomizationKey)), &sc); err != nil {
 		t.Fatalf("site-config: %v", err)
 	}

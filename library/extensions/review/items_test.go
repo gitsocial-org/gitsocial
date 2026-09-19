@@ -196,15 +196,6 @@ func TestParseCSV(t *testing.T) {
 	}
 }
 
-func TestNullStr(t *testing.T) {
-	if got := nullStr(sql.NullString{String: "hello", Valid: true}); got != "hello" {
-		t.Errorf("nullStr(valid) = %q", got)
-	}
-	if got := nullStr(sql.NullString{Valid: false}); got != "" {
-		t.Errorf("nullStr(invalid) = %q", got)
-	}
-}
-
 func TestReviewItemToPullRequest_withOriginalAuthor(t *testing.T) {
 	item := ReviewItem{
 		RepoURL:     "https://github.com/user/repo",

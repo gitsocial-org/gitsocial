@@ -16,6 +16,12 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
 )
 
+// ForkDataRefPrefix is where a registered fork's gitmsg branches and decline markers land, under <prefix><urlHash>/.
+const ForkDataRefPrefix = "refs/forks/"
+
+// ForkCodeRefPrefix is where the code branches a cross-fork diff borrows land, under <prefix><urlHash>/<branch>.
+const ForkCodeRefPrefix = "refs/fork/"
+
 // FetchForks fetches all gitmsg branches from registered forks concurrently,
 // processing commits through all registered extension processors.
 func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
@@ -92,24 +98,24 @@ func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (
 	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
 		return 0, fmt.Errorf("fork remote: %w", err)
 	}
-	refspec := fmt.Sprintf("+refs/heads/gitmsg/*:refs/forks/%s/gitmsg/*", hash)
+	refspec := "+refs/heads/gitmsg/*:" + ForkDataRefPrefix + hash + "/gitmsg/*"
 	// Also mirror the fork's published decline markers so we can learn which of our
 	// cross-repo proposals the fork (as owner) has declined. Acceptance needs no
 	// marker: it rides the fork's mirror edit on the gitmsg/* branches above.
-	declineRefspec := fmt.Sprintf("+%s*:refs/forks/%s/declines/*", gitmsg.DeclinesRefPrefix, hash)
+	declineRefspec := "+" + gitmsg.DeclinesRefPrefix + "*:" + ForkDataRefPrefix + hash + "/declines/*"
 	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, declineRefspec, "--no-tags"}); err != nil {
 		return 0, fmt.Errorf("fetch fork: %w", err)
 	}
 	syncForkDeclines(forkDir, hash)
 	// List all fetched gitmsg branches for this fork
-	prefix := fmt.Sprintf("refs/forks/%s/gitmsg/", hash)
+	prefix := ForkDataRefPrefix + hash + "/gitmsg/"
 	refList, err := git.ExecGit(forkDir, []string{"for-each-ref", "--format=%(refname)", prefix})
 	if err != nil {
 		return 0, fmt.Errorf("list fork refs: %w", err)
 	}
 	totalCount := 0
 	for _, ref := range strings.Fields(refList.Stdout) {
-		branch := ref[len(fmt.Sprintf("refs/forks/%s/", hash)):]
+		branch := ref[len(ForkDataRefPrefix+hash+"/"):]
 		gitCommits, err := git.GetCommits(forkDir, &git.GetCommitsOptions{Branch: ref})
 		if err != nil {
 			// A ref whose objects are gone means the shared repo needs rebuilding,
@@ -153,7 +159,7 @@ func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (
 func syncForkDeclines(forkDir, hash string) {
 	out, err := git.ExecGit(forkDir, []string{
 		"for-each-ref", "--format=%(contents:subject)",
-		fmt.Sprintf("refs/forks/%s/declines/", hash),
+		ForkDataRefPrefix + hash + "/declines/",
 	})
 	if err != nil || out.Stdout == "" {
 		return

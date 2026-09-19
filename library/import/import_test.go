@@ -107,26 +107,6 @@ func TestToPMLabels_Empty(t *testing.T) {
 	}
 }
 
-func TestTruncate(t *testing.T) {
-	cases := []struct {
-		input string
-		n     int
-		want  string
-	}{
-		{"short", 10, "short"},
-		{"exactly10!", 10, "exactly10!"},
-		{"hello world this is long", 10, "hello w..."},
-		{"abc", 3, "abc"},
-		{"abcd", 3, "..."},
-	}
-	for _, c := range cases {
-		got := truncate(c.input, c.n)
-		if got != c.want {
-			t.Errorf("truncate(%q, %d) = %q, want %q", c.input, c.n, got, c.want)
-		}
-	}
-}
-
 func TestStatsTotal(t *testing.T) {
 	s := Stats{Milestones: 2, Issues: 5, Releases: 1, Forks: 3, PRs: 4, Posts: 10, Comments: 20}
 	if got := s.Total(); got != 45 {

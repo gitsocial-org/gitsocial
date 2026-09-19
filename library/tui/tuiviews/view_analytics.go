@@ -11,6 +11,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -195,10 +196,10 @@ func (v *AnalyticsView) Render(state *tuicore.State) string {
 				barWidth = 10
 			}
 			for _, c := range d.Contributors {
-				nameStr := fmt.Sprintf("%-16s", truncate(c.Name, 16))
+				nameStr := fmt.Sprintf("%-16s", text.Fit(c.Name, 16))
 				emailStr := ""
 				if state.ShowEmailOnCards {
-					emailStr = fmt.Sprintf("%-20s", truncate(c.Email, 20))
+					emailStr = fmt.Sprintf("%-20s", text.Fit(c.Email, 20))
 				}
 				barStr := bar(c.Count, maxCount, barWidth)
 				line := fmt.Sprintf("  %s  %s%s  %4d",
@@ -360,7 +361,7 @@ func (v *AnalyticsView) renderPM(b *strings.Builder, pa *cache.PMAnalytics, rs t
 			if ms.Total > 0 {
 				pct = (ms.Closed * 100) / ms.Total
 			}
-			name := truncate(ms.Name, 20)
+			name := text.Fit(ms.Name, 20)
 			line := fmt.Sprintf("  %-20s  %s  %d%%", name, progressBar(pct, 30), pct)
 			if ms.Due != "" {
 				if due, err := time.Parse("2006-01-02", ms.Due); err == nil {
@@ -440,7 +441,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, 
 		maxCount := na.Repos[0].Count
 		for _, repo := range na.Repos {
 			name := shortRepoName(repo.URL)
-			nameStr := fmt.Sprintf("%-20s", truncate(name, 20))
+			nameStr := fmt.Sprintf("%-20s", text.Fit(name, 20))
 			barStr := bar(repo.Count, maxCount, barWidth)
 			trendStr := trend(repo.Count, repo.PrevCount)
 			lastStr := ""
@@ -464,7 +465,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, 
 		maxPosts := na.Social.RepoActivity[0].Posts
 		for _, repo := range na.Social.RepoActivity {
 			name := shortRepoName(repo.URL)
-			nameStr := fmt.Sprintf("%-20s", truncate(name, 20))
+			nameStr := fmt.Sprintf("%-20s", text.Fit(name, 20))
 			barStr := bar(repo.Posts, maxPosts, barWidth)
 			trendStr := trend(repo.Posts, repo.PrevPosts)
 			fmt.Fprintf(b, "  %s  %s  %4d  %s",
@@ -488,7 +489,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, 
 		}
 		for _, repo := range na.PM.RepoActivity {
 			name := shortRepoName(repo.URL)
-			nameStr := fmt.Sprintf("%-20s", truncate(name, 20))
+			nameStr := fmt.Sprintf("%-20s", text.Fit(name, 20))
 			ratioStr := ratioBar(repo.Open, repo.Closed, issueBarWidth)
 			fmt.Fprintf(b, "  %s  %s  %d open / %d closed",
 				rs.Label.Render(nameStr), ratioStr, repo.Open, repo.Closed)
@@ -507,7 +508,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, 
 		for _, rel := range na.Release.Recent {
 			name := shortRepoName(rel.URL)
 			fmt.Fprintf(b, "  %s  %s  %s",
-				rs.Label.Render(truncate(name, 20)),
+				rs.Label.Render(text.Fit(name, 20)),
 				rs.Value.Render(rel.Version),
 				tuicore.Dim.Render(tuicore.FormatTime(rel.Timestamp)))
 			b.WriteString("\n")
@@ -530,7 +531,7 @@ func (v *AnalyticsView) renderNetwork(b *strings.Builder, rs tuicore.RowStyles, 
 		}
 		for _, repo := range na.Review.RepoActivity {
 			name := shortRepoName(repo.URL)
-			nameStr := fmt.Sprintf("%-20s", truncate(name, 20))
+			nameStr := fmt.Sprintf("%-20s", text.Fit(name, 20))
 			ratioStr := ratioBar(repo.Open, repo.Merged, issueBarWidth)
 			fmt.Fprintf(b, "  %s  %s  %d open / %d merged",
 				rs.Label.Render(nameStr), ratioStr, repo.Open, repo.Merged)
@@ -699,17 +700,6 @@ func shortRepoName(url string) string {
 	}
 	name = strings.TrimSuffix(name, ".git")
 	return name
-}
-
-// truncate truncates a string to max length with ellipsis.
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	if max <= 3 {
-		return s[:max]
-	}
-	return s[:max-3] + "..."
 }
 
 // sum returns the sum of an int slice.

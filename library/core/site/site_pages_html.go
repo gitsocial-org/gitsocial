@@ -102,7 +102,7 @@ const sitePagesBootScript = `<script>(function(d,w){var e=d.documentElement;` +
 	`setTimeout(u,10000);w.addEventListener("load",u)})(document,window)</script>`
 
 // sitePagesAccentCSS renders the per-push accent override stamped after the inlined core; readSiteCustomization has already reduced cfg to hex colors.
-func sitePagesAccentCSS(cfg siteCustomization) template.CSS {
+func sitePagesAccentCSS(cfg SiteCustomization) template.CSS {
 	light, dark := "", ""
 	if cfg.Accent != "" {
 		light, dark = cfg.Accent, cfg.Accent

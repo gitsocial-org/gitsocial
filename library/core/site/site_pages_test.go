@@ -1400,7 +1400,7 @@ func TestSitePageIcon(t *testing.T) {
 // html/template does not rewrite the data: URI to its failsafe (it rewrites a
 // plain string in a URL attribute, which is why the field is typed).
 func TestSitePageIconRendered(t *testing.T) {
-	site := sitePageSiteFor(siteCustomization{Title: "Demo", Favicon: "data:image/png;base64,iVBORw0KGgo="}, "https://example.com/")
+	site := sitePageSiteFor(SiteCustomization{Title: "Demo", Favicon: "data:image/png;base64,iVBORw0KGgo="}, "https://example.com/")
 	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: site.Icon, Base: "../"}})
 	if err != nil {
 		t.Fatalf("render: %v", err)

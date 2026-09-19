@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -32,7 +33,7 @@ func assertContains(t *testing.T, output, substr string) {
 	t.Helper()
 	stripped := stripANSI(output)
 	if !strings.Contains(stripped, substr) {
-		t.Errorf("expected output to contain %q, got:\n%s", substr, truncate(stripped, 500))
+		t.Errorf("expected output to contain %q, got:\n%s", substr, text.Truncate(stripped, 500))
 	}
 }
 
@@ -104,14 +105,6 @@ func assertMaxWidth(t *testing.T, output string, maxCols int) {
 func assertFitsTerminal(t *testing.T, h *Harness) {
 	t.Helper()
 	assertMaxWidth(t, h.Rendered(), h.width)
-}
-
-// truncate shortens a string to max characters for readable error messages.
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
 }
 
 // renderedAfterLoad samples the view, and if anything wanted is missing gives

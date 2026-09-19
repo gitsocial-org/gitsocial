@@ -171,7 +171,7 @@ func putSitePages(client *objstore.Client, uploads []sitePageUpload, progress ob
 }
 
 // sitePagesEffective resolves the page layer's enablement from the pushed site config and returns the normalized base URL.
-func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
+func sitePagesEffective(cfg SiteCustomization, ok bool) (string, bool) {
 	if !ok || cfg.Publish != "true" || cfg.Pages != "true" {
 		return "", false
 	}
@@ -179,7 +179,7 @@ func sitePagesEffective(cfg siteCustomization, ok bool) (string, bool) {
 }
 
 // sitePageSiteFor assembles the site identity every page stamps, resolving a relative site.image against the base URL.
-func sitePageSiteFor(cfg siteCustomization, base string) sitePageSite {
+func sitePageSiteFor(cfg SiteCustomization, base string) sitePageSite {
 	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Image != "" && !strings.Contains(site.Image, "://") {
 		site.Image = base + site.Image

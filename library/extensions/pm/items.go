@@ -104,19 +104,11 @@ func InsertPMItem(item PMItem) error {
 			return err
 		}
 		if err := cache.RebuildCSVLinkingTable(tx, "pm_assignees", "email",
-			item.RepoURL, item.Hash, item.Branch, nullStrPM(item.Assignees)); err != nil {
+			item.RepoURL, item.Hash, item.Branch, cache.FromNullString(item.Assignees)); err != nil {
 			return err
 		}
 		return tx.Commit()
 	})
-}
-
-// nullStrPM unwraps a sql.NullString to its underlying value (empty when invalid).
-func nullStrPM(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
 }
 
 // InsertPMItems batch-inserts multiple PM items in a single transaction.
@@ -172,7 +164,7 @@ func InsertPMItems(items []PMItem) error {
 				return err
 			}
 			if err := cache.RebuildCSVLinkingTable(tx, "pm_assignees", "email",
-				item.RepoURL, item.Hash, item.Branch, nullStrPM(item.Assignees)); err != nil {
+				item.RepoURL, item.Hash, item.Branch, cache.FromNullString(item.Assignees)); err != nil {
 				return err
 			}
 		}
@@ -305,12 +297,12 @@ func GetPMItems(q PMQuery) ([]PMItem, error) {
 
 		for _, label := range q.Labels {
 			where = append(where, `v.labels LIKE ? ESCAPE '\'`)
-			args = append(args, "%"+escapeLike(label)+"%")
+			args = append(args, "%"+cache.EscapeLike(label)+"%")
 		}
 
 		if q.Assignee != "" {
 			where = append(where, `v.assignees LIKE ? ESCAPE '\'`)
-			args = append(args, "%"+escapeLike(q.Assignee)+"%")
+			args = append(args, "%"+cache.EscapeLike(q.Assignee)+"%")
 		}
 
 		if q.Since != nil {

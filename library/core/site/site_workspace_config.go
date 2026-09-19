@@ -10,34 +10,15 @@
 package site
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
 // coreConfigSiteKey is the sub-object under the core config that holds the site
 // customization.
 const coreConfigSiteKey = "site"
-
-// SiteCustomization is the workspace-editable site customization: a title, a
-// light accent and optional dark accent (both #rgb/#rrggbb hex), an optional
-// favicon data URI, an optional social-card image (og:image), the site's
-// canonical base URL, a description, and the two publish guards
-// ("true"/"false"; both default off). Empty fields are omitted on write (and
-// drop the artifact when all are empty), mirroring the push-time validation.
-type SiteCustomization struct {
-	Title       string `json:"title,omitempty"`
-	Accent      string `json:"accent,omitempty"`
-	AccentDark  string `json:"accentDark,omitempty"`
-	Favicon     string `json:"favicon,omitempty"`
-	Image       string `json:"image,omitempty"`
-	URL         string `json:"url,omitempty"`
-	Description string `json:"description,omitempty"`
-	Publish     string `json:"publish,omitempty"`
-	Pages       string `json:"pages,omitempty"`
-	// Comma-separated path globs the file-page layer publishes beyond, and
-	// withholds from, its document rule.
-	FilesInclude string `json:"filesInclude,omitempty"`
-	FilesExclude string `json:"filesExclude,omitempty"`
-}
 
 // ReadWorkspaceSiteCustomization returns the `site` sub-object of the workspace's
 // core config, keeping only fields that pass validation. Missing config or a
@@ -49,7 +30,7 @@ func ReadWorkspaceSiteCustomization(workdir string) (SiteCustomization, error) {
 	}
 	site, _ := config[coreConfigSiteKey].(map[string]interface{})
 	valid, _ := validateSiteCustomization(site)
-	return SiteCustomization(valid), nil
+	return valid, nil
 }
 
 // WriteWorkspaceSiteCustomization stores the site customization into the `site`
@@ -64,39 +45,13 @@ func WriteWorkspaceSiteCustomization(workdir string, c SiteCustomization) error 
 	if config == nil {
 		config = map[string]interface{}{}
 	}
-	site := map[string]interface{}{}
-	if c.Title != "" {
-		site["title"] = c.Title
+	data, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal site customization: %w", err)
 	}
-	if c.Accent != "" {
-		site["accent"] = c.Accent
-	}
-	if c.AccentDark != "" {
-		site["accentDark"] = c.AccentDark
-	}
-	if c.Favicon != "" {
-		site["favicon"] = c.Favicon
-	}
-	if c.Image != "" {
-		site["image"] = c.Image
-	}
-	if c.URL != "" {
-		site["url"] = c.URL
-	}
-	if c.Description != "" {
-		site["description"] = c.Description
-	}
-	if c.Publish != "" {
-		site["publish"] = c.Publish
-	}
-	if c.Pages != "" {
-		site["pages"] = c.Pages
-	}
-	if c.FilesInclude != "" {
-		site["filesInclude"] = c.FilesInclude
-	}
-	if c.FilesExclude != "" {
-		site["filesExclude"] = c.FilesExclude
+	var site map[string]interface{}
+	if err := json.Unmarshal(data, &site); err != nil {
+		return fmt.Errorf("decode site customization: %w", err)
 	}
 	if len(site) == 0 {
 		delete(config, coreConfigSiteKey)

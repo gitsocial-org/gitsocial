@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -200,8 +201,8 @@ func diffLines(want, got []string) string {
 		}
 		if w != g {
 			fmt.Fprintf(&b, "  line %d:\n", i+1)
-			b.WriteString("    -" + truncate(w, 100) + "\n")
-			b.WriteString("    +" + truncate(g, 100) + "\n")
+			b.WriteString("    -" + text.Truncate(w, 100) + "\n")
+			b.WriteString("    +" + text.Truncate(g, 100) + "\n")
 			shown++
 		}
 	}

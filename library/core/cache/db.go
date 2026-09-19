@@ -520,6 +520,14 @@ func ToNullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
+// FromNullString returns a nullable string's value, or empty when it is NULL.
+func FromNullString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
 // ToNullInt64 converts an int to sql.NullInt64 (zero → NULL).
 func ToNullInt64(n int) sql.NullInt64 {
 	if n == 0 {

@@ -247,7 +247,7 @@ func Push(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.
 	}
 	// The per-remote override wins over the workspace value, so one remote can carry data with no site.
 	cfg, cfgErr := ReadWorkspaceSiteCustomization(workdir)
-	eff, effOK := applySiteOverride(siteCustomization(cfg), cfg != SiteCustomization{}, ov)
+	eff, effOK := applySiteOverride(cfg, cfg != SiteCustomization{}, ov)
 	if cfgErr != nil || !effOK || eff.Publish != "true" {
 		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
 			progress.Call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)

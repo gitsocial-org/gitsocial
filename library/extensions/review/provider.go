@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 type reviewNotificationProvider struct{}
@@ -231,7 +232,7 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 				return nil, err
 			}
 			notifType := "feedback"
-			reviewState := nullStr(item.ReviewStateField)
+			reviewState := cache.FromNullString(item.ReviewStateField)
 			switch ReviewState(reviewState) {
 			case ReviewStateApproved:
 				notifType = "approved"
@@ -246,9 +247,9 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 				Hash:        item.Hash,
 				Branch:      item.Branch,
 				Content:     subject,
-				PRRepoURL:   nullStr(item.PullRequestRepoURL),
-				PRHash:      nullStr(item.PullRequestHash),
-				PRBranch:    nullStr(item.PullRequestBranch),
+				PRRepoURL:   cache.FromNullString(item.PullRequestRepoURL),
+				PRHash:      cache.FromNullString(item.PullRequestHash),
+				PRBranch:    cache.FromNullString(item.PullRequestBranch),
 				ActorName:   item.AuthorName,
 				ActorEmail:  item.AuthorEmail,
 				Timestamp:   item.Timestamp,
@@ -307,7 +308,7 @@ func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notif
 			  AND v.reviewers LIKE '%' || ? || '%' ESCAPE '\'
 			  AND v.author_email != ?
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
-		args := []interface{}{escapeLike(userEmail), userEmail}
+		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
 		}
@@ -323,7 +324,7 @@ func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notif
 			if err != nil {
 				return nil, err
 			}
-			if !containsEmail(nullStr(item.Reviewers), userEmail) {
+			if !text.InCSV(cache.FromNullString(item.Reviewers), userEmail) {
 				continue
 			}
 			subject, _ := protocol.SplitSubjectBody(item.Content)
@@ -583,11 +584,6 @@ func countUnreadDraftReady(workdir, workspaceURL, userEmail string, forkURLs []s
 	return len(notifs), nil
 }
 
-// containsEmail reports whether email is an exact entry in a comma-separated list.
-func containsEmail(list, email string) bool {
-	return hasEmail(strings.Split(list, ","), email)
-}
-
 // hasEmail reports whether email is an exact entry, ignoring surrounding space.
 func hasEmail(addresses []string, email string) bool {
 	for _, a := range addresses {
@@ -596,14 +592,6 @@ func hasEmail(addresses []string, email string) bool {
 		}
 	}
 	return false
-}
-
-// escapeLike escapes LIKE special characters.
-func escapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "%", `\%`)
-	s = strings.ReplaceAll(s, "_", `\_`)
-	return s
 }
 
 // scanResolvedRowWithRead scans a notificationSelectFromView row and its read marker.

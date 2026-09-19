@@ -175,20 +175,20 @@ func TestSitePagesHeadWiring(t *testing.T) {
 // set — tints the dark theme separately.
 func TestSitePagesAccentCSS(t *testing.T) {
 	cases := []struct {
-		cfg  siteCustomization
+		cfg  SiteCustomization
 		want string
 	}{
-		{siteCustomization{}, ""},
-		{siteCustomization{Accent: "#0a7"}, ":root{--pl-link:#0a7;--pd-link:#0a7}"},
-		{siteCustomization{Accent: "#0a7", AccentDark: "#00dddd"}, ":root{--pl-link:#0a7;--pd-link:#00dddd}"},
-		{siteCustomization{AccentDark: "#00dddd"}, ":root{--pd-link:#00dddd}"},
+		{SiteCustomization{}, ""},
+		{SiteCustomization{Accent: "#0a7"}, ":root{--pl-link:#0a7;--pd-link:#0a7}"},
+		{SiteCustomization{Accent: "#0a7", AccentDark: "#00dddd"}, ":root{--pl-link:#0a7;--pd-link:#00dddd}"},
+		{SiteCustomization{AccentDark: "#00dddd"}, ":root{--pd-link:#00dddd}"},
 	}
 	for _, c := range cases {
 		if got := string(sitePagesAccentCSS(c.cfg)); got != c.want {
 			t.Errorf("accent %q/%q: got %q, want %q", c.cfg.Accent, c.cfg.AccentDark, got, c.want)
 		}
 	}
-	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: sitePagesDefaultIcon, Base: "../", AccentCSS: sitePagesAccentCSS(siteCustomization{Accent: "#0a7"})}})
+	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: sitePagesDefaultIcon, Base: "../", AccentCSS: sitePagesAccentCSS(SiteCustomization{Accent: "#0a7"})}})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}

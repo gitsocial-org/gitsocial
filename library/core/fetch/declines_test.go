@@ -3,7 +3,6 @@
 package fetch
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -31,7 +30,7 @@ func TestSyncForkDeclines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit-tree: %v", err)
 	}
-	if err := git.WriteRef(dir, fmt.Sprintf("refs/forks/%s/declines/x", hash), commitHash); err != nil {
+	if err := git.WriteRef(dir, ForkDataRefPrefix+hash+"/declines/x", commitHash); err != nil {
 		t.Fatalf("write ref: %v", err)
 	}
 

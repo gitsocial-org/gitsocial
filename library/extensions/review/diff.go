@@ -86,18 +86,18 @@ func ResolveDiffContext(workdir, cacheDir, baseRef, headRef string) DiffContext 
 		if baseLocal {
 			ctx.Base = "refs/workspace/" + baseBranch
 			if !headLocal {
-				upstreamRef := "refs/fork/" + fetch.URLHash(wsURL) + "/" + baseBranch
+				upstreamRef := fetch.ForkCodeRefPrefix + fetch.URLHash(wsURL) + "/" + baseBranch
 				if _, err := git.ReadRef(dir, upstreamRef); err == nil {
 					ctx.Base = upstreamRef
 				}
 			}
 		} else {
-			ctx.Base = "refs/fork/" + fetch.URLHash(baseParsed.Repository) + "/" + baseBranch
+			ctx.Base = fetch.ForkCodeRefPrefix + fetch.URLHash(baseParsed.Repository) + "/" + baseBranch
 		}
 		if headLocal {
 			ctx.Head = "refs/workspace/" + headBranch
 		} else {
-			ctx.Head = "refs/fork/" + fetch.URLHash(headParsed.Repository) + "/" + headBranch
+			ctx.Head = fetch.ForkCodeRefPrefix + fetch.URLHash(headParsed.Repository) + "/" + headBranch
 		}
 		var missing []string
 		if ok, objectMissing := refResolves(dir, ctx.Base); !ok {
@@ -185,7 +185,7 @@ func fetchFromUpstream(forkDir, repoURL, address, branch string) error {
 	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
 		return fmt.Errorf("fork remote: %w", err)
 	}
-	refspec := fmt.Sprintf("+refs/heads/%s:refs/fork/%s/%s", branch, hash, branch)
+	refspec := fmt.Sprintf("+refs/heads/%s:%s%s/%s", branch, fetch.ForkCodeRefPrefix, hash, branch)
 	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, "--no-tags"}); err != nil {
 		return fmt.Errorf("fetch %s from %s: %w", branch, repoURL, err)
 	}

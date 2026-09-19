@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	releasepkg "github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
@@ -1023,7 +1024,7 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			continue
 		}
 		if opts.Verbose {
-			fmt.Printf("  social  post: %s\n", truncate(post.Content, 60))
+			fmt.Printf("  social  post: %s\n", text.Fit(post.Content, 60))
 		}
 		origin := buildOrigin(post.AuthorName, post.AuthorEmail, post.CreatedAt, platform, opts.RepoURL, platformPath(platform, "post", post.ExternalID))
 		msg := buildPostMessage(post.Content, "", origin)
@@ -1163,7 +1164,7 @@ func commitDiscussionComments(opts Options, comments []ImportComment, mapping *M
 			parentHash = mappedCommentHash(mapping, platform, comment.PostID, comment.ParentID, comment.ParentCreatedAt)
 		}
 		if opts.Verbose {
-			fmt.Printf("  social  comment: %s\n", truncate(comment.Content, 60))
+			fmt.Printf("  social  comment: %s\n", text.Fit(comment.Content, 60))
 		}
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, postHash, "", branch)
 		// GITSOCIAL.md 1.3: a reply names its parent comment, then the thread's first post.
@@ -1376,7 +1377,7 @@ func executeItemComments(opts Options, comments []ImportComment, mapping *Mappin
 			continue
 		}
 		if opts.Verbose {
-			fmt.Printf("  %s  comment: %s\n", parentExt, truncate(c.Content, 60))
+			fmt.Printf("  %s  comment: %s\n", parentExt, text.Fit(c.Content, 60))
 		}
 		originalRef := protocol.CreateRef(protocol.RefTypeCommit, parentHash, "", parentBranch)
 		// Build GitMsg-Ref section for the parent item
@@ -1434,14 +1435,6 @@ func sortedCSV(s string) string {
 	return strings.Join(parts, ",")
 }
 
-// nullStr extracts the string value from a sql.NullString, returning "" if invalid.
-func nullStr(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
-
 // updatePM compares platform fields with GitSocial state for already-imported items and creates edit commits for changes.
 func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 	stats := Stats{}
@@ -1487,7 +1480,7 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 		// Compare against trimmed platform text: stored content has its outer
 		// whitespace stripped, so an untrimmed body would never match and every
 		// --update would re-emit an identical edit.
-		if curTitle == strings.TrimSpace(m.Title) && curBody == strings.TrimSpace(m.Body) && item.State == m.State && nullStr(item.Due) == dueStr {
+		if curTitle == strings.TrimSpace(m.Title) && curBody == strings.TrimSpace(m.Body) && item.State == m.State && cache.FromNullString(item.Due) == dueStr {
 			if !m.UpdatedAt.IsZero() {
 				mapping.SetUpdatedAt(key, m.UpdatedAt)
 			}
@@ -1528,7 +1521,7 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 			}
 		}
 		curTitle, curBody := protocol.SplitSubjectBody(item.Content)
-		curMsHash := nullStr(item.MilestoneHash)
+		curMsHash := cache.FromNullString(item.MilestoneHash)
 		platMsHash := ""
 		if milestoneRef != "" {
 			_, platMsHash, _ = parseRefComponents(milestoneRef, repoURL, branch)
@@ -1536,8 +1529,8 @@ func updatePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 		if curTitle == strings.TrimSpace(issue.Title) &&
 			curBody == strings.TrimSpace(issue.Body) &&
 			item.State == issue.State &&
-			sortedCSV(nullStr(item.Labels)) == sortedCSV(labelStr) &&
-			sortedCSV(nullStr(item.Assignees)) == sortedCSV(strings.Join(issue.Assignees, ",")) &&
+			sortedCSV(cache.FromNullString(item.Labels)) == sortedCSV(labelStr) &&
+			sortedCSV(cache.FromNullString(item.Assignees)) == sortedCSV(strings.Join(issue.Assignees, ",")) &&
 			curMsHash == platMsHash {
 			if !issue.UpdatedAt.IsZero() {
 				mapping.SetUpdatedAt(key, issue.UpdatedAt)
@@ -1672,14 +1665,14 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		if err != nil {
 			continue
 		}
-		currentState := nullStr(item.State)
+		currentState := cache.FromNullString(item.State)
 		labels := MapLabels(pr.Labels, opts.LabelMode)
 		curTitle, curBody := protocol.SplitSubjectBody(item.Content)
 		if currentState == pr.State &&
 			curTitle == strings.TrimSpace(pr.Title) &&
 			curBody == strings.TrimSpace(pr.Body) &&
-			sortedCSV(nullStr(item.Labels)) == sortedCSV(strings.Join(labels, ",")) &&
-			sortedCSV(nullStr(item.Reviewers)) == sortedCSV(strings.Join(pr.Reviewers, ",")) {
+			sortedCSV(cache.FromNullString(item.Labels)) == sortedCSV(strings.Join(labels, ",")) &&
+			sortedCSV(cache.FromNullString(item.Reviewers)) == sortedCSV(strings.Join(pr.Reviewers, ",")) {
 			if !pr.UpdatedAt.IsZero() {
 				mapping.SetUpdatedAt(key, pr.UpdatedAt)
 			}
@@ -1698,8 +1691,8 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 			head = pr.HeadRepo + "#branch:" + pr.HeadBranch
 		}
 		base := "#branch:" + pr.BaseBranch
-		baseTip := nullStr(item.BaseTip)
-		headTip := nullStr(item.HeadTip)
+		baseTip := cache.FromNullString(item.BaseTip)
+		headTip := cache.FromNullString(item.HeadTip)
 		var stateOrigin *protocol.Origin
 		mBase, mHead := "", ""
 		switch pr.State {
@@ -1824,8 +1817,8 @@ func updateRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats 
 		if curName == strings.TrimSpace(r.Name) &&
 			curBody == strings.TrimSpace(r.Body) &&
 			item.Prerelease == r.Prerelease &&
-			sortedCSV(nullStr(item.Artifacts)) == sortedCSV(platArtifacts) &&
-			nullStr(item.ArtifactURL) == r.ArtifactURL {
+			sortedCSV(cache.FromNullString(item.Artifacts)) == sortedCSV(platArtifacts) &&
+			cache.FromNullString(item.ArtifactURL) == r.ArtifactURL {
 			if !r.UpdatedAt.IsZero() {
 				mapping.SetUpdatedAt(key, r.UpdatedAt)
 			}
@@ -1936,7 +1929,7 @@ func updateSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 			continue
 		}
 		if opts.Verbose {
-			fmt.Printf("  social  update post: %s\n", truncate(post.Content, 60))
+			fmt.Printf("  social  update post: %s\n", text.Fit(post.Content, 60))
 		}
 		editsRef := protocol.CreateRef(protocol.RefTypeCommit, canonicalHash, "", branch)
 		origin := buildStateChangeOrigin("", "", time.Time{}, platform, opts.RepoURL, platformPath(platform, "post", post.ExternalID))
@@ -2115,11 +2108,4 @@ func importTime(createdAt, fallback time.Time) time.Time {
 		return createdAt
 	}
 	return fallback
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-3] + "..."
 }

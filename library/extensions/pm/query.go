@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
 // Filter represents a single filter condition.
@@ -145,14 +147,6 @@ func parseInt(s string) int {
 	return n
 }
 
-// escapeLike escapes SQL LIKE wildcards in user input.
-func escapeLike(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "%", `\%`)
-	s = strings.ReplaceAll(s, "_", `\_`)
-	return s
-}
-
 // BuildWhereClause converts filters to SQL WHERE conditions.
 func (q *Query) BuildWhereClause() (where string, args []interface{}) {
 	var conditions []string
@@ -168,7 +162,7 @@ func (q *Query) BuildWhereClause() (where string, args []interface{}) {
 	// Text search on message content
 	if q.TextSearch != "" {
 		conditions = append(conditions, `v.resolved_message LIKE ? ESCAPE '\'`)
-		args = append(args, "%"+escapeLike(q.TextSearch)+"%")
+		args = append(args, "%"+cache.EscapeLike(q.TextSearch)+"%")
 	}
 
 	if len(conditions) == 0 {
@@ -182,7 +176,7 @@ func (q *Query) BuildWhereClause() (where string, args []interface{}) {
 func (f *Filter) toSQLCondition() (string, []interface{}) {
 	if f.IsLabel {
 		// Label filter: check if labels field contains scope/value
-		label := escapeLike(f.Field + "/" + f.Value)
+		label := cache.EscapeLike(f.Field + "/" + f.Value)
 		if f.Negate {
 			return `(v.labels IS NULL OR v.labels NOT LIKE ? ESCAPE '\')`, []interface{}{"%" + label + "%"}
 		}

@@ -1331,7 +1331,7 @@ func printFeedbackLine(out io.Writer, r review.Feedback) {
 	}
 
 	dateStr := r.Timestamp.Format("2006-01-02 15:04")
-	fmt.Fprintf(out, "%s%s%s  %s  %s\n", icon, r.Author.Name, location, dateStr, truncate(r.Content, 60))
+	fmt.Fprintf(out, "%s%s%s  %s  %s\n", icon, r.Author.Name, location, dateStr, text.Fit(strings.ReplaceAll(r.Content, "\n", " "), 60))
 }
 
 // readStdinSubjectBody reads in until EOF and splits it into a subject and a body.
@@ -1379,12 +1379,4 @@ func extractHash(id string) string {
 		return rest
 	}
 	return id
-}
-
-func truncate(s string, maxLen int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > maxLen {
-		return s[:maxLen-3] + "..."
-	}
-	return s
 }

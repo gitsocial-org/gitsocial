@@ -19,3 +19,13 @@ func SplitCSV(s string) []string {
 	}
 	return out
 }
+
+// InCSV reports whether value is an entry of a comma-separated list, ignoring surrounding space.
+func InCSV(list, value string) bool {
+	for _, p := range strings.Split(list, ",") {
+		if strings.TrimSpace(p) == value {
+			return true
+		}
+	}
+	return false
+}

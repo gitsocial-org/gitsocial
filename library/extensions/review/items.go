@@ -123,7 +123,7 @@ func insertReviewItems(items []ReviewItem) error {
 				return err
 			}
 			if err := cache.RebuildCSVLinkingTable(tx, "review_reviewers", "email",
-				item.RepoURL, item.Hash, item.Branch, nullStr(item.Reviewers)); err != nil {
+				item.RepoURL, item.Hash, item.Branch, cache.FromNullString(item.Reviewers)); err != nil {
 				return err
 			}
 		}
@@ -163,7 +163,7 @@ func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		query := `SELECT DISTINCT hash FROM review_items_resolved
 			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted`
-		args := []interface{}{escapeLike(prefix) + "%"}
+		args := []interface{}{cache.EscapeLike(prefix) + "%"}
 		if repoURL != "" {
 			query += " AND repo_url = ?"
 			args = append(args, repoURL)
@@ -440,7 +440,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 
 // forkPRTargetsWorkspace reports whether a fork pull request's base names the workspace.
 func forkPRTargetsWorkspace(item ReviewItem, workspaceURL string) bool {
-	base := nullStr(item.Base)
+	base := cache.FromNullString(item.Base)
 	if base == "" {
 		return false
 	}
@@ -577,16 +577,16 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 		Timestamp:        item.Timestamp,
 		Subject:          subject,
 		Body:             body,
-		State:            PRState(nullStr(item.State)),
+		State:            PRState(cache.FromNullString(item.State)),
 		IsDraft:          item.Draft == 1,
-		Base:             nullStr(item.Base),
-		BaseTip:          nullStr(item.BaseTip),
-		Head:             nullStr(item.Head),
-		HeadTip:          nullStr(item.HeadTip),
-		DependsOn:        parseCSV(nullStr(item.DependsOn)),
-		Closes:           parseCSV(nullStr(item.Closes)),
-		Reviewers:        parseCSV(nullStr(item.Reviewers)),
-		Labels:           parseCSV(nullStr(item.Labels)),
+		Base:             cache.FromNullString(item.Base),
+		BaseTip:          cache.FromNullString(item.BaseTip),
+		Head:             cache.FromNullString(item.Head),
+		HeadTip:          cache.FromNullString(item.HeadTip),
+		DependsOn:        parseCSV(cache.FromNullString(item.DependsOn)),
+		Closes:           parseCSV(cache.FromNullString(item.Closes)),
+		Reviewers:        parseCSV(cache.FromNullString(item.Reviewers)),
+		Labels:           parseCSV(cache.FromNullString(item.Labels)),
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
 		IsRetracted:      item.IsRetracted,
@@ -635,17 +635,17 @@ func reviewItemToFeedback(item ReviewItem) Feedback {
 		Timestamp: item.Timestamp,
 		Content:   content,
 		PullRequest: Ref{
-			RepoURL: nullStr(item.PullRequestRepoURL),
-			Hash:    nullStr(item.PullRequestHash),
-			Branch:  nullStr(item.PullRequestBranch),
+			RepoURL: cache.FromNullString(item.PullRequestRepoURL),
+			Hash:    cache.FromNullString(item.PullRequestHash),
+			Branch:  cache.FromNullString(item.PullRequestBranch),
 		},
-		Commit:      nullStr(item.CommitRef),
-		File:        nullStr(item.File),
+		Commit:      cache.FromNullString(item.CommitRef),
+		File:        cache.FromNullString(item.File),
 		OldLine:     oldLine,
 		NewLine:     newLine,
 		OldLineEnd:  oldLineEnd,
 		NewLineEnd:  newLineEnd,
-		ReviewState: ReviewState(nullStr(item.ReviewStateField)),
+		ReviewState: ReviewState(cache.FromNullString(item.ReviewStateField)),
 		Suggestion:  item.Suggestion == 1,
 		IsEdited:    item.IsEdited,
 		IsRetracted: item.IsRetracted,
@@ -659,14 +659,6 @@ func joinSubjectBody(subject, body string) string {
 		return subject + "\n\n" + body
 	}
 	return subject
-}
-
-// nullStr returns a nullable string's value, or empty when it is NULL.
-func nullStr(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
 }
 
 // parseCSV splits a comma-separated column into its values, nil when empty.

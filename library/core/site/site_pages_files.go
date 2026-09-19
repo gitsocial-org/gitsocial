@@ -305,7 +305,7 @@ func siteFilePageKey(p string) string {
 }
 
 // discoverSiteFileDocs resolves the documents the default branch publishes; known is false when the tree is unreadable, so the caller carries its published set forward.
-func discoverSiteFileDocs(src *objstore.LocalCommitSource, tip string, cfg siteCustomization) (docs []siteFileDoc, known bool) {
+func discoverSiteFileDocs(src *objstore.LocalCommitSource, tip string, cfg SiteCustomization) (docs []siteFileDoc, known bool) {
 	files, ok := siteFileWalk(src, tip)
 	if !ok {
 		return nil, false

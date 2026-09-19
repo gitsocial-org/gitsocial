@@ -11,6 +11,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 type pmNotificationProvider struct{}
@@ -190,7 +191,7 @@ func getAssignedIssueNotifications(userEmail string, unreadOnly bool, limit int)
 			  AND v.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND v.author_email != ?
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
-		args := []interface{}{escapeLike(userEmail), userEmail}
+		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
 		}
@@ -219,7 +220,7 @@ func getAssignedIssueNotifications(userEmail string, unreadOnly bool, limit int)
 				return nil, err
 			}
 			// Post-filter: exact email match in comma-separated assignees
-			if !containsEmail(assignees.String, userEmail) {
+			if !text.InCSV(assignees.String, userEmail) {
 				continue
 			}
 			var timestamp time.Time
@@ -283,7 +284,7 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 			  AND pr.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?
 			  AND NOT pr.is_retracted`
-		args := []interface{}{escapeLike(userEmail), userEmail}
+		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
 		}
@@ -310,7 +311,7 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 			); err != nil {
 				return nil, err
 			}
-			if !containsEmail(assignees.String, userEmail) {
+			if !text.InCSV(assignees.String, userEmail) {
 				continue
 			}
 			var timestamp time.Time
@@ -354,14 +355,4 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 		}
 		return result, rows.Err()
 	})
-}
-
-// containsEmail checks if email appears as an exact match in a comma-separated list.
-func containsEmail(assignees, email string) bool {
-	for _, a := range strings.Split(assignees, ",") {
-		if strings.TrimSpace(a) == email {
-			return true
-		}
-	}
-	return false
 }

@@ -37,7 +37,7 @@ var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
 var siteImageKeyRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 
 // applySiteOverride overlays a remote's deployment overrides onto a resolved customization, normalizing each the way the shared keys are.
-func applySiteOverride(c siteCustomization, ok bool, ov objstore.SiteOverride) (siteCustomization, bool) {
+func applySiteOverride(c SiteCustomization, ok bool, ov objstore.SiteOverride) (SiteCustomization, bool) {
 	if ov == (objstore.SiteOverride{}) {
 		return c, ok
 	}
@@ -56,14 +56,14 @@ func applySiteOverride(c siteCustomization, ok bool, ov objstore.SiteOverride) (
 			c.Pages = b
 		}
 	}
-	if c == (siteCustomization{}) {
-		return siteCustomization{}, false
+	if c == (SiteCustomization{}) {
+		return SiteCustomization{}, false
 	}
 	return c, true
 }
 
-// siteCustomization is the validated customization the reader consumes; only the fields that survive validation are emitted.
-type siteCustomization struct {
+// SiteCustomization is the site customization the workspace edits, the push writer publishes and the static site reads.
+type SiteCustomization struct {
 	Title       string `json:"title,omitempty"`
 	Accent      string `json:"accent,omitempty"`
 	AccentDark  string `json:"accentDark,omitempty"`
@@ -169,8 +169,8 @@ func NormalizeSiteURL(v string) (string, bool) {
 }
 
 // validateSiteCustomization keeps only the fields that validate, dropping the rest one by one; ok is false when nothing survives.
-func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, bool) {
-	var c siteCustomization
+func validateSiteCustomization(raw map[string]interface{}) (SiteCustomization, bool) {
+	var c SiteCustomization
 	if s, ok := raw["title"].(string); ok {
 		s = strings.TrimSpace(s)
 		if len(s) > siteConfigMaxTitle {
@@ -216,39 +216,39 @@ func validateSiteCustomization(raw map[string]interface{}) (siteCustomization, b
 	if s, ok := raw["filesExclude"].(string); ok {
 		c.FilesExclude = NormalizeSiteGlobs(s)
 	}
-	if c == (siteCustomization{}) {
-		return siteCustomization{}, false
+	if c == (SiteCustomization{}) {
+		return SiteCustomization{}, false
 	}
 	return c, true
 }
 
 // readSiteCustomization resolves the bucket's site customization and overlays the per-remote overrides at this one boundary, so every consumer sees effective values.
-func readSiteCustomization(client *objstore.Client, prefix string, refs map[string]string, ov objstore.SiteOverride, src *objstore.LocalCommitSource) (siteCustomization, bool, error) {
+func readSiteCustomization(client *objstore.Client, prefix string, refs map[string]string, ov objstore.SiteOverride, src *objstore.LocalCommitSource) (SiteCustomization, bool, error) {
 	base, ok, err := readSiteBaseCustomization(client, prefix, refs, src)
 	if err != nil {
-		return siteCustomization{}, false, err
+		return SiteCustomization{}, false, err
 	}
 	c, ok := applySiteOverride(base, ok, ov)
 	return c, ok, nil
 }
 
 // readSiteBaseCustomization resolves refs/gitmsg/core/config and extracts its validated `site` sub-object, with no overrides applied; ok is false when nothing survives.
-func readSiteBaseCustomization(client *objstore.Client, prefix string, refs map[string]string, src *objstore.LocalCommitSource) (siteCustomization, bool, error) {
+func readSiteBaseCustomization(client *objstore.Client, prefix string, refs map[string]string, src *objstore.LocalCommitSource) (SiteCustomization, bool, error) {
 	sha, present := refs["refs/gitmsg/core/config"]
 	if !present || len(sha) != 40 {
-		return siteCustomization{}, false, nil
+		return SiteCustomization{}, false, nil
 	}
 	c, err := getCommit(src, client, prefix, sha)
 	if err != nil {
-		return siteCustomization{}, false, err
+		return SiteCustomization{}, false, err
 	}
 	var cfg map[string]interface{}
 	if json.Unmarshal([]byte(strings.TrimSpace(c.item.Message)), &cfg) != nil {
-		return siteCustomization{}, false, nil
+		return SiteCustomization{}, false, nil
 	}
 	site, ok := cfg["site"].(map[string]interface{})
 	if !ok {
-		return siteCustomization{}, false, nil
+		return SiteCustomization{}, false, nil
 	}
 	valid, ok := validateSiteCustomization(site)
 	return valid, ok, nil

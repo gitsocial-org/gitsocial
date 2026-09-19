@@ -301,12 +301,12 @@ func TestParityDefaultTitle(t *testing.T) {
 			if got := sitePageDefaultTitle(c.Base); got != c.ExpectTitle {
 				t.Errorf("default title = %q, want %q", got, c.ExpectTitle)
 			}
-			if got := sitePageSiteFor(siteCustomization{}, c.Base).Title; got != c.ExpectTitle {
+			if got := sitePageSiteFor(SiteCustomization{}, c.Base).Title; got != c.ExpectTitle {
 				t.Errorf("stamped site title = %q, want %q", got, c.ExpectTitle)
 			}
 		})
 	}
-	if got := sitePageSiteFor(siteCustomization{Title: "Thread Demo"}, "https://example.com/thread-demo/").Title; got != "Thread Demo" {
+	if got := sitePageSiteFor(SiteCustomization{Title: "Thread Demo"}, "https://example.com/thread-demo/").Title; got != "Thread Demo" {
 		t.Errorf("configured site title = %q, want the configured value", got)
 	}
 }

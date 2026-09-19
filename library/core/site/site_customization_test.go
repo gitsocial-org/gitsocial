@@ -114,7 +114,7 @@ func TestWriteSiteCustomization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read artifact: %v", err)
 		}
-		var got siteCustomization
+		var got SiteCustomization
 		if err := json.Unmarshal(data, &got); err != nil {
 			t.Fatalf("parse artifact: %v", err)
 		}
