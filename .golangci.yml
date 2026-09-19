@@ -11,8 +11,8 @@ linters:
     misspell:
       locale: US
     funlen:
-      lines: 331
-      statements: 221
+      lines: 262
+      statements: 161
     gocognit:
       min-complexity: 116
   exclusions:

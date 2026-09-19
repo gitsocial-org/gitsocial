@@ -506,14 +506,8 @@ func drainBgSyncCmd(ch chan tea.Msg) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.layout = NewLayout(msg.Width, msg.Height)
-		if m.navHidden {
-			m.layout.NavWidth = 0
-			m.layout.ContentWidth = m.layout.Width
-		}
 		m.ready = true
-		m.nav.SetSize(m.layout.NavWidth, m.layout.Height)
-		m.host.SetSize(m.layout.ContentWidth, m.layout.Height)
+		m.applyLayout(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -532,319 +526,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		m.host.State().LastInputAt = time.Now()
 		return m.handleMouse(msg)
-
-	// Navigation messages
-	case tuicore.NavigateMsg:
-		return m.handleNavigate(msg)
-
-	case tuicore.FocusMsg:
-		m.setFocus(FocusedPanel(msg.Panel))
-		return m, nil
-
-	// Core data messages
-	case tuicore.UnreadCountMsg:
-		m.nav.SetUnreadCount(msg.Count)
-		return m, nil
-
-	case tuicore.UnpushedCountMsg:
-		m.nav.SetUnpushedCount(msg.Count)
-		return m, nil
-
-	case tuicore.UnpushedLFSCountMsg:
-		m.nav.SetUnpushedLFSCount(msg.Count)
-		return m, nil
-
-	case tuicore.LFSPushCompletedMsg:
-		m.isPushing = false
-		m.host.SetPushing(false)
-		if msg.Err != nil {
-			m.host.SetMessage(fmt.Sprintf("LFS push failed: %s", msg.Err), tuicore.MessageTypeError)
-			return m, nil
-		}
-		var msgCmd tea.Cmd
-		if msg.Count == 0 {
-			msgCmd = m.host.SetMessageWithTimeout("No LFS objects to push", tuicore.MessageTypeSuccess, 5*time.Second)
-		} else {
-			msgCmd = m.host.SetMessageWithTimeout(fmt.Sprintf("Pushed %d LFS objects", msg.Count), tuicore.MessageTypeSuccess, 5*time.Second)
-		}
-		return m, tea.Batch(msgCmd, m.loadUnpushedLFSCount())
-
-	case lfsCheckCompletedMsg:
-		m.nav.SetUnpushedLFSCount(msg.count)
-		var toast string
-		if msg.count == 0 {
-			toast = "No unpushed LFS objects"
-		} else {
-			toast = fmt.Sprintf("%d LFS objects unpushed", msg.count)
-		}
-		return m, m.host.SetMessageWithTimeout(toast, tuicore.MessageTypeSuccess, 5*time.Second)
-
-	case tuicore.CacheSizeMsg:
-		m.nav.SetCacheSize(msg.Size)
-		return m, nil
-
-	case tuicore.NavVisibilityMsg:
-		m.navHidden = msg.Hidden
-		if msg.Hidden {
-			m.layout.NavWidth = 0
-			m.layout.ContentWidth = m.layout.Width
-		} else {
-			m.layout = NewLayout(m.layout.Width, m.layout.Height)
-		}
-		m.nav.SetSize(m.layout.NavWidth, m.layout.Height)
-		m.host.SetSize(m.layout.ContentWidth, m.layout.Height)
-		return m, nil
-
-	case ClearMessageMsg:
-		if msg.ID == m.host.State().MessageID {
-			m.host.SetMessage("", tuicore.MessageTypeNone)
-		}
-		return m, nil
-
-	case fetchStatusMsg:
-		m.host.SetFetchStatus(msg.lastFetch, 0)
-		return m, nil
-
-	case startSyncMsg:
-		m.host.SetSyncing(true)
-		return m, m.initWorkspace()
-
-	case tuicore.WorkspaceInitializedMsg:
-		m.host.SetSyncing(false)
-		// Quick pass is done; the timeline can render. Background goroutine
-		// continues with older history + identity verification — flag that so
-		// the footer shows a subtle indicator instead of going silent.
-		m.host.State().BackgroundSyncing = true
-		cmds := []tea.Cmd{
-			m.host.RefreshView(),
-			m.loadInitialStatus(),
-			m.loadInitialUnpushedCount(),
-			drainBgSyncCmd(m.bgSyncCh),
-		}
-		if msg.Err != nil {
-			cmds = append(cmds, m.reportSyncError("Workspace sync failed", msg.Err))
-		}
-		return m, tea.Batch(cmds...)
-
-	case bgSyncProgressMsg:
-		// Each progress message means a chunk of older commits just landed.
-		// Bump IdentityGeneration so card lists re-query against the larger
-		// cache, then keep draining.
-		m.host.State().IdentityGeneration++
-		return m, tea.Batch(m.host.RefreshView(), drainBgSyncCmd(m.bgSyncCh))
-
-	case bgSyncCompletedMsg:
-		// Background history sync + identity backfill done. Final refresh so
-		// verification badges populate; clear the BackgroundSyncing footer flag.
-		m.host.State().IdentityGeneration++
-		m.host.State().BackgroundSyncing = false
-		if msg.Err != nil {
-			return m, tea.Batch(m.host.RefreshView(), m.reportSyncError("History sync failed", msg.Err))
-		}
-		return m, m.host.RefreshView()
-
-	case tuicore.TriggerFetchMsg:
-		if !m.isFetching {
-			return m, m.checkWorkspaceMode()
-		}
-		return m, nil
-
-	case tuicore.WorkspaceFetchModeMsg:
-		branchCount := len(msg.Branches)
-		label2 := "ll upstream"
-		if branchCount > 0 {
-			label2 = fmt.Sprintf("ll upstream (%d branches)", branchCount)
-		}
-		m.fetchChoice.Show("Workspace fetch mode?", []tuicore.Choice{
-			{Key: "d", Label: "efault + gitmsg"},
-			{Key: "a", Label: label2},
-		}, func(key string) tea.Cmd {
-			m.host.State().ChoicePrompt = ""
-			mode := "default"
-			if key == "a" {
-				mode = "*"
-			}
-			return m.saveWorkspaceModeAndFetch(mode)
-		})
-		m.host.State().ChoicePrompt = m.fetchChoice.Render()
-		return m, nil
-
-	case startFetchMsg:
-		if !m.isFetching {
-			m.SetFetching(true)
-			repos, lists := 0, 0
-			if git.GetOriginURL(m.workdir) != "" {
-				repos = 1
-			}
-			if result := social.GetLists(m.workdir); result.Success {
-				lists = len(result.Data)
-				for _, l := range result.Data {
-					repos += len(l.Repositories)
-				}
-			}
-			m.host.SetFetchingInfo(repos, lists)
-			return m, m.startFetchWithMode(msg.allBranches, msg.auto)
-		}
-		return m, nil
-
-	case autoFetchTickMsg:
-		return m, m.handleAutoFetchTick()
-
-	case localSyncDoneMsg:
-		// Only act when the sync actually ingested commits. Bump IdentityGeneration
-		// (as a fetch does) so cached views like the timeline reload on their next
-		// activation instead of restoring a stale cursor, and refresh the active
-		// view now.
-		if msg.changed {
-			m.host.State().IdentityGeneration++
-			return m, m.host.RefreshView()
-		}
-		return m, nil
-
-	case tuicore.LogErrorMsg:
-		if msg.Message != "" {
-			m.host.State().AddLogEntry(msg.Severity, msg.Message, msg.Context)
-		}
-		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
-		return m, nil
-
-	case importCountedMsg:
-		// Count phase finished — drop counting state, then either error,
-		// short-circuit on "nothing to import", or open the confirm dialog
-		// with concrete numbers.
-		m.isImporting = false
-		m.host.SetImporting(false)
-		m.bgImportCh = nil
-		if msg.Err != nil {
-			return m, m.host.SetMessageWithTimeout("Import: "+msg.Err.Error(), tuicore.MessageTypeError, 10*time.Second)
-		}
-		pending := pendingImportCounts(msg.Counts, msg.Mapped)
-		if pending == 0 {
-			return m, m.host.SetMessageWithTimeout("Already up to date — nothing new to import", tuicore.MessageTypeSuccess, 5*time.Second)
-		}
-		prompt := buildImportConfirmPrompt(msg.RepoURL, msg.Counts, msg.Mapped)
-		ad, url, counts, mapping := msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping
-		host := m.host
-		m.importChoice.Show(prompt, []tuicore.Choice{
-			{Key: "y", Label: "es"},
-			{Key: "n", Label: "o"},
-		}, func(key string) tea.Cmd {
-			host.State().ChoicePrompt = ""
-			if key != "y" {
-				return nil
-			}
-			return func() tea.Msg {
-				return startImportMsg{Adapter: ad, RepoURL: url, Counts: &counts, Mapping: mapping}
-			}
-		})
-		m.host.State().ChoicePrompt = m.importChoice.Render()
-		return m, nil
-
-	case startImportMsg:
-		if m.isImporting || m.isFetching {
-			return m, nil
-		}
-		return m, m.startImport(msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping)
-
-	case importTickMsg:
-		// Spinner tick — the glyph itself derives from time.Now() in
-		// RenderImportingFooter, so the tick exists only to trigger a
-		// re-render. Keep draining; once the goroutine closes the channel,
-		// drainBgImportCmd returns nil and the loop ends.
-		if !m.isImporting {
-			return m, nil
-		}
-		return m, drainBgImportCmd(m.bgImportCh)
-
-	case importProgressMsg:
-		phase, detail := formatImportProgress(msg.Event)
-		m.host.SetImportProgress(phase, detail)
-		return m, drainBgImportCmd(m.bgImportCh)
-
-	case importCompletedMsg:
-		m.isImporting = false
-		m.host.SetImporting(false)
-		m.bgImportCh = nil
-		if msg.Err != nil {
-			errMsg := fmt.Sprintf("Import failed: %s", msg.Err)
-			m.host.State().AddLogEntry(tuicore.LogSeverityError, errMsg, "import")
-			m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
-			return m, m.host.SetMessageWithTimeout(errMsg, tuicore.MessageTypeError, 10*time.Second)
-		}
-		for _, e := range msg.Stats.Errors {
-			label := e.Type
-			if e.ExternalID != "" {
-				label += " " + e.ExternalID
-			}
-			m.host.State().AddLogEntry(tuicore.LogSeverityWarn, label+": "+e.Message, "import")
-		}
-		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
-		// Refresh counts + views since import wrote new commits.
-		m.host.State().IdentityGeneration++
-		summary := formatImportSummary(msg.Stats)
-		msgType := tuicore.MessageTypeSuccess
-		if len(msg.Stats.Errors) > 0 {
-			summary += fmt.Sprintf(" (%d errors)", len(msg.Stats.Errors))
-			msgType = tuicore.MessageTypeWarning
-		}
-		if msg.SyncErr != nil {
-			m.host.State().AddLogEntry(tuicore.LogSeverityError, "Post-import workspace sync failed: "+msg.SyncErr.Error(), "import")
-			m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
-			summary += " — sync failed, run fetch to refresh views"
-			msgType = tuicore.MessageTypeWarning
-		}
-		return m, tea.Batch(
-			m.host.RefreshView(),
-			m.loadInitialUnreadCount(),
-			m.loadInitialUnpushedCount(),
-			m.host.SetMessageWithTimeout(summary, msgType, 10*time.Second),
-		)
-
-	case pushProgressMsg:
-		// Coarse per-branch push step: reflect the current branch on the status
-		// line, then keep draining the channel. Object/site-shard granularity
-		// below the branch push lives in the git helper's stderr, which the TUI
-		// cannot read without streaming ExecGit, so this step stays coarse.
-		m.host.SetPushingInfo(m.pushStep(msg))
-		return m, drainBgImportCmd(m.bgPushCh)
-
-	case tuisocial.PushCompletedMsg:
-		m.isPushing = false
-		m.bgPushCh = nil
-		if handled, cmd := tuicore.DispatchMessage(msg, &m); handled {
-			return m, cmd
-		}
-		return m, nil
-
-	case tuicore.ExportArtifactMsg:
-		return m, m.exportArtifact(msg)
-
-	case exportArtifactDoneMsg:
-		if msg.err != nil {
-			return m, m.host.SetMessageWithTimeout(msg.err.Error(), tuicore.MessageTypeError, 5*time.Second)
-		}
-		openBrowser(filepath.Dir(msg.path))
-		return m, m.host.SetMessageWithTimeout("Saved to "+msg.path, tuicore.MessageTypeSuccess, 5*time.Second)
-
 	}
 
-	// Handle source navigation (detail view left/right)
-	if nav, ok := msg.(tuicore.SourceNavigateMsg); ok {
-		// Try type-aware navigation first (for mixed-type sources like search)
-		if item, newIndex, found := m.host.GetSourceDisplayItem(nav.Offset); found {
-			m.host.UpdateSourceIndex(newIndex, m.host.State().DetailSource.Total)
-			loc := tuicore.GetNavTarget(item)
-			m.host.State().Router.Replace(loc)
-			return m, m.host.ActivateView()
-		}
-		// Fall back to same-type navigation
-		id, newIndex, found := m.host.GetSourceItem(nav.Offset)
-		if found {
-			m.host.UpdateSourceIndex(newIndex, m.host.State().DetailSource.Total)
-			m.host.State().Router.Replace(nav.MakeLocation(id))
-			return m, m.host.ActivateView()
-		}
-		return m, nil
+	if handled, cmd := m.handleAppMsg(msg); handled {
+		return m, cmd
 	}
 
 	// Dispatch to message bus for extension handlers
@@ -852,22 +537,397 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Delegate to focused panel for unhandled messages.
-	// Non-key/mouse messages (async load results, etc.) always go to the host
-	// so right-panel views update during nav-cursor preview.
-	var cmd tea.Cmd
-	switch msg.(type) {
-	case tea.KeyPressMsg, tea.MouseMsg:
-		switch m.focus {
-		case FocusNav:
-			_, cmd = m.nav.Update(msg)
-		case FocusContent:
-			cmd = m.host.Update(msg)
-		}
-	default:
-		cmd = m.host.Update(msg)
+	// An unhandled message is an async result, so it goes to the host whatever
+	// has focus, and a right-panel view updates during nav-cursor preview.
+	return m, m.host.Update(msg)
+}
+
+// handleAppMsg routes an app-level message to the group that owns it.
+func (m *Model) handleAppMsg(msg tea.Msg) (bool, tea.Cmd) {
+	if handled, cmd := m.handleNavMsg(msg); handled {
+		return true, cmd
 	}
-	return m, cmd
+	if handled, cmd := m.handleSyncMsg(msg); handled {
+		return true, cmd
+	}
+	if handled, cmd := m.handleFetchMsg(msg); handled {
+		return true, cmd
+	}
+	if handled, cmd := m.handlePushMsg(msg); handled {
+		return true, cmd
+	}
+	if handled, cmd := m.handleImportMsg(msg); handled {
+		return true, cmd
+	}
+	if m.handleBadgeMsg(msg) {
+		return true, nil
+	}
+	return m.handleExportMsg(msg)
+}
+
+// handleExportMsg handles a release artifact export: the request, then its result.
+func (m *Model) handleExportMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tuicore.ExportArtifactMsg:
+		return true, m.exportArtifact(msg)
+
+	case exportArtifactDoneMsg:
+		if msg.err != nil {
+			return true, m.host.SetMessageWithTimeout(msg.err.Error(), tuicore.MessageTypeError, 5*time.Second)
+		}
+		openBrowser(filepath.Dir(msg.path))
+		return true, m.host.SetMessageWithTimeout("Saved to "+msg.path, tuicore.MessageTypeSuccess, 5*time.Second)
+	}
+	return false, nil
+}
+
+// handleBadgeMsg handles the nav badges, the status message and the error log.
+// Every case writes state and starts nothing, so the group returns no command.
+func (m *Model) handleBadgeMsg(msg tea.Msg) bool {
+	switch msg := msg.(type) {
+	case tuicore.UnreadCountMsg:
+		m.nav.SetUnreadCount(msg.Count)
+
+	case tuicore.UnpushedCountMsg:
+		m.nav.SetUnpushedCount(msg.Count)
+
+	case tuicore.UnpushedLFSCountMsg:
+		m.nav.SetUnpushedLFSCount(msg.Count)
+
+	case tuicore.CacheSizeMsg:
+		m.nav.SetCacheSize(msg.Size)
+
+	case ClearMessageMsg:
+		if msg.ID == m.host.State().MessageID {
+			m.host.SetMessage("", tuicore.MessageTypeNone)
+		}
+
+	case tuicore.LogErrorMsg:
+		if msg.Message != "" {
+			m.host.State().AddLogEntry(msg.Severity, msg.Message, msg.Context)
+		}
+		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+
+	default:
+		return false
+	}
+	return true
+}
+
+// handleImportMsg handles the forge import: its count phase, its start, its progress and its result.
+func (m *Model) handleImportMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case importCountedMsg:
+		return true, m.handleImportCounted(msg)
+
+	case startImportMsg:
+		if m.isImporting || m.isFetching {
+			return true, nil
+		}
+		return true, m.startImport(msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping)
+
+	case importTickMsg:
+		// The spinner glyph derives from time.Now(), so the tick only triggers a render.
+		if !m.isImporting {
+			return true, nil
+		}
+		return true, drainBgImportCmd(m.bgImportCh)
+
+	case importProgressMsg:
+		phase, detail := formatImportProgress(msg.Event)
+		m.host.SetImportProgress(phase, detail)
+		return true, drainBgImportCmd(m.bgImportCh)
+
+	case importCompletedMsg:
+		return true, m.handleImportCompleted(msg)
+	}
+	return false, nil
+}
+
+// handleImportCounted drops the counting state, then reports or confirms what the count found.
+func (m *Model) handleImportCounted(msg importCountedMsg) tea.Cmd {
+	m.isImporting = false
+	m.host.SetImporting(false)
+	m.bgImportCh = nil
+	if msg.Err != nil {
+		return m.host.SetMessageWithTimeout("Import: "+msg.Err.Error(), tuicore.MessageTypeError, 10*time.Second)
+	}
+	if pendingImportCounts(msg.Counts, msg.Mapped) == 0 {
+		return m.host.SetMessageWithTimeout("Already up to date — nothing new to import", tuicore.MessageTypeSuccess, 5*time.Second)
+	}
+	prompt := buildImportConfirmPrompt(msg.RepoURL, msg.Counts, msg.Mapped)
+	ad, url, counts, mapping := msg.Adapter, msg.RepoURL, msg.Counts, msg.Mapping
+	host := m.host
+	m.importChoice.Show(prompt, []tuicore.Choice{
+		{Key: "y", Label: "es"},
+		{Key: "n", Label: "o"},
+	}, func(key string) tea.Cmd {
+		host.State().ChoicePrompt = ""
+		if key != "y" {
+			return nil
+		}
+		return func() tea.Msg {
+			return startImportMsg{Adapter: ad, RepoURL: url, Counts: &counts, Mapping: mapping}
+		}
+	})
+	m.host.State().ChoicePrompt = m.importChoice.Render()
+	return nil
+}
+
+// handleImportCompleted logs what the import reported and refreshes the views it wrote to.
+func (m *Model) handleImportCompleted(msg importCompletedMsg) tea.Cmd {
+	m.isImporting = false
+	m.host.SetImporting(false)
+	m.bgImportCh = nil
+	if msg.Err != nil {
+		errMsg := fmt.Sprintf("Import failed: %s", msg.Err)
+		m.host.State().AddLogEntry(tuicore.LogSeverityError, errMsg, "import")
+		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+		return m.host.SetMessageWithTimeout(errMsg, tuicore.MessageTypeError, 10*time.Second)
+	}
+	for _, e := range msg.Stats.Errors {
+		label := e.Type
+		if e.ExternalID != "" {
+			label += " " + e.ExternalID
+		}
+		m.host.State().AddLogEntry(tuicore.LogSeverityWarn, label+": "+e.Message, "import")
+	}
+	m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+	// The import wrote new commits, so counts and views reload.
+	m.host.State().IdentityGeneration++
+	summary := formatImportSummary(msg.Stats)
+	msgType := tuicore.MessageTypeSuccess
+	if len(msg.Stats.Errors) > 0 {
+		summary += fmt.Sprintf(" (%d errors)", len(msg.Stats.Errors))
+		msgType = tuicore.MessageTypeWarning
+	}
+	if msg.SyncErr != nil {
+		m.host.State().AddLogEntry(tuicore.LogSeverityError, "Post-import workspace sync failed: "+msg.SyncErr.Error(), "import")
+		m.nav.SetErrorLogCount(m.host.State().ErrorLogCount())
+		summary += " — sync failed, run fetch to refresh views"
+		msgType = tuicore.MessageTypeWarning
+	}
+	return tea.Batch(
+		m.host.RefreshView(),
+		m.loadInitialUnreadCount(),
+		m.loadInitialUnpushedCount(),
+		m.host.SetMessageWithTimeout(summary, msgType, 10*time.Second),
+	)
+}
+
+// handlePushMsg handles the push messages: the data push, and the LFS push beside it.
+func (m *Model) handlePushMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case pushProgressMsg:
+		// One coarse step per branch. Object granularity below it lives in the git
+		// helper's stderr, which the TUI cannot read without streaming ExecGit.
+		m.host.SetPushingInfo(m.pushStep(msg))
+		return true, drainBgImportCmd(m.bgPushCh)
+
+	case tuisocial.PushCompletedMsg:
+		m.isPushing = false
+		m.bgPushCh = nil
+		_, cmd := tuicore.DispatchMessage(msg, m)
+		return true, cmd
+
+	case tuicore.LFSPushCompletedMsg:
+		return true, m.handleLFSPushCompleted(msg)
+
+	case lfsCheckCompletedMsg:
+		m.nav.SetUnpushedLFSCount(msg.count)
+		toast := "No unpushed LFS objects"
+		if msg.count > 0 {
+			toast = fmt.Sprintf("%d LFS objects unpushed", msg.count)
+		}
+		return true, m.host.SetMessageWithTimeout(toast, tuicore.MessageTypeSuccess, 5*time.Second)
+	}
+	return false, nil
+}
+
+// handleLFSPushCompleted reports what the LFS push sent and refreshes the nav badge.
+func (m *Model) handleLFSPushCompleted(msg tuicore.LFSPushCompletedMsg) tea.Cmd {
+	m.isPushing = false
+	m.host.SetPushing(false)
+	if msg.Err != nil {
+		m.host.SetMessage(fmt.Sprintf("LFS push failed: %s", msg.Err), tuicore.MessageTypeError)
+		return nil
+	}
+	toast := "No LFS objects to push"
+	if msg.Count > 0 {
+		toast = fmt.Sprintf("Pushed %d LFS objects", msg.Count)
+	}
+	return tea.Batch(
+		m.host.SetMessageWithTimeout(toast, tuicore.MessageTypeSuccess, 5*time.Second),
+		m.loadUnpushedLFSCount(),
+	)
+}
+
+// handleFetchMsg handles the fetch messages: the trigger, the mode choice, the start and the heartbeat.
+func (m *Model) handleFetchMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case fetchStatusMsg:
+		m.host.SetFetchStatus(msg.lastFetch, 0)
+		return true, nil
+
+	case tuicore.TriggerFetchMsg:
+		if m.isFetching {
+			return true, nil
+		}
+		return true, m.checkWorkspaceMode()
+
+	case tuicore.WorkspaceFetchModeMsg:
+		m.showFetchModeChoice(len(msg.Branches))
+		return true, nil
+
+	case startFetchMsg:
+		if m.isFetching {
+			return true, nil
+		}
+		return true, m.startFetch(msg)
+
+	case autoFetchTickMsg:
+		return true, m.handleAutoFetchTick()
+	}
+	return false, nil
+}
+
+// showFetchModeChoice asks whether to fetch the default branch or all upstream branches.
+func (m *Model) showFetchModeChoice(branchCount int) {
+	allLabel := "ll upstream"
+	if branchCount > 0 {
+		allLabel = fmt.Sprintf("ll upstream (%d branches)", branchCount)
+	}
+	m.fetchChoice.Show("Workspace fetch mode?", []tuicore.Choice{
+		{Key: "d", Label: "efault + gitmsg"},
+		{Key: "a", Label: allLabel},
+	}, func(key string) tea.Cmd {
+		m.host.State().ChoicePrompt = ""
+		mode := "default"
+		if key == "a" {
+			mode = "*"
+		}
+		return m.saveWorkspaceModeAndFetch(mode)
+	})
+	m.host.State().ChoicePrompt = m.fetchChoice.Render()
+}
+
+// startFetch marks the fetch running, counts what it covers for the footer, and starts it.
+func (m *Model) startFetch(msg startFetchMsg) tea.Cmd {
+	m.SetFetching(true)
+	repos, lists := 0, 0
+	if git.GetOriginURL(m.workdir) != "" {
+		repos = 1
+	}
+	if result := social.GetLists(m.workdir); result.Success {
+		lists = len(result.Data)
+		for _, l := range result.Data {
+			repos += len(l.Repositories)
+		}
+	}
+	m.host.SetFetchingInfo(repos, lists)
+	return m.startFetchWithMode(msg.allBranches, msg.auto)
+}
+
+// handleSyncMsg handles the workspace sync: startup, background history and the local re-sync.
+func (m *Model) handleSyncMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case startSyncMsg:
+		m.host.SetSyncing(true)
+		return true, m.initWorkspace()
+
+	case tuicore.WorkspaceInitializedMsg:
+		return true, m.handleWorkspaceInitialized(msg.Err)
+
+	case bgSyncProgressMsg:
+		// A chunk of older commits landed; re-query card lists against the larger cache.
+		m.host.State().IdentityGeneration++
+		return true, tea.Batch(m.host.RefreshView(), drainBgSyncCmd(m.bgSyncCh))
+
+	case bgSyncCompletedMsg:
+		// History sync and identity backfill are done, so badges populate on this refresh.
+		m.host.State().IdentityGeneration++
+		m.host.State().BackgroundSyncing = false
+		if msg.Err != nil {
+			return true, tea.Batch(m.host.RefreshView(), m.reportSyncError("History sync failed", msg.Err))
+		}
+		return true, m.host.RefreshView()
+
+	case localSyncDoneMsg:
+		// Bump IdentityGeneration as a fetch does, so a cached view reloads instead
+		// of restoring a stale cursor.
+		if msg.changed {
+			m.host.State().IdentityGeneration++
+			return true, m.host.RefreshView()
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// handleWorkspaceInitialized renders the quick pass and keeps draining the background sync.
+func (m *Model) handleWorkspaceInitialized(err error) tea.Cmd {
+	m.host.SetSyncing(false)
+	// The quick pass is done; the footer flags the background half instead of going silent.
+	m.host.State().BackgroundSyncing = true
+	cmds := []tea.Cmd{
+		m.host.RefreshView(),
+		m.loadInitialStatus(),
+		m.loadInitialUnpushedCount(),
+		drainBgSyncCmd(m.bgSyncCh),
+	}
+	if err != nil {
+		cmds = append(cmds, m.reportSyncError("Workspace sync failed", err))
+	}
+	return tea.Batch(cmds...)
+}
+
+// handleNavMsg handles navigation, focus and nav-panel visibility.
+func (m *Model) handleNavMsg(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tuicore.NavigateMsg:
+		return true, m.handleNavigate(msg)
+
+	case tuicore.SourceNavigateMsg:
+		return true, m.handleSourceNavigate(msg)
+
+	case tuicore.FocusMsg:
+		m.setFocus(FocusedPanel(msg.Panel))
+		return true, nil
+
+	case tuicore.NavVisibilityMsg:
+		m.navHidden = msg.Hidden
+		m.applyLayout(m.layout.Width, m.layout.Height)
+		return true, nil
+	}
+	return false, nil
+}
+
+// applyLayout recomputes both panel sizes, keeping the nav panel hidden while it is.
+func (m *Model) applyLayout(width, height int) {
+	m.layout = NewLayout(width, height)
+	if m.navHidden {
+		m.layout.NavWidth = 0
+		m.layout.ContentWidth = m.layout.Width
+	}
+	m.nav.SetSize(m.layout.NavWidth, m.layout.Height)
+	m.host.SetSize(m.layout.ContentWidth, m.layout.Height)
+}
+
+// handleSourceNavigate moves a detail view to the previous or next item of its source list.
+func (m *Model) handleSourceNavigate(msg tuicore.SourceNavigateMsg) tea.Cmd {
+	// Type-aware navigation first, for mixed-type sources like search.
+	if item, newIndex, found := m.host.GetSourceDisplayItem(msg.Offset); found {
+		m.host.UpdateSourceIndex(newIndex, m.host.State().DetailSource.Total)
+		m.host.State().Router.Replace(tuicore.GetNavTarget(item))
+		return m.host.ActivateView()
+	}
+	// Fall back to same-type navigation.
+	if id, newIndex, found := m.host.GetSourceItem(msg.Offset); found {
+		m.host.UpdateSourceIndex(newIndex, m.host.State().DetailSource.Total)
+		m.host.State().Router.Replace(msg.MakeLocation(id))
+		return m.host.ActivateView()
+	}
+	return nil
 }
 
 // handleKey processes keyboard input and returns updated model.
@@ -1068,22 +1128,20 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 }
 
 // handleNavigate processes navigation messages and updates location.
-func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
+func (m *Model) handleNavigate(msg tuicore.NavigateMsg) tea.Cmd {
 	// Restore nav panel if hidden (leaving fullscreen diff)
 	if m.navHidden {
 		m.navHidden = false
-		m.layout = NewLayout(m.layout.Width, m.layout.Height)
-		m.nav.SetSize(m.layout.NavWidth, m.layout.Height)
-		m.host.SetSize(m.layout.ContentWidth, m.layout.Height)
+		m.applyLayout(m.layout.Width, m.layout.Height)
 	}
 	// External URLs: open in browser instead of routing internally
 	if strings.HasPrefix(msg.Location.Path, "http") {
 		openBrowser(msg.Location.Path)
-		return m, nil
+		return nil
 	}
 	// Artifact export: download to ~/Downloads and open
 	if msg.Location.Path == "/export-artifact" {
-		return m, m.exportArtifact(tuicore.ExportArtifactMsg{
+		return m.exportArtifact(tuicore.ExportArtifactMsg{
 			RepoURL:  msg.Location.Param("repoURL"),
 			Version:  msg.Location.Param("version"),
 			Filename: msg.Location.Param("filename"),
@@ -1096,13 +1154,13 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 			resolved := filepath.Join(m.workdir, clean)
 			if _, err := os.Stat(resolved); err == nil {
 				openBrowser(resolved)
-				return m, nil
+				return nil
 			}
 		}
 	}
 	// File-like paths that couldn't be resolved: ignore instead of routing
 	if ext := filepath.Ext(msg.Location.Path); ext != "" {
-		return m, nil
+		return nil
 	}
 	switch msg.Action {
 	case tuicore.NavPush:
@@ -1130,7 +1188,7 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) (tea.Model, tea.Cmd) {
 	if !msg.KeepFocus {
 		m.setFocus(FocusContent)
 	}
-	return m, tea.Batch(m.host.ActivateView(), m.maybeLocalSync())
+	return tea.Batch(m.host.ActivateView(), m.maybeLocalSync())
 }
 
 // setFocus sets the focused panel and updates panel states.
