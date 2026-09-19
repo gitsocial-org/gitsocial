@@ -91,18 +91,7 @@ func TestGetPRComments_socialQueryError(t *testing.T) {
 	}
 }
 
-func TestGetFeedbackComments_notFound(t *testing.T) {
-	setupTestDB(t)
-	res := GetFeedbackComments("#commit:aaaa00000001@gitmsg/review", reviewTestRepoURL)
-	if res.Success {
-		t.Error("should fail for non-existent feedback")
-	}
-	if res.Error.Code != "NOT_FOUND" {
-		t.Errorf("Error.Code = %q, want NOT_FOUND", res.Error.Code)
-	}
-}
-
-func TestGetFeedbackComments_noComments(t *testing.T) {
+func TestGetCommentsByKey_feedbackNoComments(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/fbcmt-repo"
 	hash := "fc0e12345678"
@@ -111,16 +100,16 @@ func TestGetFeedbackComments_noComments(t *testing.T) {
 		ReviewStateField: cache.ToNullString("approved")})
 
 	refStr := repoURL + "#commit:" + hash + "@" + reviewTestBranch
-	res := GetFeedbackComments(refStr, repoURL)
+	res := GetCommentsByKey(repoURL, hash, refStr)
 	if !res.Success {
-		t.Fatalf("GetFeedbackComments() failed: %s", res.Error.Message)
+		t.Fatalf("GetCommentsByKey() failed: %s", res.Error.Message)
 	}
 	if len(res.Data) != 0 {
 		t.Errorf("expected 0 comments, got %d", len(res.Data))
 	}
 }
 
-func TestGetFeedbackComments_socialQueryError(t *testing.T) {
+func TestGetCommentsByKey_feedbackQueryError(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/fbsqerr"
 	hash := "fc4e42345678"
@@ -133,7 +122,7 @@ func TestGetFeedbackComments_socialQueryError(t *testing.T) {
 	})
 
 	refStr := repoURL + "#commit:" + hash + "@" + reviewTestBranch
-	res := GetFeedbackComments(refStr, repoURL)
+	res := GetCommentsByKey(repoURL, hash, refStr)
 	if res.Success {
 		t.Error("should fail when the social item table is dropped")
 	}
@@ -142,7 +131,7 @@ func TestGetFeedbackComments_socialQueryError(t *testing.T) {
 	}
 }
 
-func TestGetFeedbackComments_withComments(t *testing.T) {
+func TestGetCommentsByKey_feedbackWithComments(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/fbcmt-repo2"
 	fbHash := "fc2e22345678"
@@ -165,9 +154,9 @@ func TestGetFeedbackComments_withComments(t *testing.T) {
 	})
 
 	refStr := repoURL + "#commit:" + fbHash + "@" + reviewTestBranch
-	res := GetFeedbackComments(refStr, repoURL)
+	res := GetCommentsByKey(repoURL, fbHash, refStr)
 	if !res.Success {
-		t.Fatalf("GetFeedbackComments() failed: %s", res.Error.Message)
+		t.Fatalf("GetCommentsByKey() failed: %s", res.Error.Message)
 	}
 	if len(res.Data) != 1 {
 		t.Errorf("expected 1 comment, got %d", len(res.Data))

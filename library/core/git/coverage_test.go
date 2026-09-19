@@ -539,38 +539,6 @@ func TestCreateCommitTree_error(t *testing.T) {
 	}
 }
 
-func TestCreateOrphanBranch_createTreeError(t *testing.T) {
-	dir := initTestRepo(t)
-	restore := SetExecutor(mockExecutor(func(args []string) (*ExecResult, error, bool) {
-		if len(args) > 0 && args[0] == "commit-tree" {
-			return nil, errMock, true
-		}
-		return nil, nil, false
-	}))
-	defer restore()
-
-	err := CreateOrphanBranch(dir, "orphan")
-	if err == nil {
-		t.Fatal("CreateOrphanBranch() should error when commit-tree fails")
-	}
-}
-
-func TestCreateOrphanBranch_writeRefError(t *testing.T) {
-	dir := initTestRepo(t)
-	restore := SetExecutor(mockExecutor(func(args []string) (*ExecResult, error, bool) {
-		if len(args) > 0 && args[0] == "update-ref" {
-			return nil, errMock, true
-		}
-		return nil, nil, false
-	}))
-	defer restore()
-
-	err := CreateOrphanBranch(dir, "orphan")
-	if err == nil {
-		t.Fatal("CreateOrphanBranch() should error when write-ref fails")
-	}
-}
-
 func TestCreateCommit_parentCommitTreeError(t *testing.T) {
 	dir := initTestRepo(t)
 	head, _ := ReadRef(dir, "HEAD")

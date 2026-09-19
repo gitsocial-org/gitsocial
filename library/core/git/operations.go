@@ -1144,13 +1144,3 @@ func FastImportCommits(workdir, branch string, messages []string) ([]string, err
 	}
 	return hashes, nil
 }
-
-// CreateOrphanBranch creates a new orphan branch with an initial empty commit.
-func CreateOrphanBranch(workdir, branch string) error {
-	// Create initial commit on orphan branch
-	hash, err := CreateCommitTree(workdir, "Initialize "+branch+" branch", "")
-	if err != nil {
-		return err
-	}
-	return WriteRef(workdir, "refs/heads/"+branch, hash)
-}

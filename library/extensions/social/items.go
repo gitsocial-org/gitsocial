@@ -720,27 +720,6 @@ func getThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 	})
 }
 
-// resolvedVersion carries a resolved post and whether it was edited.
-type resolvedVersion struct {
-	Item     *SocialItem
-	IsEdited bool
-}
-
-// resolveCurrentVersion finds the latest version of a post.
-func resolveCurrentVersion(repoURL, hash, branch string, workspaceURL string) (resolvedVersion, error) {
-	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(repoURL, hash, branch)
-	if err != nil {
-		return resolvedVersion{}, err
-	}
-
-	item, err := GetSocialItem(canonicalRepoURL, canonicalHash, canonicalBranch, workspaceURL)
-	if err != nil {
-		return resolvedVersion{}, err
-	}
-
-	return resolvedVersion{Item: item, IsEdited: item.IsEdited}, nil
-}
-
 // getEditHistory returns every version of a post, latest first.
 func getEditHistory(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	canonicalID := protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch)

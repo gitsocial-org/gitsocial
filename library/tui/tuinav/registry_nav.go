@@ -62,12 +62,6 @@ func (r *NavRegistry) RegisterDynamic(parentID string, items []NavItem) {
 	r.version++
 }
 
-// ClearDynamic removes all dynamic children under a parent.
-func (r *NavRegistry) ClearDynamic(parentID string) {
-	delete(r.dynamic, parentID)
-	r.version++
-}
-
 // Version returns the current registry version for cache invalidation.
 func (r *NavRegistry) Version() int {
 	return r.version

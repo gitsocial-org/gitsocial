@@ -416,7 +416,8 @@ func pickFreeRemoteName(wsDir string) string {
 // mirror targets (the refresh form's "where to" — gitsocial.pushRemote).
 func s3PushRemotes(wsDir string) []mirrorTarget {
 	var targets []mirrorTarget
-	for _, name := range git.PushRemotes(wsDir) {
+	names, _ := git.ResolvePushRemotes(wsDir)
+	for _, name := range names {
 		url := git.RemoteURL(wsDir, name)
 		if strings.HasPrefix(url, "s3://") {
 			targets = append(targets, mirrorTarget{name: name, url: url, exists: true})

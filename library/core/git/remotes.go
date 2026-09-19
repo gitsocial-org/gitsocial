@@ -268,12 +268,6 @@ func PushRemote(workdir string) string {
 	return names[0]
 }
 
-// PushRemotes returns every remote a default push reaches.
-func PushRemotes(workdir string) []string {
-	names, _ := ResolvePushRemotes(workdir)
-	return names
-}
-
 // ConfiguredPushRemotes returns every configured gitsocial.pushRemote value
 // (git config --get-all), in config order, or nil when unset. The key is
 // multi-valued so a publish can fan out to several buckets.

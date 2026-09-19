@@ -1185,30 +1185,6 @@ func TestInsertSocialItem_editCommitSkipsInteractions(t *testing.T) {
 	}
 }
 
-func TestResolveCurrentVersion_notFound(t *testing.T) {
-	setupTestDB(t)
-	_, err := resolveCurrentVersion(itemsTestRepoURL, "nonexistent12", itemsTestBranch, "")
-	if err == nil {
-		t.Error("expected error for nonexistent item")
-	}
-}
-
-func TestResolveCurrentVersion_basicPost(t *testing.T) {
-	setupTestDB(t)
-	insertItemsTestCommit(t, itemsTestRepoURL, "rcv_12345678")
-	InsertSocialItem(SocialItem{RepoURL: itemsTestRepoURL, Hash: "rcv_12345678", Branch: itemsTestBranch, Type: "post"})
-	resolved, err := resolveCurrentVersion(itemsTestRepoURL, "rcv_12345678", itemsTestBranch, "")
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if resolved.Item == nil {
-		t.Fatal("Item should not be nil")
-	}
-	if resolved.Item.Hash != "rcv_12345678" {
-		t.Errorf("Hash = %q", resolved.Item.Hash)
-	}
-}
-
 func TestGetThread_withWorkspaceURL(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/thread"

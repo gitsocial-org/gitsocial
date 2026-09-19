@@ -105,21 +105,21 @@ func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error)
 	if err != nil {
 		forkCount = 0
 	}
-	fbCount, err := countUnreadFeedback(workspaceURL, userEmail)
-	if err != nil {
-		fbCount = 0
+	fbCount := 0
+	if fbNotifs, err := getFeedbackNotifications(workspaceURL, userEmail, true); err == nil {
+		fbCount = len(fbNotifs)
 	}
 	rrCount, err := countUnreadReviewRequested(userEmail)
 	if err != nil {
 		rrCount = 0
 	}
-	scCount, err := countUnreadPRStateChanges(userEmail)
-	if err != nil {
-		scCount = 0
+	scCount := 0
+	if scNotifs, err := getPRStateChangeNotifications(userEmail, true); err == nil {
+		scCount = len(scNotifs)
 	}
-	drCount, err := countUnreadDraftReady(workdir, workspaceURL, userEmail, forks)
-	if err != nil {
-		drCount = 0
+	drCount := 0
+	if drNotifs, err := getDraftReadyNotifications(workdir, workspaceURL, userEmail, forks, true); err == nil {
+		drCount = len(drNotifs)
 	}
 	bsCount := len(getBranchStateNotifications(workdir, workspaceURL, userEmail, forks))
 	return forkCount + fbCount + rrCount + scCount + drCount + bsCount, nil
@@ -280,15 +280,6 @@ func countUnreadForkPRs(workspaceURL, userEmail string, forkURLs []string) (int,
 	}
 	// Use query + post-filter approach since we need to check base ref targeting
 	notifs, err := getForkPRNotifications(workspaceURL, userEmail, forkURLs, true)
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
-}
-
-// countUnreadFeedback counts unread feedback notifications.
-func countUnreadFeedback(workspaceURL, userEmail string) (int, error) {
-	notifs, err := getFeedbackNotifications(workspaceURL, userEmail, true)
 	if err != nil {
 		return 0, err
 	}
@@ -465,15 +456,6 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 	})
 }
 
-// countUnreadPRStateChanges counts unread pr-merged/pr-closed notifications.
-func countUnreadPRStateChanges(userEmail string) (int, error) {
-	notifs, err := getPRStateChangeNotifications(userEmail, true)
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
-}
-
 // getDraftReadyNotifications returns one notification per draft-to-ready edit on a fork pull request.
 func getDraftReadyNotifications(workdir, workspaceURL, userEmail string, forkURLs []string, unreadOnly bool) ([]notifications.Notification, error) {
 	if len(forkURLs) == 0 {
@@ -573,15 +555,6 @@ func isNotificationRead(repoURL, hash, branch string) bool {
 		return count > 0, err
 	})
 	return err == nil && read
-}
-
-// countUnreadDraftReady counts unread draft-ready notifications.
-func countUnreadDraftReady(workdir, workspaceURL, userEmail string, forkURLs []string) (int, error) {
-	notifs, err := getDraftReadyNotifications(workdir, workspaceURL, userEmail, forkURLs, true)
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
 }
 
 // hasEmail reports whether email is an exact entry, ignoring surrounding space.

@@ -103,10 +103,10 @@ func TestNavRegistry_dynamic(t *testing.T) {
 		t.Errorf("dynamic child = %q", children[0].ID)
 	}
 
-	r.ClearDynamic("social")
+	r.RegisterDynamic("social", nil)
 	children = r.GetChildren("social")
 	if len(children) != 0 {
-		t.Errorf("after clear, len(GetChildren) = %d, want 0", len(children))
+		t.Errorf("after replacing them, len(GetChildren) = %d, want 0", len(children))
 	}
 }
 

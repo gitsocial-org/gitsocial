@@ -2381,7 +2381,7 @@ func TestLogsIntegration(t *testing.T) {
 func TestVersionAndResolve(t *testing.T) {
 	t.Parallel()
 
-	t.Run("resolveCurrentVersion", func(t *testing.T) {
+	t.Run("resolveEditedPost", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		post := CreatePost(workdir, "Original", nil)
@@ -2399,16 +2399,20 @@ func TestVersionAndResolve(t *testing.T) {
 
 		// Parse the original post ref to get repo, hash, branch
 		parsed := parseRefForTest(post.Data.ID)
-		resolved, err := resolveCurrentVersion(parsed.repo, parsed.hash, parsed.branch, workspaceURL)
+		canonRepo, canonHash, canonBranch, err := cache.ResolveToCanonical(parsed.repo, parsed.hash, parsed.branch)
 		if err != nil {
-			t.Fatalf("resolveCurrentVersion() error = %v", err)
+			t.Fatalf("ResolveToCanonical() error = %v", err)
 		}
-		if resolved.Item == nil {
-			t.Fatal("resolved.Item should not be nil")
+		item, err := GetSocialItem(canonRepo, canonHash, canonBranch, workspaceURL)
+		if err != nil {
+			t.Fatalf("GetSocialItem() error = %v", err)
+		}
+		if item == nil {
+			t.Fatal("item should not be nil")
 		}
 	})
 
-	t.Run("ResolveCurrentVersion_withEdit", func(t *testing.T) {
+	t.Run("resolveEditHashToCanonical", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		post := CreatePost(workdir, "Version 1", nil)
@@ -2426,17 +2430,21 @@ func TestVersionAndResolve(t *testing.T) {
 
 		// Resolve using the EDIT hash - should resolve to canonical
 		editParsed := parseRefForTest(edit.Data.ID)
-		resolved, err := resolveCurrentVersion(editParsed.repo, editParsed.hash, editParsed.branch, wsURL)
+		canonRepo, canonHash, canonBranch, err := cache.ResolveToCanonical(editParsed.repo, editParsed.hash, editParsed.branch)
 		if err != nil {
-			t.Fatalf("error = %v", err)
+			t.Fatalf("ResolveToCanonical() error = %v", err)
 		}
-		if resolved.Item == nil {
-			t.Fatal("resolved.Item should not be nil")
+		item, err := GetSocialItem(canonRepo, canonHash, canonBranch, wsURL)
+		if err != nil {
+			t.Fatalf("GetSocialItem() error = %v", err)
 		}
-		if resolved.Item.Content != "Version 2" {
-			t.Errorf("Content = %q, want Version 2", resolved.Item.Content)
+		if item == nil {
+			t.Fatal("item should not be nil")
 		}
-		if !resolved.IsEdited {
+		if item.Content != "Version 2" {
+			t.Errorf("Content = %q, want Version 2", item.Content)
+		}
+		if !item.IsEdited {
 			t.Error("IsEdited should be true")
 		}
 	})
@@ -3998,29 +4006,7 @@ func TestGetParentChain_withParent(t *testing.T) {
 	}
 }
 
-// --- resolveCurrentVersion / getEditHistory ---
-
-func TestResolveCurrentVersion_simple(t *testing.T) {
-	setupTestDB(t)
-	repoURL := "https://github.com/resolve/ver"
-	hash := "eee0cc112233"
-	branch := "main"
-	_ = cache.InsertCommits([]cache.Commit{{
-		Hash: hash, RepoURL: repoURL, Branch: branch,
-		AuthorName: "Test", AuthorEmail: "t@t.com",
-		Message: "A post", Timestamp: time.Now(),
-	}})
-	resolved, err := resolveCurrentVersion(repoURL, hash, branch, "")
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-	if resolved.Item == nil {
-		t.Fatal("Item should not be nil")
-	}
-	if resolved.Item.Hash != hash {
-		t.Errorf("Hash = %q, want %q", resolved.Item.Hash, hash)
-	}
-}
+// --- getEditHistory ---
 
 func TestGetEditHistory_noEdits(t *testing.T) {
 	setupTestDB(t)

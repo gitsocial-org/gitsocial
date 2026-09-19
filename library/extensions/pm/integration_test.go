@@ -977,10 +977,10 @@ func TestBoardAndConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("GetBoardConfig_default", func(t *testing.T) {
+	t.Run("ResolveBoardConfig_default", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		board := GetBoardConfig(workdir, "")
+		board := ResolveBoardConfig(GetPMConfig(workdir), "")
 		if board.Name == "" {
 			t.Error("board name should not be empty")
 		}
@@ -1003,7 +1003,7 @@ func TestBoardAndConfig(t *testing.T) {
 		if err := SetBoardConfig(workdir, board); err != nil {
 			t.Fatalf("SetBoardConfig() error = %v", err)
 		}
-		loaded := GetBoardConfig(workdir, "custom")
+		loaded := ResolveBoardConfig(GetPMConfig(workdir), "custom")
 		if loaded.ID != "custom" {
 			t.Errorf("ID = %q, want custom", loaded.ID)
 		}
@@ -1026,7 +1026,7 @@ func TestBoardAndConfig(t *testing.T) {
 		if err := SetBoardConfig(workdir, board); err != nil {
 			t.Fatalf("SetBoardConfig() update error = %v", err)
 		}
-		loaded := GetBoardConfig(workdir, "update-me")
+		loaded := ResolveBoardConfig(GetPMConfig(workdir), "update-me")
 		if loaded.Name != "Updated" {
 			t.Errorf("Name = %q, want Updated", loaded.Name)
 		}

@@ -85,12 +85,6 @@ func GetPMConfig(workdir string) PMConfig {
 	return config
 }
 
-// GetBoardConfig reads the board configuration, deriving from framework if set.
-func GetBoardConfig(workdir string, boardID string) BoardConfig {
-	config := GetPMConfig(workdir)
-	return ResolveBoardConfig(config, boardID)
-}
-
 // ResolveBoardConfig derives board config from PMConfig, using framework defaults.
 func ResolveBoardConfig(config PMConfig, boardID string) BoardConfig {
 	// Check for custom board by ID

@@ -204,7 +204,7 @@ func TestGetFeedbackNotifications_plainFeedback(t *testing.T) {
 	}
 }
 
-func TestCountUnreadFeedback(t *testing.T) {
+func TestGetFeedbackNotifications_unreadCount(t *testing.T) {
 	setupTestDB(t)
 	wsURL := "https://github.com/ws/cntfb"
 	prHash := "cuf_012345678"
@@ -224,23 +224,23 @@ func TestCountUnreadFeedback(t *testing.T) {
 		PullRequestRepoURL: cache.ToNullString(wsURL), PullRequestHash: cache.ToNullString(prHash), PullRequestBranch: cache.ToNullString(reviewTestBranch),
 	})
 
-	count, err := countUnreadFeedback(wsURL, "me@test.com")
+	notifs, err := getFeedbackNotifications(wsURL, "me@test.com", true)
 	if err != nil {
-		t.Fatalf("countUnreadFeedback() error = %v", err)
+		t.Fatalf("getFeedbackNotifications() error = %v", err)
 	}
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if len(notifs) != 1 {
+		t.Errorf("count = %d, want 1", len(notifs))
 	}
 }
 
-func TestCountUnreadFeedback_empty(t *testing.T) {
+func TestGetFeedbackNotifications_unreadCountEmpty(t *testing.T) {
 	setupTestDB(t)
-	count, err := countUnreadFeedback(reviewTestRepoURL, "me@test.com")
+	notifs, err := getFeedbackNotifications(reviewTestRepoURL, "me@test.com", true)
 	if err != nil {
-		t.Fatalf("countUnreadFeedback() error = %v", err)
+		t.Fatalf("getFeedbackNotifications() error = %v", err)
 	}
-	if count != 0 {
-		t.Errorf("count = %d, want 0", count)
+	if len(notifs) != 0 {
+		t.Errorf("count = %d, want 0", len(notifs))
 	}
 }
 

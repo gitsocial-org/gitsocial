@@ -486,20 +486,6 @@ func TestCreateCommitTree_withParent(t *testing.T) {
 	}
 }
 
-func TestCreateOrphanBranch(t *testing.T) {
-	t.Parallel()
-	dir := initTestRepo(t)
-
-	err := CreateOrphanBranch(dir, "orphan-test")
-	if err != nil {
-		t.Fatalf("CreateOrphanBranch() error = %v", err)
-	}
-
-	if !BranchExists(dir, "orphan-test") {
-		t.Error("orphan branch should exist")
-	}
-}
-
 func TestCreateCommitOnBranch(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
