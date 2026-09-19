@@ -38,7 +38,7 @@ SELECT
     c.hash,
     c.branch,
     c.effective_message AS resolved_message,
-    c.message AS original_message,
+    c.message AS raw_message,
     c.edits,
     c.is_retracted,
     c.has_edits,

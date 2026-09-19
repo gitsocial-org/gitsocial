@@ -11,7 +11,7 @@ import (
 // ResolvedCommonColumns is the commit-level column prefix shared by every
 // extension's resolved-view SELECT. Expects the view aliased as v.
 const ResolvedCommonColumns = `v.repo_url, v.hash, v.branch,
-       v.author_name, v.author_email, v.resolved_message, v.original_message, v.timestamp`
+       v.author_name, v.author_email, v.resolved_message, v.raw_message, v.timestamp`
 
 // ResolvedFlagColumns are the resolved-state flag columns shared by every
 // extension's resolved-view SELECT. Expects the view aliased as v.
@@ -53,26 +53,26 @@ type RowScanner interface {
 }
 
 // ResolvedMeta carries the commit-level fields of a row produced by
-// ResolvedSelect. Message and OriginalMessage hold the raw values for
+// ResolvedSelect. Message and RawMessage hold the unparsed values for
 // extensions that parse them differently; Content, Origin and Timestamp hold
 // the standard interpretation.
 type ResolvedMeta struct {
-	RepoURL         string
-	Hash            string
-	Branch          string
-	AuthorName      string
-	AuthorEmail     string
-	Message         sql.NullString // raw resolved_message
-	OriginalMessage sql.NullString // raw original_message
-	Content         string         // clean content extracted from Message
-	Origin          *protocol.Origin
-	Timestamp       time.Time
-	EditOf          sql.NullString
-	IsVirtual       bool
-	IsRetracted     bool
-	IsEdited        bool
-	HasProposed     bool
-	Comments        int
+	RepoURL     string
+	Hash        string
+	Branch      string
+	AuthorName  string
+	AuthorEmail string
+	Message     sql.NullString // resolved_message: the latest edit's
+	RawMessage  sql.NullString // raw_message: the commit's own
+	Content     string         // clean content extracted from Message
+	Origin      *protocol.Origin
+	Timestamp   time.Time
+	EditOf      sql.NullString
+	IsVirtual   bool
+	IsRetracted bool
+	IsEdited    bool
+	HasProposed bool
+	Comments    int
 }
 
 // ScanResolved scans a row produced by ResolvedSelect: the shared commit
@@ -83,7 +83,7 @@ func ScanResolved(s RowScanner, extensionDest ...any) (*ResolvedMeta, error) {
 	var isVirtual, isRetracted, hasEdits, hasProposed int
 	dest := make([]any, 0, 14+len(extensionDest))
 	dest = append(dest, &m.RepoURL, &m.Hash, &m.Branch,
-		&m.AuthorName, &m.AuthorEmail, &m.Message, &m.OriginalMessage, &ts)
+		&m.AuthorName, &m.AuthorEmail, &m.Message, &m.RawMessage, &ts)
 	dest = append(dest, extensionDest...)
 	dest = append(dest, &m.EditOf, &isVirtual, &isRetracted, &hasEdits, &m.Comments, &hasProposed)
 	if err := s.Scan(dest...); err != nil {
@@ -92,8 +92,8 @@ func ScanResolved(s RowScanner, extensionDest ...any) (*ResolvedMeta, error) {
 	if m.Message.Valid {
 		m.Content = protocol.ExtractCleanContent(m.Message.String)
 	}
-	if m.OriginalMessage.Valid {
-		if msg := protocol.ParseMessage(m.OriginalMessage.String); msg != nil {
+	if m.RawMessage.Valid {
+		if msg := protocol.ParseMessage(m.RawMessage.String); msg != nil {
 			m.Origin = protocol.ExtractOrigin(&msg.Header)
 		}
 	}

@@ -554,8 +554,8 @@ func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, e
 			item.Content = meta.Content
 		}
 	}
-	if meta.OriginalMessage.Valid {
-		if msg := protocol.ParseMessage(meta.OriginalMessage.String); msg != nil {
+	if meta.RawMessage.Valid {
+		if msg := protocol.ParseMessage(meta.RawMessage.String); msg != nil {
 			item.Adopts = msg.Header.Fields["adopts"]
 		}
 	}

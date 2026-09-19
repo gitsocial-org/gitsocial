@@ -220,6 +220,7 @@ Outside the tree:
 |------|---------|---------|
 | `original` | GITSOCIAL field | the post being commented on, reposted or quoted |
 | `canonical` | versioning | the first version of a message |
+| `raw` | versioning | the commit's own message, before any edit applies |
 | `edits` | GITMSG field | the reference to the canonical version an edit replaces |
 
 ## Cache
