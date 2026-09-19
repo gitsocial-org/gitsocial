@@ -16,6 +16,7 @@ import (
 
 type pmNotificationProvider struct{}
 
+// init registers the pm notification provider.
 func init() {
 	notifications.RegisterProvider("pm", &pmNotificationProvider{})
 }

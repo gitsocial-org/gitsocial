@@ -131,11 +131,13 @@ func canonicalHeaderLines(req *http.Request) (signedHeaders, canonicalHeaders st
 	return strings.Join(names, ";"), strings.Join(lines, "\n") + "\n"
 }
 
+// hexSHA256 returns the hex SHA-256 digest of the data.
 func hexSHA256(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
 
+// hmacSHA256 returns the HMAC-SHA-256 of the data under the key.
 func hmacSHA256(key []byte, data string) []byte {
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(data))

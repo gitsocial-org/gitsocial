@@ -145,6 +145,7 @@ func (a *Adapter) batchReleaseUpdatedAt(tags []string) map[string]time.Time {
 	return result
 }
 
+// buildArtifactURL returns the release download URL for a tag.
 func buildArtifactURL(owner, repo, tag string) string {
 	return fmt.Sprintf("https://github.com/%s/%s/releases/download/%s",
 		owner, repo, strings.ReplaceAll(tag, " ", "%20"))

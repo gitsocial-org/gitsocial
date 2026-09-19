@@ -316,6 +316,7 @@ func (f *Fixture) seedSocialPanic(workdir string) {
 	social.EditPost(workdir, post.Data.ID, f.EditedContent, nil)
 }
 
+// seedPMPanic seeds one issue per state plus a milestone and a sprint.
 func (f *Fixture) seedPMPanic(workdir string) {
 	f.IssueSubject = "Add dark mode support"
 	issue1 := pm.CreateIssue(workdir, f.IssueSubject, "Users can toggle between light and dark themes in settings.", pm.CreateIssueOptions{})
@@ -342,6 +343,7 @@ func (f *Fixture) seedPMPanic(workdir string) {
 	}
 }
 
+// seedReleasePanic seeds the fixture's stable release and its prerelease.
 func (f *Fixture) seedReleasePanic(workdir string) {
 	f.ReleaseSubject = "Release v1.0.0"
 	f.ReleaseTag = "v1.0.0"
@@ -356,6 +358,7 @@ func (f *Fixture) seedReleasePanic(workdir string) {
 	})
 }
 
+// seedReviewPanic seeds two branches, an approved pull request and a merged one.
 func (f *Fixture) seedReviewPanic(workdir string) {
 	if _, err := git.ExecGit(workdir, []string{"branch", "dark-mode"}); err != nil {
 		panic(fmt.Sprintf("git branch dark-mode: %v", err))
@@ -576,6 +579,7 @@ func resetTimestampsPanic() {
 	}
 }
 
+// syncAllPanic syncs the workspace into the cache, ignoring the outcome.
 func syncAllPanic(workdir string) {
 	_ = client.SyncWorkspace(workdir)
 }

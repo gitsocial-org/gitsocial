@@ -127,6 +127,7 @@ func mailParentDomain(host string) string {
 	return ""
 }
 
+// init registers the DNS identity cache schema.
 func init() {
 	cache.RegisterSchema("identity_dns", dnsCacheSchema)
 }

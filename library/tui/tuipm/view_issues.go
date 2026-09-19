@@ -106,6 +106,7 @@ func (v *issuesView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadIssues()
 }
 
+// loadIssues fetches the first page of issues from the repository and its forks.
 func (v *issuesView) loadIssues() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -139,6 +140,7 @@ func (v *issuesView) loadIssues() tea.Cmd {
 	}
 }
 
+// loadMoreIssues fetches the next page of issues from the pagination cursor.
 func (v *issuesView) loadMoreIssues() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -296,6 +298,7 @@ func (v *issuesView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
+// handleKey toggles the state and assignee filters, refreshes, opens the new-issue form and starts a search.
 func (v *issuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "F":
@@ -341,6 +344,7 @@ func (v *issuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	return nil
 }
 
+// handleSearchKey feeds the search input and refilters the list on every keystroke.
 func (v *issuesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":

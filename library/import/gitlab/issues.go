@@ -64,6 +64,7 @@ func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error
 	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Comments: comments, Filtered: filtered}, nil
 }
 
+// fetchMilestones returns the project's milestones.
 func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.ImportMilestone, error) {
 	var raw []glMilestone
 	path := fmt.Sprintf("projects/%s/milestones?state=all&per_page=100", a.projectPath())
@@ -96,6 +97,7 @@ func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.Impo
 	return out, nil
 }
 
+// fetchIssues returns the project's issues and how many were filtered out.
 func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIssue, int, error) {
 	unlimited := opts.Limit == 0
 	limit := opts.Limit
@@ -325,6 +327,7 @@ func (a *Adapter) fetchBlockingLinksGraphQL() map[int]graphqlBlockingLinks {
 	return result
 }
 
+// normalizeMilestoneState maps a GitLab milestone state to the GitSocial one.
 func normalizeMilestoneState(state string) string {
 	switch state {
 	case "active":
@@ -336,6 +339,7 @@ func normalizeMilestoneState(state string) string {
 	}
 }
 
+// normalizeIssueState maps a GitLab issue state to the GitSocial one.
 func normalizeIssueState(state string) string {
 	switch state {
 	case "opened":
@@ -374,6 +378,7 @@ func (a *Adapter) fetchIssueLinks(iid int) (blocks, blockedBy, related []string)
 	return blocks, blockedBy, related
 }
 
+// mapIssueState maps a GitSocial state to the GitLab query value.
 func mapIssueState(state string) string {
 	switch state {
 	case "open":

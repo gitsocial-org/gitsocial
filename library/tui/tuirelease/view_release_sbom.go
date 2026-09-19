@@ -124,6 +124,7 @@ func (v *releaseSBOMView) Bindings() []tuicore.Binding {
 	}
 }
 
+// buildSections rebuilds the SBOM sections from the loaded summary: the summary card, then the packages.
 func (v *releaseSBOMView) buildSections() {
 	if v.sbomSummary == nil {
 		return
@@ -173,6 +174,7 @@ func (v *releaseSBOMView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// renderSummaryCard renders the format, package count, generator and generation time rows of the SBOM.
 func (v *releaseSBOMView) renderSummaryCard(s *release.SBOMSummary, _ int, selected bool) []string {
 	selectionBar := " "
 	if selected {

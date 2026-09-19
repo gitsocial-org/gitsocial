@@ -15,6 +15,7 @@ import (
 
 var CoreSite = tuicore.RegisterContext("core.site")
 
+// init registers the site customization view at /config/site.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/site", Context: CoreSite, Title: "Site", Icon: "◱", NavItemID: "config.site"})
 }

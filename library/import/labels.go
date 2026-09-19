@@ -30,6 +30,7 @@ func MapLabels(labels []string, mode string) []string {
 	return out
 }
 
+// autoMapLabel returns the scoped GitSocial label for a forge label.
 func autoMapLabel(label string) string {
 	normalized := strings.ToLower(strings.TrimSpace(label))
 	normalized = strings.ReplaceAll(normalized, " ", "-")

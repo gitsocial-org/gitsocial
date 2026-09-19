@@ -170,6 +170,7 @@ func (t *TagField) tagCount() int {
 	return len(*t.value)
 }
 
+// activeStyles returns the focused or blurred field styles of the active theme.
 func (t *TagField) activeStyles() *huh.FieldStyles {
 	theme := t.theme
 	if theme == nil {

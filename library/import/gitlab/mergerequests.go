@@ -157,6 +157,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	return &importpkg.ReviewPlan{Forks: forks, PRs: prs, Comments: comments, Filtered: filtered}, nil
 }
 
+// normalizeMRState maps a GitLab merge request state to the GitSocial one.
 func normalizeMRState(state string) string {
 	switch state {
 	case "opened":
@@ -170,6 +171,7 @@ func normalizeMRState(state string) string {
 	}
 }
 
+// mapMRState maps a GitSocial state to the GitLab query value.
 func mapMRState(state string) string {
 	switch state {
 	case "open":

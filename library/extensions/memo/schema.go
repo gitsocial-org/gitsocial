@@ -3,6 +3,7 @@ package memo
 
 import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
+// init registers the memo table schema.
 func init() {
 	cache.RegisterSchema("memo", schema)
 }

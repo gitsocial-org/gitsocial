@@ -8,6 +8,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
+// init registers the social table schema and its migration.
 func init() {
 	cache.RegisterSchema("social", schema)
 	cache.RegisterMigration(retireLegacySocialTables)

@@ -29,6 +29,7 @@ func newPersonalCmd() *cobra.Command {
 	return cmd
 }
 
+// newPersonalInitCmd builds the command that creates the personal bare repo.
 func newPersonalInitCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
@@ -64,6 +65,7 @@ func newPersonalInitCmd() *cobra.Command {
 	return cmd
 }
 
+// newPersonalSyncCmd builds the command that syncs the personal repo.
 func newPersonalSyncCmd() *cobra.Command {
 	var pushOnly, fetchOnly bool
 	cmd := &cobra.Command{
@@ -146,6 +148,7 @@ are re-indexed into the cache.`,
 	return cmd
 }
 
+// newPersonalStatusCmd builds the command that shows the personal repo state.
 func newPersonalStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
@@ -183,6 +186,7 @@ func newPersonalStatusCmd() *cobra.Command {
 	}
 }
 
+// personalHasOrigin reports whether the personal repo has an origin remote.
 func personalHasOrigin(path string) bool {
 	out, err := git.ExecGit(path, []string{"config", "--get", "remote.origin.url"})
 	if err != nil {
@@ -191,6 +195,7 @@ func personalHasOrigin(path string) bool {
 	return trimNewline(out.Stdout) != ""
 }
 
+// trimNewline strips trailing newlines and carriage returns.
 func trimNewline(s string) string {
 	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
 		s = s[:len(s)-1]
@@ -198,6 +203,7 @@ func trimNewline(s string) string {
 	return s
 }
 
+// boolLabel renders a bool as yes or no.
 func boolLabel(b bool) string {
 	if b {
 		return "yes"

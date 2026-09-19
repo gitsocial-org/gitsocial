@@ -100,6 +100,7 @@ Examples:
 	return cmd
 }
 
+// newImportSubCmd builds the import subcommand for one set of extensions.
 func newImportSubCmd(name, short string, extensions []string, defaultLimit int) *cobra.Command {
 	var f importFlags
 	hasSocial := false
@@ -386,6 +387,7 @@ func newImportSpinner(out, err io.Writer) *importSpinner {
 	}
 }
 
+// Update takes a progress event and updates the spinner line.
 func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -420,6 +422,7 @@ func (s *importSpinner) Update(ev importpkg.ProgressEvent) {
 	s.message = fmt.Sprintf("%s %s...%s", verb, desc, suffix)
 }
 
+// Start animates the spinner line until Stop.
 func (s *importSpinner) Start() {
 	go func() {
 		defer close(s.done)
@@ -445,11 +448,13 @@ func (s *importSpinner) Start() {
 	}()
 }
 
+// Stop ends the animation and waits for it to finish.
 func (s *importSpinner) Stop() {
 	close(s.stop)
 	<-s.done
 }
 
+// clearLine erases the spinner line.
 func (s *importSpinner) clearLine() {
 	fmt.Fprintf(s.err, "\r\033[K")
 }
@@ -620,6 +625,7 @@ func formatCount(n int) string {
 	return string(result)
 }
 
+// createAdapter returns the import adapter for a hosting service.
 func createAdapter(host protocol.HostingService, repoURL, owner, repo, apiURL, token string) (importpkg.SourceAdapter, error) {
 	switch host {
 	case protocol.HostGitHub:
@@ -638,6 +644,7 @@ func createAdapter(host protocol.HostingService, repoURL, owner, repo, apiURL, t
 	}
 }
 
+// parseDate parses a date in YYYY-MM-DD form.
 func parseDate(s string) (time.Time, error) {
 	return time.Parse("2006-01-02", s)
 }

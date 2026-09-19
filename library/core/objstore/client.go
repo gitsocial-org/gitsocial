@@ -110,7 +110,10 @@ type httpStatusError struct {
 	err  error
 }
 
+// Error renders the wrapped request error.
 func (e *httpStatusError) Error() string { return e.err.Error() }
+
+// Unwrap returns the wrapped error.
 func (e *httpStatusError) Unwrap() error { return e.err }
 
 // isTransientFault reports whether a failed request is worth retrying; a 404, 403, 412 or other 4xx is a definite answer.

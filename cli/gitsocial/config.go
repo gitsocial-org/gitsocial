@@ -40,6 +40,7 @@ func NewExtConfigCmd(ext string) *cobra.Command {
 	return cmd
 }
 
+// newExtConfigGetCmd builds the command that prints one extension config value.
 func newExtConfigGetCmd(ext string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <key>",
@@ -66,6 +67,7 @@ func newExtConfigGetCmd(ext string) *cobra.Command {
 	}
 }
 
+// newExtConfigSetCmd builds the command that sets one extension config value.
 func newExtConfigSetCmd(ext string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <key> <value>",
@@ -92,6 +94,7 @@ func newExtConfigSetCmd(ext string) *cobra.Command {
 	}
 }
 
+// newExtConfigListCmd builds the command that lists an extension's config values.
 func newExtConfigListCmd(ext string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -223,6 +226,7 @@ func readSiteConfigMap(workdir string) map[string]interface{} {
 	return map[string]interface{}{}
 }
 
+// newSiteConfigGetCmd builds the command that prints one site customization value.
 func newSiteConfigGetCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
@@ -253,6 +257,7 @@ func newSiteConfigGetCmd() *cobra.Command {
 	return cmd
 }
 
+// newSiteConfigListCmd builds the command that lists site customization values.
 func newSiteConfigListCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{
@@ -292,6 +297,7 @@ func siteConfigDisplay(key, value string) string {
 	return value
 }
 
+// newSiteConfigSetCmd builds the command that sets a site customization value.
 func newSiteConfigSetCmd() *cobra.Command {
 	var remote string
 	cmd := &cobra.Command{

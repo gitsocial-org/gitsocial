@@ -373,6 +373,7 @@ func scanResolvedRow(s cache.RowScanner) (*MemoItem, error) {
 	return &item, nil
 }
 
+// populateFromMessage fills a memo item's content, origin and timestamp from its row.
 func populateFromMessage(item *MemoItem, message, originalMessage, ts sql.NullString) {
 	if message.Valid {
 		item.Content = protocol.ExtractCleanContent(message.String)

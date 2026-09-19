@@ -65,6 +65,7 @@ func FormatItemCounts(c ItemCounts) string {
 	return strings.Join(parts, ", ")
 }
 
+// formatCountWithLabel renders a count with thousands separators and its noun.
 func formatCountWithLabel(n int, singular, plural string) string {
 	s := fmt.Sprintf("%d", n)
 	if len(s) > 3 {

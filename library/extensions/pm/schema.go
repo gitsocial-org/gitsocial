@@ -3,6 +3,7 @@ package pm
 
 import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
+// init registers the pm table schema.
 func init() {
 	cache.RegisterSchema("pm", schema)
 }

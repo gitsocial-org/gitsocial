@@ -13,6 +13,7 @@ import (
 
 type releaseNotificationProvider struct{}
 
+// init registers the release notification provider.
 func init() {
 	notifications.RegisterProvider("release", &releaseNotificationProvider{})
 }

@@ -471,6 +471,7 @@ func (v *prDetailView) resolveCurrentReview() (feedbackIdx, commentIdx int) {
 	return entry[0], entry[1]
 }
 
+// focusToID selects the comment, review or review comment named by focusID.
 func (v *prDetailView) focusToID() {
 	// Try comments first
 	for i, c := range v.comments {
@@ -563,6 +564,7 @@ func (v *prDetailView) loadDiff(pr *review.PullRequest) tea.Cmd {
 	}
 }
 
+// buildSections lays the view out as the PR card, then the stack, commits, reviews and comments.
 func (v *prDetailView) buildSections() {
 	var sections []tuicore.Section
 	v.reviewFlatMap = nil
@@ -814,6 +816,7 @@ func (v *prDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// navigateToFeedback opens the feedback form for this pull request in the given review state.
 func (v *prDetailView) navigateToFeedback(state string) tea.Cmd {
 	prID := v.pr.ID
 	return func() tea.Msg {
@@ -824,6 +827,7 @@ func (v *prDetailView) navigateToFeedback(state string) tea.Cmd {
 	}
 }
 
+// doMerge merges the pull request with the chosen strategy and publishes the merged base.
 func (v *prDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -841,6 +845,7 @@ func (v *prDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
 	}
 }
 
+// doSync brings the head branch up to date with its base by rebase or merge.
 func (v *prDetailView) doSync(strategy string) tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -853,6 +858,7 @@ func (v *prDetailView) doSync(strategy string) tea.Cmd {
 	}
 }
 
+// doClose closes the pull request without merging it.
 func (v *prDetailView) doClose() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -865,6 +871,7 @@ func (v *prDetailView) doClose() tea.Cmd {
 	}
 }
 
+// doMarkReady takes the pull request out of draft.
 func (v *prDetailView) doMarkReady() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -877,6 +884,7 @@ func (v *prDetailView) doMarkReady() tea.Cmd {
 	}
 }
 
+// doConvertToDraft puts the pull request back into draft.
 func (v *prDetailView) doConvertToDraft() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -889,6 +897,7 @@ func (v *prDetailView) doConvertToDraft() tea.Cmd {
 	}
 }
 
+// doUpdateTips records the current base and head tips on the pull request.
 func (v *prDetailView) doUpdateTips() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -967,6 +976,7 @@ func (v *prDetailView) tipStaleMarker(side, storedTip string) string {
 	return "  " + tuicore.Warning.Render("⚠ updated to #"+observedTip+" (press u)")
 }
 
+// doRetract withdraws the pull request.
 func (v *prDetailView) doRetract() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
@@ -1337,6 +1347,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	return lines
 }
 
+// renderStackRow renders one stack entry as a row of state icon, position, subject and branches.
 func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
@@ -1377,6 +1388,7 @@ func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected b
 	return []string{selectionBar + line}
 }
 
+// renderCommitRow renders one commit as a row of short hash, subject and author.
 func (v *prDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
@@ -1394,6 +1406,7 @@ func (v *prDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searc
 	return []string{selectionBar + line}
 }
 
+// renderReviewRow renders one feedback card, its review-age note and, for inline feedback, its code context.
 func (v *prDetailView) renderReviewRow(r review.Feedback, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, vr *review.VersionAwareReview) []string {
 	isWorkspace := r.Repository == v.workspaceURL
 	card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
@@ -1436,6 +1449,7 @@ func (v *prDetailView) renderReviewRow(r review.Feedback, width int, selected bo
 	return lines
 }
 
+// renderSuggestionPreview renders the suggested replacement against the current file as a small diff.
 func (v *prDetailView) renderSuggestionPreview(r review.Feedback, width int, selectionBar, iconPad string) []string {
 	suggested := review.ParseSuggestionCode(r.Content)
 	if suggested == "" {
@@ -1499,6 +1513,7 @@ func (v *prDetailView) renderSuggestionPreview(r review.Feedback, width int, sel
 	return lines
 }
 
+// renderCodeContextLines renders the highlighted source lines around the one the feedback anchors to.
 func (v *prDetailView) renderCodeContextLines(r review.Feedback, width int, selectionBar, iconPad string) []string {
 	if v.pr == nil {
 		return nil

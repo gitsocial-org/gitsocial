@@ -246,6 +246,7 @@ func (v *releaseDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
+// buildSections rebuilds the detail sections from the loaded release: the card, then the comment thread.
 func (v *releaseDetailView) buildSections() {
 	if v.rel == nil {
 		return
@@ -359,6 +360,7 @@ func (v *releaseDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// doRetract retracts the shown release and delivers the outcome as a releaseRetractedMsg.
 func (v *releaseDetailView) doRetract() tea.Cmd {
 	releaseID := v.rel.ID
 	workdir := v.workdir

@@ -57,8 +57,10 @@ func newMemoCreateForm(workdir, defaultTier string) *memoForm {
 	return f
 }
 
+// isCreateMode reports whether the form creates a memo rather than editing one.
 func (f *memoForm) isCreateMode() bool { return f.memoID == "" }
 
+// buildForm assembles the memo form's fields and its huh form.
 func (f *memoForm) buildForm() {
 	pad := tuicore.PadLabel
 

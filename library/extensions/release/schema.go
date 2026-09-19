@@ -3,6 +3,7 @@ package release
 
 import "github.com/gitsocial-org/gitsocial/library/core/cache"
 
+// init registers the release table schema.
 func init() {
 	cache.RegisterSchema("release", schema)
 }

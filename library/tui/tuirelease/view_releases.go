@@ -194,6 +194,7 @@ func (v *releasesView) IsInputActive() bool {
 	return v.searchActive
 }
 
+// handleKey handles the list keys: n opens the new release form, r reloads the list, / opens search.
 func (v *releasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "n":
@@ -217,6 +218,7 @@ func (v *releasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// handleSearchKey handles keys while the search input is focused: esc clears, enter applies the filter.
 func (v *releasesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
@@ -356,6 +358,7 @@ type releasesLoadedMsg struct {
 	err      error
 }
 
+// loadReleases fetches the first page of releases for the workspace and delivers a releasesLoadedMsg.
 func (v *releasesView) loadReleases() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
@@ -375,6 +378,7 @@ func (v *releasesView) loadReleases() tea.Cmd {
 	}
 }
 
+// loadMoreReleases fetches the next page after the pagination cursor and delivers a releasesLoadedMsg.
 func (v *releasesView) loadMoreReleases() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir

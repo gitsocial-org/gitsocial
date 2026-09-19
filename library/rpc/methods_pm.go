@@ -67,6 +67,7 @@ func pmGetIssues(s *Server) HandlerFunc {
 	}
 }
 
+// pmGetIssue handles pm.getIssue, returning one issue by ref.
 func pmGetIssue() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -82,6 +83,7 @@ func pmGetIssue() HandlerFunc {
 	}
 }
 
+// pmCreateIssue handles pm.createIssue, creating an issue from the given fields.
 func pmCreateIssue(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -126,6 +128,7 @@ func pmCreateIssue(s *Server) HandlerFunc {
 	}
 }
 
+// pmUpdateIssue handles pm.updateIssue, applying the fields the caller sends.
 func pmUpdateIssue(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -176,18 +179,21 @@ func pmUpdateIssue(s *Server) HandlerFunc {
 	}
 }
 
+// pmCloseIssue handles pm.closeIssue, closing the issue at a ref.
 func pmCloseIssue(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CloseIssue(workdir, ref))
 	}, s)
 }
 
+// pmReopenIssue handles pm.reopenIssue, reopening the issue at a ref.
 func pmReopenIssue(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.ReopenIssue(workdir, ref))
 	}, s)
 }
 
+// pmRetractIssue handles pm.retractIssue, retracting the issue at a ref.
 func pmRetractIssue(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.RetractIssue(workdir, ref))
@@ -227,6 +233,7 @@ func pmGetLinks() HandlerFunc {
 	}
 }
 
+// pmIsBlocked handles pm.isBlocked, reporting whether an issue is blocked.
 func pmIsBlocked() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -267,6 +274,7 @@ func pmGetMilestones(s *Server) HandlerFunc {
 	}
 }
 
+// pmGetMilestone handles pm.getMilestone, returning one milestone by ref.
 func pmGetMilestone() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -282,6 +290,7 @@ func pmGetMilestone() HandlerFunc {
 	}
 }
 
+// pmCreateMilestone handles pm.createMilestone, creating a milestone.
 func pmCreateMilestone(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -308,6 +317,7 @@ func pmCreateMilestone(s *Server) HandlerFunc {
 	}
 }
 
+// pmUpdateMilestone handles pm.updateMilestone, applying the fields the caller sends.
 func pmUpdateMilestone(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -340,30 +350,35 @@ func pmUpdateMilestone(s *Server) HandlerFunc {
 	}
 }
 
+// pmCloseMilestone handles pm.closeMilestone, closing the milestone at a ref.
 func pmCloseMilestone(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CloseMilestone(workdir, ref))
 	}, s)
 }
 
+// pmReopenMilestone handles pm.reopenMilestone, reopening the milestone at a ref.
 func pmReopenMilestone(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.ReopenMilestone(workdir, ref))
 	}, s)
 }
 
+// pmCancelMilestone handles pm.cancelMilestone, canceling the milestone at a ref.
 func pmCancelMilestone(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CancelMilestone(workdir, ref))
 	}, s)
 }
 
+// pmRetractMilestone handles pm.retractMilestone, retracting the milestone at a ref.
 func pmRetractMilestone(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.RetractMilestone(workdir, ref))
 	}, s)
 }
 
+// pmGetMilestoneIssues handles pm.getMilestoneIssues, returning a milestone's issues.
 func pmGetMilestoneIssues() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -405,6 +420,7 @@ func pmGetSprints(s *Server) HandlerFunc {
 	}
 }
 
+// pmGetSprint handles pm.getSprint, returning one sprint by ref.
 func pmGetSprint() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -420,6 +436,7 @@ func pmGetSprint() HandlerFunc {
 	}
 }
 
+// pmCreateSprint handles pm.createSprint, creating a sprint.
 func pmCreateSprint(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -452,6 +469,7 @@ func pmCreateSprint(s *Server) HandlerFunc {
 	}
 }
 
+// pmUpdateSprint handles pm.updateSprint, applying the fields the caller sends.
 func pmUpdateSprint(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -490,30 +508,35 @@ func pmUpdateSprint(s *Server) HandlerFunc {
 	}
 }
 
+// pmActivateSprint handles pm.activateSprint, starting the sprint at a ref.
 func pmActivateSprint(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.ActivateSprint(workdir, ref))
 	}, s)
 }
 
+// pmCompleteSprint handles pm.completeSprint, completing the sprint at a ref.
 func pmCompleteSprint(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CompleteSprint(workdir, ref))
 	}, s)
 }
 
+// pmCancelSprint handles pm.cancelSprint, canceling the sprint at a ref.
 func pmCancelSprint(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CancelSprint(workdir, ref))
 	}, s)
 }
 
+// pmRetractSprint handles pm.retractSprint, retracting the sprint at a ref.
 func pmRetractSprint(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.RetractSprint(workdir, ref))
 	}, s)
 }
 
+// pmGetSprintIssues handles pm.getSprintIssues, returning a sprint's issues.
 func pmGetSprintIssues() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -565,6 +588,7 @@ func pmCommentOnItem(s *Server) HandlerFunc {
 	}
 }
 
+// pmGetItemComments handles pm.getItemComments, returning a PM item's comments.
 func pmGetItemComments(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

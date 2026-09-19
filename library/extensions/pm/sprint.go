@@ -217,6 +217,7 @@ func GetSprintIssues(sprintID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
+// buildSprintContent formats a sprint message from its fields.
 func buildSprintContent(title, body string, state SprintState, start, end time.Time, labels []string, editsRef, accepts string, origin *protocol.Origin, refs []protocol.Ref) string {
 	content := title
 	if body != "" {
@@ -249,6 +250,7 @@ func buildSprintContent(title, body string, state SprintState, start, end time.T
 	return protocol.FormatMessage(content, header, refs)
 }
 
+// cacheSprintFromCommit caches one sprint commit as a core commit and a PM item.
 func cacheSprintFromCommit(workdir, repoURL, hash, branch string) error {
 	commit, err := git.GetCommit(workdir, hash)
 	if err != nil {

@@ -35,6 +35,7 @@ func New(owner, repo string) *Adapter {
 // Platform returns the platform identifier.
 func (a *Adapter) Platform() string { return "github" }
 
+// repoSlug returns the owner/repo slug the gh API takes.
 func (a *Adapter) repoSlug() string { return a.owner + "/" + a.repo }
 
 // FetchSocial fetches GitHub Discussions as social posts with comments.

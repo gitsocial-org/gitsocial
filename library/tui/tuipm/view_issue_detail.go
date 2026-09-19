@@ -88,6 +88,7 @@ func (v *issueDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadIssue()
 }
 
+// loadIssue fetches the issue with its comments, milestone, sprint, parent and sub-issues.
 func (v *issueDetailView) loadIssue() tea.Cmd {
 	issueID := v.issueID
 	workdir := v.workdir
@@ -302,6 +303,7 @@ func (v *issueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	return nil
 }
 
+// buildSections lays the view out as the issue card, then its sub-issues, then its comments.
 func (v *issueDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the issue card
@@ -428,6 +430,7 @@ func (v *issueDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// closeIssue closes the issue and reloads it, carrying whether the close was only a proposal.
 func (v *issueDetailView) closeIssue(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	return tea.Sequence(
@@ -442,6 +445,7 @@ func (v *issueDetailView) closeIssue(proposed bool) tea.Cmd {
 	)
 }
 
+// doRetract retracts the issue, reloading it when the retraction is only a proposal.
 func (v *issueDetailView) doRetract(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	workdir := v.workdir

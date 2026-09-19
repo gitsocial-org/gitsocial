@@ -24,6 +24,7 @@ func newForkCmd() *cobra.Command {
 	return cmd
 }
 
+// newForkAddCmd builds the command that registers a fork.
 func newForkAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <url>",
@@ -59,6 +60,7 @@ A list follows a repo without entangling its items with your own.`,
 	}
 }
 
+// newForkRemoveCmd builds the command that removes a registered fork.
 func newForkRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <url>",
@@ -83,6 +85,7 @@ func newForkRemoveCmd() *cobra.Command {
 	}
 }
 
+// newForkListCmd builds the command that lists registered forks.
 func newForkListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",

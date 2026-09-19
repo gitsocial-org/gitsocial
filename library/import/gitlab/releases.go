@@ -104,6 +104,7 @@ func (a *Adapter) FetchReleases(opts importpkg.FetchOptions) (*importpkg.Release
 	return &importpkg.ReleasePlan{Releases: releases, Filtered: filtered}, nil
 }
 
+// buildArtifactURL returns the release download URL for a tag.
 func buildArtifactURL(baseURL, owner, repo, tag string) string {
 	return fmt.Sprintf("%s/%s/%s/-/releases/%s",
 		baseURL, owner, repo, strings.ReplaceAll(tag, " ", "%20"))

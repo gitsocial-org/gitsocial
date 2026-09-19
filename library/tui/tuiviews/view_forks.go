@@ -20,6 +20,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the forks view at /config/forks and its message handler.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/forks", Context: tuicore.CoreForks, Title: "Forks", Icon: "⑂", NavItemID: "config.forks"})
 	tuicore.RegisterMessageHandler(handleForkMessages)
@@ -693,6 +694,7 @@ func handleForkMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	return false, nil
 }
 
+// handleForkAdded reports the new fork, pointing at lists when it is the first one.
 func handleForkAdded(msg ForkAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -709,6 +711,7 @@ func handleForkAdded(msg ForkAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	return true, tea.Batch(msgCmd, viewCmd)
 }
 
+// handleForkRemoved reports the fork that was dropped.
 func handleForkRemoved(msg ForkRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)

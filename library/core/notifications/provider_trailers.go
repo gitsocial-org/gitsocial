@@ -12,6 +12,7 @@ import (
 
 type trailerProvider struct{}
 
+// init registers the trailer notification provider.
 func init() {
 	RegisterProvider("core", &trailerProvider{})
 }

@@ -326,6 +326,7 @@ func CountMapped(mapping *MappingFile, found ItemCounts) ItemCounts {
 	return counts
 }
 
+// resolveMappingPath returns the mapping file path for a repository.
 func resolveMappingPath(cacheDir, repoURL, mapFile string) string {
 	if mapFile != "" {
 		clean := filepath.Clean(mapFile)

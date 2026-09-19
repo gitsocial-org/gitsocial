@@ -229,6 +229,7 @@ func GetSingleRelease(releaseRef string) Result[Release] {
 	return result.Err[Release]("NOT_FOUND", "release not found: "+releaseRef)
 }
 
+// buildReleaseContent formats a release message from its subject, body and options.
 func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsRef string, refs []protocol.Ref) string {
 	content := subject
 	if body != "" {
@@ -282,6 +283,7 @@ func buildReleaseContent(subject, body string, opts CreateReleaseOptions, editsR
 	return protocol.FormatMessage(content, header, refs)
 }
 
+// cacheReleaseFromCommit caches one release commit as a core commit and a release item.
 func cacheReleaseFromCommit(workdir, repoURL, hash, branch string) error {
 	commit, err := git.GetCommit(workdir, hash)
 	if err != nil {

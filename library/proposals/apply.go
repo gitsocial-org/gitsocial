@@ -308,6 +308,7 @@ func outcome[T any](res result.Result[T], ext, canonicalRef string) Result[Outco
 	return result.Ok(Outcome{Ext: ext, CanonicalRef: canonicalRef})
 }
 
+// noDelta returns the error a proposal with no acceptable change takes.
 func noDelta() Result[Outcome] {
 	return result.Err[Outcome]("NO_DELTA", "proposal makes no acceptable change")
 }

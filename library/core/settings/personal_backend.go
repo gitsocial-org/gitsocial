@@ -64,6 +64,7 @@ type personalConfigBackend struct{}
 // NewPersonalConfigBackend returns the personal-config-ref-backed source.
 func NewPersonalConfigBackend() *personalConfigBackend { return &personalConfigBackend{} }
 
+// Scope returns the personal config scope.
 func (b *personalConfigBackend) Scope() Scope { return ScopePersonalConfig }
 
 // Get returns the value of key from refs/gitmsg/core/config. Returns ("", false)

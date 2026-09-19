@@ -19,6 +19,7 @@ func RegisterReleaseMethods(s *Server) {
 	s.registry.Register("release.getSBOMRaw", s.requireInit(releaseGetSBOMRaw(s)))
 }
 
+// releaseGetReleases handles release.getReleases, returning a repository's releases.
 func releaseGetReleases(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -37,6 +38,7 @@ func releaseGetReleases(s *Server) HandlerFunc {
 	}
 }
 
+// releaseGetRelease handles release.getRelease, returning one release by ref.
 func releaseGetRelease() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -52,6 +54,7 @@ func releaseGetRelease() HandlerFunc {
 	}
 }
 
+// releaseCreateRelease handles release.createRelease, creating a release.
 func releaseCreateRelease(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -85,6 +88,7 @@ func releaseCreateRelease(s *Server) HandlerFunc {
 	}
 }
 
+// releaseEditRelease handles release.editRelease, applying the fields the caller sends.
 func releaseEditRelease(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -121,12 +125,14 @@ func releaseEditRelease(s *Server) HandlerFunc {
 	}
 }
 
+// releaseRetractRelease handles release.retractRelease, retracting the release at a ref.
 func releaseRetractRelease(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(release.RetractRelease(workdir, ref))
 	}, s)
 }
 
+// releaseGetSBOM handles release.getSBOM, returning a release's SBOM details.
 func releaseGetSBOM(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -142,6 +148,7 @@ func releaseGetSBOM(s *Server) HandlerFunc {
 	}
 }
 
+// releaseGetSBOMRaw handles release.getSBOMRaw, returning a release's raw SBOM.
 func releaseGetSBOMRaw(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -165,6 +172,7 @@ func releaseGetSBOMRaw(s *Server) HandlerFunc {
 	}
 }
 
+// releaseGetReleaseComments handles release.getReleaseComments, returning a release's comments.
 func releaseGetReleaseComments(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

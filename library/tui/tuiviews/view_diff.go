@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the commit diff view at /diff.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/diff", Context: tuicore.CommitDiff, Title: "Commit Diff", Icon: "±"})
 }

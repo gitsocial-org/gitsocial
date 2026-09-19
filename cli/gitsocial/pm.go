@@ -53,6 +53,7 @@ func runRootThenWarn(cmd *cobra.Command, args []string, feature string) error {
 	return nil
 }
 
+// init registers the pm command tree.
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "pm",
@@ -197,6 +198,7 @@ func newPMIssueCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMIssueListCmd builds the command that lists issues.
 func newPMIssueListCmd() *cobra.Command {
 	var state string
 	var limit int
@@ -306,6 +308,7 @@ Sort by created, due or priority, each with :asc or :desc.`,
 	return cmd
 }
 
+// newPMIssueShowCmd builds the command that shows one issue.
 func newPMIssueShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <issue-id>",
@@ -337,6 +340,7 @@ func newPMIssueShowCmd() *cobra.Command {
 	}
 }
 
+// newPMIssueCreateCmd builds the command that creates an issue.
 func newPMIssueCreateCmd() *cobra.Command {
 	var labelsStr string
 	var assigneesStr string
@@ -617,6 +621,7 @@ func commitRefList(refsStr string) []string {
 	return refs
 }
 
+// newPMIssueCloseCmd builds the command that closes an issue.
 func newPMIssueCloseCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "close <issue-id>",
@@ -647,6 +652,7 @@ func newPMIssueCloseCmd() *cobra.Command {
 	}
 }
 
+// newPMIssueReopenCmd builds the command that reopens an issue.
 func newPMIssueReopenCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reopen <issue-id>",
@@ -677,6 +683,7 @@ func newPMIssueReopenCmd() *cobra.Command {
 	}
 }
 
+// newPMIssueCommentCmd builds the command that comments on an issue.
 func newPMIssueCommentCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "comment <issue-id> <message>",
@@ -728,6 +735,7 @@ func newPMIssueCommentCmd() *cobra.Command {
 	}
 }
 
+// newPMIssueCommentsCmd builds the command that lists an issue's comments.
 func newPMIssueCommentsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "comments <issue-id>",
@@ -790,6 +798,7 @@ func newPMMilestoneCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMMilestoneListCmd builds the command that lists milestones.
 func newPMMilestoneListCmd() *cobra.Command {
 	var state string
 	var limit int
@@ -854,6 +863,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMMilestoneShowCmd builds the command that shows one milestone.
 func newPMMilestoneShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <milestone-id>",
@@ -894,6 +904,7 @@ func newPMMilestoneShowCmd() *cobra.Command {
 	}
 }
 
+// newPMMilestoneCreateCmd builds the command that creates a milestone.
 func newPMMilestoneCreateCmd() *cobra.Command {
 	var dueDateStr string
 	var labelsStr string
@@ -1043,6 +1054,7 @@ func newPMMilestoneEditCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMMilestoneCloseCmd builds the command that closes a milestone.
 func newPMMilestoneCloseCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "close <milestone-id>",
@@ -1073,6 +1085,7 @@ func newPMMilestoneCloseCmd() *cobra.Command {
 	}
 }
 
+// newPMMilestoneReopenCmd builds the command that reopens a milestone.
 func newPMMilestoneReopenCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "reopen <milestone-id>",
@@ -1103,6 +1116,7 @@ func newPMMilestoneReopenCmd() *cobra.Command {
 	}
 }
 
+// newPMMilestoneCancelCmd builds the command that cancels a milestone.
 func newPMMilestoneCancelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "cancel <milestone-id>",
@@ -1133,6 +1147,7 @@ func newPMMilestoneCancelCmd() *cobra.Command {
 	}
 }
 
+// newPMMilestoneDeleteCmd builds the command that retracts a milestone.
 func newPMMilestoneDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <milestone-id>",
@@ -1187,6 +1202,7 @@ func newPMSprintCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMSprintListCmd builds the command that lists sprints.
 func newPMSprintListCmd() *cobra.Command {
 	var state string
 	var limit int
@@ -1256,6 +1272,7 @@ func newPMSprintListCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMSprintShowCmd builds the command that shows one sprint.
 func newPMSprintShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <sprint-id>",
@@ -1296,6 +1313,7 @@ func newPMSprintShowCmd() *cobra.Command {
 	}
 }
 
+// newPMSprintCreateCmd builds the command that creates a sprint.
 func newPMSprintCreateCmd() *cobra.Command {
 	var startDateStr string
 	var endDateStr string
@@ -1462,6 +1480,7 @@ func newPMSprintEditCmd() *cobra.Command {
 	return cmd
 }
 
+// newPMSprintStartCmd builds the command that activates a sprint.
 func newPMSprintStartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "start <sprint-id>",
@@ -1492,6 +1511,7 @@ func newPMSprintStartCmd() *cobra.Command {
 	}
 }
 
+// newPMSprintCompleteCmd builds the command that completes a sprint.
 func newPMSprintCompleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "complete <sprint-id>",
@@ -1522,6 +1542,7 @@ func newPMSprintCompleteCmd() *cobra.Command {
 	}
 }
 
+// newPMSprintCancelCmd builds the command that cancels a sprint.
 func newPMSprintCancelCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "cancel <sprint-id>",
@@ -1552,6 +1573,7 @@ func newPMSprintCancelCmd() *cobra.Command {
 	}
 }
 
+// newPMSprintDeleteCmd builds the command that retracts a sprint.
 func newPMSprintDeleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <sprint-id>",
@@ -1582,6 +1604,7 @@ func newPMSprintDeleteCmd() *cobra.Command {
 	}
 }
 
+// printMilestoneLine prints one milestone as a list row.
 func printMilestoneLine(out io.Writer, m pm.Milestone) {
 	stateIcon := "◇"
 	switch m.State {
@@ -1604,6 +1627,7 @@ func printMilestoneLine(out io.Writer, m pm.Milestone) {
 	fmt.Fprintf(out, "%s %s %s%s\n", stateIcon, id, m.Title, dueStr)
 }
 
+// printMilestoneDetails prints a milestone's fields and body.
 func printMilestoneDetails(out io.Writer, m pm.Milestone) {
 	authorName, authorEmail, created := ResolveDisplayIdentity(m.Author.Name, m.Author.Email, m.Timestamp, m.Origin)
 	fmt.Fprintf(out, "Milestone: %s\n", m.ID)
@@ -1626,6 +1650,7 @@ func printMilestoneDetails(out io.Writer, m pm.Milestone) {
 	}
 }
 
+// printSprintLine prints one sprint as a list row.
 func printSprintLine(out io.Writer, s pm.Sprint) {
 	stateIcon := "◷"
 	switch s.State {
@@ -1647,6 +1672,7 @@ func printSprintLine(out io.Writer, s pm.Sprint) {
 	fmt.Fprintf(out, "%s %s %s (%s)\n", stateIcon, id, s.Title, dateRange)
 }
 
+// printSprintDetails prints a sprint's fields and body.
 func printSprintDetails(out io.Writer, s pm.Sprint) {
 	authorName, authorEmail, created := ResolveDisplayIdentity(s.Author.Name, s.Author.Email, s.Timestamp, s.Origin)
 	fmt.Fprintf(out, "Sprint: %s\n", s.ID)
@@ -1667,6 +1693,7 @@ func printSprintDetails(out io.Writer, s pm.Sprint) {
 	}
 }
 
+// printIssueLine prints one issue as a list row.
 func printIssueLine(out io.Writer, issue pm.Issue) {
 	stateIcon := "○"
 	if issue.State == pm.StateClosed {
@@ -1690,6 +1717,7 @@ func printIssueLine(out io.Writer, issue pm.Issue) {
 	fmt.Fprintf(out, "%s %s %s%s\n", stateIcon, issue.ID, issue.Subject, labelsDisplay)
 }
 
+// printIssueDetails prints an issue's fields and body.
 func printIssueDetails(out io.Writer, issue pm.Issue) {
 	stateDisplay := "open"
 	if issue.State == pm.StateClosed {
@@ -1787,6 +1815,7 @@ func formatParentDisplay(ref pm.IssueRef) string {
 	return shortRef
 }
 
+// formatIssueRefList joins issue refs into a comma-separated list of short refs.
 func formatIssueRefList(refs []pm.IssueRef) string {
 	parts := make([]string, len(refs))
 	for i, ref := range refs {
@@ -1795,6 +1824,7 @@ func formatIssueRefList(refs []pm.IssueRef) string {
 	return strings.Join(parts, ", ")
 }
 
+// newPMBoardCmd builds the command that shows the kanban board.
 func newPMBoardCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "board",
@@ -1880,6 +1910,7 @@ func printBoard(out io.Writer, board pm.BoardView) {
 	}
 }
 
+// padRight pads a string with spaces to the given width.
 func padRight(s string, width int) string {
 	if len(s) >= width {
 		return s

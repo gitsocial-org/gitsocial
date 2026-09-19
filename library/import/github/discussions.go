@@ -79,6 +79,7 @@ func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
 }`, owner, repo, first, afterClause, discussionCommentSelection)
 }
 
+// fetchDiscussions returns GitHub discussions and their comments as a social plan.
 func (a *Adapter) fetchDiscussions(opts importpkg.FetchOptions) (*importpkg.SocialPlan, error) {
 	unlimited := opts.Limit == 0
 	limit := opts.Limit

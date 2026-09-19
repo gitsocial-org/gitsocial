@@ -199,6 +199,7 @@ func (v *prsView) IsInputActive() bool {
 	return v.searchActive
 }
 
+// handleKey opens the new-PR form, toggles the state and author filters, refreshes and starts a search.
 func (v *prsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "n":
@@ -241,6 +242,7 @@ func (v *prsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// handleSearchKey feeds the search input and refilters the list on every keystroke.
 func (v *prsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
@@ -390,6 +392,7 @@ type prsLoadedMsg struct {
 	err     error
 }
 
+// loadPRs fetches the first page of pull requests with their review summaries.
 func (v *prsView) loadPRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
@@ -431,6 +434,7 @@ func (v *prsView) loadPRs() tea.Cmd {
 	}
 }
 
+// loadMorePRs fetches the next page of pull requests from the pagination cursor.
 func (v *prsView) loadMorePRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
@@ -475,6 +479,7 @@ func (v *prsView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMorePRs)
 }
 
+// extractHashFromID returns the commit hash a ref points at.
 func extractHashFromID(id string) string {
 	parsed := protocol.ParseRef(id)
 	return parsed.Value

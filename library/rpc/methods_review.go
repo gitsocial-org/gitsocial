@@ -74,6 +74,7 @@ func reviewGetPullRequests(s *Server) HandlerFunc {
 	}
 }
 
+// reviewGetPR handles review.getPR, returning one pull request by ref.
 func reviewGetPR() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -89,6 +90,7 @@ func reviewGetPR() HandlerFunc {
 	}
 }
 
+// reviewCreatePR handles review.createPR, creating a pull request.
 func reviewCreatePR(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -120,6 +122,7 @@ func reviewCreatePR(s *Server) HandlerFunc {
 	}
 }
 
+// reviewUpdatePR handles review.updatePR, applying the fields the caller sends.
 func reviewUpdatePR(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -160,6 +163,7 @@ func reviewUpdatePR(s *Server) HandlerFunc {
 	}
 }
 
+// reviewMergePR handles review.mergePR, merging a PR and pushing its base.
 func reviewMergePR(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		res := review.MergePR(workdir, ref, review.MergeStrategyFF)
@@ -174,24 +178,28 @@ func reviewMergePR(s *Server) HandlerFunc {
 	}, s)
 }
 
+// reviewClosePR handles review.closePR, closing the pull request at a ref.
 func reviewClosePR(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.ClosePR(workdir, ref))
 	}, s)
 }
 
+// reviewRetractPR handles review.retractPR, retracting the pull request at a ref.
 func reviewRetractPR(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.RetractPR(workdir, ref))
 	}, s)
 }
 
+// reviewMarkReady handles review.markReady, marking a draft PR ready.
 func reviewMarkReady(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.MarkReady(workdir, ref))
 	}, s)
 }
 
+// reviewConvertToDraft handles review.convertToDraft, turning an open PR into a draft.
 func reviewConvertToDraft(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.ConvertToDraft(workdir, ref))
@@ -280,6 +288,7 @@ func reviewGetFeedbackForPR(s *Server) HandlerFunc {
 	}
 }
 
+// reviewCreateFeedback handles review.createFeedback, leaving feedback on a PR.
 func reviewCreateFeedback(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -314,6 +323,7 @@ func reviewCreateFeedback(s *Server) HandlerFunc {
 	}
 }
 
+// reviewUpdateFeedback handles review.updateFeedback, editing feedback content or state.
 func reviewUpdateFeedback(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -338,12 +348,14 @@ func reviewUpdateFeedback(s *Server) HandlerFunc {
 	}
 }
 
+// reviewRetractFeedback handles review.retractFeedback, retracting feedback at a ref.
 func reviewRetractFeedback(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(review.RetractFeedback(workdir, ref))
 	}, s)
 }
 
+// reviewApplySuggestion handles review.applySuggestion, applying a suggestion to the workdir.
 func reviewApplySuggestion(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -379,6 +391,7 @@ func reviewGetDiff(s *Server) HandlerFunc {
 	}
 }
 
+// reviewGetDiffStats handles review.getDiffStats, returning a PR's diff stats.
 func reviewGetDiffStats(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		ctx, rpcErr := resolvePRDiff(s, raw)
@@ -393,6 +406,7 @@ func reviewGetDiffStats(s *Server) HandlerFunc {
 	}
 }
 
+// reviewGetFileDiff handles review.getFileDiff, returning one file's diff in a PR.
 func reviewGetFileDiff(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -421,6 +435,7 @@ func reviewGetFileDiff(s *Server) HandlerFunc {
 	}
 }
 
+// reviewGetFileContent handles review.getFileContent, returning a file on either PR side.
 func reviewGetFileContent(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -498,6 +513,7 @@ func reviewGetForks(s *Server) HandlerFunc {
 	}
 }
 
+// reviewAddFork handles review.addFork, registering a fork.
 func reviewAddFork(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -516,6 +532,7 @@ func reviewAddFork(s *Server) HandlerFunc {
 	}
 }
 
+// reviewRemoveFork handles review.removeFork, removing a registered fork.
 func reviewRemoveFork(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

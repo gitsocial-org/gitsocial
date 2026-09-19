@@ -19,6 +19,7 @@ import (
 
 const memoExt = "memo"
 
+// init registers the memo command tree.
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "memo",

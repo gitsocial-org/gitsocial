@@ -157,6 +157,7 @@ func (v *interdiffView) cycleVersions(dir int) tea.Cmd {
 	}
 }
 
+// ensureVisible scrolls just far enough to bring the cursor line into the viewport.
 func (v *interdiffView) ensureVisible() {
 	viewH := v.height
 	if viewH < 1 {
@@ -240,6 +241,7 @@ func (v *interdiffView) Render(state *tuicore.State) string {
 	return wrapper.Render(content, footer)
 }
 
+// renderFooter returns the version and scroll hints plus the range-diff prefix legend.
 func (v *interdiffView) renderFooter(_ int) string {
 	parts := make([]string, 0, 3)
 	parts = append(parts, "[/]:versions")

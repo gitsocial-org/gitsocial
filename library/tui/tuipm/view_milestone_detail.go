@@ -80,6 +80,7 @@ func (v *milestoneDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadMilestone()
 }
 
+// loadMilestone fetches the milestone with its linked issues and comments.
 func (v *milestoneDetailView) loadMilestone() tea.Cmd {
 	milestoneID := v.milestoneID
 	workdir := v.workdir
@@ -232,6 +233,7 @@ func (v *milestoneDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
+// buildSections lays the view out as the milestone card, then its linked issues, then its comments.
 func (v *milestoneDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the milestone card
@@ -327,6 +329,7 @@ func (v *milestoneDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// closeMilestone closes the milestone and reloads it, carrying whether the close was only a proposal.
 func (v *milestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
 	return tea.Sequence(
@@ -341,6 +344,7 @@ func (v *milestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
 	)
 }
 
+// doRetract retracts the milestone, reloading it when the retraction is only a proposal.
 func (v *milestoneDetailView) doRetract(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
 	workdir := v.workdir
@@ -461,6 +465,7 @@ func renderMilestoneCard(ms *pm.Milestone, width int, selected bool, searchQuery
 	return lines
 }
 
+// renderIssueRow renders one linked issue as a row of state icon, subject and labels.
 func (v *milestoneDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {

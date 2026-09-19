@@ -39,12 +39,14 @@ type docHost struct {
 	state *tuicore.State
 }
 
+// AddView records a view's bindings in the documentation registry, ignoring views that carry none.
 func (h *docHost) AddView(_ string, view tuicore.View) {
 	if bp, ok := view.(tuicore.BindingProvider); ok {
 		h.state.Registry.RegisterView(bp)
 	}
 }
 
+// State returns the shared state the collected bindings live in.
 func (h *docHost) State() *tuicore.State { return h.state }
 
 // CollectAll bootstraps the registry and collects all keybindings grouped by domain.

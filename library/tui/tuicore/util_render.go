@@ -229,6 +229,7 @@ type replacement struct {
 
 var sortedReplacements []replacement
 
+// init flattens the LaTeX symbol maps into one replacement list, longest pattern first.
 func init() {
 	// Collect all replacements
 	for k, v := range greekLetters {

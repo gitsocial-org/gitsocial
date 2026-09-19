@@ -72,6 +72,7 @@ func maskKey(key string) string {
 	return key[:4] + "…"
 }
 
+// newCredentialsSetCmd builds the command that stores a key pair for a host.
 func newCredentialsSetCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <remote-or-host>",
@@ -131,6 +132,7 @@ The file is written with 0600 permissions.`,
 	}
 }
 
+// newCredentialsListCmd builds the command that lists stored credential hosts.
 func newCredentialsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -169,6 +171,7 @@ masked, and secret keys do not print.`,
 	}
 }
 
+// newCredentialsRemoveCmd builds the command that removes a host's credentials.
 func newCredentialsRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <host>",

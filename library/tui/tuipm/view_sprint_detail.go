@@ -80,6 +80,7 @@ func (v *sprintDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadSprint()
 }
 
+// loadSprint fetches the sprint with its backlog issues and comments.
 func (v *sprintDetailView) loadSprint() tea.Cmd {
 	sprintID := v.sprintID
 	workdir := v.workdir
@@ -232,6 +233,7 @@ func (v *sprintDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
+// buildSections lays the view out as the sprint card, then its backlog, then its comments.
 func (v *sprintDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the sprint card
@@ -327,6 +329,7 @@ func (v *sprintDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
+// completeSprint marks the sprint complete and reloads it, carrying whether it was only a proposal.
 func (v *sprintDetailView) completeSprint(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
 	return tea.Sequence(
@@ -341,6 +344,7 @@ func (v *sprintDetailView) completeSprint(proposed bool) tea.Cmd {
 	)
 }
 
+// doRetract retracts the sprint, reloading it when the retraction is only a proposal.
 func (v *sprintDetailView) doRetract(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
 	workdir := v.workdir
@@ -469,6 +473,7 @@ func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery strin
 	return lines
 }
 
+// renderIssueRow renders one backlog issue as a row of state icon, subject and labels.
 func (v *sprintDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {

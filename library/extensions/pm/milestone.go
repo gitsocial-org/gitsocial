@@ -230,6 +230,7 @@ func GetMilestoneIssues(milestoneID string, states []string) Result[[]Issue] {
 	return result.Ok(issues)
 }
 
+// buildMilestoneContent formats a milestone message from its fields.
 func buildMilestoneContent(title, body string, state State, due *time.Time, labels []string, editsRef, accepts string, origin *protocol.Origin, refs []protocol.Ref) string {
 	content := title
 	if body != "" {
@@ -263,6 +264,7 @@ func buildMilestoneContent(title, body string, state State, due *time.Time, labe
 	return protocol.FormatMessage(content, header, refs)
 }
 
+// cacheMilestoneFromCommit caches one milestone commit as a core commit and a PM item.
 func cacheMilestoneFromCommit(workdir, repoURL, hash, branch string) error {
 	commit, err := git.GetCommit(workdir, hash)
 	if err != nil {

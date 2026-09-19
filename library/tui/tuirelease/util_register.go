@@ -14,6 +14,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the release views, message handler, nav target and card renderer with tuicore.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/list", Context: tuicore.ReleaseList, Title: "Releases", Icon: "⏏", NavItemID: "release", Component: "CardList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/detail", Context: tuicore.ReleaseDetail, Title: "Release Detail", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
@@ -250,6 +251,7 @@ type releaseRetractedMsg struct {
 	Err error
 }
 
+// handleReleaseMessages dispatches the release result messages to their handlers.
 func handleReleaseMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case releaseCreatedMsg:
@@ -262,6 +264,7 @@ func handleReleaseMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) 
 	return false, nil
 }
 
+// handleReleaseCreated toasts the outcome and, on success, replaces the form with the new release detail.
 func handleReleaseCreated(msg releaseCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -280,6 +283,7 @@ func handleReleaseCreated(msg releaseCreatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
+// handleReleaseUpdated toasts the outcome and, on success, replaces the form with the updated release detail.
 func handleReleaseUpdated(msg releaseUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -298,6 +302,7 @@ func handleReleaseUpdated(msg releaseUpdatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
+// handleReleaseRetracted toasts the outcome and, on success, navigates back from the detail view.
 func handleReleaseRetracted(msg releaseRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)

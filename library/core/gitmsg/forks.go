@@ -217,6 +217,7 @@ func migrateLegacyForks(workdir string) {
 	}
 }
 
+// configOrEmpty returns the config, or an empty map when it is nil.
 func configOrEmpty(config map[string]interface{}) map[string]interface{} {
 	if config == nil {
 		return map[string]interface{}{}
@@ -224,6 +225,7 @@ func configOrEmpty(config map[string]interface{}) map[string]interface{} {
 	return config
 }
 
+// getLegacyForksList returns the fork URLs a legacy config holds.
 func getLegacyForksList(config map[string]interface{}) []string {
 	forks, ok := config["forks"].([]interface{})
 	if !ok {

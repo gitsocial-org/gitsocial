@@ -270,6 +270,7 @@ func samePath(a, b string) bool {
 	return ar == br
 }
 
+// generateSessionID returns a session id from today's date and random bytes.
 func generateSessionID() string {
 	var b [4]byte
 	if _, err := rand.Read(b[:]); err != nil {

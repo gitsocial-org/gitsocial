@@ -72,6 +72,7 @@ func (a *Adapter) FetchPM(opts importpkg.FetchOptions) (*importpkg.PMPlan, error
 	return &importpkg.PMPlan{Milestones: milestones, Issues: issues, Comments: comments, Filtered: filtered}, nil
 }
 
+// fetchMilestones returns the repository's milestones.
 func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.ImportMilestone, error) {
 	var raw []ghMilestone
 	err := ghJSON(&raw, "api", fmt.Sprintf("repos/%s/milestones?state=all&per_page=100", a.repoSlug()))
@@ -107,6 +108,7 @@ func (a *Adapter) fetchMilestones(opts importpkg.FetchOptions) ([]importpkg.Impo
 	return out, nil
 }
 
+// fetchIssues returns the repository's issues and how many were filtered out.
 func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIssue, int, error) {
 	state := opts.State
 	if state == "" || state == "all" {
@@ -206,6 +208,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	return out, filtered, nil
 }
 
+// normalizeState maps a GitHub state to the GitSocial one.
 func normalizeState(state string) string {
 	switch state {
 	case "OPEN", "open":
@@ -228,6 +231,7 @@ var knownBots = map[string]bool{
 	"github-actions[bot]": true,
 }
 
+// isBot reports whether a login belongs to a known bot.
 func isBot(login string) bool {
 	return knownBots[login]
 }

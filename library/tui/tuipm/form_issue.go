@@ -581,6 +581,7 @@ func (v *issueEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadIssue()
 }
 
+// loadIssue fetches the issue the form edits.
 func (v *issueEditFormView) loadIssue() tea.Cmd {
 	issueID := v.issueID
 	return func() tea.Msg {

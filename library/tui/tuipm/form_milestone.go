@@ -253,6 +253,7 @@ func (v *milestoneEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadMilestone()
 }
 
+// loadMilestone fetches the milestone the form edits.
 func (v *milestoneEditFormView) loadMilestone() tea.Cmd {
 	milestoneID := v.milestoneID
 	return func() tea.Msg {

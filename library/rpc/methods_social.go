@@ -27,6 +27,7 @@ func RegisterSocialMethods(s *Server) {
 	s.registry.Register("social.getLogs", s.requireInit(socialGetLogs(s)))
 }
 
+// socialGetPosts handles social.getPosts, returning a scope's posts.
 func socialGetPosts(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -65,6 +66,7 @@ func socialGetPosts(s *Server) HandlerFunc {
 	}
 }
 
+// socialCreatePost handles social.createPost, publishing a post.
 func socialCreatePost(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -80,6 +82,7 @@ func socialCreatePost(s *Server) HandlerFunc {
 	}
 }
 
+// socialEditPost handles social.editPost, replacing a post's content.
 func socialEditPost(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -96,6 +99,7 @@ func socialEditPost(s *Server) HandlerFunc {
 	}
 }
 
+// socialRetractPost handles social.retractPost, retracting a post.
 func socialRetractPost(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -111,6 +115,7 @@ func socialRetractPost(s *Server) HandlerFunc {
 	}
 }
 
+// socialCreateComment handles social.createComment, commenting on a target.
 func socialCreateComment(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -127,6 +132,7 @@ func socialCreateComment(s *Server) HandlerFunc {
 	}
 }
 
+// socialCreateRepost handles social.createRepost, reposting a target.
 func socialCreateRepost(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -142,6 +148,7 @@ func socialCreateRepost(s *Server) HandlerFunc {
 	}
 }
 
+// socialCreateQuote handles social.createQuote, quoting a target.
 func socialCreateQuote(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -158,12 +165,14 @@ func socialCreateQuote(s *Server) HandlerFunc {
 	}
 }
 
+// socialGetLists handles social.getLists, returning every list.
 func socialGetLists(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		return fromResult(social.GetLists(s.session.Workdir))
 	}
 }
 
+// socialGetList handles social.getList, returning one list by id.
 func socialGetList(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -179,6 +188,7 @@ func socialGetList(s *Server) HandlerFunc {
 	}
 }
 
+// socialCreateList handles social.createList, creating a list.
 func socialCreateList(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -195,6 +205,7 @@ func socialCreateList(s *Server) HandlerFunc {
 	}
 }
 
+// socialDeleteList handles social.deleteList, deleting a list.
 func socialDeleteList(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -210,6 +221,7 @@ func socialDeleteList(s *Server) HandlerFunc {
 	}
 }
 
+// socialAddToList handles social.addToList, adding a repository to a list.
 func socialAddToList(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -228,6 +240,7 @@ func socialAddToList(s *Server) HandlerFunc {
 	}
 }
 
+// socialRemoveFromList handles social.removeFromList, removing a repository from a list.
 func socialRemoveFromList(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -244,6 +257,7 @@ func socialRemoveFromList(s *Server) HandlerFunc {
 	}
 }
 
+// socialGetRepositories handles social.getRepositories, returning a scope's repositories.
 func socialGetRepositories(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -257,6 +271,7 @@ func socialGetRepositories(s *Server) HandlerFunc {
 	}
 }
 
+// socialGetLogs handles social.getLogs, returning filtered log entries.
 func socialGetLogs(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

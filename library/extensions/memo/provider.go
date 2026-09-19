@@ -14,6 +14,7 @@ import (
 
 type memoNotificationProvider struct{}
 
+// init registers the memo notification provider.
 func init() {
 	notifications.RegisterProvider("memo", &memoNotificationProvider{})
 }
@@ -111,6 +112,7 @@ func getMemoCommentNotifications(userEmail string, filter notifications.Filter) 
 	})
 }
 
+// scanCommentRows reads comment rows into notifications.
 func scanCommentRows(db *sql.DB, query string, args []interface{}) ([]notifications.Notification, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {

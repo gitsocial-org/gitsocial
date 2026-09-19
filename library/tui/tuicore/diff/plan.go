@@ -327,6 +327,7 @@ func fileHeaderCells(d git.FileDiff, palette Palette) []Cell {
 	}
 }
 
+// fileHeaderParts returns the status icon, the display path and the added and removed line counts of a file diff.
 func fileHeaderParts(d git.FileDiff) (icon, path string, added, removed int) {
 	icon = "~"
 	switch d.Status {

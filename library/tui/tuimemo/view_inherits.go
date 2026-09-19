@@ -142,6 +142,7 @@ func (v *inheritsView) startAdd() tea.Cmd {
 	return v.addForm.Init()
 }
 
+// updateInput feeds the add-URL form and registers the source once it is submitted.
 func (v *inheritsView) updateInput(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		v.inputMode = false
@@ -167,6 +168,7 @@ func (v *inheritsView) updateInput(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// doAdd registers the URL as an inherited source and puts the cursor on it.
 func (v *inheritsView) doAdd(url string) tea.Cmd {
 	res := memo.AddInherit(v.workdir, url)
 	if !res.Success {
@@ -182,6 +184,7 @@ func (v *inheritsView) doAdd(url string) tea.Cmd {
 	return nil
 }
 
+// doRemove drops the URL from the inherited sources.
 func (v *inheritsView) doRemove(url string) tea.Cmd {
 	return func() tea.Msg {
 		res := memo.RemoveInherit(v.workdir, url)

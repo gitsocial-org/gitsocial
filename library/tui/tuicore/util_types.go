@@ -300,7 +300,6 @@ type CardHeader struct {
 	IsEditorVerified bool
 }
 
-// TitleStyle returns the appropriate style for the header title based on flags.
 // BadgeStyle returns the style for the verified ⚿ badge, mirroring the
 // author's relationship color so the title and badge read as one visual unit.
 // Default (no relationship) maps to the IdentityFollowing palette, matching
@@ -337,6 +336,7 @@ func (h CardHeader) BadgeStyle(dimmed bool) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(c)
 }
 
+// TitleStyle returns the title style for the author's relationship, muted when dimmed.
 func (h CardHeader) TitleStyle(dimmed bool) lipgloss.Style {
 	if h.IsMe {
 		if dimmed {

@@ -36,6 +36,7 @@ var (
 	mu            sync.RWMutex
 )
 
+// init gives the process a logger before Init configures one.
 func init() {
 	defaultLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -137,18 +138,22 @@ func With(args ...any) *Logger {
 	return &Logger{l: logger().With(args...)}
 }
 
+// Debug logs at debug level with the logger's fields.
 func (l *Logger) Debug(msg string, args ...any) {
 	l.l.Debug(msg, args...)
 }
 
+// Info logs at info level with the logger's fields.
 func (l *Logger) Info(msg string, args ...any) {
 	l.l.Info(msg, args...)
 }
 
+// Warn logs at warn level with the logger's fields.
 func (l *Logger) Warn(msg string, args ...any) {
 	l.l.Warn(msg, args...)
 }
 
+// Error logs at error level with the logger's fields.
 func (l *Logger) Error(msg string, args ...any) {
 	l.l.Error(msg, args...)
 }

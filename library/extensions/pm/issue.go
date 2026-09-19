@@ -295,10 +295,12 @@ func RetractIssue(workdir, issueRef string) Result[bool] {
 	return result.Ok(true)
 }
 
+// buildIssueContent formats an issue message from its subject, body and options.
 func buildIssueContent(subject, body string, opts CreateIssueOptions) string {
 	return buildIssueContentWithEdits(subject, body, opts, "", nil)
 }
 
+// buildIssueContentWithEdits formats an issue message that edits a canonical ref.
 func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, editsRef string, refs []protocol.Ref) string {
 	content := subject
 	if body != "" {
@@ -369,6 +371,7 @@ func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, e
 	return protocol.FormatMessage(content, header, refs)
 }
 
+// cacheIssueFromCommit caches one issue commit as a core commit and a PM item.
 func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {
 	commit, err := git.GetCommit(workdir, hash)
 	if err != nil {

@@ -34,6 +34,7 @@ func ReadExtConfig(workdir, ext string) (map[string]interface{}, error) {
 	return config, nil
 }
 
+// readExtConfigUncached reads an extension's config ref, skipping the cache.
 func readExtConfigUncached(workdir, ext string) map[string]interface{} {
 	ref := extConfigRef(ext)
 	hash, err := git.ReadRef(workdir, ref)

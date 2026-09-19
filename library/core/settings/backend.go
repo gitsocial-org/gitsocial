@@ -26,15 +26,18 @@ type envBackend struct{}
 // NewEnvBackend returns the singleton env-backed source.
 func NewEnvBackend() *envBackend { return &envBackend{} }
 
+// Get returns the environment variable for a key.
 func (b *envBackend) Get(key string) (string, bool) {
 	v := os.Getenv(key)
 	return v, v != ""
 }
 
+// Set refuses the write, as environment keys are read-only.
 func (b *envBackend) Set(key, _ string) error {
 	return fmt.Errorf("settings key %q is environment-scoped and read-only", key)
 }
 
+// Scope returns the env scope.
 func (b *envBackend) Scope() Scope { return ScopeEnv }
 
 // Manager routes reads through the resolution chain and writes to the backend

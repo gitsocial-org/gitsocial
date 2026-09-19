@@ -25,6 +25,7 @@ type GitError struct {
 	Code   int
 }
 
+// Error renders the git error as its operation and stderr.
 func (e *GitError) Error() string {
 	if e.Stderr != "" {
 		return e.Op + ": " + e.Stderr
@@ -35,6 +36,7 @@ func (e *GitError) Error() string {
 	return e.Op + ": unknown error"
 }
 
+// Unwrap returns the wrapped error.
 func (e *GitError) Unwrap() error {
 	return e.Err
 }

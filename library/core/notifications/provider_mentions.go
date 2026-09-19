@@ -12,6 +12,7 @@ import (
 
 type mentionProvider struct{}
 
+// init registers the mention notification provider.
 func init() {
 	RegisterProvider("core", &mentionProvider{})
 }

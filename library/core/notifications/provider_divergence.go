@@ -17,6 +17,7 @@ const gitmsgBranchPrefix = "gitmsg/"
 
 type divergenceProvider struct{}
 
+// init registers the branch divergence notification provider.
 func init() {
 	// Registering here gives the CLI, the TUI and RPC the same notification set.
 	RegisterProvider("gitmsg-divergence", &divergenceProvider{})

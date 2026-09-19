@@ -41,6 +41,7 @@ var (
 	schemaMu            sync.Mutex
 )
 
+// init registers the core column migrations and the tag-row repair.
 func init() {
 	RegisterMigration(func(db *sql.DB) {
 		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_name TEXT`)

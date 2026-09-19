@@ -280,6 +280,7 @@ func (v *sprintEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadSprint()
 }
 
+// loadSprint fetches the sprint the form edits.
 func (v *sprintEditFormView) loadSprint() tea.Cmd {
 	sprintID := v.sprintID
 	return func() tea.Msg {

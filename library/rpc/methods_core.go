@@ -78,6 +78,7 @@ func RegisterCoreMethods(s *Server, version string) {
 	s.registry.Register("unsubscribe", coreUnsubscribe(s))
 }
 
+// initializeHandler handles initialize, opening the cache and starting the session.
 func initializeHandler(s *Server, version string) HandlerFunc {
 	return func(params json.RawMessage) (any, *RPCError) {
 		if s.session.Initialized {
@@ -121,6 +122,7 @@ func initializeHandler(s *Server, version string) HandlerFunc {
 	}
 }
 
+// coreStatus handles core.status, reporting the workspace and its extensions.
 func coreStatus(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		workdir := s.session.Workdir
@@ -148,6 +150,7 @@ func coreStatus(s *Server) HandlerFunc {
 	}
 }
 
+// coreGetConfig handles core.getConfig, returning one extension's config.
 func coreGetConfig(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -170,6 +173,7 @@ func coreGetConfig(s *Server) HandlerFunc {
 	}
 }
 
+// coreSetConfig handles core.setConfig, writing one extension's config.
 func coreSetConfig(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -192,6 +196,7 @@ func coreSetConfig(s *Server) HandlerFunc {
 	}
 }
 
+// coreInitExtension handles core.initExtension, writing the extension's branch config.
 func coreInitExtension(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -221,6 +226,7 @@ func coreInitExtension(s *Server) HandlerFunc {
 	}
 }
 
+// coreGetNotifications handles core.getNotifications, returning filtered notifications.
 func coreGetNotifications(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -243,6 +249,7 @@ func coreGetNotifications(s *Server) HandlerFunc {
 	}
 }
 
+// coreGetUnreadCount handles core.getUnreadCount, returning the unread total.
 func coreGetUnreadCount(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		count, err := notifications.GetUnreadCount(s.session.Workdir)
@@ -253,6 +260,7 @@ func coreGetUnreadCount(s *Server) HandlerFunc {
 	}
 }
 
+// coreMarkAsRead handles core.markAsRead, marking one commit read.
 func coreMarkAsRead() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -273,6 +281,7 @@ func coreMarkAsRead() HandlerFunc {
 	}
 }
 
+// coreMarkAllAsRead handles core.markAllAsRead, marking every notification read.
 func coreMarkAllAsRead(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		if err := notifications.MarkAllAsRead(s.session.Workdir); err != nil {
@@ -282,6 +291,7 @@ func coreMarkAllAsRead(s *Server) HandlerFunc {
 	}
 }
 
+// coreGetHistory handles core.getHistory, returning the versions of a ref.
 func coreGetHistory(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -301,6 +311,7 @@ func coreGetHistory(s *Server) HandlerFunc {
 	}
 }
 
+// coreGetSettings handles core.getSettings, returning every user setting.
 func coreGetSettings() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		path, err := settings.DefaultPath()
@@ -315,6 +326,7 @@ func coreGetSettings() HandlerFunc {
 	}
 }
 
+// coreSetSetting handles core.setSetting, writing one user setting.
 func coreSetSetting() HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -334,6 +346,7 @@ func coreSetSetting() HandlerFunc {
 	}
 }
 
+// corePush handles core.push, pushing to the resolved remotes.
 func corePush(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		// extensions param accepted for API compatibility; push always pushes all initialized extensions
@@ -379,6 +392,7 @@ func namedRemotes(remote string) []string {
 	return []string{remote}
 }
 
+// coreFetch handles core.fetch, starting a fetch and emitting its events.
 func coreFetch(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -431,6 +445,7 @@ func coreFetch(s *Server) HandlerFunc {
 	}
 }
 
+// coreSubscribe handles subscribe, adding events to the session's subscriptions.
 func coreSubscribe(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {
@@ -451,6 +466,7 @@ func coreSubscribe(s *Server) HandlerFunc {
 	}
 }
 
+// coreUnsubscribe handles unsubscribe, dropping events from the session's subscriptions.
 func coreUnsubscribe(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

@@ -21,6 +21,7 @@ import (
 
 const socialExt = "social"
 
+// init registers the social command tree.
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "social",

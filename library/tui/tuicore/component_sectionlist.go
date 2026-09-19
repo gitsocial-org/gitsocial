@@ -393,6 +393,7 @@ func (sl *SectionList) UpdateSearchInput(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// moveDown scrolls through a selected item taller than the viewport before moving on.
 func (sl *SectionList) moveDown() {
 	// If current item extends below viewport, scroll within it first
 	if sl.selected < len(sl.itemEndLines) {
@@ -409,6 +410,7 @@ func (sl *SectionList) moveDown() {
 	}
 }
 
+// moveUp scrolls back through a selected item taller than the viewport before moving on.
 func (sl *SectionList) moveUp() {
 	// If scrolled past the start of current item, scroll within it first
 	if sl.selected < len(sl.itemStartLines) {
@@ -482,6 +484,7 @@ func (sl *SectionList) getItem(flatIdx int) *SectionItem {
 	return nil
 }
 
+// updateLiveSearch takes the query from the input and jumps to its first match.
 func (sl *SectionList) updateLiveSearch() {
 	sl.searchQuery = sl.searchInput.Value()
 	if sl.searchQuery == "" {
@@ -500,6 +503,7 @@ func (sl *SectionList) updateLiveSearch() {
 	}
 }
 
+// buildMatchLocations records every query match across all sections.
 func (sl *SectionList) buildMatchLocations() {
 	sl.matches = nil
 	if sl.searchQuery == "" {
@@ -520,6 +524,7 @@ func (sl *SectionList) buildMatchLocations() {
 	}
 }
 
+// nextMatch selects the following match, wrapping to the first.
 func (sl *SectionList) nextMatch() {
 	if sl.matchCount == 0 {
 		return
@@ -531,6 +536,7 @@ func (sl *SectionList) nextMatch() {
 	sl.navigateToMatch(sl.matchIndex - 1)
 }
 
+// prevMatch selects the preceding match, wrapping to the last.
 func (sl *SectionList) prevMatch() {
 	if sl.matchCount == 0 {
 		return
@@ -542,11 +548,13 @@ func (sl *SectionList) prevMatch() {
 	sl.navigateToMatch(sl.matchIndex - 1)
 }
 
+// navigateToMatch selects the item holding the match at idx.
 func (sl *SectionList) navigateToMatch(idx int) {
 	sl.selected = sl.matches[idx].flatIndex
 	sl.focusedLink = -1
 }
 
+// exitSearch clears the query, the matches and the input focus.
 func (sl *SectionList) exitSearch() {
 	sl.searchActive = false
 	sl.searchInputMode = false

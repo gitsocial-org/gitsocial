@@ -9,6 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuikeydoc"
 )
 
+// newDocsCmd builds the docs command group.
 func newDocsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
@@ -18,6 +19,7 @@ func newDocsCmd() *cobra.Command {
 	return cmd
 }
 
+// newDocsKeybindingsCmd builds the command that generates keybinding docs.
 func newDocsKeybindingsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "keybindings",

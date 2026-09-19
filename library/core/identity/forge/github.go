@@ -35,6 +35,7 @@ func NewGitHub() Forge {
 	}
 }
 
+// Host returns the forge host this adapter answers for.
 func (g *gitHubForge) Host() string { return g.host }
 
 // FetchGPGKeys downloads <user>.gpg and parses the OpenPGP key block.
@@ -188,6 +189,7 @@ func uidEmail(uidKey string, ident *openpgp.Identity) string {
 	return ""
 }
 
+// init registers the GitHub forge adapter.
 func init() {
 	Register(NewGitHub())
 }

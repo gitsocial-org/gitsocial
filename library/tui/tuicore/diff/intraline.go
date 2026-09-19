@@ -78,6 +78,7 @@ func highlightPair(removed, added *Row, palette Palette) {
 	added.Cells = applyIntraLineToCells(added.Cells, bodyPrefixCells, newSpans, palette.IntraLineAddedBG)
 }
 
+// sameHunk reports whether two anchors sit in the same file and hunk.
 func sameHunk(a, b RowAnchor) bool {
 	return a.FileIdx == b.FileIdx && a.HunkIdx == b.HunkIdx
 }
@@ -108,6 +109,7 @@ func shouldSkipIntraLine(oldText, newText string, oldSpans, newSpans []intraSpan
 	return false
 }
 
+// spanLength returns the total number of runes the spans cover.
 func spanLength(spans []intraSpan) int {
 	n := 0
 	for _, s := range spans {

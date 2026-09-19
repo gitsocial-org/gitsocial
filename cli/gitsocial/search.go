@@ -253,6 +253,7 @@ func tierRepoURLs(t memo.Tier, workdir string) []string {
 	return nil
 }
 
+// memoWorkspaceURL returns the workspace repository URL.
 func memoWorkspaceURL(workdir string) string {
 	return gitmsg.ResolveRepoURL(workdir)
 }

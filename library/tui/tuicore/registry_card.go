@@ -76,6 +76,7 @@ func GetDimmedCheckFunc(itemType ItemType) dimmedCheckFunc {
 	return func(any) bool { return false }
 }
 
+// init registers the card renderers and dimmed checkers for the core notification types.
 func init() {
 	RegisterCardRenderer(
 		ItemType{Extension: "core", Type: "mention"},

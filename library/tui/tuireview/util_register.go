@@ -15,6 +15,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the review views, card renderers, dimmed checker, nav targets and message handler.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/prs", Context: tuicore.ReviewPRs, Title: "Pull Requests", Icon: "⑂", NavItemID: "review.prs", Component: "CardList"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr", Context: tuicore.ReviewPRDetail, Title: "PR Detail", Icon: "⑂", NavItemID: "review.prs", Component: "SectionList"})
@@ -465,6 +466,7 @@ type feedbackCreatedMsg struct {
 	Err      error
 }
 
+// handleReviewMessages routes each review message to the handler that reports it.
 func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
 	case prCreatedMsg:
@@ -483,6 +485,7 @@ func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	return false, nil
 }
 
+// handleSuggestionApplied reports which file the suggestion was written to, or logs the failure.
 func handleSuggestionApplied(msg suggestionAppliedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -498,6 +501,7 @@ func handleSuggestionApplied(msg suggestionAppliedMsg, ctx tuicore.AppContext) (
 	return true, msgCmd
 }
 
+// handlePRCreated reports the new pull request and opens its detail view.
 func handlePRCreated(msg prCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -518,6 +522,7 @@ func handlePRCreated(msg prCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	})
 }
 
+// handlePRUpdated reports the update as created, merged or closed and reopens the detail view.
 func handlePRUpdated(msg prUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -553,6 +558,7 @@ func handlePRUpdated(msg prUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	})
 }
 
+// handlePRRetracted reports the retraction and navigates back.
 func handlePRRetracted(msg prRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -564,6 +570,7 @@ func handlePRRetracted(msg prRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	})
 }
 
+// handlePRStackUpdated reports how many stacked pull requests the operation touched.
 func handlePRStackUpdated(msg prStackUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -584,6 +591,7 @@ func handlePRStackUpdated(msg prStackUpdatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
+// handleFeedbackCreated reports the feedback as submitted, approved or changes-requested and reopens the pull request.
 func handleFeedbackCreated(msg feedbackCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)

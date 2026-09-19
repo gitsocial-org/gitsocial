@@ -1043,6 +1043,7 @@ func GetBehindCount(workdir, base, head string) (int, error) {
 	return count, nil
 }
 
+// splitNonEmpty splits text into lines, dropping the blank ones.
 func splitNonEmpty(s string) []string {
 	var result []string
 	for _, line := range strings.Split(s, "\n") {

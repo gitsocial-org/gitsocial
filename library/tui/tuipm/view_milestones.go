@@ -107,6 +107,7 @@ func (v *milestonesView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadMilestones()
 }
 
+// loadMilestones fetches the first page of milestones for the selected states.
 func (v *milestonesView) loadMilestones() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -138,6 +139,7 @@ func (v *milestonesView) loadMilestones() tea.Cmd {
 	}
 }
 
+// loadMoreMilestones fetches the next page of milestones from the pagination cursor.
 func (v *milestonesView) loadMoreMilestones() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -298,6 +300,7 @@ func (v *milestonesView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
+// handleKey toggles the state and author filters, refreshes, opens the new-milestone form and starts a search.
 func (v *milestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "F":
@@ -336,6 +339,7 @@ func (v *milestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 	return nil
 }
 
+// handleSearchKey feeds the search input and refilters the list on every keystroke.
 func (v *milestonesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":

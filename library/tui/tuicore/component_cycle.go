@@ -209,6 +209,7 @@ func (c *CycleField) cycle(delta int) {
 	*c.value = c.options[idx].Value
 }
 
+// activeStyles returns the focused or blurred field styles of the active theme.
 func (c *CycleField) activeStyles() *huh.FieldStyles {
 	theme := c.theme
 	if theme == nil {
@@ -383,6 +384,7 @@ func (s *SubmitField) Label(label string) *SubmitField {
 	return s
 }
 
+// activeStyles returns the focused or blurred field styles of the active theme.
 func (s *SubmitField) activeStyles() *huh.FieldStyles {
 	theme := s.theme
 	if theme == nil {
@@ -395,8 +397,10 @@ func (s *SubmitField) activeStyles() *huh.FieldStyles {
 	return &styles.Blurred
 }
 
+// Init returns no startup command.
 func (s *SubmitField) Init() tea.Cmd { return nil }
 
+// Update moves focus to the previous or next field on the matching keys.
 func (s *SubmitField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -410,6 +414,7 @@ func (s *SubmitField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 	return s, nil
 }
 
+// View renders the submit button, filled green while focused.
 func (s *SubmitField) View() string {
 	styles := s.activeStyles()
 	// Outdent the submit row by 1 column to match the Labels field above it.
@@ -428,27 +433,42 @@ func (s *SubmitField) View() string {
 	return base.Width(s.width).Render(btn.Render(s.label))
 }
 
+// Focus marks the button focused.
 func (s *SubmitField) Focus() tea.Cmd {
 	s.focused = true
 	return nil
 }
 
+// Blur marks the button blurred.
 func (s *SubmitField) Blur() tea.Cmd {
 	s.focused = false
 	return nil
 }
 
+// Error reports no error, since the button never validates.
 func (s *SubmitField) Error() error { return nil }
-func (s *SubmitField) Run() error   { return huh.Run(s) }
+
+// Run runs the button as a standalone form.
+func (s *SubmitField) Run() error { return huh.Run(s) }
+
+// RunAccessible prints the button label for screen readers.
 func (s *SubmitField) RunAccessible(w io.Writer, _ io.Reader) error {
 	_, err := fmt.Fprintf(w, "%s\n", s.label)
 	return err
 }
+
+// Skip reports that the form never skips the button.
 func (s *SubmitField) Skip() bool { return false }
+
+// Zoom reports that the button never expands to fill the form.
 func (s *SubmitField) Zoom() bool { return false }
+
+// KeyBinds returns the navigation and submit bindings the button answers to.
 func (s *SubmitField) KeyBinds() []key.Binding {
 	return []key.Binding{s.keymap.Next, s.keymap.Prev, s.keymap.Submit, s.keymap.Accept}
 }
+
+// WithTheme adopts the form theme unless one was already set.
 func (s *SubmitField) WithTheme(theme huh.Theme) huh.Field {
 	if s.theme != nil {
 		return s
@@ -456,14 +476,26 @@ func (s *SubmitField) WithTheme(theme huh.Theme) huh.Field {
 	s.theme = theme
 	return s
 }
+
+// WithKeyMap takes the confirm bindings from the form key map.
 func (s *SubmitField) WithKeyMap(k *huh.KeyMap) huh.Field { s.keymap = k.Confirm; return s }
-func (s *SubmitField) WithWidth(width int) huh.Field      { s.width = width; return s }
-func (s *SubmitField) WithHeight(height int) huh.Field    { s.height = height; return s }
+
+// WithWidth sets the width the button row renders to.
+func (s *SubmitField) WithWidth(width int) huh.Field { s.width = width; return s }
+
+// WithHeight sets the height the button row renders to.
+func (s *SubmitField) WithHeight(height int) huh.Field { s.height = height; return s }
+
+// WithPosition enables the bindings that suit the button's place in the form.
 func (s *SubmitField) WithPosition(p huh.FieldPosition) huh.Field {
 	s.keymap.Prev.SetEnabled(!p.IsFirst())
 	s.keymap.Next.SetEnabled(!p.IsLast())
 	s.keymap.Submit.SetEnabled(p.IsLast())
 	return s
 }
+
+// GetKey returns the key the form stores the button under.
 func (s *SubmitField) GetKey() string { return s.key }
-func (s *SubmitField) GetValue() any  { return true }
+
+// GetValue returns true, the button's fixed form value.
+func (s *SubmitField) GetValue() any { return true }

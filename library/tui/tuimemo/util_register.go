@@ -14,6 +14,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the memo views, card renderer, dimmed checker, nav target and message handler.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/list",

@@ -23,6 +23,7 @@ import (
 
 const releaseExt = "release"
 
+// init registers the release command tree.
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "release",
@@ -44,6 +45,7 @@ func init() {
 	})
 }
 
+// newReleaseStatusCmd builds the command that shows the extension's status.
 func newReleaseStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
@@ -85,6 +87,7 @@ func newReleaseStatusCmd() *cobra.Command {
 	}
 }
 
+// newReleaseInitCmd builds the command that initializes GitRelease here.
 func newReleaseInitCmd() *cobra.Command {
 	var branch string
 
@@ -126,6 +129,7 @@ func newReleaseInitCmd() *cobra.Command {
 	return cmd
 }
 
+// newReleaseCreateCmd builds the command that creates a release.
 func newReleaseCreateCmd() *cobra.Command {
 	var tag string
 	var version string
@@ -226,6 +230,7 @@ func newReleaseCreateCmd() *cobra.Command {
 	return cmd
 }
 
+// newReleaseListCmd builds the command that lists releases.
 func newReleaseListCmd() *cobra.Command {
 	var limit int
 	var repoURL string
@@ -279,6 +284,7 @@ func newReleaseListCmd() *cobra.Command {
 	return cmd
 }
 
+// newReleaseShowCmd builds the command that shows one release.
 func newReleaseShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <release-ref>",
@@ -310,6 +316,7 @@ func newReleaseShowCmd() *cobra.Command {
 	}
 }
 
+// newReleaseEditCmd builds the command that edits a release.
 func newReleaseEditCmd() *cobra.Command {
 	var body string
 	var tag string
@@ -401,6 +408,7 @@ func newReleaseEditCmd() *cobra.Command {
 	return cmd
 }
 
+// newReleaseRetractCmd builds the command that retracts a release.
 func newReleaseRetractCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retract <release-ref>",
@@ -448,6 +456,7 @@ func newReleaseArtifactsCmd() *cobra.Command {
 	return cmd
 }
 
+// newReleaseArtifactsRecordCmd builds the command that records artifacts on a release.
 func newReleaseArtifactsRecordCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "record <version> <file...>",
@@ -482,6 +491,7 @@ uploads the files to the s3 push remote's bucket.`,
 	}
 }
 
+// newReleaseArtifactsListCmd builds the command that lists a release's artifacts.
 func newReleaseArtifactsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list <version>",
@@ -526,6 +536,7 @@ func newReleaseArtifactsListCmd() *cobra.Command {
 	}
 }
 
+// newReleaseArtifactsExportCmd builds the command that exports artifacts to disk.
 func newReleaseArtifactsExportCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "export <version> [filename...]",
@@ -571,6 +582,7 @@ func newReleaseArtifactsExportCmd() *cobra.Command {
 	}
 }
 
+// printReleaseLine prints one release as a list row.
 func printReleaseLine(out io.Writer, rel release.Release) {
 	icon := "⏏"
 	if rel.Prerelease {
@@ -589,6 +601,7 @@ func printReleaseLine(out io.Writer, rel release.Release) {
 	fmt.Fprintf(out, "%s %s  %s  %s\n", icon, versionStr, rel.Subject, dateStr)
 }
 
+// printReleaseDetails prints a release's fields and body.
 func printReleaseDetails(out io.Writer, rel release.Release) {
 	fmt.Fprintf(out, "Release: %s\n", rel.ID)
 
@@ -660,6 +673,7 @@ func printReleaseDetails(out io.Writer, rel release.Release) {
 	}
 }
 
+// newReleaseSBOMCmd builds the command that shows a release's SBOM.
 func newReleaseSBOMCmd() *cobra.Command {
 	var raw bool
 

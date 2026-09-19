@@ -43,6 +43,7 @@ type Binding struct {
 	Verified       bool
 }
 
+// init registers the verified bindings schema.
 func init() {
 	cache.RegisterSchema("identity_bindings", bindingsSchema)
 }
@@ -607,6 +608,7 @@ func sshKeyMatches(declaredKey, signerKey string) bool {
 	return signerKey == expected
 }
 
+// storeBinding writes a binding to the cache.
 func storeBinding(b *Binding) {
 	verified := 0
 	if b.Verified {
@@ -623,6 +625,7 @@ func storeBinding(b *Binding) {
 	})
 }
 
+// nullableString returns nil for an empty string, for a nullable column.
 func nullableString(s string) interface{} {
 	if s == "" {
 		return nil
@@ -636,6 +639,7 @@ func isNoreplyEmail(email string) bool {
 	return strings.HasSuffix(email, "@users.noreply.github.com")
 }
 
+// containsEmail reports whether the list holds the email.
 func containsEmail(haystack []string, needle string) bool {
 	for _, e := range haystack {
 		if e == needle {

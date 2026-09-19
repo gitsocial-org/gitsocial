@@ -64,6 +64,7 @@ func (v *boardView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadBoard()
 }
 
+// loadBoard fetches the board and marks the issues whose commits are not pushed yet.
 func (v *boardView) loadBoard() tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
@@ -129,6 +130,7 @@ func (v *boardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 // IsInputActive returns false — board doesn't capture text input directly.
 func (v *boardView) IsInputActive() bool { return false }
 
+// handleKey moves the selection, shifts an issue between columns and opens the issue under the cursor.
 func (v *boardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	if !v.loaded || len(v.board.Columns) == 0 {
 		return nil
@@ -393,6 +395,7 @@ func isIssueMine(issue pm.Issue, email string) bool {
 	return false
 }
 
+// handleMouse scrolls on the wheel, selects a cell on a click and opens its issue on a second click.
 func (v *boardView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	if !v.loaded || len(v.board.Columns) == 0 {
 		return nil
@@ -471,6 +474,7 @@ func (v *boardView) adjustScroll() {
 	}
 }
 
+// clampRow pulls the selected row back inside the selected column.
 func (v *boardView) clampRow() {
 	if v.selectedCol >= len(v.board.Columns) {
 		return

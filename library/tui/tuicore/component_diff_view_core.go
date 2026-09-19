@@ -189,6 +189,7 @@ func (c *DiffViewCore) Update(msg tea.Msg, state *State) tea.Cmd {
 	return nil
 }
 
+// handleMouse scrolls on the wheel and moves the cursor to a clicked row, folding on a second click.
 func (c *DiffViewCore) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	if c.searchInputMode {
 		return nil
@@ -218,6 +219,7 @@ func (c *DiffViewCore) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	return nil
 }
 
+// handleKey routes a key press through the search modes and the wrapper hook before the shared keys.
 func (c *DiffViewCore) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 	if c.searchInputMode {
 		switch msg.String() {
@@ -262,6 +264,7 @@ func (c *DiffViewCore) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 	return c.handleSharedKey(key)
 }
 
+// handleSharedKey applies the navigation, fold, wrap, mode and search keys every diff view answers to.
 func (c *DiffViewCore) handleSharedKey(key string) tea.Cmd {
 	switch key {
 	case "j", "down":
@@ -341,6 +344,7 @@ func (c *DiffViewCore) handleSharedKey(key string) tea.Cmd {
 	return nil
 }
 
+// moveCursor moves the cursor by delta rows, clamped to the plan, and keeps it visible.
 func (c *DiffViewCore) moveCursor(delta int) {
 	if len(c.plan.Rows) == 0 {
 		return
@@ -356,6 +360,7 @@ func (c *DiffViewCore) moveCursor(delta int) {
 	c.ensureCursorVisible()
 }
 
+// cycleMode steps to the next layout, keeping the cursor row, and reports a nav visibility change.
 func (c *DiffViewCore) cycleMode() tea.Cmd {
 	prev := c.mode
 	anchor := c.CursorAnchor()
@@ -370,6 +375,7 @@ func (c *DiffViewCore) cycleMode() tea.Cmd {
 	return nil
 }
 
+// layoutFromMode maps the numeric mode to its diff layout.
 func (c *DiffViewCore) layoutFromMode() diff.Layout {
 	switch c.mode {
 	case 1:
@@ -462,12 +468,14 @@ func findRowByAnchor(rows []diff.DisplayRow, a diff.RowAnchor) int {
 	return -1
 }
 
+// syncSelectedFile points the selected file at the file under the cursor.
 func (c *DiffViewCore) syncSelectedFile() {
 	if c.cursor >= 0 && c.cursor < len(c.plan.Rows) {
 		c.selectedFile = c.plan.Rows[c.cursor].Anchor.FileIdx
 	}
 }
 
+// ensureCursorVisible scrolls just far enough to bring the cursor row into the viewport.
 func (c *DiffViewCore) ensureCursorVisible() {
 	vh := c.viewportHeight()
 	if c.cursor < c.scroll {
@@ -481,6 +489,7 @@ func (c *DiffViewCore) ensureCursorVisible() {
 	}
 }
 
+// viewportHeight returns the rows left for diff content, at least one.
 func (c *DiffViewCore) viewportHeight() int {
 	vh := c.height - 5
 	if vh < 1 {
@@ -489,11 +498,13 @@ func (c *DiffViewCore) viewportHeight() int {
 	return vh
 }
 
+// toggleFileAtCursor folds or unfolds the file the cursor sits in.
 func (c *DiffViewCore) toggleFileAtCursor() {
 	a := c.CursorAnchor()
 	c.toggleFileFold(a.FileIdx)
 }
 
+// toggleFileFold flips the file fold for the given file index and rebuilds the plan.
 func (c *DiffViewCore) toggleFileFold(fileIdx int) {
 	if fileIdx < 0 || fileIdx >= len(c.diffs) {
 		return
@@ -508,6 +519,7 @@ func (c *DiffViewCore) toggleFileFold(fileIdx int) {
 	}
 }
 
+// toggleAllFiles opens every file fold, or closes them all when none is closed.
 func (c *DiffViewCore) toggleAllFiles() {
 	anyClosed := false
 	for _, r := range c.state.Folds {
@@ -540,6 +552,7 @@ func (c *DiffViewCore) toggleFoldAtCursor() {
 	}
 }
 
+// moveCursorToFile puts the cursor on the header row of the given file.
 func (c *DiffViewCore) moveCursorToFile(idx int) {
 	for i, r := range c.plan.Rows {
 		if r.Anchor.FileIdx == idx && r.Kind == diff.RowFileHeader {
@@ -550,6 +563,7 @@ func (c *DiffViewCore) moveCursorToFile(idx int) {
 	}
 }
 
+// jumpToNextHunk moves the cursor to the first body row of the next hunk and reveals it.
 func (c *DiffViewCore) jumpToNextHunk() {
 	if len(c.plan.Rows) == 0 {
 		return
@@ -573,6 +587,7 @@ func (c *DiffViewCore) jumpToNextHunk() {
 	}
 }
 
+// jumpToPrevHunk moves the cursor to the first body row of the previous hunk and reveals it.
 func (c *DiffViewCore) jumpToPrevHunk() {
 	if len(c.plan.Rows) == 0 || c.cursor == 0 {
 		return
@@ -609,6 +624,7 @@ func (c *DiffViewCore) jumpToPrevHunk() {
 	c.revealHunkAtRow(headerRow)
 }
 
+// revealHunkAtRow scrolls so as much of the hunk starting at headerRow shows as fits.
 func (c *DiffViewCore) revealHunkAtRow(headerRow int) {
 	if headerRow < 0 || headerRow >= len(c.plan.Rows) {
 		c.ensureCursorVisible()
@@ -790,6 +806,7 @@ func planRowPlainText(r diff.DisplayRow) string {
 	return b.String()
 }
 
+// renderPinnedFileHeader returns the header of the file being scrolled through once its own header is off screen.
 func (c *DiffViewCore) renderPinnedFileHeader() string {
 	if c.scroll < 0 || c.scroll >= len(c.plan.Rows) {
 		return ""
@@ -842,6 +859,7 @@ func (c *DiffViewCore) RenderFooter(state *State, ctx Context, contentWidth int)
 	return RenderFooter(state.Registry, ctx, nil)
 }
 
+// updateSearch recollects the rows matching the query and jumps to the first.
 func (c *DiffViewCore) updateSearch() {
 	c.searchQuery = c.searchInput.Value()
 	if c.searchQuery == "" {
@@ -871,6 +889,7 @@ func (c *DiffViewCore) updateSearch() {
 	}
 }
 
+// nextMatch moves the cursor to the following matching row, wrapping to the first.
 func (c *DiffViewCore) nextMatch() {
 	if len(c.matchPositions) == 0 {
 		return
@@ -884,6 +903,7 @@ func (c *DiffViewCore) nextMatch() {
 	c.ensureCursorVisible()
 }
 
+// prevMatch moves the cursor to the preceding matching row, wrapping to the last.
 func (c *DiffViewCore) prevMatch() {
 	if len(c.matchPositions) == 0 {
 		return
@@ -897,6 +917,7 @@ func (c *DiffViewCore) prevMatch() {
 	c.ensureCursorVisible()
 }
 
+// exitSearch clears the query, the matches and the input focus.
 func (c *DiffViewCore) exitSearch() {
 	c.searchActive = false
 	c.searchInputMode = false

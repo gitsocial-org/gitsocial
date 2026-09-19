@@ -13,6 +13,7 @@ func RegisterSearchMethods(s *Server) {
 	s.registry.Register("search", s.requireInit(rpcSearch(s)))
 }
 
+// rpcSearch handles search, running one query across every extension.
 func rpcSearch(s *Server) HandlerFunc {
 	return func(raw json.RawMessage) (any, *RPCError) {
 		p, rpcErr := decodeParams[struct {

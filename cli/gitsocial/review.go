@@ -22,6 +22,7 @@ import (
 
 const reviewExt = "review"
 
+// init registers the review command tree.
 func init() {
 	RegisterExtension(ExtensionRegistration{
 		Use:   "review",
@@ -156,6 +157,7 @@ func newReviewPRCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRCreateCmd builds the command that creates a pull request.
 func newReviewPRCreateCmd() *cobra.Command {
 	var base, head, dependsOnStr, closesStr, reviewersStr, labelsStr string
 	var draft, stack, allowUnpublished bool
@@ -260,6 +262,7 @@ func newReviewPRCreateCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRListCmd builds the command that lists pull requests.
 func newReviewPRListCmd() *cobra.Command {
 	var state string
 	var limit int
@@ -326,6 +329,7 @@ func newReviewPRListCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRShowCmd builds the command that shows one pull request.
 func newReviewPRShowCmd() *cobra.Command {
 	var showVersions bool
 
@@ -497,6 +501,7 @@ func newReviewPREditCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRUpdateCmd builds the command that updates a PR with current branch tips.
 func newReviewPRUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <pr-ref>",
@@ -527,6 +532,7 @@ branches, which signals that new code is ready for review.`,
 	}
 }
 
+// newReviewPRMergeCmd builds the command that merges a pull request.
 func newReviewPRMergeCmd() *cobra.Command {
 	var strategy string
 
@@ -572,6 +578,7 @@ func newReviewPRMergeCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRCloseCmd builds the command that closes a pull request.
 func newReviewPRCloseCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "close <pr-ref>",
@@ -603,6 +610,7 @@ func newReviewPRCloseCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRRetractCmd builds the command that retracts a pull request.
 func newReviewPRRetractCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retract <pr-ref>",
@@ -634,6 +642,7 @@ func newReviewPRRetractCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRDiffCmd builds the command that range-diffs two PR versions.
 func newReviewPRDiffCmd() *cobra.Command {
 	var from, to int
 
@@ -695,6 +704,7 @@ func newReviewPRDiffCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRSyncCmd builds the command that syncs a PR head with its base.
 func newReviewPRSyncCmd() *cobra.Command {
 	var strategy string
 
@@ -731,6 +741,7 @@ func newReviewPRSyncCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewPRReadyCmd builds the command that marks a draft PR ready.
 func newReviewPRReadyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ready <pr-ref>",
@@ -759,6 +770,7 @@ func newReviewPRReadyCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRDraftCmd builds the command that converts an open PR to draft.
 func newReviewPRDraftCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "draft <pr-ref>",
@@ -787,6 +799,7 @@ func newReviewPRDraftCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRStackCmd builds the command that shows a PR's stack.
 func newReviewPRStackCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stack <pr-ref>",
@@ -835,6 +848,7 @@ func newReviewPRStackCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRRebaseStackCmd builds the command that rebases the PRs above one.
 func newReviewPRRebaseStackCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "rebase-stack <pr-ref>",
@@ -866,6 +880,7 @@ func newReviewPRRebaseStackCmd() *cobra.Command {
 	}
 }
 
+// newReviewPRSyncStackCmd builds the command that updates branch tips across a stack.
 func newReviewPRSyncStackCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync-stack <pr-ref>",
@@ -909,6 +924,7 @@ func newReviewFeedbackCmd() *cobra.Command {
 	return cmd
 }
 
+// newFeedbackApproveCmd builds the command that approves a pull request.
 func newFeedbackApproveCmd() *cobra.Command {
 	var message string
 
@@ -952,6 +968,7 @@ func newFeedbackApproveCmd() *cobra.Command {
 	return cmd
 }
 
+// newFeedbackRequestChangesCmd builds the command that requests changes on a PR.
 func newFeedbackRequestChangesCmd() *cobra.Command {
 	var message string
 
@@ -996,6 +1013,7 @@ func newFeedbackRequestChangesCmd() *cobra.Command {
 	return cmd
 }
 
+// newFeedbackCommentCmd builds the command that creates an inline feedback comment.
 func newFeedbackCommentCmd() *cobra.Command {
 	var prRef, file, commitHash string
 	var oldLine, newLine, oldLineEnd, newLineEnd int
@@ -1079,6 +1097,7 @@ func newReviewForkCmd() *cobra.Command {
 	return cmd
 }
 
+// newReviewForkAddCmd builds the command that registers a fork.
 func newReviewForkAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <url>",
@@ -1103,6 +1122,7 @@ func newReviewForkAddCmd() *cobra.Command {
 	}
 }
 
+// newReviewForkRemoveCmd builds the command that removes a registered fork.
 func newReviewForkRemoveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <url>",
@@ -1127,6 +1147,7 @@ func newReviewForkRemoveCmd() *cobra.Command {
 	}
 }
 
+// newReviewForkListCmd builds the command that lists registered forks.
 func newReviewForkListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
@@ -1168,6 +1189,7 @@ func printPRLine(out io.Writer, pr review.PullRequest) {
 	fmt.Fprintf(out, "%s %s  %s ← %s  [%s]  %s\n", icon, pr.Subject, baseShort, headShort, stateStr, dateStr)
 }
 
+// printPRDetails prints a pull request's fields, review summary and body.
 func printPRDetails(out io.Writer, workdir string, pr review.PullRequest) {
 	fmt.Fprintf(out, "Pull Request: %s\n", pr.ID)
 	if pr.IsDraft {
@@ -1281,6 +1303,7 @@ func formatTipStaleMarker(side, storedTip string, obs *review.PRObservation) str
 	return "  ⚠ updated to #" + observedTip + " (run `pr update`)"
 }
 
+// printVersionAwareReview prints one review with the version it covers.
 func printVersionAwareReview(out io.Writer, r review.VersionAwareReview) {
 	icon := "  "
 	switch r.State {
@@ -1311,6 +1334,7 @@ func printVersionAwareReview(out io.Writer, r review.VersionAwareReview) {
 	fmt.Fprintf(out, "  %s%-25s %s%s\n", icon, r.ReviewerEmail, status, stale)
 }
 
+// printFeedbackLine prints one feedback item as a list row.
 func printFeedbackLine(out io.Writer, r review.Feedback) {
 	icon := "  "
 	switch r.ReviewState {
@@ -1361,6 +1385,7 @@ func readStdin(in io.Reader) string {
 	return strings.Join(lines, "\n")
 }
 
+// shortenBranchRef returns the branch name from a branch ref.
 func shortenBranchRef(ref string) string {
 	// Extract branch name from "#branch:name" or full URL refs
 	if idx := strings.LastIndex(ref, "#branch:"); idx >= 0 {
@@ -1369,6 +1394,7 @@ func shortenBranchRef(ref string) string {
 	return ref
 }
 
+// extractHash returns the commit hash from a commit ref.
 func extractHash(id string) string {
 	// Extract hash from ref like "#commit:abc123@branch" or "url#commit:abc123@branch"
 	if idx := strings.Index(id, "#commit:"); idx >= 0 {

@@ -25,6 +25,7 @@ func newIDCmd() *cobra.Command {
 	return cmd
 }
 
+// newIDVerifyCmd builds the command that verifies a commit signature.
 func newIDVerifyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify <commit>",
@@ -91,6 +92,7 @@ documentation/IDENTITY.md.`,
 	}
 }
 
+// newIDResolveCmd builds the command that resolves an identity over DNS.
 func newIDResolveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve <email>",

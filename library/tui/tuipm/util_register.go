@@ -13,6 +13,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// init registers the PM views, card renderers, dimmed checkers, nav targets and message handler.
 func init() {
 	// Register view metadata for PM paths (enables ESC→GoBack and correct keybinding context)
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/board", Context: tuicore.PMBoard, Title: "Board", Icon: "▦", NavItemID: "pm.board"})
@@ -276,6 +277,7 @@ func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	return false, nil
 }
 
+// handlePMConfigSaved refreshes the PM nav items after a saved config and leaves the message to the config view.
 func handlePMConfigSaved(msg pmConfigSavedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == "" {
 		pm.UpdatePMNavItems(ctx.Nav().Registry(), ctx.Workdir())
@@ -284,6 +286,7 @@ func handlePMConfigSaved(msg pmConfigSavedMsg, ctx tuicore.AppContext) (bool, te
 	return false, nil
 }
 
+// handleIssueCreated reports the new issue, refreshing the board or list in place and otherwise opening its detail view.
 func handleIssueCreated(msg issueCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -309,6 +312,7 @@ func handleIssueCreated(msg issueCreatedMsg, ctx tuicore.AppContext) (bool, tea.
 	})
 }
 
+// handleIssueUpdated reports the edit and reopens the issue detail view.
 func handleIssueUpdated(msg issueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -327,6 +331,7 @@ func handleIssueUpdated(msg issueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.
 	})
 }
 
+// handleMilestoneUpdated reports the edit and reopens the milestone detail view.
 func handleMilestoneUpdated(msg milestoneUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -345,6 +350,7 @@ func handleMilestoneUpdated(msg milestoneUpdatedMsg, ctx tuicore.AppContext) (bo
 	})
 }
 
+// handleSprintUpdated reports the edit and reopens the sprint detail view.
 func handleSprintUpdated(msg sprintUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)

@@ -12,6 +12,7 @@ import (
 
 type editProvider struct{}
 
+// init registers the edit notification provider.
 func init() {
 	RegisterProvider("core", &editProvider{})
 }

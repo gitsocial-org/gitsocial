@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
+// init installs the handler for the proposal-accepted message.
 func init() {
 	RegisterMessageHandler(func(msg tea.Msg, ctx AppContext) (bool, tea.Cmd) {
 		if m, ok := msg.(proposalAcceptedMsg); ok {

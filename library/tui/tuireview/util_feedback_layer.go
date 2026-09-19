@@ -21,6 +21,7 @@ type feedbackLayer struct {
 	showEmail bool
 }
 
+// newFeedbackLayer builds the layer that inlines the given feedback into a diff plan.
 func newFeedbackLayer(items []review.Feedback, userEmail string, showEmail bool) feedbackLayer {
 	return feedbackLayer{items: items, userEmail: userEmail, showEmail: showEmail}
 }

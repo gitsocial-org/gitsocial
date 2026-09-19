@@ -8,6 +8,7 @@ import (
 
 type notificationProvider struct{}
 
+// init registers the social notification provider.
 func init() {
 	notifications.RegisterProvider("social", &notificationProvider{})
 }

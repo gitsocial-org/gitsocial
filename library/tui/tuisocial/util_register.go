@@ -25,6 +25,7 @@ type socialHost interface {
 	RemoveDisplayItem(string)
 }
 
+// init registers the social views, card renderers, dimmed checkers, nav targets and message handler.
 func init() {
 	// ViewMeta (order = doc output order within social domain)
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/timeline", Context: tuicore.Timeline, Title: "Timeline", Icon: "⏱", NavItemID: "social.timeline", ShowFetch: true, Component: "CardList"})
@@ -267,6 +268,7 @@ func handlePostSubmitted(msg postSubmittedMsg, ctx tuicore.AppContext) (bool, te
 	})
 }
 
+// handleListsLoaded refreshes the list entries in the nav panel and passes the message on.
 func handleListsLoaded(msg ListsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil && msg.Lists != nil {
 		social.UpdateListItems(ctx.Nav().Registry(), msg.Lists)
@@ -274,6 +276,7 @@ func handleListsLoaded(msg ListsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	return true, ctx.Host().Update(msg)
 }
 
+// handleNotificationsLoaded recounts the unread badge from the loaded notifications.
 func handleNotificationsLoaded(msg tuiviews.NotificationsLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		unread := 0
@@ -287,6 +290,7 @@ func handleNotificationsLoaded(msg tuiviews.NotificationsLoadedMsg, ctx tuicore.
 	return true, ctx.Host().Update(msg)
 }
 
+// handleNotificationMarkedRead updates the unread badge after one notification is read.
 func handleNotificationMarkedRead(msg tuiviews.NotificationMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		ctx.Nav().SetUnreadCount(msg.UnreadCount)
@@ -294,6 +298,7 @@ func handleNotificationMarkedRead(msg tuiviews.NotificationMarkedReadMsg, ctx tu
 	return true, ctx.Host().Update(msg)
 }
 
+// handleNotificationMarkedUnread updates the unread badge after one notification is unread again.
 func handleNotificationMarkedUnread(msg tuiviews.NotificationMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil {
 		ctx.Nav().SetUnreadCount(msg.UnreadCount)
@@ -301,16 +306,19 @@ func handleNotificationMarkedUnread(msg tuiviews.NotificationMarkedUnreadMsg, ct
 	return true, ctx.Host().Update(msg)
 }
 
+// handleNotificationsAllMarkedRead clears the unread badge.
 func handleNotificationsAllMarkedRead(msg tuiviews.NotificationsAllMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Nav().SetUnreadCount(0)
 	return true, ctx.Host().Update(msg)
 }
 
+// handleNotificationsAllMarkedUnread restores the unread badge to the full count.
 func handleNotificationsAllMarkedUnread(msg tuiviews.NotificationsAllMarkedUnreadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Nav().SetUnreadCount(msg.UnreadCount)
 	return true, ctx.Host().Update(msg)
 }
 
+// handleFetchCompleted reports the fetch outcome, adjusts the auto-fetch back-off and refreshes the view.
 func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.SetFetching(false)
 	if msg.Err != nil {
@@ -382,6 +390,7 @@ func formatFetchSummary(breakdown map[string]int) string {
 	return "Fetched " + strings.Join(parts, ", ")
 }
 
+// handlePushCompleted reports the push outcome and refreshes the view and unpushed count.
 func handlePushCompleted(msg PushCompletedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.SetPushing(false)
 	if msg.Err != nil {
@@ -443,6 +452,7 @@ func formatPushRemoteResult(res client.Result) (string, bool) {
 	return head, false
 }
 
+// handleTimelineLoaded replaces the host's display items with the loaded posts.
 func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil && !msg.Append {
 		if sh, ok := ctx.Host().(socialHost); ok {
@@ -454,6 +464,7 @@ func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, 
 	return true, ctx.Host().Update(msg)
 }
 
+// handleCommentCreated puts the new comment at the top of the list, opens it and recounts its targets.
 func handleCommentCreated(msg commentCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if sh, ok := ctx.Host().(socialHost); ok {
 		state := ctx.Host().State()
@@ -481,11 +492,13 @@ func handleCommentCreated(msg commentCreatedMsg, ctx tuicore.AppContext) (bool, 
 	return true, tea.Batch(cmds...)
 }
 
+// handleRetractStarted marks the host busy for the duration of the retraction.
 func handleRetractStarted(_ retractStartedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Host().SetRetracting(true)
 	return true, nil
 }
 
+// handlePostRetracted clears the busy marker and drops the retracted post from the list.
 func handlePostRetracted(msg postRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Host().SetRetracting(false)
 	if msg.Err == nil {
@@ -496,6 +509,7 @@ func handlePostRetracted(msg postRetractedMsg, ctx tuicore.AppContext) (bool, te
 	return true, nil
 }
 
+// handleRepoAdded reports the addition and starts the first fetch of the new repository.
 func handleRepoAdded(msg repoAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		if strings.HasPrefix(msg.Err.Error(), "repository already in the list") {
@@ -512,6 +526,7 @@ func handleRepoAdded(msg repoAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	return true, tea.Batch(cmd, fetchCmd)
 }
 
+// handleRepoFetchedAfterAdd reports how much the first fetch brought in and reloads the lists and timeline.
 func handleRepoFetchedAfterAdd(msg RepoFetchedAfterAddMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	var msgCmd tea.Cmd
 	if msg.Err != nil {
@@ -525,6 +540,7 @@ func handleRepoFetchedAfterAdd(msg RepoFetchedAfterAddMsg, ctx tuicore.AppContex
 	return true, tea.Batch(msgCmd, ctx.LoadLists(), ctx.RefreshTimeline(), ctx.LoadUnreadCount(), ctx.RefreshCacheSize())
 }
 
+// handleRepoRemoved reports the removal and passes the message to the view.
 func handleRepoRemoved(msg repoRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	var msgCmd tea.Cmd
 	if msg.Err == nil {
@@ -534,6 +550,7 @@ func handleRepoRemoved(msg repoRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	return true, tea.Batch(cmd, msgCmd)
 }
 
+// handleListCreated reports the new list and reloads the list entries.
 func handleListCreated(msg listCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
@@ -548,6 +565,7 @@ func handleListCreated(msg listCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	return true, tea.Batch(cmd, msgCmd, ctx.LoadLists())
 }
 
+// handleInteractionCountsRefreshed forwards fresh counts to the views that display them.
 func handleInteractionCountsRefreshed(msg tuicore.InteractionCountsRefreshedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		return true, nil
@@ -556,6 +574,7 @@ func handleInteractionCountsRefreshed(msg tuicore.InteractionCountsRefreshedMsg,
 	return true, ctx.Host().Update(msg)
 }
 
+// refreshInteractionCounts recounts a post's comments, reposts and quotes in the background.
 func refreshInteractionCounts(workdir, postID string) tea.Cmd {
 	return func() tea.Msg {
 		parsed := protocol.ParseRef(postID)

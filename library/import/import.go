@@ -265,6 +265,7 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 	return stats, nil
 }
 
+// executePM writes the milestones, issues and comments the PM plan holds.
 func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 	stats := Stats{}
 	platform := mapping.Source
@@ -542,6 +543,7 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 	return stats
 }
 
+// executeRelease writes the releases the release plan holds.
 func executeRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats {
 	stats := Stats{}
 	platform := mapping.Source
@@ -623,6 +625,7 @@ func executeRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats
 	return stats
 }
 
+// executeReview writes the forks, pull requests and comments the review plan holds.
 func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 	stats := Stats{}
 	if len(plan.Forks) > 0 {
@@ -981,6 +984,7 @@ func applyStackRelationships(opts Options, plan *ReviewPlan, mapping *MappingFil
 	return errors
 }
 
+// executeSocial writes the posts and comments the social plan holds.
 func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 	stats := Stats{}
 	platform := mapping.Source
@@ -2089,6 +2093,7 @@ func resolveIssueLinks(ids []string, platform string, mapping *MappingFile) []st
 	return refs
 }
 
+// toPMLabels parses scope/value label strings into PM labels.
 func toPMLabels(labels []string) []pm.Label {
 	out := make([]pm.Label, 0, len(labels))
 	for _, l := range labels {

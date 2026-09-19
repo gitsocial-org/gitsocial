@@ -458,6 +458,7 @@ func (v *prEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return tea.Batch(v.loadPR(), loadForkBranches(v.workdir))
 }
 
+// loadPR fetches the pull request the form edits.
 func (v *prEditFormView) loadPR() tea.Cmd {
 	prID := v.prID
 	return func() tea.Msg {

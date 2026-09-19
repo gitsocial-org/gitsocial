@@ -1,11 +1,11 @@
 comment-block-css	47
-comment-block-go	442
+comment-block-go	436
 comment-block-html	4
 comment-block-js	127
 comment-heavy	0
 confidence	2
-emdash	572
+emdash	553
 error-shape	0
 flag-help	0
-func-comment	445
+func-comment	0
 short-long	0

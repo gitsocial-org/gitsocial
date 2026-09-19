@@ -66,6 +66,7 @@ func newSessionItemsView(workdir string) *memosView {
 	return newMemosViewVariant(workdir, variantSessionItems)
 }
 
+// newMemosViewVariant builds a memos view for one tier filter.
 func newMemosViewVariant(workdir string, v memosVariant) *memosView {
 	return &memosView{
 		workdir:   workdir,
@@ -308,6 +309,7 @@ func (v *memosView) HeaderInfo() (int, string) {
 	return v.cardList.Selected() + 1, fmt.Sprintf("%d", len(items))
 }
 
+// navigateToSelected opens the detail view of the memo under the cursor.
 func (v *memosView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
@@ -344,6 +346,7 @@ func (v *memosView) sourcePath() string {
 	return "/memo/list"
 }
 
+// handleKey refreshes, opens the new-memo form, manages inherited sources and syncs the personal tier.
 func (v *memosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
@@ -427,6 +430,7 @@ type memoSyncMsg struct {
 	isErr   bool
 }
 
+// loadMemos syncs every tier repo into the cache and lists the memos this variant shows.
 func (v *memosView) loadMemos() tea.Cmd {
 	workdir := v.workdir
 	variant := v.variant

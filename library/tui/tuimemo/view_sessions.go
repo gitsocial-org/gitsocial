@@ -173,6 +173,7 @@ func (v *sessionsView) startNewSession() tea.Cmd {
 	return v.newForm.Init()
 }
 
+// updateInput feeds the new-session form and opens the session it creates.
 func (v *sessionsView) updateInput(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		v.inputMode = false
@@ -200,6 +201,7 @@ func (v *sessionsView) updateInput(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+// doGC deletes the session's repo and reloads the list.
 func (v *sessionsView) doGC(id string) tea.Cmd {
 	return func() tea.Msg {
 		_ = memo.GCSession(id)

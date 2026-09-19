@@ -107,6 +107,7 @@ func (v *sprintsView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadSprints()
 }
 
+// loadSprints fetches the first page of sprints for the selected states.
 func (v *sprintsView) loadSprints() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -143,6 +144,7 @@ func (v *sprintsView) loadSprints() tea.Cmd {
 	}
 }
 
+// loadMoreSprints fetches the next page of sprints from the pagination cursor.
 func (v *sprintsView) loadMoreSprints() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
@@ -302,6 +304,7 @@ func (v *sprintsView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
+// handleKey toggles the state and author filters, refreshes, opens the new-sprint form and starts a search.
 func (v *sprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "n":
@@ -340,6 +343,7 @@ func (v *sprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	return nil
 }
 
+// handleSearchKey feeds the search input and refilters the list on every keystroke.
 func (v *sprintsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":

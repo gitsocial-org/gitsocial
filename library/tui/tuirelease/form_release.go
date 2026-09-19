@@ -304,6 +304,7 @@ func (v *releaseEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadRelease()
 }
 
+// loadRelease fetches the release being edited and delivers it as a releaseEditFormLoadedMsg.
 func (v *releaseEditFormView) loadRelease() tea.Cmd {
 	releaseID := v.releaseID
 	return func() tea.Msg {

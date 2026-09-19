@@ -17,6 +17,7 @@ import (
 
 var CoreIdentity = tuicore.RegisterContext("core.identity")
 
+// init registers the identity view at /config/identity.
 func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/config/identity", Context: CoreIdentity, Title: "Identity", Icon: "⚿", NavItemID: "identity"})
 }

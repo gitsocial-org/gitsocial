@@ -68,6 +68,7 @@ func GetLinksTo(repoURL, hash, branch string) ([]Link, error) {
 	})
 }
 
+// scanLinks reads issue link rows into links.
 func scanLinks(rows *sql.Rows) ([]Link, error) {
 	var links []Link
 	for rows.Next() {
