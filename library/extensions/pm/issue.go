@@ -57,7 +57,7 @@ func CreateIssue(workdir, subject, body string, opts CreateIssueOptions) Result[
 		}
 	}
 
-	content := buildIssueContent(subject, body, opts)
+	content := buildIssueContentWithEdits(subject, body, opts, "", nil)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[Issue]("COMMIT_FAILED", err.Error())
@@ -295,11 +295,6 @@ func RetractIssue(workdir, issueRef string) Result[bool] {
 	return result.Ok(true)
 }
 
-// buildIssueContent formats an issue message from its subject, body and options.
-func buildIssueContent(subject, body string, opts CreateIssueOptions) string {
-	return buildIssueContentWithEdits(subject, body, opts, "", nil)
-}
-
 // buildIssueContentWithEdits formats an issue message that edits a canonical ref.
 func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, editsRef string, refs []protocol.Ref) string {
 	content := subject
@@ -428,9 +423,9 @@ func cacheIssueFromCommit(workdir, repoURL, hash, branch string) error {
 	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: hash, Branch: branch}})
 
 	// Parse and store links
-	blocks := parseRefList(msg.Header.Fields["blocks"], repoURL, branch)
-	blockedBy := parseRefList(msg.Header.Fields["blocked-by"], repoURL, branch)
-	related := parseRefList(msg.Header.Fields["related"], repoURL, branch)
+	blocks := ParseRefList(msg.Header.Fields["blocks"], repoURL, branch)
+	blockedBy := ParseRefList(msg.Header.Fields["blocked-by"], repoURL, branch)
+	related := ParseRefList(msg.Header.Fields["related"], repoURL, branch)
 	if len(blocks) > 0 || len(blockedBy) > 0 || len(related) > 0 {
 		return InsertLinks(repoURL, hash, branch, blocks, blockedBy, related)
 	}

@@ -162,7 +162,7 @@ func extraAllBranches(workdir string, codeBranches map[string]int) []string {
 
 // Push pushes all extension branches, gitmsg refs, and the given code branches
 // to remote (empty = resolve via git.PushRemote: origin, or the configured s3
-// remote). Extension branches go through PushBranchWithMergeTo so divergent
+// remote). Extension branches go through pushBranchWithMergeTo so divergent
 // histories auto-resolve (empty-tree append-only branches → conflict-free
 // merge) instead of failing non-fast-forward and dropping the user into raw
 // git. Code branches (open PR heads, resolved by the caller) are pushed first
@@ -317,7 +317,7 @@ func pushTags(workdir, remote string, dryRun, more bool) (int, error) {
 }
 
 // mirrorGitMsgRefsToTracking points each local refs/gitmsg/* ref's tracking
-// mirror (see trackingPrefix) at the local hash. Called after a push so the
+// mirror (see TrackingRefPrefix) at the local hash. Called after a push so the
 // push preview reflects the new remote state without a fetch.
 func mirrorGitMsgRefsToTracking(workdir, remote string) {
 	localRefs, err := getLocalGitMsgRefs(workdir)
@@ -325,7 +325,7 @@ func mirrorGitMsgRefsToTracking(workdir, remote string) {
 		return
 	}
 	for ref, hash := range localRefs {
-		tracking := trackingPrefix(remote) + strings.TrimPrefix(ref, "refs/gitmsg/")
+		tracking := TrackingRefPrefix(remote) + strings.TrimPrefix(ref, "refs/gitmsg/")
 		if err := git.WriteRef(workdir, tracking, hash); err != nil {
 			// Best-effort: a stale preview is harmless, so don't fail the push.
 			continue

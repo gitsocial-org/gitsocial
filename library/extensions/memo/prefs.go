@@ -45,12 +45,6 @@ func SaveConfig(workdir string, cfg Config) error {
 	})
 }
 
-// IsProjectInitialized returns true when the workspace has the memo extension
-// branch configured.
-func IsProjectInitialized(workdir string) bool {
-	return gitmsg.IsExtInitialized(workdir, "memo")
-}
-
 // InitProject sets up the project-tier memo branch on the workspace.
 // Idempotent: re-running on an already-initialized workspace is a no-op.
 func InitProject(workdir string) Result[bool] {

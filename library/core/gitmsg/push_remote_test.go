@@ -92,13 +92,13 @@ func TestPush_explicitRemoteWins(t *testing.T) {
 
 	// The tracking mirror must be written under backup's tracking namespace,
 	// not origin's — including the ref nested under the pushed branch name.
-	if tip := localRef(t, work, trackingPrefix("backup")+"core/forks/deadbeef"); tip != socialTip {
+	if tip := localRef(t, work, TrackingRefPrefix("backup")+"core/forks/deadbeef"); tip != socialTip {
 		t.Errorf("tracking mirror under backup = %q, want %q", tip, socialTip)
 	}
-	if tip := localRef(t, work, trackingPrefix("backup")+"release/config"); tip != socialTip {
+	if tip := localRef(t, work, TrackingRefPrefix("backup")+"release/config"); tip != socialTip {
 		t.Errorf("nested tracking mirror under backup = %q, want %q", tip, socialTip)
 	}
-	if tip := localRef(t, work, trackingPrefix("origin")+"core/forks/deadbeef"); tip != "" {
+	if tip := localRef(t, work, TrackingRefPrefix("origin")+"core/forks/deadbeef"); tip != "" {
 		t.Errorf("tracking mirror under origin = %q, want empty", tip)
 	}
 

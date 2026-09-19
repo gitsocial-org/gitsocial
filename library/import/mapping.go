@@ -45,7 +45,7 @@ func MappingKey(platform, itemType, externalID string) string {
 // a newer schema) is an error: treating it as empty would re-import
 // everything and create duplicates.
 func ReadMapping(cacheDir, repoURL, mapFile string) (*MappingFile, error) {
-	path := resolveMappingPath(cacheDir, repoURL, mapFile)
+	path := ResolveMappingPath(cacheDir, repoURL, mapFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -75,7 +75,7 @@ func WriteMapping(cacheDir, repoURL, mapFile string, m *MappingFile) error {
 	if err != nil {
 		return fmt.Errorf("marshal mapping: %w", err)
 	}
-	path := resolveMappingPath(cacheDir, repoURL, mapFile)
+	path := ResolveMappingPath(cacheDir, repoURL, mapFile)
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create import dir: %w", err)
@@ -108,7 +108,7 @@ func WriteMapping(cacheDir, repoURL, mapFile string, m *MappingFile) error {
 // lock file, serializing concurrent imports of the same repo. Returns an unlock
 // function. Fails immediately (no waiting) when another import holds the lock.
 func LockMapping(cacheDir, repoURL, mapFile string) (func(), error) {
-	path := resolveMappingPath(cacheDir, repoURL, mapFile) + ".lock"
+	path := ResolveMappingPath(cacheDir, repoURL, mapFile) + ".lock"
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("create import dir: %w", err)
 	}
@@ -122,11 +122,6 @@ func LockMapping(cacheDir, repoURL, mapFile string) (func(), error) {
 	fmt.Fprintf(f, "%d\n", os.Getpid())
 	f.Close()
 	return func() { os.Remove(path) }, nil
-}
-
-// ResolveMappingPath returns the resolved path for the mapping file (for display).
-func ResolveMappingPath(cacheDir, repoURL, mapFile string) string {
-	return resolveMappingPath(cacheDir, repoURL, mapFile)
 }
 
 // IsMapped checks if an external ID has already been imported.
@@ -326,8 +321,8 @@ func CountMapped(mapping *MappingFile, found ItemCounts) ItemCounts {
 	return counts
 }
 
-// resolveMappingPath returns the mapping file path for a repository.
-func resolveMappingPath(cacheDir, repoURL, mapFile string) string {
+// ResolveMappingPath returns the mapping file path for a repository (also shown to the user).
+func ResolveMappingPath(cacheDir, repoURL, mapFile string) string {
 	if mapFile != "" {
 		clean := filepath.Clean(mapFile)
 		if filepath.IsAbs(clean) {

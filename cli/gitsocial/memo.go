@@ -59,7 +59,7 @@ func newMemoStatusCmd() *cobra.Command {
 			if err := memo.SyncAllTierReposToCache(cfg.WorkDir); err != nil {
 				slog.Debug("memo sync", "error", err)
 			}
-			projectInit := memo.IsProjectInitialized(cfg.WorkDir)
+			projectInit := gitmsg.IsExtInitialized(cfg.WorkDir, memoExt)
 			personalPath, _ := settings.PersonalRepoPath()
 			sessionDir, _ := memo.SessionDir()
 			sessions := memo.ListSessions(gitmsg.ResolveRepoURL(cfg.WorkDir))

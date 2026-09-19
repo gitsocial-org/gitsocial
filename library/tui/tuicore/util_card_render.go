@@ -97,7 +97,7 @@ func extractCodeBlocks(content string) (string, []codeBlock) {
 func restoreCodeBlocks(content string, blocks []codeBlock, dimmed bool) string {
 	for i, block := range blocks {
 		placeholder := fmt.Sprintf("%s%d\x00", codePlaceholderPrefix, i)
-		highlighted := highlightCode(strings.TrimRight(block.code, "\n"), block.language, dimmed)
+		highlighted := highlight(strings.TrimRight(block.code, "\n"), block.language, dimmed, false)
 		content = strings.Replace(content, placeholder, highlighted, 1)
 	}
 	return content
@@ -761,11 +761,6 @@ func buildRef(repoURL, hash, branch string, isWorkspace bool) string {
 		ref += "@" + branch
 	}
 	return ref
-}
-
-// buildCommitRef builds a reference from a commit hash, against the workspace URL.
-func buildCommitRef(repoURL, hash, branch, workspaceURL string) string {
-	return buildRef(repoURL, hash, branch, repoURL == workspaceURL)
 }
 
 // BuildRef builds a reference from an item's ID, repository, and branch.

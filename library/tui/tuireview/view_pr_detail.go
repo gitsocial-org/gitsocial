@@ -155,7 +155,7 @@ func (v *prDetailView) Activate(state *tuicore.State) tea.Cmd {
 				wgComments.Add(1)
 				go func(idx int, repo, h, id string) {
 					defer wgComments.Done()
-					res := review.GetFeedbackCommentsByKey(repo, h, id)
+					res := review.GetCommentsByKey(repo, h, id)
 					if res.Success {
 						mu.Lock()
 						reviewComments[idx] = res.Data
@@ -167,7 +167,7 @@ func (v *prDetailView) Activate(state *tuicore.State) tea.Cmd {
 		wgComments.Add(1)
 		go func() {
 			defer wgComments.Done()
-			commentsRes := review.GetPRCommentsByKey(pr.Repository, hash, pr.ID)
+			commentsRes := review.GetCommentsByKey(pr.Repository, hash, pr.ID)
 			if commentsRes.Success {
 				mu.Lock()
 				prComments = commentsRes.Data
@@ -1123,7 +1123,7 @@ func (v *prDetailView) Render(state *tuicore.State) string {
 		// M (merge) is bound to a letter reserved for a global sidebar shortcut,
 		// so force-show it here when available — it is otherwise invisible despite
 		// being the primary action for accepting a PR.
-		footer = tuicore.RenderFooterWithPositionInclude(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude, map[string]bool{"M": true})
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude, map[string]bool{"M": true})
 	}
 	return wrapper.Render(content, footer)
 }

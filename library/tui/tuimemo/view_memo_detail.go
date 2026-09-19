@@ -259,7 +259,7 @@ func (v *memoDetailView) Render(state *tuicore.State) string {
 	} else if v.sectionList.IsSearchActive() {
 		footer = v.sectionList.SearchFooter(wrapper.ContentWidth())
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.MemoDetail, v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.MemoDetail, v.sourceIndex+1, v.sourceTotal, exclude, nil)
 	}
 	return wrapper.Render(content, footer)
 }

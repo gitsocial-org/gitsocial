@@ -416,16 +416,6 @@ func CountIssues(states []string) (int, error) {
 	return GetPMItemsCount(PMQuery{Types: []string{string(ItemTypeIssue)}, States: states})
 }
 
-// CountMilestones returns the number of milestones matching the given states.
-func CountMilestones(repoURL, branch string, states []string) (int, error) {
-	return GetPMItemsCount(PMQuery{Types: []string{string(ItemTypeMilestone)}, States: states, RepoURL: repoURL, Branch: branch})
-}
-
-// CountSprints returns the number of sprints matching the given states.
-func CountSprints(repoURL, branch string, states []string) (int, error) {
-	return GetPMItemsCount(PMQuery{Types: []string{string(ItemTypeSprint)}, States: states, RepoURL: repoURL, Branch: branch})
-}
-
 // GetIssues retrieves issues with optional filtering.
 func GetIssues(repoURL, branch string, states []string, cursor string, limit int) Result[[]Issue] {
 	q := PMQuery{
@@ -598,10 +588,7 @@ func scanResolvedRow(s cache.RowScanner) (*PMItem, error) {
 }
 
 // ParseLabels parses a comma-separated scoped-label string into Label structs.
-func ParseLabels(labelsStr string) []Label { return parseLabels(labelsStr) }
-
-// parseLabels parses comma-separated scoped labels into Label structs.
-func parseLabels(labelsStr string) []Label {
+func ParseLabels(labelsStr string) []Label {
 	if labelsStr == "" {
 		return nil
 	}
@@ -797,7 +784,7 @@ func PMItemToIssue(item PMItem) Issue {
 		Blocks:           blocks,
 		BlockedBy:        blockedBy,
 		Related:          related,
-		Labels:           parseLabels(item.Labels.String),
+		Labels:           ParseLabels(item.Labels.String),
 		IsEdited:         item.IsEdited,
 		HasProposedEdits: item.HasProposedEdits,
 		IsRetracted:      item.IsRetracted,

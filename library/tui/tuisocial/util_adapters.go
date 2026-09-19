@@ -685,8 +685,3 @@ func makeResolveItemFunc(userEmail string) tuicore.ResolveItemFunc {
 		return nil, false
 	}
 }
-
-// extractSearchTerms delegates to tuicore.ExtractSearchTerms.
-func extractSearchTerms(query string) string {
-	return tuicore.ExtractSearchTerms(query)
-}

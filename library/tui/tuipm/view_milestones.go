@@ -134,7 +134,7 @@ func (v *milestonesView) loadMilestones() tea.Cmd {
 				milestones[i].IsUnpushed = true
 			}
 		}
-		total, _ := pm.CountMilestones(repoURL, branch, states)
+		total, _ := pm.GetPMItemsCount(pm.PMQuery{Types: []string{string(pm.ItemTypeMilestone)}, States: states, RepoURL: repoURL, Branch: branch})
 		return milestonesLoadedMsg{Milestones: milestones, HasMore: hasMore, Total: total}
 	}
 }

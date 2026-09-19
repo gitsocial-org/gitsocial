@@ -388,7 +388,7 @@ func (v *milestoneDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMMilestoneDetail, v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMMilestoneDetail, v.sourceIndex+1, v.sourceTotal, exclude, nil)
 	}
 	return wrapper.Render(content, footer)
 }

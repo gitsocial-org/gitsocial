@@ -24,16 +24,16 @@ func TestParseLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseLabels(tt.input)
+			got := ParseLabels(tt.input)
 			if len(got) != tt.want {
-				t.Errorf("parseLabels(%q) = %d labels, want %d", tt.input, len(got), tt.want)
+				t.Errorf("ParseLabels(%q) = %d labels, want %d", tt.input, len(got), tt.want)
 			}
 		})
 	}
 }
 
 func TestParseLabels_scopeAndValue(t *testing.T) {
-	got := parseLabels("priority/high")
+	got := ParseLabels("priority/high")
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -46,7 +46,7 @@ func TestParseLabels_scopeAndValue(t *testing.T) {
 }
 
 func TestParseLabels_unscoped(t *testing.T) {
-	got := parseLabels("urgent")
+	got := ParseLabels("urgent")
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}

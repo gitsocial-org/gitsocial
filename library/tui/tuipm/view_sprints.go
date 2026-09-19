@@ -139,7 +139,7 @@ func (v *sprintsView) loadSprints() tea.Cmd {
 				sprints[i].IsUnpushed = true
 			}
 		}
-		total, _ := pm.CountSprints(repoURL, branch, states)
+		total, _ := pm.GetPMItemsCount(pm.PMQuery{Types: []string{string(pm.ItemTypeSprint)}, States: states, RepoURL: repoURL, Branch: branch})
 		return sprintsLoadedMsg{Sprints: sprints, HasMore: hasMore, Total: total}
 	}
 }

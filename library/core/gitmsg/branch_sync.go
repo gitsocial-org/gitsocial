@@ -75,20 +75,15 @@ func FetchAndMergeBranchTo(repoPath, remote, branch string) error {
 // rejection, runs FetchAndMergeBranch and retries once. Any non-FF failure on
 // the retry surfaces as an error so the caller can report it.
 func PushBranchWithMerge(repoPath, branch string) error {
-	return PushBranchWithMergeTo(repoPath, git.PushRemote(repoPath), branch)
+	return pushBranchWithMergeTo(repoPath, git.PushRemote(repoPath), branch, false)
 }
 
-// PushBranchWithMergeTo is PushBranchWithMerge against an explicit remote. The
-// gitsocial-push path threads its resolved remote through here so the push and
-// its non-FF merge-retry target the same remote.
-func PushBranchWithMergeTo(repoPath, remote, branch string) error {
-	return pushBranchWithMergeTo(repoPath, remote, branch, false)
-}
-
-// pushBranchWithMergeTo is PushBranchWithMergeTo with the multi-transfer signal:
-// more says another transfer follows in the same push run, so the helper holds
-// its bucket maintenance for the last one. Both the first attempt and the
-// post-merge retry are the same logical step and carry the same answer.
+// pushBranchWithMergeTo is PushBranchWithMerge against an explicit remote, with
+// the multi-transfer signal. The gitsocial-push path threads its resolved
+// remote through here so the push and its non-FF merge-retry target the same
+// remote; more says another transfer follows in the same push run, so the
+// helper holds its bucket maintenance for the last one. Both the first attempt
+// and the post-merge retry are the same logical step and carry the same answer.
 func pushBranchWithMergeTo(repoPath, remote, branch string, more bool) error {
 	_, err := execGitTransfer(repoPath, []string{"push", "--quiet", remote, branch}, more)
 	if err == nil {

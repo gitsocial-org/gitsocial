@@ -224,11 +224,6 @@ func getIssueByRef(ref IssueRef) (Issue, error) {
 
 // ParseRefList parses a comma-separated ref string into forward IssueRef slices.
 func ParseRefList(refsStr, defaultRepoURL, defaultBranch string) []IssueRef {
-	return parseRefList(refsStr, defaultRepoURL, defaultBranch)
-}
-
-// parseRefList parses a comma-separated ref string into IssueRef slices.
-func parseRefList(refsStr, defaultRepoURL, defaultBranch string) []IssueRef {
 	if refsStr == "" {
 		return nil
 	}

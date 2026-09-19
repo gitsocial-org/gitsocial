@@ -92,7 +92,7 @@ func TestPRToCard_basic(t *testing.T) {
 		Author:    review.Author{Name: "Alice", Email: "alice@test.com"},
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
-	card := prToCard(pr)
+	card := prToCardWithOptions(pr, prToCardOptions{})
 	if card.Header.Icon != "⑂" {
 		t.Errorf("Icon = %q, want ⑂", card.Header.Icon)
 	}
@@ -112,7 +112,7 @@ func TestPRToCard_withBranches(t *testing.T) {
 		Head:    "#branch:feature/auth",
 		Author:  review.Author{Name: "Dev"},
 	}
-	card := prToCard(pr)
+	card := prToCardWithOptions(pr, prToCardOptions{})
 	foundBase := false
 	foundHead := false
 	for _, p := range card.Header.Subtitle {
@@ -141,7 +141,7 @@ func TestPRToCard_withReviewSummary(t *testing.T) {
 			ChangesRequested: 1,
 		},
 	}
-	card := prToCard(pr)
+	card := prToCardWithOptions(pr, prToCardOptions{})
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "[✓2 ✗1]" {
@@ -179,7 +179,7 @@ func TestPRToCard_withOriginalAuthor(t *testing.T) {
 		Author:         review.Author{Name: "Forker"},
 		OriginalAuthor: &origAuthor,
 	}
-	card := prToCard(pr)
+	card := prToCardWithOptions(pr, prToCardOptions{})
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "Original" {

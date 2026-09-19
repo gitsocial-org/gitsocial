@@ -10,7 +10,7 @@ import (
 )
 
 func TestBuildPRContent_minimal(t *testing.T) {
-	content := buildPRContent("Add feature", "", CreatePROptions{}, "")
+	content := buildPRContentWithState("Add feature", "", CreatePROptions{}, "", PRStateOpen, nil)
 	if !strings.Contains(content, "Add feature") {
 		t.Error("content should contain subject")
 	}
@@ -38,7 +38,7 @@ func TestBuildPRContent_allFields(t *testing.T) {
 		MergeBase: "abc123",
 		MergeHead: "def456",
 	}
-	content := buildPRContent("Add feature", "Detailed description", opts, "")
+	content := buildPRContentWithState("Add feature", "Detailed description", opts, "", PRStateOpen, nil)
 	if !strings.Contains(content, "Detailed description") {
 		t.Error("content should contain body")
 	}

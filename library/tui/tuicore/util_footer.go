@@ -216,14 +216,10 @@ func RenderFooterInclude(registry *Registry, ctx Context, exclude, include map[s
 // callers, and their footers carry many local bindings — to reduce clutter
 // the global `q` (quit) hint is suppressed here. Users learn `q` once from
 // list views; `?` (help) stays visible as the help signpost.
-func RenderFooterWithPosition(registry *Registry, ctx Context, current, total int, exclude map[string]bool) string {
-	return RenderFooterWithPositionInclude(registry, ctx, current, total, exclude, nil)
-}
-
-// RenderFooterWithPositionInclude is like RenderFooterWithPosition but force-shows
-// keys in `include` that would normally be suppressed by hiddenKeys (e.g. view
-// actions bound to letters reserved for global sidebar shortcuts, like M:merge).
-func RenderFooterWithPositionInclude(registry *Registry, ctx Context, current, total int, exclude, include map[string]bool) string {
+// Keys in `include` are force-shown although hiddenKeys would suppress them
+// (e.g. view actions bound to letters reserved for global sidebar shortcuts,
+// like M:merge); pass nil to show none.
+func RenderFooterWithPosition(registry *Registry, ctx Context, current, total int, exclude, include map[string]bool) string {
 	position := ""
 	if total > 0 {
 		position = fmt.Sprintf("%d/%d ", current, total)

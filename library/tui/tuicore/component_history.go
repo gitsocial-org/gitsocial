@@ -215,7 +215,7 @@ func (v *HistoryView) Title() string {
 	title := v.cfg.TitleLabel + " · " + canonical.AuthorDisplay(v.showEmail)
 	title += " · " + FormatFullTime(canonical.GetTimestamp())
 	repoURL, hash, branch := canonical.Ref()
-	if ref := buildCommitRef(repoURL, hash, branch, v.workspaceURL); ref != "" {
+	if ref := buildRef(repoURL, hash, branch, repoURL == v.workspaceURL); ref != "" {
 		title += " · " + ref
 	}
 	return title

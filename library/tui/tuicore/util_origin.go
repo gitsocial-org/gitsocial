@@ -22,15 +22,10 @@ func FormatOriginBadge(origin *protocol.Origin) string {
 	return "↙ " + platform
 }
 
-// formatOriginAuthor returns the origin author display name.
-func formatOriginAuthor(origin *protocol.Origin) string {
-	return protocol.OriginDisplayAuthor(origin)
-}
-
 // FormatOriginAuthorDisplay returns the origin author name, optionally with email.
 // Respects the display.show_email setting. Returns "" when origin has no author.
 func FormatOriginAuthorDisplay(origin *protocol.Origin, showEmail bool) string {
-	name := formatOriginAuthor(origin)
+	name := protocol.OriginDisplayAuthor(origin)
 	if name == "" {
 		return ""
 	}

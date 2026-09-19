@@ -51,11 +51,6 @@ func highlight(code, language string, dimmed, stripNewlines bool) string {
 	return result
 }
 
-// highlightCode highlights a full code block with syntax coloring.
-func highlightCode(code, language string, dimmed bool) string {
-	return highlight(code, language, dimmed, false)
-}
-
 // HighlightLine highlights a single line of code for use in diffs.
 func HighlightLine(line, language string, dimmed bool) string {
 	return highlight(line, language, dimmed, true)

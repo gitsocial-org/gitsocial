@@ -56,7 +56,7 @@ func releaseCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	case releaseItemData:
 		return releaseToCardWithOptions(d.Release, releaseToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL})
 	case release.Release:
-		return releaseToCard(d)
+		return releaseToCardWithOptions(d, releaseToCardOptions{})
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid release"}}
 }
@@ -110,11 +110,6 @@ type releaseToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
-}
-
-// releaseToCard converts a Release to a Card for display.
-func releaseToCard(rel release.Release) tuicore.Card {
-	return releaseToCardWithOptions(rel, releaseToCardOptions{})
 }
 
 // releaseToCardWithOptions converts a Release to a Card with configuration options.

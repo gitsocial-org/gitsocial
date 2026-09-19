@@ -126,9 +126,9 @@ func buildPMItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) (
 		}
 	}
 
-	blocks := parseRefList(msg.Header.Fields["blocks"], repoURL, branch)
-	blockedBy := parseRefList(msg.Header.Fields["blocked-by"], repoURL, branch)
-	related := parseRefList(msg.Header.Fields["related"], repoURL, branch)
+	blocks := ParseRefList(msg.Header.Fields["blocks"], repoURL, branch)
+	blockedBy := ParseRefList(msg.Header.Fields["blocked-by"], repoURL, branch)
+	related := ParseRefList(msg.Header.Fields["related"], repoURL, branch)
 
 	var lnk *pmLinkEntry
 	if len(blocks) > 0 || len(blockedBy) > 0 || len(related) > 0 {

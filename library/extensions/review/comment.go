@@ -12,12 +12,7 @@ func GetPRComments(prRef string, workspaceURL string) Result[[]social.Post] {
 	if err != nil {
 		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+prRef)
 	}
-	return getCommentsByKey(item.RepoURL, item.Hash, prRef)
-}
-
-// GetPRCommentsByKey retrieves social comments using a known composite key.
-func GetPRCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
-	return getCommentsByKey(repoURL, hash, rootRef)
+	return GetCommentsByKey(item.RepoURL, item.Hash, prRef)
 }
 
 // GetFeedbackComments retrieves all social comments on a feedback item.
@@ -26,16 +21,11 @@ func GetFeedbackComments(feedbackRef string, workspaceURL string) Result[[]socia
 	if err != nil {
 		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+feedbackRef)
 	}
-	return getCommentsByKey(item.RepoURL, item.Hash, feedbackRef)
+	return GetCommentsByKey(item.RepoURL, item.Hash, feedbackRef)
 }
 
-// GetFeedbackCommentsByKey retrieves social comments using a known composite key.
-func GetFeedbackCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
-	return getCommentsByKey(repoURL, hash, rootRef)
-}
-
-// getCommentsByKey reads a review item's comments on any branch.
-func getCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
+// GetCommentsByKey reads a review item's comments on any branch, from its known composite key.
+func GetCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
 	posts, err := social.GetComments(repoURL, hash, "", rootRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())

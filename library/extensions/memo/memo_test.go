@@ -667,7 +667,7 @@ func TestConfig_roundtrip(t *testing.T) {
 	if got.Version != "0.1.0" {
 		t.Errorf("round-trip Version = %q", got.Version)
 	}
-	if !IsProjectInitialized(dir) {
+	if !gitmsg.IsExtInitialized(dir, "memo") {
 		t.Error("project not marked initialized after SaveConfig (branch field missing from raw config)")
 	}
 }

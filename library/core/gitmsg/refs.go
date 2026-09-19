@@ -82,35 +82,29 @@ func getLocalGitMsgRefs(workdir string) (map[string]string, error) {
 	return parseRefOutput(result.Stdout), nil
 }
 
-// trackingPrefix returns the local namespace mirroring the remote's
+// TrackingRefPrefix returns the local namespace mirroring the remote's
 // refs/gitmsg/* state refs, as last seen by a push or fetch. It sits outside
 // refs/remotes/<remote>/: there the gitmsg/<ext> branch tracking refs
 // (e.g. .../gitmsg/release) block child mirrors (.../gitmsg/release/0.1.0/artifacts)
 // with git's directory/file ref conflict, so those mirrors could never be
-// written and their refs read as unpushed.
-func trackingPrefix(remote string) string {
+// written and their refs read as unpushed. The push-path tracking-ref
+// reconcile reads it too.
+func TrackingRefPrefix(remote string) string {
 	return "refs/gitsocial/tracking/" + remote + "/gitmsg/"
 }
 
 // TrackingRefspec returns the fetch refspec that mirrors the remote's
 // refs/gitmsg/* state refs into the tracking namespace the offline push
-// preview reads (see trackingPrefix).
+// preview reads (see TrackingRefPrefix).
 func TrackingRefspec(remote string) string {
-	return "+refs/gitmsg/*:" + trackingPrefix(remote) + "*"
-}
-
-// TrackingRefPrefix returns the local namespace that mirrors the remote's
-// refs/gitmsg/* state refs (see trackingPrefix). Exposed for the push-path
-// tracking-ref reconcile.
-func TrackingRefPrefix(remote string) string {
-	return trackingPrefix(remote)
+	return "+refs/gitmsg/*:" + TrackingRefPrefix(remote) + "*"
 }
 
 // TrackingRef maps a remote gitmsg ref (refs/gitmsg/X) to the local tracking
-// ref that mirrors it (see trackingPrefix). Exposed for the push-path reconcile
+// ref that mirrors it (see TrackingRefPrefix). Exposed for the push-path reconcile
 // that syncs tracking refs to the bucket's actual state.
 func TrackingRef(remote, gitmsgRef string) string {
-	return trackingPrefix(remote) + strings.TrimPrefix(gitmsgRef, "refs/gitmsg/")
+	return TrackingRefPrefix(remote) + strings.TrimPrefix(gitmsgRef, "refs/gitmsg/")
 }
 
 // getRemoteGitMsgRefs returns the remote's gitmsg state refs from the local
@@ -136,13 +130,13 @@ func getRemoteGitMsgRefs(workdir, remote string) (map[string]string, error) {
 	result, err := git.ExecGit(workdir, []string{
 		"for-each-ref",
 		"--format=%(refname) %(objectname)",
-		trackingPrefix(remote),
+		TrackingRefPrefix(remote),
 	})
 	if err != nil {
 		return refs, err
 	}
 	for ref, hash := range parseRefOutput(result.Stdout) {
-		if local := strings.TrimPrefix(ref, trackingPrefix(remote)); local != ref {
+		if local := strings.TrimPrefix(ref, TrackingRefPrefix(remote)); local != ref {
 			refs["refs/gitmsg/"+local] = hash
 		}
 	}

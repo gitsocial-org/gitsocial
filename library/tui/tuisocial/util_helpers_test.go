@@ -3,6 +3,8 @@ package tuisocial
 
 import (
 	"testing"
+
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestFormatListIndicator(t *testing.T) {
@@ -49,9 +51,9 @@ func TestExtractSearchTerms(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractSearchTerms(tt.query)
+			got := tuicore.ExtractSearchTerms(tt.query)
 			if got != tt.want {
-				t.Errorf("extractSearchTerms(%q) = %q, want %q", tt.query, got, tt.want)
+				t.Errorf("ExtractSearchTerms(%q) = %q, want %q", tt.query, got, tt.want)
 			}
 		})
 	}

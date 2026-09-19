@@ -98,7 +98,7 @@ func issueCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	case issueItemData:
 		return issueToCardWithOptions(d.Issue, issueToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, ContributorNames: d.ContributorNames})
 	case pm.Issue:
-		return issueToCard(d)
+		return issueToCardWithOptions(d, issueToCardOptions{})
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid issue"}}
 }
@@ -109,7 +109,7 @@ func milestoneCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card
 	case milestoneItemData:
 		return milestoneToCardWithOptions(d.Milestone, milestoneToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
 	case pm.Milestone:
-		return milestoneToCard(d)
+		return milestoneToCardWithOptions(d, milestoneToCardOptions{})
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid milestone"}}
 }
@@ -120,7 +120,7 @@ func sprintCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	case sprintItemData:
 		return sprintToCardWithOptions(d.Sprint, sprintToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
 	case pm.Sprint:
-		return sprintToCard(d)
+		return sprintToCardWithOptions(d, sprintToCardOptions{})
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid sprint"}}
 }

@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildIssueContent_subjectOnly(t *testing.T) {
-	got := buildIssueContent("Fix login bug", "", CreateIssueOptions{})
+	got := buildIssueContentWithEdits("Fix login bug", "", CreateIssueOptions{}, "", nil)
 	if !strings.Contains(got, "Fix login bug") {
 		t.Errorf("should contain subject, got %q", got)
 	}
@@ -21,7 +21,7 @@ func TestBuildIssueContent_subjectOnly(t *testing.T) {
 }
 
 func TestBuildIssueContent_subjectAndBody(t *testing.T) {
-	got := buildIssueContent("Fix login bug", "Detailed description", CreateIssueOptions{})
+	got := buildIssueContentWithEdits("Fix login bug", "Detailed description", CreateIssueOptions{}, "", nil)
 	if !strings.Contains(got, "Fix login bug") {
 		t.Error("should contain subject")
 	}
@@ -42,7 +42,7 @@ func TestBuildIssueContent_withAllFields(t *testing.T) {
 		Root:      "#commit:root012@gitmsg/pm",
 		Labels:    []Label{{Scope: "priority", Value: "high"}, {Value: "urgent"}},
 	}
-	got := buildIssueContent("Full issue", "Body text", opts)
+	got := buildIssueContentWithEdits("Full issue", "Body text", opts, "", nil)
 	if !strings.Contains(got, `state="closed"`) {
 		t.Error("should contain state=closed")
 	}

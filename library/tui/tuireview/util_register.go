@@ -96,7 +96,7 @@ func prCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	case prItemData:
 		return prToCardWithOptions(d.PR, prToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL, Workdir: d.Workdir})
 	case review.PullRequest:
-		return prToCard(d)
+		return prToCardWithOptions(d, prToCardOptions{})
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid pull request"}}
 }
@@ -205,11 +205,6 @@ type prToCardOptions struct {
 	UserEmail    string
 	WorkspaceURL string
 	Workdir      string // for IsHeadUnpushed lookup; empty skips the glyph
-}
-
-// prToCard converts a PullRequest to a Card for display.
-func prToCard(pr review.PullRequest) tuicore.Card {
-	return prToCardWithOptions(pr, prToCardOptions{})
 }
 
 // prToCardWithOptions converts a PullRequest to a Card with configuration options.

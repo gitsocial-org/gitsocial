@@ -32,11 +32,6 @@ type issueItemData struct {
 	ContributorNames map[string]string
 }
 
-// issueToCard converts a pm.Issue to a Card.
-func issueToCard(issue pm.Issue) tuicore.Card {
-	return issueToCardWithOptions(issue, issueToCardOptions{})
-}
-
 // issueToCardWithOptions converts a pm.Issue to a subject-first Card.
 func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Card {
 	badge := ""
@@ -156,11 +151,6 @@ type milestoneToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
-}
-
-// milestoneToCard converts a pm.Milestone to a Card.
-func milestoneToCard(milestone pm.Milestone) tuicore.Card {
-	return milestoneToCardWithOptions(milestone, milestoneToCardOptions{})
 }
 
 // milestoneToCardWithOptions converts a pm.Milestone to a Card with configuration options.
@@ -296,11 +286,6 @@ type sprintToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
-}
-
-// sprintToCard converts a pm.Sprint to a Card.
-func sprintToCard(sprint pm.Sprint) tuicore.Card {
-	return sprintToCardWithOptions(sprint, sprintToCardOptions{})
 }
 
 // sprintToCardWithOptions converts a pm.Sprint to a Card with configuration options.

@@ -69,7 +69,7 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 			fmt.Sprintf("head branch %q is not on origin or in the workspace: push it first", opts.Head))
 	}
 
-	content := buildPRContent(subject, body, opts, "")
+	content := buildPRContentWithState(subject, body, opts, "", PRStateOpen, nil)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return result.Err[PullRequest]("COMMIT_FAILED", err.Error())
@@ -738,11 +738,6 @@ func retargetDependents(workdir string, merged PullRequest) []*result.Error {
 func extractRefHash(ref string) string {
 	parsed := protocol.ParseRef(ref)
 	return parsed.Value
-}
-
-// buildPRContent builds an open pull request's commit message.
-func buildPRContent(subject, body string, opts CreatePROptions, editsRef string) string {
-	return buildPRContentWithState(subject, body, opts, editsRef, PRStateOpen, nil)
 }
 
 // buildPRContentWithState builds a pull request's commit message with the given state and references.

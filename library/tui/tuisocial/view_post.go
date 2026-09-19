@@ -193,7 +193,7 @@ func (v *postView) Activate(state *tuicore.State) tea.Cmd {
 		v.sourceIndex = state.DetailSource.Index
 		v.sourceTotal = state.DetailSource.Total
 		if state.DetailSource.SearchQuery != "" {
-			v.highlightQuery = extractSearchTerms(state.DetailSource.SearchQuery)
+			v.highlightQuery = tuicore.ExtractSearchTerms(state.DetailSource.SearchQuery)
 		} else {
 			v.highlightQuery = ""
 		}
@@ -715,7 +715,7 @@ func (v *postView) Render(state *tuicore.State) string {
 		if v.post.Display.CommitHash == "" {
 			exclude["d"] = true
 		}
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.Detail, v.sourceIndex+1, v.sourceTotal, exclude)
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.Detail, v.sourceIndex+1, v.sourceTotal, exclude, nil)
 	}
 	return wrapper.Render(content, footer)
 }
