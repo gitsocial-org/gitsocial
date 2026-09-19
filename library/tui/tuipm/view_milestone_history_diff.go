@@ -5,8 +5,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewMilestoneHistoryDiffView creates a HistoryDiffView wired to milestone history.
-func NewMilestoneHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newMilestoneHistoryDiffView creates a HistoryDiffView wired to milestone history.
+func newMilestoneHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMMilestoneHistoryDiff,
 		TitleIcon: "◇",

@@ -9,14 +9,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MilestoneVersionItem reuses the generic list rendering of MessageVersionItem
+// milestoneVersionItem reuses the generic list rendering of MessageVersionItem
 // but reconstructs the milestone at that version to render the real hero card.
-type MilestoneVersionItem struct {
+type milestoneVersionItem struct {
 	tuicore.MessageVersionItem
 }
 
 // reconstruct rebuilds the milestone at this version from its header fields.
-func (m MilestoneVersionItem) reconstruct() *pm.Milestone {
+func (m milestoneVersionItem) reconstruct() *pm.Milestone {
 	repoURL, hash, branch := m.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "pm", Fields: m.Version.Fields}}
 	item := pm.MessageToPMItem(msg, repoURL, hash, branch)
@@ -30,7 +30,7 @@ func (m MilestoneVersionItem) reconstruct() *pm.Milestone {
 }
 
 // RenderDetail renders this version through the real milestone hero card in version mode.
-func (m MilestoneVersionItem) RenderDetail(width int) string {
+func (m milestoneVersionItem) RenderDetail(width int) string {
 	lines := renderMilestoneCard(m.reconstruct(), width, false, "", nil, milestoneCardOptions{
 		version:       true,
 		versionAuthor: m.AuthorDisplay(m.ShowEmail),
@@ -43,6 +43,6 @@ func (m MilestoneVersionItem) RenderDetail(width int) string {
 // so the detail render reconstructs the real milestone hero card.
 func loadMilestoneHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
 	return tuicore.LoadMessageHistory(ctx, "pm", func(base tuicore.MessageVersionItem) tuicore.VersionItem {
-		return MilestoneVersionItem{MessageVersionItem: base}
+		return milestoneVersionItem{MessageVersionItem: base}
 	})
 }

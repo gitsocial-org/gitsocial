@@ -15,8 +15,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// IssueFormData holds the form field values.
-type IssueFormData struct {
+// issueFormData holds the form field values.
+type issueFormData struct {
 	Subject   string
 	Body      string
 	State     string
@@ -38,14 +38,14 @@ type IssueFormData struct {
 	Parent string
 }
 
-// IssueForm wraps a Huh form for issue creation/editing.
-type IssueForm struct {
+// issueForm wraps a Huh form for issue creation/editing.
+type issueForm struct {
 	tuicore.FormBase
 	workdir       string
 	issueID       string // Non-empty for edit mode
 	bodyField     *huh.Text
 	bodyOtherRows int // count of non-body field rows, for body sizing
-	data          IssueFormData
+	data          issueFormData
 	framework     *pm.Framework
 	contributors  []cache.Contributor
 	milestones    []pm.Milestone
@@ -56,8 +56,8 @@ type IssueForm struct {
 	height        int
 }
 
-// NewIssueForm creates a new issue form based on the current framework.
-func NewIssueForm(workdir string) *IssueForm {
+// newIssueForm creates a new issue form based on the current framework.
+func newIssueForm(workdir string) *issueForm {
 	pmConfig := pm.GetPMConfig(workdir)
 	fw := pm.GetFramework(pmConfig.Framework)
 
@@ -83,7 +83,7 @@ func NewIssueForm(workdir string) *IssueForm {
 		issues = res.Data
 	}
 
-	f := &IssueForm{
+	f := &issueForm{
 		workdir:      workdir,
 		framework:    fw,
 		contributors: contributors,
@@ -96,8 +96,8 @@ func NewIssueForm(workdir string) *IssueForm {
 	return f
 }
 
-// NewIssueEditForm creates an edit form pre-populated with issue data.
-func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
+// newIssueEditForm creates an edit form pre-populated with issue data.
+func newIssueEditForm(workdir string, issue pm.Issue) *issueForm {
 	pmConfig := pm.GetPMConfig(workdir)
 	fw := pm.GetFramework(pmConfig.Framework)
 
@@ -153,7 +153,7 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 	assignees := make([]string, len(issue.Assignees))
 	copy(assignees, issue.Assignees)
 
-	f := &IssueForm{
+	f := &issueForm{
 		workdir:      workdir,
 		issueID:      issue.ID,
 		framework:    fw,
@@ -162,7 +162,7 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 		sprints:      sprints,
 		issues:       issues,
 		repoURL:      repoURL,
-		data: IssueFormData{
+		data: issueFormData{
 			Subject:   issue.Subject,
 			Body:      issue.Body,
 			State:     string(issue.State),
@@ -182,19 +182,16 @@ func NewIssueEditForm(workdir string, issue pm.Issue) *IssueForm {
 	return f
 }
 
-// IsEditMode returns true if this is an edit form.
-func (f *IssueForm) IsEditMode() bool {
+// isEditMode returns true if this is an edit form.
+func (f *issueForm) isEditMode() bool {
 	return f.issueID != ""
 }
 
-// SetParent records the parent issue ref for sub-issue creation.
-func (f *IssueForm) SetParent(parentRef string) { f.data.Parent = parentRef }
-
-// ParentRef returns the pre-filled parent ref, if any.
-func (f *IssueForm) ParentRef() string { return f.data.Parent }
+// setParent records the parent issue ref for sub-issue creation.
+func (f *issueForm) setParent(parentRef string) { f.data.Parent = parentRef }
 
 // buildFormWithDefaults constructs the form, using data values as defaults.
-func (f *IssueForm) buildFormWithDefaults() {
+func (f *issueForm) buildFormWithDefaults() {
 	pad := tuicore.PadLabel
 	var fields []huh.Field
 
@@ -214,7 +211,7 @@ func (f *IssueForm) buildFormWithDefaults() {
 	)
 
 	// State field (edit mode only)
-	if f.IsEditMode() {
+	if f.isEditMode() {
 		fields = append(fields, tuicore.NewCycleField().
 			Key("state").
 			Title(pad("State")).
@@ -312,7 +309,7 @@ func (f *IssueForm) buildFormWithDefaults() {
 }
 
 // buildCycleField creates a CycleField from framework label values.
-func (f *IssueForm) buildCycleField(key, title string, values []string, value *string) huh.Field {
+func (f *issueForm) buildCycleField(key, title string, values []string, value *string) huh.Field {
 	opts := make([]tuicore.CycleOption, 0, 1+len(values))
 	opts = append(opts, tuicore.CycleOption{Label: "(none)", Value: ""})
 	for _, v := range values {
@@ -348,7 +345,7 @@ func buildSprintOptions(sprints []pm.Sprint, repoURL string) []tuicore.TagOption
 }
 
 // SetSize sets the form dimensions.
-func (f *IssueForm) SetSize(w, h int) {
+func (f *issueForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
 	if form := f.FormPtr(); form != nil {
@@ -360,24 +357,19 @@ func (f *IssueForm) SetSize(w, h int) {
 }
 
 // Update delegates the standard form lifecycle to FormBase.
-func (f *IssueForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+func (f *issueForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
 // Body returns the current body text (for the $EDITOR escape-hatch).
-func (f *IssueForm) Body() string { return f.data.Body }
+func (f *issueForm) Body() string { return f.data.Body }
 
 // SetBody writes the body and rebuilds the form so huh.Text refreshes.
-func (f *IssueForm) SetBody(s string) {
+func (f *issueForm) SetBody(s string) {
 	f.data.Body = s
 	f.buildFormWithDefaults()
 }
 
 // Reset rebuilds the form, clearing huh-internal state while preserving data.
-func (f *IssueForm) Reset() { f.buildFormWithDefaults() }
-
-// GetData returns the form data.
-func (f *IssueForm) GetData() IssueFormData {
-	return f.data
-}
+func (f *issueForm) Reset() { f.buildFormWithDefaults() }
 
 // firstTagRef extracts the first tag value from a slice and strips local repo prefix.
 func firstTagRef(tags []string, repoURL string) string {
@@ -387,8 +379,8 @@ func firstTagRef(tags []string, repoURL string) string {
 	return stripLocalRef(tags[0], repoURL)
 }
 
-// CreateIssueFromForm creates an issue from form data.
-func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
+// createIssueFromForm creates an issue from form data.
+func (f *issueForm) createIssueFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	repoURL := f.repoURL
@@ -407,7 +399,7 @@ func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
 		if data.Parent != "" {
 			parent, root, err := pm.DeriveHierarchy(data.Parent, repoURL, "")
 			if err != nil {
-				return IssueCreatedMsg{Err: err}
+				return issueCreatedMsg{Err: err}
 			}
 			opts.Parent = parent
 			opts.Root = root
@@ -415,14 +407,14 @@ func (f *IssueForm) CreateIssueFromForm() tea.Cmd {
 
 		result := pm.CreateIssue(workdir, data.Subject, data.Body, opts)
 		if !result.Success {
-			return IssueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return issueCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return IssueCreatedMsg{Issue: result.Data}
+		return issueCreatedMsg{Issue: result.Data}
 	}
 }
 
-// UpdateIssueFromForm updates an existing issue from form data.
-func (f *IssueForm) UpdateIssueFromForm() tea.Cmd {
+// updateIssueFromForm updates an existing issue from form data.
+func (f *issueForm) updateIssueFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	issueID := f.issueID
@@ -456,14 +448,14 @@ func (f *IssueForm) UpdateIssueFromForm() tea.Cmd {
 
 		result := pm.UpdateIssue(workdir, issueID, opts)
 		if !result.Success {
-			return IssueUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return issueUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return IssueUpdatedMsg{Issue: result.Data}
+		return issueUpdatedMsg{Issue: result.Data}
 	}
 }
 
-// IssueUpdatedMsg signals that an issue has been updated.
-type IssueUpdatedMsg struct {
+// issueUpdatedMsg signals that an issue has been updated.
+type issueUpdatedMsg struct {
 	Issue pm.Issue
 	Err   error
 }
@@ -513,63 +505,60 @@ func stripLocalRefs(refs []string, repoURL string) []string {
 	return result
 }
 
-// IssueFormView wraps the form for integration with the TUI host.
-type IssueFormView struct {
+// issueFormView wraps the form for integration with the TUI host.
+type issueFormView struct {
 	tuicore.FormViewBase
 	isSubIssue bool
 }
 
-// NewIssueFormView creates a new issue form view. The form itself is
+// newIssueFormView creates a new issue form view. The form itself is
 // constructed lazily in Activate to avoid running expensive contributor /
 // milestone / sprint queries at TUI startup on large repositories.
-func NewIssueFormView(_ string) *IssueFormView {
-	return &IssueFormView{}
+func newIssueFormView(_ string) *issueFormView {
+	return &issueFormView{}
 }
 
 // Activate creates a fresh form and initializes it, pre-filling the parent when
 // launched as a sub-issue creation.
-func (v *IssueFormView) Activate(state *tuicore.State) tea.Cmd {
-	form := NewIssueForm(state.Workdir)
+func (v *issueFormView) Activate(state *tuicore.State) tea.Cmd {
+	form := newIssueForm(state.Workdir)
 	parentID := state.Router.Location().Param("parentID")
 	v.isSubIssue = parentID != ""
 	if parentID != "" {
-		form.SetParent(parentID)
+		form.setParent(parentID)
 	}
 	v.AttachForm(form)
 	return form.Init()
 }
 
 // Update handles messages.
-func (v *IssueFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if m, ok := msg.(IssueCreatedMsg); ok && m.Err != nil {
+func (v *issueFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+	if m, ok := msg.(issueCreatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*IssueForm); ok {
-			return form.CreateIssueFromForm()
+		if form, ok := v.CurrentForm().(*issueForm); ok {
+			return form.createIssueFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the form view.
-func (v *IssueFormView) Render(state *tuicore.State) string {
+func (v *issueFormView) Render(state *tuicore.State) string {
 	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *IssueFormView) Title() string {
+func (v *issueFormView) Title() string {
 	if v.isSubIssue {
 		return "○  New Sub-issue"
 	}
 	return "○  New Issue"
 }
 
-// ViewName returns the view identifier.
-func (v *IssueFormView) ViewName() string { return "pm.issue_form" }
-
-// IssueEditFormView wraps the form for editing an existing issue.
-type IssueEditFormView struct {
+// issueEditFormView wraps the form for editing an existing issue.
+type issueEditFormView struct {
 	tuicore.FormViewBase
 	workdir string
 	issueID string
@@ -577,49 +566,49 @@ type IssueEditFormView struct {
 	loaded  bool
 }
 
-// NewIssueEditFormView creates a new issue edit form view.
-func NewIssueEditFormView(workdir string) *IssueEditFormView {
-	return &IssueEditFormView{
+// newIssueEditFormView creates a new issue edit form view.
+func newIssueEditFormView(workdir string) *issueEditFormView {
+	return &issueEditFormView{
 		workdir: workdir,
 	}
 }
 
 // Activate loads the issue and initializes the form.
-func (v *IssueEditFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *issueEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.issueID = state.Router.Location().Param("issueID")
 	v.loaded = false
 	v.DetachForm()
 	return v.loadIssue()
 }
 
-func (v *IssueEditFormView) loadIssue() tea.Cmd {
+func (v *issueEditFormView) loadIssue() tea.Cmd {
 	issueID := v.issueID
 	return func() tea.Msg {
 		result := pm.GetIssue(issueID)
 		if !result.Success {
-			return EditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return editFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return EditFormLoadedMsg{Issue: &result.Data}
+		return editFormLoadedMsg{Issue: &result.Data}
 	}
 }
 
-// EditFormLoadedMsg signals that the issue for editing has been loaded.
-type EditFormLoadedMsg struct {
+// editFormLoadedMsg signals that the issue for editing has been loaded.
+type editFormLoadedMsg struct {
 	Issue *pm.Issue
 	Err   error
 }
 
 // Update handles messages.
-func (v *IssueEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *issueEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case EditFormLoadedMsg:
+	case editFormLoadedMsg:
 		if msg.Err != nil {
 			return func() tea.Msg {
 				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}
 		}
 		v.issue = msg.Issue
-		form := NewIssueEditForm(v.workdir, *v.issue)
+		form := newIssueEditForm(v.workdir, *v.issue)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
@@ -629,19 +618,19 @@ func (v *IssueEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 	}
 
-	if m, ok := msg.(IssueUpdatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(issueUpdatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*IssueForm); ok {
-			return form.UpdateIssueFromForm()
+		if form, ok := v.CurrentForm().(*issueForm); ok {
+			return form.updateIssueFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the edit form view.
-func (v *IssueEditFormView) Render(state *tuicore.State) string {
+func (v *issueEditFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		footer := tuicore.FormFooter(true, nil)
@@ -651,20 +640,17 @@ func (v *IssueEditFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *IssueEditFormView) Title() string {
+func (v *issueEditFormView) Title() string {
 	if v.issue != nil {
 		return fmt.Sprintf("○  Edit: %s", v.issue.Subject)
 	}
 	return "○  Edit Issue"
 }
 
-// ViewName returns the view identifier.
-func (v *IssueEditFormView) ViewName() string { return "pm.issue_edit_form" }
-
 // buildIssueLabelsFromForm assembles the full label slice from the form data:
 // structured cycles (status/priority/kind) plus any free-form labels parsed
 // from the Labels TagField.
-func buildIssueLabelsFromForm(data IssueFormData) []pm.Label {
+func buildIssueLabelsFromForm(data issueFormData) []pm.Label {
 	var labels []pm.Label
 	if data.Status != "" {
 		labels = append(labels, pm.Label{Scope: "status", Value: data.Status})

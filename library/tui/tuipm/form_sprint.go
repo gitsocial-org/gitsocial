@@ -12,8 +12,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// SprintFormData holds the form field values.
-type SprintFormData struct {
+// sprintFormData holds the form field values.
+type sprintFormData struct {
 	Title  string
 	Body   string
 	State  string
@@ -22,28 +22,28 @@ type SprintFormData struct {
 	Labels []string
 }
 
-// SprintForm wraps a Huh form for sprint creation/editing.
-type SprintForm struct {
+// sprintForm wraps a Huh form for sprint creation/editing.
+type sprintForm struct {
 	tuicore.FormBase
 	workdir       string
 	sprintID      string // Non-empty for edit mode
 	bodyField     *huh.Text
 	bodyOtherRows int // count of non-body field rows, for body sizing
-	data          SprintFormData
+	data          sprintFormData
 	width         int
 	height        int
 }
 
-// NewSprintForm creates a new sprint form.
-func NewSprintForm(workdir string) *SprintForm {
-	f := &SprintForm{workdir: workdir}
+// newSprintForm creates a new sprint form.
+func newSprintForm(workdir string) *sprintForm {
+	f := &sprintForm{workdir: workdir}
 	f.buildForm()
 	return f
 }
 
-// NewSprintEditForm creates a form pre-filled with sprint data.
-func NewSprintEditForm(workdir string, sprint pm.Sprint) *SprintForm {
-	f := &SprintForm{
+// newSprintEditForm creates a form pre-filled with sprint data.
+func newSprintEditForm(workdir string, sprint pm.Sprint) *sprintForm {
+	f := &sprintForm{
 		workdir:  workdir,
 		sprintID: sprint.ID,
 	}
@@ -61,13 +61,8 @@ func NewSprintEditForm(workdir string, sprint pm.Sprint) *SprintForm {
 	return f
 }
 
-// IsEditMode returns true if this is an edit form.
-func (f *SprintForm) IsEditMode() bool {
-	return f.sprintID != ""
-}
-
 // buildForm constructs the Huh form.
-func (f *SprintForm) buildForm() {
+func (f *sprintForm) buildForm() {
 	pad := tuicore.PadLabel
 	fields := make([]huh.Field, 0, 6)
 	fields = append(fields,
@@ -124,7 +119,7 @@ func (f *SprintForm) buildForm() {
 }
 
 // SetSize sets the form dimensions.
-func (f *SprintForm) SetSize(w, h int) {
+func (f *sprintForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
 	if form := f.FormPtr(); form != nil {
@@ -136,28 +131,28 @@ func (f *SprintForm) SetSize(w, h int) {
 }
 
 // Update delegates the standard form lifecycle to FormBase.
-func (f *SprintForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+func (f *sprintForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
 // Body returns the current body text (for the $EDITOR escape-hatch).
-func (f *SprintForm) Body() string { return f.data.Body }
+func (f *sprintForm) Body() string { return f.data.Body }
 
 // SetBody writes the body and rebuilds the form so huh.Text refreshes.
-func (f *SprintForm) SetBody(s string) {
+func (f *sprintForm) SetBody(s string) {
 	f.data.Body = s
 	f.buildForm()
 }
 
 // Reset rebuilds the form, clearing huh-internal state while preserving data.
-func (f *SprintForm) Reset() { f.buildForm() }
+func (f *sprintForm) Reset() { f.buildForm() }
 
-// SprintCreatedMsg signals that a sprint was created.
-type SprintCreatedMsg struct {
+// sprintCreatedMsg signals that a sprint was created.
+type sprintCreatedMsg struct {
 	Sprint pm.Sprint
 	Err    error
 }
 
-// CreateSprintFromForm creates a sprint from form data.
-func (f *SprintForm) CreateSprintFromForm() tea.Cmd {
+// createSprintFromForm creates a sprint from form data.
+func (f *sprintForm) createSprintFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	return func() tea.Msg {
@@ -177,57 +172,54 @@ func (f *SprintForm) CreateSprintFromForm() tea.Cmd {
 		}
 		result := pm.CreateSprint(workdir, data.Title, data.Body, opts)
 		if !result.Success {
-			return SprintCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return SprintCreatedMsg{Sprint: result.Data}
+		return sprintCreatedMsg{Sprint: result.Data}
 	}
 }
 
-// SprintFormView wraps the form for integration with the TUI host.
-type SprintFormView struct {
+// sprintFormView wraps the form for integration with the TUI host.
+type sprintFormView struct {
 	tuicore.FormViewBase
 }
 
-// NewSprintFormView creates a new sprint form view.
-func NewSprintFormView(workdir string) *SprintFormView {
-	v := &SprintFormView{}
-	v.AttachForm(NewSprintForm(workdir))
+// newSprintFormView creates a new sprint form view.
+func newSprintFormView(workdir string) *sprintFormView {
+	v := &sprintFormView{}
+	v.AttachForm(newSprintForm(workdir))
 	return v
 }
 
 // Activate initializes the form view.
-func (v *SprintFormView) Activate(state *tuicore.State) tea.Cmd {
-	form := NewSprintForm(state.Workdir)
+func (v *sprintFormView) Activate(state *tuicore.State) tea.Cmd {
+	form := newSprintForm(state.Workdir)
 	v.AttachForm(form)
 	return form.Init()
 }
 
 // Update handles messages.
-func (v *SprintFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if m, ok := msg.(SprintCreatedMsg); ok && m.Err != nil {
+func (v *sprintFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+	if m, ok := msg.(sprintCreatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*SprintForm); ok {
-			return form.CreateSprintFromForm()
+		if form, ok := v.CurrentForm().(*sprintForm); ok {
+			return form.createSprintFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the form view.
-func (v *SprintFormView) Render(state *tuicore.State) string {
+func (v *sprintFormView) Render(state *tuicore.State) string {
 	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *SprintFormView) Title() string { return "◷  New Sprint" }
+func (v *sprintFormView) Title() string { return "◷  New Sprint" }
 
-// ViewName returns the view identifier.
-func (v *SprintFormView) ViewName() string { return "pm.sprint_form" }
-
-// UpdateSprintFromForm updates an existing sprint from form data.
-func (f *SprintForm) UpdateSprintFromForm() tea.Cmd {
+// updateSprintFromForm updates an existing sprint from form data.
+func (f *sprintForm) updateSprintFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	sprintID := f.sprintID
@@ -252,20 +244,20 @@ func (f *SprintForm) UpdateSprintFromForm() tea.Cmd {
 		}
 		result := pm.UpdateSprint(workdir, sprintID, opts)
 		if !result.Success {
-			return SprintUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return SprintUpdatedMsg{Sprint: result.Data}
+		return sprintUpdatedMsg{Sprint: result.Data}
 	}
 }
 
-// SprintUpdatedMsg signals that a sprint was updated.
-type SprintUpdatedMsg struct {
+// sprintUpdatedMsg signals that a sprint was updated.
+type sprintUpdatedMsg struct {
 	Sprint pm.Sprint
 	Err    error
 }
 
-// SprintEditFormView wraps the form for editing an existing sprint.
-type SprintEditFormView struct {
+// sprintEditFormView wraps the form for editing an existing sprint.
+type sprintEditFormView struct {
 	tuicore.FormViewBase
 	workdir  string
 	sprintID string
@@ -273,49 +265,49 @@ type SprintEditFormView struct {
 	loaded   bool
 }
 
-// NewSprintEditFormView creates a new sprint edit form view.
-func NewSprintEditFormView(workdir string) *SprintEditFormView {
-	return &SprintEditFormView{
+// newSprintEditFormView creates a new sprint edit form view.
+func newSprintEditFormView(workdir string) *sprintEditFormView {
+	return &sprintEditFormView{
 		workdir: workdir,
 	}
 }
 
 // Activate loads the sprint and initializes the form.
-func (v *SprintEditFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *sprintEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.sprintID = state.Router.Location().Param("sprintID")
 	v.loaded = false
 	v.DetachForm()
 	return v.loadSprint()
 }
 
-func (v *SprintEditFormView) loadSprint() tea.Cmd {
+func (v *sprintEditFormView) loadSprint() tea.Cmd {
 	sprintID := v.sprintID
 	return func() tea.Msg {
 		result := pm.GetSprint(sprintID)
 		if !result.Success {
-			return SprintEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return SprintEditFormLoadedMsg{Sprint: &result.Data}
+		return sprintEditFormLoadedMsg{Sprint: &result.Data}
 	}
 }
 
-// SprintEditFormLoadedMsg signals that the sprint for editing has been loaded.
-type SprintEditFormLoadedMsg struct {
+// sprintEditFormLoadedMsg signals that the sprint for editing has been loaded.
+type sprintEditFormLoadedMsg struct {
 	Sprint *pm.Sprint
 	Err    error
 }
 
 // Update handles messages.
-func (v *SprintEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *sprintEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case SprintEditFormLoadedMsg:
+	case sprintEditFormLoadedMsg:
 		if msg.Err != nil {
 			return func() tea.Msg {
 				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}
 		}
 		v.sprint = msg.Sprint
-		form := NewSprintEditForm(v.workdir, *v.sprint)
+		form := newSprintEditForm(v.workdir, *v.sprint)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
@@ -325,19 +317,19 @@ func (v *SprintEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 	}
 
-	if m, ok := msg.(SprintUpdatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(sprintUpdatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*SprintForm); ok {
-			return form.UpdateSprintFromForm()
+		if form, ok := v.CurrentForm().(*sprintForm); ok {
+			return form.updateSprintFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the edit form view.
-func (v *SprintEditFormView) Render(state *tuicore.State) string {
+func (v *sprintEditFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		footer := tuicore.FormFooter(true, nil)
@@ -347,12 +339,9 @@ func (v *SprintEditFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *SprintEditFormView) Title() string {
+func (v *sprintEditFormView) Title() string {
 	if v.sprint != nil {
 		return fmt.Sprintf("◷  Edit: %s", v.sprint.Title)
 	}
 	return "◷  Edit Sprint"
 }
-
-// ViewName returns the view identifier.
-func (v *SprintEditFormView) ViewName() string { return "pm.sprint_edit_form" }

@@ -13,10 +13,10 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// SessionsView lists every memo session with its id, age, and remote status,
+// sessionsView lists every memo session with its id, age, and remote status,
 // and lets the user open, init, or gc a session. The TUI never tracks a
 // "current" session — selecting a row navigates to that session's memos.
-type SessionsView struct {
+type sessionsView struct {
 	workdir   string
 	sessions  []memo.SessionInfo
 	cursor    int
@@ -29,18 +29,18 @@ type SessionsView struct {
 	confirm   tuicore.ConfirmDialog
 }
 
-// NewSessionsView creates a new sessions list/picker view.
-func NewSessionsView(workdir string) *SessionsView {
-	return &SessionsView{workdir: workdir}
+// newSessionsView creates a new sessions list/picker view.
+func newSessionsView(workdir string) *sessionsView {
+	return &sessionsView{workdir: workdir}
 }
 
 // Title returns the panel header.
-func (v *SessionsView) Title() string {
+func (v *sessionsView) Title() string {
 	return fmt.Sprintf("☞  Sessions · %d", len(v.sessions))
 }
 
 // HeaderInfo returns the position indicator for the title bar.
-func (v *SessionsView) HeaderInfo() (int, string) {
+func (v *sessionsView) HeaderInfo() (int, string) {
 	if len(v.sessions) == 0 {
 		return 0, ""
 	}
@@ -48,11 +48,11 @@ func (v *SessionsView) HeaderInfo() (int, string) {
 }
 
 // SetSize stores panel dimensions.
-func (v *SessionsView) SetSize(w, h int) { v.width, v.height = w, h }
+func (v *sessionsView) SetSize(w, h int) { v.width, v.height = w, h }
 
 // Activate (re)loads the session list. Cursor is preserved across navigation:
 // the previous cursor is clamped to the new list bounds.
-func (v *SessionsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *sessionsView) Activate(state *tuicore.State) tea.Cmd {
 	v.reload()
 	v.inputMode = false
 	v.newForm = nil
@@ -62,7 +62,7 @@ func (v *SessionsView) Activate(state *tuicore.State) tea.Cmd {
 
 // reload re-lists sessions and clamps the cursor to the new bounds, preserving
 // the previous selection across data reloads (activation, push/fetch, gc).
-func (v *SessionsView) reload() {
+func (v *sessionsView) reload() {
 	prev := v.cursor
 	res := memo.ListSessions(gitmsg.ResolveRepoURL(v.workdir))
 	if res.Success {
@@ -79,10 +79,10 @@ func (v *SessionsView) reload() {
 }
 
 // IsInputActive reports whether the new-session prompt is taking text input.
-func (v *SessionsView) IsInputActive() bool { return v.inputMode }
+func (v *sessionsView) IsInputActive() bool { return v.inputMode }
 
 // Bindings returns the view's keybindings.
-func (v *SessionsView) Bindings() []tuicore.Binding {
+func (v *sessionsView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "enter", Label: "open", Contexts: []tuicore.Context{tuicore.MemoSessions}, Handler: noop},
@@ -96,7 +96,7 @@ func (v *SessionsView) Bindings() []tuicore.Binding {
 }
 
 // Update handles input mode, confirm dialog, and key dispatch.
-func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *sessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	if v.inputMode {
 		return v.updateInput(msg)
 	}
@@ -156,7 +156,7 @@ func (v *SessionsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // startNewSession opens an inline huh form for the new session id.
-func (v *SessionsView) startNewSession() tea.Cmd {
+func (v *sessionsView) startNewSession() tea.Cmd {
 	v.inputMode = true
 	v.newID = ""
 	idField := huh.NewInput().
@@ -173,7 +173,7 @@ func (v *SessionsView) startNewSession() tea.Cmd {
 	return v.newForm.Init()
 }
 
-func (v *SessionsView) updateInput(msg tea.Msg) tea.Cmd {
+func (v *sessionsView) updateInput(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		v.inputMode = false
 		v.newForm = nil
@@ -200,7 +200,7 @@ func (v *SessionsView) updateInput(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-func (v *SessionsView) doGC(id string) tea.Cmd {
+func (v *sessionsView) doGC(id string) tea.Cmd {
 	return func() tea.Msg {
 		_ = memo.GCSession(id)
 		return sessionsReloadMsg{}
@@ -210,7 +210,7 @@ func (v *SessionsView) doGC(id string) tea.Cmd {
 // syncSelected pushes or fetches the selected session's gitmsg/memo branch to
 // its remote. Runs async (network) and reports via sessionSyncMsg; the missing
 // remote / not-found cases surface as the result error so no pre-check is needed.
-func (v *SessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd {
+func (v *sessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd {
 	if v.cursor < 0 || v.cursor >= len(v.sessions) {
 		return nil
 	}
@@ -236,7 +236,7 @@ func (v *SessionsView) syncSelected(state *tuicore.State, action string) tea.Cmd
 }
 
 // Render renders the sessions list with metadata.
-func (v *SessionsView) Render(state *tuicore.State) string {
+func (v *sessionsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	v.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 

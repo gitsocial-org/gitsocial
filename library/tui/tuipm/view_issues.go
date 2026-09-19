@@ -16,8 +16,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// IssuesView displays a list of issues.
-type IssuesView struct {
+// issuesView displays a list of issues.
+type issuesView struct {
 	workdir          string
 	repoURL          string
 	branch           string
@@ -39,14 +39,14 @@ type IssuesView struct {
 	restoreID        string // item ID to reselect after reload ("" = none)
 }
 
-// NewIssuesView creates a new issues view.
-func NewIssuesView(workdir string) *IssuesView {
+// newIssuesView creates a new issues view.
+func newIssuesView(workdir string) *issuesView {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter issues..."
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &IssuesView{
+	return &issuesView{
 		workdir:     workdir,
 		searchInput: searchInput,
 		userEmail:   git.GetUserEmail(workdir),
@@ -55,14 +55,14 @@ func NewIssuesView(workdir string) *IssuesView {
 }
 
 // SetSize sets the view dimensions.
-func (v *IssuesView) SetSize(w, h int) {
+func (v *issuesView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-3)
 }
 
 // Activate loads the issues.
-func (v *IssuesView) Activate(state *tuicore.State) tea.Cmd {
+func (v *issuesView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchActive = false
 	v.searchQuery = ""
@@ -98,7 +98,7 @@ func (v *IssuesView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads issues in place, preserving the focused row by ID.
-func (v *IssuesView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *issuesView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -106,7 +106,7 @@ func (v *IssuesView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadIssues()
 }
 
-func (v *IssuesView) loadIssues() tea.Cmd {
+func (v *issuesView) loadIssues() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -123,7 +123,7 @@ func (v *IssuesView) loadIssues() tea.Cmd {
 		forks := gitmsg.GetForks(workdir)
 		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, "", limit+1)
 		if !result.Success {
-			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return issuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		issues, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -135,11 +135,11 @@ func (v *IssuesView) loadIssues() tea.Cmd {
 		}
 		contributorNames := buildContributorNameMap(workdir)
 		total := pm.CountIssuesWithForks(repoURL, branch, forks, states)
-		return IssuesLoadedMsg{Issues: issues, ContributorNames: contributorNames, HasMore: hasMore, Total: total}
+		return issuesLoadedMsg{Issues: issues, ContributorNames: contributorNames, HasMore: hasMore, Total: total}
 	}
 }
 
-func (v *IssuesView) loadMoreIssues() tea.Cmd {
+func (v *issuesView) loadMoreIssues() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -156,7 +156,7 @@ func (v *IssuesView) loadMoreIssues() tea.Cmd {
 		forks := gitmsg.GetForks(workdir)
 		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return IssuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return issuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		issues, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -166,17 +166,17 @@ func (v *IssuesView) loadMoreIssues() tea.Cmd {
 				issues[i].IsUnpushed = true
 			}
 		}
-		return IssuesLoadedMsg{Issues: issues, HasMore: hasMore, Append: true}
+		return issuesLoadedMsg{Issues: issues, HasMore: hasMore, Append: true}
 	}
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *IssuesView) LoadMorePosts() tea.Cmd {
+func (v *issuesView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMoreIssues)
 }
 
-// IssuesLoadedMsg signals that issues have been loaded.
-type IssuesLoadedMsg struct {
+// issuesLoadedMsg signals that issues have been loaded.
+type issuesLoadedMsg struct {
 	Issues           []pm.Issue
 	ContributorNames map[string]string
 	HasMore          bool
@@ -186,16 +186,16 @@ type IssuesLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *issuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case IssuesLoadedMsg:
+	case issuesLoadedMsg:
 		v.pag.Loading = false
 		if msg.Err == nil {
 			v.pag.HasMore = msg.HasMore
 			v.pag.SetTotal(msg.Total)
 			if msg.Append {
 				v.allIssues = append(v.allIssues, msg.Issues...)
-				newItems := IssuesToItems(msg.Issues, v.userEmail, v.contributorNames, v.showEmail)
+				newItems := issuesToItems(msg.Issues, v.userEmail, v.contributorNames, v.showEmail)
 				v.cardList.AppendItems(newItems)
 			} else {
 				v.allIssues = msg.Issues
@@ -215,7 +215,7 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		return nil
 
-	case IssueCreatedMsg:
+	case issueCreatedMsg:
 		if msg.Err == nil {
 			v.pag.Reset()
 			return v.loadIssues()
@@ -257,15 +257,15 @@ func (v *IssuesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns true when text input is active.
-func (v *IssuesView) IsInputActive() bool { return v.searchActive }
+func (v *issuesView) IsInputActive() bool { return v.searchActive }
 
 // navigateToSelected navigates to the selected issue's detail view.
-func (v *IssuesView) navigateToSelected() tea.Cmd {
+func (v *issuesView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
 	}
-	issue, ok := ItemToIssue(item)
+	issue, ok := itemToIssue(item)
 	if !ok {
 		return nil
 	}
@@ -283,7 +283,7 @@ func (v *IssuesView) navigateToSelected() tea.Cmd {
 }
 
 // GetItemAt returns the item ID at the given index.
-func (v *IssuesView) GetItemAt(index int) (string, bool) {
+func (v *issuesView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -292,11 +292,11 @@ func (v *IssuesView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *IssuesView) GetItemCount() int {
+func (v *issuesView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
-func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *issuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "F":
 		v.showAll = !v.showAll
@@ -341,7 +341,7 @@ func (v *IssuesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	return nil
 }
 
-func (v *IssuesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *issuesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.searchActive = false
@@ -365,7 +365,7 @@ func (v *IssuesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // applyFilter filters allIssues by assignee and search query, then updates the card list.
-func (v *IssuesView) applyFilter() {
+func (v *issuesView) applyFilter() {
 	filtered := v.allIssues
 	if v.assigneeFilter == "me" && v.userEmail != "" {
 		var mine []pm.Issue
@@ -395,11 +395,11 @@ func (v *IssuesView) applyFilter() {
 		Separator:     true,
 		HighlightText: v.searchQuery,
 	})
-	v.cardList.SetItems(IssuesToItems(filtered, v.userEmail, v.contributorNames, v.showEmail))
+	v.cardList.SetItems(issuesToItems(filtered, v.userEmail, v.contributorNames, v.showEmail))
 }
 
 // Render renders the issues view.
-func (v *IssuesView) Render(state *tuicore.State) string {
+func (v *issuesView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -427,7 +427,7 @@ func (v *IssuesView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *IssuesView) Title() string {
+func (v *issuesView) Title() string {
 	stateFilter := "Open"
 	if v.showAll {
 		stateFilter = "All"
@@ -447,7 +447,7 @@ func (v *IssuesView) Title() string {
 }
 
 // HeaderInfo returns position info for the title.
-func (v *IssuesView) HeaderInfo() (position int, total string) {
+func (v *issuesView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -456,7 +456,7 @@ func (v *IssuesView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for this view.
-func (v *IssuesView) Bindings() []tuicore.Binding {
+func (v *issuesView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -473,9 +473,4 @@ func (v *IssuesView) Bindings() []tuicore.Binding {
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMIssues}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *IssuesView) ViewName() string {
-	return "pm.issues"
 }

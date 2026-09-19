@@ -48,9 +48,6 @@ func (v *IdentityView) SetSize(width, height int) {}
 // Activate is a no-op — the view reads fresh state on each render.
 func (v *IdentityView) Activate(state *tuicore.State) tea.Cmd { return nil }
 
-// Deactivate is a no-op.
-func (v *IdentityView) Deactivate() {}
-
 // Update handles policy toggles and the on-demand email lookup.
 func (v *IdentityView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {

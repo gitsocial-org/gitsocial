@@ -94,9 +94,6 @@ func (v *HistoryDiffView) Activate(state *State) tea.Cmd {
 	}
 }
 
-// Deactivate is called when the view is hidden.
-func (v *HistoryDiffView) Deactivate() {}
-
 // historyDiffLoadedMsg signals that versions have been loaded.
 type historyDiffLoadedMsg struct {
 	versions []DiffVersion

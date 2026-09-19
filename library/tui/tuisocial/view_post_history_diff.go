@@ -11,8 +11,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewPostHistoryDiffView creates a HistoryDiffView wired to social post history.
-func NewPostHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newPostHistoryDiffView creates a HistoryDiffView wired to social post history.
+func newPostHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.HistoryDiff,
 		TitleIcon: "◉",

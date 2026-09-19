@@ -17,8 +17,8 @@ func hashFromRef(id string) string {
 	return parsed.Value
 }
 
-// IssueToCardOptions configures how an Issue is converted to a Card
-type IssueToCardOptions struct {
+// issueToCardOptions configures how an Issue is converted to a Card
+type issueToCardOptions struct {
 	ShowEmail        bool
 	UserEmail        string
 	ContributorNames map[string]string
@@ -32,13 +32,13 @@ type issueItemData struct {
 	ContributorNames map[string]string
 }
 
-// IssueToCard converts a pm.Issue to a Card.
-func IssueToCard(issue pm.Issue) tuicore.Card {
-	return IssueToCardWithOptions(issue, IssueToCardOptions{})
+// issueToCard converts a pm.Issue to a Card.
+func issueToCard(issue pm.Issue) tuicore.Card {
+	return issueToCardWithOptions(issue, issueToCardOptions{})
 }
 
-// IssueToCardWithOptions converts a pm.Issue to a subject-first Card.
-func IssueToCardWithOptions(issue pm.Issue, opts IssueToCardOptions) tuicore.Card {
+// issueToCardWithOptions converts a pm.Issue to a subject-first Card.
+func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Card {
 	badge := ""
 	switch issue.State {
 	case pm.StateClosed:
@@ -123,8 +123,8 @@ func IssueToCardWithOptions(issue pm.Issue, opts IssueToCardOptions) tuicore.Car
 	return card
 }
 
-// IssuesToItems converts []pm.Issue to []tuicore.DisplayItem using universal Item
-func IssuesToItems(issues []pm.Issue, userEmail string, contributorNames map[string]string, showEmail bool) []tuicore.DisplayItem {
+// issuesToItems converts []pm.Issue to []tuicore.DisplayItem using universal Item
+func issuesToItems(issues []pm.Issue, userEmail string, contributorNames map[string]string, showEmail bool) []tuicore.DisplayItem {
 	items := make([]tuicore.DisplayItem, len(issues))
 	for i, issue := range issues {
 		items[i] = tuicore.NewItem(issue.ID, "pm", "issue", issue.Timestamp, issueItemData{
@@ -137,8 +137,8 @@ func IssuesToItems(issues []pm.Issue, userEmail string, contributorNames map[str
 	return items
 }
 
-// ItemToIssue extracts pm.Issue from a DisplayItem
-func ItemToIssue(item tuicore.DisplayItem) (pm.Issue, bool) {
+// itemToIssue extracts pm.Issue from a DisplayItem
+func itemToIssue(item tuicore.DisplayItem) (pm.Issue, bool) {
 	if ui, ok := item.(tuicore.Item); ok {
 		if d, ok := ui.Data.(issueItemData); ok {
 			return d.Issue, true
@@ -150,21 +150,21 @@ func ItemToIssue(item tuicore.DisplayItem) (pm.Issue, bool) {
 	return pm.Issue{}, false
 }
 
-// MilestoneToCardOptions configures how a Milestone is converted to a Card
-type MilestoneToCardOptions struct {
+// milestoneToCardOptions configures how a Milestone is converted to a Card
+type milestoneToCardOptions struct {
 	FullTime     bool
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
 }
 
-// MilestoneToCard converts a pm.Milestone to a Card.
-func MilestoneToCard(milestone pm.Milestone) tuicore.Card {
-	return MilestoneToCardWithOptions(milestone, MilestoneToCardOptions{})
+// milestoneToCard converts a pm.Milestone to a Card.
+func milestoneToCard(milestone pm.Milestone) tuicore.Card {
+	return milestoneToCardWithOptions(milestone, milestoneToCardOptions{})
 }
 
-// MilestoneToCardWithOptions converts a pm.Milestone to a Card with configuration options.
-func MilestoneToCardWithOptions(milestone pm.Milestone, opts MilestoneToCardOptions) tuicore.Card {
+// milestoneToCardWithOptions converts a pm.Milestone to a Card with configuration options.
+func milestoneToCardWithOptions(milestone pm.Milestone, opts milestoneToCardOptions) tuicore.Card {
 	name := milestone.Author.Name
 	if name == "" {
 		name = "Anonymous"
@@ -263,8 +263,8 @@ type milestoneItemData struct {
 	WorkspaceURL string
 }
 
-// MilestonesToItems converts []pm.Milestone to []tuicore.DisplayItem using universal Item
-func MilestonesToItems(milestones []pm.Milestone, userEmail string, showEmail bool, workspaceURL string) []tuicore.DisplayItem {
+// milestonesToItems converts []pm.Milestone to []tuicore.DisplayItem using universal Item
+func milestonesToItems(milestones []pm.Milestone, userEmail string, showEmail bool, workspaceURL string) []tuicore.DisplayItem {
 	items := make([]tuicore.DisplayItem, len(milestones))
 	for i, m := range milestones {
 		items[i] = tuicore.NewItem(m.ID, "pm", "milestone", m.Timestamp, milestoneItemData{
@@ -277,8 +277,8 @@ func MilestonesToItems(milestones []pm.Milestone, userEmail string, showEmail bo
 	return items
 }
 
-// ItemToMilestone extracts pm.Milestone from a DisplayItem
-func ItemToMilestone(item tuicore.DisplayItem) (pm.Milestone, bool) {
+// itemToMilestone extracts pm.Milestone from a DisplayItem
+func itemToMilestone(item tuicore.DisplayItem) (pm.Milestone, bool) {
 	if ui, ok := item.(tuicore.Item); ok {
 		if d, ok := ui.Data.(milestoneItemData); ok {
 			return d.Milestone, true
@@ -290,21 +290,21 @@ func ItemToMilestone(item tuicore.DisplayItem) (pm.Milestone, bool) {
 	return pm.Milestone{}, false
 }
 
-// SprintToCardOptions configures how a Sprint is converted to a Card
-type SprintToCardOptions struct {
+// sprintToCardOptions configures how a Sprint is converted to a Card
+type sprintToCardOptions struct {
 	FullTime     bool
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
 }
 
-// SprintToCard converts a pm.Sprint to a Card.
-func SprintToCard(sprint pm.Sprint) tuicore.Card {
-	return SprintToCardWithOptions(sprint, SprintToCardOptions{})
+// sprintToCard converts a pm.Sprint to a Card.
+func sprintToCard(sprint pm.Sprint) tuicore.Card {
+	return sprintToCardWithOptions(sprint, sprintToCardOptions{})
 }
 
-// SprintToCardWithOptions converts a pm.Sprint to a Card with configuration options.
-func SprintToCardWithOptions(sprint pm.Sprint, opts SprintToCardOptions) tuicore.Card {
+// sprintToCardWithOptions converts a pm.Sprint to a Card with configuration options.
+func sprintToCardWithOptions(sprint pm.Sprint, opts sprintToCardOptions) tuicore.Card {
 	name := sprint.Author.Name
 	if name == "" {
 		name = "Anonymous"
@@ -404,8 +404,8 @@ type sprintItemData struct {
 	WorkspaceURL string
 }
 
-// SprintsToItems converts []pm.Sprint to []tuicore.DisplayItem using universal Item
-func SprintsToItems(sprints []pm.Sprint, userEmail string, showEmail bool, workspaceURL string) []tuicore.DisplayItem {
+// sprintsToItems converts []pm.Sprint to []tuicore.DisplayItem using universal Item
+func sprintsToItems(sprints []pm.Sprint, userEmail string, showEmail bool, workspaceURL string) []tuicore.DisplayItem {
 	items := make([]tuicore.DisplayItem, len(sprints))
 	for i, s := range sprints {
 		items[i] = tuicore.NewItem(s.ID, "pm", "sprint", s.Timestamp, sprintItemData{
@@ -418,8 +418,8 @@ func SprintsToItems(sprints []pm.Sprint, userEmail string, showEmail bool, works
 	return items
 }
 
-// ItemToSprint extracts pm.Sprint from a DisplayItem
-func ItemToSprint(item tuicore.DisplayItem) (pm.Sprint, bool) {
+// itemToSprint extracts pm.Sprint from a DisplayItem
+func itemToSprint(item tuicore.DisplayItem) (pm.Sprint, bool) {
 	if ui, ok := item.(tuicore.Item); ok {
 		if d, ok := ui.Data.(sprintItemData); ok {
 			return d.Sprint, true

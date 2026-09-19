@@ -15,9 +15,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// MemoDetailView displays a single memo plus its comments, mirroring the post
+// memoDetailView displays a single memo plus its comments, mirroring the post
 // detail layout so navigation, search, and key handling stay consistent.
-type MemoDetailView struct {
+type memoDetailView struct {
 	workdir      string
 	workspaceURL string
 	userEmail    string
@@ -36,15 +36,15 @@ type MemoDetailView struct {
 }
 
 // ShowRawView toggles between rendered body and the full commit message.
-func (v *MemoDetailView) ShowRawView() tea.Cmd {
+func (v *memoDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	v.buildSections()
 	return func() tea.Msg { return nil }
 }
 
-// NewMemoDetailView creates a new memo detail view.
-func NewMemoDetailView(workdir string) *MemoDetailView {
-	return &MemoDetailView{
+// newMemoDetailView creates a new memo detail view.
+func newMemoDetailView(workdir string) *memoDetailView {
+	return &memoDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -53,7 +53,7 @@ func NewMemoDetailView(workdir string) *MemoDetailView {
 }
 
 // Title mirrors the post detail header: icon, author, full timestamp, scope, ref.
-func (v *MemoDetailView) Title() string {
+func (v *memoDetailView) Title() string {
 	if v.memo == nil {
 		return "Memo"
 	}
@@ -80,7 +80,7 @@ func (v *MemoDetailView) Title() string {
 }
 
 // HeaderInfo returns position info for left/right list navigation.
-func (v *MemoDetailView) HeaderInfo() (int, string) {
+func (v *memoDetailView) HeaderInfo() (int, string) {
 	if v.sourceTotal > 0 {
 		return v.sourceIndex + 1, fmt.Sprintf("%d", v.sourceTotal)
 	}
@@ -88,14 +88,14 @@ func (v *MemoDetailView) HeaderInfo() (int, string) {
 }
 
 // SetSize sets the panel dimensions.
-func (v *MemoDetailView) SetSize(w, h int) {
+func (v *memoDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.sectionList.SetSize(w, h-2)
 }
 
 // Activate (re)loads the memo and its comments for the current route.
-func (v *MemoDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *memoDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.workspaceURL = gitmsg.ResolveRepoURL(v.workdir)
 	v.loaded = false
@@ -129,12 +129,12 @@ func (v *MemoDetailView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive surfaces section-list search input so global keys defer.
-func (v *MemoDetailView) IsInputActive() bool {
+func (v *memoDetailView) IsInputActive() bool {
 	return v.sectionList.IsInputActive()
 }
 
 // Update routes messages: load events, key dispatch, confirm dialog, sectionList.
-func (v *MemoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *memoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case memoDetailLoadedMsg:
 		v.loaded = true
@@ -221,7 +221,7 @@ func (v *MemoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // Bindings returns the view's keybindings.
-func (v *MemoDetailView) Bindings() []tuicore.Binding {
+func (v *memoDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.MemoDetail}, Handler: noop},
@@ -237,7 +237,7 @@ func (v *MemoDetailView) Bindings() []tuicore.Binding {
 }
 
 // Render renders memo card + comments via the section list.
-func (v *MemoDetailView) Render(state *tuicore.State) string {
+func (v *memoDetailView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	v.sectionList.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 
@@ -265,7 +265,7 @@ func (v *MemoDetailView) Render(state *tuicore.State) string {
 }
 
 // buildSections lays out the memo card and any comments as section-list sections.
-func (v *MemoDetailView) buildSections() {
+func (v *memoDetailView) buildSections() {
 	if v.memo == nil {
 		return
 	}
@@ -322,7 +322,7 @@ func (v *MemoDetailView) buildSections() {
 // raw-view toggle is on, the rendered body is replaced with the full commit
 // message (parsable trailer included) so users can inspect the protocol form.
 // Anchors are threaded through so markdown links can register as clickable.
-func (v *MemoDetailView) renderMemoCard(m *memo.Memo, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
+func (v *memoDetailView) renderMemoCard(m *memo.Memo, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
 	var lines []string
 	bar := " "
 	if selected {
@@ -366,7 +366,7 @@ func readOnlyMsg(state *tuicore.State) tea.Cmd {
 }
 
 // navigateSource moves to the prev/next memo in the source list (e.g., /memo/list).
-func (v *MemoDetailView) navigateSource(offset int) tea.Cmd {
+func (v *memoDetailView) navigateSource(offset int) tea.Cmd {
 	if v.sourceTotal == 0 {
 		return nil
 	}
@@ -383,7 +383,7 @@ func (v *MemoDetailView) navigateSource(offset int) tea.Cmd {
 // durable tier. The source memo is left untouched — promotion writes a fresh
 // commit on the target tier (no edit chain), so the same memo can live at
 // multiple tiers. Valid moves: session→{personal,project}, personal→{project}.
-func (v *MemoDetailView) startPromote(state *tuicore.State) tea.Cmd {
+func (v *memoDetailView) startPromote(state *tuicore.State) tea.Cmd {
 	choices, keyTier := promotableTargets(v.memo.Tier)
 	if len(choices) == 0 {
 		state.SetMessage(string(v.memo.Tier)+"-tier memos cannot be promoted", tuicore.MessageTypeWarning)
@@ -399,9 +399,9 @@ func (v *MemoDetailView) startPromote(state *tuicore.State) tea.Cmd {
 		return func() tea.Msg {
 			res := memo.PromoteMemo(workdir, id, target)
 			if !res.Success {
-				return MemoPromotedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
+				return memoPromotedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 			}
-			return MemoPromotedMsg{Memo: res.Data, Tier: target}
+			return memoPromotedMsg{Memo: res.Data, Tier: target}
 		}
 	})
 	return nil
@@ -428,7 +428,7 @@ func promotableTargets(src memo.Tier) ([]tuicore.Choice, map[string]memo.Tier) {
 }
 
 // doRetract calls memo.RetractMemo and emits a memoRetractedMsg.
-func (v *MemoDetailView) doRetract() tea.Cmd {
+func (v *memoDetailView) doRetract() tea.Cmd {
 	if v.memo == nil {
 		return nil
 	}
@@ -453,9 +453,8 @@ type memoRetractedMsg struct {
 	err error
 }
 
-// MemoPromotedMsg reports the result of a promote attempt. Exported so the
-// memo message handler can toast the result and navigate to the new copy.
-type MemoPromotedMsg struct {
+// memoPromotedMsg reports the result of a promote attempt.
+type memoPromotedMsg struct {
 	Memo memo.Memo
 	Tier memo.Tier
 	Err  error

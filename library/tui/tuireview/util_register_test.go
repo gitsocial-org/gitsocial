@@ -92,7 +92,7 @@ func TestPRToCard_basic(t *testing.T) {
 		Author:    review.Author{Name: "Alice", Email: "alice@test.com"},
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
-	card := PRToCard(pr)
+	card := prToCard(pr)
 	if card.Header.Icon != "⑂" {
 		t.Errorf("Icon = %q, want ⑂", card.Header.Icon)
 	}
@@ -112,7 +112,7 @@ func TestPRToCard_withBranches(t *testing.T) {
 		Head:    "#branch:feature/auth",
 		Author:  review.Author{Name: "Dev"},
 	}
-	card := PRToCard(pr)
+	card := prToCard(pr)
 	foundBase := false
 	foundHead := false
 	for _, p := range card.Header.Subtitle {
@@ -141,7 +141,7 @@ func TestPRToCard_withReviewSummary(t *testing.T) {
 			ChangesRequested: 1,
 		},
 	}
-	card := PRToCard(pr)
+	card := prToCard(pr)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "[✓2 ✗1]" {
@@ -159,7 +159,7 @@ func TestPRToCardWithOptions_showEmail(t *testing.T) {
 		State:   review.PRStateOpen,
 		Author:  review.Author{Name: "Bob", Email: "bob@test.com"},
 	}
-	card := PRToCardWithOptions(pr, PRToCardOptions{ShowEmail: true})
+	card := prToCardWithOptions(pr, prToCardOptions{ShowEmail: true})
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "Bob <bob@test.com>" {
@@ -179,7 +179,7 @@ func TestPRToCard_withOriginalAuthor(t *testing.T) {
 		Author:         review.Author{Name: "Forker"},
 		OriginalAuthor: &origAuthor,
 	}
-	card := PRToCard(pr)
+	card := prToCard(pr)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "Original" {
@@ -198,7 +198,7 @@ func TestFeedbackToCard_approved(t *testing.T) {
 		Author:      review.Author{Name: "Reviewer", Email: "rev@test.com"},
 		Timestamp:   time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
-	card := FeedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false)
 	if card.Header.Icon != "✓" {
 		t.Errorf("Icon = %q, want ✓ for approved", card.Header.Icon)
 	}
@@ -213,7 +213,7 @@ func TestFeedbackToCard_changesRequested(t *testing.T) {
 		ReviewState: review.ReviewStateChangesRequested,
 		Author:      review.Author{Name: "Reviewer"},
 	}
-	card := FeedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false)
 	if card.Header.Icon != "✗" {
 		t.Errorf("Icon = %q, want ✗", card.Header.Icon)
 	}
@@ -228,7 +228,7 @@ func TestFeedbackToCard_suggestion(t *testing.T) {
 		ReviewState: review.ReviewStateApproved,
 		Author:      review.Author{Name: "Dev"},
 	}
-	card := FeedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false)
 	if card.Header.Badge != "approved [suggestion]" {
 		t.Errorf("Badge = %q, want 'approved [suggestion]'", card.Header.Badge)
 	}
@@ -237,7 +237,7 @@ func TestFeedbackToCard_suggestion(t *testing.T) {
 		Suggestion: true,
 		Author:     review.Author{Name: "Dev"},
 	}
-	card2 := FeedbackToCard(fb2, "", true, false)
+	card2 := feedbackToCard(fb2, "", true, false)
 	if card2.Header.Badge != "[suggestion]" {
 		t.Errorf("Badge = %q, want '[suggestion]'", card2.Header.Badge)
 	}
@@ -250,7 +250,7 @@ func TestFeedbackToCard_withFileLocation(t *testing.T) {
 		NewLine: 42,
 		Author:  review.Author{Name: "Rev"},
 	}
-	card := FeedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "main.go:42" {
@@ -270,7 +270,7 @@ func TestFeedbackToCard_withFileRange(t *testing.T) {
 		NewLineEnd: 20,
 		Author:     review.Author{Name: "Rev"},
 	}
-	card := FeedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "main.go:10-20" {
@@ -286,12 +286,12 @@ func TestFeedbackToCard_isMe(t *testing.T) {
 	fb := review.Feedback{
 		Author: review.Author{Name: "Me", Email: "me@test.com"},
 	}
-	card := FeedbackToCard(fb, "me@test.com", true, false)
+	card := feedbackToCard(fb, "me@test.com", true, false)
 	if !card.Header.IsMe {
 		t.Error("IsMe should be true when emails match")
 	}
 
-	card2 := FeedbackToCard(fb, "other@test.com", true, false)
+	card2 := feedbackToCard(fb, "other@test.com", true, false)
 	if card2.Header.IsMe {
 		t.Error("IsMe should be false when emails differ")
 	}

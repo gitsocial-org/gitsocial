@@ -9,14 +9,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// SprintVersionItem reuses the generic list rendering of MessageVersionItem but
+// sprintVersionItem reuses the generic list rendering of MessageVersionItem but
 // reconstructs the sprint at that version to render the real hero card.
-type SprintVersionItem struct {
+type sprintVersionItem struct {
 	tuicore.MessageVersionItem
 }
 
 // reconstruct rebuilds the sprint at this version from its header fields.
-func (s SprintVersionItem) reconstruct() *pm.Sprint {
+func (s sprintVersionItem) reconstruct() *pm.Sprint {
 	repoURL, hash, branch := s.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "pm", Fields: s.Version.Fields}}
 	item := pm.MessageToPMItem(msg, repoURL, hash, branch)
@@ -30,7 +30,7 @@ func (s SprintVersionItem) reconstruct() *pm.Sprint {
 }
 
 // RenderDetail renders this version through the real sprint hero card in version mode.
-func (s SprintVersionItem) RenderDetail(width int) string {
+func (s sprintVersionItem) RenderDetail(width int) string {
 	lines := renderSprintCard(s.reconstruct(), width, false, "", nil, sprintCardOptions{
 		version:       true,
 		versionAuthor: s.AuthorDisplay(s.ShowEmail),
@@ -43,6 +43,6 @@ func (s SprintVersionItem) RenderDetail(width int) string {
 // detail render reconstructs the real sprint hero card.
 func loadSprintHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
 	return tuicore.LoadMessageHistory(ctx, "pm", func(base tuicore.MessageVersionItem) tuicore.VersionItem {
-		return SprintVersionItem{MessageVersionItem: base}
+		return sprintVersionItem{MessageVersionItem: base}
 	})
 }

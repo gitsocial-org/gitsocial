@@ -14,8 +14,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
 )
 
-// DiffView displays files changed in a pull request.
-type DiffView struct {
+// diffView displays files changed in a pull request.
+type diffView struct {
 	core       *tuicore.DiffViewCore
 	pr         *review.PullRequest
 	headCommit string
@@ -25,21 +25,21 @@ type DiffView struct {
 	showEmail  bool
 }
 
-// NewDiffView creates a new diff view.
-func NewDiffView(workdir string) *DiffView {
-	v := &DiffView{core: tuicore.NewDiffViewCore(workdir)}
+// newDiffView creates a new diff view.
+func newDiffView(workdir string) *diffView {
+	v := &diffView{core: tuicore.NewDiffViewCore(workdir)}
 	v.core.SetExtraKey(v.extraKey)
 	return v
 }
 
 // SetSize sets the view dimensions.
-func (v *DiffView) SetSize(w, h int) { v.core.SetSize(w, h) }
+func (v *diffView) SetSize(w, h int) { v.core.SetSize(w, h) }
 
 // IsInputActive returns true when search input is active.
-func (v *DiffView) IsInputActive() bool { return v.core.IsInputActive() }
+func (v *diffView) IsInputActive() bool { return v.core.IsInputActive() }
 
 // Activate loads diff data for the pull request.
-func (v *DiffView) Activate(state *tuicore.State) tea.Cmd {
+func (v *diffView) Activate(state *tuicore.State) tea.Cmd {
 	v.core.Reset()
 	v.pr = nil
 	v.headCommit = ""
@@ -76,7 +76,7 @@ func (v *DiffView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Update handles messages.
-func (v *DiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *diffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	if m, ok := msg.(diffLoadedMsg); ok {
 		v.pr = m.pr
 		v.headCommit = m.headCommit
@@ -96,7 +96,7 @@ func (v *DiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 
 // extraKey handles the PR-specific "c" key: opens the inline comment form
 // at the cursor's file/line.
-func (v *DiffView) extraKey(key string, _ *tuicore.State) (bool, tea.Cmd) {
+func (v *diffView) extraKey(key string, _ *tuicore.State) (bool, tea.Cmd) {
 	if key != "c" {
 		return false, nil
 	}
@@ -119,7 +119,7 @@ func (v *DiffView) extraKey(key string, _ *tuicore.State) (bool, tea.Cmd) {
 }
 
 // Render renders the view.
-func (v *DiffView) Render(state *tuicore.State) string {
+func (v *diffView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var content string
 	switch {
@@ -139,7 +139,7 @@ func (v *DiffView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *DiffView) Title() string {
+func (v *diffView) Title() string {
 	if v.pr == nil {
 		return "⑂  Files Changed"
 	}
@@ -149,7 +149,7 @@ func (v *DiffView) Title() string {
 
 // Bindings returns keybindings for this view: the shared diff bindings
 // plus the PR-specific inline comment key.
-func (v *DiffView) Bindings() []tuicore.Binding {
+func (v *diffView) Bindings() []tuicore.Binding {
 	noop := func(_ *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	ctx := []tuicore.Context{tuicore.ReviewDiff}
 	extras := []tuicore.Binding{

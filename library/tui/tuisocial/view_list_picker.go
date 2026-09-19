@@ -24,8 +24,8 @@ type listCreateData struct {
 	ID   string
 }
 
-// ListPickerView displays and manages user's lists.
-type ListPickerView struct {
+// listPickerView displays and manages user's lists.
+type listPickerView struct {
 	lists         []social.List
 	cursor        int
 	lastClickIdx  int
@@ -40,7 +40,7 @@ type ListPickerView struct {
 }
 
 // Bindings returns keybindings for the list picker view.
-func (v *ListPickerView) Bindings() []tuicore.Binding {
+func (v *listPickerView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -76,9 +76,9 @@ func (v *ListPickerView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewListPickerView creates a new list picker view.
-func NewListPickerView(workdir string) *ListPickerView {
-	return &ListPickerView{
+// newListPickerView creates a new list picker view.
+func newListPickerView(workdir string) *listPickerView {
+	return &listPickerView{
 		workdir:      workdir,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
@@ -107,17 +107,17 @@ func isValidID(id string) bool {
 }
 
 // SetSize sets the view dimensions.
-func (v *ListPickerView) SetSize(width, height int) {
+func (v *listPickerView) SetSize(width, height int) {
 	// List picker uses text rendering, not CardList
 }
 
 // Title returns the view header. The picker always shows the workspace's own lists.
-func (v *ListPickerView) Title() string {
+func (v *listPickerView) Title() string {
 	return "☷  My Lists"
 }
 
 // Activate loads lists when the view becomes active.
-func (v *ListPickerView) Activate(state *tuicore.State) tea.Cmd {
+func (v *listPickerView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading = true
 	v.cursor = 0
 	v.createMode = false
@@ -130,7 +130,7 @@ func (v *ListPickerView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // loadLists fetches the user's lists.
-func (v *ListPickerView) loadLists() tea.Cmd {
+func (v *listPickerView) loadLists() tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := social.GetLists(workdir)
@@ -142,7 +142,7 @@ func (v *ListPickerView) loadLists() tea.Cmd {
 }
 
 // Update handles messages and returns commands.
-func (v *ListPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *listPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.createMode || v.confirm.IsActive() || v.loading {
@@ -154,13 +154,13 @@ func (v *ListPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case ListsLoadedMsg:
 		v.handleLoaded(msg)
 		return nil
-	case ListCreatedMsg:
+	case listCreatedMsg:
 		v.handleCreated(msg)
 		return nil
-	case ListDeletedMsg:
+	case listDeletedMsg:
 		v.handleDeleted(msg)
 		return nil
-	case RepoAddedMsg:
+	case repoAddedMsg:
 		return v.handleRepoAdded(msg, state)
 	}
 	if v.createMode && v.createForm != nil {
@@ -177,7 +177,7 @@ func (v *ListPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *ListPickerView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *listPickerView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	key := msg.String()
 	if handled, cmd := v.confirm.HandleKey(key); handled {
 		return cmd
@@ -243,7 +243,7 @@ func (v *ListPickerView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 }
 
 // handleMouse processes mouse input.
-func (v *ListPickerView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *listPickerView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		idx := tuicore.ZoneClicked(msg, len(v.lists), v.zonePrefix)
@@ -271,7 +271,7 @@ func (v *ListPickerView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // activateSelected navigates to the selected list or adds repo to it.
-func (v *ListPickerView) activateSelected() tea.Cmd {
+func (v *listPickerView) activateSelected() tea.Cmd {
 	if len(v.lists) == 0 || v.cursor >= len(v.lists) {
 		return nil
 	}
@@ -292,7 +292,7 @@ func (v *ListPickerView) activateSelected() tea.Cmd {
 }
 
 // handleLoaded processes the loaded lists data.
-func (v *ListPickerView) handleLoaded(msg ListsLoadedMsg) {
+func (v *listPickerView) handleLoaded(msg ListsLoadedMsg) {
 	v.loading = false
 	if msg.Err != nil {
 		return
@@ -301,7 +301,7 @@ func (v *ListPickerView) handleLoaded(msg ListsLoadedMsg) {
 }
 
 // handleCreated adds the newly created list to the view.
-func (v *ListPickerView) handleCreated(msg ListCreatedMsg) {
+func (v *listPickerView) handleCreated(msg listCreatedMsg) {
 	if msg.Err != nil {
 		return
 	}
@@ -309,7 +309,7 @@ func (v *ListPickerView) handleCreated(msg ListCreatedMsg) {
 }
 
 // handleDeleted removes the deleted list from the view.
-func (v *ListPickerView) handleDeleted(msg ListDeletedMsg) {
+func (v *listPickerView) handleDeleted(msg listDeletedMsg) {
 	if msg.Err != nil {
 		return
 	}
@@ -325,51 +325,51 @@ func (v *ListPickerView) handleDeleted(msg ListDeletedMsg) {
 }
 
 // handleRepoAdded clears the follow mode after adding a repo.
-func (v *ListPickerView) handleRepoAdded(_ RepoAddedMsg, _ *tuicore.State) tea.Cmd {
+func (v *listPickerView) handleRepoAdded(_ repoAddedMsg, _ *tuicore.State) tea.Cmd {
 	v.followRepoURL = ""
 	// Navigation and messages handled by app.go
 	return nil
 }
 
 // createList creates a new list with the given ID and name.
-func (v *ListPickerView) createList(id, name string) tea.Cmd {
+func (v *listPickerView) createList(id, name string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := social.CreateList(workdir, id, name)
 		if !result.Success {
-			return ListCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return listCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ListCreatedMsg{List: result.Data}
+		return listCreatedMsg{List: result.Data}
 	}
 }
 
 // deleteList deletes the list with the given ID.
-func (v *ListPickerView) deleteList(id string) tea.Cmd {
+func (v *listPickerView) deleteList(id string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := social.DeleteList(workdir, id)
 		if !result.Success {
-			return ListDeletedMsg{ListID: id, Err: fmt.Errorf("%s", result.Error.Text())}
+			return listDeletedMsg{ListID: id, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ListDeletedMsg{ListID: id}
+		return listDeletedMsg{ListID: id}
 	}
 }
 
 // addRepoToList adds the follow repo URL to the specified list.
-func (v *ListPickerView) addRepoToList(listID, listName string) tea.Cmd {
+func (v *listPickerView) addRepoToList(listID, listName string) tea.Cmd {
 	workdir := v.workdir
 	repoURL := v.followRepoURL
 	return func() tea.Msg {
 		result := social.AddRepositoryToList(workdir, listID, repoURL, "", false)
 		if !result.Success {
-			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
+			return repoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
+		return repoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
 	}
 }
 
 // Render renders the list picker view to a string.
-func (v *ListPickerView) Render(state *tuicore.State) string {
+func (v *listPickerView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var b strings.Builder
@@ -426,12 +426,12 @@ func (v *ListPickerView) Render(state *tuicore.State) string {
 }
 
 // IsInputActive returns true when the create form or confirmation is active.
-func (v *ListPickerView) IsInputActive() bool {
+func (v *listPickerView) IsInputActive() bool {
 	return v.createMode || v.confirm.IsActive()
 }
 
 // GetSelectedList returns the currently selected list.
-func (v *ListPickerView) GetSelectedList() *tuicore.SelectedList {
+func (v *listPickerView) GetSelectedList() *tuicore.SelectedList {
 	if len(v.lists) == 0 || v.cursor >= len(v.lists) {
 		return nil
 	}
@@ -443,7 +443,7 @@ func (v *ListPickerView) GetSelectedList() *tuicore.SelectedList {
 }
 
 // CreateList starts the list creation input mode.
-func (v *ListPickerView) CreateList() tea.Cmd {
+func (v *listPickerView) CreateList() tea.Cmd {
 	v.createMode = true
 	v.createData = listCreateData{}
 
@@ -492,7 +492,7 @@ func (v *ListPickerView) CreateList() tea.Cmd {
 }
 
 // submitCreate finalizes the inline create form and dispatches the create command.
-func (v *ListPickerView) submitCreate() tea.Cmd {
+func (v *listPickerView) submitCreate() tea.Cmd {
 	name := strings.TrimSpace(v.createData.Name)
 	id := strings.TrimSpace(v.createData.ID)
 	if id == "" {
@@ -507,7 +507,7 @@ func (v *ListPickerView) submitCreate() tea.Cmd {
 }
 
 // DeleteList shows confirmation before deleting the currently selected list.
-func (v *ListPickerView) DeleteList() tea.Cmd {
+func (v *listPickerView) DeleteList() tea.Cmd {
 	if len(v.lists) == 0 || v.cursor >= len(v.lists) {
 		return nil
 	}
@@ -516,12 +516,7 @@ func (v *ListPickerView) DeleteList() tea.Cmd {
 	return nil
 }
 
-// SetFollowRepoURL sets the repo URL to add to a list.
-func (v *ListPickerView) SetFollowRepoURL(url string) {
-	v.followRepoURL = url
-}
-
 // Lists returns the loaded lists.
-func (v *ListPickerView) Lists() []social.List {
+func (v *listPickerView) Lists() []social.List {
 	return v.lists
 }

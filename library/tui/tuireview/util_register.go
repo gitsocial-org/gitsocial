@@ -93,9 +93,9 @@ type prItemData struct {
 func prCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case prItemData:
-		return PRToCardWithOptions(d.PR, PRToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL, Workdir: d.Workdir})
+		return prToCardWithOptions(d.PR, prToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL, Workdir: d.Workdir})
 	case review.PullRequest:
-		return PRToCard(d)
+		return prToCard(d)
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid pull request"}}
 }
@@ -198,21 +198,21 @@ func stateChangeNavTarget(id string) tuicore.Location {
 	return tuicore.LocReviewPRDetail(prRef)
 }
 
-// PRToCardOptions configures how a PullRequest is converted to a Card
-type PRToCardOptions struct {
+// prToCardOptions configures how a PullRequest is converted to a Card
+type prToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
 	Workdir      string // for IsHeadUnpushed lookup; empty skips the glyph
 }
 
-// PRToCard converts a PullRequest to a Card for display.
-func PRToCard(pr review.PullRequest) tuicore.Card {
-	return PRToCardWithOptions(pr, PRToCardOptions{})
+// prToCard converts a PullRequest to a Card for display.
+func prToCard(pr review.PullRequest) tuicore.Card {
+	return prToCardWithOptions(pr, prToCardOptions{})
 }
 
-// PRToCardWithOptions converts a PullRequest to a Card with configuration options.
-func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Card {
+// prToCardWithOptions converts a PullRequest to a Card with configuration options.
+func prToCardWithOptions(pr review.PullRequest, opts prToCardOptions) tuicore.Card {
 	icon := "⑂"
 	stateStr := string(pr.State)
 	if pr.IsDraft {
@@ -341,8 +341,8 @@ func PRToCardWithOptions(pr review.PullRequest, opts PRToCardOptions) tuicore.Ca
 	return card
 }
 
-// FeedbackToCard converts a review.Feedback to a Card for display.
-func FeedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, showEmail bool) tuicore.Card {
+// feedbackToCard converts a review.Feedback to a Card for display.
+func feedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, showEmail bool) tuicore.Card {
 	icon := "↩"
 	badge := ""
 	switch fb.ReviewState {
@@ -417,49 +417,49 @@ func FeedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, show
 // Register registers all review views with the host.
 func Register(host tuicore.ViewHost) {
 	state := host.State()
-	host.AddView("/review/prs", NewPRsView(state.Workdir))
-	host.AddView("/review/pr", NewPRDetailView(state.Workdir))
-	host.AddView("/review/new-pr", NewPRFormView(state.Workdir))
-	host.AddView("/review/edit-pr", NewPREditFormView(state.Workdir))
-	host.AddView("/review/feedback", NewFeedbackFormView(state.Workdir))
-	host.AddView("/review/pr/history", NewPRHistoryView(state.Workdir))
-	host.AddView("/review/pr/history/diff", NewPRHistoryDiffView(state.Workdir))
-	host.AddView("/review/diff", NewDiffView(state.Workdir))
-	host.AddView("/review/pr/interdiff", NewInterdiffView(state.Workdir))
+	host.AddView("/review/prs", newPRsView(state.Workdir))
+	host.AddView("/review/pr", newPRDetailView(state.Workdir))
+	host.AddView("/review/new-pr", newPRFormView(state.Workdir))
+	host.AddView("/review/edit-pr", newPREditFormView(state.Workdir))
+	host.AddView("/review/feedback", newFeedbackFormView(state.Workdir))
+	host.AddView("/review/pr/history", newPRHistoryView(state.Workdir))
+	host.AddView("/review/pr/history/diff", newPRHistoryDiffView(state.Workdir))
+	host.AddView("/review/diff", newDiffView(state.Workdir))
+	host.AddView("/review/pr/interdiff", newInterdiffView(state.Workdir))
 }
 
-// PRCreatedMsg is sent when a pull request is created.
-type PRCreatedMsg struct {
+// prCreatedMsg is sent when a pull request is created.
+type prCreatedMsg struct {
 	PR  review.PullRequest
 	Err error
 }
 
-// PRUpdatedMsg is sent when a pull request is updated. Warn carries a
+// prUpdatedMsg is sent when a pull request is updated. Warn carries a
 // non-fatal follow-up problem (e.g. merged locally but the base push failed).
-type PRUpdatedMsg struct {
+type prUpdatedMsg struct {
 	PR   review.PullRequest
 	Warn string
 	Err  error
 }
 
-// PRRetractedMsg is sent when a pull request is retracted.
-type PRRetractedMsg struct {
+// prRetractedMsg is sent when a pull request is retracted.
+type prRetractedMsg struct {
 	ID  string
 	Err error
 }
 
-// PRStackUpdatedMsg is sent when a stack maintenance op (rebase-stack /
+// prStackUpdatedMsg is sent when a stack maintenance op (rebase-stack /
 // sync-stack) finishes. Count is the number of PRs touched; PRID is the PR the
 // op was launched from, so the detail view can reload after the change.
-type PRStackUpdatedMsg struct {
+type prStackUpdatedMsg struct {
 	Action string
 	Count  int
 	PRID   string
 	Err    error
 }
 
-// FeedbackCreatedMsg is sent when feedback is created on a pull request.
-type FeedbackCreatedMsg struct {
+// feedbackCreatedMsg is sent when feedback is created on a pull request.
+type feedbackCreatedMsg struct {
 	Feedback review.Feedback
 	PRID     string
 	Err      error
@@ -467,23 +467,23 @@ type FeedbackCreatedMsg struct {
 
 func handleReviewMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
-	case PRCreatedMsg:
+	case prCreatedMsg:
 		return handlePRCreated(msg, ctx)
-	case PRUpdatedMsg:
+	case prUpdatedMsg:
 		return handlePRUpdated(msg, ctx)
-	case PRRetractedMsg:
+	case prRetractedMsg:
 		return handlePRRetracted(msg, ctx)
-	case PRStackUpdatedMsg:
+	case prStackUpdatedMsg:
 		return handlePRStackUpdated(msg, ctx)
-	case FeedbackCreatedMsg:
+	case feedbackCreatedMsg:
 		return handleFeedbackCreated(msg, ctx)
-	case SuggestionAppliedMsg:
+	case suggestionAppliedMsg:
 		return handleSuggestionApplied(msg, ctx)
 	}
 	return false, nil
 }
 
-func handleSuggestionApplied(msg SuggestionAppliedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleSuggestionApplied(msg suggestionAppliedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "Apply suggestion: "+msg.Err.Error(), "review")
@@ -498,7 +498,7 @@ func handleSuggestionApplied(msg SuggestionAppliedMsg, ctx tuicore.AppContext) (
 	return true, msgCmd
 }
 
-func handlePRCreated(msg PRCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePRCreated(msg prCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "PR create: "+msg.Err.Error(), "review")
@@ -518,7 +518,7 @@ func handlePRCreated(msg PRCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	})
 }
 
-func handlePRUpdated(msg PRUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePRUpdated(msg prUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "PR update: "+msg.Err.Error(), "review")
@@ -553,7 +553,7 @@ func handlePRUpdated(msg PRUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	})
 }
 
-func handlePRRetracted(msg PRRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePRRetracted(msg prRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -564,7 +564,7 @@ func handlePRRetracted(msg PRRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	})
 }
 
-func handlePRStackUpdated(msg PRStackUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePRStackUpdated(msg prStackUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "Stack: "+msg.Err.Error(), "review")
@@ -584,7 +584,7 @@ func handlePRStackUpdated(msg PRStackUpdatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
-func handleFeedbackCreated(msg FeedbackCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleFeedbackCreated(msg feedbackCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "Feedback: "+msg.Err.Error(), "review")

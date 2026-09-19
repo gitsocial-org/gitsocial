@@ -16,8 +16,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// PRsView displays a list of pull requests.
-type PRsView struct {
+// prsView displays a list of pull requests.
+type prsView struct {
 	workdir        string
 	workspaceURL   string
 	width          int
@@ -36,14 +36,14 @@ type PRsView struct {
 	restoreID      string // item ID to reselect after reload ("" = none)
 }
 
-// NewPRsView creates a new pull requests view.
-func NewPRsView(workdir string) *PRsView {
+// newPRsView creates a new pull requests view.
+func newPRsView(workdir string) *prsView {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter pull requests..."
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &PRsView{
+	return &prsView{
 		workdir:     workdir,
 		userEmail:   git.GetUserEmail(workdir),
 		cardList:    tuicore.NewCardList(nil),
@@ -52,14 +52,14 @@ func NewPRsView(workdir string) *PRsView {
 }
 
 // SetSize sets the view dimensions.
-func (v *PRsView) SetSize(w, h int) {
+func (v *prsView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-2)
 }
 
 // Activate loads the pull requests.
-func (v *PRsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *prsView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchActive = false
 	v.searchQuery = ""
@@ -83,7 +83,7 @@ func (v *PRsView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads pull requests in place, preserving the focused row by ID.
-func (v *PRsView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *prsView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -91,11 +91,8 @@ func (v *PRsView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadPRs()
 }
 
-// Deactivate is called when the view is hidden.
-func (v *PRsView) Deactivate() {}
-
 // navigateToSelected navigates to the selected PR's detail view.
-func (v *PRsView) navigateToSelected() tea.Cmd {
+func (v *prsView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
@@ -114,7 +111,7 @@ func (v *PRsView) navigateToSelected() tea.Cmd {
 }
 
 // GetItemAt returns the item ID at the given index.
-func (v *PRsView) GetItemAt(index int) (string, bool) {
+func (v *prsView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -123,12 +120,12 @@ func (v *PRsView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *PRsView) GetItemCount() int {
+func (v *prsView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
 // Update handles messages.
-func (v *PRsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *prsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case prsLoadedMsg:
 		v.pag.Loading = false
@@ -198,11 +195,11 @@ func (v *PRsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns true when search input is active.
-func (v *PRsView) IsInputActive() bool {
+func (v *prsView) IsInputActive() bool {
 	return v.searchActive
 }
 
-func (v *PRsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *prsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "n":
 		return func() tea.Msg {
@@ -244,7 +241,7 @@ func (v *PRsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-func (v *PRsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *prsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.searchActive = false
@@ -268,7 +265,7 @@ func (v *PRsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // applyFilter filters PRs by author and search query, then updates the card list.
-func (v *PRsView) applyFilter() {
+func (v *prsView) applyFilter() {
 	filtered := v.allPRs
 	if v.assigneeFilter == "me" && v.userEmail != "" {
 		var mine []review.PullRequest
@@ -309,7 +306,7 @@ func (v *PRsView) applyFilter() {
 }
 
 // Render renders the view.
-func (v *PRsView) Render(state *tuicore.State) string {
+func (v *prsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -337,7 +334,7 @@ func (v *PRsView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *PRsView) Title() string {
+func (v *prsView) Title() string {
 	stateFilter := "Open"
 	if v.showAll {
 		stateFilter = "All"
@@ -357,7 +354,7 @@ func (v *PRsView) Title() string {
 }
 
 // HeaderInfo returns position info for the title.
-func (v *PRsView) HeaderInfo() (position int, total string) {
+func (v *prsView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -366,7 +363,7 @@ func (v *PRsView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for this view.
-func (v *PRsView) Bindings() []tuicore.Binding {
+func (v *prsView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -393,7 +390,7 @@ type prsLoadedMsg struct {
 	err     error
 }
 
-func (v *PRsView) loadPRs() tea.Cmd {
+func (v *prsView) loadPRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	limit := v.pag.Limit()
@@ -434,7 +431,7 @@ func (v *PRsView) loadPRs() tea.Cmd {
 	}
 }
 
-func (v *PRsView) loadMorePRs() tea.Cmd {
+func (v *prsView) loadMorePRs() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
@@ -474,7 +471,7 @@ func (v *PRsView) loadMorePRs() tea.Cmd {
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *PRsView) LoadMorePosts() tea.Cmd {
+func (v *prsView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMorePRs)
 }
 
@@ -484,7 +481,7 @@ func extractHashFromID(id string) string {
 }
 
 // stateFilter returns the PR states to query based on the showAll toggle.
-func (v *PRsView) stateFilter() []string {
+func (v *prsView) stateFilter() []string {
 	if v.showAll {
 		return []string{"open", "merged", "closed"}
 	}

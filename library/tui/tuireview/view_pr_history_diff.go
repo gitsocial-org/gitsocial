@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewPRHistoryDiffView creates a HistoryDiffView wired to PR description history.
-func NewPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newPRHistoryDiffView creates a HistoryDiffView wired to PR description history.
+func newPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:    tuicore.ReviewPRHistoryDiff,
 		TitleIcon:  "⑂",

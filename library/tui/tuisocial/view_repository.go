@@ -18,8 +18,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// RepositoryView displays posts from a specific repository.
-type RepositoryView struct {
+// repositoryView displays posts from a specific repository.
+type repositoryView struct {
 	name        string
 	url         string
 	branch      string
@@ -46,7 +46,7 @@ type RepositoryView struct {
 }
 
 // Bindings returns keybindings for the repository view.
-func (v *RepositoryView) Bindings() []tuicore.Binding {
+func (v *repositoryView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "l", Label: "lists", Contexts: []tuicore.Context{tuicore.Repository},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
@@ -93,9 +93,9 @@ func (v *RepositoryView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewRepositoryView creates a new repository view.
-func NewRepositoryView(workdir string) *RepositoryView {
-	v := &RepositoryView{
+// newRepositoryView creates a new repository view.
+func newRepositoryView(workdir string) *repositoryView {
+	v := &repositoryView{
 		workdir: workdir,
 	}
 	v.cardlist = tuicore.NewCardList(nil)
@@ -104,7 +104,7 @@ func NewRepositoryView(workdir string) *RepositoryView {
 }
 
 // resolveItem fetches a post by ID via API.
-func (v *RepositoryView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
+func (v *repositoryView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 	result := social.GetPosts(v.workdir, "post:"+itemID, nil)
 	if result.Success && len(result.Data) > 0 {
 		post := result.Data[0]
@@ -115,18 +115,18 @@ func (v *RepositoryView) resolveItem(itemID string) (tuicore.DisplayItem, bool) 
 	return nil, false
 }
 
-// SetUserEmail sets the user email for own-post highlighting.
-func (v *RepositoryView) SetUserEmail(email string) {
+// setUserEmail sets the user email for own-post highlighting.
+func (v *repositoryView) setUserEmail(email string) {
 	v.userEmail = email
 }
 
 // SetSize sets the view dimensions (receives inner content area).
-func (v *RepositoryView) SetSize(width, height int) {
+func (v *repositoryView) SetSize(width, height int) {
 	v.cardlist.SetSize(width, height-3) // -3 for footer
 }
 
 // Activate loads repository posts when the view becomes active.
-func (v *RepositoryView) Activate(state *tuicore.State) tea.Cmd {
+func (v *repositoryView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	loc := state.Router.Location()
 	url := loc.Param("url")
@@ -203,7 +203,7 @@ func (v *RepositoryView) Activate(state *tuicore.State) tea.Cmd {
 // loadPosts fetches posts for the current repository. The total count is
 // loaded asynchronously so the page render isn't blocked on a multi-second
 // COUNT(*) over huge repos.
-func (v *RepositoryView) loadPosts() tea.Cmd {
+func (v *repositoryView) loadPosts() tea.Cmd {
 	v.pag.StartLoading()
 	v.pag.Cursor = ""
 	v.pag.HasMore = false
@@ -222,19 +222,19 @@ func (v *RepositoryView) loadPosts() tea.Cmd {
 	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
-			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return repositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore}
+		return repositoryLoadedMsg{Posts: posts, HasMore: hasMore}
 	}
 	countCmd := func() tea.Msg {
-		return RepositoryCountLoadedMsg{Total: social.CountRepository(workdir, repoURL, repoBranch, isWs)}
+		return repositoryCountLoadedMsg{Total: social.CountRepository(workdir, repoURL, repoBranch, isWs)}
 	}
 	return tea.Batch(pageCmd, countCmd)
 }
 
 // loadMorePosts fetches the next page of repository posts.
-func (v *RepositoryView) loadMorePosts() tea.Cmd {
+func (v *repositoryView) loadMorePosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
@@ -248,20 +248,20 @@ func (v *RepositoryView) loadMorePosts() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
-			return RepositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return repositoryLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
-		return RepositoryLoadedMsg{Posts: posts, HasMore: hasMore, Append: true}
+		return repositoryLoadedMsg{Posts: posts, HasMore: hasMore, Append: true}
 	}
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *RepositoryView) LoadMorePosts() tea.Cmd {
+func (v *repositoryView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMorePosts)
 }
 
 // fetchInitialMonths fetches the initial months for unfollowed repos.
-func (v *RepositoryView) fetchInitialMonths(state *tuicore.State) tea.Cmd {
+func (v *repositoryView) fetchInitialMonths(state *tuicore.State) tea.Cmd {
 	v.isFetching = true
 	v.fetchingLabel = "Fetching posts..."
 	cacheDir := state.CacheDir
@@ -282,12 +282,12 @@ func (v *RepositoryView) fetchInitialMonths(state *tuicore.State) tea.Cmd {
 		}
 		// Also fetch the repo's lists for exploration
 		social.CacheExternalRepoLists(cacheDir, url, branch)
-		return RepositoryFetchedMsg{Posts: totalPosts, Months: fetchedMonths}
+		return repositoryFetchedMsg{Posts: totalPosts, Months: fetchedMonths}
 	}
 }
 
 // fetchOlderMonth fetches posts from the previous month.
-func (v *RepositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
+func (v *repositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
 	if v.isWorkspace || v.isFetching || len(v.fetchedMonths) == 0 {
 		return nil
 	}
@@ -303,14 +303,14 @@ func (v *RepositoryView) fetchOlderMonth(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
-			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return repositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{social.YearMonthFromRange(m)}}
+		return repositoryFetchedMsg{Posts: result.Data.Items, Months: []string{social.YearMonthFromRange(m)}}
 	}
 }
 
 // fetchNewerMonth fetches posts from the next month.
-func (v *RepositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
+func (v *repositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
 	if v.isWorkspace || v.isFetching || len(v.fetchedMonths) == 0 {
 		return nil
 	}
@@ -340,14 +340,14 @@ func (v *RepositoryView) fetchNewerMonth(state *tuicore.State) tea.Cmd {
 	return func() tea.Msg {
 		result := client.FetchRepositoryRange(cacheDir, url, branch, m.Start, m.End, workspaceURL)
 		if !result.Success {
-			return RepositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return repositoryFetchedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return RepositoryFetchedMsg{Posts: result.Data.Items, Months: []string{ym}}
+		return repositoryFetchedMsg{Posts: result.Data.Items, Months: []string{ym}}
 	}
 }
 
 // Update handles messages and returns commands.
-func (v *RepositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *repositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg.(type) {
 	case tea.KeyPressMsg, tea.MouseMsg:
 		if v.isFetching {
@@ -371,11 +371,11 @@ func (v *RepositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 	default:
 		switch msg := msg.(type) {
-		case RepositoryLoadedMsg:
+		case repositoryLoadedMsg:
 			v.handleLoaded(msg)
-		case RepositoryCountLoadedMsg:
+		case repositoryCountLoadedMsg:
 			v.pag.SetTotal(msg.Total)
-		case RepositoryFetchedMsg:
+		case repositoryFetchedMsg:
 			return v.handleFetched(msg)
 		}
 	}
@@ -383,7 +383,7 @@ func (v *RepositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // handleFetched processes fetch completion and reloads posts.
-func (v *RepositoryView) handleFetched(msg RepositoryFetchedMsg) tea.Cmd {
+func (v *repositoryView) handleFetched(msg repositoryFetchedMsg) tea.Cmd {
 	v.isFetching = false
 	v.fetchingLabel = ""
 	if msg.Err != nil {
@@ -418,7 +418,7 @@ func mergeMonths(existing, new []string) []string {
 }
 
 // navigateToSelected navigates to the selected item's detail view.
-func (v *RepositoryView) navigateToSelected() tea.Cmd {
+func (v *repositoryView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardlist.SelectedItem()
 	if !ok {
 		return nil
@@ -436,7 +436,7 @@ func (v *RepositoryView) navigateToSelected() tea.Cmd {
 }
 
 // Refresh reloads posts in place, preserving the focused row by ID.
-func (v *RepositoryView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *repositoryView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardlist.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -445,7 +445,7 @@ func (v *RepositoryView) Refresh(_ *tuicore.State) tea.Cmd {
 }
 
 // handleKey processes view-specific keyboard input.
-func (v *RepositoryView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
+func (v *repositoryView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
 		if id, ok := v.cardlist.SelectedID(); ok {
@@ -466,7 +466,7 @@ func (v *RepositoryView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) te
 }
 
 // handleLoaded processes the loaded repository posts.
-func (v *RepositoryView) handleLoaded(msg RepositoryLoadedMsg) {
+func (v *repositoryView) handleLoaded(msg repositoryLoadedMsg) {
 	if msg.Err != nil {
 		v.pag.Loading = false
 		return
@@ -477,7 +477,7 @@ func (v *RepositoryView) handleLoaded(msg RepositoryLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
+	items := postsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {
@@ -490,7 +490,7 @@ func (v *RepositoryView) handleLoaded(msg RepositoryLoadedMsg) {
 }
 
 // Render renders the repository view to a string.
-func (v *RepositoryView) Render(state *tuicore.State) string {
+func (v *repositoryView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -514,8 +514,8 @@ func (v *RepositoryView) Render(state *tuicore.State) string {
 	if v.isFetching {
 		footer = tuicore.RenderMessageFooter(v.fetchingLabel, tuicore.MessageTypeNone)
 	} else {
-		status := GetFollowStatus(v.url, v.allLists, v.followerSet)
-		isFollowed := v.isWorkspace || status == FollowStatusFollowed || status == FollowStatusMutual
+		status := getFollowStatus(v.url, v.allLists, v.followerSet)
+		isFollowed := v.isWorkspace || status == followStatusFollowed || status == followStatusMutual
 		include := map[string]bool{"%": !v.isWorkspace}
 		if isFollowed {
 			exclude := map[string]bool{"[": true, "]": true}
@@ -528,22 +528,17 @@ func (v *RepositoryView) Render(state *tuicore.State) string {
 }
 
 // IsInputActive returns false since repository view has no text input.
-func (v *RepositoryView) IsInputActive() bool {
+func (v *repositoryView) IsInputActive() bool {
 	return false
 }
 
-// IsWorkspace returns true if viewing the workspace repository.
-func (v *RepositoryView) IsWorkspace() bool {
-	return v.isWorkspace
-}
-
 // URL returns the repository URL.
-func (v *RepositoryView) URL() string {
+func (v *repositoryView) URL() string {
 	return v.url
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *RepositoryView) HeaderInfo() (position int, total string) {
+func (v *repositoryView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -553,7 +548,7 @@ func (v *RepositoryView) HeaderInfo() (position int, total string) {
 
 // Title returns the fully formatted header for the repository view.
 // Format: repo name · n/m · x ago · date range · [lists] · url · @branch
-func (v *RepositoryView) Title() string {
+func (v *repositoryView) Title() string {
 	if v.isWorkspace {
 		pos, total := v.HeaderInfo()
 		if total != "" {
@@ -564,8 +559,8 @@ func (v *RepositoryView) Title() string {
 	if v.name == "" {
 		return "Repository"
 	}
-	status := GetFollowStatus(v.url, v.allLists, v.followerSet)
-	listNames := GetListNamesForRepo(v.url, v.allLists, "")
+	status := getFollowStatus(v.url, v.allLists, v.followerSet)
+	listNames := getListNamesForRepo(v.url, v.allLists, "")
 	pos, total := v.HeaderInfo()
 	var styledParts []string
 	counter := ""
@@ -573,12 +568,12 @@ func (v *RepositoryView) Title() string {
 		counter = fmt.Sprintf("%d/%s", pos, total)
 	}
 	switch status {
-	case FollowStatusMutual:
+	case followStatusMutual:
 		styledParts = append(styledParts, tuicore.MutualTitle.Render("⎇  "+v.name))
 		if counter != "" {
 			styledParts = append(styledParts, tuicore.MutualTitle.Render(counter))
 		}
-	case FollowStatusFollowed:
+	case followStatusFollowed:
 		styledParts = append(styledParts, tuicore.Title.Render("⎇  ✓ "+v.name))
 		if counter != "" {
 			styledParts = append(styledParts, tuicore.Title.Render(counter))
@@ -596,8 +591,8 @@ func (v *RepositoryView) Title() string {
 	if !v.isWorkspace && len(v.fetchedMonths) > 0 && !cache.IsRepositoryInAnyList(v.url, v.workdir) {
 		dimParts = append(dimParts, social.FormatMonthRangeDisplay(v.fetchedMonths))
 	}
-	indicator := FormatListIndicator(listNames, 2)
-	if indicator == "" && status != FollowStatusMutual && status != FollowStatusFollowed {
+	indicator := formatListIndicator(listNames, 2)
+	if indicator == "" && status != followStatusMutual && status != followStatusFollowed {
 		if v.followerSet[protocol.NormalizeURL(v.url)] {
 			indicator = "[follows you]"
 		} else {
@@ -624,7 +619,7 @@ func (v *RepositoryView) Title() string {
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
-func (v *RepositoryView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
+func (v *repositoryView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index], true
@@ -633,7 +628,7 @@ func (v *RepositoryView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool)
 }
 
 // GetItemAt returns the post ID at the given index.
-func (v *RepositoryView) GetItemAt(index int) (string, bool) {
+func (v *repositoryView) GetItemAt(index int) (string, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -642,17 +637,17 @@ func (v *RepositoryView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *RepositoryView) GetItemCount() int {
+func (v *repositoryView) GetItemCount() int {
 	return len(v.cardlist.Items())
 }
 
 // DisplayItems returns all repository items.
-func (v *RepositoryView) DisplayItems() []tuicore.DisplayItem {
+func (v *repositoryView) DisplayItems() []tuicore.DisplayItem {
 	return v.cardlist.Items()
 }
 
 // SetDisplayItems replaces all repository items.
-func (v *RepositoryView) SetDisplayItems(items []tuicore.DisplayItem) {
+func (v *repositoryView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.cardlist.SetItems(items)
 	if v.restoreID != "" {
 		v.cardlist.SelectByID(v.restoreID)
@@ -661,12 +656,12 @@ func (v *RepositoryView) SetDisplayItems(items []tuicore.DisplayItem) {
 }
 
 // SelectedDisplayItem returns the currently selected item.
-func (v *RepositoryView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
+func (v *repositoryView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 	return v.cardlist.SelectedItem()
 }
 
 // UpdateItem updates an item in the list by ID.
-func (v *RepositoryView) UpdateItem(item tuicore.DisplayItem) {
+func (v *repositoryView) UpdateItem(item tuicore.DisplayItem) {
 	items := v.cardlist.Items()
 	for i, existing := range items {
 		if existing.ItemID() == item.ItemID() {
@@ -678,7 +673,7 @@ func (v *RepositoryView) UpdateItem(item tuicore.DisplayItem) {
 }
 
 // RemoveItem removes an item from the list by ID.
-func (v *RepositoryView) RemoveItem(itemID string) {
+func (v *repositoryView) RemoveItem(itemID string) {
 	items := v.cardlist.Items()
 	for i, item := range items {
 		if item.ItemID() == itemID {
@@ -689,7 +684,7 @@ func (v *RepositoryView) RemoveItem(itemID string) {
 }
 
 // FollowRepository opens the list picker to add this repository to a list.
-func (v *RepositoryView) FollowRepository() tea.Cmd {
+func (v *repositoryView) FollowRepository() tea.Cmd {
 	if v.isWorkspace || v.url == "" {
 		return nil
 	}
@@ -702,7 +697,7 @@ func (v *RepositoryView) FollowRepository() tea.Cmd {
 }
 
 // OpenRepoLists opens the repository's defined lists.
-func (v *RepositoryView) OpenRepoLists() tea.Cmd {
+func (v *repositoryView) OpenRepoLists() tea.Cmd {
 	if v.isWorkspace || v.url == "" {
 		return nil
 	}
@@ -715,7 +710,7 @@ func (v *RepositoryView) OpenRepoLists() tea.Cmd {
 }
 
 // SearchInRepository opens search with the repository scope prefilled.
-func (v *RepositoryView) SearchInRepository() tea.Cmd {
+func (v *repositoryView) SearchInRepository() tea.Cmd {
 	if !v.isWorkspace && v.url == "" {
 		return nil
 	}

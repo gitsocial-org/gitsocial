@@ -19,8 +19,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ListReposView displays repositories in a list.
-type ListReposView struct {
+// listReposView displays repositories in a list.
+type listReposView struct {
 	list              social.List
 	repos             []string
 	cursor            int
@@ -37,7 +37,7 @@ type ListReposView struct {
 }
 
 // Bindings returns keybindings for the list repos view.
-func (v *ListReposView) Bindings() []tuicore.Binding {
+func (v *listReposView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -54,9 +54,9 @@ func (v *ListReposView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewListReposView creates a new list repos view.
-func NewListReposView(workdir string) *ListReposView {
-	return &ListReposView{
+// newListReposView creates a new list repos view.
+func newListReposView(workdir string) *listReposView {
+	return &listReposView{
 		workdir:      workdir,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
@@ -64,12 +64,12 @@ func NewListReposView(workdir string) *ListReposView {
 }
 
 // SetSize sets the view dimensions.
-func (v *ListReposView) SetSize(width, height int) {
+func (v *listReposView) SetSize(width, height int) {
 	// List repos uses text rendering, not CardList
 }
 
 // Activate loads list repos when the view becomes active.
-func (v *ListReposView) Activate(state *tuicore.State) tea.Cmd {
+func (v *listReposView) Activate(state *tuicore.State) tea.Cmd {
 	v.addMode = false
 	v.addForm = nil
 	v.addInput = ""
@@ -130,7 +130,7 @@ func (v *ListReposView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Update handles messages and returns commands.
-func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *listReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.addMode || v.confirm.IsActive() {
@@ -139,7 +139,7 @@ func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.handleMouse(msg)
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
-	case RepoAddedMsg:
+	case repoAddedMsg:
 		if msg.Err == nil && msg.ListID == v.list.ID {
 			v.repos = append(v.repos, msg.RepoURL)
 			// Re-sort alphabetically
@@ -161,7 +161,7 @@ func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			}
 		}
-	case RepoRemovedMsg:
+	case repoRemovedMsg:
 		if msg.Err == nil && msg.ListID == v.list.ID {
 			for i, repo := range v.repos {
 				if repo == msg.RepoURL {
@@ -200,7 +200,7 @@ func (v *ListReposView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // handleMouse processes mouse input.
-func (v *ListReposView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *listReposView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		idx := tuicore.ZoneClicked(msg, len(v.repos), v.zonePrefix)
@@ -228,7 +228,7 @@ func (v *ListReposView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // activateSelected navigates to the selected repository.
-func (v *ListReposView) activateSelected() tea.Cmd {
+func (v *listReposView) activateSelected() tea.Cmd {
 	if len(v.repos) == 0 || v.cursor >= len(v.repos) {
 		return nil
 	}
@@ -242,7 +242,7 @@ func (v *ListReposView) activateSelected() tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *ListReposView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *listReposView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	key := msg.String()
 	if handled, cmd := v.confirm.HandleKey(key); handled {
 		return cmd
@@ -299,20 +299,20 @@ func (v *ListReposView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd
 }
 
 // removeRepo removes a repository from the list.
-func (v *ListReposView) removeRepo(repoURL string) tea.Cmd {
+func (v *listReposView) removeRepo(repoURL string) tea.Cmd {
 	workdir := v.workdir
 	listID := v.list.ID
 	return func() tea.Msg {
 		result := social.RemoveRepositoryFromList(workdir, listID, repoURL)
 		if !result.Success {
-			return RepoRemovedMsg{ListID: listID, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
+			return repoRemovedMsg{ListID: listID, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return RepoRemovedMsg{ListID: listID, RepoURL: repoURL}
+		return repoRemovedMsg{ListID: listID, RepoURL: repoURL}
 	}
 }
 
 // startAddForm builds and focuses the inline add-repo form.
-func (v *ListReposView) startAddForm() tea.Cmd {
+func (v *listReposView) startAddForm() tea.Cmd {
 	v.addMode = true
 	v.addInput = ""
 	urlField := huh.NewInput().
@@ -336,7 +336,7 @@ func (v *ListReposView) startAddForm() tea.Cmd {
 }
 
 // submitAdd dispatches the add-repo command after the form completes.
-func (v *ListReposView) submitAdd() tea.Cmd {
+func (v *listReposView) submitAdd() tea.Cmd {
 	raw := strings.TrimSpace(v.addInput)
 	v.addMode = false
 	v.addForm = nil
@@ -348,21 +348,21 @@ func (v *ListReposView) submitAdd() tea.Cmd {
 }
 
 // addRepo adds a repository to the list.
-func (v *ListReposView) addRepo(repoURL, branch string, allBranches bool) tea.Cmd {
+func (v *listReposView) addRepo(repoURL, branch string, allBranches bool) tea.Cmd {
 	workdir := v.workdir
 	listID := v.list.ID
 	listName := v.list.Name
 	return func() tea.Msg {
 		result := social.AddRepositoryToList(workdir, listID, repoURL, branch, allBranches)
 		if !result.Success {
-			return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
+			return repoAddedMsg{ListID: listID, ListName: listName, RepoURL: repoURL, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return RepoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
+		return repoAddedMsg{ListID: listID, ListName: listName, RepoURL: result.Data}
 	}
 }
 
 // Render renders the list repos view to a string.
-func (v *ListReposView) Render(state *tuicore.State) string {
+func (v *listReposView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var b strings.Builder
@@ -381,8 +381,8 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 		for i, repo := range v.repos {
 			selected := i == v.cursor
 			id := protocol.ParseRepositoryID(repo)
-			status := GetFollowStatus(id.Repository, v.allLists, v.followerSet)
-			listNames := GetListNamesForRepo(id.Repository, v.allLists, v.list.ID)
+			status := getFollowStatus(id.Repository, v.allLists, v.followerSet)
+			listNames := getListNamesForRepo(id.Repository, v.allLists, v.list.ID)
 			prefix := "  "
 			if selected {
 				prefix = tuicore.Title.Render("▸ ")
@@ -391,19 +391,19 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 			line.WriteString(prefix)
 			name := protocol.GetDisplayName(repo)
 			if selected {
-				if status == FollowStatusMutual {
+				if status == followStatusMutual {
 					line.WriteString(tuicore.MutualTitle.Background(tuicore.Selected.GetBackground()).Render(name))
 				} else {
 					line.WriteString(tuicore.TitleSelected.Render(name))
 				}
 			} else {
-				if status == FollowStatusMutual {
+				if status == followStatusMutual {
 					line.WriteString(tuicore.MutualTitle.Render(name))
 				} else {
 					line.WriteString(name)
 				}
 			}
-			indicator := RenderFollowIndicator(status, listNames, selected)
+			indicator := renderFollowIndicator(status, listNames, selected)
 			if indicator != "" {
 				line.WriteString(" ")
 				line.WriteString(indicator)
@@ -438,18 +438,18 @@ func (v *ListReposView) Render(state *tuicore.State) string {
 }
 
 // IsInputActive returns true when input or confirmation is active.
-func (v *ListReposView) IsInputActive() bool {
+func (v *listReposView) IsInputActive() bool {
 	return v.addMode || v.confirm.IsActive()
 }
 
 // IsExternalList returns true if viewing an external list.
-func (v *ListReposView) IsExternalList() bool {
+func (v *listReposView) IsExternalList() bool {
 	return v.externalListOwner != ""
 }
 
 // Title returns the list name for the header, appending the owner when viewing
 // another repo's list.
-func (v *ListReposView) Title() string {
+func (v *listReposView) Title() string {
 	if v.externalListOwner != "" {
 		return "☷  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
 	}
@@ -457,7 +457,7 @@ func (v *ListReposView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *ListReposView) HeaderInfo() (position int, total string) {
+func (v *listReposView) HeaderInfo() (position int, total string) {
 	if len(v.repos) == 0 {
 		return 0, ""
 	}

@@ -9,15 +9,15 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// IssueVersionItem reuses the generic list rendering of MessageVersionItem but
+// issueVersionItem reuses the generic list rendering of MessageVersionItem but
 // reconstructs the issue at that version to render the real hero card in detail.
-type IssueVersionItem struct {
+type issueVersionItem struct {
 	tuicore.MessageVersionItem
 	workdir string
 }
 
 // reconstruct rebuilds the issue (and resolves parent/milestone/sprint) at this version.
-func (i IssueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint, *pm.Issue) {
+func (i issueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint, *pm.Issue) {
 	repoURL, hash, branch := i.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "pm", Fields: i.Version.Fields}}
 	item := pm.MessageToPMItem(msg, repoURL, hash, branch)
@@ -53,7 +53,7 @@ func (i IssueVersionItem) reconstruct() (*pm.Issue, *pm.Milestone, *pm.Sprint, *
 }
 
 // RenderDetail renders this version through the real issue hero card in version mode.
-func (i IssueVersionItem) RenderDetail(width int) string {
+func (i issueVersionItem) RenderDetail(width int) string {
 	issue, milestone, sprint, parent := i.reconstruct()
 	lines := renderIssueCard(issue, milestone, sprint, parent, buildContributorNameMap(i.workdir), width, false, "", nil, issueCardOptions{
 		version:       true,
@@ -67,6 +67,6 @@ func (i IssueVersionItem) RenderDetail(width int) string {
 // detail render reconstructs the real issue hero card (list entries stay generic).
 func loadIssueHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
 	return tuicore.LoadMessageHistory(ctx, "pm", func(base tuicore.MessageVersionItem) tuicore.VersionItem {
-		return IssueVersionItem{MessageVersionItem: base, workdir: ctx.Workdir}
+		return issueVersionItem{MessageVersionItem: base, workdir: ctx.Workdir}
 	})
 }

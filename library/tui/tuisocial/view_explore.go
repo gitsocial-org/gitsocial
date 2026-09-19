@@ -37,10 +37,10 @@ type exploreRow struct {
 	hints  string
 }
 
-// ExploreView lists repositories for discovery. The mode is resolved from the
+// exploreView lists repositories for discovery. The mode is resolved from the
 // route. Selecting a row opens the repository view; `r` drills into the related
 // repos of the selection.
-type ExploreView struct {
+type exploreView struct {
 	workdir      string
 	mode         exploreMode
 	targetURL    string
@@ -53,16 +53,16 @@ type ExploreView struct {
 	zonePrefix   string
 }
 
-// NewExploreView creates a new repository discovery view.
-func NewExploreView(workdir string) *ExploreView {
-	return &ExploreView{workdir: workdir, lastClickIdx: -1, zonePrefix: zone.NewPrefix()}
+// newExploreView creates a new repository discovery view.
+func newExploreView(workdir string) *exploreView {
+	return &exploreView{workdir: workdir, lastClickIdx: -1, zonePrefix: zone.NewPrefix()}
 }
 
 // SetSize is a no-op — the view renders plain rows, not a sized component.
-func (v *ExploreView) SetSize(width, height int) {}
+func (v *exploreView) SetSize(width, height int) {}
 
 // Activate resolves the mode from the route and loads the repository list.
-func (v *ExploreView) Activate(state *tuicore.State) tea.Cmd {
+func (v *exploreView) Activate(state *tuicore.State) tea.Cmd {
 	loc := state.Router.Location()
 	v.targetURL = ""
 	switch {
@@ -90,7 +90,7 @@ func (v *ExploreView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // load fetches the repository list for the current mode off the UI thread.
-func (v *ExploreView) load() tea.Cmd {
+func (v *exploreView) load() tea.Cmd {
 	workdir := v.workdir
 	mode := v.mode
 	target := v.targetURL
@@ -153,7 +153,7 @@ type exploreLoadedMsg struct {
 }
 
 // Update handles the async load result, mouse, and key input.
-func (v *ExploreView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *exploreView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case exploreLoadedMsg:
 		v.loaded = true
@@ -184,7 +184,7 @@ func (v *ExploreView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // handleMouse moves the cursor on wheel and opens a repo on double-click.
-func (v *ExploreView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *exploreView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		idx := tuicore.ZoneClicked(msg, len(v.rows), v.zonePrefix)
@@ -210,7 +210,7 @@ func (v *ExploreView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // handleKey processes list navigation, open, and related drill-down.
-func (v *ExploreView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *exploreView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		if v.cursor < len(v.rows)-1 {
@@ -240,7 +240,7 @@ func (v *ExploreView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // openSelected navigates to the selected repository's view.
-func (v *ExploreView) openSelected() tea.Cmd {
+func (v *exploreView) openSelected() tea.Cmd {
 	if v.cursor < 0 || v.cursor >= len(v.rows) {
 		return nil
 	}
@@ -251,10 +251,10 @@ func (v *ExploreView) openSelected() tea.Cmd {
 }
 
 // IsInputActive returns false — the view never owns text input.
-func (v *ExploreView) IsInputActive() bool { return false }
+func (v *exploreView) IsInputActive() bool { return false }
 
 // Bindings returns the view's keybindings.
-func (v *ExploreView) Bindings() []tuicore.Binding {
+func (v *exploreView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "enter", Label: "open", Contexts: []tuicore.Context{tuicore.Explore}, Handler: noop},
@@ -265,7 +265,7 @@ func (v *ExploreView) Bindings() []tuicore.Binding {
 }
 
 // Title returns the header for the current mode.
-func (v *ExploreView) Title() string {
+func (v *exploreView) Title() string {
 	switch v.mode {
 	case modeRelated:
 		return "➼  Related · " + protocol.GetDisplayName(v.targetURL)
@@ -277,7 +277,7 @@ func (v *ExploreView) Title() string {
 }
 
 // HeaderInfo returns the position indicator for the title bar.
-func (v *ExploreView) HeaderInfo() (int, string) {
+func (v *exploreView) HeaderInfo() (int, string) {
 	if len(v.rows) == 0 {
 		return 0, ""
 	}
@@ -285,7 +285,7 @@ func (v *ExploreView) HeaderInfo() (int, string) {
 }
 
 // Render draws the repository list as a table: name | status | url | hints.
-func (v *ExploreView) Render(state *tuicore.State) string {
+func (v *exploreView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var b strings.Builder
 	switch {
@@ -311,15 +311,15 @@ const (
 
 // renderTable renders the loaded rows as a fixed-column table with hover/select
 // highlighting that extends to the full content width.
-func (v *ExploreView) renderTable(contentWidth int) string {
+func (v *exploreView) renderTable(contentWidth int) string {
 	var b strings.Builder
 	selectedBg := tuicore.Selected.GetBackground()
 	bgFill := lipgloss.NewStyle().Background(selectedBg)
 
 	for i, row := range v.rows {
 		selected := i == v.cursor
-		status := GetFollowStatus(row.url, v.allLists, v.followerSet)
-		listNames := GetListNamesForRepo(row.url, v.allLists, "")
+		status := getFollowStatus(row.url, v.allLists, v.followerSet)
+		listNames := getListNamesForRepo(row.url, v.allLists, "")
 
 		// Cursor + name column
 		prefix := "  "
@@ -328,11 +328,11 @@ func (v *ExploreView) renderTable(contentWidth int) string {
 		}
 		var nameInner string
 		switch {
-		case selected && status == FollowStatusMutual:
+		case selected && status == followStatusMutual:
 			nameInner = tuicore.MutualTitle.Background(selectedBg).Render(row.name)
 		case selected:
 			nameInner = tuicore.NormalSelected.Render(row.name)
-		case status == FollowStatusMutual:
+		case status == followStatusMutual:
 			nameInner = tuicore.MutualTitle.Render(row.name)
 		default:
 			nameInner = row.name
@@ -344,7 +344,7 @@ func (v *ExploreView) renderTable(contentWidth int) string {
 		nameCol := nameColStyle.Render(nameInner)
 
 		// Status column
-		indicator := RenderFollowIndicator(status, listNames, selected)
+		indicator := renderFollowIndicator(status, listNames, selected)
 		statusColStyle := lipgloss.NewStyle().Width(exploreStatusColWidth)
 		if selected {
 			statusColStyle = statusColStyle.Background(selectedBg)

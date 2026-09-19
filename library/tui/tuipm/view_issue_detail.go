@@ -18,8 +18,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// IssueDetailView displays a single issue with metadata and comments.
-type IssueDetailView struct {
+// issueDetailView displays a single issue with metadata and comments.
+type issueDetailView struct {
 	workdir          string
 	width            int
 	height           int
@@ -43,9 +43,9 @@ type IssueDetailView struct {
 	sourceTotal      int
 }
 
-// NewIssueDetailView creates a new issue detail view.
-func NewIssueDetailView(workdir string) *IssueDetailView {
-	return &IssueDetailView{
+// newIssueDetailView creates a new issue detail view.
+func newIssueDetailView(workdir string) *issueDetailView {
+	return &issueDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -54,14 +54,14 @@ func NewIssueDetailView(workdir string) *IssueDetailView {
 }
 
 // SetSize sets the view dimensions.
-func (v *IssueDetailView) SetSize(w, h int) {
+func (v *issueDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the issue data.
-func (v *IssueDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *issueDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.confirm.Reset()
 	v.issueID = state.Router.Location().Param("issueID")
@@ -88,13 +88,13 @@ func (v *IssueDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadIssue()
 }
 
-func (v *IssueDetailView) loadIssue() tea.Cmd {
+func (v *issueDetailView) loadIssue() tea.Cmd {
 	issueID := v.issueID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := pm.GetIssue(issueID)
 		if !result.Success {
-			return IssueDetailLoadedMsg{Err: fmt.Errorf("issue not found: %s", issueID)}
+			return issueDetailLoadedMsg{Err: fmt.Errorf("issue not found: %s", issueID)}
 		}
 		issue := result.Data
 		branch := gitmsg.GetExtBranch(workdir, "pm")
@@ -129,12 +129,12 @@ func (v *IssueDetailView) loadIssue() tea.Cmd {
 			children = res.Data
 		}
 		contributorNames := buildContributorNameMap(workdir)
-		return IssueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, Parent: parent, Children: children, ContributorNames: contributorNames}
+		return issueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, Parent: parent, Children: children, ContributorNames: contributorNames}
 	}
 }
 
-// IssueDetailLoadedMsg signals that the issue has been loaded.
-type IssueDetailLoadedMsg struct {
+// issueDetailLoadedMsg signals that the issue has been loaded.
+type issueDetailLoadedMsg struct {
 	Issue            *pm.Issue
 	Milestone        *pm.Milestone
 	Sprint           *pm.Sprint
@@ -172,9 +172,9 @@ func resolveParentIssue(issue *pm.Issue) *pm.Issue {
 }
 
 // Update handles messages.
-func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *issueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case IssueDetailLoadedMsg:
+	case issueDetailLoadedMsg:
 		v.loaded = true
 		if msg.Err == nil {
 			v.issue = msg.Issue
@@ -302,7 +302,7 @@ func (v *IssueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	return nil
 }
 
-func (v *IssueDetailView) buildSections() {
+func (v *issueDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the issue card
 	issue := v.issue
@@ -428,29 +428,29 @@ func (v *IssueDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *IssueDetailView) closeIssue(proposed bool) tea.Cmd {
+func (v *issueDetailView) closeIssue(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	return tea.Sequence(
 		func() tea.Msg {
 			result := pm.CloseIssue("", issueID)
 			if !result.Success {
-				return IssueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+				return issueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
-			return IssueClosedMsg{ID: issueID, Proposed: proposed}
+			return issueClosedMsg{ID: issueID, Proposed: proposed}
 		},
 		v.loadIssue(),
 	)
 }
 
-func (v *IssueDetailView) doRetract(proposed bool) tea.Cmd {
+func (v *issueDetailView) doRetract(proposed bool) tea.Cmd {
 	issueID := v.issue.ID
 	workdir := v.workdir
 	retract := func() tea.Msg {
 		result := pm.RetractIssue(workdir, issueID)
 		if !result.Success {
-			return IssueRetractedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+			return issueRetractedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return IssueRetractedMsg{ID: issueID, Proposed: proposed}
+		return issueRetractedMsg{ID: issueID, Proposed: proposed}
 	}
 	if proposed {
 		return tea.Sequence(retract, v.loadIssue())
@@ -459,7 +459,7 @@ func (v *IssueDetailView) doRetract(proposed bool) tea.Cmd {
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *IssueDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *issueDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -469,12 +469,12 @@ func (v *IssueDetailView) navigateSource(state *tuicore.State, offset int) tea.C
 }
 
 // IsInputActive returns true when confirmation or search input is active.
-func (v *IssueDetailView) IsInputActive() bool {
+func (v *issueDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
 // Render renders the issue detail view.
-func (v *IssueDetailView) Render(state *tuicore.State) string {
+func (v *issueDetailView) Render(state *tuicore.State) string {
 	if v.issue != nil && v.issue.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -686,13 +686,13 @@ func renderLinkRows(label string, refs []pm.IssueRef, selectionBar string, style
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *IssueDetailView) ShowRawView() tea.Cmd {
+func (v *issueDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return func() tea.Msg { return nil }
 }
 
 // Title returns the view title.
-func (v *IssueDetailView) Title() string {
+func (v *issueDetailView) Title() string {
 	if v.issue == nil {
 		return "○  Issue"
 	}
@@ -718,7 +718,7 @@ func (v *IssueDetailView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *IssueDetailView) Bindings() []tuicore.Binding {
+func (v *issueDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -741,11 +741,6 @@ func (v *IssueDetailView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *IssueDetailView) ViewName() string {
-	return "pm.issue_detail"
 }
 
 // buildContributorNameMap builds an email-to-name map from all cached commits.

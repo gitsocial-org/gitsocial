@@ -22,9 +22,9 @@ func TestFormatListIndicator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatListIndicator(tt.names, tt.maxVisible)
+			got := formatListIndicator(tt.names, tt.maxVisible)
 			if got != tt.want {
-				t.Errorf("FormatListIndicator(%v, %d) = %q, want %q", tt.names, tt.maxVisible, got, tt.want)
+				t.Errorf("formatListIndicator(%v, %d) = %q, want %q", tt.names, tt.maxVisible, got, tt.want)
 			}
 		})
 	}
@@ -49,9 +49,9 @@ func TestExtractSearchTerms(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ExtractSearchTerms(tt.query)
+			got := extractSearchTerms(tt.query)
 			if got != tt.want {
-				t.Errorf("ExtractSearchTerms(%q) = %q, want %q", tt.query, got, tt.want)
+				t.Errorf("extractSearchTerms(%q) = %q, want %q", tt.query, got, tt.want)
 			}
 		})
 	}

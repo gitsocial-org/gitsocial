@@ -31,12 +31,6 @@ type PostToCardOptions struct {
 	Workdir    string // for cross-extension PR unpushed-head lookup; empty skips
 }
 
-// PostToCard converts a social.Post to a Card with optional nested post resolution.
-// This is the social extension's adapter - it converts social.Post to the generic Card format.
-func PostToCard(post social.Post, resolver PostResolver) tuicore.Card {
-	return PostToCardWithOptions(post, resolver, PostToCardOptions{})
-}
-
 // PostToCardWithOptions converts a social.Post to a Card with configuration options.
 func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts PostToCardOptions) tuicore.Card {
 	name := post.Author.Name
@@ -297,8 +291,8 @@ func RenderCommentCard(comment social.Post, width int, selected bool, searchQuer
 	return strings.Split(rendered, "\n")
 }
 
-// PostsToItems converts []social.Post to []tuicore.DisplayItem using universal Item
-func PostsToItems(posts []social.Post, userEmail string, showEmail bool, workdir string) []tuicore.DisplayItem {
+// postsToItems converts []social.Post to []tuicore.DisplayItem using universal Item
+func postsToItems(posts []social.Post, userEmail string, showEmail bool, workdir string) []tuicore.DisplayItem {
 	items := make([]tuicore.DisplayItem, len(posts))
 	for i, p := range posts {
 		// Store rendering options in the post's Display field
@@ -325,8 +319,8 @@ func PostsToItems(posts []social.Post, userEmail string, showEmail bool, workdir
 	return items
 }
 
-// ItemToPost extracts social.Post from a DisplayItem
-func ItemToPost(item tuicore.DisplayItem) (social.Post, bool) {
+// itemToPost extracts social.Post from a DisplayItem
+func itemToPost(item tuicore.DisplayItem) (social.Post, bool) {
 	if ui, ok := item.(tuicore.Item); ok {
 		if p, ok := ui.Data.(social.Post); ok {
 			return p, true
@@ -335,8 +329,8 @@ func ItemToPost(item tuicore.DisplayItem) (social.Post, bool) {
 	return social.Post{}, false
 }
 
-// MakeSearchFunc creates a SearchFunc that wraps core/search.Search.
-func MakeSearchFunc(userEmail string, showEmailFn func() bool) tuicore.SearchFunc {
+// makeSearchFunc creates a SearchFunc that wraps core/search.Search.
+func makeSearchFunc(userEmail string, showEmailFn func() bool) tuicore.SearchFunc {
 	return func(workdir, query, scope string, limit, offset int) (tuicore.SearchResult, error) {
 		result, err := search.Search(workdir, search.Params{
 			Query:  query,
@@ -547,8 +541,8 @@ func parseSearchLabels(labelsStr string) []pm.Label {
 	return labels
 }
 
-// MakeGetNotificationsFunc creates a GetNotificationsFunc that wraps core notifications.GetAll.
-func MakeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore.GetNotificationsFunc {
+// makeGetNotificationsFunc creates a GetNotificationsFunc that wraps core notifications.GetAll.
+func makeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore.GetNotificationsFunc {
 	return func(workdir string, unreadOnly bool) (tuicore.NotificationsResult, error) {
 		filter := notifications.Filter{UnreadOnly: unreadOnly}
 		all, err := notifications.GetAll(workdir, filter)
@@ -659,28 +653,28 @@ func MakeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore
 	}
 }
 
-// MakeMarkReadFunc creates a MarkReadFunc that wraps notifications.MarkAsRead.
-func MakeMarkReadFunc() tuicore.MarkReadFunc {
+// makeMarkReadFunc creates a MarkReadFunc that wraps notifications.MarkAsRead.
+func makeMarkReadFunc() tuicore.MarkReadFunc {
 	return notifications.MarkAsRead
 }
 
-// MakeMarkUnreadFunc creates a MarkUnreadFunc that wraps notifications.MarkAsUnread.
-func MakeMarkUnreadFunc() tuicore.MarkUnreadFunc {
+// makeMarkUnreadFunc creates a MarkUnreadFunc that wraps notifications.MarkAsUnread.
+func makeMarkUnreadFunc() tuicore.MarkUnreadFunc {
 	return notifications.MarkAsUnread
 }
 
-// MakeMarkAllReadFunc creates a MarkAllReadFunc that wraps notifications.MarkAllAsRead.
-func MakeMarkAllReadFunc() tuicore.MarkAllReadFunc {
+// makeMarkAllReadFunc creates a MarkAllReadFunc that wraps notifications.MarkAllAsRead.
+func makeMarkAllReadFunc() tuicore.MarkAllReadFunc {
 	return notifications.MarkAllAsRead
 }
 
-// MakeMarkAllUnreadFunc creates a MarkAllUnreadFunc that wraps notifications.MarkAllAsUnread.
-func MakeMarkAllUnreadFunc() tuicore.MarkAllUnreadFunc {
+// makeMarkAllUnreadFunc creates a MarkAllUnreadFunc that wraps notifications.MarkAllAsUnread.
+func makeMarkAllUnreadFunc() tuicore.MarkAllUnreadFunc {
 	return notifications.MarkAllAsUnread
 }
 
-// MakeResolveItemFunc creates a ResolveItemFunc that wraps social.GetPosts.
-func MakeResolveItemFunc(userEmail string) tuicore.ResolveItemFunc {
+// makeResolveItemFunc creates a ResolveItemFunc that wraps social.GetPosts.
+func makeResolveItemFunc(userEmail string) tuicore.ResolveItemFunc {
 	return func(workdir, itemID string) (tuicore.DisplayItem, bool) {
 		result := social.GetPosts(workdir, "post:"+itemID, nil)
 		if result.Success && len(result.Data) > 0 {
@@ -692,7 +686,7 @@ func MakeResolveItemFunc(userEmail string) tuicore.ResolveItemFunc {
 	}
 }
 
-// ExtractSearchTerms delegates to tuicore.ExtractSearchTerms.
-func ExtractSearchTerms(query string) string {
+// extractSearchTerms delegates to tuicore.ExtractSearchTerms.
+func extractSearchTerms(query string) string {
 	return tuicore.ExtractSearchTerms(query)
 }

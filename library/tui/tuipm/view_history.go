@@ -6,8 +6,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuiproposal"
 )
 
-// NewIssueHistoryView creates the edit-history view for a PM issue.
-func NewIssueHistoryView(workdir string) *tuicore.HistoryView {
+// newIssueHistoryView creates the edit-history view for a PM issue.
+func newIssueHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "issueID",
 		Context:    tuicore.PMIssueHistory,
@@ -20,8 +20,8 @@ func NewIssueHistoryView(workdir string) *tuicore.HistoryView {
 	})
 }
 
-// NewMilestoneHistoryView creates the edit-history view for a PM milestone.
-func NewMilestoneHistoryView(workdir string) *tuicore.HistoryView {
+// newMilestoneHistoryView creates the edit-history view for a PM milestone.
+func newMilestoneHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "milestoneID",
 		Context:    tuicore.PMMilestoneHistory,
@@ -34,8 +34,8 @@ func NewMilestoneHistoryView(workdir string) *tuicore.HistoryView {
 	})
 }
 
-// NewSprintHistoryView creates the edit-history view for a PM sprint.
-func NewSprintHistoryView(workdir string) *tuicore.HistoryView {
+// newSprintHistoryView creates the edit-history view for a PM sprint.
+func newSprintHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "sprintID",
 		Context:    tuicore.PMSprintHistory,

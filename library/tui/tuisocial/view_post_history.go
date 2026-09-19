@@ -12,26 +12,26 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// PostVersionItem wraps social.Post to implement tuicore.VersionItem.
-type PostVersionItem struct {
+// postVersionItem wraps social.Post to implement tuicore.VersionItem.
+type postVersionItem struct {
 	Post      social.Post
 	ShowEmail bool
 }
 
 // GetID returns the post's unique identifier.
-func (p PostVersionItem) GetID() string { return p.Post.ID }
+func (p postVersionItem) GetID() string { return p.Post.ID }
 
 // GetTimestamp returns the post's creation time.
-func (p PostVersionItem) GetTimestamp() time.Time { return p.Post.Timestamp }
+func (p postVersionItem) GetTimestamp() time.Time { return p.Post.Timestamp }
 
 // GetEditOf returns the ID of the post this version edits.
-func (p PostVersionItem) GetEditOf() string { return p.Post.EditOf }
+func (p postVersionItem) GetEditOf() string { return p.Post.EditOf }
 
 // IsRetracted returns true if this version has been retracted.
-func (p PostVersionItem) IsRetracted() bool { return p.Post.IsRetracted }
+func (p postVersionItem) IsRetracted() bool { return p.Post.IsRetracted }
 
 // AuthorDisplay returns the author name, optionally with email.
-func (p PostVersionItem) AuthorDisplay(showEmail bool) string {
+func (p postVersionItem) AuthorDisplay(showEmail bool) string {
 	name := p.Post.Author.Name
 	if name == "" {
 		name = "Anonymous"
@@ -43,16 +43,16 @@ func (p PostVersionItem) AuthorDisplay(showEmail bool) string {
 }
 
 // Ref returns the post's repo URL, commit hash, and branch.
-func (p PostVersionItem) Ref() (string, string, string) {
+func (p postVersionItem) Ref() (string, string, string) {
 	return p.Post.Repository, protocol.ParseRef(p.Post.ID).Value, p.Post.Branch
 }
 
 // IsOpenProposal reports whether this version is an open cross-repo proposal.
 // Posts have no cross-repo proposal flow, so this is always false.
-func (p PostVersionItem) IsOpenProposal() bool { return false }
+func (p postVersionItem) IsOpenProposal() bool { return false }
 
 // RenderListEntry renders a compact list entry for this version.
-func (p PostVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
+func (p postVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
 	hash, _ := protocol.NormalizeHash(protocol.ParseRef(p.Post.ID).Value)
 	name := p.AuthorDisplay(p.ShowEmail)
 	if p.Post.Display.IsVerified {
@@ -78,7 +78,7 @@ func (p PostVersionItem) RenderListEntry(index, total int, label string, selecte
 }
 
 // RenderDetail renders the full detail view for this version.
-func (p PostVersionItem) RenderDetail(width int) string {
+func (p postVersionItem) RenderDetail(width int) string {
 	card := PostToCardWithOptions(p.Post, nil, PostToCardOptions{
 		FullTime:   true,
 		SkipNested: true,
@@ -110,13 +110,13 @@ func loadPostHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, err
 	}
 	items := make([]tuicore.VersionItem, len(posts))
 	for i, post := range posts {
-		items[i] = PostVersionItem{Post: post, ShowEmail: ctx.ShowEmail}
+		items[i] = postVersionItem{Post: post, ShowEmail: ctx.ShowEmail}
 	}
 	return items, nil
 }
 
-// NewHistoryView creates the edit-history view for a post.
-func NewHistoryView(workdir string) *tuicore.HistoryView {
+// newHistoryView creates the edit-history view for a post.
+func newHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "postID",
 		Context:    tuicore.History,

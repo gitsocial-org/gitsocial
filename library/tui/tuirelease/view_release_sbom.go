@@ -11,8 +11,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ReleaseSBOMView displays SBOM package details for a release.
-type ReleaseSBOMView struct {
+// releaseSBOMView displays SBOM package details for a release.
+type releaseSBOMView struct {
 	workdir     string
 	width       int
 	height      int
@@ -22,23 +22,23 @@ type ReleaseSBOMView struct {
 	sectionList *tuicore.SectionList
 }
 
-// NewReleaseSBOMView creates a new SBOM view.
-func NewReleaseSBOMView(workdir string) *ReleaseSBOMView {
-	return &ReleaseSBOMView{
+// newReleaseSBOMView creates a new SBOM view.
+func newReleaseSBOMView(workdir string) *releaseSBOMView {
+	return &releaseSBOMView{
 		workdir:     workdir,
 		sectionList: tuicore.NewSectionList(),
 	}
 }
 
 // SetSize sets the view dimensions.
-func (v *ReleaseSBOMView) SetSize(w, h int) {
+func (v *releaseSBOMView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the release and its SBOM.
-func (v *ReleaseSBOMView) Activate(state *tuicore.State) tea.Cmd {
+func (v *releaseSBOMView) Activate(state *tuicore.State) tea.Cmd {
 	v.loaded = false
 	v.rel = nil
 	v.sbomSummary = nil
@@ -60,16 +60,13 @@ func (v *ReleaseSBOMView) Activate(state *tuicore.State) tea.Cmd {
 	}
 }
 
-// Deactivate is called when the view is hidden.
-func (v *ReleaseSBOMView) Deactivate() {}
-
 // IsInputActive returns true when search input is active.
-func (v *ReleaseSBOMView) IsInputActive() bool {
+func (v *releaseSBOMView) IsInputActive() bool {
 	return v.sectionList.IsInputActive()
 }
 
 // Update handles messages.
-func (v *ReleaseSBOMView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *releaseSBOMView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case releaseSBOMLoadedMsg:
 		v.loaded = true
@@ -90,7 +87,7 @@ func (v *ReleaseSBOMView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // Render renders the view.
-func (v *ReleaseSBOMView) Render(state *tuicore.State) string {
+func (v *releaseSBOMView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var content string
 	if !v.loaded {
@@ -112,7 +109,7 @@ func (v *ReleaseSBOMView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *ReleaseSBOMView) Title() string {
+func (v *releaseSBOMView) Title() string {
 	if v.rel == nil {
 		return "⏏  SBOM"
 	}
@@ -120,14 +117,14 @@ func (v *ReleaseSBOMView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *ReleaseSBOMView) Bindings() []tuicore.Binding {
+func (v *releaseSBOMView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReleaseSBOM}, Handler: noop},
 	}
 }
 
-func (v *ReleaseSBOMView) buildSections() {
+func (v *releaseSBOMView) buildSections() {
 	if v.sbomSummary == nil {
 		return
 	}
@@ -176,7 +173,7 @@ func (v *ReleaseSBOMView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *ReleaseSBOMView) renderSummaryCard(s *release.SBOMSummary, _ int, selected bool) []string {
+func (v *releaseSBOMView) renderSummaryCard(s *release.SBOMSummary, _ int, selected bool) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")

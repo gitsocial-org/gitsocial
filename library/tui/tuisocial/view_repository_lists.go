@@ -13,8 +13,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// RepoListsView displays lists published by an external repository.
-type RepoListsView struct {
+// repoListsView displays lists published by an external repository.
+type repoListsView struct {
 	repoURL      string
 	repoName     string
 	lists        []cache.ExternalRepoList
@@ -26,7 +26,7 @@ type RepoListsView struct {
 }
 
 // Bindings returns keybindings for the repo lists view.
-func (v *RepoListsView) Bindings() []tuicore.Binding {
+func (v *repoListsView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -42,9 +42,9 @@ func (v *RepoListsView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewRepoListsView creates a new repo lists view.
-func NewRepoListsView(workdir string) *RepoListsView {
-	return &RepoListsView{
+// newRepoListsView creates a new repo lists view.
+func newRepoListsView(workdir string) *repoListsView {
+	return &repoListsView{
 		workdir:      workdir,
 		lastClickIdx: -1,
 		zonePrefix:   zone.NewPrefix(),
@@ -52,12 +52,12 @@ func NewRepoListsView(workdir string) *RepoListsView {
 }
 
 // SetSize sets the view dimensions.
-func (v *RepoListsView) SetSize(width, height int) {
+func (v *repoListsView) SetSize(width, height int) {
 	// Uses text rendering, not CardList
 }
 
 // Activate loads the lists when the view becomes active.
-func (v *RepoListsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *repoListsView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading = true
 	v.cursor = 0
 	loc := state.Router.Location()
@@ -67,16 +67,16 @@ func (v *RepoListsView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // loadLists fetches the external repo's published lists.
-func (v *RepoListsView) loadLists() tea.Cmd {
+func (v *repoListsView) loadLists() tea.Cmd {
 	repoURL := v.repoURL
 	return func() tea.Msg {
 		lists, err := cache.GetExternalRepoLists(repoURL)
-		return RepoListsLoadedMsg{Lists: lists, Err: err}
+		return repoListsLoadedMsg{Lists: lists, Err: err}
 	}
 }
 
 // Update handles messages and returns commands.
-func (v *RepoListsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *repoListsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.loading {
@@ -85,14 +85,14 @@ func (v *RepoListsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.handleMouse(msg)
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
-	case RepoListsLoadedMsg:
+	case repoListsLoadedMsg:
 		v.handleLoaded(msg)
 	}
 	return nil
 }
 
 // handleMouse processes mouse input.
-func (v *RepoListsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *repoListsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		idx := tuicore.ZoneClicked(msg, len(v.lists), v.zonePrefix)
@@ -120,7 +120,7 @@ func (v *RepoListsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // activateSelected navigates to the selected list's posts.
-func (v *RepoListsView) activateSelected() tea.Cmd {
+func (v *repoListsView) activateSelected() tea.Cmd {
 	if len(v.lists) == 0 || v.cursor >= len(v.lists) {
 		return nil
 	}
@@ -134,7 +134,7 @@ func (v *RepoListsView) activateSelected() tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *RepoListsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *repoListsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		if v.cursor < len(v.lists)-1 {
@@ -169,7 +169,7 @@ func (v *RepoListsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd
 }
 
 // handleLoaded processes the loaded lists data.
-func (v *RepoListsView) handleLoaded(msg RepoListsLoadedMsg) {
+func (v *repoListsView) handleLoaded(msg repoListsLoadedMsg) {
 	v.loading = false
 	if msg.Err != nil {
 		return
@@ -178,7 +178,7 @@ func (v *RepoListsView) handleLoaded(msg RepoListsLoadedMsg) {
 }
 
 // Render renders the repo lists view to a string.
-func (v *RepoListsView) Render(state *tuicore.State) string {
+func (v *repoListsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var b strings.Builder
 	if v.loading {
@@ -223,7 +223,7 @@ func (v *RepoListsView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title for the header.
-func (v *RepoListsView) Title() string {
+func (v *repoListsView) Title() string {
 	if v.repoName != "" {
 		return "☷  " + v.repoName + " lists"
 	}

@@ -12,8 +12,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MilestoneFormData holds the form field values.
-type MilestoneFormData struct {
+// milestoneFormData holds the form field values.
+type milestoneFormData struct {
 	Title  string
 	Body   string
 	State  string
@@ -21,28 +21,28 @@ type MilestoneFormData struct {
 	Labels []string
 }
 
-// MilestoneForm wraps a Huh form for milestone creation/editing.
-type MilestoneForm struct {
+// milestoneForm wraps a Huh form for milestone creation/editing.
+type milestoneForm struct {
 	tuicore.FormBase
 	workdir       string
 	milestoneID   string // Non-empty for edit mode
 	bodyField     *huh.Text
 	bodyOtherRows int // count of non-body field rows, for body sizing
-	data          MilestoneFormData
+	data          milestoneFormData
 	width         int
 	height        int
 }
 
-// NewMilestoneForm creates a new milestone form.
-func NewMilestoneForm(workdir string) *MilestoneForm {
-	f := &MilestoneForm{workdir: workdir}
+// newMilestoneForm creates a new milestone form.
+func newMilestoneForm(workdir string) *milestoneForm {
+	f := &milestoneForm{workdir: workdir}
 	f.buildForm()
 	return f
 }
 
-// NewMilestoneEditForm creates a form pre-filled with milestone data.
-func NewMilestoneEditForm(workdir string, milestone pm.Milestone) *MilestoneForm {
-	f := &MilestoneForm{
+// newMilestoneEditForm creates a form pre-filled with milestone data.
+func newMilestoneEditForm(workdir string, milestone pm.Milestone) *milestoneForm {
+	f := &milestoneForm{
 		workdir:     workdir,
 		milestoneID: milestone.ID,
 	}
@@ -57,13 +57,8 @@ func NewMilestoneEditForm(workdir string, milestone pm.Milestone) *MilestoneForm
 	return f
 }
 
-// IsEditMode returns true if this is an edit form.
-func (f *MilestoneForm) IsEditMode() bool {
-	return f.milestoneID != ""
-}
-
 // buildForm constructs the Huh form.
-func (f *MilestoneForm) buildForm() {
+func (f *milestoneForm) buildForm() {
 	pad := tuicore.PadLabel
 	fields := make([]huh.Field, 0, 5)
 	fields = append(fields,
@@ -113,7 +108,7 @@ func (f *MilestoneForm) buildForm() {
 }
 
 // SetSize sets the form dimensions.
-func (f *MilestoneForm) SetSize(w, h int) {
+func (f *milestoneForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
 	if form := f.FormPtr(); form != nil {
@@ -125,22 +120,22 @@ func (f *MilestoneForm) SetSize(w, h int) {
 }
 
 // Update delegates the standard form lifecycle to FormBase.
-func (f *MilestoneForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+func (f *milestoneForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
 // Body returns the current body text (for the $EDITOR escape-hatch).
-func (f *MilestoneForm) Body() string { return f.data.Body }
+func (f *milestoneForm) Body() string { return f.data.Body }
 
 // SetBody writes the body and rebuilds the form so huh.Text refreshes.
-func (f *MilestoneForm) SetBody(s string) {
+func (f *milestoneForm) SetBody(s string) {
 	f.data.Body = s
 	f.buildForm()
 }
 
 // Reset rebuilds the form, clearing huh-internal state while preserving data.
-func (f *MilestoneForm) Reset() { f.buildForm() }
+func (f *milestoneForm) Reset() { f.buildForm() }
 
-// CreateMilestoneFromForm creates a milestone from form data.
-func (f *MilestoneForm) CreateMilestoneFromForm() tea.Cmd {
+// createMilestoneFromForm creates a milestone from form data.
+func (f *milestoneForm) createMilestoneFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	return func() tea.Msg {
@@ -155,57 +150,54 @@ func (f *MilestoneForm) CreateMilestoneFromForm() tea.Cmd {
 		}
 		result := pm.CreateMilestone(workdir, data.Title, data.Body, opts)
 		if !result.Success {
-			return MilestoneCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestoneCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return MilestoneCreatedMsg{Milestone: result.Data}
+		return milestoneCreatedMsg{Milestone: result.Data}
 	}
 }
 
-// MilestoneFormView wraps the form for integration with the TUI host.
-type MilestoneFormView struct {
+// milestoneFormView wraps the form for integration with the TUI host.
+type milestoneFormView struct {
 	tuicore.FormViewBase
 }
 
-// NewMilestoneFormView creates a new milestone form view.
-func NewMilestoneFormView(workdir string) *MilestoneFormView {
-	v := &MilestoneFormView{}
-	v.AttachForm(NewMilestoneForm(workdir))
+// newMilestoneFormView creates a new milestone form view.
+func newMilestoneFormView(workdir string) *milestoneFormView {
+	v := &milestoneFormView{}
+	v.AttachForm(newMilestoneForm(workdir))
 	return v
 }
 
 // Activate initializes the form view.
-func (v *MilestoneFormView) Activate(state *tuicore.State) tea.Cmd {
-	form := NewMilestoneForm(state.Workdir)
+func (v *milestoneFormView) Activate(state *tuicore.State) tea.Cmd {
+	form := newMilestoneForm(state.Workdir)
 	v.AttachForm(form)
 	return form.Init()
 }
 
 // Update handles messages.
-func (v *MilestoneFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if m, ok := msg.(MilestoneCreatedMsg); ok && m.Err != nil {
+func (v *milestoneFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+	if m, ok := msg.(milestoneCreatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*MilestoneForm); ok {
-			return form.CreateMilestoneFromForm()
+		if form, ok := v.CurrentForm().(*milestoneForm); ok {
+			return form.createMilestoneFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the form view.
-func (v *MilestoneFormView) Render(state *tuicore.State) string {
+func (v *milestoneFormView) Render(state *tuicore.State) string {
 	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *MilestoneFormView) Title() string { return "◇  New Milestone" }
+func (v *milestoneFormView) Title() string { return "◇  New Milestone" }
 
-// ViewName returns the view identifier.
-func (v *MilestoneFormView) ViewName() string { return "pm.milestone_form" }
-
-// UpdateMilestoneFromForm updates an existing milestone from form data.
-func (f *MilestoneForm) UpdateMilestoneFromForm() tea.Cmd {
+// updateMilestoneFromForm updates an existing milestone from form data.
+func (f *milestoneForm) updateMilestoneFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	milestoneID := f.milestoneID
@@ -225,20 +217,20 @@ func (f *MilestoneForm) UpdateMilestoneFromForm() tea.Cmd {
 		}
 		result := pm.UpdateMilestone(workdir, milestoneID, opts)
 		if !result.Success {
-			return MilestoneUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestoneUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return MilestoneUpdatedMsg{Milestone: result.Data}
+		return milestoneUpdatedMsg{Milestone: result.Data}
 	}
 }
 
-// MilestoneUpdatedMsg signals that a milestone was updated.
-type MilestoneUpdatedMsg struct {
+// milestoneUpdatedMsg signals that a milestone was updated.
+type milestoneUpdatedMsg struct {
 	Milestone pm.Milestone
 	Err       error
 }
 
-// MilestoneEditFormView wraps the form for editing an existing milestone.
-type MilestoneEditFormView struct {
+// milestoneEditFormView wraps the form for editing an existing milestone.
+type milestoneEditFormView struct {
 	tuicore.FormViewBase
 	workdir     string
 	milestoneID string
@@ -246,49 +238,49 @@ type MilestoneEditFormView struct {
 	loaded      bool
 }
 
-// NewMilestoneEditFormView creates a new milestone edit form view.
-func NewMilestoneEditFormView(workdir string) *MilestoneEditFormView {
-	return &MilestoneEditFormView{
+// newMilestoneEditFormView creates a new milestone edit form view.
+func newMilestoneEditFormView(workdir string) *milestoneEditFormView {
+	return &milestoneEditFormView{
 		workdir: workdir,
 	}
 }
 
 // Activate loads the milestone and initializes the form.
-func (v *MilestoneEditFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *milestoneEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.milestoneID = state.Router.Location().Param("milestoneID")
 	v.loaded = false
 	v.DetachForm()
 	return v.loadMilestone()
 }
 
-func (v *MilestoneEditFormView) loadMilestone() tea.Cmd {
+func (v *milestoneEditFormView) loadMilestone() tea.Cmd {
 	milestoneID := v.milestoneID
 	return func() tea.Msg {
 		result := pm.GetMilestone(milestoneID)
 		if !result.Success {
-			return MilestoneEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestoneEditFormLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return MilestoneEditFormLoadedMsg{Milestone: &result.Data}
+		return milestoneEditFormLoadedMsg{Milestone: &result.Data}
 	}
 }
 
-// MilestoneEditFormLoadedMsg signals that the milestone for editing has been loaded.
-type MilestoneEditFormLoadedMsg struct {
+// milestoneEditFormLoadedMsg signals that the milestone for editing has been loaded.
+type milestoneEditFormLoadedMsg struct {
 	Milestone *pm.Milestone
 	Err       error
 }
 
 // Update handles messages.
-func (v *MilestoneEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *milestoneEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case MilestoneEditFormLoadedMsg:
+	case milestoneEditFormLoadedMsg:
 		if msg.Err != nil {
 			return func() tea.Msg {
 				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}
 		}
 		v.milestone = msg.Milestone
-		form := NewMilestoneEditForm(v.workdir, *v.milestone)
+		form := newMilestoneEditForm(v.workdir, *v.milestone)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
@@ -298,19 +290,19 @@ func (v *MilestoneEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cm
 		return nil
 	}
 
-	if m, ok := msg.(MilestoneUpdatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(milestoneUpdatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*MilestoneForm); ok {
-			return form.UpdateMilestoneFromForm()
+		if form, ok := v.CurrentForm().(*milestoneForm); ok {
+			return form.updateMilestoneFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the edit form view.
-func (v *MilestoneEditFormView) Render(state *tuicore.State) string {
+func (v *milestoneEditFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		footer := tuicore.FormFooter(true, nil)
@@ -320,12 +312,9 @@ func (v *MilestoneEditFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *MilestoneEditFormView) Title() string {
+func (v *milestoneEditFormView) Title() string {
 	if v.milestone != nil {
 		return fmt.Sprintf("◇  Edit: %s", v.milestone.Title)
 	}
 	return "◇  Edit Milestone"
 }
-
-// ViewName returns the view identifier.
-func (v *MilestoneEditFormView) ViewName() string { return "pm.milestone_edit_form" }

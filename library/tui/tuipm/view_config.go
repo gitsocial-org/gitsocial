@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ConfigView displays PM configuration with a framework picker.
-type ConfigView struct {
+// configView displays PM configuration with a framework picker.
+type configView struct {
 	workdir      string
 	framework    string
 	cursor       int
@@ -31,9 +31,9 @@ var frameworkOptions = []frameworkOption{
 	{"scrum", "Sprint-based with story points"},
 }
 
-// NewConfigView creates a new PM config view.
-func NewConfigView(workdir string) *ConfigView {
-	return &ConfigView{
+// newConfigView creates a new PM config view.
+func newConfigView(workdir string) *configView {
+	return &configView{
 		workdir:      workdir,
 		options:      frameworkOptions,
 		lastClickIdx: -1,
@@ -42,7 +42,7 @@ func NewConfigView(workdir string) *ConfigView {
 }
 
 // Bindings returns keybindings for the config view.
-func (v *ConfigView) Bindings() []tuicore.Binding {
+func (v *configView) Bindings() []tuicore.Binding {
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
 			return false, nil
@@ -55,15 +55,15 @@ func (v *ConfigView) Bindings() []tuicore.Binding {
 }
 
 // SetSize sets the view dimensions.
-func (v *ConfigView) SetSize(width, height int) {}
+func (v *configView) SetSize(width, height int) {}
 
 // Activate loads the config when the view becomes active.
-func (v *ConfigView) Activate(state *tuicore.State) tea.Cmd {
+func (v *configView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadConfig()
 }
 
 // loadConfig loads PM configuration.
-func (v *ConfigView) loadConfig() tea.Cmd {
+func (v *configView) loadConfig() tea.Cmd {
 	return func() tea.Msg {
 		config := pm.GetPMConfig(v.workdir)
 		return pmConfigLoadedMsg{framework: config.Framework}
@@ -75,7 +75,7 @@ type pmConfigLoadedMsg struct {
 }
 
 // Update handles messages and returns commands.
-func (v *ConfigView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *configView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		return v.handleMouse(msg)
@@ -87,7 +87,7 @@ func (v *ConfigView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			v.framework = "kanban"
 		}
 		v.cursor = v.frameworkIndex(v.framework)
-	case PMConfigSavedMsg:
+	case pmConfigSavedMsg:
 		if msg.Err != "" {
 			v.err = msg.Err
 		} else {
@@ -99,7 +99,7 @@ func (v *ConfigView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // frameworkIndex returns the index of a framework in options.
-func (v *ConfigView) frameworkIndex(name string) int {
+func (v *configView) frameworkIndex(name string) int {
 	for i, opt := range v.options {
 		if opt.name == name {
 			return i
@@ -109,7 +109,7 @@ func (v *ConfigView) frameworkIndex(name string) int {
 }
 
 // handleMouse processes mouse input.
-func (v *ConfigView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *configView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		idx := tuicore.ZoneClicked(msg, len(v.options), v.zonePrefix)
@@ -137,7 +137,7 @@ func (v *ConfigView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *ConfigView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *configView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		if v.cursor < len(v.options)-1 {
@@ -154,7 +154,7 @@ func (v *ConfigView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // selectFramework saves the selected framework.
-func (v *ConfigView) selectFramework() tea.Cmd {
+func (v *configView) selectFramework() tea.Cmd {
 	selected := v.options[v.cursor].name
 	if selected == v.framework {
 		return nil // No change
@@ -163,25 +163,25 @@ func (v *ConfigView) selectFramework() tea.Cmd {
 		config := pm.GetPMConfig(v.workdir)
 		config.Framework = selected
 		if err := pm.SavePMConfig(v.workdir, config); err != nil {
-			return PMConfigSavedMsg{Err: err.Error()}
+			return pmConfigSavedMsg{Err: err.Error()}
 		}
-		return PMConfigSavedMsg{Framework: selected}
+		return pmConfigSavedMsg{Framework: selected}
 	}
 }
 
-// PMConfigSavedMsg is sent when PM config is saved (exported for message bus).
-type PMConfigSavedMsg struct {
+// pmConfigSavedMsg is sent when PM config is saved.
+type pmConfigSavedMsg struct {
 	Framework string
 	Err       string
 }
 
 // IsInputActive returns false as this view doesn't have text input.
-func (v *ConfigView) IsInputActive() bool {
+func (v *configView) IsInputActive() bool {
 	return false
 }
 
 // Render renders the config view to a string.
-func (v *ConfigView) Render(state *tuicore.State) string {
+func (v *configView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	rs := tuicore.DefaultRowStyles()
 	var content string

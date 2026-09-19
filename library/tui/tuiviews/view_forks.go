@@ -96,9 +96,6 @@ func (v *ForksView) Activate(state *tuicore.State) tea.Cmd {
 	return nil
 }
 
-// Deactivate is called when the view is hidden.
-func (v *ForksView) Deactivate() {}
-
 // Update handles messages and returns commands.
 func (v *ForksView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {

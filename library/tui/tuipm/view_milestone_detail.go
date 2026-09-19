@@ -17,8 +17,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// MilestoneDetailView displays a single milestone with issues and comments.
-type MilestoneDetailView struct {
+// milestoneDetailView displays a single milestone with issues and comments.
+type milestoneDetailView struct {
 	workdir      string
 	width        int
 	height       int
@@ -38,9 +38,9 @@ type MilestoneDetailView struct {
 	sourceTotal  int
 }
 
-// NewMilestoneDetailView creates a new milestone detail view.
-func NewMilestoneDetailView(workdir string) *MilestoneDetailView {
-	return &MilestoneDetailView{
+// newMilestoneDetailView creates a new milestone detail view.
+func newMilestoneDetailView(workdir string) *milestoneDetailView {
+	return &milestoneDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -49,14 +49,14 @@ func NewMilestoneDetailView(workdir string) *MilestoneDetailView {
 }
 
 // SetSize sets the view dimensions.
-func (v *MilestoneDetailView) SetSize(w, h int) {
+func (v *milestoneDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the milestone details.
-func (v *MilestoneDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *milestoneDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.confirm.Reset()
 	v.milestoneID = state.Router.Location().Param("milestoneID")
@@ -80,13 +80,13 @@ func (v *MilestoneDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadMilestone()
 }
 
-func (v *MilestoneDetailView) loadMilestone() tea.Cmd {
+func (v *milestoneDetailView) loadMilestone() tea.Cmd {
 	milestoneID := v.milestoneID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := pm.GetMilestone(milestoneID)
 		if !result.Success {
-			return MilestoneDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestoneDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -104,12 +104,12 @@ func (v *MilestoneDetailView) loadMilestone() tea.Cmd {
 		if commentsResult.Success {
 			comments = commentsResult.Data
 		}
-		return MilestoneDetailLoadedMsg{Milestone: result.Data, Issues: issues, Comments: comments}
+		return milestoneDetailLoadedMsg{Milestone: result.Data, Issues: issues, Comments: comments}
 	}
 }
 
-// MilestoneDetailLoadedMsg signals milestone details loaded.
-type MilestoneDetailLoadedMsg struct {
+// milestoneDetailLoadedMsg signals milestone details loaded.
+type milestoneDetailLoadedMsg struct {
 	Milestone pm.Milestone
 	Issues    []pm.Issue
 	Comments  []social.Post
@@ -117,9 +117,9 @@ type MilestoneDetailLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *MilestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *milestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case MilestoneDetailLoadedMsg:
+	case milestoneDetailLoadedMsg:
 		v.loaded = true
 		if msg.Err == nil {
 			v.milestone = &msg.Milestone
@@ -218,7 +218,7 @@ func (v *MilestoneDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *MilestoneDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *milestoneDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -228,11 +228,11 @@ func (v *MilestoneDetailView) navigateSource(state *tuicore.State, offset int) t
 }
 
 // IsInputActive returns true when confirmation or search input is active.
-func (v *MilestoneDetailView) IsInputActive() bool {
+func (v *milestoneDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
-func (v *MilestoneDetailView) buildSections() {
+func (v *milestoneDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the milestone card
 	ms := v.milestone
@@ -327,29 +327,29 @@ func (v *MilestoneDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *MilestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
+func (v *milestoneDetailView) closeMilestone(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
 	return tea.Sequence(
 		func() tea.Msg {
 			result := pm.CloseMilestone("", milestoneID)
 			if !result.Success {
-				return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+				return milestoneClosedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
-			return MilestoneClosedMsg{ID: milestoneID, Proposed: proposed}
+			return milestoneClosedMsg{ID: milestoneID, Proposed: proposed}
 		},
 		v.loadMilestone(),
 	)
 }
 
-func (v *MilestoneDetailView) doRetract(proposed bool) tea.Cmd {
+func (v *milestoneDetailView) doRetract(proposed bool) tea.Cmd {
 	milestoneID := v.milestone.ID
 	workdir := v.workdir
 	retract := func() tea.Msg {
 		result := pm.RetractMilestone(workdir, milestoneID)
 		if !result.Success {
-			return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestoneRetractedMsg{ID: milestoneID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return MilestoneRetractedMsg{ID: milestoneID, Proposed: proposed}
+		return milestoneRetractedMsg{ID: milestoneID, Proposed: proposed}
 	}
 	if proposed {
 		return tea.Sequence(retract, v.loadMilestone())
@@ -358,7 +358,7 @@ func (v *MilestoneDetailView) doRetract(proposed bool) tea.Cmd {
 }
 
 // Render renders the milestone detail view.
-func (v *MilestoneDetailView) Render(state *tuicore.State) string {
+func (v *milestoneDetailView) Render(state *tuicore.State) string {
 	if v.milestone != nil && v.milestone.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -461,7 +461,7 @@ func renderMilestoneCard(ms *pm.Milestone, width int, selected bool, searchQuery
 	return lines
 }
 
-func (v *MilestoneDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
+func (v *milestoneDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
@@ -492,13 +492,13 @@ func (v *MilestoneDetailView) renderIssueRow(issue pm.Issue, width int, selected
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *MilestoneDetailView) ShowRawView() tea.Cmd {
+func (v *milestoneDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return func() tea.Msg { return nil }
 }
 
 // Title returns the view title.
-func (v *MilestoneDetailView) Title() string {
+func (v *milestoneDetailView) Title() string {
 	if v.milestone == nil {
 		return "◇  Milestone"
 	}
@@ -524,12 +524,12 @@ func (v *MilestoneDetailView) Title() string {
 }
 
 // HeaderInfo returns position info.
-func (v *MilestoneDetailView) HeaderInfo() (position int, total string) {
+func (v *milestoneDetailView) HeaderInfo() (position int, total string) {
 	return 0, ""
 }
 
 // Bindings returns keybindings for this view.
-func (v *MilestoneDetailView) Bindings() []tuicore.Binding {
+func (v *milestoneDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -549,9 +549,4 @@ func (v *MilestoneDetailView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.PMMilestoneDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMMilestoneDetail}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *MilestoneDetailView) ViewName() string {
-	return "pm.milestone_detail"
 }

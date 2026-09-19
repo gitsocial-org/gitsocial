@@ -5,8 +5,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewSprintHistoryDiffView creates a HistoryDiffView wired to sprint history.
-func NewSprintHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newSprintHistoryDiffView creates a HistoryDiffView wired to sprint history.
+func newSprintHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMSprintHistoryDiff,
 		TitleIcon: "⟳",

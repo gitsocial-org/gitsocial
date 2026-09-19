@@ -5,8 +5,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewIssueHistoryDiffView creates a HistoryDiffView wired to issue history.
-func NewIssueHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newIssueHistoryDiffView creates a HistoryDiffView wired to issue history.
+func newIssueHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMIssueHistoryDiff,
 		TitleIcon: "○",

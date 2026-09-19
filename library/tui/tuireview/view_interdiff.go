@@ -13,8 +13,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// InterdiffView displays range-diff output between two PR versions.
-type InterdiffView struct {
+// interdiffView displays range-diff output between two PR versions.
+type interdiffView struct {
 	workdir       string
 	cacheDir      string
 	workspaceURL  string
@@ -31,16 +31,16 @@ type InterdiffView struct {
 	errMsg        string
 }
 
-// NewInterdiffView creates a new interdiff view.
-func NewInterdiffView(workdir string) *InterdiffView {
-	return &InterdiffView{
+// newInterdiffView creates a new interdiff view.
+func newInterdiffView(workdir string) *interdiffView {
+	return &interdiffView{
 		workdir:      workdir,
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
 	}
 }
 
 // SetSize sets the view dimensions.
-func (v *InterdiffView) SetSize(w, h int) {
+func (v *interdiffView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 }
@@ -54,7 +54,7 @@ type interdiffLoadedMsg struct {
 }
 
 // Activate loads versions and range-diff when view becomes active.
-func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
+func (v *interdiffView) Activate(state *tuicore.State) tea.Cmd {
 	prID := state.Router.Location().Param("prID")
 	if prID == "" {
 		return nil
@@ -87,11 +87,8 @@ func (v *InterdiffView) Activate(state *tuicore.State) tea.Cmd {
 	}
 }
 
-// Deactivate is called when the view is hidden.
-func (v *InterdiffView) Deactivate() {}
-
 // Update handles messages.
-func (v *InterdiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *interdiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case interdiffLoadedMsg:
 		v.loaded = true
@@ -135,7 +132,7 @@ func (v *InterdiffView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // cycleVersions shifts the version pair and reloads.
-func (v *InterdiffView) cycleVersions(dir int) tea.Cmd {
+func (v *interdiffView) cycleVersions(dir int) tea.Cmd {
 	if len(v.versions) < 2 {
 		return nil
 	}
@@ -160,7 +157,7 @@ func (v *InterdiffView) cycleVersions(dir int) tea.Cmd {
 	}
 }
 
-func (v *InterdiffView) ensureVisible() {
+func (v *interdiffView) ensureVisible() {
 	viewH := v.height
 	if viewH < 1 {
 		viewH = 1
@@ -173,7 +170,7 @@ func (v *InterdiffView) ensureVisible() {
 }
 
 // buildRenderedLines parses range-diff output and colorizes it.
-func (v *InterdiffView) buildRenderedLines(raw string) {
+func (v *interdiffView) buildRenderedLines(raw string) {
 	v.renderedLines = nil
 	if strings.TrimSpace(raw) == "" {
 		return
@@ -209,7 +206,7 @@ func (v *InterdiffView) buildRenderedLines(raw string) {
 }
 
 // Render renders the interdiff view.
-func (v *InterdiffView) Render(state *tuicore.State) string {
+func (v *interdiffView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var content string
 	if !v.loaded {
@@ -243,7 +240,7 @@ func (v *InterdiffView) Render(state *tuicore.State) string {
 	return wrapper.Render(content, footer)
 }
 
-func (v *InterdiffView) renderFooter(_ int) string {
+func (v *interdiffView) renderFooter(_ int) string {
 	parts := make([]string, 0, 3)
 	parts = append(parts, "[/]:versions")
 	parts = append(parts, "j/k:scroll")
@@ -253,12 +250,12 @@ func (v *InterdiffView) renderFooter(_ int) string {
 }
 
 // IsInputActive returns false.
-func (v *InterdiffView) IsInputActive() bool {
+func (v *interdiffView) IsInputActive() bool {
 	return false
 }
 
 // Title returns the view title.
-func (v *InterdiffView) Title() string {
+func (v *interdiffView) Title() string {
 	if !v.loaded || len(v.versions) < 2 {
 		return "⑂  Interdiff"
 	}
@@ -268,7 +265,7 @@ func (v *InterdiffView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *InterdiffView) Bindings() []tuicore.Binding {
+func (v *interdiffView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "[/]", Label: "prev/next version", Contexts: []tuicore.Context{tuicore.ReviewInterdiff}, Handler: noop},

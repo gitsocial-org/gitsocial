@@ -38,7 +38,7 @@ func TestReleaseToCard_basic(t *testing.T) {
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
 
-	card := ReleaseToCard(rel)
+	card := releaseToCard(rel)
 	if card.Header.Icon != "⏏" {
 		t.Errorf("Icon = %q, want ⏏", card.Header.Icon)
 	}
@@ -52,7 +52,7 @@ func TestReleaseToCard_prerelease(t *testing.T) {
 		Subject:    "Beta",
 		Prerelease: true,
 	}
-	card := ReleaseToCard(rel)
+	card := releaseToCard(rel)
 	if card.Header.Icon != "⏏" {
 		t.Errorf("Icon = %q, want ⏏ for prerelease", card.Header.Icon)
 	}
@@ -63,7 +63,7 @@ func TestReleaseToCard_prerelease(t *testing.T) {
 
 func TestReleaseToCard_noVersion(t *testing.T) {
 	rel := release.Release{Subject: "Hotfix"}
-	card := ReleaseToCard(rel)
+	card := releaseToCard(rel)
 	if card.Header.Title != "Hotfix" {
 		t.Errorf("Title = %q, want 'Hotfix' (no version prefix)", card.Header.Title)
 	}
@@ -74,7 +74,7 @@ func TestReleaseToCardWithOptions_showEmail(t *testing.T) {
 		Subject: "Release",
 		Author:  release.Author{Name: "Bob", Email: "bob@test.com"},
 	}
-	card := ReleaseToCardWithOptions(rel, ReleaseToCardOptions{ShowEmail: true})
+	card := releaseToCardWithOptions(rel, releaseToCardOptions{ShowEmail: true})
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "Bob <bob@test.com>" {
@@ -92,7 +92,7 @@ func TestReleaseToCard_withComments(t *testing.T) {
 		Comments: 5,
 		ID:       "test-id",
 	}
-	card := ReleaseToCard(rel)
+	card := releaseToCard(rel)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "↩ 5" {
@@ -112,7 +112,7 @@ func TestReleaseToCard_body(t *testing.T) {
 		Subject: "v2.0",
 		Body:    "Major update with breaking changes",
 	}
-	card := ReleaseToCard(rel)
+	card := releaseToCard(rel)
 	if card.Content.Text != "Major update with breaking changes" {
 		t.Errorf("Content.Text = %q", card.Content.Text)
 	}

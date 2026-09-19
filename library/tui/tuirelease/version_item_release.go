@@ -9,14 +9,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ReleaseVersionItem reuses the generic list rendering of MessageVersionItem but
+// releaseVersionItem reuses the generic list rendering of MessageVersionItem but
 // reconstructs the release at that version to render the real hero card in detail.
-type ReleaseVersionItem struct {
+type releaseVersionItem struct {
 	tuicore.MessageVersionItem
 }
 
 // reconstruct rebuilds the release at this version from its header fields.
-func (r ReleaseVersionItem) reconstruct() *release.Release {
+func (r releaseVersionItem) reconstruct() *release.Release {
 	repoURL, hash, branch := r.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "release", Fields: r.Version.Fields}}
 	item := release.MessageToReleaseItem(msg, repoURL, hash, branch)
@@ -32,7 +32,7 @@ func (r ReleaseVersionItem) reconstruct() *release.Release {
 }
 
 // RenderDetail renders this version through the real release hero card in version mode.
-func (r ReleaseVersionItem) RenderDetail(width int) string {
+func (r releaseVersionItem) RenderDetail(width int) string {
 	lines := renderReleaseCard(r.reconstruct(), width, false, "", nil, releaseCardOptions{
 		version:       true,
 		versionAuthor: r.AuthorDisplay(r.ShowEmail),
@@ -46,6 +46,6 @@ func (r ReleaseVersionItem) RenderDetail(width int) string {
 // generic).
 func loadReleaseHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error) {
 	return tuicore.LoadMessageHistory(ctx, "release", func(base tuicore.MessageVersionItem) tuicore.VersionItem {
-		return ReleaseVersionItem{MessageVersionItem: base}
+		return releaseVersionItem{MessageVersionItem: base}
 	})
 }

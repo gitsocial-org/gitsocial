@@ -6,8 +6,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuiproposal"
 )
 
-// NewReleaseHistoryView creates the edit-history view for a release.
-func NewReleaseHistoryView(workdir string) *tuicore.HistoryView {
+// newReleaseHistoryView creates the edit-history view for a release.
+func newReleaseHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "releaseID",
 		Context:    tuicore.ReleaseHistory,

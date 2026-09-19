@@ -124,18 +124,18 @@ func init() {
 // Register adds memo views to the host.
 func Register(host tuicore.ViewHost) {
 	state := host.State()
-	host.AddView("/memo/list", NewMemosView(state.Workdir))
-	host.AddView("/memo/project", NewProjectMemosView(state.Workdir))
-	host.AddView("/memo/inherited", NewInheritedMemosView(state.Workdir))
-	host.AddView("/memo/personal", NewPersonalMemosView(state.Workdir))
-	host.AddView("/memo/session", NewSessionsView(state.Workdir))
-	host.AddView("/memo/session/items", NewSessionItemsView(state.Workdir))
-	host.AddView("/memo/inherits", NewInheritsView(state.Workdir))
-	host.AddView("/memo/detail", NewMemoDetailView(state.Workdir))
-	host.AddView("/memo/history", NewMemoHistoryView(state.Workdir))
-	host.AddView("/memo/history/diff", NewMemoHistoryDiffView(state.Workdir))
-	host.AddView("/memo/edit", NewMemoFormView(state.Workdir))
-	host.AddView("/memo/new", NewMemoCreateFormView(state.Workdir))
+	host.AddView("/memo/list", newMemosView(state.Workdir))
+	host.AddView("/memo/project", newProjectMemosView(state.Workdir))
+	host.AddView("/memo/inherited", newInheritedMemosView(state.Workdir))
+	host.AddView("/memo/personal", newPersonalMemosView(state.Workdir))
+	host.AddView("/memo/session", newSessionsView(state.Workdir))
+	host.AddView("/memo/session/items", newSessionItemsView(state.Workdir))
+	host.AddView("/memo/inherits", newInheritsView(state.Workdir))
+	host.AddView("/memo/detail", newMemoDetailView(state.Workdir))
+	host.AddView("/memo/history", newMemoHistoryView(state.Workdir))
+	host.AddView("/memo/history/diff", newMemoHistoryDiffView(state.Workdir))
+	host.AddView("/memo/edit", newMemoFormView(state.Workdir))
+	host.AddView("/memo/new", newMemoCreateFormView(state.Workdir))
 }
 
 // memoItemData wraps a memo with display context for card rendering.
@@ -262,11 +262,11 @@ func isMemoExpired(labels []string) bool {
 // handleMemoMessages dispatches memo extension messages (form submit results).
 func handleMemoMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch m := msg.(type) {
-	case MemoEditedMsg:
+	case memoEditedMsg:
 		return handleMemoEdited(m, ctx)
-	case MemoCreatedMsg:
+	case memoCreatedMsg:
 		return handleMemoCreated(m, ctx)
-	case MemoPromotedMsg:
+	case memoPromotedMsg:
 		return handleMemoPromoted(m, ctx)
 	}
 	return false, nil
@@ -275,7 +275,7 @@ func handleMemoMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 // handleMemoPromoted surfaces the promote result: on success, toast the target
 // tier and navigate to the promoted copy's detail (NavPush keeps the source
 // memo on the back stack).
-func handleMemoPromoted(msg MemoPromotedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleMemoPromoted(msg memoPromotedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -296,7 +296,7 @@ func handleMemoPromoted(msg MemoPromotedMsg, ctx tuicore.AppContext) (bool, tea.
 // handleMemoEdited handles the result of a memo edit form submission.
 // On success, navigate back to the memo's detail view (NavReplace so /memo/edit
 // is removed from the back stack) and surface a brief status message.
-func handleMemoEdited(msg MemoEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleMemoEdited(msg memoEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -317,7 +317,7 @@ func handleMemoEdited(msg MemoEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd)
 // handleMemoCreated handles the result of a memo create form submission.
 // On success, replace /memo/new with the new memo's detail view and surface
 // a brief status message; on error, keep the form mounted and show the error.
-func handleMemoCreated(msg MemoCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleMemoCreated(msg memoCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil

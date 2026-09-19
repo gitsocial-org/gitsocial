@@ -21,8 +21,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// PRDetailView displays a single pull request with reviews and discussion.
-type PRDetailView struct {
+// prDetailView displays a single pull request with reviews and discussion.
+type prDetailView struct {
 	workdir        string
 	cacheDir       string
 	width          int
@@ -55,9 +55,9 @@ type PRDetailView struct {
 	sourceTotal   int
 }
 
-// NewPRDetailView creates a new PR detail view.
-func NewPRDetailView(workdir string) *PRDetailView {
-	return &PRDetailView{
+// newPRDetailView creates a new PR detail view.
+func newPRDetailView(workdir string) *prDetailView {
+	return &prDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -66,14 +66,14 @@ func NewPRDetailView(workdir string) *PRDetailView {
 }
 
 // SetSize sets the view dimensions.
-func (v *PRDetailView) SetSize(w, h int) {
+func (v *prDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the pull request.
-func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *prDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	prID := state.Router.Location().Param("prID")
 	v.focusID = state.Router.Location().Param("focusID")
@@ -198,11 +198,8 @@ func (v *PRDetailView) Activate(state *tuicore.State) tea.Cmd {
 	}
 }
 
-// Deactivate is called when the view is hidden.
-func (v *PRDetailView) Deactivate() {}
-
 // Update handles messages.
-func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *prDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case prDetailLoadedMsg:
 		preserveCursor := v.pr != nil && msg.pr != nil && v.pr.ID == msg.pr.ID && v.focusID == ""
@@ -261,7 +258,7 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return refreshCacheSize(v.cacheDir)
 		}
 		return nil
-	case SuggestionAppliedMsg:
+	case suggestionAppliedMsg:
 		return nil
 	case tea.KeyPressMsg, tea.MouseMsg:
 		if key, ok := msg.(tea.KeyPressMsg); ok {
@@ -377,7 +374,7 @@ func (v *PRDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *PRDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *prDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -387,7 +384,7 @@ func (v *PRDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd 
 }
 
 // navigateStack navigates to an adjacent PR in the current stack.
-func (v *PRDetailView) navigateStack(offset int) tea.Cmd {
+func (v *prDetailView) navigateStack(offset int) tea.Cmd {
 	if v.pr == nil || len(v.stack) < 2 {
 		return nil
 	}
@@ -415,12 +412,12 @@ func (v *PRDetailView) navigateStack(offset int) tea.Cmd {
 }
 
 // IsInputActive returns true when confirmation or search input is active.
-func (v *PRDetailView) IsInputActive() bool {
+func (v *prDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.choice.IsActive() || v.sectionList.IsInputActive()
 }
 
 // applySuggestion applies the suggestion at the current selection.
-func (v *PRDetailView) applySuggestion() tea.Cmd {
+func (v *prDetailView) applySuggestion() tea.Cmd {
 	fi, ci := v.resolveCurrentReview()
 	if fi < 0 || ci != -1 {
 		return nil
@@ -433,15 +430,15 @@ func (v *PRDetailView) applySuggestion() tea.Cmd {
 	return func() tea.Msg {
 		res := review.ApplySuggestion(workdir, r)
 		if !res.Success {
-			return SuggestionAppliedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
+			return suggestionAppliedMsg{Err: fmt.Errorf("%s", res.Error.Text())}
 		}
-		return SuggestionAppliedMsg{File: res.Data}
+		return suggestionAppliedMsg{File: res.Data}
 	}
 }
 
 // resolveCurrentReview returns the feedback index and comment index for the current selection.
 // Returns (-1, -1) if not in reviews section.
-func (v *PRDetailView) resolveCurrentReview() (feedbackIdx, commentIdx int) {
+func (v *prDetailView) resolveCurrentReview() (feedbackIdx, commentIdx int) {
 	sec, idx := v.sectionList.SectionAndIndex()
 	// Find the reviews section index
 	reviewSec := -1
@@ -474,7 +471,7 @@ func (v *PRDetailView) resolveCurrentReview() (feedbackIdx, commentIdx int) {
 	return entry[0], entry[1]
 }
 
-func (v *PRDetailView) focusToID() {
+func (v *prDetailView) focusToID() {
 	// Try comments first
 	for i, c := range v.comments {
 		if c.ID == v.focusID {
@@ -513,7 +510,7 @@ func (v *PRDetailView) focusToID() {
 }
 
 // loadDiff kicks off phase 2: resolve diff context, stats, and commits in the background.
-func (v *PRDetailView) loadDiff(pr *review.PullRequest) tea.Cmd {
+func (v *prDetailView) loadDiff(pr *review.PullRequest) tea.Cmd {
 	if pr == nil {
 		return nil
 	}
@@ -566,7 +563,7 @@ func (v *PRDetailView) loadDiff(pr *review.PullRequest) tea.Cmd {
 	}
 }
 
-func (v *PRDetailView) buildSections() {
+func (v *prDetailView) buildSections() {
 	var sections []tuicore.Section
 	v.reviewFlatMap = nil
 	// Hero section (no label) — the PR card
@@ -729,7 +726,7 @@ func (v *PRDetailView) buildSections() {
 				SearchText: func() string { return r.Content },
 				Links: func() []tuicore.CardLink {
 					isWorkspace := r.Repository == v.workspaceURL
-					card := FeedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
+					card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
 					return card.AllLinks()
 				},
 				OnActivate: func() tea.Cmd {
@@ -817,7 +814,7 @@ func (v *PRDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *PRDetailView) navigateToFeedback(state string) tea.Cmd {
+func (v *prDetailView) navigateToFeedback(state string) tea.Cmd {
 	prID := v.pr.ID
 	return func() tea.Msg {
 		return tuicore.NavigateMsg{
@@ -827,113 +824,113 @@ func (v *PRDetailView) navigateToFeedback(state string) tea.Cmd {
 	}
 }
 
-func (v *PRDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
+func (v *prDetailView) doMerge(strategy review.MergeStrategy) tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.MergePR(workdir, prID, strategy)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		// Publish the merged base so origin's code agrees with the merged
 		// state on gitmsg/review. Failure is a warning: the merge succeeded.
 		if err := review.PushMergedBase(workdir, result.Data); err != nil {
-			return PRUpdatedMsg{PR: result.Data, Warn: fmt.Sprintf("base push failed, push it manually: %s", err)}
+			return prUpdatedMsg{PR: result.Data, Warn: fmt.Sprintf("base push failed, push it manually: %s", err)}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-func (v *PRDetailView) doSync(strategy string) tea.Cmd {
+func (v *prDetailView) doSync(strategy string) tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.SyncPRBranch(workdir, prID, strategy)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-func (v *PRDetailView) doClose() tea.Cmd {
+func (v *prDetailView) doClose() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.ClosePR(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-func (v *PRDetailView) doMarkReady() tea.Cmd {
+func (v *prDetailView) doMarkReady() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.MarkReady(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-func (v *PRDetailView) doConvertToDraft() tea.Cmd {
+func (v *prDetailView) doConvertToDraft() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.ConvertToDraft(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-func (v *PRDetailView) doUpdateTips() tea.Cmd {
+func (v *prDetailView) doUpdateTips() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.UpdatePRTips(workdir, prID)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
 // doRebaseStack rebases every open dependent above this PR onto its base.
-func (v *PRDetailView) doRebaseStack() tea.Cmd {
+func (v *prDetailView) doRebaseStack() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.RebaseStack(workdir, prID)
 		if !result.Success {
-			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return prStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRStackUpdatedMsg{PRID: prID, Action: "Rebased", Count: len(result.Data)}
+		return prStackUpdatedMsg{PRID: prID, Action: "Rebased", Count: len(result.Data)}
 	}
 }
 
 // doSyncStack refreshes the stored base-tip/head-tip for every open PR in the stack.
-func (v *PRDetailView) doSyncStack() tea.Cmd {
+func (v *prDetailView) doSyncStack() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.SyncStackTips(workdir, prID)
 		if !result.Success {
-			return PRStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return prStackUpdatedMsg{PRID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRStackUpdatedMsg{PRID: prID, Action: "Synced tips for", Count: len(result.Data)}
+		return prStackUpdatedMsg{PRID: prID, Action: "Synced tips for", Count: len(result.Data)}
 	}
 }
 
 // tipStaleMarker returns a `⚠ ...` suffix when the cached observation for the
 // given side ("head" or "base") differs from the PR's stored tip, or when the
 // branch is gone on origin. Empty when in sync or no observation is available.
-func (v *PRDetailView) tipStaleMarker(side, storedTip string) string {
+func (v *prDetailView) tipStaleMarker(side, storedTip string) string {
 	if v.observation == nil {
 		return ""
 	}
@@ -970,21 +967,21 @@ func (v *PRDetailView) tipStaleMarker(side, storedTip string) string {
 	return "  " + tuicore.Warning.Render("⚠ updated to #"+observedTip+" (press u)")
 }
 
-func (v *PRDetailView) doRetract() tea.Cmd {
+func (v *prDetailView) doRetract() tea.Cmd {
 	prID := v.pr.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := review.RetractPR(workdir, prID)
 		if !result.Success {
-			return PRRetractedMsg{ID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return prRetractedMsg{ID: prID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRRetractedMsg{ID: prID}
+		return prRetractedMsg{ID: prID}
 	}
 }
 
 // buildActionChoices lists the less-frequent PR actions available for the
 // current PR, used to populate the "a" actions menu and to gate its footer hint.
-func (v *PRDetailView) buildActionChoices() []tuicore.Choice {
+func (v *prDetailView) buildActionChoices() []tuicore.Choice {
 	if v.pr == nil {
 		return nil
 	}
@@ -1018,7 +1015,7 @@ func (v *PRDetailView) buildActionChoices() []tuicore.Choice {
 
 // runAction dispatches a selection from the actions menu, opening a strategy
 // sub-menu or confirmation where the action needs one.
-func (v *PRDetailView) runAction(key string) tea.Cmd {
+func (v *prDetailView) runAction(key string) tea.Cmd {
 	switch key {
 	case "d":
 		if v.pr.IsDraft {
@@ -1039,7 +1036,7 @@ func (v *PRDetailView) runAction(key string) tea.Cmd {
 }
 
 // showSyncChoice opens the rebase/merge strategy picker for syncing the head.
-func (v *PRDetailView) showSyncChoice() tea.Cmd {
+func (v *prDetailView) showSyncChoice() tea.Cmd {
 	prompt := "Sync branch?"
 	if v.behindCount > 0 {
 		baseName := shortenBranchRef(v.pr.Base)
@@ -1056,7 +1053,7 @@ func (v *PRDetailView) showSyncChoice() tea.Cmd {
 }
 
 // showStackChoice opens the stack-operation picker.
-func (v *PRDetailView) showStackChoice() tea.Cmd {
+func (v *prDetailView) showStackChoice() tea.Cmd {
 	v.choice.Show("Stack operation?", []tuicore.Choice{
 		{Key: "r", Label: "ebase stack"},
 		{Key: "s", Label: "ync tips"},
@@ -1073,7 +1070,7 @@ func (v *PRDetailView) showStackChoice() tea.Cmd {
 }
 
 // Render renders the view.
-func (v *PRDetailView) Render(state *tuicore.State) string {
+func (v *prDetailView) Render(state *tuicore.State) string {
 	if v.pr != nil && v.pr.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -1340,7 +1337,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	return lines
 }
 
-func (v *PRDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string) []string {
+func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
@@ -1380,7 +1377,7 @@ func (v *PRDetailView) renderStackRow(entry review.StackEntry, _ int, selected b
 	return []string{selectionBar + line}
 }
 
-func (v *PRDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searchQuery string) []string {
+func (v *prDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
@@ -1397,9 +1394,9 @@ func (v *PRDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searc
 	return []string{selectionBar + line}
 }
 
-func (v *PRDetailView) renderReviewRow(r review.Feedback, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, vr *review.VersionAwareReview) []string {
+func (v *prDetailView) renderReviewRow(r review.Feedback, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, vr *review.VersionAwareReview) []string {
 	isWorkspace := r.Repository == v.workspaceURL
-	card := FeedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
+	card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
 	opts := tuicore.CardOptions{
 		MaxLines:      -1,
 		ShowStats:     true,
@@ -1439,7 +1436,7 @@ func (v *PRDetailView) renderReviewRow(r review.Feedback, width int, selected bo
 	return lines
 }
 
-func (v *PRDetailView) renderSuggestionPreview(r review.Feedback, width int, selectionBar, iconPad string) []string {
+func (v *prDetailView) renderSuggestionPreview(r review.Feedback, width int, selectionBar, iconPad string) []string {
 	suggested := review.ParseSuggestionCode(r.Content)
 	if suggested == "" {
 		return nil
@@ -1502,7 +1499,7 @@ func (v *PRDetailView) renderSuggestionPreview(r review.Feedback, width int, sel
 	return lines
 }
 
-func (v *PRDetailView) renderCodeContextLines(r review.Feedback, width int, selectionBar, iconPad string) []string {
+func (v *prDetailView) renderCodeContextLines(r review.Feedback, width int, selectionBar, iconPad string) []string {
 	if v.pr == nil {
 		return nil
 	}
@@ -1551,7 +1548,7 @@ func (v *PRDetailView) renderCodeContextLines(r review.Feedback, width int, sele
 }
 
 // targetsWorkspace returns true if the PR's base branch targets the current workspace repo.
-func (v *PRDetailView) targetsWorkspace() bool {
+func (v *prDetailView) targetsWorkspace() bool {
 	if v.pr == nil {
 		return false
 	}
@@ -1560,7 +1557,7 @@ func (v *PRDetailView) targetsWorkspace() bool {
 }
 
 // isLocalPR returns true if the PR belongs to the workspace repo or one of its registered forks.
-func (v *PRDetailView) isLocalPR() bool {
+func (v *prDetailView) isLocalPR() bool {
 	if v.pr == nil {
 		return false
 	}
@@ -1577,13 +1574,13 @@ func (v *PRDetailView) isLocalPR() bool {
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *PRDetailView) ShowRawView() tea.Cmd {
+func (v *prDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return func() tea.Msg { return nil }
 }
 
 // Title returns the view title.
-func (v *PRDetailView) Title() string {
+func (v *prDetailView) Title() string {
 	if v.pr == nil {
 		return "⑂  Pull Request"
 	}
@@ -1619,7 +1616,7 @@ func (v *PRDetailView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *PRDetailView) Bindings() []tuicore.Binding {
+func (v *prDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -1665,8 +1662,8 @@ type prDetailDiffMsg struct {
 	versionReviews []review.VersionAwareReview
 }
 
-// SuggestionAppliedMsg is sent when a suggestion is applied to the working tree.
-type SuggestionAppliedMsg struct {
+// suggestionAppliedMsg is sent when a suggestion is applied to the working tree.
+type suggestionAppliedMsg struct {
 	File string
 	Err  error
 }

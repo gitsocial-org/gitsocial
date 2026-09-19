@@ -36,8 +36,8 @@ type matchLocation struct {
 	matchNum  int
 }
 
-// PostView displays a post detail with thread.
-type PostView struct {
+// postView displays a post detail with thread.
+type postView struct {
 	post              social.Post
 	thread            []social.Post
 	width             int
@@ -72,7 +72,7 @@ type PostView struct {
 }
 
 // Bindings returns keybindings for the post view.
-func (v *PostView) Bindings() []tuicore.Binding {
+func (v *postView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -92,7 +92,7 @@ func (v *PostView) Bindings() []tuicore.Binding {
 				if !ok {
 					return false, nil
 				}
-				post, ok := ItemToPost(item)
+				post, ok := itemToPost(item)
 				if !ok || !isPostMutable(post) {
 					return false, nil
 				}
@@ -107,7 +107,7 @@ func (v *PostView) Bindings() []tuicore.Binding {
 				if !ok {
 					return false, nil
 				}
-				post, ok := ItemToPost(item)
+				post, ok := itemToPost(item)
 				if !ok || !isPostMutable(post) {
 					return false, nil
 				}
@@ -122,7 +122,7 @@ func (v *PostView) Bindings() []tuicore.Binding {
 				if !ok {
 					return false, nil
 				}
-				post, ok := ItemToPost(item)
+				post, ok := itemToPost(item)
 				if !ok || !post.IsEdited {
 					return false, nil
 				}
@@ -149,14 +149,14 @@ func (v *PostView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewPostView creates a new post detail view.
-func NewPostView(workdir string) *PostView {
+// newPostView creates a new post detail view.
+func newPostView(workdir string) *postView {
 	input := textinput.New()
 	input.Placeholder = "Search in thread..."
 	input.CharLimit = 100
 	input.Prompt = "> "
 	tuicore.StyleTextInput(&input, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &PostView{
+	return &postView{
 		workdir:     workdir,
 		width:       80,
 		height:      20,
@@ -166,19 +166,19 @@ func NewPostView(workdir string) *PostView {
 	}
 }
 
-// SetUserEmail sets the user email for display.
-func (v *PostView) SetUserEmail(email string) {
+// setUserEmail sets the user email for display.
+func (v *postView) setUserEmail(email string) {
 	v.userEmail = email
 }
 
 // SetSize sets the view dimensions.
-func (v *PostView) SetSize(width, height int) {
+func (v *postView) SetSize(width, height int) {
 	v.width = width
 	v.height = height - 3 // -3 for footer
 }
 
 // Activate loads the thread when the view becomes active.
-func (v *PostView) Activate(state *tuicore.State) tea.Cmd {
+func (v *postView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchInputMode = false
 	v.searchActive = false
@@ -193,7 +193,7 @@ func (v *PostView) Activate(state *tuicore.State) tea.Cmd {
 		v.sourceIndex = state.DetailSource.Index
 		v.sourceTotal = state.DetailSource.Total
 		if state.DetailSource.SearchQuery != "" {
-			v.highlightQuery = ExtractSearchTerms(state.DetailSource.SearchQuery)
+			v.highlightQuery = extractSearchTerms(state.DetailSource.SearchQuery)
 		} else {
 			v.highlightQuery = ""
 		}
@@ -223,19 +223,19 @@ func (v *PostView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // loadThread fetches the thread for the given post ID.
-func (v *PostView) loadThread(postID string) tea.Cmd {
+func (v *postView) loadThread(postID string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "thread:"+postID, nil)
 		if !result.Success {
-			return ThreadLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return threadLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ThreadLoadedMsg{Posts: result.Data}
+		return threadLoadedMsg{Posts: result.Data}
 	}
 }
 
 // Update handles messages and returns commands.
-func (v *PostView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *postView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if v.searchInputMode || v.confirm.IsActive() {
@@ -281,7 +281,7 @@ func (v *PostView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
-	case ThreadLoadedMsg:
+	case threadLoadedMsg:
 		v.handleThreadLoaded(msg)
 		return v.loadDiffStats()
 	case diffStatsLoadedMsg:
@@ -296,7 +296,7 @@ func (v *PostView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // handleKey processes keyboard input.
-func (v *PostView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
+func (v *postView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	key := msg.String()
 	if handled, cmd := v.confirm.HandleKey(key); handled {
 		return cmd
@@ -434,7 +434,7 @@ func (v *PostView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd 
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *PostView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *postView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -444,7 +444,7 @@ func (v *PostView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 }
 
 // openComment navigates to the post form in comment mode for the selected post.
-func (v *PostView) openComment() tea.Cmd {
+func (v *postView) openComment() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
 	}
@@ -461,7 +461,7 @@ func (v *PostView) openComment() tea.Cmd {
 }
 
 // openRepost navigates to the post form in quote mode (empty body → plain repost).
-func (v *PostView) openRepost() tea.Cmd {
+func (v *postView) openRepost() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
 	}
@@ -478,7 +478,7 @@ func (v *PostView) openRepost() tea.Cmd {
 }
 
 // openRepository navigates to the repository view for the selected post.
-func (v *PostView) openRepository() tea.Cmd {
+func (v *postView) openRepository() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
 	}
@@ -503,7 +503,7 @@ func (v *PostView) openRepository() tea.Cmd {
 }
 
 // showHistory navigates to the edit history view.
-func (v *PostView) showHistory() tea.Cmd {
+func (v *postView) showHistory() tea.Cmd {
 	if v.post.ID == "" || !v.post.IsEdited {
 		return nil
 	}
@@ -520,7 +520,7 @@ type diffStatsLoadedMsg struct {
 }
 
 // loadDiffStats fires a command to load diff stats for workspace posts.
-func (v *PostView) loadDiffStats() tea.Cmd {
+func (v *postView) loadDiffStats() tea.Cmd {
 	if v.post.Display.CommitHash == "" || !v.post.Display.IsWorkspacePost {
 		return nil
 	}
@@ -536,7 +536,7 @@ func (v *PostView) loadDiffStats() tea.Cmd {
 }
 
 // openDiff navigates to the commit diff view for the selected post.
-func (v *PostView) openDiff() tea.Cmd {
+func (v *postView) openDiff() tea.Cmd {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
 	}
@@ -553,18 +553,18 @@ func (v *PostView) openDiff() tea.Cmd {
 }
 
 // ShowHistory implements historyViewer interface for registry handler.
-func (v *PostView) ShowHistory() tea.Cmd {
+func (v *postView) ShowHistory() tea.Cmd {
 	return v.showHistory()
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *PostView) ShowRawView() tea.Cmd {
+func (v *postView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return noopCmd
 }
 
 // exitSearch clears and exits search mode.
-func (v *PostView) exitSearch() {
+func (v *postView) exitSearch() {
 	v.searchActive = false
 	v.searchInputMode = false
 	v.searchInput.Blur()
@@ -580,7 +580,7 @@ func (v *PostView) exitSearch() {
 }
 
 // updateLiveSearch updates search results as the user types.
-func (v *PostView) updateLiveSearch() {
+func (v *postView) updateLiveSearch() {
 	v.searchQuery = v.searchInput.Value()
 	if v.searchQuery == "" {
 		v.matches = nil
@@ -599,7 +599,7 @@ func (v *PostView) updateLiveSearch() {
 }
 
 // nextMatch moves to the next search match.
-func (v *PostView) nextMatch() {
+func (v *postView) nextMatch() {
 	if v.matchCount == 0 {
 		return
 	}
@@ -611,7 +611,7 @@ func (v *PostView) nextMatch() {
 }
 
 // prevMatch moves to the previous search match.
-func (v *PostView) prevMatch() {
+func (v *postView) prevMatch() {
 	if v.matchCount == 0 {
 		return
 	}
@@ -623,7 +623,7 @@ func (v *PostView) prevMatch() {
 }
 
 // buildMatchLocations builds the list of match locations in the thread.
-func (v *PostView) buildMatchLocations() {
+func (v *postView) buildMatchLocations() {
 	v.matches = nil
 	if v.searchQuery == "" {
 		return
@@ -644,7 +644,7 @@ func (v *PostView) buildMatchLocations() {
 }
 
 // handleThreadLoaded processes the loaded thread data.
-func (v *PostView) handleThreadLoaded(msg ThreadLoadedMsg) {
+func (v *postView) handleThreadLoaded(msg threadLoadedMsg) {
 	v.loading = false
 	if msg.Err != nil {
 		v.loadErr = msg.Err
@@ -672,7 +672,7 @@ func (v *PostView) handleThreadLoaded(msg ThreadLoadedMsg) {
 }
 
 // Render renders the post view to a string.
-func (v *PostView) Render(state *tuicore.State) string {
+func (v *postView) Render(state *tuicore.State) string {
 	if v.post.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -721,12 +721,12 @@ func (v *PostView) Render(state *tuicore.State) string {
 }
 
 // renderSearchFooter renders the search mode footer.
-func (v *PostView) renderSearchFooter() string {
+func (v *postView) renderSearchFooter() string {
 	return tuicore.RenderSearchFooter(v.matchIndex, v.matchCount, v.searchInputMode, v.searchQuery != "")
 }
 
 // renderContent renders the thread with cards.
-func (v *PostView) renderContent() string {
+func (v *postView) renderContent() string {
 	resolver := func(postID string) (social.Post, bool) {
 		for _, p := range v.thread {
 			if p.ID == postID {
@@ -912,7 +912,7 @@ func (v *PostView) renderContent() string {
 }
 
 // getMaxLines returns the max content lines based on position.
-func (v *PostView) getMaxLines(isParent, _ bool) int {
+func (v *postView) getMaxLines(isParent, _ bool) int {
 	if isParent {
 		return 5
 	}
@@ -920,7 +920,7 @@ func (v *PostView) getMaxLines(isParent, _ bool) int {
 }
 
 // selectedPostLinks returns the links for the currently selected thread post.
-func (v *PostView) selectedPostLinks() []tuicore.CardLink {
+func (v *postView) selectedPostLinks() []tuicore.CardLink {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.thread) {
 		return nil
 	}
@@ -942,7 +942,7 @@ func (v *PostView) selectedPostLinks() []tuicore.CardLink {
 }
 
 // cycleLinkForward advances to the next link on the selected post.
-func (v *PostView) cycleLinkForward() {
+func (v *postView) cycleLinkForward() {
 	links := v.selectedPostLinks()
 	if len(links) == 0 {
 		return
@@ -954,7 +954,7 @@ func (v *PostView) cycleLinkForward() {
 }
 
 // cycleLinkBackward moves to the previous link on the selected post.
-func (v *PostView) cycleLinkBackward() {
+func (v *postView) cycleLinkBackward() {
 	links := v.selectedPostLinks()
 	if len(links) == 0 {
 		return
@@ -966,7 +966,7 @@ func (v *PostView) cycleLinkBackward() {
 }
 
 // focusedLinkLocation returns the Location of the focused link, if any.
-func (v *PostView) focusedLinkLocation() *tuicore.Location {
+func (v *postView) focusedLinkLocation() *tuicore.Location {
 	if v.focusedLink < 0 {
 		return nil
 	}
@@ -979,7 +979,7 @@ func (v *PostView) focusedLinkLocation() *tuicore.Location {
 }
 
 // canScrollDown returns true if current post extends below viewport.
-func (v *PostView) canScrollDown() bool {
+func (v *postView) canScrollDown() bool {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.postEndLines) {
 		return false
 	}
@@ -988,7 +988,7 @@ func (v *PostView) canScrollDown() bool {
 }
 
 // canScrollUp returns true if current post extends above viewport.
-func (v *PostView) canScrollUp() bool {
+func (v *postView) canScrollUp() bool {
 	if v.selectedIndex < 0 || v.selectedIndex >= len(v.postStartLines) {
 		return false
 	}
@@ -997,22 +997,22 @@ func (v *PostView) canScrollUp() bool {
 }
 
 // scrollStep returns the number of lines to scroll per keypress.
-func (v *PostView) scrollStep() int {
+func (v *postView) scrollStep() int {
 	return 3
 }
 
 // IsInputActive returns true when search input or confirm is active.
-func (v *PostView) IsInputActive() bool {
+func (v *postView) IsInputActive() bool {
 	return v.searchInputMode || v.confirm.IsActive()
 }
 
 // Post returns the current post for editing/retraction.
-func (v *PostView) Post() social.Post {
+func (v *postView) Post() social.Post {
 	return v.post
 }
 
 // SelectedDisplayItem returns the main post as a DisplayItem for keybinding handlers.
-func (v *PostView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
+func (v *postView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 	if v.post.ID == "" {
 		return nil, false
 	}
@@ -1020,7 +1020,7 @@ func (v *PostView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 }
 
 // DisplayItems returns a single-element slice with the main post.
-func (v *PostView) DisplayItems() []tuicore.DisplayItem {
+func (v *postView) DisplayItems() []tuicore.DisplayItem {
 	if v.post.ID == "" {
 		return nil
 	}
@@ -1029,10 +1029,10 @@ func (v *PostView) DisplayItems() []tuicore.DisplayItem {
 }
 
 // SetDisplayItems is a no-op for detail views.
-func (v *PostView) SetDisplayItems(_ []tuicore.DisplayItem) {}
+func (v *postView) SetDisplayItems(_ []tuicore.DisplayItem) {}
 
 // EditPost navigates to the post form in edit mode for the current post.
-func (v *PostView) EditPost() tea.Cmd {
+func (v *postView) EditPost() tea.Cmd {
 	if v.post.ID == "" {
 		return nil
 	}
@@ -1045,7 +1045,7 @@ func (v *PostView) EditPost() tea.Cmd {
 }
 
 // RetractPost shows confirmation prompt before retracting.
-func (v *PostView) RetractPost() tea.Cmd {
+func (v *postView) RetractPost() tea.Cmd {
 	if v.post.ID == "" {
 		return nil
 	}
@@ -1054,23 +1054,23 @@ func (v *PostView) RetractPost() tea.Cmd {
 }
 
 // doRetract executes the retraction of the current post.
-func (v *PostView) doRetract() tea.Cmd {
+func (v *postView) doRetract() tea.Cmd {
 	postID := v.post.ID
 	workdir := v.workdir
 	return tea.Sequence(
-		func() tea.Msg { return RetractStartedMsg{} },
+		func() tea.Msg { return retractStartedMsg{} },
 		func() tea.Msg {
 			result := social.RetractPost(workdir, postID)
 			if !result.Success {
-				return PostRetractedMsg{PostID: postID, Err: fmt.Errorf("%s", result.Error.Text())}
+				return postRetractedMsg{PostID: postID, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
-			return PostRetractedMsg{PostID: postID}
+			return postRetractedMsg{PostID: postID}
 		},
 	)
 }
 
 // Title returns the view header with author, timestamp, and repo link.
-func (v *PostView) Title() string {
+func (v *postView) Title() string {
 	if v.post.ID == "" {
 		return "Thread"
 	}
@@ -1125,7 +1125,7 @@ func (v *PostView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header display.
-func (v *PostView) HeaderInfo() (position int, total string) {
+func (v *postView) HeaderInfo() (position int, total string) {
 	if v.sourceTotal > 0 {
 		return v.sourceIndex + 1, fmt.Sprintf("%d", v.sourceTotal)
 	}

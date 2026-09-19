@@ -16,8 +16,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// SprintsView displays a list of sprints.
-type SprintsView struct {
+// sprintsView displays a list of sprints.
+type sprintsView struct {
 	workdir        string
 	workspaceURL   string
 	repoURL        string
@@ -39,14 +39,14 @@ type SprintsView struct {
 	restoreID      string // item ID to reselect after reload ("" = none)
 }
 
-// NewSprintsView creates a new sprints view.
-func NewSprintsView(workdir string) *SprintsView {
+// newSprintsView creates a new sprints view.
+func newSprintsView(workdir string) *sprintsView {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter sprints..."
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &SprintsView{
+	return &sprintsView{
 		workdir:     workdir,
 		userEmail:   git.GetUserEmail(workdir),
 		cardList:    tuicore.NewCardList(nil),
@@ -55,14 +55,14 @@ func NewSprintsView(workdir string) *SprintsView {
 }
 
 // SetSize sets the view dimensions.
-func (v *SprintsView) SetSize(w, h int) {
+func (v *sprintsView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-3)
 }
 
 // Activate loads the sprints.
-func (v *SprintsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *sprintsView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchActive = false
 	v.searchQuery = ""
@@ -99,7 +99,7 @@ func (v *SprintsView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads sprints in place, preserving the focused row by ID.
-func (v *SprintsView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *sprintsView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -107,7 +107,7 @@ func (v *SprintsView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadSprints()
 }
 
-func (v *SprintsView) loadSprints() tea.Cmd {
+func (v *sprintsView) loadSprints() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -128,7 +128,7 @@ func (v *SprintsView) loadSprints() tea.Cmd {
 		}
 		result := pm.GetSprints(repoURL, branch, states, "", limit+1)
 		if !result.Success {
-			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		sprints, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -139,11 +139,11 @@ func (v *SprintsView) loadSprints() tea.Cmd {
 			}
 		}
 		total, _ := pm.CountSprints(repoURL, branch, states)
-		return SprintsLoadedMsg{Sprints: sprints, HasMore: hasMore, Total: total}
+		return sprintsLoadedMsg{Sprints: sprints, HasMore: hasMore, Total: total}
 	}
 }
 
-func (v *SprintsView) loadMoreSprints() tea.Cmd {
+func (v *sprintsView) loadMoreSprints() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -164,7 +164,7 @@ func (v *SprintsView) loadMoreSprints() tea.Cmd {
 		}
 		result := pm.GetSprints(repoURL, branch, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return SprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintsLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		sprints, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -174,17 +174,17 @@ func (v *SprintsView) loadMoreSprints() tea.Cmd {
 				sprints[i].IsUnpushed = true
 			}
 		}
-		return SprintsLoadedMsg{Sprints: sprints, HasMore: hasMore, Append: true}
+		return sprintsLoadedMsg{Sprints: sprints, HasMore: hasMore, Append: true}
 	}
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *SprintsView) LoadMorePosts() tea.Cmd {
+func (v *sprintsView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMoreSprints)
 }
 
-// SprintsLoadedMsg signals that sprints have been loaded.
-type SprintsLoadedMsg struct {
+// sprintsLoadedMsg signals that sprints have been loaded.
+type sprintsLoadedMsg struct {
 	Sprints []pm.Sprint
 	HasMore bool
 	Append  bool
@@ -193,16 +193,16 @@ type SprintsLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *SprintsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *sprintsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case SprintsLoadedMsg:
+	case sprintsLoadedMsg:
 		v.pag.Loading = false
 		if msg.Err == nil {
 			v.pag.HasMore = msg.HasMore
 			v.pag.SetTotal(msg.Total)
 			if msg.Append {
 				v.allSprints = append(v.allSprints, msg.Sprints...)
-				newItems := SprintsToItems(msg.Sprints, v.userEmail, v.showEmail, v.workspaceURL)
+				newItems := sprintsToItems(msg.Sprints, v.userEmail, v.showEmail, v.workspaceURL)
 				v.cardList.AppendItems(newItems)
 			} else {
 				v.allSprints = msg.Sprints
@@ -219,7 +219,7 @@ func (v *SprintsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		return nil
 
-	case SprintCreatedMsg:
+	case sprintCreatedMsg:
 		if msg.Err == nil {
 			v.pag.Reset()
 			return v.loadSprints()
@@ -261,17 +261,17 @@ func (v *SprintsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns true when text input is active.
-func (v *SprintsView) IsInputActive() bool {
+func (v *sprintsView) IsInputActive() bool {
 	return v.searchActive
 }
 
 // navigateToSelected navigates to the selected sprint's detail view.
-func (v *SprintsView) navigateToSelected() tea.Cmd {
+func (v *sprintsView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
 	}
-	sprint, ok := ItemToSprint(item)
+	sprint, ok := itemToSprint(item)
 	if !ok {
 		return nil
 	}
@@ -289,7 +289,7 @@ func (v *SprintsView) navigateToSelected() tea.Cmd {
 }
 
 // GetItemAt returns the item ID at the given index.
-func (v *SprintsView) GetItemAt(index int) (string, bool) {
+func (v *sprintsView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -298,11 +298,11 @@ func (v *SprintsView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *SprintsView) GetItemCount() int {
+func (v *sprintsView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
-func (v *SprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *sprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "n":
 		if v.isRemote {
@@ -340,7 +340,7 @@ func (v *SprintsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	return nil
 }
 
-func (v *SprintsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *sprintsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.searchActive = false
@@ -364,7 +364,7 @@ func (v *SprintsView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // applyFilter filters sprints by author and search query, then updates the card list.
-func (v *SprintsView) applyFilter() {
+func (v *sprintsView) applyFilter() {
 	filtered := v.allSprints
 	if v.assigneeFilter == "me" && v.userEmail != "" {
 		var mine []pm.Sprint
@@ -391,11 +391,11 @@ func (v *SprintsView) applyFilter() {
 		Separator:     true,
 		HighlightText: v.searchQuery,
 	})
-	v.cardList.SetItems(SprintsToItems(filtered, v.userEmail, v.showEmail, v.workspaceURL))
+	v.cardList.SetItems(sprintsToItems(filtered, v.userEmail, v.showEmail, v.workspaceURL))
 }
 
 // Render renders the sprints view.
-func (v *SprintsView) Render(state *tuicore.State) string {
+func (v *sprintsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -423,7 +423,7 @@ func (v *SprintsView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *SprintsView) Title() string {
+func (v *sprintsView) Title() string {
 	filter := "Active"
 	if v.showAll {
 		filter = "All"
@@ -443,7 +443,7 @@ func (v *SprintsView) Title() string {
 }
 
 // HeaderInfo returns position info for the title.
-func (v *SprintsView) HeaderInfo() (position int, total string) {
+func (v *sprintsView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -452,7 +452,7 @@ func (v *SprintsView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for this view.
-func (v *SprintsView) Bindings() []tuicore.Binding {
+func (v *sprintsView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -468,9 +468,4 @@ func (v *SprintsView) Bindings() []tuicore.Binding {
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMSprints}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *SprintsView) ViewName() string {
-	return "pm.sprints"
 }

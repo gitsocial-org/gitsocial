@@ -16,8 +16,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MilestonesView displays a list of milestones.
-type MilestonesView struct {
+// milestonesView displays a list of milestones.
+type milestonesView struct {
 	workdir        string
 	workspaceURL   string
 	repoURL        string
@@ -39,14 +39,14 @@ type MilestonesView struct {
 	restoreID      string // item ID to reselect after reload ("" = none)
 }
 
-// NewMilestonesView creates a new milestones view.
-func NewMilestonesView(workdir string) *MilestonesView {
+// newMilestonesView creates a new milestones view.
+func newMilestonesView(workdir string) *milestonesView {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter milestones..."
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &MilestonesView{
+	return &milestonesView{
 		workdir:     workdir,
 		userEmail:   git.GetUserEmail(workdir),
 		cardList:    tuicore.NewCardList(nil),
@@ -55,14 +55,14 @@ func NewMilestonesView(workdir string) *MilestonesView {
 }
 
 // SetSize sets the view dimensions.
-func (v *MilestonesView) SetSize(w, h int) {
+func (v *milestonesView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-3)
 }
 
 // Activate loads the milestones.
-func (v *MilestonesView) Activate(state *tuicore.State) tea.Cmd {
+func (v *milestonesView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchActive = false
 	v.searchQuery = ""
@@ -99,7 +99,7 @@ func (v *MilestonesView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads milestones in place, preserving the focused row by ID.
-func (v *MilestonesView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *milestonesView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -107,7 +107,7 @@ func (v *MilestonesView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadMilestones()
 }
 
-func (v *MilestonesView) loadMilestones() tea.Cmd {
+func (v *milestonesView) loadMilestones() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -123,7 +123,7 @@ func (v *MilestonesView) loadMilestones() tea.Cmd {
 		}
 		result := pm.GetMilestones(repoURL, branch, states, "", limit+1)
 		if !result.Success {
-			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		milestones, hasMore := tuicore.TrimPage(result.Data, limit)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -134,11 +134,11 @@ func (v *MilestonesView) loadMilestones() tea.Cmd {
 			}
 		}
 		total, _ := pm.CountMilestones(repoURL, branch, states)
-		return MilestonesLoadedMsg{Milestones: milestones, HasMore: hasMore, Total: total}
+		return milestonesLoadedMsg{Milestones: milestones, HasMore: hasMore, Total: total}
 	}
 }
 
-func (v *MilestonesView) loadMoreMilestones() tea.Cmd {
+func (v *milestonesView) loadMoreMilestones() tea.Cmd {
 	v.pag.StartLoading()
 	showAll := v.showAll
 	repoURL := v.repoURL
@@ -154,7 +154,7 @@ func (v *MilestonesView) loadMoreMilestones() tea.Cmd {
 		}
 		result := pm.GetMilestones(repoURL, branch, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
-			return MilestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return milestonesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		milestones, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -164,17 +164,17 @@ func (v *MilestonesView) loadMoreMilestones() tea.Cmd {
 				milestones[i].IsUnpushed = true
 			}
 		}
-		return MilestonesLoadedMsg{Milestones: milestones, HasMore: hasMore, Append: true}
+		return milestonesLoadedMsg{Milestones: milestones, HasMore: hasMore, Append: true}
 	}
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *MilestonesView) LoadMorePosts() tea.Cmd {
+func (v *milestonesView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMoreMilestones)
 }
 
-// MilestonesLoadedMsg signals that milestones have been loaded.
-type MilestonesLoadedMsg struct {
+// milestonesLoadedMsg signals that milestones have been loaded.
+type milestonesLoadedMsg struct {
 	Milestones []pm.Milestone
 	HasMore    bool
 	Append     bool
@@ -182,23 +182,23 @@ type MilestonesLoadedMsg struct {
 	Err        error
 }
 
-// MilestoneCreatedMsg signals that a milestone was created.
-type MilestoneCreatedMsg struct {
+// milestoneCreatedMsg signals that a milestone was created.
+type milestoneCreatedMsg struct {
 	Milestone pm.Milestone
 	Err       error
 }
 
 // Update handles messages.
-func (v *MilestonesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *milestonesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case MilestonesLoadedMsg:
+	case milestonesLoadedMsg:
 		v.pag.Loading = false
 		if msg.Err == nil {
 			v.pag.HasMore = msg.HasMore
 			v.pag.SetTotal(msg.Total)
 			if msg.Append {
 				v.allMilestones = append(v.allMilestones, msg.Milestones...)
-				newItems := MilestonesToItems(msg.Milestones, v.userEmail, v.showEmail, v.workspaceURL)
+				newItems := milestonesToItems(msg.Milestones, v.userEmail, v.showEmail, v.workspaceURL)
 				v.cardList.AppendItems(newItems)
 			} else {
 				v.allMilestones = msg.Milestones
@@ -215,7 +215,7 @@ func (v *MilestonesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		return nil
 
-	case MilestoneCreatedMsg:
+	case milestoneCreatedMsg:
 		if msg.Err == nil {
 			v.pag.Reset()
 			return v.loadMilestones()
@@ -257,17 +257,17 @@ func (v *MilestonesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns true when text input is active.
-func (v *MilestonesView) IsInputActive() bool {
+func (v *milestonesView) IsInputActive() bool {
 	return v.searchActive
 }
 
 // navigateToSelected navigates to the selected milestone's detail view.
-func (v *MilestonesView) navigateToSelected() tea.Cmd {
+func (v *milestonesView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
 	}
-	milestone, ok := ItemToMilestone(item)
+	milestone, ok := itemToMilestone(item)
 	if !ok {
 		return nil
 	}
@@ -285,7 +285,7 @@ func (v *MilestonesView) navigateToSelected() tea.Cmd {
 }
 
 // GetItemAt returns the item ID at the given index.
-func (v *MilestonesView) GetItemAt(index int) (string, bool) {
+func (v *milestonesView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -294,11 +294,11 @@ func (v *MilestonesView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *MilestonesView) GetItemCount() int {
+func (v *milestonesView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
-func (v *MilestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *milestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "F":
 		v.showAll = !v.showAll
@@ -336,7 +336,7 @@ func (v *MilestonesView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cm
 	return nil
 }
 
-func (v *MilestonesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *milestonesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.searchActive = false
@@ -360,7 +360,7 @@ func (v *MilestonesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // applyFilter filters milestones by author and search query, then updates the card list.
-func (v *MilestonesView) applyFilter() {
+func (v *milestonesView) applyFilter() {
 	filtered := v.allMilestones
 	if v.assigneeFilter == "me" && v.userEmail != "" {
 		var mine []pm.Milestone
@@ -387,11 +387,11 @@ func (v *MilestonesView) applyFilter() {
 		Separator:     true,
 		HighlightText: v.searchQuery,
 	})
-	v.cardList.SetItems(MilestonesToItems(filtered, v.userEmail, v.showEmail, v.workspaceURL))
+	v.cardList.SetItems(milestonesToItems(filtered, v.userEmail, v.showEmail, v.workspaceURL))
 }
 
 // Render renders the milestones view.
-func (v *MilestonesView) Render(state *tuicore.State) string {
+func (v *milestonesView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -419,7 +419,7 @@ func (v *MilestonesView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *MilestonesView) Title() string {
+func (v *milestonesView) Title() string {
 	filter := "Open"
 	if v.showAll {
 		filter = "All"
@@ -439,7 +439,7 @@ func (v *MilestonesView) Title() string {
 }
 
 // HeaderInfo returns position info for the title.
-func (v *MilestonesView) HeaderInfo() (position int, total string) {
+func (v *milestonesView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -448,7 +448,7 @@ func (v *MilestonesView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for this view.
-func (v *MilestonesView) Bindings() []tuicore.Binding {
+func (v *milestonesView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -464,9 +464,4 @@ func (v *MilestonesView) Bindings() []tuicore.Binding {
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMMilestones}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *MilestonesView) ViewName() string {
-	return "pm.milestones"
 }

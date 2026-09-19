@@ -10,17 +10,17 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MemoVersionItem reuses the generic VersionItem plumbing of MessageVersionItem
+// memoVersionItem reuses the generic VersionItem plumbing of MessageVersionItem
 // with memo-specific list and detail layouts. Memos have no cross-repo proposal
 // flow, so the embedded ProposalTag stays empty.
-type MemoVersionItem struct {
+type memoVersionItem struct {
 	tuicore.MessageVersionItem
 }
 
 // RenderListEntry renders a compact summary line for the picker: header on
 // line 1 (version, label, hash, author, time), body excerpt on line 2, and
 // labels on line 3 (when set).
-func (m MemoVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
+func (m memoVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
 	hash, _ := protocol.NormalizeHash(protocol.ParseRef(m.Version.ID).Value)
 	header := fmt.Sprintf("Version %d (%s) - %s - %s - %s",
 		total-index, label, hash, m.AuthorDisplay(m.ShowEmail), m.Version.Timestamp.Format("2006-01-02 15:04:05"))
@@ -54,7 +54,7 @@ func (m MemoVersionItem) RenderListEntry(index, total int, label string, selecte
 // pane: header (author, timestamp, ref), labels, then the markdown-rendered
 // body. Mirrors the layout of the memo detail card so version inspection is
 // visually consistent.
-func (m MemoVersionItem) RenderDetail(width int) string {
+func (m memoVersionItem) RenderDetail(width int) string {
 	if m.Version.IsRetracted {
 		return tuicore.Dim.Render("[retracted]")
 	}
@@ -92,13 +92,13 @@ func loadMemoHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, err
 	}
 	items := make([]tuicore.VersionItem, len(versions))
 	for i, ver := range versions {
-		items[i] = MemoVersionItem{MessageVersionItem: tuicore.MessageVersionItem{Version: ver, ShowEmail: ctx.ShowEmail}}
+		items[i] = memoVersionItem{MessageVersionItem: tuicore.MessageVersionItem{Version: ver, ShowEmail: ctx.ShowEmail}}
 	}
 	return items, nil
 }
 
-// NewMemoHistoryView creates the edit-history view for a memo.
-func NewMemoHistoryView(workdir string) *tuicore.HistoryView {
+// newMemoHistoryView creates the edit-history view for a memo.
+func newMemoHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "memoID",
 		Context:    tuicore.MemoHistory,

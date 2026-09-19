@@ -81,7 +81,7 @@ type FormLike interface {
 
 // FormViewBase plumbs the standard "host view that wraps a form" lifecycle:
 // SetSize cascade, Update cancel/submit dispatch, Render with FormFooter, plus
-// the boilerplate methods (Bindings/IsInputActive/Deactivate) every form view
+// the boilerplate methods (Bindings/IsInputActive) every form view
 // implements identically.
 type FormViewBase struct {
 	form       FormLike
@@ -195,9 +195,6 @@ func (v *FormViewBase) Bindings() []Binding { return nil }
 
 // IsInputActive always reports true so global keys defer to the form.
 func (v *FormViewBase) IsInputActive() bool { return true }
-
-// Deactivate is a no-op called when the view is hidden.
-func (v *FormViewBase) Deactivate() {}
 
 // EditorEscapeForm is implemented by forms that want the FormViewBase ctrl+e
 // $EDITOR escape-hatch: opens $EDITOR with the current body, then writes back

@@ -12,8 +12,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ReleaseFormData holds the form field values.
-type ReleaseFormData struct {
+// releaseFormData holds the form field values.
+type releaseFormData struct {
 	Subject     string
 	Body        string
 	Version     string
@@ -27,31 +27,31 @@ type ReleaseFormData struct {
 	Labels      []string
 }
 
-// ReleaseForm wraps a Huh form for release creation and editing.
-type ReleaseForm struct {
+// releaseForm wraps a Huh form for release creation and editing.
+type releaseForm struct {
 	tuicore.FormBase
 	workdir       string
 	releaseID     string
 	bodyField     *huh.Text
 	bodyOtherRows int // count of non-body field rows, for body sizing
-	data          ReleaseFormData
+	data          releaseFormData
 	width         int
 	height        int
 }
 
-// NewReleaseForm creates a new release creation form.
-func NewReleaseForm(workdir string) *ReleaseForm {
-	f := &ReleaseForm{workdir: workdir}
+// newReleaseForm creates a new release creation form.
+func newReleaseForm(workdir string) *releaseForm {
+	f := &releaseForm{workdir: workdir}
 	f.buildForm()
 	return f
 }
 
-// NewReleaseEditForm creates an edit form pre-populated with release data.
-func NewReleaseEditForm(workdir string, rel release.Release) *ReleaseForm {
-	f := &ReleaseForm{
+// newReleaseEditForm creates an edit form pre-populated with release data.
+func newReleaseEditForm(workdir string, rel release.Release) *releaseForm {
+	f := &releaseForm{
 		workdir:   workdir,
 		releaseID: rel.ID,
-		data: ReleaseFormData{
+		data: releaseFormData{
 			Subject:     rel.Subject,
 			Body:        rel.Body,
 			Version:     rel.Version,
@@ -69,13 +69,8 @@ func NewReleaseEditForm(workdir string, rel release.Release) *ReleaseForm {
 	return f
 }
 
-// IsEditMode returns true if this is an edit form.
-func (f *ReleaseForm) IsEditMode() bool {
-	return f.releaseID != ""
-}
-
 // buildForm constructs the Huh form.
-func (f *ReleaseForm) buildForm() {
+func (f *releaseForm) buildForm() {
 	pad := tuicore.PadLabel
 	fields := make([]huh.Field, 0, 10)
 	fields = append(fields,
@@ -156,7 +151,7 @@ func (f *ReleaseForm) buildForm() {
 }
 
 // SetSize sets the form dimensions.
-func (f *ReleaseForm) SetSize(w, h int) {
+func (f *releaseForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
 	if form := f.FormPtr(); form != nil {
@@ -168,22 +163,22 @@ func (f *ReleaseForm) SetSize(w, h int) {
 }
 
 // Update delegates the standard form lifecycle to FormBase.
-func (f *ReleaseForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+func (f *releaseForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
 // Body returns the current body text (for the $EDITOR escape-hatch).
-func (f *ReleaseForm) Body() string { return f.data.Body }
+func (f *releaseForm) Body() string { return f.data.Body }
 
 // SetBody writes the body and rebuilds the form so huh.Text refreshes.
-func (f *ReleaseForm) SetBody(s string) {
+func (f *releaseForm) SetBody(s string) {
 	f.data.Body = s
 	f.buildForm()
 }
 
 // Reset rebuilds the form, clearing huh-internal state while preserving data.
-func (f *ReleaseForm) Reset() { f.buildForm() }
+func (f *releaseForm) Reset() { f.buildForm() }
 
-// CreateReleaseFromForm creates a release from form data.
-func (f *ReleaseForm) CreateReleaseFromForm() tea.Cmd {
+// createReleaseFromForm creates a release from form data.
+func (f *releaseForm) createReleaseFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	return func() tea.Msg {
@@ -202,14 +197,14 @@ func (f *ReleaseForm) CreateReleaseFromForm() tea.Cmd {
 
 		result := release.CreateRelease(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
 		if !result.Success {
-			return ReleaseCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return releaseCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ReleaseCreatedMsg{Release: result.Data}
+		return releaseCreatedMsg{Release: result.Data}
 	}
 }
 
-// UpdateReleaseFromForm updates an existing release from form data.
-func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
+// updateReleaseFromForm updates an existing release from form data.
+func (f *releaseForm) updateReleaseFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	releaseID := f.releaseID
@@ -243,52 +238,52 @@ func (f *ReleaseForm) UpdateReleaseFromForm() tea.Cmd {
 
 		result := release.EditRelease(workdir, releaseID, opts)
 		if !result.Success {
-			return ReleaseUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return releaseUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ReleaseUpdatedMsg{Release: result.Data}
+		return releaseUpdatedMsg{Release: result.Data}
 	}
 }
 
-// ReleaseFormView wraps the form for integration with the TUI host.
-type ReleaseFormView struct {
+// releaseFormView wraps the form for integration with the TUI host.
+type releaseFormView struct {
 	tuicore.FormViewBase
 }
 
-// NewReleaseFormView creates a new release form view.
-func NewReleaseFormView(_ string) *ReleaseFormView {
-	return &ReleaseFormView{}
+// newReleaseFormView creates a new release form view.
+func newReleaseFormView(_ string) *releaseFormView {
+	return &releaseFormView{}
 }
 
 // Activate constructs a fresh form for every re-entry.
-func (v *ReleaseFormView) Activate(state *tuicore.State) tea.Cmd {
-	form := NewReleaseForm(state.Workdir)
+func (v *releaseFormView) Activate(state *tuicore.State) tea.Cmd {
+	form := newReleaseForm(state.Workdir)
 	v.AttachForm(form)
 	return form.Init()
 }
 
 // Update handles messages.
-func (v *ReleaseFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
-	if m, ok := msg.(ReleaseCreatedMsg); ok && m.Err != nil {
+func (v *releaseFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+	if m, ok := msg.(releaseCreatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*ReleaseForm); ok {
-			return form.CreateReleaseFromForm()
+		if form, ok := v.CurrentForm().(*releaseForm); ok {
+			return form.createReleaseFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the form view.
-func (v *ReleaseFormView) Render(state *tuicore.State) string {
+func (v *releaseFormView) Render(state *tuicore.State) string {
 	return v.RenderForm(state)
 }
 
 // Title returns the view title.
-func (v *ReleaseFormView) Title() string { return "⏏  New Release" }
+func (v *releaseFormView) Title() string { return "⏏  New Release" }
 
-// ReleaseEditFormView wraps the form for editing an existing release.
-type ReleaseEditFormView struct {
+// releaseEditFormView wraps the form for editing an existing release.
+type releaseEditFormView struct {
 	tuicore.FormViewBase
 	workdir   string
 	releaseID string
@@ -296,20 +291,20 @@ type ReleaseEditFormView struct {
 	loaded    bool
 }
 
-// NewReleaseEditFormView creates a new release edit form view.
-func NewReleaseEditFormView(workdir string) *ReleaseEditFormView {
-	return &ReleaseEditFormView{workdir: workdir}
+// newReleaseEditFormView creates a new release edit form view.
+func newReleaseEditFormView(workdir string) *releaseEditFormView {
+	return &releaseEditFormView{workdir: workdir}
 }
 
 // Activate loads the release and initializes the form.
-func (v *ReleaseEditFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *releaseEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.releaseID = state.Router.Location().Param("releaseID")
 	v.loaded = false
 	v.DetachForm()
 	return v.loadRelease()
 }
 
-func (v *ReleaseEditFormView) loadRelease() tea.Cmd {
+func (v *releaseEditFormView) loadRelease() tea.Cmd {
 	releaseID := v.releaseID
 	return func() tea.Msg {
 		result := release.GetSingleRelease(releaseID)
@@ -328,7 +323,7 @@ type releaseEditFormLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *ReleaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *releaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case releaseEditFormLoadedMsg:
 		if msg.Err != nil {
@@ -337,7 +332,7 @@ func (v *ReleaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 			}
 		}
 		v.rel = msg.Release
-		form := NewReleaseEditForm(v.workdir, *v.rel)
+		form := newReleaseEditForm(v.workdir, *v.rel)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
@@ -347,19 +342,19 @@ func (v *ReleaseEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd 
 		return nil
 	}
 
-	if m, ok := msg.(ReleaseUpdatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(releaseUpdatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*ReleaseForm); ok {
-			return form.UpdateReleaseFromForm()
+		if form, ok := v.CurrentForm().(*releaseForm); ok {
+			return form.updateReleaseFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the edit form view.
-func (v *ReleaseEditFormView) Render(state *tuicore.State) string {
+func (v *releaseEditFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		footer := tuicore.FormFooter(true, nil)
@@ -369,7 +364,7 @@ func (v *ReleaseEditFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *ReleaseEditFormView) Title() string {
+func (v *releaseEditFormView) Title() string {
 	if v.rel != nil {
 		return fmt.Sprintf("⏏  Edit: %s", v.rel.Subject)
 	}

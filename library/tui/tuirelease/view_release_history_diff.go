@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewReleaseHistoryDiffView creates a HistoryDiffView wired to release history.
-func NewReleaseHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newReleaseHistoryDiffView creates a HistoryDiffView wired to release history.
+func newReleaseHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.ReleaseHistoryDiff,
 		TitleIcon: "⏏",

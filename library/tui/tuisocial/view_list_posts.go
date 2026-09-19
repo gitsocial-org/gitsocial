@@ -12,8 +12,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ListPostsView displays posts from a specific list.
-type ListPostsView struct {
+// listPostsView displays posts from a specific list.
+type listPostsView struct {
 	list              social.List
 	cardlist          *tuicore.CardList
 	externalListOwner string
@@ -25,7 +25,7 @@ type ListPostsView struct {
 }
 
 // Bindings returns keybindings for the list posts view.
-func (v *ListPostsView) Bindings() []tuicore.Binding {
+func (v *listPostsView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "m", Label: "more", Contexts: []tuicore.Context{tuicore.ListPosts},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
@@ -51,9 +51,9 @@ func (v *ListPostsView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewListPostsView creates a new list posts view.
-func NewListPostsView(workdir string) *ListPostsView {
-	v := &ListPostsView{
+// newListPostsView creates a new list posts view.
+func newListPostsView(workdir string) *listPostsView {
+	v := &listPostsView{
 		workdir: workdir,
 	}
 	v.cardlist = tuicore.NewCardList(nil)
@@ -62,7 +62,7 @@ func NewListPostsView(workdir string) *ListPostsView {
 }
 
 // resolveItem fetches a post by ID via API.
-func (v *ListPostsView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
+func (v *listPostsView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 	result := social.GetPosts(v.workdir, "post:"+itemID, nil)
 	if result.Success && len(result.Data) > 0 {
 		post := result.Data[0]
@@ -74,23 +74,23 @@ func (v *ListPostsView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 	return nil, false
 }
 
-// SetUserEmail sets the user email for own-post highlighting.
-func (v *ListPostsView) SetUserEmail(email string) {
+// setUserEmail sets the user email for own-post highlighting.
+func (v *listPostsView) setUserEmail(email string) {
 	v.userEmail = email
 }
 
-// SetShowEmail sets whether to show emails on cards.
-func (v *ListPostsView) SetShowEmail(show bool) {
+// setShowEmail sets whether to show emails on cards.
+func (v *listPostsView) setShowEmail(show bool) {
 	v.showEmail = show
 }
 
 // SetSize sets the view dimensions (receives inner content area).
-func (v *ListPostsView) SetSize(width, height int) {
+func (v *listPostsView) SetSize(width, height int) {
 	v.cardlist.SetSize(width, height-3) // -3 for footer
 }
 
 // Activate loads list posts when the view becomes active.
-func (v *ListPostsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *listPostsView) Activate(state *tuicore.State) tea.Cmd {
 	loc := state.Router.Location()
 	listID := loc.Param("listID")
 	owner := loc.Param("owner")
@@ -117,7 +117,7 @@ func (v *ListPostsView) Activate(state *tuicore.State) tea.Cmd {
 
 // loadListPosts fetches posts for a local list. The total count is loaded
 // asynchronously so the page render isn't blocked on COUNT(*).
-func (v *ListPostsView) loadListPosts(listID string) tea.Cmd {
+func (v *listPostsView) loadListPosts(listID string) tea.Cmd {
 	workdir := v.workdir
 	limit := v.pag.Limit()
 	pageCmd := func() tea.Msg {
@@ -128,19 +128,19 @@ func (v *ListPostsView) loadListPosts(listID string) tea.Cmd {
 		}
 		result := social.GetPosts(workdir, "list:"+listID, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return listPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, limit)
-		return ListPostsLoadedMsg{ListID: listID, List: list, Posts: posts, HasMore: hasMore}
+		return listPostsLoadedMsg{ListID: listID, List: list, Posts: posts, HasMore: hasMore}
 	}
 	countCmd := func() tea.Msg {
-		return ListPostsCountLoadedMsg{ListID: listID, Total: social.CountListPosts(listID)}
+		return listPostsCountLoadedMsg{ListID: listID, Total: social.CountListPosts(listID)}
 	}
 	return tea.Batch(pageCmd, countCmd)
 }
 
 // loadMoreListPosts fetches the next page of list posts.
-func (v *ListPostsView) loadMoreListPosts() tea.Cmd {
+func (v *listPostsView) loadMoreListPosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	listID := v.list.ID
@@ -148,32 +148,32 @@ func (v *ListPostsView) loadMoreListPosts() tea.Cmd {
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "list:"+listID, &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return listPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		posts, hasMore := tuicore.TrimPage(result.Data, tuicore.PageSize)
-		return ListPostsLoadedMsg{ListID: listID, Posts: posts, HasMore: hasMore, Append: true}
+		return listPostsLoadedMsg{ListID: listID, Posts: posts, HasMore: hasMore, Append: true}
 	}
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *ListPostsView) LoadMorePosts() tea.Cmd {
+func (v *listPostsView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMoreListPosts)
 }
 
 // loadExternalListPosts fetches posts for an external list.
-func (v *ListPostsView) loadExternalListPosts(owner, listID string) tea.Cmd {
+func (v *listPostsView) loadExternalListPosts(owner, listID string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, "list:"+owner+"#list:"+listID, nil)
 		if !result.Success {
-			return ListPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return listPostsLoadedMsg{ListID: listID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ListPostsLoadedMsg{ListID: listID, Posts: result.Data}
+		return listPostsLoadedMsg{ListID: listID, Posts: result.Data}
 	}
 }
 
 // Update handles messages and returns commands.
-func (v *ListPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *listPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg.(type) {
 	case tea.KeyPressMsg, tea.MouseMsg:
 		consumed, activate, link := v.cardlist.Update(msg)
@@ -194,9 +194,9 @@ func (v *ListPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 	default:
 		switch msg := msg.(type) {
-		case ListPostsLoadedMsg:
+		case listPostsLoadedMsg:
 			v.handleLoaded(msg)
-		case ListPostsCountLoadedMsg:
+		case listPostsCountLoadedMsg:
 			if msg.ListID == v.list.ID {
 				v.pag.SetTotal(msg.Total)
 			}
@@ -206,7 +206,7 @@ func (v *ListPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // navigateToSelected navigates to the selected item's detail view.
-func (v *ListPostsView) navigateToSelected() tea.Cmd {
+func (v *listPostsView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardlist.SelectedItem()
 	if !ok {
 		return nil
@@ -224,7 +224,7 @@ func (v *ListPostsView) navigateToSelected() tea.Cmd {
 }
 
 // Refresh reloads the list's posts in place, preserving the focused row by ID.
-func (v *ListPostsView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *listPostsView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardlist.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -235,7 +235,7 @@ func (v *ListPostsView) Refresh(_ *tuicore.State) tea.Cmd {
 }
 
 // handleKey processes view-specific keyboard input.
-func (v *ListPostsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *listPostsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "r":
 		if v.externalListOwner == "" {
@@ -265,7 +265,7 @@ func (v *ListPostsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded processes the loaded posts data.
-func (v *ListPostsView) handleLoaded(msg ListPostsLoadedMsg) {
+func (v *listPostsView) handleLoaded(msg listPostsLoadedMsg) {
 	if msg.Err != nil {
 		v.pag.Loading = false
 		return
@@ -279,7 +279,7 @@ func (v *ListPostsView) handleLoaded(msg ListPostsLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
+	items := postsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {
@@ -292,7 +292,7 @@ func (v *ListPostsView) handleLoaded(msg ListPostsLoadedMsg) {
 }
 
 // Render renders the list posts view to a string.
-func (v *ListPostsView) Render(state *tuicore.State) string {
+func (v *listPostsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -315,18 +315,18 @@ func (v *ListPostsView) Render(state *tuicore.State) string {
 }
 
 // IsInputActive returns false since list posts view has no text input.
-func (v *ListPostsView) IsInputActive() bool {
+func (v *listPostsView) IsInputActive() bool {
 	return false
 }
 
 // IsExternalList returns true if viewing an external list.
-func (v *ListPostsView) IsExternalList() bool {
+func (v *listPostsView) IsExternalList() bool {
 	return v.externalListOwner != ""
 }
 
 // Title returns the list name for the header, appending the owner when viewing
 // another repo's list.
-func (v *ListPostsView) Title() string {
+func (v *listPostsView) Title() string {
 	if v.externalListOwner != "" {
 		return "☷  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
 	}
@@ -334,7 +334,7 @@ func (v *ListPostsView) Title() string {
 }
 
 // HeaderInfo returns position and total for the header.
-func (v *ListPostsView) HeaderInfo() (position int, total string) {
+func (v *listPostsView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -343,7 +343,7 @@ func (v *ListPostsView) HeaderInfo() (position int, total string) {
 }
 
 // ToggleListView switches to repos view.
-func (v *ListPostsView) ToggleListView() tea.Cmd {
+func (v *listPostsView) ToggleListView() tea.Cmd {
 	if v.externalListOwner == "" {
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
@@ -361,7 +361,7 @@ func (v *ListPostsView) ToggleListView() tea.Cmd {
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
-func (v *ListPostsView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
+func (v *listPostsView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index], true
@@ -370,7 +370,7 @@ func (v *ListPostsView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) 
 }
 
 // GetItemAt returns the post ID at the given index.
-func (v *ListPostsView) GetItemAt(index int) (string, bool) {
+func (v *listPostsView) GetItemAt(index int) (string, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -379,17 +379,17 @@ func (v *ListPostsView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *ListPostsView) GetItemCount() int {
+func (v *listPostsView) GetItemCount() int {
 	return len(v.cardlist.Items())
 }
 
 // DisplayItems returns all list items.
-func (v *ListPostsView) DisplayItems() []tuicore.DisplayItem {
+func (v *listPostsView) DisplayItems() []tuicore.DisplayItem {
 	return v.cardlist.Items()
 }
 
 // SetDisplayItems replaces all list items.
-func (v *ListPostsView) SetDisplayItems(items []tuicore.DisplayItem) {
+func (v *listPostsView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.cardlist.SetItems(items)
 	if v.restoreID != "" {
 		v.cardlist.SelectByID(v.restoreID)
@@ -398,12 +398,12 @@ func (v *ListPostsView) SetDisplayItems(items []tuicore.DisplayItem) {
 }
 
 // SelectedDisplayItem returns the currently selected item.
-func (v *ListPostsView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
+func (v *listPostsView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 	return v.cardlist.SelectedItem()
 }
 
 // SearchInList opens search with the list scope prefilled.
-func (v *ListPostsView) SearchInList() tea.Cmd {
+func (v *listPostsView) SearchInList() tea.Cmd {
 	query := "list:" + v.list.ID
 	return func() tea.Msg {
 		return tuicore.NavigateMsg{

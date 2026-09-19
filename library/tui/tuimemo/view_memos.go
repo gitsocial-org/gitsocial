@@ -16,9 +16,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// MemosView displays memos using the shared CardList. The variant determines
+// memosView displays memos using the shared CardList. The variant determines
 // the filter applied (all merged tiers, project only, inherited only, etc.).
-type MemosView struct {
+type memosView struct {
 	workdir      string
 	workspaceURL string
 	userEmail    string
@@ -42,32 +42,32 @@ const (
 	variantSessionItems // memos for a specific session id (read from route params)
 )
 
-// NewMemosView creates the default merged memos view.
-func NewMemosView(workdir string) *MemosView { return newMemosViewVariant(workdir, variantAll) }
+// newMemosView creates the default merged memos view.
+func newMemosView(workdir string) *memosView { return newMemosViewVariant(workdir, variantAll) }
 
-// NewProjectMemosView creates a memos view scoped to the workspace's project tier.
-func NewProjectMemosView(workdir string) *MemosView {
+// newProjectMemosView creates a memos view scoped to the workspace's project tier.
+func newProjectMemosView(workdir string) *memosView {
 	return newMemosViewVariant(workdir, variantProject)
 }
 
-// NewInheritedMemosView creates a memos view scoped to inherited binding sources.
-func NewInheritedMemosView(workdir string) *MemosView {
+// newInheritedMemosView creates a memos view scoped to inherited binding sources.
+func newInheritedMemosView(workdir string) *memosView {
 	return newMemosViewVariant(workdir, variantInherited)
 }
 
-// NewPersonalMemosView creates a memos view scoped to the personal tier.
-func NewPersonalMemosView(workdir string) *MemosView {
+// newPersonalMemosView creates a memos view scoped to the personal tier.
+func newPersonalMemosView(workdir string) *memosView {
 	return newMemosViewVariant(workdir, variantPersonal)
 }
 
-// NewSessionItemsView creates a memos view scoped to a specific session id
+// newSessionItemsView creates a memos view scoped to a specific session id
 // (read from the route's `sessionID` param).
-func NewSessionItemsView(workdir string) *MemosView {
+func newSessionItemsView(workdir string) *memosView {
 	return newMemosViewVariant(workdir, variantSessionItems)
 }
 
-func newMemosViewVariant(workdir string, v memosVariant) *MemosView {
-	return &MemosView{
+func newMemosViewVariant(workdir string, v memosVariant) *memosView {
+	return &memosView{
 		workdir:   workdir,
 		userEmail: git.GetUserEmail(workdir),
 		cardList:  tuicore.NewCardList(nil),
@@ -76,7 +76,7 @@ func newMemosViewVariant(workdir string, v memosVariant) *MemosView {
 }
 
 // SetSize updates the view dimensions.
-func (v *MemosView) SetSize(w, h int) {
+func (v *memosView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-2)
@@ -89,7 +89,7 @@ func (v *MemosView) SetSize(w, h int) {
 // For variantSessionItems we additionally detect when the session id has
 // changed since the last visit; in that case the previous cursor belongs to
 // a different session and is discarded so the new session starts at row 0.
-func (v *MemosView) Activate(state *tuicore.State) tea.Cmd {
+func (v *memosView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.cardList.SetCardOptions(tuicore.CardOptions{
 		MaxLines:  2,
@@ -115,7 +115,7 @@ func (v *MemosView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads in place, preserving the focused row by ID.
-func (v *MemosView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *memosView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -123,7 +123,7 @@ func (v *MemosView) Refresh(_ *tuicore.State) tea.Cmd {
 }
 
 // Update handles input and delegates list operations to CardList.
-func (v *MemosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *memosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch m := msg.(type) {
 	case memosLoadedMsg:
 		v.loaded = true
@@ -172,10 +172,10 @@ func (v *MemosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive reports whether the view is consuming text input (always false).
-func (v *MemosView) IsInputActive() bool { return false }
+func (v *memosView) IsInputActive() bool { return false }
 
 // Render renders the view through the standard wrapper + footer.
-func (v *MemosView) Render(state *tuicore.State) string {
+func (v *memosView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	var content string
 	if !v.loaded {
@@ -194,7 +194,7 @@ func (v *MemosView) Render(state *tuicore.State) string {
 // inherited and personal lists have their own contexts so their view-specific
 // bindings (`m:manage`, `p:push`) stay scoped and don't leak into the other
 // lists, which share the generic MemoList context.
-func (v *MemosView) bindingContext() tuicore.Context {
+func (v *memosView) bindingContext() tuicore.Context {
 	switch v.variant {
 	case variantInherited:
 		return tuicore.MemoInheritedList
@@ -205,7 +205,7 @@ func (v *MemosView) bindingContext() tuicore.Context {
 }
 
 // Bindings returns the view's keybindings.
-func (v *MemosView) Bindings() []tuicore.Binding {
+func (v *memosView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	ctx := v.bindingContext()
 	var bindings []tuicore.Binding
@@ -232,7 +232,7 @@ func (v *MemosView) Bindings() []tuicore.Binding {
 }
 
 // GetItemAt returns the memo ID at the given list index (used by detail nav).
-func (v *MemosView) GetItemAt(index int) (string, bool) {
+func (v *memosView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -241,14 +241,14 @@ func (v *MemosView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items in the list.
-func (v *MemosView) GetItemCount() int {
+func (v *memosView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
 // SetSourceCursor moves the list cursor to the given index. Called by the
 // host when the detail view navigates left/right so esc-back returns to the
 // currently-displayed memo's row.
-func (v *MemosView) SetSourceCursor(index int) {
+func (v *memosView) SetSourceCursor(index int) {
 	if index < 0 {
 		return
 	}
@@ -258,7 +258,7 @@ func (v *MemosView) SetSourceCursor(index int) {
 }
 
 // Title returns the view's title with current selection info.
-func (v *MemosView) Title() string {
+func (v *memosView) Title() string {
 	title := "☞  Memos"
 	switch v.variant {
 	case variantProject:
@@ -300,7 +300,7 @@ func tildePath(p string) string {
 }
 
 // HeaderInfo returns position info for the title bar.
-func (v *MemosView) HeaderInfo() (int, string) {
+func (v *memosView) HeaderInfo() (int, string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -308,7 +308,7 @@ func (v *MemosView) HeaderInfo() (int, string) {
 	return v.cardList.Selected() + 1, fmt.Sprintf("%d", len(items))
 }
 
-func (v *MemosView) navigateToSelected() tea.Cmd {
+func (v *memosView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
@@ -330,7 +330,7 @@ func (v *MemosView) navigateToSelected() tea.Cmd {
 
 // sourcePath returns the route path that hosts this variant's view, so the
 // detail view's left/right navigation can find the correct source list.
-func (v *MemosView) sourcePath() string {
+func (v *memosView) sourcePath() string {
 	switch v.variant {
 	case variantProject:
 		return "/memo/project"
@@ -344,7 +344,7 @@ func (v *MemosView) sourcePath() string {
 	return "/memo/list"
 }
 
-func (v *MemosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
+func (v *memosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd {
 	switch msg.String() {
 	case "r":
 		if id, ok := v.cardList.SelectedID(); ok {
@@ -380,7 +380,7 @@ func (v *MemosView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd
 // syncTier pushes or fetches the personal-tier bare repo to its remote. Runs
 // async (network) and reports via memoSyncMsg; a fetch reloads the list so
 // pulled memos appear. The missing-remote case surfaces as the result error.
-func (v *MemosView) syncTier(state *tuicore.State, action string) tea.Cmd {
+func (v *memosView) syncTier(state *tuicore.State, action string) tea.Cmd {
 	if action == "push" {
 		state.SetMessage("Pushing personal memos…", tuicore.MessageTypeSuccess)
 		return func() tea.Msg {
@@ -403,7 +403,7 @@ func (v *MemosView) syncTier(state *tuicore.State, action string) tea.Cmd {
 
 // defaultCreateTier maps the current list variant to the tier the new-memo
 // form should preselect; empty means use the form's own default (session).
-func (v *MemosView) defaultCreateTier() string {
+func (v *memosView) defaultCreateTier() string {
 	switch v.variant {
 	case variantProject:
 		return string(memo.TierProject)
@@ -427,7 +427,7 @@ type memoSyncMsg struct {
 	isErr   bool
 }
 
-func (v *MemosView) loadMemos() tea.Cmd {
+func (v *memosView) loadMemos() tea.Cmd {
 	workdir := v.workdir
 	variant := v.variant
 	return func() tea.Msg {

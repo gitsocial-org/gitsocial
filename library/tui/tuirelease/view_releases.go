@@ -14,8 +14,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// ReleasesView displays a list of releases.
-type ReleasesView struct {
+// releasesView displays a list of releases.
+type releasesView struct {
 	workdir      string
 	workspaceURL string
 	userEmail    string
@@ -32,14 +32,14 @@ type ReleasesView struct {
 	restoreID    string // item ID to reselect after reload ("" = none)
 }
 
-// NewReleasesView creates a new releases view.
-func NewReleasesView(workdir string) *ReleasesView {
+// newReleasesView creates a new releases view.
+func newReleasesView(workdir string) *releasesView {
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Filter releases..."
 	searchInput.CharLimit = 100
 	searchInput.Prompt = "/ "
 	tuicore.StyleTextInput(&searchInput, tuicore.Title, tuicore.Title, tuicore.Dim)
-	return &ReleasesView{
+	return &releasesView{
 		workdir:     workdir,
 		userEmail:   git.GetUserEmail(workdir),
 		cardList:    tuicore.NewCardList(nil),
@@ -48,14 +48,14 @@ func NewReleasesView(workdir string) *ReleasesView {
 }
 
 // SetSize sets the view dimensions.
-func (v *ReleasesView) SetSize(w, h int) {
+func (v *releasesView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.cardList.SetSize(w, h-2)
 }
 
 // Activate loads the releases.
-func (v *ReleasesView) Activate(state *tuicore.State) tea.Cmd {
+func (v *releasesView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.searchActive = false
 	v.searchQuery = ""
@@ -79,7 +79,7 @@ func (v *ReleasesView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Refresh reloads releases in place, preserving the focused row by ID.
-func (v *ReleasesView) Refresh(_ *tuicore.State) tea.Cmd {
+func (v *releasesView) Refresh(_ *tuicore.State) tea.Cmd {
 	if id, ok := v.cardList.SelectedID(); ok {
 		v.restoreID = id
 	}
@@ -87,11 +87,8 @@ func (v *ReleasesView) Refresh(_ *tuicore.State) tea.Cmd {
 	return v.loadReleases()
 }
 
-// Deactivate is called when the view is hidden.
-func (v *ReleasesView) Deactivate() {}
-
 // navigateToSelected navigates to the selected release's detail view.
-func (v *ReleasesView) navigateToSelected() tea.Cmd {
+func (v *releasesView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardList.SelectedItem()
 	if !ok {
 		return nil
@@ -110,7 +107,7 @@ func (v *ReleasesView) navigateToSelected() tea.Cmd {
 }
 
 // GetItemAt returns the item ID at the given index.
-func (v *ReleasesView) GetItemAt(index int) (string, bool) {
+func (v *releasesView) GetItemAt(index int) (string, bool) {
 	items := v.cardList.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -119,12 +116,12 @@ func (v *ReleasesView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *ReleasesView) GetItemCount() int {
+func (v *releasesView) GetItemCount() int {
 	return len(v.cardList.Items())
 }
 
 // Update handles messages.
-func (v *ReleasesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *releasesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case releasesLoadedMsg:
 		v.pag.Loading = false
@@ -193,11 +190,11 @@ func (v *ReleasesView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns true when search input is active.
-func (v *ReleasesView) IsInputActive() bool {
+func (v *releasesView) IsInputActive() bool {
 	return v.searchActive
 }
 
-func (v *ReleasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *releasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "n":
 		return func() tea.Msg {
@@ -220,7 +217,7 @@ func (v *ReleasesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-func (v *ReleasesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *releasesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.searchActive = false
@@ -244,7 +241,7 @@ func (v *ReleasesView) handleSearchKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // applyFilter filters releases by search query and updates the card list.
-func (v *ReleasesView) applyFilter() {
+func (v *releasesView) applyFilter() {
 	filtered := v.allReleases
 	if v.searchQuery != "" {
 		pattern := tuicore.CompileSearchPattern(v.searchQuery)
@@ -275,7 +272,7 @@ func (v *ReleasesView) applyFilter() {
 }
 
 // Render renders the view.
-func (v *ReleasesView) Render(state *tuicore.State) string {
+func (v *releasesView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -299,7 +296,7 @@ func (v *ReleasesView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *ReleasesView) Title() string {
+func (v *releasesView) Title() string {
 	title := "⏏  Releases"
 	if v.searchQuery != "" {
 		title += fmt.Sprintf(" · /%s", v.searchQuery)
@@ -312,7 +309,7 @@ func (v *ReleasesView) Title() string {
 }
 
 // HeaderInfo returns position info for the title.
-func (v *ReleasesView) HeaderInfo() (position int, total string) {
+func (v *releasesView) HeaderInfo() (position int, total string) {
 	items := v.cardList.Items()
 	if len(items) == 0 {
 		return 0, ""
@@ -321,7 +318,7 @@ func (v *ReleasesView) HeaderInfo() (position int, total string) {
 }
 
 // Bindings returns keybindings for this view.
-func (v *ReleasesView) Bindings() []tuicore.Binding {
+func (v *releasesView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -359,7 +356,7 @@ type releasesLoadedMsg struct {
 	err      error
 }
 
-func (v *ReleasesView) loadReleases() tea.Cmd {
+func (v *releasesView) loadReleases() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	limit := v.pag.Limit()
@@ -378,7 +375,7 @@ func (v *ReleasesView) loadReleases() tea.Cmd {
 	}
 }
 
-func (v *ReleasesView) loadMoreReleases() tea.Cmd {
+func (v *releasesView) loadMoreReleases() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
@@ -396,6 +393,6 @@ func (v *ReleasesView) loadMoreReleases() tea.Cmd {
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *ReleasesView) LoadMorePosts() tea.Cmd {
+func (v *releasesView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMoreReleases)
 }

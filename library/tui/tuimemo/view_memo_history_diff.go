@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// NewMemoHistoryDiffView creates a HistoryDiffView wired to memo history.
-func NewMemoHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
+// newMemoHistoryDiffView creates a HistoryDiffView wired to memo history.
+func newMemoHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.MemoHistoryDiff,
 		TitleIcon: "☞",

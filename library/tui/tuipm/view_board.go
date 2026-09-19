@@ -23,8 +23,8 @@ const (
 	collapsedColWidth = 4
 )
 
-// BoardView displays issues in a kanban board layout.
-type BoardView struct {
+// boardView displays issues in a kanban board layout.
+type boardView struct {
 	workdir        string
 	userEmail      string
 	width          int
@@ -42,9 +42,9 @@ type BoardView struct {
 	lastClickRow   int
 }
 
-// NewBoardView creates a new board view.
-func NewBoardView(workdir string) *BoardView {
-	return &BoardView{
+// newBoardView creates a new board view.
+func newBoardView(workdir string) *boardView {
+	return &boardView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		zonePrefix:   zone.NewPrefix(),
@@ -54,22 +54,22 @@ func NewBoardView(workdir string) *BoardView {
 }
 
 // SetSize sets the view dimensions.
-func (v *BoardView) SetSize(w, h int) {
+func (v *boardView) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 }
 
 // Activate loads the board data.
-func (v *BoardView) Activate(state *tuicore.State) tea.Cmd {
+func (v *boardView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadBoard()
 }
 
-func (v *BoardView) loadBoard() tea.Cmd {
+func (v *boardView) loadBoard() tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := pm.GetBoardView(workdir)
 		if !result.Success {
-			return BoardLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return boardLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -81,20 +81,20 @@ func (v *BoardView) loadBoard() tea.Cmd {
 				}
 			}
 		}
-		return BoardLoadedMsg{Board: result.Data}
+		return boardLoadedMsg{Board: result.Data}
 	}
 }
 
-// BoardLoadedMsg signals that the board has been loaded.
-type BoardLoadedMsg struct {
+// boardLoadedMsg signals that the board has been loaded.
+type boardLoadedMsg struct {
 	Board pm.BoardView
 	Err   error
 }
 
 // Update handles messages.
-func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *boardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case BoardLoadedMsg:
+	case boardLoadedMsg:
 		if msg.Err == nil {
 			v.allBoard = msg.Board
 			v.loaded = true
@@ -104,7 +104,7 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 		return nil
 
-	case IssueCreatedMsg:
+	case issueCreatedMsg:
 		if msg.Err == nil {
 			return v.loadBoard()
 		}
@@ -127,9 +127,9 @@ func (v *BoardView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive returns false — board doesn't capture text input directly.
-func (v *BoardView) IsInputActive() bool { return false }
+func (v *boardView) IsInputActive() bool { return false }
 
-func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
+func (v *boardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	if !v.loaded || len(v.board.Columns) == 0 {
 		return nil
 	}
@@ -194,7 +194,7 @@ func (v *BoardView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 	case "r":
 		return v.loadBoard()
 	case "n":
-		// Create - navigate to full IssueForm
+		// Create - navigate to full issueForm
 		return func() tea.Msg {
 			return tuicore.NavigateMsg{
 				Location: tuicore.LocPMNewIssue,
@@ -240,7 +240,7 @@ type columnMoveResultMsg struct {
 // moveIssue translates a one-column shift of the selected issue into a state
 // or label edit, dispatched asynchronously. Returns nil when bounds
 // are invalid; emits a result message with err set for filter or API failures.
-func (v *BoardView) moveIssue(destCol int) tea.Cmd {
+func (v *boardView) moveIssue(destCol int) tea.Cmd {
 	if destCol < 0 || destCol >= len(v.board.Columns) || destCol == v.selectedCol {
 		return nil
 	}
@@ -343,7 +343,7 @@ func buildColumnMoveOpts(issue pm.Issue, sourceFilter, destFilter string) (pm.Up
 
 // applyFilter rebuilds v.board from v.allBoard based on the active filters.
 // Currently only assigneeFilter ("me") is supported; column structure is preserved.
-func (v *BoardView) applyFilter() {
+func (v *boardView) applyFilter() {
 	if v.assigneeFilter == "" || v.userEmail == "" {
 		v.board = v.allBoard
 		return
@@ -393,7 +393,7 @@ func isIssueMine(issue pm.Issue, email string) bool {
 	return false
 }
 
-func (v *BoardView) handleMouse(msg tea.MouseMsg) tea.Cmd {
+func (v *boardView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	if !v.loaded || len(v.board.Columns) == 0 {
 		return nil
 	}
@@ -458,7 +458,7 @@ func (v *BoardView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // adjustScroll ensures the selected row is visible.
-func (v *BoardView) adjustScroll() {
+func (v *boardView) adjustScroll() {
 	if v.selectedRow < v.scrollOffset {
 		v.scrollOffset = v.selectedRow
 	}
@@ -471,7 +471,7 @@ func (v *BoardView) adjustScroll() {
 	}
 }
 
-func (v *BoardView) clampRow() {
+func (v *boardView) clampRow() {
 	if v.selectedCol >= len(v.board.Columns) {
 		return
 	}
@@ -485,7 +485,7 @@ func (v *BoardView) clampRow() {
 }
 
 // Render renders the board view.
-func (v *BoardView) Render(state *tuicore.State) string {
+func (v *boardView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 
 	var content string
@@ -502,7 +502,7 @@ func (v *BoardView) Render(state *tuicore.State) string {
 }
 
 // renderBoard renders the kanban board content.
-func (v *BoardView) renderBoard(width, height int) string {
+func (v *boardView) renderBoard(width, height int) string {
 	colCount := len(v.board.Columns)
 	// Count collapsed columns and calculate width for expanded ones
 	collapsedCount := 0
@@ -581,7 +581,7 @@ func (v *BoardView) renderBoard(width, height int) string {
 }
 
 // renderWithoutSwimlanes renders issues without swimlane grouping.
-func (v *BoardView) renderWithoutSwimlanes(colWidth, availableHeight int) []string {
+func (v *boardView) renderWithoutSwimlanes(colWidth, availableHeight int) []string {
 	var lines []string
 	for row := 0; row < availableHeight; row++ {
 		dataRow := v.scrollOffset + row
@@ -608,7 +608,7 @@ func (v *BoardView) renderWithoutSwimlanes(colWidth, availableHeight int) []stri
 }
 
 // renderWithSwimlanes renders issues grouped by swimlane field.
-func (v *BoardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth int) []string {
+func (v *boardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth int) []string {
 	swimlanes := v.getSwimlaneOrder()
 	grouped := v.groupIssuesBySwimlane(swimlanes)
 
@@ -700,7 +700,7 @@ func (v *BoardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth in
 }
 
 // renderIssueCell renders a single issue cell.
-func (v *BoardView) renderIssueCell(issue pm.Issue, width int, isSelected bool) string {
+func (v *boardView) renderIssueCell(issue pm.Issue, width int, isSelected bool) string {
 	stateIcon := "○"
 	if issue.State == pm.StateClosed {
 		stateIcon = "●"
@@ -714,7 +714,7 @@ func (v *BoardView) renderIssueCell(issue pm.Issue, width int, isSelected bool) 
 }
 
 // getSwimlaneOrder returns ordered swimlane values based on field type.
-func (v *BoardView) getSwimlaneOrder() []string {
+func (v *boardView) getSwimlaneOrder() []string {
 	field := v.prefs.SwimlaneField
 	// Predefined order for known fields
 	switch field {
@@ -740,7 +740,7 @@ func (v *BoardView) getSwimlaneOrder() []string {
 }
 
 // getSwimlaneValue extracts the swimlane field value from an issue.
-func (v *BoardView) getSwimlaneValue(issue pm.Issue) string {
+func (v *boardView) getSwimlaneValue(issue pm.Issue) string {
 	field := v.prefs.SwimlaneField
 	switch field {
 	case "assignees":
@@ -772,7 +772,7 @@ func (v *BoardView) getSwimlaneValue(issue pm.Issue) string {
 }
 
 // groupIssuesBySwimlane groups issues by swimlane value for each column.
-func (v *BoardView) groupIssuesBySwimlane(swimlanes []string) map[string]map[string][]pm.Issue {
+func (v *boardView) groupIssuesBySwimlane(swimlanes []string) map[string]map[string][]pm.Issue {
 	result := make(map[string]map[string][]pm.Issue)
 	for _, col := range v.board.Columns {
 		result[col.Name] = make(map[string][]pm.Issue)
@@ -788,7 +788,7 @@ func (v *BoardView) groupIssuesBySwimlane(swimlanes []string) map[string]map[str
 }
 
 // Title returns the view title.
-func (v *BoardView) Title() string {
+func (v *boardView) Title() string {
 	framework := pm.GetPMConfig(v.workdir).Framework
 	if framework == "" {
 		framework = "kanban"
@@ -803,7 +803,7 @@ func (v *BoardView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *BoardView) Bindings() []tuicore.Binding {
+func (v *boardView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -830,7 +830,7 @@ func (v *BoardView) Bindings() []tuicore.Binding {
 }
 
 // GetItemAt returns the issue ID at the given index in the selected column.
-func (v *BoardView) GetItemAt(index int) (string, bool) {
+func (v *boardView) GetItemAt(index int) (string, bool) {
 	if v.selectedCol >= 0 && v.selectedCol < len(v.board.Columns) {
 		col := v.board.Columns[v.selectedCol]
 		if index >= 0 && index < len(col.Issues) {
@@ -841,14 +841,9 @@ func (v *BoardView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the number of issues in the selected column.
-func (v *BoardView) GetItemCount() int {
+func (v *boardView) GetItemCount() int {
 	if v.selectedCol >= 0 && v.selectedCol < len(v.board.Columns) {
 		return len(v.board.Columns[v.selectedCol].Issues)
 	}
 	return 0
-}
-
-// ViewName returns the view identifier.
-func (v *BoardView) ViewName() string {
-	return "pm.board"
 }

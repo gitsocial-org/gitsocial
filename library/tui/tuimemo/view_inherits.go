@@ -12,9 +12,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// InheritsView lets the user view, add, and remove inherited (binding) memo
+// inheritsView lets the user view, add, and remove inherited (binding) memo
 // source URLs for the workspace.
-type InheritsView struct {
+type inheritsView struct {
 	workdir   string
 	urls      []string
 	cursor    int
@@ -27,18 +27,18 @@ type InheritsView struct {
 	loaded    bool
 }
 
-// NewInheritsView creates a new inherits-management view.
-func NewInheritsView(workdir string) *InheritsView {
-	return &InheritsView{workdir: workdir}
+// newInheritsView creates a new inherits-management view.
+func newInheritsView(workdir string) *inheritsView {
+	return &inheritsView{workdir: workdir}
 }
 
 // Title returns the panel header for the view.
-func (v *InheritsView) Title() string {
+func (v *inheritsView) Title() string {
 	return fmt.Sprintf("☞  Inherited Sources · %d", len(v.urls))
 }
 
 // HeaderInfo returns the position indicator for the title bar.
-func (v *InheritsView) HeaderInfo() (int, string) {
+func (v *inheritsView) HeaderInfo() (int, string) {
 	if len(v.urls) == 0 {
 		return 0, ""
 	}
@@ -46,11 +46,11 @@ func (v *InheritsView) HeaderInfo() (int, string) {
 }
 
 // SetSize stores panel dimensions.
-func (v *InheritsView) SetSize(w, h int) { v.width, v.height = w, h }
+func (v *inheritsView) SetSize(w, h int) { v.width, v.height = w, h }
 
 // Activate (re)loads the URL list. Cursor is preserved across navigation
 // (clamped to new bounds when the list shrinks).
-func (v *InheritsView) Activate(state *tuicore.State) tea.Cmd {
+func (v *inheritsView) Activate(state *tuicore.State) tea.Cmd {
 	prev := v.cursor
 	v.urls = memo.ListInherits(v.workdir)
 	v.cursor = prev
@@ -68,10 +68,10 @@ func (v *InheritsView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // IsInputActive reports whether the URL input is taking text input.
-func (v *InheritsView) IsInputActive() bool { return v.inputMode }
+func (v *inheritsView) IsInputActive() bool { return v.inputMode }
 
 // Bindings returns the view's keybindings.
-func (v *InheritsView) Bindings() []tuicore.Binding {
+func (v *inheritsView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "n", Label: "add", Contexts: []tuicore.Context{tuicore.MemoInherits}, Handler: noop},
@@ -82,7 +82,7 @@ func (v *InheritsView) Bindings() []tuicore.Binding {
 }
 
 // Update handles input mode, confirm dialog, and key dispatch.
-func (v *InheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *inheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	if v.inputMode {
 		return v.updateInput(msg)
 	}
@@ -119,7 +119,7 @@ func (v *InheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // startAdd opens the inline huh form for the new inherit URL.
-func (v *InheritsView) startAdd() tea.Cmd {
+func (v *inheritsView) startAdd() tea.Cmd {
 	v.inputMode = true
 	v.addURL = ""
 	urlField := huh.NewInput().
@@ -142,7 +142,7 @@ func (v *InheritsView) startAdd() tea.Cmd {
 	return v.addForm.Init()
 }
 
-func (v *InheritsView) updateInput(msg tea.Msg) tea.Cmd {
+func (v *inheritsView) updateInput(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "esc" {
 		v.inputMode = false
 		v.addForm = nil
@@ -167,7 +167,7 @@ func (v *InheritsView) updateInput(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-func (v *InheritsView) doAdd(url string) tea.Cmd {
+func (v *inheritsView) doAdd(url string) tea.Cmd {
 	res := memo.AddInherit(v.workdir, url)
 	if !res.Success {
 		return func() tea.Msg { return inheritsErrMsg{err: fmt.Errorf("%s", res.Error.Text())} }
@@ -182,7 +182,7 @@ func (v *InheritsView) doAdd(url string) tea.Cmd {
 	return nil
 }
 
-func (v *InheritsView) doRemove(url string) tea.Cmd {
+func (v *inheritsView) doRemove(url string) tea.Cmd {
 	return func() tea.Msg {
 		res := memo.RemoveInherit(v.workdir, url)
 		if !res.Success {
@@ -193,7 +193,7 @@ func (v *InheritsView) doRemove(url string) tea.Cmd {
 }
 
 // Render renders the URL list, the input prompt, and the footer.
-func (v *InheritsView) Render(state *tuicore.State) string {
+func (v *inheritsView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	v.SetSize(wrapper.ContentWidth(), wrapper.ContentHeight())
 

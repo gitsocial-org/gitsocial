@@ -17,8 +17,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// ReleaseDetailView displays a single release with comments.
-type ReleaseDetailView struct {
+// releaseDetailView displays a single release with comments.
+type releaseDetailView struct {
 	workdir       string
 	width         int
 	height        int
@@ -39,9 +39,9 @@ type ReleaseDetailView struct {
 	sourceTotal   int
 }
 
-// NewReleaseDetailView creates a new release detail view.
-func NewReleaseDetailView(workdir string) *ReleaseDetailView {
-	return &ReleaseDetailView{
+// newReleaseDetailView creates a new release detail view.
+func newReleaseDetailView(workdir string) *releaseDetailView {
+	return &releaseDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -50,14 +50,14 @@ func NewReleaseDetailView(workdir string) *ReleaseDetailView {
 }
 
 // SetSize sets the view dimensions.
-func (v *ReleaseDetailView) SetSize(w, h int) {
+func (v *releaseDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the release.
-func (v *ReleaseDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *releaseDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.loaded = false
 	v.confirm.Reset()
@@ -102,11 +102,8 @@ func (v *ReleaseDetailView) Activate(state *tuicore.State) tea.Cmd {
 	}
 }
 
-// Deactivate is called when the view is hidden.
-func (v *ReleaseDetailView) Deactivate() {}
-
 // Update handles messages.
-func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *releaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case releaseDetailLoadedMsg:
 		v.loaded = true
@@ -235,7 +232,7 @@ func (v *ReleaseDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *ReleaseDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *releaseDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -245,11 +242,11 @@ func (v *ReleaseDetailView) navigateSource(state *tuicore.State, offset int) tea
 }
 
 // IsInputActive returns true when confirmation or search input is active.
-func (v *ReleaseDetailView) IsInputActive() bool {
+func (v *releaseDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
-func (v *ReleaseDetailView) buildSections() {
+func (v *releaseDetailView) buildSections() {
 	if v.rel == nil {
 		return
 	}
@@ -362,20 +359,20 @@ func (v *ReleaseDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *ReleaseDetailView) doRetract() tea.Cmd {
+func (v *releaseDetailView) doRetract() tea.Cmd {
 	releaseID := v.rel.ID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := release.RetractRelease(workdir, releaseID)
 		if !result.Success {
-			return ReleaseRetractedMsg{ID: releaseID, Err: fmt.Errorf("%s", result.Error.Text())}
+			return releaseRetractedMsg{ID: releaseID, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return ReleaseRetractedMsg{ID: releaseID}
+		return releaseRetractedMsg{ID: releaseID}
 	}
 }
 
 // Render renders the view.
-func (v *ReleaseDetailView) Render(state *tuicore.State) string {
+func (v *releaseDetailView) Render(state *tuicore.State) string {
 	if v.rel != nil && v.rel.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -546,13 +543,13 @@ func renderReleaseCard(rel *release.Release, width int, selected bool, searchQue
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *ReleaseDetailView) ShowRawView() tea.Cmd {
+func (v *releaseDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return func() tea.Msg { return nil }
 }
 
 // Title returns the view title.
-func (v *ReleaseDetailView) Title() string {
+func (v *releaseDetailView) Title() string {
 	if v.rel == nil {
 		return "⏏  Release"
 	}
@@ -583,7 +580,7 @@ func (v *ReleaseDetailView) Title() string {
 }
 
 // Bindings returns keybindings for this view.
-func (v *ReleaseDetailView) Bindings() []tuicore.Binding {
+func (v *releaseDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {

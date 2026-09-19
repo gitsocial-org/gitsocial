@@ -53,9 +53,9 @@ type releaseItemData struct {
 func releaseCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case releaseItemData:
-		return ReleaseToCardWithOptions(d.Release, ReleaseToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL})
+		return releaseToCardWithOptions(d.Release, releaseToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, WorkspaceURL: d.WorkspaceURL})
 	case release.Release:
-		return ReleaseToCard(d)
+		return releaseToCard(d)
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid release"}}
 }
@@ -104,20 +104,20 @@ func releaseNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.C
 	}
 }
 
-// ReleaseToCardOptions configures how a Release is converted to a Card
-type ReleaseToCardOptions struct {
+// releaseToCardOptions configures how a Release is converted to a Card
+type releaseToCardOptions struct {
 	ShowEmail    bool
 	UserEmail    string
 	WorkspaceURL string
 }
 
-// ReleaseToCard converts a Release to a Card for display.
-func ReleaseToCard(rel release.Release) tuicore.Card {
-	return ReleaseToCardWithOptions(rel, ReleaseToCardOptions{})
+// releaseToCard converts a Release to a Card for display.
+func releaseToCard(rel release.Release) tuicore.Card {
+	return releaseToCardWithOptions(rel, releaseToCardOptions{})
 }
 
-// ReleaseToCardWithOptions converts a Release to a Card with configuration options.
-func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tuicore.Card {
+// releaseToCardWithOptions converts a Release to a Card with configuration options.
+func releaseToCardWithOptions(rel release.Release, opts releaseToCardOptions) tuicore.Card {
 	icon := "⏏"
 	title := rel.Subject
 	if rel.Version != "" {
@@ -223,46 +223,46 @@ func ReleaseToCardWithOptions(rel release.Release, opts ReleaseToCardOptions) tu
 // Register registers all release views with the host.
 func Register(host tuicore.ViewHost) {
 	state := host.State()
-	host.AddView("/release/list", NewReleasesView(state.Workdir))
-	host.AddView("/release/detail", NewReleaseDetailView(state.Workdir))
-	host.AddView("/release/new", NewReleaseFormView(state.Workdir))
-	host.AddView("/release/edit", NewReleaseEditFormView(state.Workdir))
-	host.AddView("/release/sbom", NewReleaseSBOMView(state.Workdir))
-	host.AddView("/release/history", NewReleaseHistoryView(state.Workdir))
-	host.AddView("/release/history/diff", NewReleaseHistoryDiffView(state.Workdir))
+	host.AddView("/release/list", newReleasesView(state.Workdir))
+	host.AddView("/release/detail", newReleaseDetailView(state.Workdir))
+	host.AddView("/release/new", newReleaseFormView(state.Workdir))
+	host.AddView("/release/edit", newReleaseEditFormView(state.Workdir))
+	host.AddView("/release/sbom", newReleaseSBOMView(state.Workdir))
+	host.AddView("/release/history", newReleaseHistoryView(state.Workdir))
+	host.AddView("/release/history/diff", newReleaseHistoryDiffView(state.Workdir))
 }
 
-// ReleaseCreatedMsg is sent when a release is created.
-type ReleaseCreatedMsg struct {
+// releaseCreatedMsg is sent when a release is created.
+type releaseCreatedMsg struct {
 	Release release.Release
 	Err     error
 }
 
-// ReleaseUpdatedMsg is sent when a release is updated.
-type ReleaseUpdatedMsg struct {
+// releaseUpdatedMsg is sent when a release is updated.
+type releaseUpdatedMsg struct {
 	Release release.Release
 	Err     error
 }
 
-// ReleaseRetractedMsg is sent when a release is retracted.
-type ReleaseRetractedMsg struct {
+// releaseRetractedMsg is sent when a release is retracted.
+type releaseRetractedMsg struct {
 	ID  string
 	Err error
 }
 
 func handleReleaseMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
-	case ReleaseCreatedMsg:
+	case releaseCreatedMsg:
 		return handleReleaseCreated(msg, ctx)
-	case ReleaseUpdatedMsg:
+	case releaseUpdatedMsg:
 		return handleReleaseUpdated(msg, ctx)
-	case ReleaseRetractedMsg:
+	case releaseRetractedMsg:
 		return handleReleaseRetracted(msg, ctx)
 	}
 	return false, nil
 }
 
-func handleReleaseCreated(msg ReleaseCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleReleaseCreated(msg releaseCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -280,7 +280,7 @@ func handleReleaseCreated(msg ReleaseCreatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
-func handleReleaseUpdated(msg ReleaseUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleReleaseUpdated(msg releaseUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -298,7 +298,7 @@ func handleReleaseUpdated(msg ReleaseUpdatedMsg, ctx tuicore.AppContext) (bool, 
 	})
 }
 
-func handleReleaseRetracted(msg ReleaseRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleReleaseRetracted(msg releaseRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil

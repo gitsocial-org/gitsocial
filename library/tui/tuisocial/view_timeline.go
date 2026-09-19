@@ -11,8 +11,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// TimelineView displays the social timeline.
-type TimelineView struct {
+// timelineView displays the social timeline.
+type timelineView struct {
 	cardlist    *tuicore.CardList
 	workdir     string
 	gitRoot     string
@@ -23,7 +23,7 @@ type TimelineView struct {
 }
 
 // Bindings returns keybindings for the timeline view.
-func (v *TimelineView) Bindings() []tuicore.Binding {
+func (v *timelineView) Bindings() []tuicore.Binding {
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
 			return false, nil
@@ -64,9 +64,9 @@ func (v *TimelineView) Bindings() []tuicore.Binding {
 	}
 }
 
-// NewTimelineView creates a new timeline view.
-func NewTimelineView(workdir string, userEmail string, showEmail bool) *TimelineView {
-	v := &TimelineView{
+// newTimelineView creates a new timeline view.
+func newTimelineView(workdir string, userEmail string, showEmail bool) *timelineView {
+	v := &timelineView{
 		workdir:   workdir,
 		userEmail: userEmail,
 		showEmail: showEmail,
@@ -77,7 +77,7 @@ func NewTimelineView(workdir string, userEmail string, showEmail bool) *Timeline
 }
 
 // resolveItem fetches a post by ID via API.
-func (v *TimelineView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
+func (v *timelineView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 	result := social.GetPosts(v.workdir, "post:"+itemID, nil)
 	if result.Success && len(result.Data) > 0 {
 		post := result.Data[0]
@@ -89,18 +89,13 @@ func (v *TimelineView) resolveItem(itemID string) (tuicore.DisplayItem, bool) {
 	return nil, false
 }
 
-// SetUserEmail sets the user email for own-post highlighting.
-func (v *TimelineView) SetUserEmail(email string) {
-	v.userEmail = email
-}
-
 // SetSize sets the view dimensions (receives inner content area).
-func (v *TimelineView) SetSize(width, height int) {
+func (v *timelineView) SetSize(width, height int) {
 	v.cardlist.SetSize(width, height-3) // -3 for footer
 }
 
 // Activate loads timeline posts when the view becomes active.
-func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
+func (v *timelineView) Activate(state *tuicore.State) tea.Cmd {
 	// Returning from a detail view: pre-select the focused row by ID so that any
 	// reload below (and ReloadItems) keeps the cursor on it. DetailSource.Index
 	// tracks left/right paging and indexes the still-loaded list.
@@ -129,21 +124,21 @@ func (v *TimelineView) Activate(state *tuicore.State) tea.Cmd {
 			Limit: 10, GitRoot: v.gitRoot, SkipUnpushed: true,
 		})
 		if result.Success && len(result.Data) > 0 {
-			v.cardlist.SetItems(PostsToItems(result.Data, v.userEmail, v.showEmail, v.workdir))
+			v.cardlist.SetItems(postsToItems(result.Data, v.userEmail, v.showEmail, v.workdir))
 		}
 	}
 	return v.loadPosts()
 }
 
 // Refresh reloads timeline data; ReloadItems preserves the cursor by ID.
-func (v *TimelineView) Refresh(state *tuicore.State) tea.Cmd {
+func (v *timelineView) Refresh(state *tuicore.State) tea.Cmd {
 	return v.loadPosts()
 }
 
 // loadPosts fetches timeline posts from the social API. The total count is
 // loaded asynchronously so the page render isn't blocked on a multi-second
 // COUNT(*).
-func (v *TimelineView) loadPosts() tea.Cmd {
+func (v *timelineView) loadPosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	gitRoot := v.gitRoot
@@ -166,7 +161,7 @@ func (v *TimelineView) loadPosts() tea.Cmd {
 }
 
 // loadMorePosts fetches the next page of timeline posts.
-func (v *TimelineView) loadMorePosts() tea.Cmd {
+func (v *timelineView) loadMorePosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
@@ -181,12 +176,12 @@ func (v *TimelineView) loadMorePosts() tea.Cmd {
 }
 
 // LoadMorePosts implements the loadMoreHandler interface for infinite scroll.
-func (v *TimelineView) LoadMorePosts() tea.Cmd {
+func (v *timelineView) LoadMorePosts() tea.Cmd {
 	return v.pag.LoadMore(v.loadMorePosts)
 }
 
 // Update handles messages and returns commands.
-func (v *TimelineView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *timelineView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg, tea.MouseMsg:
 		consumed, activate, link := v.cardlist.Update(msg)
@@ -214,7 +209,7 @@ func (v *TimelineView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // navigateToSelected navigates to the selected item's detail view.
-func (v *TimelineView) navigateToSelected() tea.Cmd {
+func (v *timelineView) navigateToSelected() tea.Cmd {
 	item, ok := v.cardlist.SelectedItem()
 	if !ok {
 		return nil
@@ -233,7 +228,7 @@ func (v *TimelineView) navigateToSelected() tea.Cmd {
 }
 
 // handleKey processes view-specific keyboard input.
-func (v *TimelineView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
+func (v *timelineView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "r":
 		v.pag.ResetForRefresh(len(v.cardlist.Items()))
@@ -243,7 +238,7 @@ func (v *TimelineView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded updates the view with loaded posts.
-func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
+func (v *timelineView) handleLoaded(msg TimelineLoadedMsg) {
 	if msg.Err != nil {
 		v.pag.Loading = false
 		return
@@ -254,7 +249,7 @@ func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
 	}
 	v.pag.Done(msg.HasMore, cursor)
 	v.pag.SetTotal(msg.Total)
-	items := PostsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
+	items := postsToItems(msg.Posts, v.userEmail, v.showEmail, v.workdir)
 	if msg.Append {
 		v.cardlist.AppendItems(items)
 	} else {
@@ -263,7 +258,7 @@ func (v *TimelineView) handleLoaded(msg TimelineLoadedMsg) {
 }
 
 // Render renders the timeline view to a string.
-func (v *TimelineView) Render(state *tuicore.State) string {
+func (v *timelineView) Render(state *tuicore.State) string {
 	wrapper := tuicore.NewViewWrapper(state)
 	content := v.cardlist.View()
 
@@ -276,12 +271,12 @@ func (v *TimelineView) Render(state *tuicore.State) string {
 }
 
 // IsInputActive returns false since timeline doesn't have text input.
-func (v *TimelineView) IsInputActive() bool {
+func (v *timelineView) IsInputActive() bool {
 	return false
 }
 
 // UpdateItem updates an item in the list by ID.
-func (v *TimelineView) UpdateItem(item tuicore.DisplayItem) {
+func (v *timelineView) UpdateItem(item tuicore.DisplayItem) {
 	items := v.cardlist.Items()
 	for i, existing := range items {
 		if existing.ItemID() == item.ItemID() {
@@ -293,7 +288,7 @@ func (v *TimelineView) UpdateItem(item tuicore.DisplayItem) {
 }
 
 // RemoveItem removes an item from the list by ID.
-func (v *TimelineView) RemoveItem(itemID string) {
+func (v *timelineView) RemoveItem(itemID string) {
 	items := v.cardlist.Items()
 	for i, item := range items {
 		if item.ItemID() == itemID {
@@ -304,22 +299,22 @@ func (v *TimelineView) RemoveItem(itemID string) {
 }
 
 // DisplayItems returns all timeline items.
-func (v *TimelineView) DisplayItems() []tuicore.DisplayItem {
+func (v *timelineView) DisplayItems() []tuicore.DisplayItem {
 	return v.cardlist.Items()
 }
 
 // SetDisplayItems replaces all timeline items (extension-agnostic).
-func (v *TimelineView) SetDisplayItems(items []tuicore.DisplayItem) {
+func (v *timelineView) SetDisplayItems(items []tuicore.DisplayItem) {
 	v.cardlist.ReloadItems(items)
 }
 
 // SelectedDisplayItem returns the currently selected item (extension-agnostic).
-func (v *TimelineView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
+func (v *timelineView) SelectedDisplayItem() (tuicore.DisplayItem, bool) {
 	return v.cardlist.SelectedItem()
 }
 
 // HeaderInfo returns position and total for the header display.
-func (v *TimelineView) HeaderInfo() (position int, total string) {
+func (v *timelineView) HeaderInfo() (position int, total string) {
 	items := v.cardlist.Items()
 	if len(items) == 0 || v.pag.Loading {
 		return 0, ""
@@ -328,7 +323,7 @@ func (v *TimelineView) HeaderInfo() (position int, total string) {
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
-func (v *TimelineView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
+func (v *timelineView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index], true
@@ -337,7 +332,7 @@ func (v *TimelineView) GetDisplayItemAt(index int) (tuicore.DisplayItem, bool) {
 }
 
 // GetItemAt returns the post ID at the given index.
-func (v *TimelineView) GetItemAt(index int) (string, bool) {
+func (v *timelineView) GetItemAt(index int) (string, bool) {
 	items := v.cardlist.Items()
 	if index >= 0 && index < len(items) {
 		return items[index].ItemID(), true
@@ -346,6 +341,6 @@ func (v *TimelineView) GetItemAt(index int) (string, bool) {
 }
 
 // GetItemCount returns the total number of items.
-func (v *TimelineView) GetItemCount() int {
+func (v *timelineView) GetItemCount() int {
 	return len(v.cardlist.Items())
 }

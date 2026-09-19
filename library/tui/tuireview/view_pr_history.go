@@ -15,8 +15,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuiproposal"
 )
 
-// PRVersionItem wraps review.PRVersion to implement tuicore.VersionItem.
-type PRVersionItem struct {
+// prVersionItem wraps review.PRVersion to implement tuicore.VersionItem.
+type prVersionItem struct {
 	Version     review.PRVersion
 	ShowEmail   bool
 	ProposalTag string
@@ -24,21 +24,21 @@ type PRVersionItem struct {
 
 // GetID returns the version's commit ref, matching the IDs the history-diff
 // loader emits via gitmsg.GetHistory so the diff route resolves the pair.
-func (v PRVersionItem) GetID() string {
+func (v prVersionItem) GetID() string {
 	return protocol.CreateRef(protocol.RefTypeCommit, v.Version.CommitHash, v.Version.RepoURL, v.Version.Branch)
 }
 
 // GetTimestamp returns the version's creation time.
-func (v PRVersionItem) GetTimestamp() time.Time { return v.Version.Timestamp }
+func (v prVersionItem) GetTimestamp() time.Time { return v.Version.Timestamp }
 
 // GetEditOf returns empty since PRVersions are a flat list.
-func (v PRVersionItem) GetEditOf() string { return "" }
+func (v prVersionItem) GetEditOf() string { return "" }
 
 // IsRetracted returns true if this version has been retracted.
-func (v PRVersionItem) IsRetracted() bool { return v.Version.IsRetracted }
+func (v prVersionItem) IsRetracted() bool { return v.Version.IsRetracted }
 
 // AuthorDisplay returns the author name, optionally with email.
-func (v PRVersionItem) AuthorDisplay(showEmail bool) string {
+func (v prVersionItem) AuthorDisplay(showEmail bool) string {
 	name := v.Version.AuthorName
 	if name == "" {
 		name = "Anonymous"
@@ -50,15 +50,15 @@ func (v PRVersionItem) AuthorDisplay(showEmail bool) string {
 }
 
 // Ref returns the version's repo URL, commit hash, and branch.
-func (v PRVersionItem) Ref() (string, string, string) {
+func (v prVersionItem) Ref() (string, string, string) {
 	return v.Version.RepoURL, v.Version.CommitHash, v.Version.Branch
 }
 
 // IsOpenProposal reports whether this version is an open cross-repo proposal.
-func (v PRVersionItem) IsOpenProposal() bool { return tuicore.IsOpenProposalTag(v.ProposalTag) }
+func (v prVersionItem) IsOpenProposal() bool { return tuicore.IsOpenProposalTag(v.ProposalTag) }
 
 // RenderListEntry renders a compact table row for this version.
-func (v PRVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
+func (v prVersionItem) RenderListEntry(index, total int, label string, selected bool, width int) string {
 	baseTip := v.Version.BaseTip
 	if baseTip == "" {
 		baseTip = "—"
@@ -90,7 +90,7 @@ func (v PRVersionItem) RenderListEntry(index, total int, label string, selected 
 }
 
 // reconstruct rebuilds the pull request at this version from its header fields.
-func (v PRVersionItem) reconstruct() *review.PullRequest {
+func (v prVersionItem) reconstruct() *review.PullRequest {
 	repoURL, hash, branch := v.Ref()
 	msg := &protocol.Message{Header: protocol.Header{Ext: "review", Fields: v.Version.Fields}}
 	item := review.MessageToReviewItem(msg, repoURL, hash, branch)
@@ -109,7 +109,7 @@ func (v PRVersionItem) reconstruct() *review.PullRequest {
 }
 
 // RenderDetail renders this version through the real PR hero card in version mode.
-func (v PRVersionItem) RenderDetail(width int) string {
+func (v prVersionItem) RenderDetail(width int) string {
 	lines := renderPRCard(v.reconstruct(), width, false, "", nil, prCardOptions{
 		version:       true,
 		versionAuthor: v.AuthorDisplay(v.ShowEmail),
@@ -128,7 +128,7 @@ func loadPRHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error
 	}
 	items := make([]tuicore.VersionItem, len(res.Data))
 	for i, version := range res.Data {
-		items[len(res.Data)-1-i] = PRVersionItem{
+		items[len(res.Data)-1-i] = prVersionItem{
 			Version:     version,
 			ShowEmail:   ctx.ShowEmail,
 			ProposalTag: tuicore.ProposalTag(ctx.Owned, ctx.WorkspaceURL, version.RepoURL, version.CommitHash, version.Branch),
@@ -137,8 +137,8 @@ func loadPRHistory(ctx tuicore.HistoryLoadContext) ([]tuicore.VersionItem, error
 	return items, nil
 }
 
-// NewPRHistoryView creates the version-history view for a pull request.
-func NewPRHistoryView(workdir string) *tuicore.HistoryView {
+// newPRHistoryView creates the version-history view for a pull request.
+func newPRHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "prID",
 		Context:    tuicore.ReviewPRHistory,

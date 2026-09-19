@@ -10,31 +10,31 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// FollowStatus represents the follow relationship between a repo and the workspace
-type FollowStatus int
+// followStatus represents the follow relationship between a repo and the workspace
+type followStatus int
 
 const (
-	FollowStatusNone       FollowStatus = iota // Neither follows the other
-	FollowStatusFollowsYou                     // They follow us but we don't follow them
-	FollowStatusFollowed                       // We follow them but they don't follow us
-	FollowStatusMutual                         // Mutual follow (we follow them AND they follow us)
+	followStatusNone       followStatus = iota // Neither follows the other
+	followStatusFollowsYou                     // They follow us but we don't follow them
+	followStatusFollowed                       // We follow them but they don't follow us
+	followStatusMutual                         // Mutual follow (we follow them AND they follow us)
 )
 
-// GetFollowStatus determines the follow relationship for a repo
-func GetFollowStatus(repoURL string, lists []social.List, followerSet map[string]bool) FollowStatus {
+// getFollowStatus determines the follow relationship for a repo
+func getFollowStatus(repoURL string, lists []social.List, followerSet map[string]bool) followStatus {
 	normalizedURL := protocol.NormalizeURL(repoURL)
 	theyFollowUs := followerSet[normalizedURL]
 	weFollowThem := isRepoInAnyList(normalizedURL, lists)
 	if weFollowThem && theyFollowUs {
-		return FollowStatusMutual
+		return followStatusMutual
 	}
 	if weFollowThem {
-		return FollowStatusFollowed
+		return followStatusFollowed
 	}
 	if theyFollowUs {
-		return FollowStatusFollowsYou
+		return followStatusFollowsYou
 	}
-	return FollowStatusNone
+	return followStatusNone
 }
 
 // isRepoInAnyList checks if a repo URL is in any of the given lists
@@ -50,8 +50,8 @@ func isRepoInAnyList(repoURL string, lists []social.List) bool {
 	return false
 }
 
-// GetListNamesForRepo returns the list names that contain a specific repo
-func GetListNamesForRepo(repoURL string, lists []social.List, excludeListID string) []string {
+// getListNamesForRepo returns the list names that contain a specific repo
+func getListNamesForRepo(repoURL string, lists []social.List, excludeListID string) []string {
 	normalizedURL := protocol.NormalizeURL(repoURL)
 	var names []string
 	for _, list := range lists {
@@ -69,8 +69,8 @@ func GetListNamesForRepo(repoURL string, lists []social.List, excludeListID stri
 	return names
 }
 
-// FormatListIndicator formats list names as "[list1, list2]" or "[+N more]" if too many
-func FormatListIndicator(names []string, maxVisible int) string {
+// formatListIndicator formats list names as "[list1, list2]" or "[+N more]" if too many
+func formatListIndicator(names []string, maxVisible int) string {
 	if len(names) == 0 {
 		return ""
 	}
@@ -100,12 +100,12 @@ func parseRepoInput(raw string) (url, branch string, allBranches bool) {
 	return base, suffix, false
 }
 
-// RenderFollowIndicator renders the follow status indicator with appropriate styling
+// renderFollowIndicator renders the follow status indicator with appropriate styling
 // List names are shown in purple, status indicators in dim
-func RenderFollowIndicator(status FollowStatus, listNames []string, selected bool) string {
+func renderFollowIndicator(status followStatus, listNames []string, selected bool) string {
 	switch status {
-	case FollowStatusMutual, FollowStatusFollowed:
-		indicator := FormatListIndicator(listNames, 2)
+	case followStatusMutual, followStatusFollowed:
+		indicator := formatListIndicator(listNames, 2)
 		if indicator == "" {
 			return ""
 		}
@@ -113,7 +113,7 @@ func RenderFollowIndicator(status FollowStatus, listNames []string, selected boo
 			return tuicore.ListIndicatorSelected.Render(indicator)
 		}
 		return tuicore.ListIndicator.Render(indicator)
-	case FollowStatusFollowsYou:
+	case followStatusFollowsYou:
 		if selected {
 			return tuicore.DimSelected.Render("[follows you]")
 		}

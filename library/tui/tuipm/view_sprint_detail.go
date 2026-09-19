@@ -17,8 +17,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuisocial"
 )
 
-// SprintDetailView displays a single sprint with backlog and comments.
-type SprintDetailView struct {
+// sprintDetailView displays a single sprint with backlog and comments.
+type sprintDetailView struct {
 	workdir      string
 	width        int
 	height       int
@@ -38,9 +38,9 @@ type SprintDetailView struct {
 	sourceTotal  int
 }
 
-// NewSprintDetailView creates a new sprint detail view.
-func NewSprintDetailView(workdir string) *SprintDetailView {
-	return &SprintDetailView{
+// newSprintDetailView creates a new sprint detail view.
+func newSprintDetailView(workdir string) *sprintDetailView {
+	return &sprintDetailView{
 		workdir:      workdir,
 		userEmail:    git.GetUserEmail(workdir),
 		workspaceURL: gitmsg.ResolveRepoURL(workdir),
@@ -49,14 +49,14 @@ func NewSprintDetailView(workdir string) *SprintDetailView {
 }
 
 // SetSize sets the view dimensions.
-func (v *SprintDetailView) SetSize(w, h int) {
+func (v *sprintDetailView) SetSize(w, h int) {
 	v.width = w
 	v.height = h - 3
 	v.sectionList.SetSize(w, h-3)
 }
 
 // Activate loads the sprint details.
-func (v *SprintDetailView) Activate(state *tuicore.State) tea.Cmd {
+func (v *sprintDetailView) Activate(state *tuicore.State) tea.Cmd {
 	v.showEmail = state.ShowEmailOnCards
 	v.confirm.Reset()
 	v.sprintID = state.Router.Location().Param("sprintID")
@@ -80,13 +80,13 @@ func (v *SprintDetailView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadSprint()
 }
 
-func (v *SprintDetailView) loadSprint() tea.Cmd {
+func (v *sprintDetailView) loadSprint() tea.Cmd {
 	sprintID := v.sprintID
 	workdir := v.workdir
 	return func() tea.Msg {
 		result := pm.GetSprint(sprintID)
 		if !result.Success {
-			return SprintDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintDetailLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
 		branch := gitmsg.GetExtBranch(workdir, "pm")
 		unpushed, _ := git.GetUnpushedCommits(workdir, branch)
@@ -104,12 +104,12 @@ func (v *SprintDetailView) loadSprint() tea.Cmd {
 		if commentsResult.Success {
 			comments = commentsResult.Data
 		}
-		return SprintDetailLoadedMsg{Sprint: result.Data, Issues: issues, Comments: comments}
+		return sprintDetailLoadedMsg{Sprint: result.Data, Issues: issues, Comments: comments}
 	}
 }
 
-// SprintDetailLoadedMsg signals sprint details loaded.
-type SprintDetailLoadedMsg struct {
+// sprintDetailLoadedMsg signals sprint details loaded.
+type sprintDetailLoadedMsg struct {
 	Sprint   pm.Sprint
 	Issues   []pm.Issue
 	Comments []social.Post
@@ -117,9 +117,9 @@ type SprintDetailLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *SprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *sprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
-	case SprintDetailLoadedMsg:
+	case sprintDetailLoadedMsg:
 		v.loaded = true
 		if msg.Err == nil {
 			v.sprint = &msg.Sprint
@@ -218,7 +218,7 @@ func (v *SprintDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 }
 
 // navigateSource navigates to adjacent items in the source list.
-func (v *SprintDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
+func (v *sprintDetailView) navigateSource(state *tuicore.State, offset int) tea.Cmd {
 	if state.DetailSource == nil {
 		return nil
 	}
@@ -228,11 +228,11 @@ func (v *SprintDetailView) navigateSource(state *tuicore.State, offset int) tea.
 }
 
 // IsInputActive returns true when confirmation or search input is active.
-func (v *SprintDetailView) IsInputActive() bool {
+func (v *sprintDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.sectionList.IsInputActive()
 }
 
-func (v *SprintDetailView) buildSections() {
+func (v *sprintDetailView) buildSections() {
 	var sections []tuicore.Section
 	// Hero section (no label) — the sprint card
 	sp := v.sprint
@@ -327,29 +327,29 @@ func (v *SprintDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-func (v *SprintDetailView) completeSprint(proposed bool) tea.Cmd {
+func (v *sprintDetailView) completeSprint(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
 	return tea.Sequence(
 		func() tea.Msg {
 			result := pm.CompleteSprint("", sprintID)
 			if !result.Success {
-				return SprintCompletedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+				return sprintCompletedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
-			return SprintCompletedMsg{ID: sprintID, Proposed: proposed}
+			return sprintCompletedMsg{ID: sprintID, Proposed: proposed}
 		},
 		v.loadSprint(),
 	)
 }
 
-func (v *SprintDetailView) doRetract(proposed bool) tea.Cmd {
+func (v *sprintDetailView) doRetract(proposed bool) tea.Cmd {
 	sprintID := v.sprint.ID
 	workdir := v.workdir
 	retract := func() tea.Msg {
 		result := pm.RetractSprint(workdir, sprintID)
 		if !result.Success {
-			return SprintRetractedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
+			return sprintRetractedMsg{ID: sprintID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return SprintRetractedMsg{ID: sprintID, Proposed: proposed}
+		return sprintRetractedMsg{ID: sprintID, Proposed: proposed}
 	}
 	if proposed {
 		return tea.Sequence(retract, v.loadSprint())
@@ -358,7 +358,7 @@ func (v *SprintDetailView) doRetract(proposed bool) tea.Cmd {
 }
 
 // Render renders the sprint detail view.
-func (v *SprintDetailView) Render(state *tuicore.State) string {
+func (v *sprintDetailView) Render(state *tuicore.State) string {
 	if v.sprint != nil && v.sprint.IsRetracted {
 		state.BorderVariant = "warning"
 	}
@@ -469,7 +469,7 @@ func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery strin
 	return lines
 }
 
-func (v *SprintDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
+func (v *sprintDetailView) renderIssueRow(issue pm.Issue, width int, selected bool, searchQuery string) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
@@ -500,13 +500,13 @@ func (v *SprintDetailView) renderIssueRow(issue pm.Issue, width int, selected bo
 }
 
 // ShowRawView toggles between rendered body and full commit message.
-func (v *SprintDetailView) ShowRawView() tea.Cmd {
+func (v *sprintDetailView) ShowRawView() tea.Cmd {
 	v.showRaw = !v.showRaw
 	return func() tea.Msg { return nil }
 }
 
 // Title returns the view title.
-func (v *SprintDetailView) Title() string {
+func (v *sprintDetailView) Title() string {
 	if v.sprint == nil {
 		return "◷  Sprint"
 	}
@@ -532,12 +532,12 @@ func (v *SprintDetailView) Title() string {
 }
 
 // HeaderInfo returns position info.
-func (v *SprintDetailView) HeaderInfo() (position int, total string) {
+func (v *sprintDetailView) HeaderInfo() (position int, total string) {
 	return 0, ""
 }
 
 // Bindings returns keybindings for this view.
-func (v *SprintDetailView) Bindings() []tuicore.Binding {
+func (v *sprintDetailView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	push := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 		if ctx.StartPush == nil {
@@ -556,9 +556,4 @@ func (v *SprintDetailView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.PMSprintDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMSprintDetail}, Handler: push},
 	}
-}
-
-// ViewName returns the view identifier.
-func (v *SprintDetailView) ViewName() string {
-	return "pm.sprint_detail"
 }

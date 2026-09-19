@@ -17,8 +17,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuiviews"
 )
 
-// SocialHost provides social-specific item operations using universal DisplayItem interface.
-type SocialHost interface {
+// socialHost provides social-specific item operations using universal DisplayItem interface.
+type socialHost interface {
 	DisplayItems() []tuicore.DisplayItem
 	SetDisplayItems([]tuicore.DisplayItem)
 	UpdateDisplayItem(tuicore.DisplayItem)
@@ -83,7 +83,7 @@ func socialItemToCard(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	if resolver != nil {
 		postResolver = func(id string) (social.Post, bool) {
 			if item, ok := resolver(id); ok {
-				if p, ok := ItemToPost(item); ok {
+				if p, ok := itemToPost(item); ok {
 					return p, true
 				}
 			}
@@ -142,33 +142,33 @@ func followIsDimmed(data any) bool {
 // Register registers all social views with the host.
 func Register(host tuicore.ViewHost) {
 	state := host.State()
-	timeline := NewTimelineView(state.Workdir, state.UserEmail, state.ShowEmailOnCards)
-	post := NewPostView(state.Workdir)
-	post.SetUserEmail(state.UserEmail)
+	timeline := newTimelineView(state.Workdir, state.UserEmail, state.ShowEmailOnCards)
+	post := newPostView(state.Workdir)
+	post.setUserEmail(state.UserEmail)
 	showEmailFn := func() bool { return state.ShowEmailOnCards }
 	search := tuiviews.NewSearchView(
 		state.Workdir,
-		MakeSearchFunc(state.UserEmail, showEmailFn),
-		MakeResolveItemFunc(state.UserEmail),
+		makeSearchFunc(state.UserEmail, showEmailFn),
+		makeResolveItemFunc(state.UserEmail),
 	)
 	notifications := tuiviews.NewNotificationsView(
 		state.Workdir,
-		MakeGetNotificationsFunc(state.UserEmail, showEmailFn),
-		MakeMarkReadFunc(),
-		MakeMarkUnreadFunc(),
-		MakeResolveItemFunc(state.UserEmail),
-		tuiviews.WithBulkMarkFuncs(MakeMarkAllReadFunc(), MakeMarkAllUnreadFunc()),
+		makeGetNotificationsFunc(state.UserEmail, showEmailFn),
+		makeMarkReadFunc(),
+		makeMarkUnreadFunc(),
+		makeResolveItemFunc(state.UserEmail),
+		tuiviews.WithBulkMarkFuncs(makeMarkAllReadFunc(), makeMarkAllUnreadFunc()),
 	)
-	repository := NewRepositoryView(state.Workdir)
-	repository.SetUserEmail(state.UserEmail)
-	listPicker := NewListPickerView(state.Workdir)
-	listPosts := NewListPostsView(state.Workdir)
-	listPosts.SetUserEmail(state.UserEmail)
-	listPosts.SetShowEmail(state.ShowEmailOnCards)
-	listRepos := NewListReposView(state.Workdir)
-	history := NewHistoryView(state.Workdir)
-	historyDiff := NewPostHistoryDiffView(state.Workdir)
-	repoLists := NewRepoListsView(state.Workdir)
+	repository := newRepositoryView(state.Workdir)
+	repository.setUserEmail(state.UserEmail)
+	listPicker := newListPickerView(state.Workdir)
+	listPosts := newListPostsView(state.Workdir)
+	listPosts.setUserEmail(state.UserEmail)
+	listPosts.setShowEmail(state.ShowEmailOnCards)
+	listRepos := newListReposView(state.Workdir)
+	history := newHistoryView(state.Workdir)
+	historyDiff := newPostHistoryDiffView(state.Workdir)
+	repoLists := newRepoListsView(state.Workdir)
 	host.AddView("/social/timeline", timeline)
 	host.AddView("/social/detail", post)
 	host.AddView("/search", search)
@@ -181,8 +181,8 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/history", history)
 	host.AddView("/social/history/diff", historyDiff)
 	host.AddView("/social/repository/lists", repoLists)
-	host.AddView("/social/post-form", NewPostFormView(state.Workdir))
-	explore := NewExploreView(state.Workdir)
+	host.AddView("/social/post-form", newPostFormView(state.Workdir))
+	explore := newExploreView(state.Workdir)
 	host.AddView("/social/explore", explore)
 	host.AddView("/social/followers", explore)
 }
@@ -191,7 +191,7 @@ func Register(host tuicore.ViewHost) {
 
 func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
-	case PostSubmittedMsg:
+	case postSubmittedMsg:
 		return handlePostSubmitted(msg, ctx)
 	case ListsLoadedMsg:
 		return handleListsLoaded(msg, ctx)
@@ -211,19 +211,19 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handlePushCompleted(msg, ctx)
 	case TimelineLoadedMsg:
 		return handleTimelineLoaded(msg, ctx)
-	case CommentCreatedMsg:
+	case commentCreatedMsg:
 		return handleCommentCreated(msg, ctx)
-	case RetractStartedMsg:
+	case retractStartedMsg:
 		return handleRetractStarted(msg, ctx)
-	case PostRetractedMsg:
+	case postRetractedMsg:
 		return handlePostRetracted(msg, ctx)
-	case RepoAddedMsg:
+	case repoAddedMsg:
 		return handleRepoAdded(msg, ctx)
 	case RepoFetchedAfterAddMsg:
 		return handleRepoFetchedAfterAdd(msg, ctx)
-	case RepoRemovedMsg:
+	case repoRemovedMsg:
 		return handleRepoRemoved(msg, ctx)
-	case ListCreatedMsg:
+	case listCreatedMsg:
 		return handleListCreated(msg, ctx)
 	case tuicore.InteractionCountsRefreshedMsg:
 		return handleInteractionCountsRefreshed(msg, ctx)
@@ -236,22 +236,22 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 // back to the source view (which may be a non-social detail view like a
 // release or issue) so the new comment appears in context without assuming
 // the target ID resolves as a social post.
-func handlePostSubmitted(msg PostSubmittedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePostSubmitted(msg postSubmittedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
 	}
 	verb := "Posted"
 	switch msg.Mode {
-	case PostFormComment:
+	case postFormComment:
 		verb = "Commented"
-	case PostFormQuote:
+	case postFormQuote:
 		verb = "Quoted"
-	case PostFormEdit:
+	case postFormEdit:
 		verb = "Edited"
 	}
 	statusCmd := ctx.Host().SetMessageWithTimeout(verb, tuicore.MessageTypeSuccess, 5*time.Second)
-	if msg.Mode == PostFormComment {
+	if msg.Mode == postFormComment {
 		return true, tea.Batch(statusCmd, func() tea.Msg {
 			return tuicore.NavigateMsg{Action: tuicore.NavBack}
 		})
@@ -259,7 +259,7 @@ func handlePostSubmitted(msg PostSubmittedMsg, ctx tuicore.AppContext) (bool, te
 	// For quote/edit land on the parent post; for new posts land on the
 	// freshly-created post.
 	target := msg.Post.ID
-	if msg.Mode != PostFormNew && msg.TargetID != "" {
+	if msg.Mode != postFormNew && msg.TargetID != "" {
 		target = msg.TargetID
 	}
 	return true, tea.Batch(statusCmd, func() tea.Msg {
@@ -445,17 +445,17 @@ func formatPushRemoteResult(res client.Result) (string, bool) {
 
 func handleTimelineLoaded(msg TimelineLoadedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == nil && !msg.Append {
-		if sh, ok := ctx.Host().(SocialHost); ok {
+		if sh, ok := ctx.Host().(socialHost); ok {
 			state := ctx.Host().State()
-			items := PostsToItems(msg.Posts, state.UserEmail, state.ShowEmailOnCards, state.Workdir)
+			items := postsToItems(msg.Posts, state.UserEmail, state.ShowEmailOnCards, state.Workdir)
 			sh.SetDisplayItems(items)
 		}
 	}
 	return true, ctx.Host().Update(msg)
 }
 
-func handleCommentCreated(msg CommentCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	if sh, ok := ctx.Host().(SocialHost); ok {
+func handleCommentCreated(msg commentCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if sh, ok := ctx.Host().(socialHost); ok {
 		state := ctx.Host().State()
 		post := msg.Post
 		post.Display.UserEmail = state.UserEmail
@@ -481,22 +481,22 @@ func handleCommentCreated(msg CommentCreatedMsg, ctx tuicore.AppContext) (bool, 
 	return true, tea.Batch(cmds...)
 }
 
-func handleRetractStarted(_ RetractStartedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleRetractStarted(_ retractStartedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Host().SetRetracting(true)
 	return true, nil
 }
 
-func handlePostRetracted(msg PostRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePostRetracted(msg postRetractedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	ctx.Host().SetRetracting(false)
 	if msg.Err == nil {
-		if sh, ok := ctx.Host().(SocialHost); ok {
+		if sh, ok := ctx.Host().(socialHost); ok {
 			sh.RemoveDisplayItem(msg.PostID)
 		}
 	}
 	return true, nil
 }
 
-func handleRepoAdded(msg RepoAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleRepoAdded(msg repoAddedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		if strings.HasPrefix(msg.Err.Error(), "repository already in the list") {
 			msgCmd := ctx.Host().SetMessageWithTimeout("Already in "+msg.ListName+": "+msg.RepoURL, tuicore.MessageTypeWarning, 5*time.Second)
@@ -525,7 +525,7 @@ func handleRepoFetchedAfterAdd(msg RepoFetchedAfterAddMsg, ctx tuicore.AppContex
 	return true, tea.Batch(msgCmd, ctx.LoadLists(), ctx.RefreshTimeline(), ctx.LoadUnreadCount(), ctx.RefreshCacheSize())
 }
 
-func handleRepoRemoved(msg RepoRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleRepoRemoved(msg repoRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	var msgCmd tea.Cmd
 	if msg.Err == nil {
 		msgCmd = ctx.Host().SetMessageWithTimeout(fmt.Sprintf("Removed %s from list", protocol.GetDisplayName(msg.RepoURL)), tuicore.MessageTypeSuccess, 5*time.Second)
@@ -534,7 +534,7 @@ func handleRepoRemoved(msg RepoRemovedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 	return true, tea.Batch(cmd, msgCmd)
 }
 
-func handleListCreated(msg ListCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleListCreated(msg listCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, ctx.Host().Update(msg)

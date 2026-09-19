@@ -17,8 +17,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
-// PRFormData holds the form field values.
-type PRFormData struct {
+// prFormData holds the form field values.
+type prFormData struct {
 	Subject   string
 	Body      string
 	Base      []string
@@ -30,8 +30,8 @@ type PRFormData struct {
 	Draft     bool
 }
 
-// PRForm wraps a Huh form for pull request creation and editing.
-type PRForm struct {
+// prForm wraps a Huh form for pull request creation and editing.
+type prForm struct {
 	tuicore.FormBase
 	workdir       string
 	prID          string
@@ -39,7 +39,7 @@ type PRForm struct {
 	bodyOtherRows int // count of non-body field rows, for body sizing
 	baseField     *tuicore.TagField
 	headField     *tuicore.TagField
-	data          PRFormData
+	data          prFormData
 	contributors  []cache.Contributor
 	branches      []string
 	issues        []pm.Issue
@@ -122,9 +122,9 @@ func loadForkBranches(workdir string) tea.Cmd {
 	}
 }
 
-// NewPRForm creates a new pull request creation form with pre-loaded data.
-func NewPRForm(workdir string, data prFormDataMsg) *PRForm {
-	f := &PRForm{
+// newPRForm creates a new pull request creation form with pre-loaded data.
+func newPRForm(workdir string, data prFormDataMsg) *prForm {
+	f := &prForm{
 		workdir:      workdir,
 		contributors: data.Contributors,
 		branches:     data.Branches,
@@ -144,8 +144,8 @@ func NewPRForm(workdir string, data prFormDataMsg) *PRForm {
 	return f
 }
 
-// NewPREditForm creates an edit form pre-populated with pull request data.
-func NewPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *PRForm {
+// newPREditForm creates an edit form pre-populated with pull request data.
+func newPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *prForm {
 	reviewers := make([]string, len(pr.Reviewers))
 	copy(reviewers, pr.Reviewers)
 
@@ -167,14 +167,14 @@ func NewPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *P
 	labels := make([]string, len(pr.Labels))
 	copy(labels, pr.Labels)
 
-	f := &PRForm{
+	f := &prForm{
 		workdir:      workdir,
 		prID:         pr.ID,
 		contributors: data.Contributors,
 		branches:     data.Branches,
 		issues:       data.Issues,
 		openPRs:      data.OpenPRs,
-		data: PRFormData{
+		data: prFormData{
 			Subject:   pr.Subject,
 			Body:      pr.Body,
 			Base:      base,
@@ -190,13 +190,8 @@ func NewPREditForm(workdir string, pr review.PullRequest, data prFormDataMsg) *P
 	return f
 }
 
-// IsEditMode returns true if this is an edit form.
-func (f *PRForm) IsEditMode() bool {
-	return f.prID != ""
-}
-
 // buildForm constructs the Huh form.
-func (f *PRForm) buildForm() {
+func (f *prForm) buildForm() {
 	pad := tuicore.PadLabel
 	var fields []huh.Field
 
@@ -287,15 +282,15 @@ func (f *PRForm) buildForm() {
 		WithKeyMap(tuicore.FormKeyMap()))
 }
 
-// AddForkBranches appends fork branch options to the base/head fields.
-func (f *PRForm) AddForkBranches(forkBranches map[string][]string) {
+// addForkBranches appends fork branch options to the base/head fields.
+func (f *prForm) addForkBranches(forkBranches map[string][]string) {
 	opts := buildBranchOptions(nil, forkBranches)
 	f.baseField.AppendOptions(opts...)
 	f.headField.AppendOptions(opts...)
 }
 
 // SetSize sets the form dimensions.
-func (f *PRForm) SetSize(w, h int) {
+func (f *prForm) SetSize(w, h int) {
 	f.width = w
 	f.height = h
 	if form := f.FormPtr(); form != nil {
@@ -307,22 +302,22 @@ func (f *PRForm) SetSize(w, h int) {
 }
 
 // Update delegates the standard form lifecycle to FormBase.
-func (f *PRForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
+func (f *prForm) Update(msg tea.Msg) tea.Cmd { return f.UpdateForm(msg) }
 
 // Body returns the current body text (for the $EDITOR escape-hatch).
-func (f *PRForm) Body() string { return f.data.Body }
+func (f *prForm) Body() string { return f.data.Body }
 
 // SetBody writes the body and rebuilds the form so huh.Text refreshes.
-func (f *PRForm) SetBody(s string) {
+func (f *prForm) SetBody(s string) {
 	f.data.Body = s
 	f.buildForm()
 }
 
 // Reset rebuilds the form, clearing huh-internal state while preserving data.
-func (f *PRForm) Reset() { f.buildForm() }
+func (f *prForm) Reset() { f.buildForm() }
 
-// CreatePRFromForm creates a pull request from form data.
-func (f *PRForm) CreatePRFromForm() tea.Cmd {
+// createPRFromForm creates a pull request from form data.
+func (f *prForm) createPRFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	return func() tea.Msg {
@@ -337,14 +332,14 @@ func (f *PRForm) CreatePRFromForm() tea.Cmd {
 		}
 		result := review.CreatePR(workdir, strings.TrimSpace(data.Subject), strings.TrimSpace(data.Body), opts)
 		if !result.Success {
-			return PRCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prCreatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRCreatedMsg{PR: result.Data}
+		return prCreatedMsg{PR: result.Data}
 	}
 }
 
-// UpdatePRFromForm updates an existing pull request from form data.
-func (f *PRForm) UpdatePRFromForm() tea.Cmd {
+// updatePRFromForm updates an existing pull request from form data.
+func (f *prForm) updatePRFromForm() tea.Cmd {
 	data := f.data
 	workdir := f.workdir
 	prID := f.prID
@@ -372,26 +367,26 @@ func (f *PRForm) UpdatePRFromForm() tea.Cmd {
 		}
 		result := review.UpdatePR(workdir, prID, opts)
 		if !result.Success {
-			return PRUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
-		return PRUpdatedMsg{PR: result.Data}
+		return prUpdatedMsg{PR: result.Data}
 	}
 }
 
-// PRFormView wraps the form for integration with the TUI host.
-type PRFormView struct {
+// prFormView wraps the form for integration with the TUI host.
+type prFormView struct {
 	tuicore.FormViewBase
 	workdir string
 	loaded  bool
 }
 
-// NewPRFormView creates a new pull request form view.
-func NewPRFormView(workdir string) *PRFormView {
-	return &PRFormView{workdir: workdir}
+// newPRFormView creates a new pull request form view.
+func newPRFormView(workdir string) *prFormView {
+	return &prFormView{workdir: workdir}
 }
 
 // Activate loads form data asynchronously.
-func (v *PRFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *prFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.workdir = state.Workdir
 	v.loaded = false
 	v.DetachForm()
@@ -399,16 +394,16 @@ func (v *PRFormView) Activate(state *tuicore.State) tea.Cmd {
 }
 
 // Update handles messages.
-func (v *PRFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *prFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case prFormDataMsg:
-		form := NewPRForm(v.workdir, msg)
+		form := newPRForm(v.workdir, msg)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
 	case prForkBranchesMsg:
-		if form, ok := v.CurrentForm().(*PRForm); ok {
-			form.AddForkBranches(msg.ForkBranches)
+		if form, ok := v.CurrentForm().(*prForm); ok {
+			form.addForkBranches(msg.ForkBranches)
 		}
 		return nil
 	}
@@ -417,19 +412,19 @@ func (v *PRFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 	}
 
-	if m, ok := msg.(PRCreatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(prCreatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*PRForm); ok {
-			return form.CreatePRFromForm()
+		if form, ok := v.CurrentForm().(*prForm); ok {
+			return form.createPRFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the form view.
-func (v *PRFormView) Render(state *tuicore.State) string {
+func (v *prFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		return wrapper.Render("Loading...", "")
@@ -438,10 +433,10 @@ func (v *PRFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *PRFormView) Title() string { return "⑂  New Pull Request" }
+func (v *prFormView) Title() string { return "⑂  New Pull Request" }
 
-// PREditFormView wraps the form for editing an existing pull request.
-type PREditFormView struct {
+// prEditFormView wraps the form for editing an existing pull request.
+type prEditFormView struct {
 	tuicore.FormViewBase
 	workdir string
 	prID    string
@@ -449,13 +444,13 @@ type PREditFormView struct {
 	loaded  bool
 }
 
-// NewPREditFormView creates a new pull request edit form view.
-func NewPREditFormView(workdir string) *PREditFormView {
-	return &PREditFormView{workdir: workdir}
+// newPREditFormView creates a new pull request edit form view.
+func newPREditFormView(workdir string) *prEditFormView {
+	return &prEditFormView{workdir: workdir}
 }
 
 // Activate loads the pull request and initializes the form.
-func (v *PREditFormView) Activate(state *tuicore.State) tea.Cmd {
+func (v *prEditFormView) Activate(state *tuicore.State) tea.Cmd {
 	v.workdir = state.Workdir
 	v.prID = state.Router.Location().Param("prID")
 	v.loaded = false
@@ -463,7 +458,7 @@ func (v *PREditFormView) Activate(state *tuicore.State) tea.Cmd {
 	return tea.Batch(v.loadPR(), loadForkBranches(v.workdir))
 }
 
-func (v *PREditFormView) loadPR() tea.Cmd {
+func (v *prEditFormView) loadPR() tea.Cmd {
 	prID := v.prID
 	return func() tea.Msg {
 		result := review.GetPR(prID)
@@ -482,7 +477,7 @@ type prEditFormLoadedMsg struct {
 }
 
 // Update handles messages.
-func (v *PREditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
+func (v *prEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case prEditFormLoadedMsg:
 		if msg.Err != nil {
@@ -496,13 +491,13 @@ func (v *PREditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		if v.pr == nil {
 			return nil
 		}
-		form := NewPREditForm(v.workdir, *v.pr, msg)
+		form := newPREditForm(v.workdir, *v.pr, msg)
 		v.AttachForm(form)
 		v.loaded = true
 		return form.Init()
 	case prForkBranchesMsg:
-		if form, ok := v.CurrentForm().(*PRForm); ok {
-			form.AddForkBranches(msg.ForkBranches)
+		if form, ok := v.CurrentForm().(*prForm); ok {
+			form.addForkBranches(msg.ForkBranches)
 		}
 		return nil
 	}
@@ -511,19 +506,19 @@ func (v *PREditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 	}
 
-	if m, ok := msg.(PRUpdatedMsg); ok && m.Err != nil {
+	if m, ok := msg.(prUpdatedMsg); ok && m.Err != nil {
 		v.ClearSubmitting()
 	}
 	return v.UpdateForm(msg, func() tea.Cmd {
-		if form, ok := v.CurrentForm().(*PRForm); ok {
-			return form.UpdatePRFromForm()
+		if form, ok := v.CurrentForm().(*prForm); ok {
+			return form.updatePRFromForm()
 		}
 		return nil
 	})
 }
 
 // Render renders the edit form view.
-func (v *PREditFormView) Render(state *tuicore.State) string {
+func (v *prEditFormView) Render(state *tuicore.State) string {
 	if !v.loaded {
 		wrapper := tuicore.NewViewWrapper(state)
 		footer := tuicore.FormFooter(true, nil)
@@ -533,7 +528,7 @@ func (v *PREditFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *PREditFormView) Title() string {
+func (v *prEditFormView) Title() string {
 	if v.pr != nil {
 		return fmt.Sprintf("⑂  Edit: %s", v.pr.Subject)
 	}

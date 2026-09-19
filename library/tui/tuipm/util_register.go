@@ -95,9 +95,9 @@ func init() {
 func issueCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case issueItemData:
-		return IssueToCardWithOptions(d.Issue, IssueToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, ContributorNames: d.ContributorNames})
+		return issueToCardWithOptions(d.Issue, issueToCardOptions{ShowEmail: d.ShowEmail, UserEmail: d.UserEmail, ContributorNames: d.ContributorNames})
 	case pm.Issue:
-		return IssueToCard(d)
+		return issueToCard(d)
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid issue"}}
 }
@@ -106,9 +106,9 @@ func issueCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 func milestoneCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case milestoneItemData:
-		return MilestoneToCardWithOptions(d.Milestone, MilestoneToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
+		return milestoneToCardWithOptions(d.Milestone, milestoneToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
 	case pm.Milestone:
-		return MilestoneToCard(d)
+		return milestoneToCard(d)
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid milestone"}}
 }
@@ -117,9 +117,9 @@ func milestoneCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card
 func sprintCardRenderer(data any, resolver tuicore.ItemResolver) tuicore.Card {
 	switch d := data.(type) {
 	case sprintItemData:
-		return SprintToCardWithOptions(d.Sprint, SprintToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
+		return sprintToCardWithOptions(d.Sprint, sprintToCardOptions{UserEmail: d.UserEmail, ShowEmail: d.ShowEmail, WorkspaceURL: d.WorkspaceURL})
 	case pm.Sprint:
-		return SprintToCard(d)
+		return sprintToCard(d)
 	}
 	return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid sprint"}}
 }
@@ -204,45 +204,45 @@ func stateChangeIssueNavTarget(id string) tuicore.Location {
 // Register registers all PM views with the host.
 func Register(host tuicore.ViewHost) {
 	state := host.State()
-	board := NewBoardView(state.Workdir)
-	issues := NewIssuesView(state.Workdir)
-	issueDetail := NewIssueDetailView(state.Workdir)
-	issueHistory := NewIssueHistoryView(state.Workdir)
-	issueHistoryDiff := NewIssueHistoryDiffView(state.Workdir)
-	issueForm := NewIssueFormView(state.Workdir)
-	issueEditForm := NewIssueEditFormView(state.Workdir)
-	config := NewConfigView(state.Workdir)
-	milestones := NewMilestonesView(state.Workdir)
-	milestoneDetail := NewMilestoneDetailView(state.Workdir)
-	milestoneHistory := NewMilestoneHistoryView(state.Workdir)
-	milestoneHistoryDiff := NewMilestoneHistoryDiffView(state.Workdir)
-	milestoneForm := NewMilestoneFormView(state.Workdir)
-	milestoneEditForm := NewMilestoneEditFormView(state.Workdir)
-	sprints := NewSprintsView(state.Workdir)
-	sprintDetail := NewSprintDetailView(state.Workdir)
-	sprintHistory := NewSprintHistoryView(state.Workdir)
-	sprintHistoryDiff := NewSprintHistoryDiffView(state.Workdir)
-	sprintForm := NewSprintFormView(state.Workdir)
-	sprintEditForm := NewSprintEditFormView(state.Workdir)
+	board := newBoardView(state.Workdir)
+	issues := newIssuesView(state.Workdir)
+	issueDetail := newIssueDetailView(state.Workdir)
+	issueHistory := newIssueHistoryView(state.Workdir)
+	issueHistoryDiff := newIssueHistoryDiffView(state.Workdir)
+	issueFormView := newIssueFormView(state.Workdir)
+	issueEditForm := newIssueEditFormView(state.Workdir)
+	config := newConfigView(state.Workdir)
+	milestones := newMilestonesView(state.Workdir)
+	milestoneDetail := newMilestoneDetailView(state.Workdir)
+	milestoneHistory := newMilestoneHistoryView(state.Workdir)
+	milestoneHistoryDiff := newMilestoneHistoryDiffView(state.Workdir)
+	milestoneFormView := newMilestoneFormView(state.Workdir)
+	milestoneEditForm := newMilestoneEditFormView(state.Workdir)
+	sprints := newSprintsView(state.Workdir)
+	sprintDetail := newSprintDetailView(state.Workdir)
+	sprintHistory := newSprintHistoryView(state.Workdir)
+	sprintHistoryDiff := newSprintHistoryDiffView(state.Workdir)
+	sprintFormView := newSprintFormView(state.Workdir)
+	sprintEditForm := newSprintEditFormView(state.Workdir)
 	host.AddView("/pm/board", board)
 	host.AddView("/pm/issues", issues)
 	host.AddView("/pm/issue", issueDetail)
 	host.AddView("/pm/issue/history", issueHistory)
 	host.AddView("/pm/issue/history/diff", issueHistoryDiff)
-	host.AddView("/pm/new-issue", issueForm)
+	host.AddView("/pm/new-issue", issueFormView)
 	host.AddView("/pm/edit-issue", issueEditForm)
 	host.AddView("/pm/config", config)
 	host.AddView("/pm/milestones", milestones)
 	host.AddView("/pm/milestone", milestoneDetail)
 	host.AddView("/pm/milestone/history", milestoneHistory)
 	host.AddView("/pm/milestone/history/diff", milestoneHistoryDiff)
-	host.AddView("/pm/new-milestone", milestoneForm)
+	host.AddView("/pm/new-milestone", milestoneFormView)
 	host.AddView("/pm/edit-milestone", milestoneEditForm)
 	host.AddView("/pm/sprints", sprints)
 	host.AddView("/pm/sprint", sprintDetail)
 	host.AddView("/pm/sprint/history", sprintHistory)
 	host.AddView("/pm/sprint/history/diff", sprintHistoryDiff)
-	host.AddView("/pm/new-sprint", sprintForm)
+	host.AddView("/pm/new-sprint", sprintFormView)
 	host.AddView("/pm/edit-sprint", sprintEditForm)
 }
 
@@ -250,41 +250,41 @@ func Register(host tuicore.ViewHost) {
 
 func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	switch msg := msg.(type) {
-	case IssueCreatedMsg:
+	case issueCreatedMsg:
 		return handleIssueCreated(msg, ctx)
-	case IssueUpdatedMsg:
+	case issueUpdatedMsg:
 		return handleIssueUpdated(msg, ctx)
-	case IssueClosedMsg:
+	case issueClosedMsg:
 		return handleStateChange(msg.Err, "Issue closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
-	case MilestoneClosedMsg:
+	case milestoneClosedMsg:
 		return handleStateChange(msg.Err, "Milestone closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
-	case SprintCompletedMsg:
+	case sprintCompletedMsg:
 		return handleStateChange(msg.Err, "Sprint completed", "Completion proposed (awaiting acceptance)", msg.Proposed, ctx)
-	case MilestoneUpdatedMsg:
+	case milestoneUpdatedMsg:
 		return handleMilestoneUpdated(msg, ctx)
-	case SprintUpdatedMsg:
+	case sprintUpdatedMsg:
 		return handleSprintUpdated(msg, ctx)
-	case PMConfigSavedMsg:
+	case pmConfigSavedMsg:
 		return handlePMConfigSaved(msg, ctx)
-	case IssueRetractedMsg:
+	case issueRetractedMsg:
 		return handleRetract(msg.Err, msg.Proposed, "Issue retracted", "Retraction proposed (awaiting acceptance)", ctx)
-	case MilestoneRetractedMsg:
+	case milestoneRetractedMsg:
 		return handleRetract(msg.Err, msg.Proposed, "Milestone retracted", "Retraction proposed (awaiting acceptance)", ctx)
-	case SprintRetractedMsg:
+	case sprintRetractedMsg:
 		return handleRetract(msg.Err, msg.Proposed, "Sprint retracted", "Retraction proposed (awaiting acceptance)", ctx)
 	}
 	return false, nil
 }
 
-func handlePMConfigSaved(msg PMConfigSavedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handlePMConfigSaved(msg pmConfigSavedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err == "" {
 		pm.UpdatePMNavItems(ctx.Nav().Registry(), ctx.Workdir())
 	}
-	// Pass through to ConfigView
+	// Pass through to configView
 	return false, nil
 }
 
-func handleIssueCreated(msg IssueCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleIssueCreated(msg issueCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -309,7 +309,7 @@ func handleIssueCreated(msg IssueCreatedMsg, ctx tuicore.AppContext) (bool, tea.
 	})
 }
 
-func handleIssueUpdated(msg IssueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleIssueUpdated(msg issueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -327,7 +327,7 @@ func handleIssueUpdated(msg IssueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.
 	})
 }
 
-func handleMilestoneUpdated(msg MilestoneUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleMilestoneUpdated(msg milestoneUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil
@@ -345,7 +345,7 @@ func handleMilestoneUpdated(msg MilestoneUpdatedMsg, ctx tuicore.AppContext) (bo
 	})
 }
 
-func handleSprintUpdated(msg SprintUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+func handleSprintUpdated(msg sprintUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return true, nil

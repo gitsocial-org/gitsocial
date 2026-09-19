@@ -8,14 +8,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
-// ThreadLoadedMsg is sent when thread data is loaded
-type ThreadLoadedMsg struct {
+// threadLoadedMsg is sent when thread data is loaded
+type threadLoadedMsg struct {
 	Posts []social.Post
 	Err   error
 }
 
-// RepositoryLoadedMsg is sent when repository posts are loaded
-type RepositoryLoadedMsg struct {
+// repositoryLoadedMsg is sent when repository posts are loaded
+type repositoryLoadedMsg struct {
 	Posts   []social.Post
 	HasMore bool
 	Append  bool
@@ -23,10 +23,10 @@ type RepositoryLoadedMsg struct {
 	Err     error
 }
 
-// RepositoryCountLoadedMsg is sent when the repository total count finishes
-// loading. Sent independently of RepositoryLoadedMsg because COUNT(*) over
+// repositoryCountLoadedMsg is sent when the repository total count finishes
+// loading. Sent independently of repositoryLoadedMsg because COUNT(*) over
 // huge repos (e.g. linux kernel) can take many seconds.
-type RepositoryCountLoadedMsg struct {
+type repositoryCountLoadedMsg struct {
 	Total int
 }
 
@@ -36,8 +36,8 @@ type ListsLoadedMsg struct {
 	Err   error
 }
 
-// ListPostsLoadedMsg is sent when posts from a list are loaded
-type ListPostsLoadedMsg struct {
+// listPostsLoadedMsg is sent when posts from a list are loaded
+type listPostsLoadedMsg struct {
 	ListID  string
 	List    *social.List
 	Posts   []social.Post
@@ -47,43 +47,43 @@ type ListPostsLoadedMsg struct {
 	Err     error
 }
 
-// ListCreatedMsg is sent when a list is created
-type ListCreatedMsg struct {
+// listCreatedMsg is sent when a list is created
+type listCreatedMsg struct {
 	List social.List
 	Err  error
 }
 
-// ListDeletedMsg is sent when a list is deleted
-type ListDeletedMsg struct {
+// listDeletedMsg is sent when a list is deleted
+type listDeletedMsg struct {
 	ListID string
 	Err    error
 }
 
-// RepoAddedMsg is sent when a repo is added to a list
-type RepoAddedMsg struct {
+// repoAddedMsg is sent when a repo is added to a list
+type repoAddedMsg struct {
 	ListID   string
 	ListName string
 	RepoURL  string
 	Err      error
 }
 
-// RepoRemovedMsg is sent when a repo is removed from a list
-type RepoRemovedMsg struct {
+// repoRemovedMsg is sent when a repo is removed from a list
+type repoRemovedMsg struct {
 	ListID  string
 	RepoURL string
 	Err     error
 }
 
-// CommentCreatedMsg is sent when a comment is created
-type CommentCreatedMsg struct {
+// commentCreatedMsg is sent when a comment is created
+type commentCreatedMsg struct {
 	Post social.Post
 }
 
-// RetractStartedMsg is sent when retraction begins
-type RetractStartedMsg struct{}
+// retractStartedMsg is sent when retraction begins
+type retractStartedMsg struct{}
 
-// PostRetractedMsg is sent when a post has been retracted
-type PostRetractedMsg struct {
+// postRetractedMsg is sent when a post has been retracted
+type postRetractedMsg struct {
 	PostID string
 	Err    error
 }
@@ -104,9 +104,9 @@ type TimelineCountLoadedMsg struct {
 	Total int
 }
 
-// ListPostsCountLoadedMsg is sent when a list's total count finishes loading.
+// listPostsCountLoadedMsg is sent when a list's total count finishes loading.
 // ListID lets the receiving view ignore counts for stale list selections.
-type ListPostsCountLoadedMsg struct {
+type listPostsCountLoadedMsg struct {
 	ListID string
 	Total  int
 }
@@ -128,8 +128,8 @@ type PushCompletedMsg struct {
 	Err     error
 }
 
-// RepositoryFetchedMsg is sent when unfollowed repo posts are fetched
-type RepositoryFetchedMsg struct {
+// repositoryFetchedMsg is sent when unfollowed repo posts are fetched
+type repositoryFetchedMsg struct {
 	Posts  int
 	Months []string // Fetched months (e.g., ["2026-01", "2025-12"])
 	Err    error
@@ -142,8 +142,8 @@ type RepoFetchedAfterAddMsg struct {
 	Err     error
 }
 
-// RepoListsLoadedMsg is sent when lists are loaded from cache
-type RepoListsLoadedMsg struct {
+// repoListsLoadedMsg is sent when lists are loaded from cache
+type repoListsLoadedMsg struct {
 	Lists []cache.ExternalRepoList
 	Err   error
 }
