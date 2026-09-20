@@ -102,6 +102,7 @@ GitMsg trailers MAY coexist with standard git trailers (`Signed-off-by:`, `Co-au
 Messages MAY be edited or retracted using the `edits` field.
 
 - `edits` MUST reference the original message, not intermediate edits
+- Edits MUST be stored on the same branch as the original message
 - Edit commits MUST contain complete replacement content
 - Latest edit by timestamp is current version; tie-breaker: commit hash lexicographically descending
 - Original commit hash remains the canonical ID
@@ -251,15 +252,13 @@ Implementations MAY consult additional attestation sources, such as forge-publis
 - SHOULD handle unknown extensions gracefully
 - Configuration MUST be stored at `refs/gitmsg/<extension-name>/config` as JSON
 
-### 3.4. Branch Resolution
+Extension names MUST use the form `<name>`, and third-party extensions MUST use `<vendor>/<name>`. `<vendor>` MUST NOT be `core`, `social`, `pm`, `review`, `release` or `memo`.
 
-Extensions store content on a dedicated branch. Implementations MUST resolve the content branch using the following algorithm:
+### 3.4. Content Branch
 
-1. Read `refs/gitmsg/<extension-name>/config` for a configured `branch` value
-2. If not found, check if `gitmsg/<extension-name>` branch exists (convention)
-3. If not found, use the repository default branch
+Messages with a `GitMsg:` trailer MUST be stored on the `gitmsg/<extension-name>` branch. Implementations MUST only scan that branch for the extension's messages.
 
-Implementations MUST only scan the resolved branch for extension content.
+Exception: `social` messages MAY be stored on any branch (see GITSOCIAL.md 2).
 
 ### 3.5. Manifest
 
@@ -276,7 +275,7 @@ Extension manifests enable cross-extension discovery and compatibility. When an 
 }
 ```
 
-Extension manifests MUST include: `name` (matching `[a-z][a-z0-9_-]*`), `version` (semver), `description`.
+Extension manifests MUST include: `name` (the extension name, see 3.3), `version` (semver), `description`.
 
 Extension manifests MAY include: `display` (human-readable name), `types` (array of valid values for the `type` field), `fields` (array of extension-specific field names for both `GitMsg:` and `GitMsg-Ref:` trailers).
 
@@ -287,11 +286,11 @@ Core fields (`type`, `author`, `email`, `time`, `ref`, `edits`, `retracted`, `la
 - Header trailer: `^GitMsg: (.*)$`
 - Reference trailer: `^GitMsg-Ref: (.*)$`
 - Continuation line: `^ > .*$` or `^ >$`
-- Required Fields: `ext="[a-z][a-z0-9_-]*"`, `v="\d+\.\d+\.\d+"`
+- Required Fields: `ext="[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)?"`, `v="\d+\.\d+\.\d+"`
 - Optional Fields: `ext-v="\d+\.\d+\.\d+"` (for third-party extensions)
 - Versioning Fields: `edits="<reference>"`, `retracted="true"` (boolean, requires `edits`)
 - Origin Fields: `origin-author-email="<email>"`, `origin-author-name="<name>"`, `origin-platform="<string>"`, `origin-time="<ISO 8601>"`, `origin-url="<URL>"`
-- Extension Name: `^[a-z][a-z0-9_-]*$`
+- Extension Name: `^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)?$` (second segment for third-party extensions)
 - Version: `^\d+\.\d+\.\d+$`
 - Repo Prefix (HTTPS): `^https?://[^#]+#`
 - Repo Prefix (SSH): `^git@[^:]+:[^#]+#`

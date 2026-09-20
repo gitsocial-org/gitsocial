@@ -34,7 +34,7 @@ Field order: `artifact-url`, `artifacts`, `checksums`, `prerelease`, `sbom`, `si
 
 ### 1.4. Editing and Retracting
 
-Releases MAY be edited or retracted using core versioning (GITMSG.md Section 1.5). Implementations SHOULD display an edit indicator on modified releases.
+Releases MAY be edited or retracted using core versioning (GITMSG.md Section 1.5).
 
 Retracted releases SHOULD be hidden from release listings but MAY remain accessible for audit purposes. Retracting a release SHOULD NOT delete stored artifacts.
 
@@ -57,15 +57,12 @@ Configuration MUST be stored at `refs/gitmsg/release/config`:
 ```json
 {
   "version": "0.1.0",
-  "branch": "gitmsg/release",
   "require-signature": false,
   "checksum-algorithm": "sha256"
 }
 ```
 
 Configuration MUST include: `version`.
-
-Configuration SHOULD include: `branch`. Default: `gitmsg/release`.
 
 Configuration MAY include: `require-signature`, `checksum-algorithm` (one of: `sha256`, `sha512`).
 

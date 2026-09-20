@@ -1,6 +1,6 @@
 # Social Extension
 
-Posts, comments, reposts and quotes are commits on the `gitmsg/social` branch ([GITSOCIAL.md](../specs/GITSOCIAL.md)), and the timeline is the union of the lists a workspace follows.
+Posts, comments, reposts and quotes are commits ([GITSOCIAL.md](../specs/GITSOCIAL.md)), written to the `gitmsg/social` branch unless `init` names another. The timeline is the union of the lists a workspace follows.
 
 [Initialize](#initialize) · [Post](#post) · [Lists and timeline](#lists-and-timeline) · [Followers](#followers) · [Reference](#reference)
 
@@ -11,7 +11,7 @@ gitsocial social init [-b <branch>]        # refs/gitmsg/social/config and the g
 gitsocial social config get|set|list
 ```
 
-`init` is idempotent. On the configured branch a commit without a `GitMsg:` trailer is a post, so a plain `git commit` there posts. Commits with a trailer are comments, reposts, quotes, edits or retractions. Other branches are ignored.
+`init` is idempotent. `-b` names the branch that `post`, `comment`, `repost` and `quote` write to. A commit without a `GitMsg:` trailer is a post on any branch the timeline reads, so a plain `git commit` posts too. Commits with a trailer are comments, reposts, quotes, edits or retractions.
 
 ## Post
 
@@ -42,7 +42,7 @@ gitsocial social timeline [-l following] [-r workspace] [-n 50]
 gitsocial social fetch                      # every repository in every list; `gitsocial fetch` does this and more
 ```
 
-`list add` fetches the URL as you write it, and `list remove` takes any spelling of it: two URLs naming one repository match by canonical form. A repository is in a list once, on one branch or on all of them.
+`list add` fetches the URL as you write it, and `list remove` takes any spelling of it: two URLs naming one repository match by canonical form. A repository is in a list once, on one branch or on all of them. The timeline reads the branch the entry names and the repository's `gitmsg/social` branch, and every branch of the workspace.
 
 ## Followers
 
@@ -54,7 +54,7 @@ gitsocial social followers [--json]
 
 ## Reference
 
-- Branch resolution follows [GITMSG.md §3.4](../specs/GITMSG.md#34-branch-resolution).
+- Where social messages are stored is specified in [GITMSG.md §3.4](../specs/GITMSG.md#34-content-branch).
 - Lists live at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)), so adds from concurrent clones do not collide.
 - The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)), and orders by effective timestamp, newest first; imported content sorts by its origin time.
 - A card's comment, repost and quote counts follow the items that are live now, so retracting a comment lowers them.

@@ -113,14 +113,11 @@ Configuration MUST be stored at `refs/gitmsg/pm/config`.
 
 Configuration MUST include: `version`.
 
-Configuration SHOULD include: `branch`. Default: `gitmsg/pm`.
-
 Configuration MAY include: `framework` (board framework preset: `minimal`, `kanban`, `scrum`; default: `kanban`), `boards` (array of custom board definitions).
 
 ```json
 {
   "version": "0.1.0",
-  "branch": "gitmsg/pm",
   "framework": "kanban"
 }
 ```

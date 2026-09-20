@@ -71,7 +71,7 @@ When transitioning to `state="merged"`, implementations MUST include `merge-base
 
 When resolving a cross-repository pull request (fork PR) by merge or close, implementations SHOULD first copy it to the upstream review branch, carrying `adopts="<fork-pr-ref>"` (naming the fork PR) and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
 
-Feedback messages MAY be edited or retracted using core versioning. Implementations SHOULD display an edit indicator on modified messages.
+Feedback messages MAY be edited or retracted using core versioning.
 
 ### 1.6. Comments
 
@@ -112,14 +112,11 @@ Configuration MUST be stored at `refs/gitmsg/review/config`:
 ```json
 {
   "version": "0.1.0",
-  "branch": "gitmsg/review",
   "require-review": true
 }
 ```
 
 Configuration MUST include: `version`.
-
-Configuration SHOULD include: `branch`. Default: `gitmsg/review`.
 
 Configuration MAY include: `require-review` (boolean, default `false`).
 

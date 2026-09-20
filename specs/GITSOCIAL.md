@@ -9,12 +9,12 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 ### 1.1. Types
 
 Message types:
-- `post`: Standard message (implicit - no header required on configured branch)
+- `post`: Standard message
 - `comment`: Response to content
 - `repost`: Share without commentary
 - `quote`: Share with commentary
 
-Commits without `GitMsg:` trailers on the configured branch (see Section 3) are implicit posts. Commits with `GitMsg:` trailers are explicit interactions.
+A commit without a `GitMsg:` trailer is a `post`. A `post` requires a trailer only when it uses a field (e.g., `edits`, `retracted`, origin fields).
 
 ### 1.2. Fields
 
@@ -37,7 +37,7 @@ Reference structure requirements:
 
 ### 1.4. Editing and Deleting
 
-Messages MAY be edited or deleted using core versioning (GITMSG.md 1.5). Implementations SHOULD display an edit indicator on modified messages.
+Messages MAY be edited or deleted using core versioning (GITMSG.md 1.5).
 
 ## 2. Lists
 
@@ -45,22 +45,19 @@ Lists define repositories to follow. Posts from repositories in lists appear in 
 
 Repository entries use `<url>#branch:<branch>` format. `#branch:*` follows all branches (see GITMSG.md 2.1).
 
+For each entry, implementations MUST read the named branch and the repository's `gitmsg/social` branch. On those branches, a commit without a `GitMsg:` trailer is a `post`, and a commit with a `GitMsg:` trailer whose `ext` is `social` is a social message.
+
 ## 3. Configuration
 
 Configuration is stored at `refs/gitmsg/social/config`:
 
 ```json
 {
-  "version": "0.1.0",
-  "branch": "gitmsg/social"
+  "version": "0.1.0"
 }
 ```
 
 Configuration MUST include: `version`.
-
-Configuration SHOULD include: `branch` (the branch containing all GitSocial content). Default: `gitmsg/social`.
-
-Branch resolution follows GITMSG.md Section 3.3. Only the resolved branch is scanned for social content. Commits without `GitMsg:` trailers on this branch are implicit posts. Commits with `GitMsg:` trailers on this branch are interactions. All other branches are ignored.
 
 ## 4. Manifest
 
@@ -77,7 +74,7 @@ Branch resolution follows GITMSG.md Section 3.3. Only the resolved branch is sca
 
 ## Appendix: Examples
 
-### Implicit Post
+### Post
 
 ```
 Hello world!
