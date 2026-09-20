@@ -191,7 +191,8 @@ func (sl *SectionList) updateSearchKey(action listAction) (bool, tea.Cmd) {
 		return true, sl.searchInput.Focus()
 	case listActionUnfocus:
 		sl.exitSearch()
-		return true, nil
+		// ConsumedCmd keeps the global esc binding from firing on the key we just used.
+		return true, ConsumedCmd
 	}
 	return false, nil
 }
@@ -211,13 +212,14 @@ func (sl *SectionList) Update(msg tea.Msg) (bool, tea.Cmd) {
 	}
 	switch action {
 	case listActionUnfocus:
+		// ConsumedCmd keeps the global esc binding from firing on the key we just used.
 		if sl.focusedLink >= 0 {
 			sl.focusedLink = -1
-			return true, nil
+			return true, ConsumedCmd
 		}
 		if sl.highlightQuery != "" {
 			sl.highlightQuery = ""
-			return true, nil
+			return true, ConsumedCmd
 		}
 	case listActionMoveDown:
 		sl.moveDown()

@@ -323,6 +323,27 @@ func TestSectionListSearchKeys(t *testing.T) {
 	}
 }
 
+// esc that the list consumes returns a command, so the global esc binding does not navigate back as well.
+func TestSectionListEscClaimsTheKey(t *testing.T) {
+	sl := newKeySectionList()
+	sl.Update(keyMsg(";"))
+	if _, cmd := sl.Update(keyMsg("esc")); cmd == nil {
+		t.Error("esc on a focused link: cmd = nil, so the global esc binding also navigates back")
+	}
+	sl.SetHighlightQuery("beta")
+	if _, cmd := sl.Update(keyMsg("esc")); cmd == nil {
+		t.Error("esc on a highlight: cmd = nil, so the global esc binding also navigates back")
+	}
+	sl.Update(keyMsg("/"))
+	for _, r := range "beta" {
+		sl.Update(keyMsg(string(r)))
+	}
+	sl.Update(keyMsg("enter"))
+	if _, cmd := sl.Update(keyMsg("esc")); cmd == nil {
+		t.Error("esc in search navigation: cmd = nil, so the global esc binding also navigates back")
+	}
+}
+
 // The mouse is inert while the search input has focus.
 func TestSectionListMouseIgnoredInSearchInput(t *testing.T) {
 	sl := newKeySectionList()
