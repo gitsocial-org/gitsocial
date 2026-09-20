@@ -348,7 +348,7 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 				continue
 			}
 			key := MappingKey(platform, "milestone", entry.item.ExternalID)
-			mapping.Record(key, hash, "gitmsg/pm", "milestone")
+			mapping.Record(key, hash, pm.PMBranch, "milestone")
 			stats.Milestones++
 		}
 		// Phase 4: prepare milestone close messages
@@ -461,7 +461,7 @@ func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 				continue
 			}
 			key := MappingKey(platform, "issue", entry.item.ExternalID)
-			mapping.Record(key, hash, "gitmsg/pm", "issue")
+			mapping.Record(key, hash, pm.PMBranch, "issue")
 			stats.Issues++
 		}
 		flushMapping(opts, mapping)
@@ -619,7 +619,7 @@ func executeRelease(opts Options, plan *ReleasePlan, mapping *MappingFile) Stats
 			continue
 		}
 		key := MappingKey(platform, "release", entry.item.ExternalID)
-		mapping.Record(key, hash, "gitmsg/release", "release")
+		mapping.Record(key, hash, releasepkg.ReleaseBranch, "release")
 		stats.Releases++
 	}
 	return stats
@@ -782,7 +782,7 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 			continue
 		}
 		key := MappingKey(platform, "pr", entry.item.ExternalID)
-		mapping.Record(key, hash, "gitmsg/review", "pull-request")
+		mapping.Record(key, hash, review.ReviewBranch, "pull-request")
 		stats.PRs++
 	}
 	flushMapping(opts, mapping)

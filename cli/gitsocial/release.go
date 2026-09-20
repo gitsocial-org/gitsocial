@@ -59,13 +59,9 @@ func newReleaseStatusCmd() *cobra.Command {
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 				slog.Debug("sync workspace", "error", err)
 			}
-			relConfig := release.GetReleaseConfig(cfg.WorkDir)
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, releaseExt)
 
-			branch := relConfig.Branch
-			if branch == "" {
-				branch = "(not configured)"
-			}
-
+			branch := release.ReleaseBranch
 			res := release.GetReleases("", "", "", 0)
 			count := 0
 			if res.Success {
@@ -89,8 +85,6 @@ func newReleaseStatusCmd() *cobra.Command {
 
 // newReleaseInitCmd builds the command that initializes GitRelease here.
 func newReleaseInitCmd() *cobra.Command {
-	var branch string
-
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitRelease in this repository",
@@ -100,13 +94,11 @@ func newReleaseInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if branch == "" {
-				branch = "gitmsg/release"
-			}
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, releaseExt)
 
+			branch := release.ReleaseBranch
 			relConfig := release.ReleaseConfig{
 				Version: "0.1.0",
-				Branch:  branch,
 			}
 			if err := release.SaveReleaseConfig(cfg.WorkDir, relConfig); err != nil {
 				PrintError(cmd, "save release config: "+err.Error())
@@ -125,7 +117,6 @@ func newReleaseInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&branch, "branch", "b", "gitmsg/release", "Branch to use for release content")
 	return cmd
 }
 

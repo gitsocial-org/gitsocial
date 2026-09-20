@@ -9,7 +9,7 @@ import (
 // FetchRepository fetches review data from a remote repository.
 func FetchRepository(cacheDir, repoURL, branch string) fetch.Result {
 	if branch == "" {
-		branch = "gitmsg/review"
+		branch = ReviewBranch
 	}
 	return fetch.FetchRepository(cacheDir, repoURL, branch, "", Processors(), nil)
 }

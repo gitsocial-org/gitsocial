@@ -55,13 +55,9 @@ func newReviewStatusCmd() *cobra.Command {
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 				slog.Debug("sync workspace", "error", err)
 			}
-			revConfig := review.GetReviewConfig(cfg.WorkDir)
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, reviewExt)
 
-			branch := revConfig.Branch
-			if branch == "" {
-				branch = "(not configured)"
-			}
-
+			branch := review.ReviewBranch
 			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
 			count, _ := review.CountPullRequests(repoURL, nil)
 			openCount, _ := review.CountPullRequests(repoURL, []string{"open"})
@@ -90,8 +86,6 @@ func newReviewStatusCmd() *cobra.Command {
 // --- init ---
 
 func newReviewInitCmd() *cobra.Command {
-	var branch string
-
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize GitReview in this repository",
@@ -101,13 +95,11 @@ func newReviewInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			if branch == "" {
-				branch = "gitmsg/review"
-			}
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, reviewExt)
 
+			branch := review.ReviewBranch
 			revConfig := review.ReviewConfig{
 				Version: "0.1.0",
-				Branch:  branch,
 			}
 			if err := review.SaveReviewConfig(cfg.WorkDir, revConfig); err != nil {
 				PrintError(cmd, "save review config: "+err.Error())
@@ -126,7 +118,6 @@ func newReviewInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&branch, "branch", "b", "gitmsg/review", "Branch to use for review content")
 	return cmd
 }
 

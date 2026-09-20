@@ -87,11 +87,9 @@ func newPMStatusCmd() *cobra.Command {
 				slog.Debug("sync workspace", "error", err)
 			}
 			pmConfig := pm.GetPMConfig(cfg.WorkDir)
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, pmExt)
 
-			branch := pmConfig.Branch
-			if branch == "" {
-				branch = "(not configured)"
-			}
+			branch := pm.PMBranch
 			framework := pmConfig.Framework
 			if framework == "" {
 				framework = "(not configured)"
@@ -121,7 +119,6 @@ func newPMStatusCmd() *cobra.Command {
 
 // newPMInitCmd creates the command to initialize GitPM in a repository.
 func newPMInitCmd() *cobra.Command {
-	var branch string
 	var framework string
 
 	cmd := &cobra.Command{
@@ -133,10 +130,9 @@ func newPMInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
+			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, pmExt)
 
-			if branch == "" {
-				branch = "gitmsg/pm"
-			}
+			branch := pm.PMBranch
 			if framework == "" {
 				framework = "kanban"
 			}
@@ -150,7 +146,6 @@ func newPMInitCmd() *cobra.Command {
 			// Save PM config with framework
 			pmConfig := pm.PMConfig{
 				Version:   "0.1.0",
-				Branch:    branch,
 				Framework: framework,
 			}
 			if err := pm.SavePMConfig(cfg.WorkDir, pmConfig); err != nil {
@@ -171,7 +166,6 @@ func newPMInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&branch, "branch", "b", "gitmsg/pm", "Branch to use for PM content")
 	cmd.Flags().StringVarP(&framework, "framework", "f", "kanban", "Framework to use: minimal, kanban, scrum")
 
 	return cmd

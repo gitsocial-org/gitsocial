@@ -9,10 +9,12 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
+// PMBranch is the branch PM content lives on; it is not configurable (GITPM.md).
+const PMBranch = "gitmsg/pm"
+
 // PMConfig represents the full PM configuration from refs/gitmsg/pm/config.
 type PMConfig struct {
 	Version   string        `json:"version"`
-	Branch    string        `json:"branch,omitempty"`
 	Framework string        `json:"framework,omitempty"`
 	Boards    []BoardConfig `json:"boards,omitempty"`
 }
@@ -43,7 +45,6 @@ type BoardView struct {
 func DefaultPMConfig() PMConfig {
 	return PMConfig{
 		Version:   "0.1.0",
-		Branch:    "gitmsg/pm",
 		Framework: "kanban",
 	}
 }
@@ -78,9 +79,6 @@ func GetPMConfig(workdir string) PMConfig {
 	}
 	if config.Version == "" {
 		config.Version = "0.1.0"
-	}
-	if config.Branch == "" {
-		config.Branch = "gitmsg/pm"
 	}
 	return config
 }
@@ -237,6 +235,7 @@ func SavePMConfig(workdir string, config PMConfig) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
+	raw["branch"] = PMBranch // the key stays the initialized marker IsExtInitialized reads
 	return gitmsg.WriteExtConfig(workdir, "pm", raw)
 }
 

@@ -7,11 +7,11 @@ A release is a commit on the `gitmsg/release` branch ([GITRELEASE.md](../specs/G
 ## Initialize
 
 ```
-gitsocial release init [-b <branch>]         # refs/gitmsg/release/config and the gitmsg/release branch
+gitsocial release init                       # refs/gitmsg/release/config and the gitmsg/release branch
 gitsocial release config get|set|list
 ```
 
-`init` is idempotent.
+`init` is idempotent. Releases always live on `gitmsg/release`: a `branch` value in the config is ignored, and `release status` prints the rename that moves content off it.
 
 ## Create
 

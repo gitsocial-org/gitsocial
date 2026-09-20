@@ -13,6 +13,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 )
 
+// ReleaseBranch is the branch release content lives on; it is not configurable (GITRELEASE.md).
+const ReleaseBranch = "gitmsg/release"
+
 // releaseFieldOrder declares the spec-defined field ordering for release headers (GITRELEASE.md 1.2).
 var releaseFieldOrder = []string{"artifact-url", "artifacts", "checksums", "labels", "prerelease", "sbom", "signed-by", "tag", "version"}
 
@@ -341,7 +344,6 @@ func cacheReleaseFromCommit(workdir, repoURL, hash, branch string) error {
 // ReleaseConfig holds release extension configuration.
 type ReleaseConfig struct {
 	Version           string `json:"version"`
-	Branch            string `json:"branch,omitempty"`
 	RequireSignature  bool   `json:"require-signature,omitempty"`
 	ChecksumAlgorithm string `json:"checksum-algorithm,omitempty"`
 }
@@ -359,6 +361,7 @@ func SaveReleaseConfig(workdir string, config ReleaseConfig) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
+	raw["branch"] = ReleaseBranch // the key stays the initialized marker IsExtInitialized reads
 	return gitmsg.WriteExtConfig(workdir, "release", raw)
 }
 
@@ -366,23 +369,17 @@ func SaveReleaseConfig(workdir string, config ReleaseConfig) error {
 func GetReleaseConfig(workdir string) ReleaseConfig {
 	configMap, err := gitmsg.ReadExtConfig(workdir, "release")
 	if err != nil || configMap == nil {
-		return ReleaseConfig{Branch: "gitmsg/release"}
+		return ReleaseConfig{}
 	}
 	var config ReleaseConfig
 	if v, ok := configMap["version"].(string); ok {
 		config.Version = v
-	}
-	if v, ok := configMap["branch"].(string); ok {
-		config.Branch = v
 	}
 	if v, ok := configMap["require-signature"].(bool); ok {
 		config.RequireSignature = v
 	}
 	if v, ok := configMap["checksum-algorithm"].(string); ok {
 		config.ChecksumAlgorithm = v
-	}
-	if config.Branch == "" {
-		config.Branch = "gitmsg/release"
 	}
 	return config
 }

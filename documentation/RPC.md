@@ -944,7 +944,7 @@ Initializes an extension in the workspace.
 
 Params:
 - `extension` (string, required): Extension name
-- `branch` (string): Custom branch name
+- `branch` (string): Custom branch name, honored for `social` only
 
 Result: `true`
 

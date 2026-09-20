@@ -251,7 +251,7 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 // concurrently between when the close was requested and when it ran).
 func CloseIssue(workdir, issueRef string) Result[Issue] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
-	ref := protocol.ResolveRefWithDefaults(issueRef, repoURL, "gitmsg/pm")
+	ref := protocol.ResolveRefWithDefaults(issueRef, repoURL, PMBranch)
 	if ref.Hash != "" {
 		if retracted, _ := IsItemRetracted(ref.RepoURL, ref.Hash, ref.Branch); retracted {
 			return result.Err[Issue]("RETRACTED",

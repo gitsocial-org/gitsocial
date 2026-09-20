@@ -25,7 +25,7 @@ gitsocial [--json] <command> [subcommand] [args] [flags]
 | `release` | [RELEASE.md](RELEASE.md) | releases, artifacts, SBOM |
 | `memo` | [MEMO.md](MEMO.md) | memos across tiers |
 
-Each extension has `init`, `status` and `config`; `memo` inits per tier.
+Each extension has `init`, `status` and `config`; `memo` inits per tier. Content lives on `gitmsg/<extension>`, and only `social init` takes `-b` to name another branch.
 
 ## Core Commands
 

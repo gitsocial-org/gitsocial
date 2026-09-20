@@ -8,7 +8,7 @@ import (
 // FetchRepository fetches PM data from a remote repository.
 func FetchRepository(cacheDir, repoURL, branch string) fetch.Result {
 	if branch == "" {
-		branch = "gitmsg/pm"
+		branch = PMBranch
 	}
 	return fetch.FetchRepository(cacheDir, repoURL, branch, "", Processors(), nil)
 }

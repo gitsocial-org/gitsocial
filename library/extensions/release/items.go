@@ -87,7 +87,7 @@ func GetReleaseItem(repoURL, hash, branch string) (*ReleaseItem, error) {
 
 // GetReleaseItemByRef looks up a release item by its ref string.
 func GetReleaseItemByRef(refStr string, defaultRepoURL string) (*ReleaseItem, error) {
-	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, "gitmsg/release")
+	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, ReleaseBranch)
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
 	}

@@ -153,15 +153,18 @@ func TestPROperations(t *testing.T) {
 		}
 	})
 
-	t.Run("GetPR_onConfiguredBranch", func(t *testing.T) {
+	t.Run("CreatePR_ignoresConfiguredBranch", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		if err := SaveReviewConfig(dir, ReviewConfig{Branch: "gitmsg/pr"}); err != nil {
-			t.Fatalf("SaveReviewConfig() failed: %v", err)
+		if err := gitmsg.SetExtConfigValue(dir, "review", "branch", "gitmsg/pr"); err != nil {
+			t.Fatalf("SetExtConfigValue() failed: %v", err)
 		}
-		created := CreatePR(dir, "PR on another branch", "", CreatePROptions{Base: "main", Head: "feature"})
+		created := CreatePR(dir, "PR on the fixed branch", "", CreatePROptions{Base: "main", Head: "feature"})
 		if !created.Success {
 			t.Fatalf("CreatePR() failed: %s", created.Error.Message)
+		}
+		if created.Data.Branch != ReviewBranch {
+			t.Errorf("Branch = %q, want %q", created.Data.Branch, ReviewBranch)
 		}
 		hash := protocol.ParseRef(created.Data.ID).Value
 		if res := GetPR(hash); !res.Success {
@@ -795,9 +798,6 @@ func TestReviewConfig(t *testing.T) {
 		if config.Version != "" {
 			t.Errorf("Version = %q, want empty", config.Version)
 		}
-		if config.Branch != "gitmsg/review" {
-			t.Errorf("Branch = %q, want gitmsg/review", config.Branch)
-		}
 	})
 
 	t.Run("GetForks_empty", func(t *testing.T) {
@@ -814,7 +814,6 @@ func TestReviewConfig(t *testing.T) {
 		dir := initTestRepo(t)
 		err := SaveReviewConfig(dir, ReviewConfig{
 			Version:       "0.1.0",
-			Branch:        "gitmsg/review",
 			RequireReview: true,
 		})
 		if err != nil {
@@ -824,8 +823,8 @@ func TestReviewConfig(t *testing.T) {
 		if config.Version != "0.1.0" {
 			t.Errorf("Version = %q, want 0.1.0", config.Version)
 		}
-		if config.Branch != "gitmsg/review" {
-			t.Errorf("Branch = %q, want gitmsg/review", config.Branch)
+		if !gitmsg.IsExtInitialized(dir, "review") {
+			t.Error("a saved config should carry the branch key IsExtInitialized reads")
 		}
 		if !config.RequireReview {
 			t.Error("RequireReview should be true")
@@ -844,8 +843,8 @@ func TestReviewConfig(t *testing.T) {
 	t.Run("SaveReviewConfig_update", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0", Branch: "gitmsg/review"})
-		SaveReviewConfig(dir, ReviewConfig{Version: "0.2.0", Branch: "gitmsg/review"})
+		SaveReviewConfig(dir, ReviewConfig{Version: "0.1.0"})
+		SaveReviewConfig(dir, ReviewConfig{Version: "0.2.0"})
 		config := GetReviewConfig(dir)
 		if config.Version != "0.2.0" {
 			t.Errorf("Version = %q, want 0.2.0", config.Version)

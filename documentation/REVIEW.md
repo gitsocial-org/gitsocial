@@ -7,11 +7,11 @@ Pull requests and review feedback are commits on the `gitmsg/review` branch ([GI
 ## Initialize
 
 ```
-gitsocial review init [-b <branch>]         # refs/gitmsg/review/config and the gitmsg/review branch
+gitsocial review init                       # refs/gitmsg/review/config and the gitmsg/review branch
 gitsocial review config get|set|list
 ```
 
-`init` is idempotent.
+`init` is idempotent. Pull requests and feedback always live on `gitmsg/review`: a `branch` value in the config is ignored, and `review status` prints the rename that moves content off it.
 
 ## Pull requests
 

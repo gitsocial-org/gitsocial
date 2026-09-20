@@ -905,9 +905,6 @@ func TestBoardAndConfig(t *testing.T) {
 		if config.Version != "0.1.0" {
 			t.Errorf("Version = %q", config.Version)
 		}
-		if config.Branch != "gitmsg/pm" {
-			t.Errorf("Branch = %q", config.Branch)
-		}
 		if config.Framework != "kanban" {
 			t.Errorf("Framework = %q", config.Framework)
 		}
@@ -918,7 +915,6 @@ func TestBoardAndConfig(t *testing.T) {
 		workdir := cloneFixture(t)
 		config := PMConfig{
 			Version:   "0.2.0",
-			Branch:    "gitmsg/pm",
 			Framework: "scrum",
 		}
 		if err := SavePMConfig(workdir, config); err != nil {
@@ -927,6 +923,9 @@ func TestBoardAndConfig(t *testing.T) {
 		loaded := GetPMConfig(workdir)
 		if loaded.Framework != "scrum" {
 			t.Errorf("Framework = %q, want scrum", loaded.Framework)
+		}
+		if !gitmsg.IsExtInitialized(workdir, "pm") {
+			t.Error("a saved config should carry the branch key IsExtInitialized reads")
 		}
 	})
 
@@ -943,7 +942,7 @@ func TestBoardAndConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("GetPMConfig_emptyVersionAndBranch", func(t *testing.T) {
+	t.Run("GetPMConfig_emptyVersionField", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		hash, err := git.CreateCommitTree(workdir, `{"framework":"scrum"}`, "")
@@ -954,9 +953,6 @@ func TestBoardAndConfig(t *testing.T) {
 		config := GetPMConfig(workdir)
 		if config.Version != "0.1.0" {
 			t.Errorf("empty version should default to 0.1.0, got %q", config.Version)
-		}
-		if config.Branch != "gitmsg/pm" {
-			t.Errorf("empty branch should default to gitmsg/pm, got %q", config.Branch)
 		}
 		if config.Framework != "scrum" {
 			t.Errorf("Framework = %q, want scrum", config.Framework)

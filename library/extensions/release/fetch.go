@@ -8,7 +8,7 @@ import (
 // FetchRepository fetches release data from a remote repository.
 func FetchRepository(cacheDir, repoURL, branch string) fetch.Result {
 	if branch == "" {
-		branch = "gitmsg/release"
+		branch = ReleaseBranch
 	}
 	return fetch.FetchRepository(cacheDir, repoURL, branch, "", Processors(), nil)
 }

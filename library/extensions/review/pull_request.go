@@ -650,10 +650,12 @@ func RetractPR(workdir, prRef string) Result[bool] {
 	return result.Ok(true)
 }
 
+// ReviewBranch is the branch review content lives on; it is not configurable (GITREVIEW.md).
+const ReviewBranch = "gitmsg/review"
+
 // ReviewConfig holds review extension configuration.
 type ReviewConfig struct {
 	Version       string `json:"version"`
-	Branch        string `json:"branch,omitempty"`
 	RequireReview bool   `json:"require-review,omitempty"`
 }
 
@@ -662,10 +664,7 @@ func SaveReviewConfig(workdir string, config ReviewConfig) error {
 	if config.Version == "" {
 		config.Version = "0.1.0"
 	}
-	raw := map[string]interface{}{"version": config.Version}
-	if config.Branch != "" {
-		raw["branch"] = config.Branch
-	}
+	raw := map[string]interface{}{"version": config.Version, "branch": ReviewBranch} // the key stays the initialized marker IsExtInitialized reads
 	if config.RequireReview {
 		raw["require-review"] = true
 	}
@@ -676,20 +675,14 @@ func SaveReviewConfig(workdir string, config ReviewConfig) error {
 func GetReviewConfig(workdir string) ReviewConfig {
 	configMap, err := gitmsg.ReadExtConfig(workdir, "review")
 	if err != nil || configMap == nil {
-		return ReviewConfig{Branch: "gitmsg/review"}
+		return ReviewConfig{}
 	}
 	var config ReviewConfig
 	if v, ok := configMap["version"].(string); ok {
 		config.Version = v
 	}
-	if v, ok := configMap["branch"].(string); ok {
-		config.Branch = v
-	}
 	if v, ok := configMap["require-review"].(bool); ok {
 		config.RequireReview = v
-	}
-	if config.Branch == "" {
-		config.Branch = "gitmsg/review"
 	}
 	return config
 }

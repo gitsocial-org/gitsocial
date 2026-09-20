@@ -213,8 +213,8 @@ func coreInitExtension(s *Server) HandlerFunc {
 			return nil, appError(CodeConflict, "CONFLICT", fmt.Sprintf("extension %s already initialized", p.Extension))
 		}
 		branch := p.Branch
-		if branch == "" {
-			branch = "gitmsg/" + p.Extension
+		if branch == "" || !gitmsg.IsBranchConfigurable(p.Extension) {
+			branch = gitmsg.GetExtBranch(s.session.Workdir, p.Extension)
 		}
 		config := map[string]interface{}{
 			"branch": branch,

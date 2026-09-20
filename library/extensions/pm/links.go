@@ -206,7 +206,7 @@ func IsBlocked(issueRef string) bool {
 
 // resolveRefForLinks parses an issue ref string into an IssueRef.
 func resolveRefForLinks(issueRef string) (IssueRef, error) {
-	parsed := protocol.ResolveRefWithDefaults(issueRef, "", "gitmsg/pm")
+	parsed := protocol.ResolveRefWithDefaults(issueRef, "", PMBranch)
 	if parsed.Hash == "" {
 		return IssueRef{}, sql.ErrNoRows
 	}

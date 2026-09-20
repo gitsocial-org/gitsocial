@@ -404,6 +404,24 @@ func TestGetExtBranch_configured(t *testing.T) {
 	}
 }
 
+func TestGetExtBranch_configuredIsIgnoredOutsideSocial(t *testing.T) {
+	t.Parallel()
+
+	for _, ext := range []string{"pm", "review", "release", "memo"} {
+		dir := initTestRepo(t)
+		SetExtConfigValue(dir, ext, "branch", "custom-branch")
+		if branch := GetExtBranch(dir, ext); branch != "gitmsg/"+ext {
+			t.Errorf("GetExtBranch(%q) = %q, want gitmsg/%s", ext, branch, ext)
+		}
+	}
+
+	dir := initTestRepo(t)
+	SetExtConfigValue(dir, "social", "branch", "custom-branch")
+	if branch := GetExtBranch(dir, "social"); branch != "custom-branch" {
+		t.Errorf("GetExtBranch(\"social\") = %q, want custom-branch", branch)
+	}
+}
+
 func TestIsExtInitialized(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)

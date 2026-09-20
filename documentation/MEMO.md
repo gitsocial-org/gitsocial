@@ -1,6 +1,6 @@
 # Memo Extension
 
-Memos are knowledge kept as commits on a `gitmsg/memo` branch (core protocol only, [GITMSG.md](../specs/GITMSG.md)), at one of five tiers and organized by labels.
+Memos are knowledge kept as commits on the fixed `gitmsg/memo` branch (core protocol only, [GITMSG.md](../specs/GITMSG.md)), at one of five tiers and organized by labels.
 
 [Tiers](#tiers) · [Initialize](#initialize) · [Write and promote](#write-and-promote) · [Sessions](#sessions) · [Inherit](#inherit) · [Labels](#labels) · [Workflows](#workflows) · [Reference](#reference)
 

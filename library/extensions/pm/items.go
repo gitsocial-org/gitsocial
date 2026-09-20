@@ -204,7 +204,7 @@ func GetPMItem(repoURL, hash, branch string) (*PMItem, error) {
 
 // GetPMItemByRef looks up a PM item by its ref string.
 func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
-	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, "gitmsg/pm")
+	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, PMBranch)
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
 	}

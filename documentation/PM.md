@@ -7,11 +7,11 @@ Issues, milestones and sprints are commits on the `gitmsg/pm` branch ([GITPM.md]
 ## Initialize
 
 ```
-gitsocial pm init [-b <branch>]          # refs/gitmsg/pm/config and the gitmsg/pm branch
+gitsocial pm init                       # refs/gitmsg/pm/config and the gitmsg/pm branch
 gitsocial pm config get|set|list
 ```
 
-`init` is idempotent.
+`init` is idempotent. Issues, milestones and sprints always live on `gitmsg/pm`: a `branch` value in the config is ignored, and `pm status` prints the rename that moves content off it.
 
 ## Issues
 

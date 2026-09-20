@@ -169,10 +169,17 @@ func ListExtConfig(workdir, ext string) []ConfigKeyValue {
 	return result
 }
 
-// GetExtBranch returns the configured branch for an extension, defaulting to gitmsg/<ext>.
+// IsBranchConfigurable reports whether an extension may store its content on a configured branch.
+func IsBranchConfigurable(ext string) bool {
+	return ext == "social"
+}
+
+// GetExtBranch returns an extension's content branch, honoring a configured one only where it is configurable.
 func GetExtBranch(workdir, ext string) string {
-	if val, ok := GetExtConfigValue(workdir, ext, "branch"); ok {
-		return val
+	if IsBranchConfigurable(ext) {
+		if val, ok := GetExtConfigValue(workdir, ext, "branch"); ok {
+			return val
+		}
 	}
 	return "gitmsg/" + ext
 }

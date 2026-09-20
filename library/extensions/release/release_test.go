@@ -10,6 +10,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -495,7 +496,6 @@ func TestSaveAndGetReleaseConfig(t *testing.T) {
 
 	err := SaveReleaseConfig(dir, ReleaseConfig{
 		Version:           "0.1.0",
-		Branch:            "gitmsg/release",
 		RequireSignature:  true,
 		ChecksumAlgorithm: "sha256",
 	})
@@ -507,8 +507,8 @@ func TestSaveAndGetReleaseConfig(t *testing.T) {
 	if config.Version != "0.1.0" {
 		t.Errorf("Version = %q, want 0.1.0", config.Version)
 	}
-	if config.Branch != "gitmsg/release" {
-		t.Errorf("Branch = %q, want gitmsg/release", config.Branch)
+	if !gitmsg.IsExtInitialized(dir, "release") {
+		t.Error("a saved config should carry the branch key IsExtInitialized reads")
 	}
 	if !config.RequireSignature {
 		t.Error("RequireSignature should be true")
@@ -540,8 +540,8 @@ func TestSaveReleaseConfig_defaultVersion(t *testing.T) {
 func TestSaveReleaseConfig_update(t *testing.T) {
 	dir := initTestRepo(t)
 
-	SaveReleaseConfig(dir, ReleaseConfig{Version: "0.1.0", Branch: "gitmsg/release"})
-	SaveReleaseConfig(dir, ReleaseConfig{Version: "0.2.0", Branch: "gitmsg/release"})
+	SaveReleaseConfig(dir, ReleaseConfig{Version: "0.1.0"})
+	SaveReleaseConfig(dir, ReleaseConfig{Version: "0.2.0"})
 
 	config := GetReleaseConfig(dir)
 	if config.Version != "0.2.0" {
@@ -688,8 +688,5 @@ func TestGetReleaseConfig_empty(t *testing.T) {
 	config := GetReleaseConfig(dir)
 	if config.Version != "" {
 		t.Errorf("Version = %q, want empty", config.Version)
-	}
-	if config.Branch != "gitmsg/release" {
-		t.Errorf("Branch = %q, want gitmsg/release", config.Branch)
 	}
 }

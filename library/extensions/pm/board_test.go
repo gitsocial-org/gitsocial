@@ -10,9 +10,6 @@ func TestDefaultPMConfig(t *testing.T) {
 	if config.Version != "0.1.0" {
 		t.Errorf("Version = %q, want %q", config.Version, "0.1.0")
 	}
-	if config.Branch != "gitmsg/pm" {
-		t.Errorf("Branch = %q, want %q", config.Branch, "gitmsg/pm")
-	}
 	if config.Framework != "kanban" {
 		t.Errorf("Framework = %q, want %q", config.Framework, "kanban")
 	}
