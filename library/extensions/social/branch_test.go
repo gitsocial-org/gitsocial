@@ -4,6 +4,7 @@ package social
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -71,14 +72,6 @@ func TestEditOnSocialBranch(t *testing.T) {
 		if after := len(commitsOn(t, workdir, "main")); after != before+1 {
 			t.Errorf("main holds %d commits after the retraction, want %d", after, before+1)
 		}
-
-		if _, err := os.Stat(file); err != nil {
-			t.Errorf("the working tree lost %s: %v", file, err)
-		}
-		diff, err := git.ExecGit(workdir, []string{"diff", "--name-only"})
-		if err != nil || diff.Stdout != "" {
-			t.Errorf("the working tree differs from the index: %q (%v)", diff.Stdout, err)
-		}
 	})
 
 	// A default workspace writes gitmsg/social, so a commit on main is not its to edit.
@@ -102,4 +95,66 @@ func TestEditOnSocialBranch(t *testing.T) {
 			t.Errorf("error code = %q, want INVALID_TARGET", result.Error.Code)
 		}
 	})
+}
+
+// blogWorkspace initializes a workspace whose social branch is main, holding the given committed files.
+func blogWorkspace(t *testing.T, files []string) string {
+	t.Helper()
+	workdir := cloneFixture(t)
+	if err := gitmsg.WriteExtConfig(workdir, "social", map[string]interface{}{"branch": "main"}); err != nil {
+		t.Fatalf("WriteExtConfig() error = %v", err)
+	}
+	for _, name := range files {
+		path := filepath.Join(workdir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		if err := os.WriteFile(path, []byte("content\n"), 0644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+	}
+	if _, err := git.CreateCommit(workdir, git.CommitOptions{Message: "Add the blog"}); err != nil {
+		t.Fatalf("CreateCommit() error = %v", err)
+	}
+	return workdir
+}
+
+// assertBlogTree checks that main still holds the files and the checkout is clean.
+func assertBlogTree(t *testing.T, workdir, step string, files []string) {
+	t.Helper()
+	tree, err := git.ExecGit(workdir, []string{"ls-tree", "-r", "--name-only", "main"})
+	if err != nil {
+		t.Fatalf("ls-tree after the %s error = %v", step, err)
+	}
+	if got := strings.Fields(tree.Stdout); len(got) != len(files) {
+		t.Errorf("main holds %v after the %s, want %v", got, step, files)
+	}
+	status, err := git.ExecGit(workdir, []string{"status", "--porcelain"})
+	if err != nil || status.Stdout != "" {
+		t.Errorf("git status after the %s = %q (%v), want clean", step, status.Stdout, err)
+	}
+}
+
+// TestBlogBranchKeepsItsFiles checks that a message commit carries the branch tip's tree.
+func TestBlogBranchKeepsItsFiles(t *testing.T) {
+	t.Parallel()
+	files := []string{"README.md", "posts/first.md"}
+	workdir := blogWorkspace(t, files)
+
+	post := CreatePost(workdir, "Hello from the blog", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+	}
+	assertBlogTree(t, workdir, "post", files)
+
+	edit := EditPost(workdir, post.Data.ID, "Hello from the blog, revised", nil)
+	if !edit.Success {
+		t.Fatalf("EditPost() failed: %s", edit.Error.Message)
+	}
+	assertBlogTree(t, workdir, "edit", files)
+
+	if r := RetractPost(workdir, post.Data.ID); !r.Success {
+		t.Fatalf("RetractPost() failed: %s", r.Error.Message)
+	}
+	assertBlogTree(t, workdir, "retraction", files)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -519,6 +520,73 @@ func TestCreateCommitOnBranch_existingBranch(t *testing.T) {
 	}
 	if hash1 == hash2 {
 		t.Error("second commit should have different hash")
+	}
+}
+
+// treeOf lists the paths a commit's tree holds.
+func treeOf(t *testing.T, dir, rev string) []string {
+	t.Helper()
+	result, err := ExecGit(dir, []string{"ls-tree", "-r", "--name-only", rev})
+	if err != nil {
+		t.Fatalf("ls-tree(%s) error = %v", rev, err)
+	}
+	return strings.Fields(result.Stdout)
+}
+
+// TestCreateCommitOnBranch_keepsTheBranchTree checks that a message commit leaves a code branch's files in place.
+func TestCreateCommitOnBranch_keepsTheBranchTree(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	for _, name := range []string{"README.md", "posts/first.md"} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		if err := os.WriteFile(path, []byte("content\n"), 0644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+	}
+	if _, err := CreateCommit(dir, CommitOptions{Message: "Add the blog"}); err != nil {
+		t.Fatalf("CreateCommit() error = %v", err)
+	}
+	before := treeOf(t, dir, "main")
+
+	hash, err := CreateCommitOnBranch(dir, "main", "A post")
+	if err != nil {
+		t.Fatalf("CreateCommitOnBranch() error = %v", err)
+	}
+	after := treeOf(t, dir, hash)
+	if len(after) != len(before) || len(after) != 2 {
+		t.Fatalf("tree after = %v, want %v", after, before)
+	}
+	for i, path := range before {
+		if after[i] != path {
+			t.Errorf("tree after = %v, want %v", after, before)
+		}
+	}
+}
+
+// TestCreateCommitOnBranch_gitmsgBranchStaysEmpty checks that a gitmsg branch's commits still carry the empty tree.
+func TestCreateCommitOnBranch_gitmsgBranchStaysEmpty(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+
+	first, err := CreateCommitOnBranch(dir, "gitmsg/social", "first")
+	if err != nil {
+		t.Fatalf("first CreateCommitOnBranch() error = %v", err)
+	}
+	second, err := CreateCommitOnBranch(dir, "gitmsg/social", "second")
+	if err != nil {
+		t.Fatalf("second CreateCommitOnBranch() error = %v", err)
+	}
+	for _, hash := range []string{first, second} {
+		tree, err := execGitSimple(dir, []string{"rev-parse", hash + "^{tree}"})
+		if err != nil {
+			t.Fatalf("rev-parse tree error = %v", err)
+		}
+		if strings.TrimSpace(tree) != EmptyTreeHash {
+			t.Errorf("tree of %s = %s, want the empty tree", hash, strings.TrimSpace(tree))
+		}
 	}
 }
 

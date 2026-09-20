@@ -13,10 +13,7 @@ import (
 const (
 	recordSep = "\x1E"
 	unitSep   = "\x1F"
-	// EmptyTreeHash is the well-known git SHA1 of the empty tree object.
-	// Every gitmsg extension commit uses this tree (content lives in the
-	// commit message via the protocol header), and auto-merge commits on
-	// `gitmsg/*` branches reuse it for consistency.
+	// EmptyTreeHash is git's well-known empty tree, the tree a new gitmsg branch starts from.
 	EmptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 	emptyTree     = EmptyTreeHash
 )
@@ -294,14 +291,19 @@ func CreateCommit(workdir string, opts CommitOptions) (string, error) {
 	return strings.TrimSpace(hash), nil
 }
 
-// CreateCommitOnBranch creates an empty commit directly on a branch.
+// CreateCommitOnBranch commits a message onto a branch, carrying the branch tip's tree.
 func CreateCommitOnBranch(workdir, branch, message string) (string, error) {
 	branchRef := "refs/heads/" + branch
 
 	result, err := ExecGit(workdir, []string{"rev-parse", "--verify", "--quiet", branchRef})
 	if err == nil && result.Stdout != "" {
 		parentHash := strings.TrimSpace(result.Stdout)
-		args := []string{"commit-tree", emptyTree, "-m", message, "-p", parentHash}
+		// The message replaces the commit, never the files: a code branch keeps its tree.
+		tree, err := execGitSimple(workdir, []string{"rev-parse", "--verify", parentHash + "^{tree}"})
+		if err != nil {
+			return "", fmt.Errorf("%w: read the branch tree", ErrGitCommit)
+		}
+		args := []string{"commit-tree", strings.TrimSpace(tree), "-m", message, "-p", parentHash}
 		commitHash, err := execGitSimple(workdir, args)
 		if err != nil {
 			return "", fmt.Errorf("%w: %v", ErrGitCommit, err)
@@ -320,6 +322,7 @@ func CreateCommitOnBranch(workdir, branch, message string) (string, error) {
 		return strings.TrimSpace(shortHash), nil
 	}
 
+	// The branch has no tip, so this first commit starts it from the empty tree.
 	commitHash, err := execGitSimple(workdir, []string{"commit-tree", emptyTree, "-m", message})
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrGitCommit, err)
