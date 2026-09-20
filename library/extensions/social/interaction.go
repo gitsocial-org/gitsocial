@@ -347,12 +347,13 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 	if targetItem == nil {
 		return failure[Post]("NOT_FOUND", "target post not found: "+targetPostID)
 	}
-	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
-		return failure[Post]("INVALID_TARGET", "cannot edit a post on a code branch: reply with a comment")
-	}
-
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	// GITMSG.md 1.5: the edit is stored on the branch of the message it edits.
+	if targetItem.Branch != "" && targetItem.Branch != branch {
+		return failure[Post]("INVALID_TARGET", "cannot edit a post on a code branch: reply with a comment")
+	}
 
 	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
 		return failure[Post]("INVALID_TARGET", "cannot edit a post owned by another repository")
@@ -362,11 +363,7 @@ func EditPost(workdir, targetPostID, newContent string, opts *EditPostOptions) R
 	if targetRepoURL == "" {
 		targetRepoURL = repoURL
 	}
-	targetBranch := targetItem.Branch
-	if targetBranch == "" {
-		targetBranch = branch
-	}
-	canonicalRepoURL, canonicalHash, canonicalBranch, _ := cache.ResolveToCanonical(targetRepoURL, targetItem.Hash, targetBranch)
+	canonicalRepoURL, canonicalHash, canonicalBranch, _ := cache.ResolveToCanonical(targetRepoURL, targetItem.Hash, branch)
 	canonicalID := protocol.CreateRef(protocol.RefTypeCommit, canonicalHash, canonicalRepoURL, canonicalBranch)
 
 	editsRef := protocol.LocalizeRef(canonicalID, repoURL)
@@ -433,12 +430,13 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 	if targetItem == nil {
 		return failure[bool]("NOT_FOUND", "target post not found: "+targetPostID)
 	}
-	if !strings.HasPrefix(targetItem.Branch, "gitmsg/") {
-		return failure[bool]("INVALID_TARGET", "cannot retract a post on a code branch")
-	}
-
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	// GITMSG.md 1.5: the retraction is stored on the branch of the message it retracts.
+	if targetItem.Branch != "" && targetItem.Branch != branch {
+		return failure[bool]("INVALID_TARGET", "cannot retract a post on a code branch")
+	}
 
 	if targetItem.RepoURL != "" && targetItem.RepoURL != repoURL {
 		return failure[bool]("INVALID_TARGET", "cannot retract a post owned by another repository")
@@ -448,11 +446,7 @@ func RetractPost(workdir, targetPostID string) Result[bool] {
 	if targetRepoURL == "" {
 		targetRepoURL = repoURL
 	}
-	targetBranch := targetItem.Branch
-	if targetBranch == "" {
-		targetBranch = branch
-	}
-	canonicalRepoURL, canonicalHash, canonicalBranch, _ := cache.ResolveToCanonical(targetRepoURL, targetItem.Hash, targetBranch)
+	canonicalRepoURL, canonicalHash, canonicalBranch, _ := cache.ResolveToCanonical(targetRepoURL, targetItem.Hash, branch)
 	canonicalID := protocol.CreateRef(protocol.RefTypeCommit, canonicalHash, canonicalRepoURL, canonicalBranch)
 
 	editsRef := protocol.LocalizeRef(canonicalID, repoURL)

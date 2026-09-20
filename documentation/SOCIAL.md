@@ -2,7 +2,7 @@
 
 Posts, comments, reposts and quotes are commits ([GITSOCIAL.md](../specs/GITSOCIAL.md)), written to the `gitmsg/social` branch unless `init` names another. The timeline is the union of the lists a workspace follows.
 
-[Initialize](#initialize) · [Post](#post) · [Lists and timeline](#lists-and-timeline) · [Followers](#followers) · [Reference](#reference)
+[Initialize](#initialize) · [Post](#post) · [Blog](#blog) · [Lists and timeline](#lists-and-timeline) · [Followers](#followers) · [Reference](#reference)
 
 ## Initialize
 
@@ -25,6 +25,20 @@ gitsocial social retract <ref>
 ```
 
 A comment's `original` is the thread's root post; a nested reply adds `reply-to` for its parent. Edits and retractions use core versioning, and the latest version wins.
+
+## Blog
+
+A blog runs from one branch, with no `gitmsg/social` branch at all.
+
+```
+gitsocial social init -b main
+git commit -m "Hello world"                 # a plain commit on main is a post
+gitsocial social post "A shorter note"
+gitsocial social edit <ref> "Updated text"
+gitsocial social retract <ref>
+```
+
+`edit` and `retract` write to the branch the post is on, so they land on `main` too. A follower names that branch with `list add -b main`, or lets `list add` record the repository's default branch.
 
 ## Lists and timeline
 

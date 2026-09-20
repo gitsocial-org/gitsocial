@@ -11,6 +11,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -23,12 +24,9 @@ const (
 
 var noopCmd tea.Cmd = func() tea.Msg { return nil }
 
-// isPostMutable returns true when the post is owned by the workspace and lives
-// on a gitmsg/* branch. Posts on code branches are excluded because edit/retract
-// would create a sibling commit on the social branch that diverges from the
-// real git history (see social.EditPost / RetractPost guards).
-func isPostMutable(post social.Post) bool {
-	return post.Display.IsWorkspacePost && strings.HasPrefix(post.Branch, "gitmsg/")
+// isPostMutable reports whether the workspace owns the post and it sits on the workspace's social branch.
+func isPostMutable(workdir string, post social.Post) bool {
+	return post.Display.IsWorkspacePost && post.Branch == gitmsg.GetExtBranch(workdir, "social")
 }
 
 type matchLocation struct {
@@ -93,7 +91,7 @@ func (v *postView) Bindings() []tuicore.Binding {
 					return false, nil
 				}
 				post, ok := itemToPost(item)
-				if !ok || !isPostMutable(post) {
+				if !ok || !isPostMutable(ctx.Workdir, post) {
 					return false, nil
 				}
 				return true, ctx.Panel.EditPost()
@@ -108,7 +106,7 @@ func (v *postView) Bindings() []tuicore.Binding {
 					return false, nil
 				}
 				post, ok := itemToPost(item)
-				if !ok || !isPostMutable(post) {
+				if !ok || !isPostMutable(ctx.Workdir, post) {
 					return false, nil
 				}
 				return true, ctx.Panel.RetractPost()
@@ -708,7 +706,7 @@ func (v *postView) Render(state *tuicore.State) string {
 			exclude["D"] = true
 			exclude["d"] = true
 		}
-		if !isPostMutable(v.post) {
+		if !isPostMutable(v.workdir, v.post) {
 			exclude["e"] = true
 			exclude["X"] = true
 		}
