@@ -552,10 +552,13 @@ func (c *DiffViewCore) toggleFoldAtCursor() {
 	}
 }
 
-// moveCursorToFile puts the cursor on the header row of the given file.
+// moveCursorToFile puts the cursor on the header row of the given file, collapsed or not.
 func (c *DiffViewCore) moveCursorToFile(idx int) {
 	for i, r := range c.plan.Rows {
-		if r.Anchor.FileIdx == idx && r.Kind == diff.RowFileHeader {
+		if r.Anchor.FileIdx != idx {
+			continue
+		}
+		if r.Kind == diff.RowFileHeader || r.Anchor.Tag == "fold-placeholder" {
 			c.cursor = i
 			c.ensureCursorVisible()
 			return
@@ -829,17 +832,19 @@ func (c *DiffViewCore) renderPinnedFileHeader() string {
 	return Dim.Render("▸ ") + renderDiffHeader(c.diffs[fileIdx])
 }
 
-// SharedBindings returns the keybindings every diff view exposes. Wrappers
-// append their own extras (e.g. PR's "c" for inline comment). Labels are
-// purely informational — actual key handling lives in handleSharedKey.
+// SharedBindings returns the keybindings every diff view exposes; wrappers append their own extras.
 func (c *DiffViewCore) SharedBindings(ctx Context) []Binding {
+	// A noop is label-only, so a global binding for the same key still runs after it.
 	noop := func(_ *HandlerContext) (bool, tea.Cmd) { return false, nil }
+	// A claim stops the global binding; handleSharedKey has already done the work in Update.
+	claim := func(_ *HandlerContext) (bool, tea.Cmd) { return true, nil }
 	contexts := []Context{ctx}
 	return []Binding{
 		{Key: "e/E", Label: "expand", Contexts: contexts, Handler: noop},
 		{Key: "w", Label: "wrap", Contexts: contexts, Handler: noop},
 		{Key: "v", Label: "view mode", Contexts: contexts, Handler: noop},
-		{Key: "tab", Label: "next file", Contexts: contexts, Handler: noop},
+		{Key: "tab", Label: "next file", Contexts: contexts, Handler: claim},
+		{Key: "shift+tab", Label: "prev file", Contexts: contexts, Handler: claim},
 		{Key: "[/]", Label: "prev/next hunk", Contexts: contexts, Handler: noop},
 		{Key: "/", Label: "search", Contexts: contexts, Handler: noop},
 		{Key: "j", Label: "scroll down", Contexts: contexts, Handler: noop},

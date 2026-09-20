@@ -616,6 +616,7 @@
 | `w` | Wrap |
 | `v` | View mode |
 | `tab` | Next file |
+| `shift+tab` | Prev file |
 | `[/]` | Prev/next hunk |
 | `/` | Search |
 | `j` | Scroll down |
@@ -624,7 +625,6 @@
 | `ctrl+u` | Half-page up |
 | `c` | Comment |
 | `!` | Errors |
-| `shift+tab` | Focus |
 
 ### Interdiff
 
