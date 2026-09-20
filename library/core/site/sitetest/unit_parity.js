@@ -156,6 +156,9 @@ for (const c of FIX.markdownPaths) {
 for (const c of FIX.mdxStrip) {
   eq(GS.stripMDX(c.source), c.expect, c.name);
 }
+for (const c of FIX.frontMatter) {
+  eq(GS.stripFrontMatter(c.source), c.expect, c.name);
+}
 
 console.log("=== parity invariant: the name an unconfigured site takes ===");
 for (const c of FIX.defaultTitles) {

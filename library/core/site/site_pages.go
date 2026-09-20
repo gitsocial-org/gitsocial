@@ -523,7 +523,7 @@ func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch stri
 		return nil
 	}
 	text, truncated := siteMDTruncateSource(string(body), sitePagesReadmeMax)
-	rendered := renderSiteMarkdown(text, siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch})
+	rendered := renderSiteMarkdown(siteStripFrontMatter(text), siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch})
 	if rendered == "" {
 		return nil
 	}

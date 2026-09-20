@@ -333,19 +333,85 @@ func siteFileDocsFromState(state *siteFilesState) []siteFileDoc {
 	return docs
 }
 
-// siteFileStripMDX drops the import, export and standalone JSX lines the markdown grammar has no rule for.
+// siteStripFrontMatter drops a document's leading YAML front matter, which no markdown grammar reads and both renderers would otherwise show raw. Mirrors stripFrontMatter in gs-core.js.
+func siteStripFrontMatter(source string) string {
+	lines := strings.Split(source, "\n")
+	if len(lines) == 0 || strings.TrimRight(lines[0], " \t\r") != "---" {
+		return source
+	}
+	for i := 1; i < len(lines); i++ {
+		if t := strings.TrimRight(lines[i], " \t\r"); t == "---" || t == "..." {
+			return strings.Join(lines[i+1:], "\n")
+		}
+	}
+	// An unclosed opener is a thematic break, not front matter.
+	return source
+}
+
+// siteFileJSXOpen reports whether a trimmed line opens a standalone JSX element, which is a component tag or any closing tag.
+func siteFileJSXOpen(t string) bool {
+	if len(t) < 2 || t[0] != '<' {
+		return false
+	}
+	r := t[1]
+	return r == '/' || (r >= 'A' && r <= 'Z')
+}
+
+// siteFileBracketDelta returns a line's net bracket depth, which is how a multi-line import or export statement is followed to its end.
+func siteFileBracketDelta(line string) int {
+	delta := 0
+	for _, r := range line {
+		switch r {
+		case '(', '[', '{':
+			delta++
+		case ')', ']', '}':
+			delta--
+		}
+	}
+	return delta
+}
+
+// siteFileStripMDX drops the import, export and standalone JSX blocks the markdown grammar has no rule for, on one line or spanning several; a fenced block keeps every line. Mirrors stripMDX in gs-core.js.
 func siteFileStripMDX(source string) string {
 	lines := strings.Split(source, "\n")
 	kept := make([]string, 0, len(lines))
+	fenced, depth, inTag := false, 0, false
 	for _, line := range lines {
 		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "import ") || strings.HasPrefix(t, "export ") {
-			continue
-		}
-		if len(t) > 1 && t[0] == '<' && t[len(t)-1] == '>' {
-			if r := t[1]; r == '/' || (r >= 'A' && r <= 'Z') {
+		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+			if depth == 0 && !inTag {
+				fenced = !fenced
+				kept = append(kept, line)
 				continue
 			}
+		}
+		if fenced {
+			kept = append(kept, line)
+			continue
+		}
+		// A blank line closes an unterminated block, so a stray opener cannot eat the document.
+		if depth > 0 || inTag {
+			if t == "" {
+				depth, inTag = 0, false
+				kept = append(kept, line)
+				continue
+			}
+			if inTag && strings.HasSuffix(t, ">") {
+				inTag = false
+			} else if depth > 0 {
+				depth += siteFileBracketDelta(line)
+			}
+			continue
+		}
+		if strings.HasPrefix(t, "import ") || strings.HasPrefix(t, "export ") {
+			if d := siteFileBracketDelta(line); d > 0 {
+				depth = d
+			}
+			continue
+		}
+		if siteFileJSXOpen(t) {
+			inTag = !strings.HasSuffix(t, ">")
+			continue
 		}
 		kept = append(kept, line)
 	}
@@ -517,6 +583,9 @@ func maintainSiteFilePages(client *objstore.Client, prefix string, site sitePage
 			continue
 		}
 		source, truncated := siteMDTruncateSource(string(body), sitePagesFileMax)
+		if doc.Markdown {
+			source = siteStripFrontMatter(source)
+		}
 		if siteFileExt(doc.Path) == ".mdx" {
 			source = siteFileStripMDX(source)
 		}

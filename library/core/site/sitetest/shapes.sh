@@ -92,13 +92,63 @@ gg pm issue create "Document the build flags" -l "kind/task" >/dev/null
 gg pm issue close "$CLOSED" >/dev/null
 publish src-repo trunk
 
-# ---- docs-repo: an .mdx documentation site. The page layer publishes the .mdx
-# files as prose and the app renders them as source, so the goldens carry both
-# halves of that divergence.
+# ---- docs-repo: an .mdx documentation site in the Docusaurus shape, with front
+# matter, imports, an export block and JSX spanning lines. Both renderers strip
+# those before rendering the prose, so the goldens carry both halves.
 newrepo docs-repo main
 printf '# docs-repo\n\nA documentation site written in MDX.\n' >"$W/README.md"
 mkdir -p "$W/docs"
-printf 'import { Callout } from "../components/Callout"\n\n# Introduction\n\nThe reader opens this page before anything else, so it states what the project does and what it does not. A bucket serves the whole site as static objects, which means every page has to read on its own without a server rendering it first. The sections below walk through installation, the first push and the layout of the published keys, in the order a new reader meets them.\n\n<Callout>Read the quick start before the reference.</Callout>\n\n## Installing\n\nDownload a release binary and put it on the path. No daemon runs and no database is created.\n\n## Publishing\n\nOne command builds the site and uploads it. The keys it writes are listed in the reference.\n' >"$W/docs/intro.mdx"
+cat >"$W/docs/intro.mdx" <<'MDX'
+---
+id: intro
+title: Introduction
+sidebar_position: 1
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+export const Highlight = ({children, color}) => (
+  <span style={{backgroundColor: color}}>{children}</span>
+);
+
+# Introduction
+
+The reader opens this page before anything else, so it states what the project does and what it does not. A bucket serves every page as a static object, which means each one has to read on its own without a server rendering it first. The sections below walk through installation, the first push and the layout of the published keys, in the order a new reader meets them.
+
+<Callout>Read the quick start before the reference.</Callout>
+
+## Installing
+
+<Tabs
+  groupId="manager"
+  defaultValue="release"
+  values={[
+    {label: 'Release', value: 'release'},
+    {label: 'Source', value: 'source'},
+  ]}>
+  <TabItem value="release" label="Release">
+
+Download a release binary and put it on the path. No daemon runs and no database is created.
+
+  </TabItem>
+  <TabItem value="source" label="Source">
+
+Build from source instead, which needs nothing but the toolchain and a checkout.
+
+  </TabItem>
+</Tabs>
+
+:::note
+
+The first push takes longer than the ones after it.
+
+:::
+
+## Publishing
+
+One command builds the site and uploads it. The keys it writes are listed in the reference.
+MDX
 printf 'import Layout from "../layout"\n\n# Guide\n\nThis page holds the walkthrough. Each step names the command to type and the output to expect, and nothing here explains why the design is what it is. The walkthrough assumes the binary is installed and a bucket exists, and it ends with a published site the reader can open in a browser without any further setup or configuration.\n\n## First push\n\nRun the publish command. The site appears under the prefix.\n' >"$W/docs/guide.mdx"
 printf '# API\n\nThe reference tables list every key, every flag and every environment variable the tool reads. A row is one line. The tables are generated from the source, so a value here and a value in the binary cannot drift apart without the generator noticing it first and failing the build.\n\n| Key | Meaning |\n|---|---|\n| `title` | the site title |\n| `url` | the public base |\n' >"$W/docs/api.md"
 gcommit "Initial commit: the MDX documentation site"

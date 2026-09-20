@@ -184,7 +184,7 @@ type parityMarkdownPath struct {
 	ExpectProse bool   `json:"expectProse"`
 }
 
-// parityMDXStripCase pins the source an MDX document renders from.
+// parityMDXStripCase pins the source a prose or MDX document renders from, once a strip has run over it.
 type parityMDXStripCase struct {
 	Name   string `json:"name"`
 	Source string `json:"source"`
@@ -209,6 +209,7 @@ type parityFixtures struct {
 	FrontFiles     parityFrontFiles          `json:"frontFiles"`
 	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
+	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
 	ListEmpty      map[string]string         `json:"listEmpty"`
 	ListHeadings   map[string]string         `json:"listHeadings"`
 }
@@ -621,6 +622,22 @@ func TestParityMDXStrip(t *testing.T) {
 		t.Run(c.Name, func(t *testing.T) {
 			if got := siteFileStripMDX(c.Source); got != c.Expect {
 				t.Errorf("siteFileStripMDX = %q, want %q", got, c.Expect)
+			}
+		})
+	}
+}
+
+// TestParityFrontMatter asserts siteStripFrontMatter drops the YAML block the
+// app's own stripFrontMatter drops, against the fixture unit_parity.js asserts.
+func TestParityFrontMatter(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.FrontMatter) == 0 {
+		t.Fatal("no front matter cases in parity fixtures")
+	}
+	for _, c := range f.FrontMatter {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := siteStripFrontMatter(c.Source); got != c.Expect {
+				t.Errorf("siteStripFrontMatter = %q, want %q", got, c.Expect)
 			}
 		})
 	}

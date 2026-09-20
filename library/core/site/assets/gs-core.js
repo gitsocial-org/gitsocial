@@ -1935,16 +1935,60 @@
   // isMDXPath reports whether a path carries MDX, whose imports and standalone JSX are stripped before parsing.
   function isMDXPath(path) { return /\.mdx$/i.test(path || ""); }
 
-  // stripMDX drops the import, export and standalone JSX lines the markdown grammar has no rule for. Mirrors siteFileStripMDX in site_pages_files.go.
+  // stripFrontMatter drops a document's leading YAML front matter, which no markdown grammar reads and both renderers would otherwise show raw. Mirrors siteStripFrontMatter in site_pages_files.go.
+  function stripFrontMatter(source) {
+    const lines = (source || "").split("\n");
+    if (!lines.length || lines[0].replace(/[ \t\r]+$/, "") !== "---") return source || "";
+    for (let i = 1; i < lines.length; i++) {
+      const t = lines[i].replace(/[ \t\r]+$/, "");
+      if (t === "---" || t === "...") return lines.slice(i + 1).join("\n");
+    }
+    // An unclosed opener is a thematic break, not front matter.
+    return source || "";
+  }
+
+  // jsxOpen reports whether a trimmed line opens a standalone JSX element, which is a component tag or any closing tag.
+  function jsxOpen(t) {
+    if (t.length < 2 || t[0] !== "<") return false;
+    const r = t[1];
+    return r === "/" || (r >= "A" && r <= "Z");
+  }
+
+  // bracketDelta returns a line's net bracket depth, which is how a multi-line import or export statement is followed to its end.
+  function bracketDelta(line) {
+    let delta = 0;
+    for (const r of line) {
+      if (r === "(" || r === "[" || r === "{") delta++;
+      else if (r === ")" || r === "]" || r === "}") delta--;
+    }
+    return delta;
+  }
+
+  // stripMDX drops the import, export and standalone JSX blocks the markdown grammar has no rule for, on one line or spanning several; a fenced block keeps every line. Mirrors siteFileStripMDX in site_pages_files.go.
   function stripMDX(source) {
     const kept = [];
+    let fenced = false, depth = 0, inTag = false;
     for (const line of (source || "").split("\n")) {
       const t = line.trim();
-      if (t.startsWith("import ") || t.startsWith("export ")) continue;
-      if (t.length > 1 && t[0] === "<" && t[t.length - 1] === ">") {
-        const r = t[1];
-        if (r === "/" || (r >= "A" && r <= "Z")) continue;
+      if ((t.startsWith("```") || t.startsWith("~~~")) && depth === 0 && !inTag) {
+        fenced = !fenced;
+        kept.push(line);
+        continue;
       }
+      if (fenced) { kept.push(line); continue; }
+      // A blank line closes an unterminated block, so a stray opener cannot eat the document.
+      if (depth > 0 || inTag) {
+        if (!t) { depth = 0; inTag = false; kept.push(line); continue; }
+        if (inTag && t.endsWith(">")) inTag = false;
+        else if (depth > 0) depth += bracketDelta(line);
+        continue;
+      }
+      if (t.startsWith("import ") || t.startsWith("export ")) {
+        const d = bracketDelta(line);
+        if (d > 0) depth = d;
+        continue;
+      }
+      if (jsxOpen(t)) { inTag = !t.endsWith(">"); continue; }
       kept.push(line);
     }
     return kept.join("\n");
@@ -4138,7 +4182,7 @@
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
-    parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX,
+    parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
     headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, homeFilesMoreLabel, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
