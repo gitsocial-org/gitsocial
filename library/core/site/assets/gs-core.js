@@ -2301,8 +2301,6 @@
     "gitmsg/release": { ext: "release", tab: "releases", label: "Release" },
     "gitmsg/memo": { ext: "memo", tab: "memos", label: "Memo" },
   };
-  // LEGACY_BRANCH maps a detail link shared before the commit routes to its branch; no push retires it, so removing it breaks those links.
-  const LEGACY_BRANCH = { issue: "gitmsg/pm", pr: "gitmsg/review", release: "gitmsg/release", commit: "" };
   const INDEX_TABS = { timeline: 1, issues: 1, prs: 1, releases: 1, memos: 1, milestones: 1, sprints: 1 };
 
   // commitRef builds a workspace-relative gitmsg commit ref fragment.
@@ -2313,12 +2311,6 @@
   // compareRef builds a compare route fragment with each side URL-encoded.
   function compareRef(base, head) {
     return "#/compare:" + encodeURIComponent(base || "") + "..." + encodeURIComponent(head || "");
-  }
-
-  // legacyCommit resolves a legacy detail route to its #commit: target and records the canonical fragment.
-  function legacyCommit(hash, branch) {
-    const clean = hash.toLowerCase();
-    return { type: "commit", hash: clean, branch, canonical: commitRef(clean, branch), legacy: true };
   }
 
   // parseRoute maps a location.hash fragment to a route descriptor; fragments carry ":" "@" "/" unencoded, so parsing is positional.
@@ -2356,7 +2348,6 @@
       if (head === "search") return { type: "search", q: rest ? decodeURIComponent(rest) : "" };
       if (head === "lists") return { type: "lists" };
       if (head === "config") return { type: "config" };
-      if (rest && head in LEGACY_BRANCH) return legacyCommit(rest, LEGACY_BRANCH[head]);
       return { type: "notfound" };
     }
     // A plain fragment is an in-page anchor into the home README.

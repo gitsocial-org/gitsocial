@@ -927,7 +927,7 @@ async function main() {
 
   console.log("\n--- Hash deep-link wins over the page's meta route ---");
   // An item page (meta = the issue) receiving a #/prs deep-link must boot /prs,
-  // not the issue — a code-commit/legacy shared link landing on any page works.
+  // not the issue: a code-commit shared link landing on any page works.
   const deepView = await bootLike(base, "commit:" + short + "@gitmsg/pm", "#/prs");
   ok("hash route overrides the meta route", /pull request|No pull requests|Expand notes/i.test(deepView), "view=" + deepView.slice(0, 80));
 

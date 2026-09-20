@@ -86,7 +86,6 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // synchronous prefix, so location.hash is unreliable after the first await.
     const hashAtEntry = location.hash;
     const r = parseRoute(hashAtEntry);
-    if (r.canonical && r.canonical !== hashAtEntry) { location.replace(r.canonical); return; }
     // Remember the last in-app hash so a detail page's "back" returns to where the
     // user came from (a board/milestone/sprint/search list), not a fixed default.
     // Updated AFTER a detail render reads it (see recordRoute at the end).

@@ -143,6 +143,7 @@ eq(GS.parseRoute("#file:documentation/REVIEW.md@main:forks"), { type: "file", pa
 eq(GS.parseRoute("#file:a/b.md@main:L12-20"), { type: "file", path: "a/b.md", branch: "main", line: 12, lineEnd: 20 }, "file line suffix still parses as lines, not anchor");
 eq(GS.parseRoute("#2-lists"), { type: "home", anchor: "2-lists" }, "digit-leading fragment routes home with anchor");
 eq(GS.parseRoute("#bad^frag"), { type: "notfound" }, "non-anchor junk fragment stays notfound");
+eq(GS.parseRoute("#/issue/abc123def456"), { type: "notfound" }, "a pre-commit-route detail link is notfound");
 
 console.log("=== B1 board config resolution ===");
 const bcfg = GS.buildBoard(issues, { name: "Minimal", columns: [{ name: "Open", filter: "state:open" }, { name: "Closed", filter: "state:closed" }] });
