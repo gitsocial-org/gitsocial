@@ -300,20 +300,23 @@ func ListKeys() []string {
 	}
 }
 
-// ListAll returns all settings as key-value pairs.
+// ListAll returns all settings as key-value pairs, described from the Registry.
 func ListAll(s *Settings) []KeyValue {
 	keys := ListKeys()
 	result := make([]KeyValue, 0, len(keys))
 	for _, key := range keys {
 		value, _ := Get(s, key)
-		result = append(result, KeyValue{Key: key, Value: value})
+		spec, _ := Lookup(key)
+		result = append(result, KeyValue{Key: key, Value: value, Description: spec.Desc})
 	}
 	return result
 }
 
+// KeyValue is one settings key, its current value and its Registry description.
 type KeyValue struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"` // empty for keys outside the Registry
 }
 
 // ParseKey splits a setting key into section and name.

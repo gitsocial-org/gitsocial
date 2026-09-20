@@ -118,10 +118,13 @@ func newSettingsListCmd() *cobra.Command {
 				return PrintJSON(cmd, items)
 			} else {
 				for _, item := range items {
-					if item.Value != "" {
-						fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", item.Key, item.Value)
-					} else {
-						fmt.Fprintf(cmd.OutOrStdout(), "%s = (not set)\n", item.Key)
+					value := item.Value
+					if value == "" {
+						value = "(not set)"
+					}
+					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", item.Key, value)
+					if item.Description != "" {
+						fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", item.Description)
 					}
 				}
 			}

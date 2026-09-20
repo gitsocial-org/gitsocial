@@ -110,6 +110,18 @@ User settings, stored in the personal bare repo and synced across machines. Keys
 gitsocial settings get <key> | set <key> <value> | list
 ```
 
+`list` prints each key, its value, and the key's description on the line below:
+
+```
+fetch.parallel = 4
+  Concurrent fetch workers.
+fetch.timeout = 30
+  Per-repo fetch timeout in seconds.
+fetch.workspace_mode = (per-repo)
+```
+
+`--json` adds a `description` field, left out for a key the registry does not carry.
+
 ### gitsocial personal
 
 The personal bare repo that holds settings and personal-tier memos. See [SETTINGS.md](SETTINGS.md#cross-machine-sync).

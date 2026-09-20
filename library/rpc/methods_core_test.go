@@ -10,6 +10,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
@@ -186,6 +187,52 @@ func TestCorePush_siteOnlyOnNonS3Fails(t *testing.T) {
 
 // TestCoreGetNotifications_carriesEverySource checks the RPC round trip serves
 // the notification set the library reports, the divergence source included.
+func TestCoreGetSettings_carriesDescriptions(t *testing.T) {
+	t.Setenv("GITSOCIAL_PERSONAL_REPO", t.TempDir()+"/personal")
+	server := NewServer(NewRegistry(), strings.NewReader(""), io.Discard)
+	RegisterCoreMethods(server, "test")
+	server.session.Initialized = true
+
+	resp := server.processRequest(Request{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "core.getSettings",
+	})
+	if resp.Error != nil {
+		t.Fatalf("core.getSettings error = %v", resp.Error)
+	}
+	encoded, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var served []struct {
+		Key         string `json:"key"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(encoded, &served); err != nil {
+		t.Fatalf("unmarshal result: %v (%s)", err, encoded)
+	}
+	spec, ok := settings.Lookup("fetch.parallel")
+	if !ok {
+		t.Fatal("Lookup(fetch.parallel) found no registry entry")
+	}
+	found := false
+	for _, kv := range served {
+		if kv.Key == "fetch.parallel" {
+			found = true
+			if kv.Description != spec.Desc {
+				t.Errorf("fetch.parallel description = %q, want %q", kv.Description, spec.Desc)
+			}
+		}
+		if kv.Key == "fetch.workspace_mode" && kv.Description != "" {
+			t.Errorf("fetch.workspace_mode is outside the registry, description = %q, want empty", kv.Description)
+		}
+	}
+	if !found {
+		t.Error("core.getSettings served no fetch.parallel key")
+	}
+}
+
 func TestCoreGetNotifications_carriesEverySource(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 	workdir := divergedWorkdir(t)

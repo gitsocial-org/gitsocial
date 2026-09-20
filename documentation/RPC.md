@@ -1003,10 +1003,12 @@ Result: `KeyValue[]`
 
 ```json
 [
-  {"key": "fetch.parallel", "value": "4"},
-  {"key": "log.level", "value": "info"}
+  {"key": "fetch.parallel", "value": "4", "description": "Concurrent fetch workers."},
+  {"key": "log.level", "value": "info", "description": "Logging verbosity."}
 ]
 ```
+
+`description` is the key's registry description, left out for a key the registry does not carry.
 
 #### core.setSetting
 

@@ -26,7 +26,7 @@
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││    extensions.memo       true  (true · false)                                        │
 │                              ││                                                                                      │
-│                              ││                                                                                      │
+│                              ││  Concurrent fetch workers.                                                           │
 │                              ││                                                                                      │
 │                              ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │

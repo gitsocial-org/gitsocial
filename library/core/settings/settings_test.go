@@ -258,6 +258,24 @@ func TestListAll(t *testing.T) {
 	}
 }
 
+func TestListAll_carriesRegistryDescriptions(t *testing.T) {
+	t.Setenv("GITSOCIAL_PERSONAL_REPO", t.TempDir()+"/no-such-personal-repo")
+	byKey := map[string]KeyValue{}
+	for _, kv := range ListAll(DefaultSettings()) {
+		byKey[kv.Key] = kv
+	}
+	spec, ok := Lookup("fetch.parallel")
+	if !ok {
+		t.Fatal("Lookup(fetch.parallel) found no registry entry")
+	}
+	if got := byKey["fetch.parallel"].Description; got != spec.Desc {
+		t.Errorf("ListAll description for fetch.parallel = %q, want %q", got, spec.Desc)
+	}
+	if got := byKey["fetch.workspace_mode"].Description; got != "" {
+		t.Errorf("fetch.workspace_mode is outside the registry, description = %q, want empty", got)
+	}
+}
+
 func TestIdentityDNSVerification(t *testing.T) {
 	s := DefaultSettings()
 	if s.Identity.DNSVerification {

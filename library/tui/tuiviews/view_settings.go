@@ -373,6 +373,7 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 	var b strings.Builder
 	lines := 0
 	idx := 0
+	selectedDesc := ""
 	for _, cat := range categories {
 		if lines >= innerHeight-3 {
 			break
@@ -387,9 +388,11 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 				break
 			}
 			value := ""
+			desc := ""
 			for _, kv := range v.keys {
 				if kv.Key == key {
 					value = kv.Value
+					desc = kv.Description
 					break
 				}
 			}
@@ -409,6 +412,10 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 				displayValue += "  " + tuicore.Dim.Render(suffix)
 			}
 
+			if idx == v.cursor {
+				selectedDesc = desc
+			}
+
 			var line string
 			if idx == v.cursor {
 				if v.editMode {
@@ -426,6 +433,11 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 		}
 		b.WriteString("\n")
 		lines++
+	}
+
+	if selectedDesc != "" && lines < innerHeight-3 {
+		b.WriteString(tuicore.Dim.Render(tuicore.TruncateToWidth(selectedDesc, state.InnerWidth())))
+		b.WriteString("\n")
 	}
 
 	if v.err != "" {
