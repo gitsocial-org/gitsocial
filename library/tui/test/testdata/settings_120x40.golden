@@ -18,6 +18,7 @@
 │                              ││                                                                                      │
 │                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
+│                              ││    display.theme         auto  (auto · light · dark)  applies on restart             │
 │                              ││                                                                                      │
 │                              ││  Extensions  · synced                                                                │
 │                              ││    extensions.social     true  (true · false)                                        │
@@ -26,11 +27,10 @@
 │                              ││    extensions.release    true  (true · false)                                        │
 │                              ││    extensions.memo       true  (true · false)                                        │
 │                              ││                                                                                      │
-│                              ││  Concurrent fetch workers.                                                           │
-│                              ││                                                                                      │
-│                              ││                                                                                      │
+│                              ││  S3  · synced                                                                        │
+│                              ││    s3.concurrency        16                                                          │
 │ ──────────────────────────── ││                                                                                      │
-│  ⚙  Configuration            ││                                                                                      │
+│  ⚙  Configuration            ││  Concurrent fetch workers.                                                           │
 │  ⚿  Identity                 ││                                                                                      │
 │  ⛁  Cache  ········ XXXKB    ││                                                                                      │
 │  ⌨  Settings                 ││                                                                                      │

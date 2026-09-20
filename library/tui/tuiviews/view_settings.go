@@ -19,7 +19,7 @@ import (
 // SettingsView displays and edits user settings.
 type SettingsView struct {
 	data         *settings.Settings
-	keys         []settings.KeyValue
+	rows         []settingsRow
 	cursor       int
 	lastClickIdx int
 	editMode     bool
@@ -31,6 +31,14 @@ type SettingsView struct {
 	// Callback to apply display settings
 	onDisplayChange   func(showEmail bool)
 	onExtensionChange func(ext string, enabled bool)
+}
+
+// settingsRow is one rendered row: the key it acts on, its loaded value and description, and the category header above it.
+type settingsRow struct {
+	key    string
+	value  string
+	desc   string
+	header string
 }
 
 // Bindings returns keybindings for the settings view.
@@ -111,7 +119,13 @@ func (v *SettingsView) HandleLoaded(msg SettingsViewLoadedMsg) {
 		return
 	}
 	v.data = msg.Settings
-	v.keys = msg.Keys
+	v.rows = buildSettingsRows(msg.Keys)
+	if v.cursor >= len(v.rows) {
+		v.cursor = len(v.rows) - 1
+	}
+	if v.cursor < 0 {
+		v.cursor = 0
+	}
 	v.err = ""
 	// Notify after data is updated so callbacks see the freshly-loaded values.
 	// The notify calls in editOrCycleSetting/saveCurrentSetting fire before the
@@ -149,7 +163,7 @@ func (v *SettingsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 func (v *SettingsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
-		idx := tuicore.ZoneClicked(msg, len(v.keys), v.zonePrefix)
+		idx := tuicore.ZoneClicked(msg, len(v.rows), v.zonePrefix)
 		if idx >= 0 {
 			if idx == v.lastClickIdx && idx == v.cursor {
 				v.lastClickIdx = -1
@@ -165,7 +179,7 @@ func (v *SettingsView) handleMouse(msg tea.MouseMsg) tea.Cmd {
 				v.cursor--
 			}
 		} else {
-			if v.cursor < len(v.keys)-1 {
+			if v.cursor < len(v.rows)-1 {
 				v.cursor++
 			}
 		}
@@ -192,7 +206,7 @@ func (v *SettingsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 	switch msg.String() {
 	case "j", "down":
-		if len(v.keys) > 0 && v.cursor < len(v.keys)-1 {
+		if len(v.rows) > 0 && v.cursor < len(v.rows)-1 {
 			v.cursor++
 		}
 	case "k", "up":
@@ -200,22 +214,32 @@ func (v *SettingsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			v.cursor--
 		}
 	case "e", "enter":
-		if len(v.keys) > 0 && v.cursor < len(v.keys) {
-			return v.editOrCycleSetting()
-		}
+		return v.editOrCycleSetting()
 	case "home":
 		v.cursor = 0
 	case "end":
-		if len(v.keys) > 0 {
-			v.cursor = len(v.keys) - 1
+		if len(v.rows) > 0 {
+			v.cursor = len(v.rows) - 1
 		}
 	}
 	return nil
 }
 
+// currentRow returns the row under the cursor, and false when there is none.
+func (v *SettingsView) currentRow() (settingsRow, bool) {
+	if v.cursor < 0 || v.cursor >= len(v.rows) {
+		return settingsRow{}, false
+	}
+	return v.rows[v.cursor], true
+}
+
 // editOrCycleSetting edits or cycles through setting values.
 func (v *SettingsView) editOrCycleSetting() tea.Cmd {
-	key := v.keys[v.cursor].Key
+	row, ok := v.currentRow()
+	if !ok {
+		return nil
+	}
+	key := row.key
 	if key == "fetch.workspace_mode" {
 		originURL := protocol.NormalizeURL(git.GetOriginURL(v.workdir))
 		if originURL == "" {
@@ -245,19 +269,19 @@ func (v *SettingsView) editOrCycleSetting() tea.Cmd {
 		return v.loadSettings()
 	}
 	v.editMode = true
-	v.input.SetValue(v.keys[v.cursor].Value)
+	v.input.SetValue(row.value)
 	v.err = ""
 	return v.input.Focus()
 }
 
 // saveCurrentSetting saves the current setting value.
 func (v *SettingsView) saveCurrentSetting() tea.Cmd {
-	if len(v.keys) == 0 || v.cursor >= len(v.keys) {
+	row, ok := v.currentRow()
+	if !ok {
 		return nil
 	}
-	key := v.keys[v.cursor].Key
 	value := v.input.Value()
-	if err := v.writeSetting(key, value); err != nil {
+	if err := v.writeSetting(row.key, value); err != nil {
 		v.err = err.Error()
 		return nil
 	}
@@ -274,6 +298,99 @@ func (v *SettingsView) saveCurrentSetting() tea.Cmd {
 // on first write.
 func (v *SettingsView) writeSetting(key, value string) error {
 	return settings.NewManager().Write(key, value)
+}
+
+// sectionTitles names and orders the settings sections; a section absent here sorts last under its own name.
+var sectionTitles = []struct {
+	section string
+	title   string
+}{
+	{"fetch", "Fetch"},
+	{"workspace", "Workspace"},
+	{"output", "Output"},
+	{"log", "Log"},
+	{"display", "Display"},
+	{"extensions", "Extensions"},
+	{"s3", "S3"},
+}
+
+// keysOwnedElsewhere names the keys another view edits; the Identity view toggles DNS verification and applies it live.
+var keysOwnedElsewhere = map[string]bool{
+	"identity.dns_verification": true,
+}
+
+// sectionOf returns the section a key groups under: the part before the first dot, with the per-repo workspace mode split out.
+func sectionOf(key string) string {
+	if key == "fetch.workspace_mode" {
+		return "workspace"
+	}
+	section, _, ok := settings.ParseKey(key)
+	if !ok {
+		return key
+	}
+	return section
+}
+
+// sectionTitle returns the display name for a section, falling back to the section itself.
+func sectionTitle(section string) string {
+	for _, st := range sectionTitles {
+		if st.section == section {
+			return st.title
+		}
+	}
+	return section
+}
+
+// sectionOrder lists every section present in keys, the named ones in display order and the rest in first-seen order.
+func sectionOrder(keys []settings.KeyValue) []string {
+	pending := make(map[string]bool, len(keys))
+	for _, kv := range keys {
+		pending[sectionOf(kv.Key)] = true
+	}
+	order := make([]string, 0, len(pending))
+	for _, st := range sectionTitles {
+		if pending[st.section] {
+			order = append(order, st.section)
+			delete(pending, st.section)
+		}
+	}
+	for _, kv := range keys {
+		if section := sectionOf(kv.Key); pending[section] {
+			order = append(order, section)
+			delete(pending, section)
+		}
+	}
+	return order
+}
+
+// buildSettingsRows groups every loaded key into the ordered rows the view renders, cursors and edits.
+func buildSettingsRows(all []settings.KeyValue) []settingsRow {
+	keys := make([]settings.KeyValue, 0, len(all))
+	for _, kv := range all {
+		if !keysOwnedElsewhere[kv.Key] {
+			keys = append(keys, kv)
+		}
+	}
+	rows := make([]settingsRow, 0, len(keys))
+	for _, section := range sectionOrder(keys) {
+		group := make([]settings.KeyValue, 0, len(keys))
+		names := make([]string, 0, len(keys))
+		for _, kv := range keys {
+			if sectionOf(kv.Key) == section {
+				group = append(group, kv)
+				names = append(names, kv.Key)
+			}
+		}
+		header := sectionTitle(section) + categoryScopeLabel(names)
+		for i, kv := range group {
+			row := settingsRow{key: kv.Key, value: kv.Value, desc: kv.Description}
+			if i == 0 {
+				row.header = header
+			}
+			rows = append(rows, row)
+		}
+	}
+	return rows
 }
 
 // categoryScopeLabel returns a dim suffix like " · synced" or " · local"
@@ -307,6 +424,7 @@ var rowSuffix = map[string]string{
 	"fetch.auto.enabled":  "pauses after 1h idle",
 	"fetch.auto.interval": "s",
 	"fetch.auto.backoff":  "doubles per empty cycle, max 30m",
+	"display.theme":       "applies on restart",
 }
 
 // notifyDisplayChange notifies the callback of display setting changes.
@@ -355,82 +473,59 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 		return wrapper.Render(content, footer)
 	}
 
-	categories := []struct {
-		name string
-		keys []string
-	}{
-		{"Fetch", []string{"fetch.parallel", "fetch.timeout", "fetch.auto.enabled", "fetch.auto.interval", "fetch.auto.backoff"}},
-		{"Workspace", []string{"fetch.workspace_mode"}},
-		{"Output", []string{"output.color"}},
-		{"Log", []string{"log.level"}},
-		{"Display", []string{"display.show_email"}},
-		{"Extensions", []string{"extensions.social", "extensions.pm", "extensions.review", "extensions.release", "extensions.memo"}},
-	}
-
 	rs := tuicore.DefaultRowStyles()
 	innerHeight := state.InnerHeight()
 
 	var b strings.Builder
 	lines := 0
-	idx := 0
 	selectedDesc := ""
-	for _, cat := range categories {
+	for idx, row := range v.rows {
 		if lines >= innerHeight-3 {
 			break
 		}
-		header := cat.name + categoryScopeLabel(cat.keys)
-		b.WriteString(tuicore.RenderHeader(rs, header))
-		b.WriteString("\n")
-		lines++
-
-		for _, key := range cat.keys {
-			if lines >= innerHeight-3 {
-				break
+		if row.header != "" {
+			if idx > 0 {
+				b.WriteString("\n")
+				lines++
 			}
-			value := ""
-			desc := ""
-			for _, kv := range v.keys {
-				if kv.Key == key {
-					value = kv.Value
-					desc = kv.Description
-					break
-				}
-			}
-			if key == "fetch.workspace_mode" {
-				value = v.resolveWorkspaceMode(state)
-			}
-			if value == "" {
-				value = "(not set)"
-			}
-
-			displayValue := value
-			if settings.IsEnum(key) {
-				opts := settings.EnumOptions[key]
-				displayValue = value + "  " + tuicore.Dim.Render("("+strings.Join(opts, " · ")+")")
-			}
-			if suffix := rowSuffix[key]; suffix != "" {
-				displayValue += "  " + tuicore.Dim.Render(suffix)
-			}
-
-			if idx == v.cursor {
-				selectedDesc = desc
-			}
-
-			var line string
-			if idx == v.cursor {
-				if v.editMode {
-					line = tuicore.RenderEditRow(rs, key, v.input.View())
-				} else {
-					line = tuicore.RenderRow(rs, key, displayValue, "", true)
-				}
-			} else {
-				line = tuicore.RenderRow(rs, key, displayValue, "", false)
-			}
-			b.WriteString(tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, idx), line))
+			b.WriteString(tuicore.RenderHeader(rs, row.header))
 			b.WriteString("\n")
 			lines++
-			idx++
 		}
+
+		value := row.value
+		if row.key == "fetch.workspace_mode" {
+			value = v.resolveWorkspaceMode(state)
+		}
+		if value == "" {
+			value = "(not set)"
+		}
+
+		displayValue := value
+		if settings.IsEnum(row.key) {
+			opts := settings.EnumOptions[row.key]
+			displayValue = value + "  " + tuicore.Dim.Render("("+strings.Join(opts, " · ")+")")
+		}
+		if suffix := rowSuffix[row.key]; suffix != "" {
+			displayValue += "  " + tuicore.Dim.Render(suffix)
+		}
+
+		var line string
+		if idx == v.cursor {
+			selectedDesc = row.desc
+			if v.editMode {
+				line = tuicore.RenderEditRow(rs, row.key, v.input.View())
+			} else {
+				line = tuicore.RenderRow(rs, row.key, displayValue, "", true)
+			}
+		} else {
+			line = tuicore.RenderRow(rs, row.key, displayValue, "", false)
+		}
+		b.WriteString(tuicore.MarkZone(tuicore.ZoneID(v.zonePrefix, idx), line))
+		b.WriteString("\n")
+		lines++
+	}
+	if lines > 0 {
 		b.WriteString("\n")
 		lines++
 	}
