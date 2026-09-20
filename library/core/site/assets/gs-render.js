@@ -2458,9 +2458,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // itemDetail paints the base detail as soon as the item resolves, then enriches sections in the background.
-  async function itemDetail(ctx, hash, branch) {
+  // paint is the caller's generation-guarded setView, so a superseded search never repaints over a newer view.
+  async function itemDetail(ctx, hash, branch, paint) {
     const cv = COMMIT_VIEW[branch];
-    const onProgress = (visited) => setView([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
+    const show = paint || setView;
+    const onProgress = (visited) => show([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
     const { item, items } = await findItemDeep(ctx, cv.ext, hash, onProgress);
     if (!item) return [el("div", { class: "err" }, [cv.label + " not found."])];
     const skip = cv.ext === "release" ? RELEASE_DETAIL_SKIP : [];

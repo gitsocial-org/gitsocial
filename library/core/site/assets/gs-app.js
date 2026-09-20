@@ -192,7 +192,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, LIST_EMPTY.releases)),
           () => loadExtItemsWindow(ctx, "release", true))]);
       } else if (r.type === "commit") {
-        setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch) : await commitDetail(ctx, r.hash, r.branch));
+        setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch, setView) : await commitDetail(ctx, r.hash, r.branch));
       } else if (r.type === "home") {
         setView(await homeView(ctx));
         if (r.anchor) scrollToAnchor(r.anchor, 10);
