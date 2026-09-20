@@ -131,6 +131,7 @@ func (v *prsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		v.pag.Loading = false
 		v.loaded = true
 		if msg.err != nil {
+			state.SetMessage(msg.err.Error(), tuicore.MessageTypeError)
 			return nil
 		}
 		v.pag.HasMore = msg.hasMore

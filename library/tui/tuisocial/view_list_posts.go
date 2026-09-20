@@ -195,7 +195,7 @@ func (v *listPostsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	default:
 		switch msg := msg.(type) {
 		case listPostsLoadedMsg:
-			v.handleLoaded(msg)
+			v.handleLoaded(msg, state)
 		case listPostsCountLoadedMsg:
 			if msg.ListID == v.list.ID {
 				v.pag.SetTotal(msg.Total)
@@ -265,9 +265,10 @@ func (v *listPostsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded processes the loaded posts data.
-func (v *listPostsView) handleLoaded(msg listPostsLoadedMsg) {
+func (v *listPostsView) handleLoaded(msg listPostsLoadedMsg, state *tuicore.State) {
 	if msg.Err != nil {
 		v.pag.Loading = false
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	if msg.List != nil {

@@ -276,6 +276,7 @@ func (v *milestoneEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cm
 	switch msg := msg.(type) {
 	case milestoneEditFormLoadedMsg:
 		if msg.Err != nil {
+			state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 			return func() tea.Msg {
 				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}

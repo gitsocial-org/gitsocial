@@ -51,6 +51,15 @@ func (v *inheritsView) SetSize(w, h int) { v.width, v.height = w, h }
 // Activate (re)loads the URL list. Cursor is preserved across navigation
 // (clamped to new bounds when the list shrinks).
 func (v *inheritsView) Activate(state *tuicore.State) tea.Cmd {
+	v.reload()
+	v.inputMode = false
+	v.addForm = nil
+	v.addURL = ""
+	return nil
+}
+
+// reload re-lists the inherited sources and clamps the cursor to the new bounds.
+func (v *inheritsView) reload() {
 	prev := v.cursor
 	v.urls = memo.ListInherits(v.workdir)
 	v.cursor = prev
@@ -61,10 +70,6 @@ func (v *inheritsView) Activate(state *tuicore.State) tea.Cmd {
 		v.cursor = 0
 	}
 	v.loaded = true
-	v.inputMode = false
-	v.addForm = nil
-	v.addURL = ""
-	return nil
 }
 
 // IsInputActive reports whether the URL input is taking text input.
@@ -87,6 +92,13 @@ func (v *inheritsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.updateInput(msg)
 	}
 	switch m := msg.(type) {
+	case inheritsErrMsg:
+		state.SetMessage(m.err.Error(), tuicore.MessageTypeError)
+		return nil
+	case inheritsRemovedMsg:
+		state.SetMessage("Removed "+m.url, tuicore.MessageTypeSuccess)
+		v.reload()
+		return nil
 	case tea.KeyPressMsg:
 		if handled, cmd := v.confirm.HandleKey(m.String()); handled {
 			return cmd

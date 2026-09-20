@@ -201,7 +201,7 @@ func (v *SearchView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
 	case SearchResultsMsg:
-		return v.handleSearchResults(msg)
+		return v.handleSearchResults(msg, state)
 	}
 
 	// Update input for cursor blinking
@@ -326,7 +326,7 @@ func (v *SearchView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd {
 }
 
 // handleSearchResults processes search results.
-func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
+func (v *SearchView) handleSearchResults(msg SearchResultsMsg, state *tuicore.State) tea.Cmd {
 	// Ignore stale results from a previous query
 	if msg.Query != v.query {
 		return nil
@@ -334,6 +334,7 @@ func (v *SearchView) handleSearchResults(msg SearchResultsMsg) tea.Cmd {
 	v.loading = false
 	v.pag.Loading = false
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return nil
 	}
 

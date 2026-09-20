@@ -303,6 +303,7 @@ func (v *sprintEditFormView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	switch msg := msg.(type) {
 	case sprintEditFormLoadedMsg:
 		if msg.Err != nil {
+			state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 			return func() tea.Msg {
 				return tuicore.NavigateMsg{Action: tuicore.NavBack}
 			}

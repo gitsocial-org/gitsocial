@@ -129,6 +129,7 @@ func (v *memosView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case memosLoadedMsg:
 		v.loaded = true
 		if m.err != nil {
+			state.SetMessage(m.err.Error(), tuicore.MessageTypeError)
 			return nil
 		}
 		v.workspaceURL = m.workspaceURL

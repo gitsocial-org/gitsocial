@@ -372,21 +372,22 @@ func (v *repositoryView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	default:
 		switch msg := msg.(type) {
 		case repositoryLoadedMsg:
-			v.handleLoaded(msg)
+			v.handleLoaded(msg, state)
 		case repositoryCountLoadedMsg:
 			v.pag.SetTotal(msg.Total)
 		case repositoryFetchedMsg:
-			return v.handleFetched(msg)
+			return v.handleFetched(msg, state)
 		}
 	}
 	return nil
 }
 
 // handleFetched processes fetch completion and reloads posts.
-func (v *repositoryView) handleFetched(msg repositoryFetchedMsg) tea.Cmd {
+func (v *repositoryView) handleFetched(msg repositoryFetchedMsg, state *tuicore.State) tea.Cmd {
 	v.isFetching = false
 	v.fetchingLabel = ""
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return nil
 	}
 	// Merge new months into fetchedMonths (keep sorted desc)
@@ -466,9 +467,10 @@ func (v *repositoryView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) te
 }
 
 // handleLoaded processes the loaded repository posts.
-func (v *repositoryView) handleLoaded(msg repositoryLoadedMsg) {
+func (v *repositoryView) handleLoaded(msg repositoryLoadedMsg, state *tuicore.State) {
 	if msg.Err != nil {
 		v.pag.Loading = false
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	cursor := ""

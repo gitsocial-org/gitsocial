@@ -139,6 +139,7 @@ func (v *memoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case memoDetailLoadedMsg:
 		v.loaded = true
 		if msg.err != nil {
+			state.SetMessage(msg.err.Error(), tuicore.MessageTypeError)
 			return nil
 		}
 		v.memo = msg.memo
@@ -147,6 +148,7 @@ func (v *memoDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return nil
 	case memoRetractedMsg:
 		if msg.err != nil {
+			state.SetMessage(msg.err.Error(), tuicore.MessageTypeError)
 			return nil
 		}
 		return func() tea.Msg { return tuicore.NavigateMsg{Action: tuicore.NavBack} }

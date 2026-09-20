@@ -152,13 +152,13 @@ func (v *listPickerView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
 	case ListsLoadedMsg:
-		v.handleLoaded(msg)
+		v.handleLoaded(msg, state)
 		return nil
 	case listCreatedMsg:
 		v.handleCreated(msg)
 		return nil
 	case listDeletedMsg:
-		v.handleDeleted(msg)
+		v.handleDeleted(msg, state)
 		return nil
 	case repoAddedMsg:
 		return v.handleRepoAdded(msg, state)
@@ -292,9 +292,10 @@ func (v *listPickerView) activateSelected() tea.Cmd {
 }
 
 // handleLoaded processes the loaded lists data.
-func (v *listPickerView) handleLoaded(msg ListsLoadedMsg) {
+func (v *listPickerView) handleLoaded(msg ListsLoadedMsg, state *tuicore.State) {
 	v.loading = false
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	v.lists = msg.Lists
@@ -303,14 +304,15 @@ func (v *listPickerView) handleLoaded(msg ListsLoadedMsg) {
 // handleCreated adds the newly created list to the view.
 func (v *listPickerView) handleCreated(msg listCreatedMsg) {
 	if msg.Err != nil {
-		return
+		return // handleListCreated has already reported it
 	}
 	v.lists = append(v.lists, msg.List)
 }
 
 // handleDeleted removes the deleted list from the view.
-func (v *listPickerView) handleDeleted(msg listDeletedMsg) {
+func (v *listPickerView) handleDeleted(msg listDeletedMsg, state *tuicore.State) {
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	for i, list := range v.lists {

@@ -109,7 +109,7 @@ func (v *ForksView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		return v.handleKey(msg, state)
 	case ForkAddedMsg:
 		if msg.Err != nil {
-			return nil
+			return nil // handleForkAdded has already reported it
 		}
 		v.forks = append(v.forks, msg.ForkURL)
 		v.sortForks()
@@ -121,7 +121,7 @@ func (v *ForksView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		}
 	case ForkRemovedMsg:
 		if msg.Err != nil {
-			return nil
+			return nil // handleForkRemoved has already reported it
 		}
 		for i, f := range v.forks {
 			if f == msg.ForkURL {

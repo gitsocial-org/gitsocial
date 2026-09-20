@@ -201,7 +201,7 @@ func (v *timelineView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return v.handleKey(key)
 		}
 	case TimelineLoadedMsg:
-		v.handleLoaded(msg)
+		v.handleLoaded(msg, state)
 	case TimelineCountLoadedMsg:
 		v.pag.SetTotal(msg.Total)
 	}
@@ -238,9 +238,10 @@ func (v *timelineView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // handleLoaded updates the view with loaded posts.
-func (v *timelineView) handleLoaded(msg TimelineLoadedMsg) {
+func (v *timelineView) handleLoaded(msg TimelineLoadedMsg, state *tuicore.State) {
 	if msg.Err != nil {
 		v.pag.Loading = false
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	cursor := ""

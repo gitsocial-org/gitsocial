@@ -158,6 +158,7 @@ func (v *exploreView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case exploreLoadedMsg:
 		v.loaded = true
 		if msg.err != nil {
+			state.SetMessage(msg.err.Error(), tuicore.MessageTypeError)
 			return nil
 		}
 		// Explore + followers sort alphabetically; related preserves the

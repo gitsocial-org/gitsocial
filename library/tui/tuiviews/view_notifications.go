@@ -273,6 +273,7 @@ func (v *NotificationsView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 func (v *NotificationsView) handleLoaded(msg NotificationsLoadedMsg, state *tuicore.State) {
 	v.loading = false
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	v.meta = msg.Result.Meta

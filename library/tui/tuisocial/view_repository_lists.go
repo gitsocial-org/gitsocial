@@ -86,7 +86,7 @@ func (v *repoListsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case tea.KeyPressMsg:
 		return v.handleKey(msg, state)
 	case repoListsLoadedMsg:
-		v.handleLoaded(msg)
+		v.handleLoaded(msg, state)
 	}
 	return nil
 }
@@ -169,9 +169,10 @@ func (v *repoListsView) handleKey(msg tea.KeyPressMsg, _ *tuicore.State) tea.Cmd
 }
 
 // handleLoaded processes the loaded lists data.
-func (v *repoListsView) handleLoaded(msg repoListsLoadedMsg) {
+func (v *repoListsView) handleLoaded(msg repoListsLoadedMsg, state *tuicore.State) {
 	v.loading = false
 	if msg.Err != nil {
+		state.SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		return
 	}
 	v.lists = msg.Lists

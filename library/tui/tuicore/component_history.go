@@ -135,6 +135,7 @@ func (v *HistoryView) Update(msg tea.Msg, state *State) tea.Cmd {
 		}
 		if msg.err != nil {
 			v.picker.SetLoading(false)
+			state.SetMessage(msg.err.Error(), MessageTypeError)
 			return nil
 		}
 		v.picker.SetItems(msg.items)
